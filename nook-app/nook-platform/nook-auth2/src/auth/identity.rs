@@ -1,5 +1,8 @@
 //! First-class Identity: passkeys, app-key members, and identity-owned vault DEKs.
 
+use std::fmt;
+
+use super::identity_dek_grant;
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, DeviceSigningPublicKey,
@@ -39,8 +42,8 @@ impl IdentityId {
     }
 }
 
-impl std::fmt::Display for IdentityId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for IdentityId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
@@ -424,7 +427,7 @@ impl IdentityRecord {
                 "reconciling app key is not authorized for this vault".to_owned(),
             ));
         }
-        if crate::auth::identity_dek_grant::already_grants(
+        if identity_dek_grant::already_grants(
             vault_dek,
             app_key,
             &authorized_members,

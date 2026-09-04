@@ -273,8 +273,8 @@ impl EventGraph {
 mod tests {
     use super::*;
     use crate::event::{
-        GenesisImportPayload, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-        build_genesis_import_event,
+        EncryptedSecretPayload, GenesisImportPayload, SentinelShareIssuedPayload, VaultEvent,
+        VaultEventBody, VaultEventSchemaVersion, VaultOperation, build_genesis_import_event,
     };
     use crate::test_support::{actor, epoch, public_key, signing_key, store};
     use crate::{EventId, EventInsertStatus, EventResult};
@@ -304,7 +304,7 @@ mod tests {
             created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
             key_epoch: epoch()?,
             operations: vec![VaultOperation::SecretCreated {
-                secret: crate::event::EncryptedSecretPayload {
+                secret: EncryptedSecretPayload {
                     id: SecretId::from_vault_record(secret_id),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: OpaqueCiphertext::from_trusted(format!("cipher-{secret_id}")),
@@ -655,7 +655,7 @@ mod tests {
         let shares = signed_operation(
             vec![genesis_id],
             VaultOperation::SentinelSharesIssued {
-                shares: vec![crate::event::SentinelShareIssuedPayload {
+                shares: vec![SentinelShareIssuedPayload {
                     device_id: DeviceId::parse("0123456789abcdef")?,
                     version: 1,
                     threshold: 2,

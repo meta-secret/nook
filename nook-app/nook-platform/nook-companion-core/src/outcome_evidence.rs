@@ -4,7 +4,7 @@
 //! This module owns whether those signals are sufficient to treat a workflow
 //! as complete before durably creating or replacing credentials.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -66,7 +66,7 @@ impl<'de> Deserialize<'de> for AuthenticationOutcomeDecision {
 
         let wire = DecisionWire::deserialize(deserializer)?;
         if wire.allows_credential_commit != wire.verdict.allows_credential_commit() {
-            return Err(serde::de::Error::custom(
+            return Err(D::Error::custom(
                 "authentication outcome decision contradicts its verdict",
             ));
         }
@@ -135,7 +135,7 @@ impl<'de> Deserialize<'de> for AuthenticationOutcomeVerdict {
             1 => Ok(Self::Insufficient),
             2 => Ok(Self::Conflicting),
             3 => Ok(Self::Timeout),
-            value => Err(serde::de::Error::custom(format!(
+            value => Err(D::Error::custom(format!(
                 "invalid authentication outcome verdict: {value}"
             ))),
         }

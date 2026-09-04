@@ -3,6 +3,7 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
+#![deny(clippy::absolute_paths)]
 
 //! Portable signed vault event-log domain.
 //!

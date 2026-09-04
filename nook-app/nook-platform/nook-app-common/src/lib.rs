@@ -3,6 +3,7 @@
 //! This crate is deliberately a leaf in the application dependency graph. It
 //! owns only cross-cutting facilities that both authentication and vault-domain
 //! crates need without depending on either of them.
+#![deny(clippy::absolute_paths)]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)

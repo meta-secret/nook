@@ -1,7 +1,11 @@
-use std::io::{Read, Write};
+use std::{
+    io::{Read, Write},
+    iter,
+};
 
 use crate::errors::{VaultCryptoError, VaultCryptoResult};
 use crate::{AgeArmoredCiphertext, DecryptedPlaintext, SymmetricKey};
+use age::{scrypt, secrecy};
 
 /// Session-scoped age encryptor/decryptor.
 ///
@@ -9,8 +13,8 @@ use crate::{AgeArmoredCiphertext, DecryptedPlaintext, SymmetricKey};
 /// random bytes (not a human passphrase), so we use a lower scrypt work factor than age's
 /// default ~1s target for new encryptions. Existing records keep their embedded factor.
 pub struct VaultCrypto {
-    identity: age::scrypt::Identity,
-    recipient: age::scrypt::Recipient,
+    identity: scrypt::Identity,
+    recipient: scrypt::Recipient,
 }
 
 /// scrypt N = 2^10. The input is a uniformly random 256-bit vault key, not a
@@ -21,10 +25,10 @@ const PROGRAMMATIC_SCRYPT_LOG_N: u8 = 10;
 
 impl VaultCrypto {
     pub fn new(passphrase: &SymmetricKey) -> VaultCryptoResult<Self> {
-        let secret = age::secrecy::SecretString::from(passphrase.as_str().to_owned());
-        let mut recipient = age::scrypt::Recipient::new(secret.clone());
+        let secret = secrecy::SecretString::from(passphrase.as_str().to_owned());
+        let mut recipient = scrypt::Recipient::new(secret.clone());
         recipient.set_work_factor(PROGRAMMATIC_SCRYPT_LOG_N);
-        let identity = age::scrypt::Identity::new(secret);
+        let identity = scrypt::Identity::new(secret);
         Ok(Self {
             identity,
             recipient,
@@ -37,10 +41,9 @@ impl VaultCrypto {
     ) -> VaultCryptoResult<AgeArmoredCiphertext> {
         use age::armor::{ArmoredWriter, Format};
 
-        let encryptor = age::Encryptor::with_recipients(std::iter::once(
-            &self.recipient as &dyn age::Recipient,
-        ))
-        .map_err(|e| VaultCryptoError::EncryptSetup(e.to_string()))?;
+        let encryptor =
+            age::Encryptor::with_recipients(iter::once(&self.recipient as &dyn age::Recipient))
+                .map_err(|e| VaultCryptoError::EncryptSetup(e.to_string()))?;
 
         let mut armored = Vec::new();
         let armor_writer = ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor)
@@ -73,7 +76,7 @@ impl VaultCrypto {
                 .map_err(|e| VaultCryptoError::DecryptSetup(e.to_string()))?;
 
         let mut reader = decryptor
-            .decrypt(std::iter::once(&self.identity as &dyn age::Identity))
+            .decrypt(iter::once(&self.identity as &dyn age::Identity))
             .map_err(|e| VaultCryptoError::Decrypt(e.to_string()))?;
 
         let mut decrypted = String::new();
@@ -86,6 +89,8 @@ impl VaultCrypto {
 
 #[cfg(test)]
 mod tests {
+    use std::time;
+
     use super::*;
     use crate::SymmetricKey;
 
@@ -126,7 +131,7 @@ mod tests {
 
     #[test]
     fn bulk_roundtrip_is_practical_for_password_manager_imports() -> anyhow::Result<()> {
-        let started = std::time::Instant::now();
+        let started = time::Instant::now();
         let crypto = VaultCrypto::new(&test_key()?)?;
         let encrypted = (0..1_300)
             .map(|index| crypto.encrypt_value(format!("secret-{index}")))
@@ -138,7 +143,7 @@ mod tests {
             );
         }
         assert!(
-            started.elapsed() < std::time::Duration::from_secs(30),
+            started.elapsed() < time::Duration::from_secs(30),
             "1,300-record roundtrip took {:?}",
             started.elapsed()
         );

@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
 const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
 
@@ -43,7 +43,7 @@ impl SecretFingerprint {
 impl<'de> Deserialize<'de> for SecretFingerprint {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 

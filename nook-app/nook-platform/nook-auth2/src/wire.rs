@@ -3,8 +3,8 @@
 use crate::CompactToken;
 use crate::errors::{ValidationError, ValidationResult};
 use age::x25519::{Identity, Recipient};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::fmt;
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use std::{fmt, mem};
 use zeroize::Zeroize;
 
 mod metadata;
@@ -24,7 +24,7 @@ impl SymmetricKey {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -33,8 +33,8 @@ impl SymmetricKey {
     }
 }
 
-impl std::fmt::Display for SymmetricKey {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SymmetricKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -62,7 +62,7 @@ impl AgeArmoredCiphertext {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -71,8 +71,8 @@ impl AgeArmoredCiphertext {
     }
 }
 
-impl std::fmt::Display for AgeArmoredCiphertext {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for AgeArmoredCiphertext {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -100,7 +100,7 @@ impl DevicePublicKey {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -109,8 +109,8 @@ impl DevicePublicKey {
     }
 }
 
-impl std::fmt::Display for DevicePublicKey {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for DevicePublicKey {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -138,7 +138,7 @@ impl MemberLabel {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -147,8 +147,8 @@ impl MemberLabel {
     }
 }
 
-impl std::fmt::Display for MemberLabel {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for MemberLabel {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -176,7 +176,7 @@ impl PasswordEntryId {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -185,8 +185,8 @@ impl PasswordEntryId {
     }
 }
 
-impl std::fmt::Display for PasswordEntryId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for PasswordEntryId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -214,7 +214,7 @@ impl OpaqueCiphertext {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -223,8 +223,8 @@ impl OpaqueCiphertext {
     }
 }
 
-impl std::fmt::Display for OpaqueCiphertext {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for OpaqueCiphertext {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -252,7 +252,7 @@ impl DecryptedPlaintext {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -261,8 +261,8 @@ impl DecryptedPlaintext {
     }
 }
 
-impl std::fmt::Display for DecryptedPlaintext {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for DecryptedPlaintext {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -290,7 +290,7 @@ impl SigningSeedHex {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -299,8 +299,8 @@ impl SigningSeedHex {
     }
 }
 
-impl std::fmt::Display for SigningSeedHex {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SigningSeedHex {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -340,7 +340,7 @@ impl DeviceIdentitySecret {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -398,7 +398,7 @@ impl SymmetricKey {
 impl<'de> Deserialize<'de> for SymmetricKey {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -419,7 +419,7 @@ impl AgeArmoredCiphertext {
 impl<'de> Deserialize<'de> for AgeArmoredCiphertext {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -435,7 +435,7 @@ impl DevicePublicKey {
 impl<'de> Deserialize<'de> for DevicePublicKey {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -452,7 +452,7 @@ impl DeviceIdentitySecret {
 impl<'de> Deserialize<'de> for DeviceIdentitySecret {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -469,7 +469,7 @@ impl SigningSeedHex {
 impl<'de> Deserialize<'de> for SigningSeedHex {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -487,7 +487,7 @@ impl PasswordEntryId {
 impl<'de> Deserialize<'de> for PasswordEntryId {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 

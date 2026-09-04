@@ -216,6 +216,8 @@ pub fn revoke_vault_member(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
     use crate::auth::multi_device::{
         VaultKeys, approve_join_request, create_join_request_record, create_sentinel_share_records,
@@ -258,7 +260,7 @@ mod tests {
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
         let join = pending_join_for_device(records, joiner.device_id())
-            .ok_or_else(|| std::io::Error::other("pending join fixture must exist"))?;
+            .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
             &keys.members_key,
@@ -291,7 +293,7 @@ mod tests {
             roster
                 .iter()
                 .find(|member| member.auth_id == joiner.auth_id())
-                .ok_or_else(|| std::io::Error::other("renamed member must exist"))?
+                .ok_or_else(|| io::Error::other("renamed member must exist"))?
                 .label
                 .as_deref(),
             Some("Travel iPad")
@@ -304,7 +306,7 @@ mod tests {
             roster
                 .iter()
                 .find(|member| member.auth_id == joiner.auth_id())
-                .ok_or_else(|| std::io::Error::other("renamed member must exist"))?
+                .ok_or_else(|| io::Error::other("renamed member must exist"))?
                 .label,
             None
         );
@@ -377,7 +379,7 @@ mod tests {
         let mut member_record = records
             .iter()
             .find(|record| is_members_stored_record(record))
-            .ok_or_else(|| std::io::Error::other("member record must exist"))?
+            .ok_or_else(|| io::Error::other("member record must exist"))?
             .clone();
         let other_identity = DeviceIdentity::generate()?;
         member_record.key =

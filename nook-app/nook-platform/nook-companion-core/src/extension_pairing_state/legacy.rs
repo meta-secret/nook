@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -128,7 +128,7 @@ pub fn migrate_legacy_pairing_state_json(
     if setup.sync_provider_count != selected.sync_provider_count {
         return Err(ExtensionPairingStateError::InvalidLegacyState);
     }
-    let migrated_vault_names: std::collections::HashSet<_> = entries
+    let migrated_vault_names: HashSet<_> = entries
         .iter()
         .filter_map(|entry| match &entry.record {
             ExtensionPairingRecord::Grant(grant) => Some(grant.vault_name.as_str()),

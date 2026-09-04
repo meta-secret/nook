@@ -1,6 +1,6 @@
 //! Ed25519 signing identity for vault events (separate from X25519 encryption keys).
 
-use crate::canonical::format_ed25519_signature;
+use crate::canonical::{self, format_ed25519_signature};
 use crate::{EventError, EventResult};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, SigningSeedHex, format_auth_key_id};
@@ -88,7 +88,7 @@ impl SigningIdentity {
         signature: &str,
         verifying_key: &VerifyingKey,
     ) -> EventResult<()> {
-        crate::canonical::verify_body_signature(body_bytes, signature, verifying_key)
+        canonical::verify_body_signature(body_bytes, signature, verifying_key)
     }
 }
 

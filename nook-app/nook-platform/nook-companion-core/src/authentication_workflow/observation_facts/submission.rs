@@ -1,3 +1,4 @@
+use crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
 use crate::{
     PageControlActionability, PageControlSubmissionMethod, canonicalize_control_destination,
 };
@@ -19,8 +20,7 @@ pub struct AuthenticationCredentialSubmissionFacts {
 impl AuthenticationCredentialSubmissionFacts {
     pub(super) fn is_bounded(&self) -> bool {
         !matches!(self.method, PageControlSubmissionMethod::Absent)
-            && self.form_identity.len()
-                <= crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+            && self.form_identity.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && canonicalize_control_destination(&self.source_origin, &self.destination_identity)
                 .is_some()
     }

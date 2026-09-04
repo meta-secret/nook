@@ -126,6 +126,7 @@ pub fn concurrent_epoch_rotations_conflict(
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
     use super::*;
+    use crate::event;
 
     #[test]
     fn password_and_revoke_rotations_conflict_when_concurrent() -> anyhow::Result<()> {
@@ -200,7 +201,7 @@ mod tests {
         );
         assert_eq!(
             operation_starts_epoch(&VaultOperation::SecretCreated {
-                secret: crate::event::EncryptedSecretPayload {
+                secret: event::EncryptedSecretPayload {
                     id: crate::SecretId::from_vault_record("s"),
                     secret_type: crate::SecretType::ApiKey,
                     ciphertext: crate::OpaqueCiphertext::from_trusted("c".to_owned()),

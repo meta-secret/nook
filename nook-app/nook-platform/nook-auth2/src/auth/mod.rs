@@ -446,6 +446,8 @@ pub mod mock_passkey {
 
     #[cfg(test)]
     mod tests {
+        use std::io;
+
         use super::*;
         use crate::{
             derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
@@ -566,7 +568,7 @@ pub mod mock_passkey {
             assert_eq!(
                 authenticator
                     .credential(registration.credential_id())
-                    .ok_or_else(|| std::io::Error::other("registered credential must exist"))?
+                    .ok_or_else(|| io::Error::other("registered credential must exist"))?
                     .sign_count(),
                 0
             );
@@ -635,16 +637,14 @@ pub mod mock_passkey {
             assert_eq!(
                 authenticator
                     .credential(first.credential_id())
-                    .ok_or_else(|| std::io::Error::other("first registered credential must exist"))?
+                    .ok_or_else(|| io::Error::other("first registered credential must exist"))?
                     .sign_count(),
                 0
             );
             assert_eq!(
                 authenticator
                     .credential(second.credential_id())
-                    .ok_or_else(|| std::io::Error::other(
-                        "second registered credential must exist"
-                    ))?
+                    .ok_or_else(|| io::Error::other("second registered credential must exist"))?
                     .sign_count(),
                 1
             );
@@ -672,16 +672,14 @@ pub mod mock_passkey {
             assert_eq!(
                 authenticator
                     .credential(first.credential_id())
-                    .ok_or_else(|| std::io::Error::other("first registered credential must exist"))?
+                    .ok_or_else(|| io::Error::other("first registered credential must exist"))?
                     .sign_count(),
                 0
             );
             assert_eq!(
                 authenticator
                     .credential(second.credential_id())
-                    .ok_or_else(|| std::io::Error::other(
-                        "second registered credential must exist"
-                    ))?
+                    .ok_or_else(|| io::Error::other("second registered credential must exist"))?
                     .sign_count(),
                 0
             );

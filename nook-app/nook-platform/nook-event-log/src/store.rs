@@ -6,6 +6,7 @@ use crate::event::{
     serialize_event_storage_yaml,
 };
 use crate::graph::{EventGraph, EventInsertStatus};
+use crate::remote_epoch_visibility;
 use crate::{EventError, EventResult};
 use nook_auth2::StoreId;
 pub use nook_replication::RemoteEventLogClassification;
@@ -98,11 +99,8 @@ pub fn union_remote_events(
     remote_events: &[(EventId, Vec<u8>)],
     store_id: &str,
 ) -> EventResult<Vec<EventId>> {
-    let visible_remote_events = crate::remote_epoch_visibility::visibility_gated_remote_events(
-        local,
-        remote_events,
-        store_id,
-    )?;
+    let visible_remote_events =
+        remote_epoch_visibility::visibility_gated_remote_events(local, remote_events, store_id)?;
     let mut candidate = local.clone();
     let mut candidates = Vec::new();
     for (event_id, bytes) in &visible_remote_events {
@@ -122,9 +120,7 @@ pub fn union_remote_events(
     let graph = candidate.load_graph(store_id)?;
     let mut quarantined: BTreeSet<EventId> = graph.quarantined().keys().cloned().collect();
     quarantined.extend(
-        crate::remote_epoch_visibility::incomplete_security_transition_events(
-            &candidate, store_id,
-        )?,
+        remote_epoch_visibility::incomplete_security_transition_events(&candidate, store_id)?,
     );
     let mut accepted = LocalEventStore::new();
     for event_id in candidate.event_ids() {
@@ -263,14 +259,11 @@ mod tests {
     use nook_auth2::{DeviceSigningPublicKey, IsoTimestamp, OpaqueCiphertext, Sha256Hex};
     use nook_auth2::{SecretId, StoreId};
 
-    fn genesis(signing_key: &SigningKey) -> EventResult<crate::event::VaultEvent> {
+    fn genesis(signing_key: &SigningKey) -> EventResult<VaultEvent> {
         genesis_for_store(signing_key, "store_testtoken11")
     }
 
-    fn genesis_for_store(
-        signing_key: &SigningKey,
-        store_id: &str,
-    ) -> EventResult<crate::event::VaultEvent> {
+    fn genesis_for_store(signing_key: &SigningKey, store_id: &str) -> EventResult<VaultEvent> {
         build_genesis_import_event(
             &StoreId::parse(store_id)?,
             &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,

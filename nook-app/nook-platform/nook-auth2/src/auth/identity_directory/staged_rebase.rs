@@ -1,5 +1,7 @@
 //! Three-way rebase policy for staged vault-creation identity ownership.
 
+use std::iter;
+
 use super::IdentityDirectory;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{IdentityId, IdentityRecord};
@@ -52,7 +54,7 @@ impl IdentityDirectory {
                 .identities
                 .iter()
                 .cloned()
-                .chain(std::iter::once(target.clone()))
+                .chain(iter::once(target.clone()))
                 .collect(),
             _ => return Err(Self::staged_identity_conflict(identity_id)),
         };

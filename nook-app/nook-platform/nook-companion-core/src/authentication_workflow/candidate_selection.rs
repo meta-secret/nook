@@ -5,7 +5,7 @@ use super::{
     AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot,
     authentication_page_observations_are_valid, classify_authentication_workflow,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::Error as _};
 use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify)]
@@ -43,7 +43,7 @@ impl<'de> Deserialize<'de> for AuthenticationFormObservationPriority {
             3 => Ok(Self::GENERIC_PASSWORD),
             4 => Ok(Self::CURRENT_PASSWORD),
             5 => Ok(Self::ONE_TIME_CODE),
-            value => Err(serde::de::Error::custom(format!(
+            value => Err(D::Error::custom(format!(
                 "invalid authentication form observation priority: {value}"
             ))),
         }

@@ -87,6 +87,8 @@ pub fn pending_join_for_device(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::super::{
         approve_join_request, create_join_request_record, generate_vault_keys, genesis_auth_record,
         genesis_members_records, replace_member_records, resolve_secrets_key,
@@ -119,7 +121,7 @@ mod tests {
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
         let join = pending_join_for_device(records, joiner.device_id())
-            .ok_or_else(|| std::io::Error::other("pending join fixture must exist"))?;
+            .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
             &keys.members_key,

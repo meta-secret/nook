@@ -111,6 +111,8 @@ impl ObservedHeads {
 
 #[cfg(test)]
 mod tests {
+    use std::str;
+
     use super::*;
     use crate::canonical::EventId;
     use crate::signing::SigningIdentity;
@@ -143,7 +145,7 @@ mod tests {
             operations: vec![VaultOperation::VaultCleared],
         })?;
         assert!(!bytes.is_empty());
-        assert!(std::str::from_utf8(&bytes)?.starts_with("schema_version:"));
+        assert!(str::from_utf8(&bytes)?.starts_with("schema_version:"));
         assert_eq!(event.body.store_id, store_id);
         assert_eq!(event.body.actor_id, actor);
         assert_eq!(parse_event_storage_bytes(&bytes)?.id()?, event.id()?);

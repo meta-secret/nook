@@ -10,6 +10,8 @@
 //! Serialized and generated contract names remain identical to their Rust
 //! source names.
 
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -277,7 +279,7 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, CredentialFillRejecti
     if fields.len() > field::Count::MAXIMUM.value as usize {
         return Err(CredentialFillRejection::TooManyObservedFields);
     }
-    let mut observed_field_indices = std::collections::HashSet::with_capacity(fields.len());
+    let mut observed_field_indices = HashSet::with_capacity(fields.len());
     for field in fields {
         if !observed_field_indices.insert(field.field_index()) {
             return Err(CredentialFillRejection::DuplicateFieldIndex);

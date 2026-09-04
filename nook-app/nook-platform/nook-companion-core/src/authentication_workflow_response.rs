@@ -18,7 +18,7 @@ pub struct AuthenticationWorkflowSnapshotWire {
     current_step: u8,
     total_steps: u8,
     approval_requirement: AuthenticationApprovalRequirement,
-    saved_login_capability: crate::authentication_workflow::AuthenticationSavedLoginCapability,
+    saved_login_capability: AuthenticationSavedLoginCapability,
     observation_index: u32,
 }
 
