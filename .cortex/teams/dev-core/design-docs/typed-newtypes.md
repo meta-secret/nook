@@ -175,6 +175,9 @@ let credential = Credential {
 #### Required actions
 
 - Construct independent aggregate fields with named struct literals.
+- Distinguish ordinary data aggregates from validated state capabilities.
+- Follow [action ownership and typestate](rust-action-ownership.md) for state
+  construction and transitions.
 - Reserve `From<T>` for one clear semantic conversion.
 - Keep aggregate validation in a named fallible constructor when it enforces an
   invariant.
@@ -183,6 +186,7 @@ let credential = Credential {
 
 - Do not implement `From<(A, B, C)>` for independent aggregate fields.
 - Do not add a trivial `new(a, b, c)` that only hides those field names.
+- Do not expose state-capability fields merely to permit aggregate literals.
 
 ### Serde-transparent string newtype
 
