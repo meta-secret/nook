@@ -4,31 +4,6 @@ use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
-pub struct CredentialFillKind {
-    inner: nook_companion_core::credential_fill::CredentialKind,
-}
-
-impl CredentialFillKind {
-    const fn from_core(value: nook_companion_core::credential_fill::CredentialKind) -> Self {
-        Self { inner: value }
-    }
-}
-
-#[wasm_bindgen]
-impl CredentialFillKind {
-    #[must_use]
-    pub fn is_username(&self) -> bool {
-        self.inner == nook_companion_core::credential_fill::CredentialKind::Username
-    }
-
-    #[must_use]
-    pub fn is_current_password(&self) -> bool {
-        self.inner == nook_companion_core::credential_fill::CredentialKind::CurrentPassword
-    }
-}
-
-#[wasm_bindgen]
-#[derive(Clone, Debug)]
 pub struct CredentialFillFieldRole {
     inner: nook_companion_core::credential_fill::field::CredentialRole,
 }
@@ -119,6 +94,27 @@ impl CredentialFillFieldIndex {
 
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
+pub struct CredentialFillObservationCount {
+    inner: nook_companion_core::credential_fill::field::Count,
+}
+
+impl CredentialFillObservationCount {
+    const fn from_core(value: nook_companion_core::credential_fill::field::Count) -> Self {
+        Self { inner: value }
+    }
+}
+
+#[wasm_bindgen]
+impl CredentialFillObservationCount {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn value(&self) -> u32 {
+        self.inner.value
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug)]
 pub struct CredentialFillObservation {
     inner: nook_companion_core::credential_fill::field::Observation,
 }
@@ -179,8 +175,8 @@ pub struct CredentialFillObservations {
 #[wasm_bindgen]
 impl CredentialFillObservations {
     #[must_use]
-    pub fn max_count() -> u32 {
-        nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+    pub fn max_count() -> CredentialFillObservationCount {
+        CredentialFillObservationCount::from_core(Self::maximum_count())
     }
 
     #[wasm_bindgen(constructor)]
@@ -193,8 +189,7 @@ impl CredentialFillObservations {
         &mut self,
         observation: &CredentialFillObservation,
     ) -> Result<(), wasm_bindgen::JsError> {
-        if self.inner.len() >= nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize
-        {
+        if self.inner.len() >= Self::maximum_count().value as usize {
             return Err(wasm_bindgen::JsError::new(
                 "the observed scope exceeds the field-count limit",
             ));
@@ -205,6 +200,10 @@ impl CredentialFillObservations {
 }
 
 impl CredentialFillObservations {
+    fn maximum_count() -> nook_companion_core::credential_fill::field::Count {
+        nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT.into()
+    }
+
     fn as_core(&self) -> &[nook_companion_core::credential_fill::field::Observation] {
         &self.inner
     }
@@ -237,8 +236,8 @@ impl CredentialFillAssignment {
 
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn credential(&self) -> CredentialFillKind {
-        CredentialFillKind::from_core(self.inner.credential)
+    pub fn credential(&self) -> nook_companion_core::credential_fill::CredentialKind {
+        self.inner.credential
     }
 }
 
@@ -297,9 +296,15 @@ mod tests {
         let assignments = plan.take_assignments();
         assert_eq!(assignments.len(), 2);
         assert_eq!(assignments[0].field_index().value(), 0);
-        assert!(assignments[0].credential().is_username());
+        assert_eq!(
+            assignments[0].credential(),
+            nook_companion_core::credential_fill::CredentialKind::Username
+        );
         assert_eq!(assignments[1].field_index().value(), 1);
-        assert!(assignments[1].credential().is_current_password());
+        assert_eq!(
+            assignments[1].credential(),
+            nook_companion_core::credential_fill::CredentialKind::CurrentPassword
+        );
         assert!(plan.take_assignments().is_empty());
         Ok(())
     }

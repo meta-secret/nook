@@ -11,8 +11,10 @@
 //! source names.
 
 use serde::{Deserialize, Serialize};
+use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Credential kind assigned to one field in a fill plan.
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CredentialKind {
     Username,
@@ -30,6 +32,18 @@ pub mod field {
     }
 
     impl From<u32> for Index {
+        fn from(value: u32) -> Self {
+            Self { value }
+        }
+    }
+
+    /// Number of fields in an observed authentication scope.
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    pub struct Count {
+        pub value: u32,
+    }
+
+    impl From<u32> for Count {
         fn from(value: u32) -> Self {
             Self { value }
         }
@@ -146,6 +160,7 @@ pub mod field {
 
         #[test]
         fn serialization_preserves_source_names_and_payload_boundaries() -> anyhow::Result<()> {
+            assert_eq!(serde_json::to_string(&Count::from(64))?, r#"{"value":64}"#);
             let credential = Observation::from(Credential {
                 field_index: 0.into(),
                 role: CredentialRole::Username,
@@ -217,7 +232,8 @@ pub struct Plan {
 /// sole current-password or generic-password field. A scope with only a
 /// username field still plans a username fill; every other shape fails closed.
 pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
-    if fields.len() > crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize {
+    let maximum_field_count = field::Count::from(crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT);
+    if fields.len() > maximum_field_count.value as usize {
         return Err(Error::TooManyObservedFields);
     }
     for (offset, field) in fields.iter().enumerate() {
