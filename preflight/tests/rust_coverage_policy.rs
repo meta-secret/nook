@@ -106,11 +106,11 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         "--manifest-path dylint/nook-domain-api/Cargo.toml --locked --fail-under-lines 90"
     ));
     assert!(nightly.contains("--locked --no-report"));
-    let dylint_object =
-        "dylint/nook-domain-api/target/llvm-cov-target/debug/deps/libnook_domain_api";
-    assert!(nightly.contains(&format!("{dylint_object}@*.so")));
+    let dylint_root = "dylint/nook-domain-api/target/llvm-cov-target";
+    assert!(nightly.contains(&format!("find {dylint_root} -type f")));
+    assert!(nightly.contains("-name 'libnook_domain_api@*.so' -print"));
     assert!(nightly.contains("test \"$#\" -eq 1 && test -f \"$1\""));
-    assert!(nightly.contains(&format!("{dylint_object}-c0ffee.so")));
+    assert!(nightly.contains("$(dirname \"$1\")/libnook_domain_api-c0ffee.so"));
 
     assert!(product.contains("for package in nook-companion-wasm nook-wasm; do"));
     assert!(product.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
