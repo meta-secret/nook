@@ -58,16 +58,6 @@ pub mod field {
         pub editability: Editability,
     }
 
-    impl From<(Index, CredentialRole, Editability)> for Credential {
-        fn from((field_index, role, editability): (Index, CredentialRole, Editability)) -> Self {
-            Self {
-                field_index,
-                role,
-                editability,
-            }
-        }
-    }
-
     /// Facts carried only by a new-password field.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     pub struct NewPassword {
@@ -136,8 +126,12 @@ pub mod field {
         #[test]
         fn variant_payloads_preserve_their_field_index() {
             for observation in [
-                Credential::from((1.into(), CredentialRole::Username, Editability::Writable))
-                    .into(),
+                Credential {
+                    field_index: 1.into(),
+                    role: CredentialRole::Username,
+                    editability: Editability::Writable,
+                }
+                .into(),
                 NewPassword::from(Index::from(1)).into(),
                 OneTimeCode::from(Index::from(1)).into(),
             ] {
@@ -147,11 +141,11 @@ pub mod field {
 
         #[test]
         fn serialization_preserves_source_names_and_payload_boundaries() -> anyhow::Result<()> {
-            let credential = Observation::from(Credential::from((
-                0.into(),
-                CredentialRole::Username,
-                Editability::Writable,
-            )));
+            let credential = Observation::from(Credential {
+                field_index: 0.into(),
+                role: CredentialRole::Username,
+                editability: Editability::Writable,
+            });
             assert_eq!(
                 serde_json::to_string(&credential)?,
                 r#"{"Credential":{"field_index":{"value":0},"role":"Username","editability":"Writable"}}"#
@@ -326,11 +320,21 @@ mod tests {
     }
 
     fn field(field_index: u32, role: field::CredentialRole) -> field::Observation {
-        field::Credential::from((field_index.into(), role, field::Editability::Writable)).into()
+        field::Credential {
+            field_index: field_index.into(),
+            role,
+            editability: field::Editability::Writable,
+        }
+        .into()
     }
 
     fn readonly_field(field_index: u32, role: field::CredentialRole) -> field::Observation {
-        field::Credential::from((field_index.into(), role, field::Editability::Readonly)).into()
+        field::Credential {
+            field_index: field_index.into(),
+            role,
+            editability: field::Editability::Readonly,
+        }
+        .into()
     }
 
     fn new_password_field(field_index: u32) -> field::Observation {

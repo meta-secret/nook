@@ -109,11 +109,11 @@ impl CredentialFillObservation {
         editability: CredentialFillEditability,
     ) -> Self {
         Self {
-            inner: nook_companion_core::field::Credential::from((
-                field_index.as_core(),
-                role.into_core(),
-                editability.into_core(),
-            ))
+            inner: nook_companion_core::field::Credential {
+                field_index: field_index.as_core(),
+                role: role.into_core(),
+                editability: editability.into_core(),
+            }
             .into(),
         }
     }
