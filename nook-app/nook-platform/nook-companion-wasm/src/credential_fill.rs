@@ -25,8 +25,8 @@ pub fn simulate_companion_credential_fill(
 
 #[wasm_bindgen]
 #[must_use]
-pub fn simulated_authentication_credential_fixture(
-) -> nook_companion_core::SimulatedAuthenticationCredentials {
+pub fn simulated_authentication_credential_fixture()
+-> nook_companion_core::SimulatedAuthenticationCredentials {
     nook_companion_core::SimulatedAuthenticationCredentials::fixture()
 }
 
