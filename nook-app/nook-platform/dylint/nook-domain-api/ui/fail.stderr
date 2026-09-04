@@ -202,13 +202,21 @@ LL | pub fn nested_unresolved_external_projection<D: external_api::RawAssociated
 warning: raw numeric primitive exposed in reachable function signature
   --> $DIR/fail.rs:117:8
    |
+LL | pub fn nested_bound_projection<D: external_api::NestedRawAssociatedDecoder>() -> D::Error {
+   |        ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:121:8
+   |
 LL | pub fn inline_projection<T: Iterator<Item = RawAlias>>() {}
    |        ^^^^^^^^^^^^^^^^^
    |
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:119:8
+  --> $DIR/fail.rs:123:8
    |
 LL | pub fn where_projection<T>()
    |        ^^^^^^^^^^^^^^^^
@@ -216,7 +224,7 @@ LL | pub fn where_projection<T>()
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:125:1
+  --> $DIR/fail.rs:129:1
    |
 LL | / pub trait AssociatedBound {
 LL | |     type Values: Iterator<Item = RawAlias>;
@@ -226,7 +234,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:129:1
+  --> $DIR/fail.rs:133:1
    |
 LL | / pub trait AssociatedDefault {
 LL | |     type Value = RawAlias;
@@ -236,7 +244,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:133:1
+  --> $DIR/fail.rs:137:1
    |
 LL | / pub trait GenericAssociatedType {
 LL | |     type Values<T: Iterator<Item = RawAlias>>;
@@ -246,7 +254,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:141:1
+  --> $DIR/fail.rs:145:1
    |
 LL | / pub trait EnclosingTrait<T>
 LL | | where
@@ -258,7 +266,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable impl generic declaration
-  --> $DIR/fail.rs:148:1
+  --> $DIR/fail.rs:152:1
    |
 LL | / impl<T> Wrapper<T>
 LL | | where
@@ -270,7 +278,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:155:9
+  --> $DIR/fail.rs:159:9
    |
 LL | pub use external_api::RawRecord;
    |         ^^^^^^^^^^^^^^^^^^^^^^^
@@ -278,7 +286,7 @@ LL | pub use external_api::RawRecord;
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:156:9
+  --> $DIR/fail.rs:160:9
    |
 LL | pub use external_api::raw_module::*;
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -286,7 +294,7 @@ LL | pub use external_api::raw_module::*;
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:157:24
+  --> $DIR/fail.rs:161:24
    |
 LL | pub use external_api::{RawInherent, raw_opaque};
    |                        ^^^^^^^^^^^
@@ -294,7 +302,7 @@ LL | pub use external_api::{RawInherent, raw_opaque};
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:157:37
+  --> $DIR/fail.rs:161:37
    |
 LL | pub use external_api::{RawInherent, raw_opaque};
    |                                     ^^^^^^^^^^
@@ -302,7 +310,7 @@ LL | pub use external_api::{RawInherent, raw_opaque};
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:159:1
+  --> $DIR/fail.rs:163:1
    |
 LL | impl external_api::RawDefault for UserId {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -310,7 +318,7 @@ LL | impl external_api::RawDefault for UserId {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:160:1
+  --> $DIR/fail.rs:164:1
    |
 LL | impl external_api::GenericDefault<u64> for UserId {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -318,7 +326,7 @@ LL | impl external_api::GenericDefault<u64> for UserId {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:161:1
+  --> $DIR/fail.rs:165:1
    |
 LL | impl external_api::ReferenceRawDefault for &UserId {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -326,12 +334,12 @@ LL | impl external_api::ReferenceRawDefault for &UserId {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:162:1
+  --> $DIR/fail.rs:166:1
    |
 LL | impl LocalGenericDefault<u64> for Wrapper<UserId> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
-warning: 40 warnings emitted
+warning: 41 warnings emitted
 
