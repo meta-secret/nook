@@ -98,8 +98,9 @@ Use this workflow for quality, CI, and deployment changes.
    - `PR / Rust ecosystem / Dependency policy and RustSec` —
      `task docker:ecosystem:dependency-policy` builds pinned `cargo-deny` and
      `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each workspace
-     task (`rust:dependency-policy`, `preflight:dependency-policy`,
-     `fuzz:dependency-policy`, `minds:dependency-policy`) through the cache-only
+     task (`dylint:dependency-policy`, `rust:dependency-policy`,
+     `preflight:dependency-policy`, `fuzz:dependency-policy`,
+     `minds:dependency-policy`) through the cache-only
      `rust-ecosystem-dependency-policy` BuildKit target.
      Never aggregate multiple workspaces into one Dockerfile RUN.
      Never export or load the policy-tools image into a Docker daemon.

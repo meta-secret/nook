@@ -10,7 +10,7 @@ ARG CARGO_DYLINT_VERSION=6.0.1
 # cargo-fuzz has a usable release binary. cargo-dylint release binaries bake a
 # CI-only driver path, so install the pinned crates once into this image layer.
 RUN rustup toolchain install "${DYLINT_NIGHTLY}" \
-      --component clippy,llvm-tools-preview,rustc-dev
+      --component clippy,rustfmt,llvm-tools-preview,rustc-dev
 
 RUN curl -fsSL \
       "https://github.com/rust-fuzz/cargo-fuzz/releases/download/${CARGO_FUZZ_VERSION}/cargo-fuzz-${CARGO_FUZZ_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
@@ -37,7 +37,12 @@ ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo dylint --all -- --all-targets \
+    cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check \
+    && rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs \
+    && RUSTC_WRAPPER= RUSTFLAGS= cargo test \
+      --manifest-path dylint/nook-domain-api/Cargo.toml --locked \
+    && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
+    && cargo dylint --all -- --all-targets \
     && nook-sccache-report rust-dylint
 
 FROM rust-ecosystem-nightly AS rust-fuzz-smoke

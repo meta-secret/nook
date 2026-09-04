@@ -1,0 +1,52 @@
+warning: invalid suppression of `raw_numeric_public_api`
+  --> $DIR/suppression_fail.rs:2:4
+   |
+LL | #![expect(
+   |    ^^^^^^
+   |
+   = help: crate, module, type, variant, and other blanket expectations are forbidden
+   = note: requested on the command line with `-W invalid-raw-numeric-api-suppression`
+
+warning: invalid suppression of `raw_numeric_public_api`
+  --> $DIR/suppression_fail.rs:9:3
+   |
+LL | #[expect(
+   |   ^^^^^^
+   |
+   = help: crate, module, type, variant, and other blanket expectations are forbidden
+
+warning: invalid suppression of `raw_numeric_public_api`
+  --> $DIR/suppression_fail.rs:17:3
+   |
+LL | #[expect(raw_numeric_public_api)]
+   |   ^^^^^^
+   |
+   = help: a nonempty boundary reason must be present
+
+warning: invalid suppression of `raw_numeric_public_api`
+  --> $DIR/suppression_fail.rs:20:3
+   |
+LL | #[expect(
+   |   ^^^^^^
+   |
+   = help: reason must identify exactly a serialization, database, or FFI boundary
+
+warning: invalid suppression of `raw_numeric_public_api`
+  --> $DIR/suppression_fail.rs:26:3
+   |
+LL | #[allow(
+   |   ^^^^^
+   |
+   = help: use `expect`, not `allow`, for a reviewed boundary exception
+
+warning: this lint expectation is unfulfilled
+  --> $DIR/suppression_fail.rs:10:5
+   |
+LL |     raw_numeric_public_api,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: database boundary: module-wide escape hatch
+   = note: `#[warn(unfulfilled_lint_expectations)]` on by default
+
+warning: 6 warnings emitted
+

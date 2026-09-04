@@ -1,0 +1,147 @@
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:26:8
+   |
+LL | pub fn every_numeric_primitive(_value: EveryNumericPrimitive) {}
+   |        ^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+   = note: requested on the command line with `-W raw-numeric-public-api`
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:28:8
+   |
+LL | pub fn direct_parameter(_id: u64) -> Option<Result<Vec<(u16, i32)>, f64>> {
+   |        ^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:32:8
+   |
+LL | pub fn aliased_return() -> RawAlias {
+   |        ^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:36:8
+   |
+LL | pub fn tuple_parameter(_value: (UserId, u32)) -> [i16; 2] {
+   |        ^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:40:8
+   |
+LL | pub fn borrowed_slice(_value: &[u8]) -> &UserId {
+   |        ^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:44:8
+   |
+LL | pub fn callback_parameter(_callback: fn(u16) -> i8, _pointer: *const i64) {}
+   |        ^^^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:47:12
+   |
+LL |     pub fn raw_foreign(_raw: u32) -> i32;
+   |            ^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:51:8
+   |
+LL |     fn retry_count(&self) -> usize;
+   |        ^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:53:8
+   |
+LL |     fn default_timeout(&self) -> u64 {
+   |        ^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:61:12
+   |
+LL |     pub fn exposed_method(&self, _count: Option<u32>) {}
+   |            ^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:65:17
+   |
+LL |     pub direct: usize,
+   |                 ^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:66:17
+   |
+LL |     pub nested: Wrapper<Option<[i8; 4]>>,
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:70:28
+   |
+LL | pub struct PublicTuple(pub isize, u32);
+   |                            ^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:73:12
+   |
+LL |     Direct(f32),
+   |            ^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:74:22
+   |
+LL |     Nested { values: Result<Vec<u8>, i64> },
+   |                      ^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:79:18
+   |
+LL |         pub raw: u64,
+   |                  ^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:87:14
+   |
+LL | pub async fn async_raw_output() -> Option<RawAlias> {
+   |              ^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:92:17
+   |
+LL |     pub values: Box<RawSink>,
+   |                 ^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: 18 warnings emitted
+

@@ -74,6 +74,7 @@ When you see `Option<T>`, ask:
 - Represent typed domain values with existing core newtypes such as
   `IsoTimestamp`, `StoredVaultYaml`, `StoreId`, `EventId`, and `SymmetricKey`.
   Add a newtype when the domain has no existing one.
+- Use named domain newtypes for typed domain values in reachable public function parameters, returns, and public struct or enum fields. Do not expose raw `u8`–`u128`, `i8`–`i128`, `usize`, `isize`, `f32`, or `f64`. Do not expose raw `String` when it represents a typed domain value. Apply these rules recursively through `Option`, `Result`, collections, tuples, generics, aliases, and bounds. Exclude private implementation details and private inner storage of a newtype. Locale and i18n plumbing remain raw-string exceptions. Only legitimate serialization, database, or FFI boundaries may use a narrow item-scoped `expect` with a reason. Blanket `allow` is forbidden.
 - Keep raw YAML or JSON strings at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings when crossing storage, provider, or JS boundaries.
@@ -506,6 +507,8 @@ whether a value exists.
 - Prefer flat `let ... else` variant narrowing in multi-step filters only when
   every other variant is intentionally equivalent.
 - Require an exhaustive `match` for evolving domain decisions.
+- Inventory reachable public numeric APIs recursively. Enforce them with
+  `raw_numeric_public_api`.
 - Inventory authored Rust `bool` fields, parameters, returns, and lint
   allowances in the changed scope.
 - Replace every domain, state, policy, mode, command, configuration, persisted,

@@ -361,6 +361,7 @@ tasks:
     deps: [sccache:ensure, registry-cache:ensure]
     cmds:
       - task: docker:ecosystem:policy-tools
+      - task: dylint:dependency-policy
       - task: rust:dependency-policy
       - task: preflight:dependency-policy
       - task: fuzz:dependency-policy

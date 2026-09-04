@@ -87,6 +87,12 @@ tasks:
       - task: docker:ecosystem:dependency-policy:run
         vars: { WORKSPACE: nook-app/nook-platform }
 
+  dylint:dependency-policy:
+    desc: Run cargo-deny and cargo-audit for the standalone Dylint workspace.
+    cmds:
+      - task: docker:ecosystem:dependency-policy:run
+        vars: { WORKSPACE: nook-app/nook-platform/dylint/nook-domain-api }
+
   fuzz:dependency-policy:
     desc: Run cargo-deny and cargo-audit for the platform fuzz workspace.
     cmds:
