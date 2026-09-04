@@ -21,6 +21,14 @@ pub enum CredentialKind {
     CurrentPassword,
 }
 
+/// Whether one page input was ignored or classified for credential filling.
+#[wasm_bindgen]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CredentialFillFieldClassificationOutcome {
+    Ignored,
+    Observed,
+}
+
 /// Structural facts about fields in one observed authentication scope.
 pub mod field {
     use serde::{Deserialize, Serialize};
@@ -152,6 +160,9 @@ pub mod field {
             }
         }
     }
+
+    mod classification;
+    pub use classification::{Classification, Ignored, Observed, classify};
 
     #[cfg(test)]
     mod tests {

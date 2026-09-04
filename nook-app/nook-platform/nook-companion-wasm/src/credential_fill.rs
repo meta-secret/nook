@@ -1,5 +1,6 @@
 //! WASM-owned objects for portable credential-fill planning.
 
+use crate::page_form_policy::NookPageInputFieldObservation;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -164,6 +165,55 @@ impl CredentialFillObservation {
     const fn as_core(&self) -> nook_companion_core::credential_fill::field::Observation {
         self.inner
     }
+}
+
+#[wasm_bindgen]
+pub struct CredentialFillFieldClassification {
+    inner: nook_companion_core::credential_fill::field::Classification,
+}
+
+impl CredentialFillFieldClassification {
+    const fn from_core(value: nook_companion_core::credential_fill::field::Classification) -> Self {
+        Self { inner: value }
+    }
+}
+
+#[wasm_bindgen]
+impl CredentialFillFieldClassification {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn kind(
+        &self,
+    ) -> nook_companion_core::credential_fill::CredentialFillFieldClassificationOutcome {
+        self.inner.outcome()
+    }
+
+    pub fn observation(&self) -> Result<CredentialFillObservation, wasm_bindgen::JsError> {
+        let nook_companion_core::credential_fill::field::Classification::Observed(observed) =
+            self.inner
+        else {
+            return Err(wasm_bindgen::JsError::new(
+                "an ignored credential-fill field classification has no observation",
+            ));
+        };
+        Ok(CredentialFillObservation {
+            inner: observed.observation,
+        })
+    }
+}
+
+#[wasm_bindgen]
+#[must_use]
+pub fn classify_companion_credential_fill_field(
+    field_index: &CredentialFillFieldIndex,
+    field: &NookPageInputFieldObservation,
+) -> CredentialFillFieldClassification {
+    CredentialFillFieldClassification::from_core(
+        nook_companion_core::credential_fill::field::classify(
+            field_index.as_core(),
+            field.as_core(),
+        ),
+    )
 }
 
 #[wasm_bindgen]
@@ -424,6 +474,75 @@ mod tests {
         ] {
             assert_eq!(field_index.as_core(), expected);
         }
+    }
+
+    #[test]
+    fn classifier_returns_an_owned_observation_from_borrowed_inputs()
+    -> Result<(), wasm_bindgen::JsError> {
+        let field_index = CredentialFillFieldIndex::two();
+        let page_field = NookPageInputFieldObservation::new(
+            nook_companion_core::PageInputType::Password,
+            false,
+            true,
+            vec!["current-password".to_owned()],
+            "password".to_owned(),
+            true,
+        );
+
+        let classification = classify_companion_credential_fill_field(&field_index, &page_field);
+        assert_eq!(
+            classification.kind(),
+            nook_companion_core::credential_fill::CredentialFillFieldClassificationOutcome::Observed
+        );
+        let observation = classification.observation()?;
+        assert_eq!(
+            observation.as_core(),
+            nook_companion_core::credential_fill::field::Observation::from(
+                nook_companion_core::credential_fill::field::Credential {
+                    field_index: nook_companion_core::credential_fill::field::Index::TWO,
+                    role: nook_companion_core::credential_fill::field::CredentialRole::Password(
+                        nook_companion_core::credential_fill::field::Password::Current,
+                    ),
+                    editability: nook_companion_core::credential_fill::field::Editability::Readonly,
+                },
+            )
+        );
+        assert_eq!(
+            field_index.as_core(),
+            nook_companion_core::credential_fill::field::Index::TWO
+        );
+        assert_eq!(
+            page_field.as_core().input_type,
+            nook_companion_core::PageInputType::Password
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn classifier_returns_typed_ignored_for_an_unrelated_input() {
+        let field_index = CredentialFillFieldIndex::three();
+        let page_field = NookPageInputFieldObservation::new(
+            nook_companion_core::PageInputType::Text,
+            false,
+            false,
+            Vec::new(),
+            "search".to_owned(),
+            false,
+        );
+
+        let classification = classify_companion_credential_fill_field(&field_index, &page_field);
+        assert_eq!(
+            classification.kind(),
+            nook_companion_core::credential_fill::CredentialFillFieldClassificationOutcome::Ignored
+        );
+        assert!(matches!(
+            classification.inner,
+            nook_companion_core::credential_fill::field::Classification::Ignored(
+                nook_companion_core::credential_fill::field::Ignored {
+                    field_index: nook_companion_core::credential_fill::field::Index::THREE
+                }
+            )
+        ));
     }
 
     #[test]

@@ -164,53 +164,84 @@ pub fn has_login_context(observation: &LoginContextObservation) -> bool {
 /// Classify whether an input should count as a username/email identity field.
 #[must_use]
 pub fn looks_like_username_field(field: &PageInputFieldObservation) -> bool {
-    if field.disabled
-        || field.read_only
-        || !matches!(
-            field.input_type,
-            PageInputType::Text | PageInputType::Email | PageInputType::Tel
-        )
-    {
+    if field.disabled || field.read_only {
         return false;
     }
-    if has_autocomplete_token(&field.autocomplete_tokens, "username")
-        || has_autocomplete_token(&field.autocomplete_tokens, "email")
-    {
-        return true;
-    }
-    let identity = expand_identity_text(&field.identity_text);
-    if identity.is_empty() || username_negative(&identity) {
-        return false;
-    }
-    if username_positive(&identity) {
-        return true;
-    }
-    field.input_type == PageInputType::Email && field.login_context
+    matches!(
+        classify_authentication_input_role(field),
+        AuthenticationInputRole::Username(_)
+    )
 }
 
 /// Classify whether an input should count as a one-time-code field.
 #[must_use]
 pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool {
-    if field.disabled
-        || field.read_only
-        || !matches!(
-            field.input_type,
-            PageInputType::Text
-                | PageInputType::Tel
-                | PageInputType::Number
-                | PageInputType::Password
-        )
-    {
+    if field.disabled || field.read_only {
         return false;
     }
-    // Identity text from the host includes autocomplete tokens. Prefer tokenized
-    // identity over CSS substring selectors so names like "hotpot" are not OTP.
-    let identity = expand_identity_text(&field.identity_text);
-    if identity.is_empty() || one_time_code_negative(&identity) {
-        return false;
+    matches!(
+        classify_authentication_input_role(field),
+        AuthenticationInputRole::OneTimeCode(_)
+    )
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Username;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct OneTimeCode;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Unrelated;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AuthenticationInputRole {
+    Username(Username),
+    OneTimeCode(OneTimeCode),
+    Unrelated(Unrelated),
+}
+
+pub(crate) fn classify_authentication_input_role(
+    field: &PageInputFieldObservation,
+) -> AuthenticationInputRole {
+    if has_autocomplete_token(&field.autocomplete_tokens, "one-time-code") {
+        return AuthenticationInputRole::OneTimeCode(OneTimeCode);
     }
-    one_time_code_positive(&identity)
-        || has_autocomplete_token(&field.autocomplete_tokens, "one-time-code")
+    if matches!(
+        field.input_type,
+        PageInputType::Text | PageInputType::Tel | PageInputType::Number | PageInputType::Password
+    ) {
+        // Tokenized identity avoids CSS substring false positives such as "hotpot".
+        let identity = expand_identity_text(&field.identity_text);
+        if !identity.is_empty()
+            && !one_time_code_negative(&identity)
+            && one_time_code_positive(&identity)
+        {
+            return AuthenticationInputRole::OneTimeCode(OneTimeCode);
+        }
+    }
+
+    if matches!(
+        field.input_type,
+        PageInputType::Text | PageInputType::Email | PageInputType::Tel
+    ) {
+        if has_autocomplete_token(&field.autocomplete_tokens, "username")
+            || has_autocomplete_token(&field.autocomplete_tokens, "email")
+        {
+            return AuthenticationInputRole::Username(Username);
+        }
+        let identity = expand_identity_text(&field.identity_text);
+        if identity.is_empty() || username_negative(&identity) {
+            return AuthenticationInputRole::Unrelated(Unrelated);
+        }
+        if username_positive(&identity)
+            || (field.input_type == PageInputType::Email && field.login_context)
+        {
+            return AuthenticationInputRole::Username(Username);
+        }
+    }
+
+    AuthenticationInputRole::Unrelated(Unrelated)
 }
 
 /// True when a checkbox/control label looks like terms / privacy acceptance.
@@ -656,7 +687,7 @@ pub fn can_activate_authentication_route_control(
         && has_local_authentication_scope
 }
 
-fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
+pub(crate) fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
     tokens
         .iter()
         .any(|token| token.eq_ignore_ascii_case(expected))
