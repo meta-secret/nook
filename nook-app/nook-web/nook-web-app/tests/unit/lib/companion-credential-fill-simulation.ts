@@ -25,6 +25,14 @@ export class SimulatedCredentialFieldIdentity {
   }
 }
 
+export class SimulatedLoginPageIdentity {
+  readonly value: string
+
+  constructor(value: string) {
+    this.value = value
+  }
+}
+
 export enum SimulatedCredentialFieldKind {
   Credential = 'Credential',
   NewPassword = 'NewPassword',
@@ -51,34 +59,50 @@ export type SimulatedCredentialFieldDefinition = SimulatedCredentialFieldBase &
 export type SimulatedCredentialFieldDefinitions =
   readonly SimulatedCredentialFieldDefinition[]
 
-export type CredentialFillJourneyStep = {
+export type SimulatedLoginPageDefinition = {
+  readonly page_identity: SimulatedLoginPageIdentity
+  readonly fields: SimulatedCredentialFieldDefinitions
   readonly observed_field_identities: readonly SimulatedCredentialFieldIdentity[]
 }
 
 export enum CredentialFillJourneyOutcomeKind {
-  Filled = 'filled',
+  Replaced = 'replaced',
+  Completed = 'completed',
   Rejected = 'rejected',
 }
 
-export type SimulatedCredentialFormSnapshot = {
+export type SimulatedCredentialFormSnapshot = readonly {
+  readonly field_identity: SimulatedCredentialFieldIdentity
   readonly name: string
   readonly value: string
 }[]
 
+export type SimulatedLoginPageSnapshot = {
+  readonly page_identity: SimulatedLoginPageIdentity
+  readonly fields: SimulatedCredentialFormSnapshot
+}
+
 export type CredentialFillJourneyOutcome =
   | {
-      readonly kind: CredentialFillJourneyOutcomeKind.Filled
-      readonly snapshot: SimulatedCredentialFormSnapshot
+      readonly kind: CredentialFillJourneyOutcomeKind.Replaced
+      readonly next_page_identity: SimulatedLoginPageIdentity
+      readonly snapshot: SimulatedLoginPageSnapshot
+    }
+  | {
+      readonly kind: CredentialFillJourneyOutcomeKind.Completed
+      readonly snapshot: SimulatedLoginPageSnapshot
     }
   | {
       readonly kind: CredentialFillJourneyOutcomeKind.Rejected
       readonly rejection: CredentialFillRejection
-      readonly snapshot: SimulatedCredentialFormSnapshot
+      readonly snapshot: SimulatedLoginPageSnapshot
     }
 
 export enum SimulatedLoginJourneyValidationFailure {
+  EmptyJourney = 'emptyJourney',
+  DuplicatePageIdentity = 'duplicatePageIdentity',
   DuplicateFieldIdentity = 'duplicateFieldIdentity',
-  UnknownStepFieldReference = 'unknownStepFieldReference',
+  UnknownPageFieldReference = 'unknownPageFieldReference',
 }
 
 export class SimulatedLoginJourneyValidationError extends Error {
@@ -91,8 +115,7 @@ export class SimulatedLoginJourneyValidationError extends Error {
 }
 
 export type CredentialFillJourneyRequest = {
-  readonly fields: SimulatedCredentialFieldDefinitions
-  readonly steps: readonly CredentialFillJourneyStep[]
+  readonly pages: readonly SimulatedLoginPageDefinition[]
   readonly credentials: FakeLoginCredentials
 }
 
@@ -169,25 +192,47 @@ type MaterializedCredentialObservation = {
   readonly ownership: CredentialFieldOwnership
 }
 
-function validateLoginJourney(request: CredentialFillJourneyRequest): void {
-  const acceptedIdentities = new Set<string>()
-  for (const field of request.fields) {
-    if (acceptedIdentities.has(field.field_identity.value)) {
+type ValidatedLoginJourney = {
+  readonly firstPage: SimulatedLoginPageDefinition
+  readonly remainingPages: readonly SimulatedLoginPageDefinition[]
+}
+
+function validateLoginJourney(
+  request: CredentialFillJourneyRequest,
+): ValidatedLoginJourney {
+  const [firstPage, ...remainingPages] = request.pages
+  if (!firstPage) {
+    throw new SimulatedLoginJourneyValidationError(
+      SimulatedLoginJourneyValidationFailure.EmptyJourney,
+    )
+  }
+  const acceptedPageIdentities = new Set<string>()
+  for (const page of request.pages) {
+    if (acceptedPageIdentities.has(page.page_identity.value)) {
       throw new SimulatedLoginJourneyValidationError(
-        SimulatedLoginJourneyValidationFailure.DuplicateFieldIdentity,
+        SimulatedLoginJourneyValidationFailure.DuplicatePageIdentity,
       )
     }
-    acceptedIdentities.add(field.field_identity.value)
-  }
-  for (const step of request.steps) {
-    for (const fieldIdentity of step.observed_field_identities) {
-      if (!acceptedIdentities.has(fieldIdentity.value)) {
+    acceptedPageIdentities.add(page.page_identity.value)
+
+    const acceptedFieldIdentities = new Set<string>()
+    for (const field of page.fields) {
+      if (acceptedFieldIdentities.has(field.field_identity.value)) {
         throw new SimulatedLoginJourneyValidationError(
-          SimulatedLoginJourneyValidationFailure.UnknownStepFieldReference,
+          SimulatedLoginJourneyValidationFailure.DuplicateFieldIdentity,
+        )
+      }
+      acceptedFieldIdentities.add(field.field_identity.value)
+    }
+    for (const fieldIdentity of page.observed_field_identities) {
+      if (!acceptedFieldIdentities.has(fieldIdentity.value)) {
+        throw new SimulatedLoginJourneyValidationError(
+          SimulatedLoginJourneyValidationFailure.UnknownPageFieldReference,
         )
       }
     }
   }
+  return { firstPage, remainingPages }
 }
 
 function materializeCredentialObservation({
@@ -311,7 +356,7 @@ function resolveSimulatedCredentialField({
     if (field.field_identity.value === field_identity.value) return field
   }
   throw new SimulatedLoginJourneyValidationError(
-    SimulatedLoginJourneyValidationFailure.UnknownStepFieldReference,
+    SimulatedLoginJourneyValidationFailure.UnknownPageFieldReference,
   )
 }
 
@@ -325,18 +370,18 @@ type CredentialFillPlanning =
       readonly rejection: CredentialFillRejection
     }
 
-type PlanCredentialFillStepRequest = {
-  readonly step: CredentialFillJourneyStep
+type PlanCredentialFillPageRequest = {
+  readonly page: SimulatedLoginPageDefinition
   readonly form: SimulatedCredentialForm
 }
 
-function planCredentialFillStep({
-  step,
+function planCredentialFillPage({
+  page,
   form,
-}: PlanCredentialFillStepRequest): CredentialFillPlanning {
+}: PlanCredentialFillPageRequest): CredentialFillPlanning {
   const observations = new CredentialFillObservations()
   try {
-    for (const field_identity of step.observed_field_identities) {
+    for (const field_identity of page.observed_field_identities) {
       const request: ResolveSimulatedCredentialFieldRequest = {
         field_identity,
         form,
@@ -457,55 +502,129 @@ function applyCredentialPlan({
   }
 }
 
-function snapshotForm(
-  form: SimulatedCredentialForm,
-): SimulatedCredentialFormSnapshot {
-  return form.map((field) => ({ name: field.name, value: field.value }))
+type SnapshotLoginPageRequest = {
+  readonly page_identity: SimulatedLoginPageIdentity
+  readonly form: SimulatedCredentialForm
+}
+
+function snapshotLoginPage({
+  page_identity,
+  form,
+}: SnapshotLoginPageRequest): SimulatedLoginPageSnapshot {
+  return {
+    page_identity,
+    fields: form.map((field) => ({
+      field_identity: field.field_identity,
+      name: field.name,
+      value: field.value,
+    })),
+  }
+}
+
+type SimulateLoginPageRequest = {
+  readonly page: SimulatedLoginPageDefinition
+  readonly credentials: FakeLoginCredentials
+  readonly success:
+    | {
+        readonly kind: CredentialFillJourneyOutcomeKind.Replaced
+        readonly next_page_identity: SimulatedLoginPageIdentity
+      }
+    | { readonly kind: CredentialFillJourneyOutcomeKind.Completed }
+}
+
+function simulateLoginPage({
+  page,
+  credentials,
+  success,
+}: SimulateLoginPageRequest): CredentialFillJourneyOutcome {
+  const definitions = page.fields
+  const form = materializeCredentialForm(definitions)
+  try {
+    const planningRequest: PlanCredentialFillPageRequest = { page, form }
+    const planning = planCredentialFillPage(planningRequest)
+    switch (planning.kind) {
+      case CredentialFillPlanningOutcome.Planned: {
+        try {
+          const applyRequest: ApplyCredentialPlanRequest = {
+            plan: planning.plan,
+            form,
+            credentials,
+          }
+          applyCredentialPlan(applyRequest)
+          const snapshotRequest: SnapshotLoginPageRequest = {
+            page_identity: page.page_identity,
+            form,
+          }
+          const snapshot = snapshotLoginPage(snapshotRequest)
+          switch (success.kind) {
+            case CredentialFillJourneyOutcomeKind.Replaced:
+              return {
+                kind: CredentialFillJourneyOutcomeKind.Replaced,
+                next_page_identity: success.next_page_identity,
+                snapshot,
+              }
+            case CredentialFillJourneyOutcomeKind.Completed:
+              return {
+                kind: CredentialFillJourneyOutcomeKind.Completed,
+                snapshot,
+              }
+          }
+          throw new Error('unsupported successful login page outcome')
+        } finally {
+          planning.plan.free()
+        }
+      }
+      case CredentialFillPlanningOutcome.Rejected: {
+        const snapshotRequest: SnapshotLoginPageRequest = {
+          page_identity: page.page_identity,
+          form,
+        }
+        return {
+          kind: CredentialFillJourneyOutcomeKind.Rejected,
+          rejection: planning.rejection,
+          snapshot: snapshotLoginPage(snapshotRequest),
+        }
+      }
+    }
+  } finally {
+    for (const field of form) field.free()
+  }
+  throw new Error('unsupported credential fill planning outcome')
 }
 
 export function simulateLoginJourney(
   request: CredentialFillJourneyRequest,
 ): CredentialFillJourneyOutcome[] {
-  validateLoginJourney(request)
-  const definitions = request.fields
-  const form = materializeCredentialForm(definitions)
+  const validated = validateLoginJourney(request)
+
   const outcomes: CredentialFillJourneyOutcome[] = []
-  try {
-    for (const step of request.steps) {
-      const planningRequest: PlanCredentialFillStepRequest = { step, form }
-      const planning = planCredentialFillStep(planningRequest)
-      switch (planning.kind) {
-        case CredentialFillPlanningOutcome.Planned: {
-          try {
-            const applyRequest: ApplyCredentialPlanRequest = {
-              plan: planning.plan,
-              form,
-              credentials: request.credentials,
-            }
-            applyCredentialPlan(applyRequest)
-            const outcome: CredentialFillJourneyOutcome = {
-              kind: CredentialFillJourneyOutcomeKind.Filled,
-              snapshot: snapshotForm(form),
-            }
-            outcomes.push(outcome)
-          } finally {
-            planning.plan.free()
-          }
-          break
-        }
-        case CredentialFillPlanningOutcome.Rejected: {
-          const outcome: CredentialFillJourneyOutcome = {
-            kind: CredentialFillJourneyOutcomeKind.Rejected,
-            rejection: planning.rejection,
-            snapshot: snapshotForm(form),
-          }
-          outcomes.push(outcome)
-          return outcomes
-        }
-      }
+  let currentPage = validated.firstPage
+  for (const nextPage of validated.remainingPages) {
+    const pageRequest: SimulateLoginPageRequest = {
+      page: currentPage,
+      credentials: request.credentials,
+      success: {
+        kind: CredentialFillJourneyOutcomeKind.Replaced,
+        next_page_identity: nextPage.page_identity,
+      },
     }
-    return outcomes
-  } finally {
-    for (const field of form) field.free()
+    const outcome = simulateLoginPage(pageRequest)
+    outcomes.push(outcome)
+    switch (outcome.kind) {
+      case CredentialFillJourneyOutcomeKind.Replaced:
+        currentPage = nextPage
+        break
+      case CredentialFillJourneyOutcomeKind.Rejected:
+        return outcomes
+      case CredentialFillJourneyOutcomeKind.Completed:
+        throw new Error('non-final login page completed without replacement')
+    }
   }
+  const finalPageRequest: SimulateLoginPageRequest = {
+    page: currentPage,
+    credentials: request.credentials,
+    success: { kind: CredentialFillJourneyOutcomeKind.Completed },
+  }
+  outcomes.push(simulateLoginPage(finalPageRequest))
+  return outcomes
 }
