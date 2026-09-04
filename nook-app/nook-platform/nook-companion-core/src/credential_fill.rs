@@ -62,13 +62,6 @@ pub mod field {
         Readonly,
     }
 
-    impl Editability {
-        #[must_use]
-        pub const fn is_writable(self) -> bool {
-            matches!(self, Self::Writable)
-        }
-    }
-
     /// Facts carried only by a field that can receive a saved login value.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     pub struct Credential {
@@ -150,12 +143,6 @@ pub mod field {
             assert!(CredentialRole::CurrentPassword.is_password());
             assert!(!CredentialRole::GenericPassword.is_username());
             assert!(CredentialRole::GenericPassword.is_password());
-        }
-
-        #[test]
-        fn editability_classifies_only_writable_fields() {
-            assert!(Editability::Writable.is_writable());
-            assert!(!Editability::Readonly.is_writable());
         }
 
         #[test]
@@ -276,7 +263,9 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
             let field::Observation::Credential(credential) = field else {
                 return None;
             };
-            if !credential.role.is_username() || !credential.editability.is_writable() {
+            if !credential.role.is_username()
+                || !matches!(credential.editability, field::Editability::Writable)
+            {
                 return None;
             }
             Some(credential.field_index)
@@ -306,7 +295,9 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
         return Err(Error::AmbiguousPasswordField);
     }
     let password_field = password_fields.first().copied();
-    if password_field.is_some_and(|(_, editability)| !editability.is_writable()) {
+    if password_field
+        .is_some_and(|(_, editability)| matches!(editability, field::Editability::Readonly))
+    {
         return Err(Error::PasswordFieldsReadonly);
     }
 
