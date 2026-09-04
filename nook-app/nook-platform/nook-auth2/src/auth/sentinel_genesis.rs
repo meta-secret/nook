@@ -491,6 +491,8 @@ fn announcement_signing_bytes(
 
 #[cfg(test)]
 mod tests {
+    use std::{io, slice};
+
     use super::*;
 
     fn signing_key() -> anyhow::Result<SigningKey> {
@@ -666,7 +668,7 @@ mod tests {
             .deliveries
             .iter()
             .find(|delivery| delivery.device_id == *peer.device_id())
-            .ok_or_else(|| std::io::Error::other("peer delivery must exist"))?;
+            .ok_or_else(|| io::Error::other("peer delivery must exist"))?;
         let accepted =
             accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &peer)?;
         assert!(issued.records.contains(&accepted));
@@ -704,7 +706,7 @@ mod tests {
         assert!(
             super::super::multi_device::reconstruct_sentinel_vault_keys(
                 &issued.records,
-                std::slice::from_ref(&owner)
+                slice::from_ref(&owner)
             )
             .is_err()
         );

@@ -9,8 +9,11 @@ use age::x25519::{Identity, Recipient};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::{
+    collections::HashMap,
+    io::{Read, Write},
+    iter,
+};
 
 mod access;
 mod roster;
@@ -366,9 +369,8 @@ fn encrypt_with_recipient(
 ) -> MultiDeviceResult<AgeArmoredCiphertext> {
     use age::armor::{ArmoredWriter, Format};
 
-    let encryptor =
-        age::Encryptor::with_recipients(std::iter::once(recipient as &dyn age::Recipient))
-            .map_err(|e| AgeCryptoError::EncryptSetup(e.to_string()))?;
+    let encryptor = age::Encryptor::with_recipients(iter::once(recipient as &dyn age::Recipient))
+        .map_err(|e| AgeCryptoError::EncryptSetup(e.to_string()))?;
 
     let mut armored = Vec::new();
     let armor_writer = ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor)
@@ -399,7 +401,7 @@ fn decrypt_with_identity(
     let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(envelope.as_str().as_bytes()))
         .map_err(|e| AgeCryptoError::DecryptSetup(e.to_string()))?;
     let mut reader = decryptor
-        .decrypt(std::iter::once(identity as &dyn age::Identity))
+        .decrypt(iter::once(identity as &dyn age::Identity))
         .map_err(|e| AgeCryptoError::Decrypt(e.to_string()))?;
     let mut decrypted = String::new();
     reader
@@ -410,6 +412,8 @@ fn decrypt_with_identity(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
 
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
@@ -445,7 +449,7 @@ mod tests {
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
         let join = pending_join_for_device(records, joiner.device_id())
-            .ok_or_else(|| std::io::Error::other("pending join fixture must exist"))?;
+            .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
             &keys.members_key,
@@ -497,7 +501,7 @@ mod tests {
             2,
         )?
         .pop()
-        .ok_or_else(|| std::io::Error::other("sentinel share record must exist"))?;
+        .ok_or_else(|| io::Error::other("sentinel share record must exist"))?;
         let join_record = create_join_request_record_with_signing_key(
             &joiner,
             ENROLLED_AT,
@@ -518,7 +522,7 @@ mod tests {
             state
                 .joins
                 .get(joiner.device_id())
-                .ok_or_else(|| std::io::Error::other("joining member must exist"))?
+                .ok_or_else(|| io::Error::other("joining member must exist"))?
                 .signing_public_key
                 .as_str(),
             "a".repeat(64)
@@ -594,13 +598,13 @@ mod tests {
         )?
         .into_iter()
         .next()
-        .ok_or_else(|| std::io::Error::other("member record must exist"))?;
+        .ok_or_else(|| io::Error::other("member record must exist"))?;
         let records = vec![
             create_join_request_record(&joiner, ENROLLED_AT)?,
             corrupt_member_record,
         ];
         let join = pending_join_for_device(&records, joiner.device_id())
-            .ok_or_else(|| std::io::Error::other("pending join must exist"))?;
+            .ok_or_else(|| io::Error::other("pending join must exist"))?;
 
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,

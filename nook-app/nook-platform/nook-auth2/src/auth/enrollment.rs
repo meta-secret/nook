@@ -1,7 +1,7 @@
 //! Enrollment-code payloads for one-step QR-based device joins.
 
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use std::{fmt, marker::PhantomData};
 
 use crate::errors::{EnrollmentError, EnrollmentResult};
 
@@ -30,9 +30,9 @@ mod enrollment_state_sealed {
 /// Sealed mapping from an onboarding typestate to the only provider data shape
 /// legal in that state.
 pub trait EnrollmentState:
-    enrollment_state_sealed::Sealed + std::fmt::Debug + Clone + PartialEq + Eq
+    enrollment_state_sealed::Sealed + fmt::Debug + Clone + PartialEq + Eq
 {
-    type Provider: std::fmt::Debug + Clone + PartialEq + Eq;
+    type Provider: fmt::Debug + Clone + PartialEq + Eq;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

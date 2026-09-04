@@ -1,3 +1,5 @@
+use std::str;
+
 use super::{
     AES_GCM_NONCE_LEN, AES_KEY_LEN, AGE_SECRET_KEY_PREFIX, Aead, Aes256Gcm, Array, Bech32,
     CIPHER_NAME, CREDENTIAL_ID_MAX_LEN, Deserialize, DeviceIdentitySecret,
@@ -249,7 +251,7 @@ fn decrypt_device_identity(
             )
             .map_err(|_| DeviceKeyProtectionError::Decrypt)?,
     );
-    let text = std::str::from_utf8(plaintext.as_ref())
+    let text = str::from_utf8(plaintext.as_ref())
         .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
     DeviceIdentitySecret::parse(text).map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)
 }

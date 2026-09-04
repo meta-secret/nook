@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use hkdf::Hkdf;
 use serde::{Deserialize, Serialize};
@@ -261,7 +263,7 @@ pub fn reconstruct_sentinel_vault_keys_from_opened(
     let mut expected_threshold = None;
     let mut expected_required = None;
     let mut expected_version = None;
-    let mut seen_indexes = std::collections::BTreeSet::new();
+    let mut seen_indexes = BTreeSet::new();
     let mut slip39_mnemonics = Vec::new();
     for contribution in opened {
         let device_id =
@@ -364,6 +366,8 @@ pub fn reconstruct_sentinel_vault_keys(
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::super::{
         ConnectAccessStatus, DeviceIdentity, assess_connect_access, device_is_enrolled,
         generate_vault_keys, is_auth_stored_record, resolve_secrets_key,
@@ -392,7 +396,7 @@ mod tests {
         assert!(records.iter().all(is_sentinel_share_stored_record));
         assert!(records.iter().all(|record| !is_auth_stored_record(record)));
         assert!(resolve_secrets_key(&records, &first).is_err());
-        assert!(reconstruct_sentinel_vault_keys(&records, std::slice::from_ref(&first)).is_err());
+        assert!(reconstruct_sentinel_vault_keys(&records, slice::from_ref(&first)).is_err());
 
         let reconstructed =
             reconstruct_sentinel_vault_keys(&records, &[first.clone(), second.clone()])?;
@@ -413,11 +417,8 @@ mod tests {
         assert_eq!(opened_second.threshold, 2);
 
         assert!(
-            reconstruct_sentinel_vault_keys_from_opened(
-                &records,
-                std::slice::from_ref(&opened_first)
-            )
-            .is_err()
+            reconstruct_sentinel_vault_keys_from_opened(&records, slice::from_ref(&opened_first))
+                .is_err()
         );
 
         let reconstructed =

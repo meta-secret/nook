@@ -601,6 +601,8 @@ fn verify_checksum(data: &[u16]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
 
     // Official current vectors from SatoshiLabs python-shamir-mnemonic
@@ -667,7 +669,7 @@ mod tests {
         let mut shares = split_sentinel_secret(&root, 2, 3)?;
         let last = shares[0]
             .rfind(' ')
-            .ok_or_else(|| std::io::Error::other("share must contain words"))?
+            .ok_or_else(|| io::Error::other("share must contain words"))?
             + 1;
         let replacement = if &shares[0][last..] == "academic" {
             "acid"
@@ -683,10 +685,10 @@ mod tests {
             .map(|word| {
                 wordlist()
                     .binary_search(&word)
-                    .map_err(|_| std::io::Error::other("word must exist in SLIP-39 wordlist"))
+                    .map_err(|_| io::Error::other("word must exist in SLIP-39 wordlist"))
                     .and_then(|index| {
                         u16::try_from(index)
-                            .map_err(|_| std::io::Error::other("word index must fit into u16"))
+                            .map_err(|_| io::Error::other("word index must fit into u16"))
                     })
             })
             .collect::<Result<Vec<_>, _>>()?;

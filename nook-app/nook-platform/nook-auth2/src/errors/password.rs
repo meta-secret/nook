@@ -1,5 +1,7 @@
 //! Password generation and envelope unlock errors.
 
+use std::string;
+
 use super::age_crypto::AgeCryptoError;
 use super::validation::ValidationError;
 use thiserror::Error;
@@ -42,7 +44,7 @@ pub enum PasswordError {
     EnvelopeNotFound,
 
     #[error("Envelope plaintext is not valid UTF-8")]
-    EnvelopePlaintextUtf8(#[source] std::string::FromUtf8Error),
+    EnvelopePlaintextUtf8(#[source] string::FromUtf8Error),
 
     #[error("Invalid envelope plaintext JSON")]
     EnvelopePlaintextJson(#[source] serde_json::Error),

@@ -2,7 +2,7 @@
 
 use super::HEX_32_BYTE_LEN;
 use crate::errors::{ValidationError, ValidationResult};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use std::fmt;
 
 /// Bare SHA-256 hex digest (64 chars).
@@ -55,7 +55,7 @@ impl Serialize for Sha256Hex {
 impl<'de> Deserialize<'de> for Sha256Hex {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -106,7 +106,7 @@ impl Serialize for IdentityVaultEventId {
 impl<'de> Deserialize<'de> for IdentityVaultEventId {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -182,7 +182,7 @@ impl Serialize for DeviceSigningPublicKey {
 impl<'de> Deserialize<'de> for DeviceSigningPublicKey {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -239,7 +239,7 @@ impl Serialize for IsoTimestamp {
 impl<'de> Deserialize<'de> for IsoTimestamp {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
