@@ -222,6 +222,27 @@ enum VersionedVaultEventBody {
 
 `from_trusted` / `from_vault_record` for values already validated or emitted by this process. Do not use for external input.
 
+## Domain API lint rollout
+
+Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
+Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
+`nook-app-common` is the first clean activation; later crates migrate in dependency order.
+Activate a migrated crate only while the Dylint library is loaded:
+
+```rust
+#![cfg_attr(dylint_lib = "nook_domain_api", forbid(invalid_raw_numeric_api_suppression))]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
+```
+
+Boundary exceptions use an item-scoped `expect(raw_numeric_public_api, reason = "...")`.
+The reason starts with `serialization boundary:`, `database boundary:`, or `FFI boundary:` and then explains the edge.
+Crate, module, type, and other blanket `allow` or expectation attributes are forbidden.
+Development core owns pass/fail UI fixtures, diagnostics snapshots, and staged crate activation.
+Hosted validation runs the locked standalone lint tests with the repository-pinned nightly toolchain.
+Phase 1 inspects concrete declared parameter, return, and public field types; it does not enforce generic predicates.
+One mandatory phase-2 semantic public-surface PR covers generic predicates and defaults, where clauses, associated type bounds, and enclosing impl or trait predicates.
+It also covers local and nonlocal named traits, reexports, and inherited methods before `nook-authenticator-domain` activation.
+
 ## Remaining type-safety checklist
 
 - [ ] Raw identifier and count primitives are absent from domain and WASM

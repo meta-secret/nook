@@ -38,6 +38,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/teams/sre/workflows/quality.md")?;
     let workspace = read("nook-app/nook-platform/Cargo.toml")?;
+    let dylint_manifest = read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?;
     let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
     let rust_dockerfile = [
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
@@ -198,7 +199,6 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ci:cache:publish:rust-base",
-        "task: rust:dependency-policy",
         "task: preflight:dependency-policy",
         "task: fuzz:dependency-policy",
         "task: minds:dependency-policy",
@@ -221,13 +221,17 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "policy-tools must translate explicit local publication into a cache-only Zot write"
     );
     assert!(
-        platform_tasks.contains("rust:dependency-policy:")
+        platform_tasks.contains("dylint:dependency-policy:")
+            && platform_tasks.contains("WORKSPACE: nook-app/nook-platform/dylint/nook-domain-api")
+            && platform_tasks.contains("rust:dependency-policy:")
             && platform_tasks.contains("fuzz:dependency-policy:")
             && platform_tasks.contains("WORKSPACE: nook-app/nook-platform/fuzz")
             && preflight_tasks.contains("preflight:dependency-policy:")
             && minds_tasks.contains("minds:dependency-policy:")
             && !root_tasks.contains("taskfile: fuzz/Taskfile.yml")
-            && root_tasks.contains("taskfile: agentic-ai/minds/Taskfile.yml"),
+            && root_tasks.contains("taskfile: agentic-ai/minds/Taskfile.yml")
+            && docker_tasks
+                .contains("task: dylint:dependency-policy\n      - task: rust:dependency-policy",),
         "each Rust workspace must own dependency-policy in its Taskfile"
     );
     assert!(
@@ -277,7 +281,12 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo install cargo-dylint dylint-link",
         "COPY nook-app/nook-platform/ nook-app/nook-platform/",
         "cargo fuzz run",
+        "cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check",
+        "rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs",
+        "RUSTC_WRAPPER= RUSTFLAGS= cargo test",
+        "cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings",
         "cargo dylint --all",
+        "--manifest-path dylint/nook-domain-api/Cargo.toml",
         "KANI_VERSION=0.67.0",
         "cargo kani setup",
         "cargo kani --package nook-replication",
@@ -292,6 +301,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         !nightly_dockerfile.contains("rust-platform-nightly")
             && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
             && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
+            && nightly_dockerfile
+                .contains("--manifest-path dylint/nook-domain-api/Cargo.toml --locked")
             && nightly_dockerfile
                 .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
                 .count()
@@ -480,7 +491,17 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             .is_file()
     );
     assert!(workspace.contains("[workspace.metadata.kani.flags]"));
-    assert!(workspace.contains("[workspace.metadata.dylint]"));
+    assert!(
+        dylint_manifest.contains("[lints.clippy]")
+            && dylint_manifest.contains("all = { level = \"warn\", priority = -1 }")
+            && dylint_manifest.contains("pedantic = { level = \"warn\", priority = -1 }")
+            && dylint_manifest.contains("expect_used = \"deny\"")
+            && dylint_manifest.contains("unwrap_used = \"deny\"")
+    );
+    assert!(
+        workspace.contains("[workspace.metadata.dylint]")
+            && workspace.contains("{ path = \"dylint/nook-domain-api\" }")
+    );
     assert!(replication.contains("proptest!"));
     assert!(replication.contains("insta::assert_debug_snapshot!"));
     assert!(replication.contains("loom::model"));
