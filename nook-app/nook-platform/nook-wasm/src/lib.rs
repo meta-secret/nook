@@ -18,7 +18,6 @@
     clippy::unnecessary_wraps,
     clippy::items_after_statements
 )]
-#![deny(clippy::absolute_paths)]
 
 use nook_companion_core::ExtensionConnectScope;
 

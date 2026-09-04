@@ -1,5 +1,4 @@
 //! Portable domain values for TOTP authenticators and recovery-code updates.
-#![deny(clippy::absolute_paths)]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
     forbid(invalid_raw_numeric_api_suppression)

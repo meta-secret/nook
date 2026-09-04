@@ -23,6 +23,7 @@ pub use links::{
     normalize_sentinel_genesis_participant_payload, normalize_sentinel_genesis_request,
     sentinel_genesis_participant_fingerprint,
 };
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 const GENESIS_VERSION: u32 = 1;
@@ -141,7 +142,7 @@ pub fn add_sentinel_genesis_participant_payload(
 ) -> MultiDeviceResult<()> {
     let value: serde_json::Value = serde_json::from_str(payload_json)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-    if value.get("kind").and_then(serde_json::Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
+    if value.get("kind").and_then(Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
         return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
     }
     let response: SentinelGenesisParticipantResponse = serde_json::from_str(payload_json)
@@ -496,6 +497,7 @@ fn announcement_signing_bytes(
 mod tests {
     use std::{io, slice};
 
+    use super::super::multi_device;
     use super::*;
 
     fn signing_key() -> anyhow::Result<SigningKey> {
@@ -744,24 +746,16 @@ mod tests {
                 VaultMetaRecord::Auth(..)
             ))
         );
-        let share_count = super::super::multi_device::count_sentinel_share_records(&issued.records);
+        let share_count = multi_device::count_sentinel_share_records(&issued.records);
         assert_eq!(usize::from(share_count), 3);
         assert!(
-            super::super::multi_device::reconstruct_sentinel_vault_keys(
-                &issued.records,
-                slice::from_ref(&owner)
-            )
-            .is_err()
-        );
-        let first_quorum = super::super::multi_device::reconstruct_sentinel_vault_keys(
-            &issued.records,
-            &[owner, peer_a],
-        )?;
-        assert_eq!(first_quorum.secrets_key.as_str().len(), 64);
-        assert!(
-            super::super::multi_device::reconstruct_sentinel_vault_keys(&issued.records, &[peer_b])
+            multi_device::reconstruct_sentinel_vault_keys(&issued.records, slice::from_ref(&owner))
                 .is_err()
         );
+        let first_quorum =
+            multi_device::reconstruct_sentinel_vault_keys(&issued.records, &[owner, peer_a])?;
+        assert_eq!(first_quorum.secrets_key.as_str().len(), 64);
+        assert!(multi_device::reconstruct_sentinel_vault_keys(&issued.records, &[peer_b]).is_err());
         Ok(())
     }
 }
