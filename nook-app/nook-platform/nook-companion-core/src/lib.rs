@@ -116,9 +116,7 @@ pub use backup_code_candidates::{
 };
 pub use credential_fill::{
     AuthenticationCredentialFillAssignment, AuthenticationCredentialFillError,
-    AuthenticationCredentialFillPlan, AuthenticationCredentialKind,
-    AuthenticationFillFieldEditability, AuthenticationFillFieldIndex,
-    AuthenticationFillFieldObservation, AuthenticationFillFieldRole,
+    AuthenticationCredentialFillPlan, AuthenticationCredentialKind, field,
     plan_authentication_credential_fill,
 };
 pub use extension_pairing_state::{
