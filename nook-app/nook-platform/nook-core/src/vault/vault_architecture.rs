@@ -398,6 +398,8 @@ impl VaultArchitecture {
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::*;
 
     #[test]
@@ -642,7 +644,7 @@ mod tests {
         );
 
         assert_eq!(
-            sentinel.validate_records(std::slice::from_ref(&malformed)),
+            sentinel.validate_records(slice::from_ref(&malformed)),
             Err(ValidationError::InvalidSentinelShareSet)
         );
         assert_eq!(

@@ -1,5 +1,7 @@
 //! Chromium-family password CSV conversion into Nook's typed plaintext model.
 
+use std::iter;
+
 use csv::StringRecord;
 use thiserror::Error;
 
@@ -42,7 +44,7 @@ fn required_column(
     name: &'static str,
     aliases: &[&str],
 ) -> Result<usize, ChromePasswordsImportError> {
-    std::iter::once(name)
+    iter::once(name)
         .chain(aliases.iter().copied())
         .find_map(|candidate| {
             let expected = normalized_csv_header(candidate);

@@ -1,12 +1,16 @@
 //! Proton Pass export conversion into Nook's typed plaintext secret model.
 
-use std::collections::BTreeMap;
-use std::io::{Cursor, Read};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    io::{Cursor, Read},
+    str,
+};
 
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
-use zip::ZipArchive;
+use zip::{ZipArchive, result};
 
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 
@@ -123,7 +127,7 @@ struct ProtonPassField {
     data: Value,
 }
 
-fn invalid_export(error: impl std::fmt::Display) -> ProtonPassImportError {
+fn invalid_export(error: impl fmt::Display) -> ProtonPassImportError {
     ProtonPassImportError::InvalidExport(error.to_string())
 }
 
@@ -139,10 +143,10 @@ fn read_zip_data(bytes: &[u8]) -> Result<String, ProtonPassImportError> {
 
     let file = match archive.by_name(DATA_FILE) {
         Ok(file) => file,
-        Err(zip::result::ZipError::FileNotFound) if encrypted_data_found => {
+        Err(result::ZipError::FileNotFound) if encrypted_data_found => {
             return Err(ProtonPassImportError::EncryptedExport);
         }
-        Err(zip::result::ZipError::FileNotFound) => {
+        Err(result::ZipError::FileNotFound) => {
             return Err(ProtonPassImportError::MissingDataFile);
         }
         Err(error) => return Err(invalid_export(error)),
@@ -366,7 +370,7 @@ pub fn plan_proton_pass_import(
         let json = read_zip_data(export_bytes)?;
         return plan_json(&json);
     }
-    let json = std::str::from_utf8(export_bytes).map_err(invalid_export)?;
+    let json = str::from_utf8(export_bytes).map_err(invalid_export)?;
     plan_json(json)
 }
 

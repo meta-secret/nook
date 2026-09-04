@@ -2,19 +2,19 @@
 //!
 //! Run: `cargo run --example generate_vault_fixtures -p nook-core`
 
+use std::{fs, io, path::PathBuf};
+
 use nook_core::{ApiKeySecret, Database, SecretId, SecretValue};
-use std::fs;
-use std::path::PathBuf;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
 enum FixtureGenerationError {
     #[error("could not create the fixture directory")]
-    CreateDirectory(#[source] std::io::Error),
+    CreateDirectory(#[source] io::Error),
     #[error("could not serialize the example vault")]
     SerializeVault(#[from] nook_core::DatabaseError),
     #[error("could not write nook-projection.example.yaml")]
-    WriteFixture(#[source] std::io::Error),
+    WriteFixture(#[source] io::Error),
 }
 
 fn api_key(website_url: &str, key: &str) -> SecretValue {

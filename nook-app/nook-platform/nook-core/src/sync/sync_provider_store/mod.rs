@@ -273,6 +273,8 @@ pub struct NormalizedAuthSnapshot {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use std::io;
+
     use super::*;
 
     fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
@@ -295,7 +297,7 @@ mod tests {
         let mut value = serde_json::to_value(github_provider("github", "owner/repo", "pat"))?;
         value
             .as_object_mut()
-            .ok_or_else(|| std::io::Error::other("provider must serialize as an object"))?
+            .ok_or_else(|| io::Error::other("provider must serialize as an object"))?
             .remove("syncCheckpoint");
 
         let provider: StorageProviderData = serde_json::from_value(value)?;
@@ -319,7 +321,7 @@ mod tests {
         let mut legacy = serde_json::to_value(OAuthFileConfigData::default())?;
         let object = legacy
             .as_object_mut()
-            .ok_or_else(|| serde_json::Error::io(std::io::Error::other("expected object")))?;
+            .ok_or_else(|| serde_json::Error::io(io::Error::other("expected object")))?;
         object.remove("iCloudShareTarget");
 
         let migrated: OAuthFileConfigData = serde_json::from_value(legacy)?;

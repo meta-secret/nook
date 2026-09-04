@@ -151,6 +151,8 @@ fn validate_provider_snapshot(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
     use crate::{
         DeviceIdentity, OAuthFileConfigData, OauthFilePreset, SigningIdentity, StorageProviderData,
@@ -212,7 +214,7 @@ mod tests {
             .deliveries
             .into_iter()
             .find(|delivery| delivery.device_id == *member.device_id())
-            .ok_or_else(|| std::io::Error::other("member delivery must exist"))?;
+            .ok_or_else(|| io::Error::other("member delivery must exist"))?;
         let package = create_sentinel_onboarding_package(
             request,
             delivery,
@@ -241,7 +243,7 @@ mod tests {
             accepted.provider_snapshot.providers[0]
                 .oauth_file
                 .as_ref()
-                .ok_or_else(|| std::io::Error::other("provider OAuth fixture must exist"))?
+                .ok_or_else(|| io::Error::other("provider OAuth fixture must exist"))?
                 .access_token,
             crate::StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
         );

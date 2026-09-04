@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::errors::{ValidationError, ValidationResult};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -51,8 +53,8 @@ impl StorageMode {
     }
 }
 
-impl std::fmt::Display for StorageMode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for StorageMode {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
@@ -410,6 +412,8 @@ pub fn validate_connect(
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use std::io;
+
     use super::*;
 
     #[test]
@@ -441,7 +445,7 @@ mod tests {
         assert!(validate_connect(STORAGE_MODE_GITHUB, "  ").is_err());
         assert_eq!(
             validate_connect(STORAGE_MODE_GITHUB, " ghp_test ")?
-                .ok_or_else(|| std::io::Error::other("GitHub credential must be returned"))?
+                .ok_or_else(|| io::Error::other("GitHub credential must be returned"))?
                 .as_str(),
             "ghp_test"
         );

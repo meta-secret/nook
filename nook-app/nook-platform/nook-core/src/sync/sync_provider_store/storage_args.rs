@@ -320,6 +320,8 @@ pub fn vault_storage_args(
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use std::io;
+
     use super::*;
     use crate::{
         EnrollmentProvider, LocalFolderConfigData, ProviderSyncCheckpoint,
@@ -425,7 +427,7 @@ mod tests {
         let oauth = provider
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("OAuth config must exist"))?;
+            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.drive_mode = GoogleDriveMode::Shared;
         assert_eq!(
             storage_args_for_provider(&provider),
@@ -434,7 +436,7 @@ mod tests {
         provider
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("OAuth config must exist"))?
+            .ok_or_else(|| io::Error::other("OAuth config must exist"))?
             .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-1".to_owned());
         assert_eq!(
             storage_args_for_provider(&provider)?.repo,
@@ -561,7 +563,7 @@ mod tests {
         let oauth = icloud
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("OAuth config must exist"))?;
+            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Private;
         assert!(validate_provider_row_replication(&icloud, ReplicationType::Personal).is_ok());
         assert_eq!(
@@ -571,7 +573,7 @@ mod tests {
         let oauth = icloud
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("OAuth config must exist"))?;
+            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Shared;
         oauth.icloud_share_target =
             crate::StoredICloudShareTarget::SharedTarget("not-a-cloudkit-share-target".to_owned());
@@ -596,7 +598,7 @@ mod tests {
         let oauth = icloud
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("OAuth config must exist"))?;
+            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Shared;
         oauth.icloud_share_target = crate::StoredICloudShareTarget::SharedTarget(target.clone());
 
@@ -628,7 +630,7 @@ mod tests {
                 Some(" owner/repo "),
                 None,
             )?
-            .ok_or_else(|| std::io::Error::other("GitHub args must exist"))?
+            .ok_or_else(|| io::Error::other("GitHub args must exist"))?
             .repo,
             "owner/repo"
         );
@@ -647,7 +649,7 @@ mod tests {
                 Some("draft-name"),
                 Some(&oauth),
             )?
-            .ok_or_else(|| std::io::Error::other("OAuth args must exist"))?
+            .ok_or_else(|| io::Error::other("OAuth args must exist"))?
             .repo,
             "file-id\tdraft-name"
         );
@@ -660,7 +662,7 @@ mod tests {
                 Some("ignored-draft-name"),
                 Some(&oauth),
             )?
-            .ok_or_else(|| std::io::Error::other("shared OAuth args must exist"))?
+            .ok_or_else(|| io::Error::other("shared OAuth args must exist"))?
             .repo,
             "shared:shared-folder\tstored-name"
         );

@@ -1,6 +1,6 @@
 //! Connect-time vault assessment and session hydration from stored YAML.
 
-use crate::errors::VaultResult;
+use crate::errors::{self, VaultResult};
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
     VaultCrypto, VaultMetaState, VaultType, VaultUnlock, assess_connect_access, deserialize_stored,
@@ -231,7 +231,7 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
     let store_id = match crate::read_vault_store_id(content)? {
         crate::VaultStoreIdentity::Assigned(store_id) => store_id,
         crate::VaultStoreIdentity::Unassigned => {
-            return Err(crate::errors::VaultFormatError::YamlMissingSections.into());
+            return Err(errors::VaultFormatError::YamlMissingSections.into());
         }
     };
     let vault_name = match crate::read_vault_name(content)? {
@@ -253,6 +253,7 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support;
 
     #[test]
     fn vault_access_status_labels_are_stable_across_host_bindings() {
@@ -305,7 +306,7 @@ mod tests {
 
     #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
-        let (keys, identity, yaml) = crate::test_support::simple_genesis_projection()?;
+        let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
         assert!(!content_requires_genesis(yaml.as_str(), false)?);
         assert_eq!(
             access_status_for_vault_content(yaml.as_str(), &identity)?,

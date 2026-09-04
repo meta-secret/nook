@@ -1,3 +1,5 @@
+use std::fmt;
+
 use super::{DEFAULT_GITHUB_REPO_NAME, ValidationError, ValidationResult};
 
 /// Validated GitHub personal access token.
@@ -20,8 +22,8 @@ impl GithubPat {
     }
 }
 
-impl std::fmt::Display for GithubPat {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for GithubPat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
@@ -95,8 +97,8 @@ impl GithubRepoName {
     }
 }
 
-impl std::fmt::Display for GithubRepoName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for GithubRepoName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }

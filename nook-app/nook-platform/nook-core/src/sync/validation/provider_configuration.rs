@@ -1,3 +1,5 @@
+use std::fmt;
+
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_STORAGE_REF_SEP, OauthFilePreset,
     StorageMode, StorageProviderType, SyncProviderTarget, ValidationError, ValidationResult,
@@ -43,8 +45,8 @@ impl GoogleDriveFolderId {
     }
 }
 
-impl std::fmt::Display for DriveBackupName {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for DriveBackupName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }
@@ -75,8 +77,8 @@ impl OauthAccessToken {
     }
 }
 
-impl std::fmt::Display for OauthAccessToken {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for OauthAccessToken {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&self.0)
     }
 }

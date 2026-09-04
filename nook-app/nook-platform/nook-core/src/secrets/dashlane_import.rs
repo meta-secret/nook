@@ -3,7 +3,11 @@
 //! Accepts either a single Dashlane category CSV (`credentials`, secure notes,
 //! or payments) or the unencrypted ZIP export that contains those files.
 
-use std::io::{Cursor, Read};
+use std::{
+    fmt,
+    io::{Cursor, Read},
+    str,
+};
 
 use csv::StringRecord;
 use thiserror::Error;
@@ -86,7 +90,7 @@ fn is_zip_export(bytes: &[u8]) -> bool {
         || bytes.starts_with(b"PK\x07\x08")
 }
 
-fn invalid_archive(error: impl std::fmt::Display) -> DashlaneImportError {
+fn invalid_archive(error: impl fmt::Display) -> DashlaneImportError {
     DashlaneImportError::InvalidArchive(error.to_string())
 }
 
@@ -482,7 +486,7 @@ pub fn plan_dashlane_import(
     if is_zip_export(export_bytes) {
         return plan_zip_import(export_bytes);
     }
-    let csv_text = std::str::from_utf8(export_bytes).map_err(|_| {
+    let csv_text = str::from_utf8(export_bytes).map_err(|_| {
         DashlaneImportError::InvalidArchive(
             "expected UTF-8 CSV or a Dashlane CSV ZIP archive".to_owned(),
         )

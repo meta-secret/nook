@@ -31,11 +31,12 @@ pub fn hydrate_keys_from_projection_yaml(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_support;
     use crate::{VaultResult, VaultUnlock};
 
     #[test]
     fn hydrate_keys_from_genesis_projection_yaml() -> VaultResult<()> {
-        let (keys, identity, yaml) = crate::test_support::simple_genesis_projection()?;
+        let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
         let (secrets_key, members_key) =
             hydrate_keys_from_projection_yaml(yaml.as_str(), &identity)?;
         assert_eq!(secrets_key, keys.secrets_key.as_str());

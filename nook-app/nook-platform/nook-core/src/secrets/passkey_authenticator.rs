@@ -6,6 +6,7 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ciborium::value::{Integer, Value};
+use ciborium::{de, ser};
 use getrandom::fill;
 use p256::Sec1Point;
 use p256::ecdsa::{Signature, SigningKey, signature::Signer};
@@ -213,14 +214,13 @@ fn cose_public_key(encoded_point: &Sec1Point) -> PasskeyAuthenticatorResult<Vec<
         (integer(-3), Value::Bytes(y.to_vec())),
     ]);
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(&value, &mut bytes)
-        .map_err(|_| PasskeyAuthenticatorError::Serialization)?;
+    ser::into_writer(&value, &mut bytes).map_err(|_| PasskeyAuthenticatorError::Serialization)?;
     Ok(bytes)
 }
 
 fn cose_coordinates(bytes: &[u8]) -> PasskeyAuthenticatorResult<(Vec<u8>, Vec<u8>)> {
-    let value: Value = ciborium::de::from_reader(bytes)
-        .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
+    let value: Value =
+        de::from_reader(bytes).map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
     let Value::Map(entries) = value else {
         return Err(PasskeyAuthenticatorError::InvalidKeyMaterial);
     };
@@ -329,8 +329,7 @@ fn attestation_object(authenticator_data: Vec<u8>) -> PasskeyAuthenticatorResult
         ),
     ]);
     let mut bytes = Vec::new();
-    ciborium::ser::into_writer(&value, &mut bytes)
-        .map_err(|_| PasskeyAuthenticatorError::Serialization)?;
+    ser::into_writer(&value, &mut bytes).map_err(|_| PasskeyAuthenticatorError::Serialization)?;
     Ok(bytes)
 }
 
@@ -507,6 +506,8 @@ fn same_credential_material(left: &PasskeySecret, right: &PasskeySecret) -> bool
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::*;
     use p256::ecdsa::{VerifyingKey, signature::Verifier};
 
@@ -539,7 +540,7 @@ mod tests {
         let result = create_website_passkey(&registration_request(), &[])?;
         result.credential.validate()?;
         let attestation = URL_SAFE_NO_PAD.decode(&result.attestation_object)?;
-        let value: Value = ciborium::de::from_reader(attestation.as_slice())?;
+        let value: Value = de::from_reader(attestation.as_slice())?;
         let Value::Map(entries) = value else {
             panic!("attestation must be a map")
         };
@@ -565,7 +566,7 @@ mod tests {
             user_verification_required: true,
         };
         let assertion =
-            assert_website_passkey(&request, std::slice::from_ref(&registration.credential))?;
+            assert_website_passkey(&request, slice::from_ref(&registration.credential))?;
         assert_eq!(assertion.updated_credential.signature_count, 1);
         let auth_data = URL_SAFE_NO_PAD.decode(&assertion.authenticator_data)?;
         let client_data = URL_SAFE_NO_PAD.decode(&assertion.client_data_json)?;
@@ -670,7 +671,7 @@ mod tests {
             id: credential.credential_id.clone(),
         }];
         assert_eq!(
-            create_website_passkey(&excluded_request, std::slice::from_ref(&credential)),
+            create_website_passkey(&excluded_request, slice::from_ref(&credential)),
             Err(PasskeyAuthenticatorError::CredentialExcluded)
         );
 
@@ -684,7 +685,7 @@ mod tests {
             user_verification_required: true,
         };
         assert_eq!(
-            assert_website_passkey(&assertion_request, std::slice::from_ref(&credential)),
+            assert_website_passkey(&assertion_request, slice::from_ref(&credential)),
             Err(PasskeyAuthenticatorError::InvalidRequest(
                 "allowed credential id"
             ))

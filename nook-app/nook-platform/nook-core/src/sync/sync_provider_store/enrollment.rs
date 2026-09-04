@@ -222,6 +222,8 @@ fn shared_enrollment_provider(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
     use crate::{
         EnrollmentProviderDataRef, OAuthFileConfigData, ProviderSyncCheckpoint,
@@ -312,7 +314,7 @@ mod tests {
         let oauth = shared_drive
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("OAuth config must exist"))?;
+            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.drive_mode = GoogleDriveMode::Shared;
         oauth.folder_id =
             crate::StoredGoogleDriveFolder::FolderId("persisted-shared-folder".to_owned());
@@ -378,7 +380,7 @@ mod tests {
         other
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("configured provider required"))?
+            .ok_or_else(|| io::Error::other("configured provider required"))?
             .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-other".to_owned());
         let mut matching = oauth_provider(
             "matching",
@@ -389,7 +391,7 @@ mod tests {
         matching
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("configured provider required"))?
+            .ok_or_else(|| io::Error::other("configured provider required"))?
             .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-required".to_owned());
         let providers = vec![private, other, matching];
 

@@ -1,5 +1,6 @@
 //! Atomic core integration for provider-independent Sentinel genesis.
 
+use crate::i18n_keys;
 use crate::{
     DeviceIdentity, DeviceMode, ReplicationType, SentinelGenesisSession,
     SentinelGenesisShareDelivery, SentinelPolicy, SigningIdentity, StoredSecretRecord,
@@ -46,17 +47,13 @@ impl SentinelGenesisPhase {
     #[must_use]
     pub const fn translation_key(self) -> &'static str {
         match self {
-            Self::Inactive => crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_INACTIVE,
+            Self::Inactive => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_INACTIVE,
             Self::CollectingParticipants => {
-                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
+                i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
             }
-            Self::ReadyToFinalize => {
-                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_READY_TO_FINALIZE
-            }
-            Self::DeliveringShares => {
-                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_DELIVERING_SHARES
-            }
-            Self::Complete => crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COMPLETE,
+            Self::ReadyToFinalize => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_READY_TO_FINALIZE,
+            Self::DeliveringShares => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_DELIVERING_SHARES,
+            Self::Complete => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COMPLETE,
         }
     }
 
@@ -198,7 +195,7 @@ mod tests {
     fn core_finalization_has_no_full_key_envelope() -> crate::VaultResult<()> {
         assert_eq!(
             SentinelGenesisPhase::CollectingParticipants.translation_key(),
-            crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
+            i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
         );
         assert_eq!(
             SentinelGenesisPhase::DeliveringShares.complete_delivery(),

@@ -147,6 +147,8 @@ fn non_empty(value: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use crate::{GoogleDriveMode, ICloudMode, OAuthFileConfigData, OauthFilePreset};
 
     use super::{
@@ -299,7 +301,7 @@ mod tests {
         );
 
         let updated = update_oauth_remote_ref(&google, " manager-ref ")
-            .ok_or_else(|| std::io::Error::other("remote reference update must exist"))?;
+            .ok_or_else(|| io::Error::other("remote reference update must exist"))?;
         assert_eq!(updated.file_id.as_deref(), Some("manager-ref"));
         assert!(update_oauth_remote_ref(&updated, "manager-ref").is_none());
         assert!(update_oauth_remote_ref(&updated, " ").is_none());

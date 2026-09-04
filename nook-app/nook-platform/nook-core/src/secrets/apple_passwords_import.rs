@@ -4,7 +4,11 @@
 //! Accepts either a plaintext Apple Passwords / Safari passwords CSV, or a
 //! Safari browsing-data ZIP that contains a passwords CSV entry.
 
-use std::io::{Cursor, Read};
+use std::{
+    fmt,
+    io::{Cursor, Read},
+    str,
+};
 
 use csv::StringRecord;
 use thiserror::Error;
@@ -149,7 +153,7 @@ fn is_zip_export(bytes: &[u8]) -> bool {
         || bytes.starts_with(b"PK\x07\x08")
 }
 
-fn invalid_archive(error: impl std::fmt::Display) -> ApplePasswordsImportError {
+fn invalid_archive(error: impl fmt::Display) -> ApplePasswordsImportError {
     ApplePasswordsImportError::InvalidArchive(error.to_string())
 }
 
@@ -242,7 +246,7 @@ pub fn plan_apple_passwords_export(
     if is_zip_export(export_bytes) {
         return plan_safari_zip_import(export_bytes);
     }
-    let csv_text = std::str::from_utf8(export_bytes).map_err(|_| {
+    let csv_text = str::from_utf8(export_bytes).map_err(|_| {
         ApplePasswordsImportError::InvalidArchive(
             "expected UTF-8 CSV or a Safari browsing-data ZIP archive".to_owned(),
         )

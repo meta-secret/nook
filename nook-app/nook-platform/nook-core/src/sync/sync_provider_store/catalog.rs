@@ -347,6 +347,10 @@ fn non_empty(value: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
+    use std::io;
+
     use serde_json::json;
 
     use crate::{
@@ -480,12 +484,8 @@ mod tests {
 
         let self_row = github_provider("gh-self", "nook", "github_pat_11AAAA");
         assert!(
-            find_duplicate_sync_provider(
-                std::slice::from_ref(&self_row),
-                &self_row,
-                Some("gh-self")
-            )
-            .is_none()
+            find_duplicate_sync_provider(slice::from_ref(&self_row), &self_row, Some("gh-self"))
+                .is_none()
         );
         assert!(
             find_duplicate_sync_provider(
@@ -517,14 +517,14 @@ mod tests {
         private
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("private OAuth config must exist"))?
+            .ok_or_else(|| io::Error::other("private OAuth config must exist"))?
             .drive_mode = GoogleDriveMode::Private;
         let mut shared =
             oauth_provider("drive-shared", OauthFilePreset::GoogleDrive, None, "events");
         let shared_oauth = shared
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("shared OAuth config must exist"))?;
+            .ok_or_else(|| io::Error::other("shared OAuth config must exist"))?;
         shared_oauth.drive_mode = GoogleDriveMode::Shared;
         shared_oauth.folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-team".to_owned());
         let providers = vec![private.clone(), shared.clone()];

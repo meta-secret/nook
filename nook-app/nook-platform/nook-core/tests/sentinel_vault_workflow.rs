@@ -1,5 +1,7 @@
 //! Sentinel vault key-share lifecycle integration tests.
 
+use std::slice;
+
 use nook_core::{
     DeviceIdentity, DeviceMode, MultiDeviceError, SentinelPolicy, VaultArchitecture, VaultType,
     VaultUnlock, create_sentinel_share_records, generate_store_id, generate_vault_keys,
@@ -46,7 +48,7 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
             MultiDeviceError::SentinelCeremonyRequired
         ))
     ));
-    assert!(load_sentinel_vault(yaml.as_str(), std::slice::from_ref(&first)).is_err());
+    assert!(load_sentinel_vault(yaml.as_str(), slice::from_ref(&first)).is_err());
 
     let loaded = load_sentinel_vault(yaml.as_str(), &[first.clone(), second.clone()])?;
     assert_eq!(loaded.secrets_key, keys.secrets_key);

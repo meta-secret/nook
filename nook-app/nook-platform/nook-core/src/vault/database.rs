@@ -186,6 +186,8 @@ impl Database {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use std::{fs, io, path};
+
     use super::Database;
     use crate::secret_types::StoredRecordPayload;
     use crate::vault_wire::StoredVaultYaml;
@@ -274,10 +276,10 @@ mod tests {
 
     #[test]
     fn example_fixtures_roundtrip() -> anyhow::Result<()> {
-        let fixtures = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
+        let fixtures = path::Path::new(env!("CARGO_MANIFEST_DIR")).join("fixtures");
         let passphrase = TEST_PASSPHRASE;
 
-        let yaml = std::fs::read_to_string(fixtures.join("nook-projection.example.yaml"))?;
+        let yaml = fs::read_to_string(fixtures.join("nook-projection.example.yaml"))?;
 
         assert!(yaml.as_str().contains("secrets:"));
         assert!(yaml.as_str().contains('|'));
@@ -340,7 +342,7 @@ mod tests {
         let mut db = sample_db();
         assert_eq!(
             db.remove(&sid("github.com"))
-                .ok_or_else(|| std::io::Error::other("removed record must exist"))?
+                .ok_or_else(|| io::Error::other("removed record must exist"))?
                 .data,
             api_key("hunter2")
         );

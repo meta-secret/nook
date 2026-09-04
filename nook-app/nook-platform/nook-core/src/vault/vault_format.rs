@@ -374,6 +374,8 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use std::{error, io, slice};
+
     use super::*;
     use crate::{SecretId, StoredRecordPayload};
 
@@ -536,7 +538,7 @@ mod tests {
         let yaml = serialize_stored_yaml_with_unlock(
             &[],
             &VaultUnlock::Keys,
-            std::slice::from_ref(&entry),
+            slice::from_ref(&entry),
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultVersionWrite::Version(1),
         )?;
@@ -640,7 +642,7 @@ secrets: []
 
     #[test]
     fn unknown_architecture_mode_reports_stable_validation_key() -> anyhow::Result<()> {
-        use std::error::Error;
+        use error::Error;
 
         let invalid = "\
 schema_version: 1
@@ -656,7 +658,7 @@ secrets: []
             .ok_or_else(|| anyhow::anyhow!("vault format test should reject invalid input"))?;
         let source = error
             .source()
-            .ok_or_else(|| std::io::Error::other("test source value must exist"))?
+            .ok_or_else(|| io::Error::other("test source value must exist"))?
             .to_string();
         assert!(
             source.contains("errors.validation.unknown_device_mode:future-device-mode"),

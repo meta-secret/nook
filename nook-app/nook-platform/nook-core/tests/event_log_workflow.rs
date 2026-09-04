@@ -1,5 +1,7 @@
 //! Event-sourcing integration scenarios using the in-memory harness.
 
+use std::slice;
+
 #[path = "event_log_harness.rs"]
 mod harness;
 
@@ -679,7 +681,7 @@ fn union_order_does_not_change_projection() -> VaultResult<()> {
 
     forward.session.union_remote(&events)?;
     for event in events.iter().rev() {
-        reverse.session.union_remote(std::slice::from_ref(event))?;
+        reverse.session.union_remote(slice::from_ref(event))?;
     }
 
     let graph_f = forward.session.store.load_graph(forward.store_id())?;

@@ -4,7 +4,9 @@
 //! module keeps protection naming and safe passkey identifiers consistent for
 //! every host without exposing credential bytes or private device material.
 
-use serde::{Deserialize, Serialize};
+use std::{error, fmt};
+
+use serde::{Deserialize, Serialize, de::Error as _};
 use sha2::{Digest, Sha256};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -97,8 +99,8 @@ pub enum DeviceAccessProviderLabelError {
     ContainsControlCharacter,
 }
 
-impl std::fmt::Display for DeviceAccessProviderLabelError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for DeviceAccessProviderLabelError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::TooLong => formatter.write_str("passkey provider label is too long"),
             Self::ContainsControlCharacter => {
@@ -164,7 +166,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let raw = String::deserialize(deserializer)?;
-    DeviceId::parse(&raw).map_err(serde::de::Error::custom)
+    DeviceId::parse(&raw).map_err(D::Error::custom)
 }
 
 fn deserialize_verified_store_id<'de, D>(deserializer: D) -> Result<StoreId, D::Error>
@@ -172,7 +174,7 @@ where
     D: serde::Deserializer<'de>,
 {
     let raw = String::deserialize(deserializer)?;
-    StoreId::parse(&raw).map_err(serde::de::Error::custom)
+    StoreId::parse(&raw).map_err(D::Error::custom)
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
@@ -236,8 +238,8 @@ pub enum DeviceAccessProfileTransitionError {
     CredentialChanged,
 }
 
-impl std::fmt::Display for DeviceAccessProfileTransitionError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for DeviceAccessProfileTransitionError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::CredentialChanged => {
                 formatter.write_str("passkey changed before its metadata was saved")
@@ -246,7 +248,7 @@ impl std::fmt::Display for DeviceAccessProfileTransitionError {
     }
 }
 
-impl std::error::Error for DeviceAccessProfileTransitionError {}
+impl error::Error for DeviceAccessProfileTransitionError {}
 
 impl DeviceAccessProfile {
     pub fn set_passkey_name(

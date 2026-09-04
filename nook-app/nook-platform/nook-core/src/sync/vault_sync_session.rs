@@ -91,6 +91,7 @@ pub fn reconcile_yaml_sync(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::errors;
     use crate::{
         PasswordEnvelope, PasswordUnlockEntry, VaultKeys, VaultResult, generate_store_id,
         generate_vault_keys, genesis_auth_record, genesis_members_records,
@@ -203,7 +204,7 @@ mod tests {
                 assert_eq!(reloaded.version, 42);
             }
             other => {
-                return Err(crate::errors::VaultSyncError::UnexpectedYamlSyncOutcome {
+                return Err(errors::VaultSyncError::UnexpectedYamlSyncOutcome {
                     outcome: format!("{other:?}"),
                 }
                 .into());

@@ -1,6 +1,9 @@
 //! Typed wire strings for vault storage plus compatibility exports for auth/key-access strings.
 
-use serde::{Deserialize, Deserializer};
+use std::{fmt, mem};
+
+use crate::errors;
+use serde::{Deserialize, Deserializer, de::Error as _};
 
 pub use nook_auth2::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
@@ -19,7 +22,7 @@ impl StoredVaultYaml {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -28,8 +31,8 @@ impl StoredVaultYaml {
     }
 }
 
-impl std::fmt::Display for StoredVaultYaml {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for StoredVaultYaml {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -57,7 +60,7 @@ impl SecretPayloadYaml {
 
     #[must_use]
     pub fn into_inner(mut self) -> String {
-        std::mem::take(&mut self.0)
+        mem::take(&mut self.0)
     }
 
     #[must_use]
@@ -66,8 +69,8 @@ impl SecretPayloadYaml {
     }
 }
 
-impl std::fmt::Display for SecretPayloadYaml {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for SecretPayloadYaml {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -119,23 +122,20 @@ impl StoredVaultBlob {
         }
     }
 
-    pub fn parse_auto(raw: &str) -> crate::errors::DatabaseResult<Self> {
+    pub fn parse_auto(raw: &str) -> errors::DatabaseResult<Self> {
         crate::detect_stored_format(raw)?;
         Ok(Self::Yaml(StoredVaultYaml::parse(raw)?))
     }
 }
 
 impl StoredVaultYaml {
-    pub fn parse(raw: &str) -> crate::errors::ValidationResult<Self> {
+    pub fn parse(raw: &str) -> errors::ValidationResult<Self> {
         Ok(Self(raw.to_owned()))
     }
 }
 
 impl SecretPayloadYaml {
-    pub fn parse(
-        secret_type: crate::SecretType,
-        raw: &str,
-    ) -> crate::errors::SecretPayloadResult<Self> {
+    pub fn parse(secret_type: crate::SecretType, raw: &str) -> errors::SecretPayloadResult<Self> {
         crate::SecretValue::from_yaml_str(secret_type, raw)?;
         Ok(Self::from_trusted(raw.to_owned()))
     }
@@ -144,7 +144,7 @@ impl SecretPayloadYaml {
 impl<'de> Deserialize<'de> for StoredVaultYaml {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 

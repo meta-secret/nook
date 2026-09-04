@@ -163,6 +163,8 @@ pub(super) fn vault_architecture_is_default(architecture: &VaultArchitecture) ->
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::super::{
         VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite, deserialize_stored_yaml,
         serialize_stored_yaml, serialize_stored_yaml_with_unlock_name_architecture,
@@ -335,7 +337,7 @@ mod tests {
                 .to_owned(),
         })?;
 
-        let yaml = serialize_stored_yaml(std::slice::from_ref(&record))?;
+        let yaml = serialize_stored_yaml(slice::from_ref(&record))?;
         assert!(yaml.as_str().contains("secrets_key:"));
         assert!(yaml.as_str().contains("members_key:"));
         assert!(!yaml.as_str().contains("dek:"));

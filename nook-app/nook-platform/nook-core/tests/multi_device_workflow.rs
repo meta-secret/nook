@@ -1,5 +1,7 @@
 //! Multi-device vault keys workflow integration tests.
 
+use std::io;
+
 use nook_core::{
     ApiKeySecret, Database, DeviceIdentity, SecretId, SecretValue, VaultCrypto, VaultFormat,
     VaultKeys, approve_join_request, create_join_request_record, deserialize_stored,
@@ -63,7 +65,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     )?);
     let join_two = list_join_requests(&records)
         .pop()
-        .ok_or_else(|| std::io::Error::other("test pop value must exist"))?;
+        .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_two, join_key, member_records) = approve_join_request(
         &keys.secrets_key,
         &keys.members_key,
@@ -82,7 +84,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     )?);
     let join_three = list_join_requests(&records)
         .pop()
-        .ok_or_else(|| std::io::Error::other("test pop value must exist"))?;
+        .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_three, join_key, member_records) = approve_join_request(
         &keys.secrets_key,
         &keys.members_key,
@@ -201,7 +203,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
     records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z")?);
     let join = list_join_requests(&records)
         .pop()
-        .ok_or_else(|| std::io::Error::other("test pop value must exist"))?;
+        .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
     let (auth, join_key, _) = approve_join_request(
         &keys.secrets_key,
@@ -249,7 +251,7 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z")?);
     let join = list_join_requests(&records)
         .pop()
-        .ok_or_else(|| std::io::Error::other("test pop value must exist"))?;
+        .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
     let (auth, join_key, member_records) = approve_join_request(
         &keys.secrets_key,

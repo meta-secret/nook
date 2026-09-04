@@ -180,6 +180,8 @@ pub fn apply_user_records_to_armored_session(
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::*;
     use crate::{
         ApiKeySecret, LoginSecret, SecretId, SecretValue, StoredRecordPayload, VaultResult,
@@ -202,7 +204,7 @@ mod tests {
         )?;
 
         let old_id = SecretId::from_vault_record("secret_old0000001");
-        let mut state = VaultMetaState::from_stored_records(std::slice::from_ref(&auth));
+        let mut state = VaultMetaState::from_stored_records(slice::from_ref(&auth));
         state.secrets.insert(
             old_id.clone(),
             (

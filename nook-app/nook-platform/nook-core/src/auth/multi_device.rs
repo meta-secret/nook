@@ -446,6 +446,8 @@ pub fn sentinel_member_records_from_public_roster(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
     use crate::{
         EventGraph, EventId, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
@@ -595,7 +597,7 @@ mod tests {
         let participant = state
             .sentinel_participants
             .get(identity.device_id())
-            .ok_or_else(|| std::io::Error::other("sentinel participant must exist"))?;
+            .ok_or_else(|| io::Error::other("sentinel participant must exist"))?;
         assert_eq!(participant.encryption_public_key, identity.public_key());
         assert_eq!(participant.signing_public_key, signing.public_key());
         assert_eq!(participant.label, "Owner");
@@ -618,7 +620,7 @@ mod tests {
             state
                 .sentinel_participants
                 .get(identity.device_id())
-                .ok_or_else(|| std::io::Error::other("sentinel participant must exist"))?
+                .ok_or_else(|| io::Error::other("sentinel participant must exist"))?
                 .label,
             "Renamed"
         );
@@ -672,7 +674,7 @@ mod tests {
             let envelopes = state
                 .auth
                 .get(&app_key.auth_id())
-                .ok_or_else(|| std::io::Error::other("member authorization must be replayable"))?;
+                .ok_or_else(|| io::Error::other("member authorization must be replayable"))?;
             assert_eq!(
                 app_key.decrypt_envelope(&envelopes.secrets_key)?,
                 keys.secrets_key

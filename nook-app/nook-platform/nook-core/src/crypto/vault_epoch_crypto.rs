@@ -107,6 +107,8 @@ pub fn rewrap_vault_meta_for_epoch(
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
     use crate::{
         ApiKeySecret, DeviceIdentity, SecretId, SecretValue, VaultOperation, VaultResult,
@@ -217,7 +219,7 @@ mod tests {
         )?);
         records.push(create_join_request_record(&joiner, "2026-06-28T00:01:00Z")?);
         let join = pending_join_for_device(&records, joiner.device_id())
-            .ok_or_else(|| std::io::Error::other("join request must exist"))?;
+            .ok_or_else(|| io::Error::other("join request must exist"))?;
         let (joiner_auth, join_key, member_records) = approve_join_request(
             &old_keys.secrets_key,
             &old_keys.members_key,

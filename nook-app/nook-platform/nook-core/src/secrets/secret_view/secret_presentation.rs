@@ -1,4 +1,5 @@
 use super::{SecretListItem, SecretListItemData, SecretType, Url};
+use crate::secrets::{authenticator_issuer_hosts, login_site_hosts};
 
 /// Normalize a website URL or origin to a comparable host (no leading `www.`).
 #[must_use]
@@ -38,7 +39,7 @@ pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
         return false;
     }
     secret_host.eq_ignore_ascii_case(&origin_host)
-        || crate::secrets::login_site_hosts::login_hosts_share_family(&secret_host, &origin_host)
+        || login_site_hosts::login_hosts_share_family(&secret_host, &origin_host)
 }
 
 /// Intrinsic list clustering key for an authenticator.
@@ -49,10 +50,7 @@ pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
 #[must_use]
 pub fn authenticator_group_key(website_url: &str, issuer: &str) -> String {
     if let Some(host) =
-        crate::secrets::authenticator_issuer_hosts::resolve_authenticator_website_host(
-            website_url,
-            issuer,
-        )
+        authenticator_issuer_hosts::resolve_authenticator_website_host(website_url, issuer)
     {
         return host;
     }
@@ -60,7 +58,7 @@ pub fn authenticator_group_key(website_url: &str, issuer: &str) -> String {
 }
 
 fn normalize_brand_label(raw: &str) -> String {
-    crate::secrets::authenticator_issuer_hosts::normalize_issuer_lookup_key(raw)
+    authenticator_issuer_hosts::normalize_issuer_lookup_key(raw)
 }
 
 pub(super) fn titled_group_key(title: &str, unnamed: &str) -> String {
@@ -265,11 +263,10 @@ impl SecretListItem {
                 website_url,
                 issuer,
                 ..
-            } => crate::secrets::authenticator_issuer_hosts::resolve_authenticator_website_host(
-                website_url,
-                issuer,
-            )
-            .unwrap_or_default(),
+            } => {
+                authenticator_issuer_hosts::resolve_authenticator_website_host(website_url, issuer)
+                    .unwrap_or_default()
+            }
             _ => String::new(),
         }
     }
@@ -393,6 +390,8 @@ impl SecretListItem {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use std::io;
+
     use super::*;
     use crate::SecretId;
 
@@ -416,7 +415,7 @@ mod tests {
         ] {
             let mut item = login_list_item();
             let SecretListItemData::Login { website_url, .. } = &mut item.data else {
-                return Err(std::io::Error::other("expected login item").into());
+                return Err(io::Error::other("expected login item").into());
             };
             *website_url = url.to_owned();
             assert_eq!(item.website_host(), expected, "{url}");
@@ -468,7 +467,7 @@ mod tests {
     fn list_item_reports_no_host_for_malformed_login_url() -> anyhow::Result<()> {
         let mut item = login_list_item();
         let SecretListItemData::Login { website_url, .. } = &mut item.data else {
-            return Err(std::io::Error::other("expected login item").into());
+            return Err(io::Error::other("expected login item").into());
         };
         *website_url = "https://".to_owned();
         assert!(item.website_host().is_empty());

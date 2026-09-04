@@ -1,5 +1,7 @@
 //! One-time, encrypted transfer of an unlocked extension device identity.
 
+use std::mem;
+
 use crate::{
     AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, VaultResult,
@@ -40,7 +42,7 @@ pub struct ExtensionIdentityHandoffMaterial {
 impl ExtensionIdentityHandoffMaterial {
     #[must_use]
     pub fn into_parts(mut self) -> (DeviceIdentity, String) {
-        let signing_seed = std::mem::take(&mut self.signing_seed.0);
+        let signing_seed = mem::take(&mut self.signing_seed.0);
         (self.identity, signing_seed)
     }
 }
