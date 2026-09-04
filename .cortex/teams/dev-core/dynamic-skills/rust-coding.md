@@ -26,32 +26,37 @@ When you see `Option<T>`, ask:
 
 ## Preferred Pattern
 
+### Required actions
+
 - Model closed sets as Rust enums, not `String`.
 - Model different workflow states as enum variants, not optional fields inside a
   reused struct.
 - Put fields only on the variant/sub-struct that actually owns them.
-- Give every data-carrying enum variant a dedicated payload struct.
+- Give an enum variant a dedicated payload struct when it owns multiple
+  independently named fields.
   - Keep each field on the payload for the state that owns it.
-  - Do not use one shared field bag for unrelated variants.
+- Keep unit variants and scalar payload variants when those are the truthful
+  domain and wire shapes.
 - Use a nested enum when one semantic category refines another.
   - For example, model `CredentialRole::Password(Password::Current)` instead of
     placing `CurrentPassword` beside unrelated top-level roles.
 - Keep orthogonal concepts as separate enums.
-  - Do not nest editability, visibility, or another independent dimension under
-    a role merely because both describe one record.
 - Put domain behavior on the type that owns the required knowledge.
   - Prefer methods that validate, transform, or return a domain state.
-  - Do not add `is_*` methods that only decode one enum variant into `bool`.
   - Match the enum directly so new variants remain compiler-visible.
 - Narrow enum variants before reading their payloads.
-  - Prefer a positive `let ... else` followed by simple named-field checks.
-  - Avoid negated compound conditions and deeply nested destructuring patterns.
+  - Prefer a positive `let ... else` followed by simple named-field checks only
+    when every other variant is intentionally handled the same way.
+  - Use an exhaustive `match` when variants represent evolving domain decisions
+    or require distinct behavior.
 - Use a membership collection for uniqueness checks.
   - Prefer `HashSet::insert` when rejecting duplicate identifiers.
-  - Do not scan every prior element when the collection can express membership.
 - Group a focused vocabulary under its owning module.
   - Use concise names such as `field::Index` and `field::Observation`.
   - Keep focused model and serialization tests beside that module.
+
+#### Boundary, error, and WASM requirements
+
 - Required persisted or signed values use required validated newtypes. Never use
   `Option<T>`, empty strings, or a `Missing` enum variant.
 - Use `Option<T>` only when absence is the truthful structural contract, not a
@@ -133,6 +138,22 @@ When you see `Option<T>`, ask:
 - `void` remains TypeScript's unit/effect return type, equivalent to Rust `()`;
   it is not a serialized field-state escape hatch.
 
+### Prohibited actions
+
+- Do not use one shared field bag for unrelated enum variants.
+- Do not replace a unit or scalar enum payload with a dedicated struct merely
+  for structural uniformity.
+- Do not change a persisted enum's payload shape without the explicit wire
+  contract or migration required by the task.
+- Do not nest editability, visibility, or another independent dimension under a
+  role merely because both describe one record.
+- Do not add `is_*` methods that only decode one enum variant into `bool`.
+- Do not use `let ... else` when doing so would silently collapse variants that
+  need exhaustive domain handling.
+- Avoid negated compound conditions and deeply nested destructuring patterns.
+- Do not scan every prior element when a membership collection expresses the
+  same uniqueness rule.
+
 ## Enums instead of booleans
 
 Do not use `bool` as an authored domain value by default. Use a named enum even
@@ -174,7 +195,8 @@ An enum carries the domain meaning in the type and in every variant.
 - Distinct enum types prevent parameters from being swapped accidentally.
 - A new case becomes another variant of the same coherent vocabulary.
 - Exhaustive matching forces every decision point to handle that new case.
-- An enum-of-structs keeps state-specific data on the variant that owns it.
+- State-owned enum payloads keep variant-specific data on the variant that owns
+  it.
 - Mutually exclusive states become the only representable states.
 - Persisted and generated contracts retain semantic names instead of anonymous
   bits.
@@ -460,12 +482,16 @@ whether a value exists.
   dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
-- Check data-carrying variants for dedicated payload structs.
+- Check variants with independently named multi-field payloads for dedicated
+  payload structs.
+- Preserve truthful unit, scalar, and persisted enum wire shapes.
 - Check related categories for a truthful nested-enum boundary.
 - Keep independent dimensions as separate types.
 - Search changed enums for `is_*` methods that only reveal a variant.
 - Replace quadratic duplicate scans with a membership collection.
-- Prefer flat `let ... else` variant narrowing in multi-step filters.
+- Prefer flat `let ... else` variant narrowing in multi-step filters only when
+  every other variant is intentionally equivalent.
+- Require an exhaustive `match` for evolving domain decisions.
 - Inventory authored Rust `bool` fields, parameters, returns, and lint
   allowances in the changed scope.
 - Replace every domain, state, policy, mode, command, configuration, persisted,

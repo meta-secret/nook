@@ -20,6 +20,7 @@ boundary. A plain JavaScript reconstruction passed for a declared
 - Let generated JavaScript use `snake_case` for those callables.
 - Import, re-export, and call generated functions with that same `snake_case`
   name.
+- Preserve sanctioned type-only re-exports through facade modules.
 - Preserve authored Rust struct fields and enum variants in generated contracts.
 - Construct exported `#[wasm_bindgen]` objects through their generated classes.
 - Construct `Tsify` `from_wasm_abi` structural DTOs as the generated structural
@@ -31,7 +32,7 @@ boundary. A plain JavaScript reconstruction passed for a declared
 
 ### Prohibited actions
 
-- Do not use `as` to restore a TypeScript-style alias for a generated callable.
+- Do not use `as` to restore a casing alias for a generated callable.
 - Do not add `rename_all` merely to convert Rust names into JavaScript casing.
 - Do not add a second TypeScript interface over a generated Rust contract.
 - Do not reconstruct a declared `#[wasm_bindgen]` class input as a plain object
@@ -65,10 +66,10 @@ Does not apply to:
 2. Distinguish exported callables from properties and imports.
 3. Remove callable renames and update every generated-binding consumer.
 4. Inventory `rename_all` and field-level renames on Rust-owned contracts.
-5. Remove aliases from generated-WASM imports and re-exports.
+5. Remove generated callable casing aliases from imports and re-exports.
 6. Remove plain-object or raw-value reconstructions of parameters declared as
    generated classes.
-7. Check direct bindings and imports through local facade modules.
+7. Preserve sanctioned type-only re-exports through local facade modules.
 8. Confirm behavior is unchanged and typed Rust/WASM boundaries remain intact.
 9. Require the syntax-aware preflight inventory to be empty.
 

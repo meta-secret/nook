@@ -272,7 +272,7 @@ export function syncProviderTargetKey(
     outcome at the boundary.
   - Return a meaningfully named discriminated union.
 
-### Model sum types as an enum-of-structs, wrap it for wasm
+### Model sum types with state-owned payloads, wrap them for wasm
 
 When a wasm export needs many parameters — especially several optional ones —
 that is a design smell. Do **not** flatten the variants into one stringly-typed
@@ -291,15 +291,13 @@ pub struct NookSyncProviderTarget {
 }
 ```
 
-Model the state as a real core enum. Give every data-carrying variant a
-dedicated struct. Use a thin `#[wasm_bindgen]` object only when the core enum
-cannot cross the generated boundary directly.
+Model the state as a real core enum. Give variants with independently named
+multi-field payloads dedicated structs. Keep unit and scalar variants when they
+are the truthful domain or persisted wire shape. Use a thin `#[wasm_bindgen]`
+object only when the core enum cannot cross the generated boundary directly.
 
 ```rust
-// nook-core: owned enum-of-structs, serializable, testable, no wasm behavior.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct LocalSyncProvider;
-
+// nook-core: enum with state-owned payloads; serializable and testable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct GithubSyncProvider {
     pub repo: String,
@@ -309,7 +307,7 @@ pub struct GithubSyncProvider {
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum SyncProviderTarget {
     Empty,
-    Local(LocalSyncProvider),
+    Local,
     Github(GithubSyncProvider),
     // OauthFile(OauthFileSyncProvider), ...
 }
@@ -323,7 +321,7 @@ pub struct WasmSyncProviderTarget(SyncProviderTarget);
 #[wasm_bindgen]
 impl WasmSyncProviderTarget {
     pub fn local() -> Self {
-        Self(SyncProviderTarget::Local(LocalSyncProvider))
+        Self(SyncProviderTarget::Local)
     }
 
     pub fn github(repo: String, pat: String) -> Self {
@@ -340,9 +338,14 @@ impl From<SyncProviderTarget> for WasmSyncProviderTarget {
 
 Rules:
 
-- The **variant carries its own struct** (`Github(GithubSyncProvider)`), so each
-  state only holds the fields it actually has — no cross-variant field soup, no
-  `oauth_config_present`-style booleans standing in for a variant.
+- A variant with independently named fields carries its own struct
+  (`Github(GithubSyncProvider)`). Each state holds only the fields it owns.
+- Keep unit and scalar variants when they are the truthful domain and wire
+  shape.
+- Do not change a persisted enum payload shape merely to make every variant
+  structurally uniform.
+- Do not use cross-variant field soup or `oauth_config_present`-style booleans
+  to stand in for a variant.
 - A configured variant must not contain optional fields for required
   configuration. Use a separate absence/draft variant, such as `Empty`, rather
   than `Github { pat: Option<String> }`.
@@ -399,8 +402,8 @@ Why the enum wins almost always:
 - **Exhaustive matching.** Adding a state forces every `match` to be revisited;
   an `Option` silently keeps compiling and quietly loses meaning.
 - **No invalid states.** Multiple sibling `Option` fields encode a combinatorial
-  soup of impossible combinations; a single enum-of-structs makes only the legal
-  combinations representable.
+  soup of impossible combinations. An enum with state-owned payloads makes only
+  the legal combinations representable.
 
 Apply this at the design layer that owns the data, usually `nook-core`.
 Let `nook-wasm` expose the canonical enum or a generated object that owns it.
@@ -416,7 +419,7 @@ When `Option<T>` is still acceptable (do not force an enum):
   do not create an enum variant that merely renames failure.
 - When two or more `Option` fields co-vary (present/absent together), that is the
   clearest case that they should collapse into one enum variant carrying a struct
-  — see the `GithubSyncProvider` enum-of-structs pattern above.
+  — see the `GithubSyncProvider` state-owned payload pattern above.
 
 ## Application Checklist
 
@@ -435,9 +438,9 @@ When `Option<T>` is still acceptable (do not force an enum):
       raw `JsValue` and paint a TypeScript type over it with
       `unchecked_return_type` / `unchecked_param_type`; derive the declaration
       and conversion from the Rust type (for example with `Tsify`).
-- [ ] Re-export generated WASM bindings directly; remove local aliases and
-      same-argument forwarding functions that add no lifecycle or translation
-      behavior.
+- [ ] Re-export generated WASM bindings directly. Remove callable casing aliases
+      and same-argument forwarding functions that add no lifecycle or
+      translation behavior. Preserve sanctioned type-only facade re-exports.
 - [ ] Search Svelte state and function parameters for domain identifiers typed
       as `string`; replace them with the generated Rust/WASM identifier type.
 - [ ] Search `$state<"...">` and exported TypeScript unions for domain
@@ -448,7 +451,8 @@ When `Option<T>` is still acceptable (do not force an enum):
       TypeScript summaries solely to simplify ownership.
 - [ ] Treat long wasm functions with many optional parameters (or a flattened
       stringly-typed struct) as a design smell. Model the state as a `nook-core`
-      enum-of-structs and expose a generated object that owns the core value.
+      enum with state-owned payloads and expose a generated object that owns the
+      core value.
 - [ ] Export canonical fieldless core enums directly instead of mirroring them
       in the WASM bridge.
 - [ ] Remove `is_*` methods that only decode enum variants.
