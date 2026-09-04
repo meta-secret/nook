@@ -257,7 +257,7 @@ fn is_struct_or_enum_field(cx: &LateContext<'_>, hir_id: HirId) -> bool {
 
 fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
     let Ok(normalized) = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), ty) else {
-        return true;
+        return contract_type_contains_raw(ty);
     };
     let raw_args = |args: ty::GenericArgsRef<'tcx>| {
         args.types()

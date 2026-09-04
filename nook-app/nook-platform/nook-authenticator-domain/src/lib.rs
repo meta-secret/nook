@@ -1,4 +1,9 @@
 //! Portable domain values for TOTP authenticators and recovery-code updates.
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 
@@ -113,6 +118,13 @@ impl Default for TotpDigits {
 impl TotpDigits {
     /// # Errors
     /// Returns an error when the digit count is outside the supported range.
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: validates a numeric digit count decoded from authenticator data"
+        )
+    )]
     pub fn parse(value: u32) -> Result<Self, AuthenticatorDomainError> {
         if (6..=8).contains(&value) {
             Ok(Self(value))
@@ -122,6 +134,13 @@ impl TotpDigits {
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the validated digit count to numeric adapter representations"
+        )
+    )]
     pub const fn get(self) -> u32 {
         self.0
     }
@@ -149,6 +168,13 @@ impl Default for TotpPeriod {
 impl TotpPeriod {
     /// # Errors
     /// Returns an error when the period is outside the supported range.
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: validates a numeric period decoded from authenticator data"
+        )
+    )]
     pub fn parse(value: u64) -> Result<Self, AuthenticatorDomainError> {
         if (15..=300).contains(&value) {
             Ok(Self(value))
@@ -158,6 +184,13 @@ impl TotpPeriod {
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the validated period to numeric adapter representations"
+        )
+    )]
     pub const fn get(self) -> u64 {
         self.0
     }
