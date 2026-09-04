@@ -11,19 +11,16 @@
 //! source names.
 
 use serde::{Deserialize, Serialize};
-use tsify::Tsify;
 
 /// Credential kind assigned to one field in a fill plan.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuthenticationCredentialKind {
     Username,
     CurrentPassword,
 }
 
 /// Exactly one semantic role observed for a candidate field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuthenticationFillFieldRole {
     Username,
     CurrentPassword,
@@ -33,16 +30,14 @@ pub enum AuthenticationFillFieldRole {
 }
 
 /// Whether the host observed a candidate field as writable.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum AuthenticationFillFieldEditability {
     Writable,
     Readonly,
 }
 
 /// Host-assigned identity for one field inside the observed scope.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticationFillFieldIndex {
     pub value: u32,
 }
@@ -55,8 +50,7 @@ impl AuthenticationFillFieldIndex {
 }
 
 /// Host-observed identity for one candidate fill field.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticationFillFieldObservation {
     /// Zero-based field index inside the observed scope, assigned by the host.
     pub field_index: AuthenticationFillFieldIndex,
@@ -65,8 +59,7 @@ pub struct AuthenticationFillFieldObservation {
 }
 
 /// Why a fill plan cannot be produced for the observed fields.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
 pub enum AuthenticationCredentialFillError {
     /// The host supplied more field observations than the portable boundary permits.
     #[error("the observed scope exceeds the field-count limit")]
@@ -96,16 +89,14 @@ pub enum AuthenticationCredentialFillError {
 }
 
 /// Rust-owned decision for which field receives which credential kind.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticationCredentialFillAssignment {
     pub field_index: AuthenticationFillFieldIndex,
     pub credential: AuthenticationCredentialKind,
 }
 
 /// A complete, host-executable fill plan.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthenticationCredentialFillPlan {
     pub assignments: Vec<AuthenticationCredentialFillAssignment>,
 }
