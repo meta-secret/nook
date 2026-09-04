@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest'
 import {
   CredentialFillAssignment,
   CredentialFillEditability,
+  CredentialFillFieldClassification,
+  CredentialFillFieldClassificationOutcome,
   CredentialFillFieldIndex,
   CredentialFillFieldRole,
   CredentialFillObservation,
@@ -13,10 +15,386 @@ import {
   CredentialFillRejection,
   CredentialFillResult,
   CredentialKind,
+  NookPageInputFieldObservation,
+  PageInputType,
+  classify_companion_credential_fill_field,
   plan_companion_credential_fill,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 describe('companion credential-fill WASM ABI', () => {
+  test.each([
+    {
+      name: 'an unrelated text input',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          [],
+          'search',
+          false,
+        ),
+    },
+    {
+      name: 'a disabled OTP/new/current-password collision',
+      fieldIndexFactory: () => CredentialFillFieldIndex.one(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          true,
+          false,
+          ['one-time-code', 'new-password', 'current-password'],
+          'verification code password',
+          true,
+        ),
+    },
+    {
+      name: 'a text input with current/new-password hints',
+      fieldIndexFactory: () => CredentialFillFieldIndex.two(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          ['current-password', 'new-password'],
+          'search',
+          true,
+        ),
+    },
+    {
+      name: 'a card-security-code password input',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['cc-csc'],
+          'card security code',
+          true,
+        ),
+    },
+    {
+      name: 'a field with conflicting username and cc-csc tokens',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          ['username', 'cc-csc'],
+          'account username',
+          true,
+        ),
+    },
+  ])('returns closed Ignored for $name', (classifierCase) => {
+    const fieldIndex = classifierCase.fieldIndexFactory()
+    const field = classifierCase.fieldFactory()
+    const classification = classify_companion_credential_fill_field(
+      fieldIndex,
+      field,
+    )
+    try {
+      expect(classification).toBeInstanceOf(CredentialFillFieldClassification)
+      expect(classification.kind).toBe(
+        CredentialFillFieldClassificationOutcome.Ignored,
+      )
+      expect(() => classification.observation()).toThrow()
+    } finally {
+      classification.free()
+      field.free()
+      fieldIndex.free()
+    }
+  })
+
+  test.each([
+    {
+      name: 'username',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          ['username'],
+          'account username',
+          true,
+        ),
+      expectedCredential: CredentialKind.Username,
+    },
+    {
+      name: 'writable current password',
+      fieldIndexFactory: () => CredentialFillFieldIndex.one(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['current-password'],
+          'password',
+          true,
+        ),
+      expectedCredential: CredentialKind.CurrentPassword,
+    },
+    {
+      name: 'generic password',
+      fieldIndexFactory: () => CredentialFillFieldIndex.two(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          [],
+          'password',
+          true,
+        ),
+      expectedCredential: CredentialKind.CurrentPassword,
+    },
+    {
+      name: 'explicit username despite OTP-like identity',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          ['username'],
+          'verification code',
+          true,
+        ),
+      expectedCredential: CredentialKind.Username,
+    },
+    {
+      name: 'explicit email despite OTP-like identity',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Email,
+          false,
+          false,
+          ['email'],
+          'one time code',
+          true,
+        ),
+      expectedCredential: CredentialKind.Username,
+    },
+  ])('classifies $name into a planned assignment', (classifierCase) => {
+    const fieldIndex = classifierCase.fieldIndexFactory()
+    const field = classifierCase.fieldFactory()
+    const classification = classify_companion_credential_fill_field(
+      fieldIndex,
+      field,
+    )
+    try {
+      expect(classification).toBeInstanceOf(CredentialFillFieldClassification)
+      expect(classification.kind).toBe(
+        CredentialFillFieldClassificationOutcome.Observed,
+      )
+      const observation = classification.observation()
+      try {
+        const fields = new CredentialFillObservations()
+        try {
+          fields.add(observation)
+          const result = plan_companion_credential_fill(fields)
+          try {
+            expect(result.kind).toBe(CredentialFillPlanningOutcome.Planned)
+            const plan = result.plan()
+            try {
+              const assignments = plan.take_assignments()
+              try {
+                expect(assignments).toHaveLength(1)
+                const assignment = assignments[0]!
+                expect(assignment).toBeInstanceOf(CredentialFillAssignment)
+                expect(assignment.credential).toBe(
+                  classifierCase.expectedCredential,
+                )
+              } finally {
+                for (const assignment of assignments) assignment.free()
+              }
+            } finally {
+              plan.free()
+            }
+          } finally {
+            result.free()
+          }
+        } finally {
+          fields.free()
+        }
+      } finally {
+        observation.free()
+      }
+    } finally {
+      classification.free()
+      field.free()
+      fieldIndex.free()
+    }
+  })
+
+  test.each([
+    {
+      name: 'readonly username',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          true,
+          ['username'],
+          'account username',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.NoCredentialField,
+    },
+    {
+      name: 'readonly current password',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          true,
+          ['current-password'],
+          'password',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.PasswordFieldsReadonly,
+    },
+    {
+      name: 'new password',
+      fieldIndexFactory: () => CredentialFillFieldIndex.one(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['new-password'],
+          'new password',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.NewPasswordFieldPresent,
+    },
+    {
+      name: 'one-time code',
+      fieldIndexFactory: () => CredentialFillFieldIndex.two(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          ['one-time-code'],
+          'verification code',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+    {
+      name: 'password with a one-time-code token and empty identity',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['one-time-code'],
+          '',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+    {
+      name: 'password with a one-time-code token and OTP-negative identity',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['one-time-code'],
+          'card security code',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+    {
+      name: 'email with a one-time-code token and username-positive identity',
+      fieldIndexFactory: () => CredentialFillFieldIndex.one(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Email,
+          false,
+          false,
+          ['one-time-code'],
+          'account email username',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+    {
+      name: 'email with explicit one-time-code and username tokens',
+      fieldIndexFactory: () => CredentialFillFieldIndex.two(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Email,
+          false,
+          false,
+          ['username', 'one-time-code'],
+          'account email',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+    {
+      name: 'password with explicit one-time-code and cc-csc tokens',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['one-time-code', 'cc-csc'],
+          'card security code',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+  ])('classifies $name into a typed rejection', (classifierCase) => {
+    const fieldIndex = classifierCase.fieldIndexFactory()
+    const field = classifierCase.fieldFactory()
+    const classification = classify_companion_credential_fill_field(
+      fieldIndex,
+      field,
+    )
+    try {
+      expect(classification).toBeInstanceOf(CredentialFillFieldClassification)
+      expect(classification.kind).toBe(
+        CredentialFillFieldClassificationOutcome.Observed,
+      )
+      const observation = classification.observation()
+      try {
+        const fields = new CredentialFillObservations()
+        try {
+          fields.add(observation)
+          const result = plan_companion_credential_fill(fields)
+          try {
+            expect(result.kind).toBe(CredentialFillPlanningOutcome.Rejected)
+            expect(result.rejection()).toBe(classifierCase.expectedRejection)
+          } finally {
+            result.free()
+          }
+        } finally {
+          fields.free()
+        }
+      } finally {
+        observation.free()
+      }
+    } finally {
+      classification.free()
+      field.free()
+      fieldIndex.free()
+    }
+  })
+
   test('constructs generated fields and reads typed assignments', () => {
     const usernameIndex = new CredentialFillFieldIndex(4)
     const passwordIndex = new CredentialFillFieldIndex(7)

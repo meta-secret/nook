@@ -8,8 +8,11 @@ mod authentication_advance_control;
 mod control_identity;
 mod destination_identity;
 mod form_identity;
+mod input_role;
 mod one_time_code_progression;
 mod passkey;
+
+pub(crate) use input_role::{AuthenticationInputRole, classify_authentication_input_role};
 
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
@@ -164,53 +167,25 @@ pub fn has_login_context(observation: &LoginContextObservation) -> bool {
 /// Classify whether an input should count as a username/email identity field.
 #[must_use]
 pub fn looks_like_username_field(field: &PageInputFieldObservation) -> bool {
-    if field.disabled
-        || field.read_only
-        || !matches!(
-            field.input_type,
-            PageInputType::Text | PageInputType::Email | PageInputType::Tel
-        )
-    {
+    if field.disabled || field.read_only {
         return false;
     }
-    if has_autocomplete_token(&field.autocomplete_tokens, "username")
-        || has_autocomplete_token(&field.autocomplete_tokens, "email")
-    {
-        return true;
-    }
-    let identity = expand_identity_text(&field.identity_text);
-    if identity.is_empty() || username_negative(&identity) {
-        return false;
-    }
-    if username_positive(&identity) {
-        return true;
-    }
-    field.input_type == PageInputType::Email && field.login_context
+    matches!(
+        classify_authentication_input_role(field),
+        AuthenticationInputRole::Username(_)
+    )
 }
 
 /// Classify whether an input should count as a one-time-code field.
 #[must_use]
 pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool {
-    if field.disabled
-        || field.read_only
-        || !matches!(
-            field.input_type,
-            PageInputType::Text
-                | PageInputType::Tel
-                | PageInputType::Number
-                | PageInputType::Password
-        )
-    {
+    if field.disabled || field.read_only {
         return false;
     }
-    // Identity text from the host includes autocomplete tokens. Prefer tokenized
-    // identity over CSS substring selectors so names like "hotpot" are not OTP.
-    let identity = expand_identity_text(&field.identity_text);
-    if identity.is_empty() || one_time_code_negative(&identity) {
-        return false;
-    }
-    one_time_code_positive(&identity)
-        || has_autocomplete_token(&field.autocomplete_tokens, "one-time-code")
+    matches!(
+        classify_authentication_input_role(field),
+        AuthenticationInputRole::OneTimeCode(_)
+    )
 }
 
 /// True when a checkbox/control label looks like terms / privacy acceptance.
@@ -656,7 +631,7 @@ pub fn can_activate_authentication_route_control(
         && has_local_authentication_scope
 }
 
-fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
+pub(crate) fn has_autocomplete_token(tokens: &[String], expected: &str) -> bool {
     tokens
         .iter()
         .any(|token| token.eq_ignore_ascii_case(expected))
