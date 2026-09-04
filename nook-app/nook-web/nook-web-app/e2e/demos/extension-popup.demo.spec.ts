@@ -2,10 +2,15 @@ import { expect, test, type Route } from '../fixtures'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { demoBeat } from './pilot-demo-helpers'
+import { DeviceProtectionStatus } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 const demoDir = path.dirname(fileURLToPath(import.meta.url))
 const extensionDist = path.resolve(demoDir, '../../../nook-web-extension/dist')
 const extensionRoutePrefix = '/__extension-popup/'
-function installPopupDemoRuntime(): void {
+type PopupDemoSession = {
+  firstStatus: DeviceProtectionStatus
+  followingStatus: DeviceProtectionStatus
+}
+function installPopupDemoRuntime(session: PopupDemoSession): void {
   let statusReads = 0
   const device = {
     deviceId: 'popup-demo-device',
@@ -35,7 +40,14 @@ function installPopupDemoRuntime(): void {
           callback({ ok: true, setup })
           return
         case 'nook:extension-session-status':
-          callback({ ok: true, status: statusReads++ === 0 ? 6 : 3, device })
+          callback({
+            ok: true,
+            status:
+              statusReads++ === 0
+                ? session.firstStatus
+                : session.followingStatus,
+            device,
+          })
           return
         default:
           callback({ ok: true })
@@ -49,8 +61,7 @@ function installPopupDemoRuntime(): void {
   const descriptor: PropertyDescriptor = { value: chromeStub }
   Object.defineProperty(globalThis, 'chrome', descriptor)
 }
-test('keeps mixed session status safe and actionable', async ({ page }) => {
-  await page.addInitScript(installPopupDemoRuntime)
+test.beforeEach(async ({ page }) => {
   await page.route(`**${extensionRoutePrefix}**`, async (route: Route) => {
     const requestPath = new URL(route.request().url()).pathname
     const relativePath = requestPath.slice(extensionRoutePrefix.length)
@@ -58,6 +69,13 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
       path: path.join(extensionDist, relativePath),
     })
   })
+})
+test('keeps mixed session status safe and actionable', async ({ page }) => {
+  const session: PopupDemoSession = {
+    firstStatus: DeviceProtectionStatus.Unlocked,
+    followingStatus: DeviceProtectionStatus.Passkey,
+  }
+  await page.addInitScript(installPopupDemoRuntime, session)
   await page.goto(`${extensionRoutePrefix}popup/index.html?state=mixed`)
   await expect(
     page.locator(
@@ -65,5 +83,21 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
     ),
   ).toBeVisible()
   await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
+  await demoBeat(page)
+})
+
+test('reopens an unlocked popup without another ceremony', async ({ page }) => {
+  const session: PopupDemoSession = {
+    firstStatus: DeviceProtectionStatus.Unlocked,
+    followingStatus: DeviceProtectionStatus.Unlocked,
+  }
+  await page.addInitScript(installPopupDemoRuntime, session)
+  await page.goto(`${extensionRoutePrefix}popup/index.html`)
+  await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
+  await expect(page.getByTestId('extension-device-setup')).toHaveCount(0)
+  await page.reload()
+  await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
+  await expect(page.getByTestId('extension-device-setup')).toHaveCount(0)
+  await expect(page.getByTestId('device-protection-unlock-btn')).toHaveCount(0)
   await demoBeat(page)
 })
