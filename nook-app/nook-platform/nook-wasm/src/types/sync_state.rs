@@ -1,4 +1,6 @@
 use super::{NookPendingSyncConflict, NookProviderSyncRevision, wasm_bindgen};
+use nook_core::{LocalFolderHealth, ManualProviderSync, SyncConflictReview, VaultLastSync};
+use wasm_bindgen::JsError;
 
 const MAX_SAFE_JAVASCRIPT_INTEGER: f64 = 9_007_199_254_740_991.0;
 
@@ -17,7 +19,7 @@ pub struct NookVaultLastSync(nook_core::VaultLastSync);
 impl NookVaultLastSync {
     #[wasm_bindgen]
     pub fn never_synced() -> Self {
-        Self(nook_core::VaultLastSync::NeverSynced)
+        Self(VaultLastSync::NeverSynced)
     }
 
     #[wasm_bindgen]
@@ -29,9 +31,9 @@ impl NookVaultLastSync {
         )
     )]
     pub fn synced(at_unix_milliseconds: f64) -> Result<Self, wasm_bindgen::JsError> {
-        let at_unix_milliseconds = valid_javascript_milliseconds(at_unix_milliseconds)
-            .map_err(wasm_bindgen::JsError::new)?;
-        Ok(Self(nook_core::VaultLastSync::Synced {
+        let at_unix_milliseconds =
+            valid_javascript_milliseconds(at_unix_milliseconds).map_err(JsError::new)?;
+        Ok(Self(VaultLastSync::Synced {
             at_unix_milliseconds,
         }))
     }
@@ -39,8 +41,8 @@ impl NookVaultLastSync {
     #[wasm_bindgen(getter)]
     pub fn state(&self) -> NookVaultLastSyncState {
         match &self.0 {
-            nook_core::VaultLastSync::NeverSynced => NookVaultLastSyncState::NeverSynced,
-            nook_core::VaultLastSync::Synced { .. } => NookVaultLastSyncState::Synced,
+            VaultLastSync::NeverSynced => NookVaultLastSyncState::NeverSynced,
+            VaultLastSync::Synced { .. } => NookVaultLastSyncState::Synced,
         }
     }
 
@@ -55,12 +57,12 @@ impl NookVaultLastSync {
     )]
     pub fn synced_at_unix_milliseconds(&self) -> Result<f64, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::VaultLastSync::Synced {
+            VaultLastSync::Synced {
                 at_unix_milliseconds,
             } => Ok(*at_unix_milliseconds as f64),
-            nook_core::VaultLastSync::NeverSynced => Err(wasm_bindgen::JsError::new(
-                "vault has not completed a synchronization",
-            )),
+            VaultLastSync::NeverSynced => {
+                Err(JsError::new("vault has not completed a synchronization"))
+            }
         }
     }
 }
@@ -92,29 +94,27 @@ pub struct NookManualProviderSync(nook_core::ManualProviderSync);
 impl NookManualProviderSync {
     #[wasm_bindgen]
     pub fn idle() -> Self {
-        Self(nook_core::ManualProviderSync::Idle)
+        Self(ManualProviderSync::Idle)
     }
 
     #[wasm_bindgen]
     pub fn running(provider_id: String) -> Self {
-        Self(nook_core::ManualProviderSync::Running { provider_id })
+        Self(ManualProviderSync::Running { provider_id })
     }
 
     #[wasm_bindgen(getter)]
     pub fn state(&self) -> NookManualProviderSyncState {
         match &self.0 {
-            nook_core::ManualProviderSync::Idle => NookManualProviderSyncState::Idle,
-            nook_core::ManualProviderSync::Running { .. } => NookManualProviderSyncState::Running,
+            ManualProviderSync::Idle => NookManualProviderSyncState::Idle,
+            ManualProviderSync::Running { .. } => NookManualProviderSyncState::Running,
         }
     }
 
     #[wasm_bindgen(getter, js_name = providerId)]
     pub fn provider_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::ManualProviderSync::Running { provider_id } => Ok(provider_id.clone()),
-            nook_core::ManualProviderSync::Idle => {
-                Err(wasm_bindgen::JsError::new("manual provider sync is idle"))
-            }
+            ManualProviderSync::Running { provider_id } => Ok(provider_id.clone()),
+            ManualProviderSync::Idle => Err(JsError::new("manual provider sync is idle")),
         }
     }
 }
@@ -134,19 +134,19 @@ pub struct NookSyncConflictReview(nook_core::SyncConflictReview<NookPendingSyncC
 impl NookSyncConflictReview {
     #[wasm_bindgen]
     pub fn clear() -> Self {
-        Self(nook_core::SyncConflictReview::Clear)
+        Self(SyncConflictReview::Clear)
     }
 
     #[wasm_bindgen]
     pub fn requires_decision(conflict: NookPendingSyncConflict) -> Self {
-        Self(nook_core::SyncConflictReview::RequiresDecision(conflict))
+        Self(SyncConflictReview::RequiresDecision(conflict))
     }
 
     #[wasm_bindgen(getter)]
     pub fn state(&self) -> NookSyncConflictReviewState {
         match &self.0 {
-            nook_core::SyncConflictReview::Clear => NookSyncConflictReviewState::Clear,
-            nook_core::SyncConflictReview::RequiresDecision(_) => {
+            SyncConflictReview::Clear => NookSyncConflictReviewState::Clear,
+            SyncConflictReview::RequiresDecision(_) => {
                 NookSyncConflictReviewState::RequiresDecision
             }
         }
@@ -240,8 +240,8 @@ impl NookSyncConflictReview {
 impl NookSyncConflictReview {
     fn conflict(&self) -> Result<&NookPendingSyncConflict, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::SyncConflictReview::RequiresDecision(conflict) => Ok(conflict),
-            nook_core::SyncConflictReview::Clear => Err(wasm_bindgen::JsError::new(
+            SyncConflictReview::RequiresDecision(conflict) => Ok(conflict),
+            SyncConflictReview::Clear => Err(JsError::new(
                 "sync conflict review does not contain a conflict",
             )),
         }
@@ -263,7 +263,7 @@ pub struct NookLocalFolderHealth(nook_core::LocalFolderHealth);
 impl NookLocalFolderHealth {
     #[wasm_bindgen]
     pub fn healthy() -> Self {
-        Self(nook_core::LocalFolderHealth::Healthy)
+        Self(LocalFolderHealth::Healthy)
     }
 
     #[wasm_bindgen]
@@ -273,7 +273,7 @@ impl NookLocalFolderHealth {
         store_ids: Vec<String>,
         message: String,
     ) -> Self {
-        Self(nook_core::LocalFolderHealth::MultipleVaults(
+        Self(LocalFolderHealth::MultipleVaults(
             nook_core::LocalFolderMultipleVaultsIssue {
                 provider_id,
                 provider_label,
@@ -286,10 +286,8 @@ impl NookLocalFolderHealth {
     #[wasm_bindgen(getter)]
     pub fn state(&self) -> NookLocalFolderHealthState {
         match &self.0 {
-            nook_core::LocalFolderHealth::Healthy => NookLocalFolderHealthState::Healthy,
-            nook_core::LocalFolderHealth::MultipleVaults(_) => {
-                NookLocalFolderHealthState::MultipleVaults
-            }
+            LocalFolderHealth::Healthy => NookLocalFolderHealthState::Healthy,
+            LocalFolderHealth::MultipleVaults(_) => NookLocalFolderHealthState::MultipleVaults,
         }
     }
 
@@ -317,8 +315,8 @@ impl NookLocalFolderHealth {
 impl NookLocalFolderHealth {
     fn issue(&self) -> Result<&nook_core::LocalFolderMultipleVaultsIssue, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::LocalFolderHealth::MultipleVaults(issue) => Ok(issue),
-            nook_core::LocalFolderHealth::Healthy => Err(wasm_bindgen::JsError::new(
+            LocalFolderHealth::MultipleVaults(issue) => Ok(issue),
+            LocalFolderHealth::Healthy => Err(JsError::new(
                 "local folder does not contain multiple vaults",
             )),
         }

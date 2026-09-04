@@ -1,4 +1,5 @@
 use crate::NookError;
+use nook_core::SessionError;
 
 impl From<nook_core::VaultError> for NookError {
     fn from(err: nook_core::VaultError) -> Self {
@@ -12,8 +13,8 @@ impl From<nook_core::VaultError> for NookError {
             VaultError::Password(e) => NookError::Encryption(e.to_string()),
             VaultError::Age(e) => NookError::Encryption(e.to_string()),
             VaultError::Database(e) => NookError::Database(e.to_string()),
-            VaultError::Session(nook_core::SessionError::EmptyProjectionCache) => {
-                NookError::Decryption(nook_core::SessionError::EmptyProjectionCache.to_string())
+            VaultError::Session(SessionError::EmptyProjectionCache) => {
+                NookError::Decryption(SessionError::EmptyProjectionCache.to_string())
             }
             VaultError::Session(e) => NookError::Database(e.to_string()),
             VaultError::VaultSync(e) => NookError::Database(e.to_string()),

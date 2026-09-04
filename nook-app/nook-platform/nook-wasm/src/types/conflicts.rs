@@ -1,4 +1,10 @@
 use super::{NookError, NookProviderSyncRevision, wasm_bindgen};
+use nook_core::{
+    ProviderVaultDecision, ProviderVaultDecisionReason, ProviderVaultIdentityEligibility,
+    VaultSyncConflict, VaultSyncConflictKind,
+};
+use std::collections::BTreeMap;
+use wasm_bindgen::JsError;
 
 /// Pending browser sync resolution state.
 ///
@@ -161,7 +167,7 @@ impl NookPendingSyncConflict {
             pat,
             repo,
             remote_revision: remote_revision.clone(),
-            conflict: nook_core::VaultSyncConflict::Content(nook_core::ContentSyncConflict {
+            conflict: VaultSyncConflict::Content(nook_core::ContentSyncConflict {
                 local_version: u64::from(local_version),
                 remote_version: u64::from(remote_version),
             }),
@@ -191,7 +197,7 @@ impl NookPendingSyncConflict {
             pat,
             repo,
             remote_revision: remote_revision.clone(),
-            conflict: nook_core::VaultSyncConflict::Content(nook_core::ContentSyncConflict {
+            conflict: VaultSyncConflict::Content(nook_core::ContentSyncConflict {
                 local_version,
                 remote_version,
             }),
@@ -221,7 +227,7 @@ impl NookPendingSyncConflict {
             pat,
             repo,
             remote_revision: remote_revision.clone(),
-            conflict: nook_core::VaultSyncConflict::StoreId(nook_core::StoreIdSyncConflict {
+            conflict: VaultSyncConflict::StoreId(nook_core::StoreIdSyncConflict {
                 local_store_id,
                 remote_store_id,
             }),
@@ -320,14 +326,12 @@ impl NookPendingSyncConflict {
         )
     )]
     pub fn content_local_version(&self) -> Result<u32, wasm_bindgen::JsError> {
-        let nook_core::VaultSyncConflict::Content(details) = &self.conflict else {
-            return Err(wasm_bindgen::JsError::new(
-                "Sync conflict is not a content conflict.",
-            ));
+        let VaultSyncConflict::Content(details) = &self.conflict else {
+            return Err(JsError::new("Sync conflict is not a content conflict."));
         };
         let version = details.local_version;
         u32::try_from(version)
-            .map_err(|_| wasm_bindgen::JsError::new("Local vault version exceeds the web limit."))
+            .map_err(|_| JsError::new("Local vault version exceeds the web limit."))
     }
 
     #[wasm_bindgen]
@@ -339,33 +343,31 @@ impl NookPendingSyncConflict {
         )
     )]
     pub fn content_remote_version(&self) -> Result<u32, wasm_bindgen::JsError> {
-        let nook_core::VaultSyncConflict::Content(details) = &self.conflict else {
-            return Err(wasm_bindgen::JsError::new(
-                "Sync conflict is not a content conflict.",
-            ));
+        let VaultSyncConflict::Content(details) = &self.conflict else {
+            return Err(JsError::new("Sync conflict is not a content conflict."));
         };
         let version = details.remote_version;
         u32::try_from(version)
-            .map_err(|_| wasm_bindgen::JsError::new("Remote vault version exceeds the web limit."))
+            .map_err(|_| JsError::new("Remote vault version exceeds the web limit."))
     }
 
     #[wasm_bindgen]
     pub fn local_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.conflict {
-            nook_core::VaultSyncConflict::StoreId(details) => Ok(details.local_store_id.clone()),
-            nook_core::VaultSyncConflict::Content(_) => Err(wasm_bindgen::JsError::new(
-                "Sync conflict is not a store-id conflict.",
-            )),
+            VaultSyncConflict::StoreId(details) => Ok(details.local_store_id.clone()),
+            VaultSyncConflict::Content(_) => {
+                Err(JsError::new("Sync conflict is not a store-id conflict."))
+            }
         }
     }
 
     #[wasm_bindgen]
     pub fn remote_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.conflict {
-            nook_core::VaultSyncConflict::StoreId(details) => Ok(details.remote_store_id.clone()),
-            nook_core::VaultSyncConflict::Content(_) => Err(wasm_bindgen::JsError::new(
-                "Sync conflict is not a store-id conflict.",
-            )),
+            VaultSyncConflict::StoreId(details) => Ok(details.remote_store_id.clone()),
+            VaultSyncConflict::Content(_) => {
+                Err(JsError::new("Sync conflict is not a store-id conflict."))
+            }
         }
     }
 }
@@ -373,6 +375,7 @@ impl NookPendingSyncConflict {
 #[cfg(test)]
 mod pending_sync_conflict_tests {
     use super::*;
+    use nook_core::{CurrentVaultReplaceability, IdentityVaultAppGrantKind};
 
     #[test]
     fn pending_store_id_factory_marks_unsaved_provider() -> Result<(), wasm_bindgen::JsError> {
@@ -399,7 +402,7 @@ mod pending_sync_conflict_tests {
     fn testing_factories_keep_conflict_shapes_in_rust() -> Result<(), wasm_bindgen::JsError> {
         let content =
             NookPendingSyncConflict::for_testing_content("Remote provider".to_owned(), 1, 2);
-        assert_eq!(content.kind(), nook_core::VaultSyncConflictKind::Content);
+        assert_eq!(content.kind(), VaultSyncConflictKind::Content);
         assert_eq!(content.content_local_version()?, 1);
         assert_eq!(content.content_remote_version()?, 2);
 
@@ -408,7 +411,7 @@ mod pending_sync_conflict_tests {
             "store_localDemo01".to_owned(),
             "store_remoteDemo1".to_owned(),
         );
-        assert_eq!(store_id.kind(), nook_core::VaultSyncConflictKind::StoreId);
+        assert_eq!(store_id.kind(), VaultSyncConflictKind::StoreId);
         assert_eq!(store_id.local_store_id()?, "store_localDemo01");
         assert_eq!(store_id.remote_store_id()?, "store_remoteDemo1");
         Ok(())
@@ -418,7 +421,7 @@ mod pending_sync_conflict_tests {
     fn provider_vault_projection_exposes_only_public_decision_facts() {
         let projection = NookProviderVaultDecisionProjection::from_core(
             nook_core::project_provider_vault_decision(
-                nook_core::CurrentVaultReplaceability::Replaceable,
+                CurrentVaultReplaceability::Replaceable,
                 vec![
                     nook_core::ProviderVaultIdentityObservation {
                         identity_id: "identity-personal".to_owned(),
@@ -426,7 +429,7 @@ mod pending_sync_conflict_tests {
                         linked_to_provider_vault: false,
                         protected_local_app_available: true,
                         is_current_app: true,
-                        app_grant: nook_core::IdentityVaultAppGrantKind::NotLinked,
+                        app_grant: IdentityVaultAppGrantKind::NotLinked,
                     },
                     nook_core::ProviderVaultIdentityObservation {
                         identity_id: "identity-work".to_owned(),
@@ -434,7 +437,7 @@ mod pending_sync_conflict_tests {
                         linked_to_provider_vault: true,
                         protected_local_app_available: true,
                         is_current_app: false,
-                        app_grant: nook_core::IdentityVaultAppGrantKind::Granted,
+                        app_grant: IdentityVaultAppGrantKind::Granted,
                     },
                 ],
             ),
@@ -442,23 +445,23 @@ mod pending_sync_conflict_tests {
 
         assert_eq!(
             projection.decision(),
-            nook_core::ProviderVaultDecision::AdoptProviderVault
+            ProviderVaultDecision::AdoptProviderVault
         );
         assert_eq!(
             projection.reason(),
-            nook_core::ProviderVaultDecisionReason::ReadyToAdopt
+            ProviderVaultDecisionReason::ReadyToAdopt
         );
         let identities = projection.identities();
         assert_eq!(identities[0].identity_id(), "identity-personal");
         assert_eq!(
             identities[0].eligibility(),
-            nook_core::ProviderVaultIdentityEligibility::NotLinked
+            ProviderVaultIdentityEligibility::NotLinked
         );
         assert_eq!(identities[1].identity_label(), "Work");
         assert!(!identities[1].is_current_app());
         assert_eq!(
             identities[1].eligibility(),
-            nook_core::ProviderVaultIdentityEligibility::LinkedAndPrepared
+            ProviderVaultIdentityEligibility::LinkedAndPrepared
         );
     }
 }
@@ -512,10 +515,7 @@ impl NookReplacementConflict {
 }
 
 pub(crate) fn replacement_conflicts_to_vec(
-    conflicts: std::collections::BTreeMap<
-        nook_core::SecretId,
-        nook_core::SecretReplacementConflict,
-    >,
+    conflicts: BTreeMap<nook_core::SecretId, nook_core::SecretReplacementConflict>,
 ) -> Result<Vec<NookReplacementConflict>, NookError> {
     conflicts
         .into_values()

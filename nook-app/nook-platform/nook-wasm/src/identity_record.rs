@@ -1,5 +1,14 @@
 //! Typed WASM surface for the local identity directory.
 
+use crate::storage::identity_record;
+use crate::{
+    NookError,
+    device_access::{self, NookDeviceAccessSnapshot, NookDeviceVaultAccess},
+};
+use nook_core::{
+    AppId, DeviceAccessProtectionKind, IdentityId, IdentitySelection, IdentityVaultAppGrantKind,
+};
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::storage::{
@@ -70,10 +79,10 @@ pub(crate) async fn provider_vault_identity_observations(
 fn provider_vault_identity_observations_from_projection(
     session_app_id: &str,
     store_id: &nook_core::StoreId,
-    projection: &crate::storage::identity_record::LocalIdentityProjection,
+    projection: &identity_record::LocalIdentityProjection,
 ) -> Vec<nook_core::ProviderVaultIdentityObservation> {
     let local_protections = local_app_protections(&projection.keyring);
-    let current_app_id = nook_core::AppId::parse(session_app_id).ok();
+    let current_app_id = AppId::parse(session_app_id).ok();
 
     projection
         .directory
@@ -86,7 +95,7 @@ fn provider_vault_identity_observations_from_projection(
                 .filter(|member| {
                     local_protections.iter().any(|entry| {
                         entry.app_id == member.app_id
-                            && entry.protection != nook_core::DeviceAccessProtectionKind::Missing
+                            && entry.protection != DeviceAccessProtectionKind::Missing
                     })
                 })
                 .collect::<Vec<_>>();
@@ -99,7 +108,7 @@ fn provider_vault_identity_observations_from_projection(
                             identity,
                             store_id,
                             &member.app_id,
-                        ) == nook_core::IdentityVaultAppGrantKind::Granted
+                        ) == IdentityVaultAppGrantKind::Granted
                 })
                 .or_else(|| {
                     protected_members.iter().copied().find(|member| {
@@ -107,7 +116,7 @@ fn provider_vault_identity_observations_from_projection(
                             identity,
                             store_id,
                             &member.app_id,
-                        ) == nook_core::IdentityVaultAppGrantKind::Granted
+                        ) == IdentityVaultAppGrantKind::Granted
                     })
                 })
                 .or_else(|| {
@@ -125,16 +134,9 @@ fn provider_vault_identity_observations_from_projection(
                 protected_local_app_available: candidate.is_some(),
                 is_current_app: candidate
                     .is_some_and(|member| current_app_id.as_ref() == Some(&member.app_id)),
-                app_grant: candidate.map_or(
-                    nook_core::IdentityVaultAppGrantKind::NotGranted,
-                    |member| {
-                        nook_core::classify_identity_vault_app_grant(
-                            identity,
-                            store_id,
-                            &member.app_id,
-                        )
-                    },
-                ),
+                app_grant: candidate.map_or(IdentityVaultAppGrantKind::NotGranted, |member| {
+                    nook_core::classify_identity_vault_app_grant(identity, store_id, &member.app_id)
+                }),
             }
         })
         .collect()
@@ -162,7 +164,7 @@ impl NookIdentityMemberSnapshot {
             local_protection: local_protections
                 .iter()
                 .find(|entry| entry.app_id == member.app_id)
-                .map_or(nook_core::DeviceAccessProtectionKind::Missing, |entry| {
+                .map_or(DeviceAccessProtectionKind::Missing, |entry| {
                     entry.protection
                 }),
         }
@@ -197,7 +199,7 @@ impl NookIdentityMemberSnapshot {
     pub fn label(&self) -> Result<String, wasm_bindgen::JsError> {
         self.label
             .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("Identity member label is unknown"))
+            .ok_or_else(|| JsError::new("Identity member label is unknown"))
     }
 }
 
@@ -216,7 +218,7 @@ pub struct NookIdentitySnapshot {
     app_id: String,
     members: Vec<NookIdentityMemberSnapshot>,
     vault_store_ids: Vec<String>,
-    vaults: Vec<crate::device_access::NookDeviceVaultAccess>,
+    vaults: Vec<NookDeviceVaultAccess>,
     app_key_count: u32,
     vault_count: u32,
     fingerprint: String,
@@ -229,7 +231,7 @@ impl NookIdentitySnapshot {
         current_app_id: Option<&str>,
         local_protections: &[LocalAppProtection],
     ) -> Self {
-        let current_app_id = current_app_id.and_then(|value| nook_core::AppId::parse(value).ok());
+        let current_app_id = current_app_id.and_then(|value| AppId::parse(value).ok());
         let app_id = record
             .members
             .first()
@@ -246,7 +248,7 @@ impl NookIdentitySnapshot {
                 .map(|member| {
                     NookIdentityMemberSnapshot::from_member(
                         member,
-                        current_app_id.as_ref().map(nook_core::AppId::as_str),
+                        current_app_id.as_ref().map(AppId::as_str),
                         local_protections,
                     )
                 })
@@ -317,7 +319,7 @@ impl NookIdentitySnapshot {
     }
 
     #[wasm_bindgen]
-    pub fn vaults(&self) -> Vec<crate::device_access::NookDeviceVaultAccess> {
+    pub fn vaults(&self) -> Vec<NookDeviceVaultAccess> {
         self.vaults.clone()
     }
 
@@ -371,9 +373,9 @@ impl NookIdentitySnapshotLoad {
 
     pub fn snapshot(&self) -> Result<NookIdentitySnapshot, wasm_bindgen::JsError> {
         match &self.0 {
-            NookIdentitySnapshotLoadValue::Missing => Err(wasm_bindgen::JsError::new(
-                "Local identity snapshot is missing",
-            )),
+            NookIdentitySnapshotLoadValue::Missing => {
+                Err(JsError::new("Local identity snapshot is missing"))
+            }
             NookIdentitySnapshotLoadValue::Present(snapshot) => Ok(snapshot.clone()),
         }
     }
@@ -403,8 +405,8 @@ fn directory_selection_for_session(
         return NookIdentityDirectorySelection::Empty;
     }
     match persisted_selection {
-        nook_core::IdentitySelection::Empty => NookIdentityDirectorySelection::Empty,
-        nook_core::IdentitySelection::Selected(identity_id) => {
+        IdentitySelection::Empty => NookIdentityDirectorySelection::Empty,
+        IdentitySelection::Selected(identity_id) => {
             NookIdentityDirectorySelection::Selected(identity_id.as_str().to_owned())
         }
     }
@@ -414,7 +416,7 @@ fn directory_selection_for_session(
 pub struct NookIdentityDirectorySnapshot {
     identities: Vec<NookIdentitySnapshot>,
     selection: NookIdentityDirectorySelection,
-    access: crate::device_access::NookDeviceAccessSnapshot,
+    access: NookDeviceAccessSnapshot,
     selected_vault_current_app_granted: bool,
 }
 
@@ -467,7 +469,7 @@ async fn identity_directory_snapshot_for_session(
     let session_app_id = session_app_id.trim();
     let projection = load_local_identity_projection(session_app_id)
         .await
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        .map_err(|error| JsError::new(&error.to_string()))?;
     let protected = projection.protected;
     let protected_app_id = protected.as_ref().map(|(app_id, _)| app_id.clone());
     let current_app_id = if session_app_id.is_empty() {
@@ -478,7 +480,7 @@ async fn identity_directory_snapshot_for_session(
     let directory = projection.directory;
     let keyring = projection.keyring;
     let local_protections = local_app_protections(&keyring);
-    let access = crate::device_access::device_access_snapshot_for_session_with_protected(
+    let access = device_access::device_access_snapshot_for_session_with_protected(
         session_app_id,
         session_unlocked,
         protected,
@@ -508,7 +510,7 @@ async fn identity_directory_snapshot_for_session(
     );
     let current_app = current_app_id
         .as_deref()
-        .and_then(|app_id| nook_core::AppId::parse(app_id).ok());
+        .and_then(|app_id| AppId::parse(app_id).ok());
     let selected_vault_current_app_granted = selected_vault_current_app_granted(
         &selected_identities,
         selected_store_id,
@@ -521,12 +523,9 @@ async fn identity_directory_snapshot_for_session(
             current_app_id.as_deref(),
             &local_protections,
         );
-        snapshot.vaults = crate::device_access::device_vault_access_for_identity(
-            record,
-            &local_app_ids,
-            session_app_id,
-        )
-        .await?;
+        snapshot.vaults =
+            device_access::device_vault_access_for_identity(record, &local_app_ids, session_app_id)
+                .await?;
         identities.push(snapshot);
     }
     Ok(NookIdentityDirectorySnapshot {
@@ -553,7 +552,7 @@ fn selected_vault_current_app_granted(
         .is_some_and(|(store_id, app_id)| {
             identities.iter().any(|identity| {
                 nook_core::classify_identity_vault_app_grant(identity, store_id, app_id)
-                    == nook_core::IdentityVaultAppGrantKind::Granted
+                    == IdentityVaultAppGrantKind::Granted
             })
         })
 }
@@ -580,26 +579,26 @@ pub async fn load_identity_directory_snapshot()
 
 #[wasm_bindgen]
 pub async fn select_identity(identity_id: String) -> Result<(), wasm_bindgen::JsError> {
-    let identity_id = nook_core::IdentityId::parse(&identity_id)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
-    crate::storage::identity_record::update_identity_directory(move |directory| {
+    let identity_id =
+        IdentityId::parse(&identity_id).map_err(|error| JsError::new(&error.to_string()))?;
+    identity_record::update_identity_directory(move |directory| {
         directory
             .select(&identity_id)
-            .map_err(|error| crate::NookError::Database(error.to_string()))
+            .map_err(|error| NookError::Database(error.to_string()))
     })
     .await
-    .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+    .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
 pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_bindgen::JsError> {
     let current_app_id = load_wrapped_device_identity()
         .await
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?
+        .map_err(|error| JsError::new(&error.to_string()))?
         .map(|(app_id, _)| app_id);
     let Some(record) = load_selected_identity()
         .await
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?
+        .map_err(|error| JsError::new(&error.to_string()))?
     else {
         return Ok(NookIdentitySnapshotLoad(
             NookIdentitySnapshotLoadValue::Missing,
@@ -607,7 +606,7 @@ pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_b
     };
     let keyring = load_keyring()
         .await
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        .map_err(|error| JsError::new(&error.to_string()))?;
     let local_protections = local_app_protections(&keyring);
     Ok(NookIdentitySnapshotLoad(
         NookIdentitySnapshotLoadValue::Present(NookIdentitySnapshot::from_record(
@@ -621,20 +620,21 @@ pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_b
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_core::{
+        AppKey, CurrentVaultReplaceability, IdentityDirectory, IdentityRecord,
+        LocalIdentityKeyring, LocalIdentityKeyringEntry,
+    };
 
     #[test]
     fn identity_snapshot_enumerates_public_members_and_vault_ids() -> anyhow::Result<()> {
-        let app_key = nook_core::AppKey::generate()?;
-        let mut record = nook_core::IdentityRecord::create_with_app_key(
-            "Personal",
-            &app_key,
-            Some("MacBook".to_owned()),
-        )?;
+        let app_key = AppKey::generate()?;
+        let mut record =
+            IdentityRecord::create_with_app_key("Personal", &app_key, Some("MacBook".to_owned()))?;
         let store_id = nook_core::generate_store_id()?;
         record.generate_vault_dek(store_id.clone())?;
         let local_protections = [LocalAppProtection {
             app_id: app_key.app_id().clone(),
-            protection: nook_core::DeviceAccessProtectionKind::PasskeyStandard,
+            protection: DeviceAccessProtectionKind::PasskeyStandard,
         }];
 
         let snapshot = NookIdentitySnapshot::from_record(
@@ -649,7 +649,7 @@ mod tests {
         assert!(members[0].current_browser());
         assert_eq!(
             members[0].local_protection(),
-            nook_core::DeviceAccessProtectionKind::PasskeyStandard
+            DeviceAccessProtectionKind::PasskeyStandard
         );
         assert_eq!(
             snapshot.local_access(),
@@ -666,7 +666,7 @@ mod tests {
         assert!(!peer_snapshot.members()[0].current_browser());
         assert_eq!(
             peer_snapshot.members()[0].local_protection(),
-            nook_core::DeviceAccessProtectionKind::PasskeyStandard
+            DeviceAccessProtectionKind::PasskeyStandard
         );
         assert_eq!(
             peer_snapshot.local_access(),
@@ -682,9 +682,9 @@ mod tests {
 
     #[test]
     fn unmatched_live_session_does_not_select_persisted_identity() -> anyhow::Result<()> {
-        let app_key = nook_core::AppKey::generate()?;
-        let record = nook_core::IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
-        let persisted = nook_core::IdentitySelection::Selected(record.identity_id.clone());
+        let app_key = AppKey::generate()?;
+        let record = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let persisted = IdentitySelection::Selected(record.identity_id.clone());
 
         assert!(matches!(
             directory_selection_for_session(&persisted, None, false),
@@ -700,10 +700,9 @@ mod tests {
 
     #[test]
     fn selected_vault_context_resolves_current_browser() -> anyhow::Result<()> {
-        let personal_key = nook_core::AppKey::generate()?;
+        let personal_key = AppKey::generate()?;
         let store_id = nook_core::generate_store_id()?;
-        let mut personal =
-            nook_core::IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
+        let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
         personal.generate_vault_dek(store_id.clone())?;
         let linked = [&personal];
         let current_app_granted = selected_vault_current_app_granted(
@@ -737,13 +736,13 @@ mod tests {
 
     #[test]
     fn selected_vault_context_keeps_other_browser_identity_without_current() -> anyhow::Result<()> {
-        let work_key = nook_core::AppKey::generate()?;
-        let travel_key = nook_core::AppKey::generate()?;
-        let work = nook_core::IdentityRecord::create_with_app_key("Work", &work_key, None)?;
-        let travel = nook_core::IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
+        let work_key = AppKey::generate()?;
+        let travel_key = AppKey::generate()?;
+        let work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
+        let travel = IdentityRecord::create_with_app_key("Travel", &travel_key, None)?;
         let local_protections = [LocalAppProtection {
             app_id: work_key.app_id().clone(),
-            protection: nook_core::DeviceAccessProtectionKind::PinOrPassphrase,
+            protection: DeviceAccessProtectionKind::PinOrPassphrase,
         }];
 
         let snapshots = [&work, &travel]
@@ -784,10 +783,9 @@ mod tests {
 
     #[test]
     fn selected_vault_context_rejects_current_member_without_vault_grant() -> anyhow::Result<()> {
-        let app_key = nook_core::AppKey::generate()?;
+        let app_key = AppKey::generate()?;
         let store_id = nook_core::generate_store_id()?;
-        let mut identity =
-            nook_core::IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         identity.generate_vault_dek(store_id.clone())?;
         let vault = identity
             .vault_deks
@@ -830,7 +828,7 @@ mod tests {
         app_key: &nook_core::AppKey,
     ) -> anyhow::Result<nook_core::LocalIdentityKeyringEntry> {
         let wrapped = nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "123456")?;
-        Ok(nook_core::LocalIdentityKeyringEntry::legacy(
+        Ok(LocalIdentityKeyringEntry::legacy(
             identity.identity_id.clone(),
             app_key.app_id().clone(),
             wrapped,
@@ -841,13 +839,13 @@ mod tests {
         identities: Vec<nook_core::IdentityRecord>,
         selected: nook_core::IdentityId,
         entries: Vec<nook_core::LocalIdentityKeyringEntry>,
-    ) -> anyhow::Result<crate::storage::identity_record::LocalIdentityProjection> {
-        Ok(crate::storage::identity_record::LocalIdentityProjection {
-            directory: nook_core::IdentityDirectory::from_records(
+    ) -> anyhow::Result<identity_record::LocalIdentityProjection> {
+        Ok(identity_record::LocalIdentityProjection {
+            directory: IdentityDirectory::from_records(
                 identities,
-                nook_core::IdentitySelection::Selected(selected),
+                IdentitySelection::Selected(selected),
             )?,
-            keyring: nook_core::LocalIdentityKeyring::from_entries(entries)?,
+            keyring: LocalIdentityKeyring::from_entries(entries)?,
             protected: None,
         })
     }
@@ -855,10 +853,10 @@ mod tests {
     fn decision(
         session_app_id: &str,
         store_id: &nook_core::StoreId,
-        projection: &crate::storage::identity_record::LocalIdentityProjection,
+        projection: &identity_record::LocalIdentityProjection,
     ) -> nook_core::ProviderVaultDecisionProjection {
         nook_core::project_provider_vault_decision(
-            nook_core::CurrentVaultReplaceability::Replaceable,
+            CurrentVaultReplaceability::Replaceable,
             provider_vault_identity_observations_from_projection(
                 session_app_id,
                 store_id,
@@ -869,14 +867,13 @@ mod tests {
 
     #[test]
     fn current_and_other_protected_identities_keep_distinct_eligibility() -> anyhow::Result<()> {
-        let current_key = nook_core::AppKey::generate()?;
-        let other_key = nook_core::AppKey::generate()?;
+        let current_key = AppKey::generate()?;
+        let other_key = AppKey::generate()?;
         let store_id = nook_core::generate_store_id()?;
-        let current =
-            nook_core::IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
+        let current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
-        let mut other = nook_core::IdentityRecord::create_with_app_key("Work", &other_key, None)?;
+        let mut other = IdentityRecord::create_with_app_key("Work", &other_key, None)?;
         other.generate_vault_dek(store_id.clone())?;
         let other_entry = keyring_entry(&other, &other_key)?;
         let projection = projection(
@@ -899,14 +896,13 @@ mod tests {
 
     #[test]
     fn linked_identity_without_a_protected_keyring_entry_is_unavailable() -> anyhow::Result<()> {
-        let current_key = nook_core::AppKey::generate()?;
-        let linked_key = nook_core::AppKey::generate()?;
+        let current_key = AppKey::generate()?;
+        let linked_key = AppKey::generate()?;
         let store_id = nook_core::generate_store_id()?;
-        let current =
-            nook_core::IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
+        let current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
-        let mut linked = nook_core::IdentityRecord::create_with_app_key("Work", &linked_key, None)?;
+        let mut linked = IdentityRecord::create_with_app_key("Work", &linked_key, None)?;
         linked.generate_vault_dek(store_id.clone())?;
         let projection = projection(vec![current, linked], current_id, vec![current_entry])?;
 
@@ -923,9 +919,9 @@ mod tests {
     #[test]
     fn revoked_or_missing_dek_envelopes_make_a_protected_identity_unavailable() -> anyhow::Result<()>
     {
-        let app_key = nook_core::AppKey::generate()?;
+        let app_key = AppKey::generate()?;
         let store_id = nook_core::generate_store_id()?;
-        let mut base = nook_core::IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        let mut base = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         base.generate_vault_dek(store_id.clone())?;
         let entry = keyring_entry(&base, &app_key)?;
 

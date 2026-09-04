@@ -1,4 +1,6 @@
 use super::wasm_bindgen;
+use nook_core::{OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry};
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,33 +18,31 @@ impl NookOAuthRefreshCredential {
     #[wasm_bindgen]
     #[must_use]
     pub fn not_issued() -> Self {
-        Self(nook_core::OAuthRefreshCredential::NotIssued)
+        Self(OAuthRefreshCredential::NotIssued)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn token(value: String) -> Self {
-        Self(nook_core::OAuthRefreshCredential::Token(value))
+        Self(OAuthRefreshCredential::Token(value))
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthRefreshCredentialState {
         match &self.0 {
-            nook_core::OAuthRefreshCredential::NotIssued => {
-                NookOAuthRefreshCredentialState::NotIssued
-            }
-            nook_core::OAuthRefreshCredential::Token(_) => NookOAuthRefreshCredentialState::Token,
+            OAuthRefreshCredential::NotIssued => NookOAuthRefreshCredentialState::NotIssued,
+            OAuthRefreshCredential::Token(_) => NookOAuthRefreshCredentialState::Token,
         }
     }
 
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::OAuthRefreshCredential::NotIssued => Err(wasm_bindgen::JsError::new(
-                "OAuth refresh token was not issued",
-            )),
-            nook_core::OAuthRefreshCredential::Token(value) => Ok(value.clone()),
+            OAuthRefreshCredential::NotIssued => {
+                Err(JsError::new("OAuth refresh token was not issued"))
+            }
+            OAuthRefreshCredential::Token(value) => Ok(value.clone()),
         }
     }
 }
@@ -63,31 +63,29 @@ impl NookOAuthTokenExpiry {
     #[wasm_bindgen]
     #[must_use]
     pub fn unknown() -> Self {
-        Self(nook_core::OAuthTokenExpiry::Unknown)
+        Self(OAuthTokenExpiry::Unknown)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn expires_at(value: String) -> Self {
-        Self(nook_core::OAuthTokenExpiry::ExpiresAt(value))
+        Self(OAuthTokenExpiry::ExpiresAt(value))
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthTokenExpiryState {
         match &self.0 {
-            nook_core::OAuthTokenExpiry::Unknown => NookOAuthTokenExpiryState::Unknown,
-            nook_core::OAuthTokenExpiry::ExpiresAt(_) => NookOAuthTokenExpiryState::ExpiresAt,
+            OAuthTokenExpiry::Unknown => NookOAuthTokenExpiryState::Unknown,
+            OAuthTokenExpiry::ExpiresAt(_) => NookOAuthTokenExpiryState::ExpiresAt,
         }
     }
 
     #[wasm_bindgen(getter, js_name = value)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::OAuthTokenExpiry::Unknown => {
-                Err(wasm_bindgen::JsError::new("OAuth token expiry is unknown"))
-            }
-            nook_core::OAuthTokenExpiry::ExpiresAt(value) => Ok(value.clone()),
+            OAuthTokenExpiry::Unknown => Err(JsError::new("OAuth token expiry is unknown")),
+            OAuthTokenExpiry::ExpiresAt(value) => Ok(value.clone()),
         }
     }
 }
@@ -110,59 +108,57 @@ impl NookOAuthRemoteFile {
     #[wasm_bindgen]
     #[must_use]
     pub fn unresolved() -> Self {
-        Self(nook_core::OAuthRemoteFile::Unresolved)
+        Self(OAuthRemoteFile::Unresolved)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn file_id(file_id: String) -> Self {
-        Self(nook_core::OAuthRemoteFile::FileId { file_id })
+        Self(OAuthRemoteFile::FileId { file_id })
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn file_name(file_name: String) -> Self {
-        Self(nook_core::OAuthRemoteFile::FileName { file_name })
+        Self(OAuthRemoteFile::FileName { file_name })
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn identified(file_id: String, file_name: String) -> Self {
-        Self(nook_core::OAuthRemoteFile::Identified { file_id, file_name })
+        Self(OAuthRemoteFile::Identified { file_id, file_name })
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthRemoteFileState {
         match &self.0 {
-            nook_core::OAuthRemoteFile::Unresolved => NookOAuthRemoteFileState::Unresolved,
-            nook_core::OAuthRemoteFile::FileId { .. } => NookOAuthRemoteFileState::FileId,
-            nook_core::OAuthRemoteFile::FileName { .. } => NookOAuthRemoteFileState::FileName,
-            nook_core::OAuthRemoteFile::Identified { .. } => NookOAuthRemoteFileState::Identified,
+            OAuthRemoteFile::Unresolved => NookOAuthRemoteFileState::Unresolved,
+            OAuthRemoteFile::FileId { .. } => NookOAuthRemoteFileState::FileId,
+            OAuthRemoteFile::FileName { .. } => NookOAuthRemoteFileState::FileName,
+            OAuthRemoteFile::Identified { .. } => NookOAuthRemoteFileState::Identified,
         }
     }
 
     #[wasm_bindgen(getter, js_name = fileIdValue)]
     pub fn file_id_value(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::OAuthRemoteFile::FileId { file_id }
-            | nook_core::OAuthRemoteFile::Identified { file_id, .. } => Ok(file_id.clone()),
-            nook_core::OAuthRemoteFile::Unresolved
-            | nook_core::OAuthRemoteFile::FileName { .. } => Err(wasm_bindgen::JsError::new(
-                "OAuth remote file has no file id",
-            )),
+            OAuthRemoteFile::FileId { file_id } | OAuthRemoteFile::Identified { file_id, .. } => {
+                Ok(file_id.clone())
+            }
+            OAuthRemoteFile::Unresolved | OAuthRemoteFile::FileName { .. } => {
+                Err(JsError::new("OAuth remote file has no file id"))
+            }
         }
     }
 
     #[wasm_bindgen(getter, js_name = fileNameValue)]
     pub fn file_name_value(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::OAuthRemoteFile::FileName { file_name }
-            | nook_core::OAuthRemoteFile::Identified { file_name, .. } => Ok(file_name.clone()),
-            nook_core::OAuthRemoteFile::Unresolved | nook_core::OAuthRemoteFile::FileId { .. } => {
-                Err(wasm_bindgen::JsError::new(
-                    "OAuth remote file has no file name",
-                ))
+            OAuthRemoteFile::FileName { file_name }
+            | OAuthRemoteFile::Identified { file_name, .. } => Ok(file_name.clone()),
+            OAuthRemoteFile::Unresolved | OAuthRemoteFile::FileId { .. } => {
+                Err(JsError::new("OAuth remote file has no file name"))
             }
         }
     }
@@ -184,31 +180,29 @@ impl NookOAuthAccountIdentity {
     #[wasm_bindgen]
     #[must_use]
     pub fn unknown() -> Self {
-        Self(nook_core::OAuthAccountIdentity::Unknown)
+        Self(OAuthAccountIdentity::Unknown)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn email(value: String) -> Self {
-        Self(nook_core::OAuthAccountIdentity::Email(value))
+        Self(OAuthAccountIdentity::Email(value))
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookOAuthAccountIdentityState {
         match &self.0 {
-            nook_core::OAuthAccountIdentity::Unknown => NookOAuthAccountIdentityState::Unknown,
-            nook_core::OAuthAccountIdentity::Email(_) => NookOAuthAccountIdentityState::Email,
+            OAuthAccountIdentity::Unknown => NookOAuthAccountIdentityState::Unknown,
+            OAuthAccountIdentity::Email(_) => NookOAuthAccountIdentityState::Email,
         }
     }
 
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::OAuthAccountIdentity::Unknown => Err(wasm_bindgen::JsError::new(
-                "OAuth account identity is unknown",
-            )),
-            nook_core::OAuthAccountIdentity::Email(value) => Ok(value.clone()),
+            OAuthAccountIdentity::Unknown => Err(JsError::new("OAuth account identity is unknown")),
+            OAuthAccountIdentity::Email(value) => Ok(value.clone()),
         }
     }
 }

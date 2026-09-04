@@ -6,6 +6,8 @@
 //! through the browser JS API while keeping request shape, PRF extraction, and
 //! passkey metadata parsing in Rust/WASM.
 
+use js_sys::{JsString, Object, Promise, Reflect, Uint8Array};
+use nook_core::DeviceId;
 mod options;
 
 pub(crate) use options::{
@@ -62,7 +64,7 @@ pub(crate) fn credential_id(credential: &PublicKeyCredential) -> Result<Vec<u8>,
 
 pub(crate) fn passkey_label_with_device_id(passkey_label: &str, device_id: &str) -> String {
     let label = normalized_passkey_label(passkey_label);
-    let device_id = nook_core::DeviceId::parse(device_id).map_or_else(
+    let device_id = DeviceId::parse(device_id).map_or_else(
         |_| device_id.trim().to_owned(),
         |id| nook_core::recovery_device_id_hint(&id),
     );
@@ -189,7 +191,7 @@ fn credential_ceremony_error_message(
 }
 
 fn js_error_text(error: &js_sys::Object, property: &str) -> Option<String> {
-    js_sys::Reflect::get(error, &js_sys::JsString::from(property))
+    Reflect::get(error, &JsString::from(property))
         .ok()
         .and_then(|value| value.as_string())
         .filter(|value| !value.trim().is_empty())
@@ -219,43 +221,43 @@ async fn try_signal_current_user_details(
     })?;
 
     let label = normalized_passkey_label(passkey_label);
-    let details = js_sys::Object::new();
-    js_sys::Reflect::set(
+    let details = Object::new();
+    Reflect::set(
         details.as_ref(),
-        &js_sys::JsString::from("rpId"),
-        &js_sys::JsString::from(rp_id),
+        &JsString::from("rpId"),
+        &JsString::from(rp_id),
     )
     .map_err(|_| JsError::new("Failed to set passkey rpId detail"))?;
-    js_sys::Reflect::set(
+    Reflect::set(
         details.as_ref(),
-        &js_sys::JsString::from("userId"),
-        js_sys::Uint8Array::from(user_handle).as_ref(),
+        &JsString::from("userId"),
+        Uint8Array::from(user_handle).as_ref(),
     )
     .map_err(|_| JsError::new("Failed to set passkey userId detail"))?;
-    js_sys::Reflect::set(
+    Reflect::set(
         details.as_ref(),
-        &js_sys::JsString::from("name"),
-        &js_sys::JsString::from(label.as_str()),
+        &JsString::from("name"),
+        &JsString::from(label.as_str()),
     )
     .map_err(|_| JsError::new("Failed to set passkey name detail"))?;
-    js_sys::Reflect::set(
+    Reflect::set(
         details.as_ref(),
-        &js_sys::JsString::from("displayName"),
-        &js_sys::JsString::from(label.as_str()),
+        &JsString::from("displayName"),
+        &JsString::from(label.as_str()),
     )
     .map_err(|_| JsError::new("Failed to set passkey displayName detail"))?;
 
     let promise = method_fn
         .call1(&public_key_credential, details.as_ref())
         .map_err(|_| JsError::new("Failed to signal updated passkey details"))?;
-    JsFuture::from(js_sys::Promise::from(promise))
+    JsFuture::from(Promise::from(promise))
         .await
         .map_err(|_| JsError::new("Updated passkey details were rejected"))?;
     Ok(())
 }
 
 fn bytes_from_buffer(value: &js_sys::ArrayBuffer, name: &str) -> Result<Vec<u8>, JsError> {
-    let bytes = js_sys::Uint8Array::new(value);
+    let bytes = Uint8Array::new(value);
     if bytes.length() == 0 {
         return Err(JsError::new(&format!("Empty {name}")));
     }
@@ -271,7 +273,7 @@ fn get_optional_object(
     target: &js_sys::Object,
     field: &str,
 ) -> Result<Option<js_sys::Object>, JsError> {
-    let value = js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+    let value = Reflect::get(target, &JsString::from(field))
         .map_err(|_| JsError::new(&format!("Failed to read passkey option field {field}")))?;
     if value.is_undefined() || value.is_null() {
         Ok(None)
@@ -295,7 +297,7 @@ fn get_optional_buffer(
 }
 
 fn get_optional_bool(target: &js_sys::Object, field: &str) -> Result<Option<bool>, JsError> {
-    let value = js_sys::Reflect::get(target, &js_sys::JsString::from(field))
+    let value = Reflect::get(target, &JsString::from(field))
         .map_err(|_| JsError::new(&format!("Failed to read passkey option field {field}")))?;
     Ok(value.as_bool())
 }

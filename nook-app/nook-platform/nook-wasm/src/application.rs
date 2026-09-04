@@ -28,7 +28,7 @@ pub fn configured_vault_application() -> nook_core::VaultApplication {
         #[cfg(test)]
         return configured
             .get()
-            .unwrap_or(nook_core::VaultApplication::UnifiedDevelopment);
+            .unwrap_or(VaultApplication::UnifiedDevelopment);
 
         #[cfg(not(test))]
         configured
@@ -41,15 +41,16 @@ pub fn configured_vault_application() -> nook_core::VaultApplication {
 mod tests {
     use super::{configure_vault_application, configured_vault_application};
     use nook_core::VaultApplication;
+    use std::{panic, thread};
 
     #[test]
     fn application_configuration_is_idempotent_and_immutable() -> anyhow::Result<()> {
-        std::thread::spawn(|| {
+        thread::spawn(|| {
             configure_vault_application(VaultApplication::Simple);
             configure_vault_application(VaultApplication::Simple);
             assert_eq!(configured_vault_application(), VaultApplication::Simple);
 
-            let changed = std::panic::catch_unwind(|| {
+            let changed = panic::catch_unwind(|| {
                 configure_vault_application(VaultApplication::Sentinel);
             });
             assert!(changed.is_err());

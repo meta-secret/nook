@@ -3,6 +3,12 @@ use super::{
     NookOAuthRemoteFile, NookOAuthTokenExpiry, NookSecretRecord, NookVaultManager, NookVaultMember,
     wasm_bindgen,
 };
+use nook_core::{
+    EnrollmentProvider, EnrollmentProviderDataRef, PersonalEnrollmentProvider,
+    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+    StorageProviderType, SyncProviderTarget,
+};
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -13,16 +19,16 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen]
     #[must_use]
     pub fn local() -> Self {
-        Self(nook_core::EnrollmentProvider::personal(
-            nook_core::PersonalEnrollmentProvider::local(),
+        Self(EnrollmentProvider::personal(
+            PersonalEnrollmentProvider::local(),
         ))
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn github(repo: String, pat: String) -> Self {
-        Self(nook_core::EnrollmentProvider::personal(
-            nook_core::PersonalEnrollmentProvider::github(pat, repo),
+        Self(EnrollmentProvider::personal(
+            PersonalEnrollmentProvider::github(pat, repo),
         ))
     }
 
@@ -37,8 +43,8 @@ impl NookEnrollmentProvider {
         remote_file: NookOAuthRemoteFile,
         account: NookOAuthAccountIdentity,
     ) -> Self {
-        Self(nook_core::EnrollmentProvider::personal(
-            nook_core::PersonalEnrollmentProvider::oauth_file(
+        Self(EnrollmentProvider::personal(
+            PersonalEnrollmentProvider::oauth_file(
                 preset,
                 access_token,
                 refresh.0,
@@ -52,16 +58,16 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen]
     #[must_use]
     pub fn shared_provider_grant(joiner_identity: String, storage_target_id: String) -> Self {
-        Self(nook_core::EnrollmentProvider::shared(
-            nook_core::SharedEnrollmentProvider::google_drive(joiner_identity, storage_target_id),
+        Self(EnrollmentProvider::shared(
+            SharedEnrollmentProvider::google_drive(joiner_identity, storage_target_id),
         ))
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn icloud_shared(storage_target_id: String) -> Self {
-        Self(nook_core::EnrollmentProvider::shared(
-            nook_core::SharedEnrollmentProvider::icloud(storage_target_id),
+        Self(EnrollmentProvider::shared(
+            SharedEnrollmentProvider::icloud(storage_target_id),
         ))
     }
 
@@ -77,32 +83,19 @@ impl NookEnrollmentProvider {
     #[must_use]
     pub fn provider_type(&self) -> nook_core::StorageProviderType {
         match &self.0 {
-            nook_core::EnrollmentProvider::PersonalCredentialTransfer(provider) => {
-                match provider.data() {
-                    nook_core::PersonalEnrollmentProviderData::Local => {
-                        nook_core::StorageProviderType::Local
-                    }
-                    nook_core::PersonalEnrollmentProviderData::Github { .. } => {
-                        nook_core::StorageProviderType::Github
-                    }
-                    nook_core::PersonalEnrollmentProviderData::OauthFile { .. } => {
-                        nook_core::StorageProviderType::OauthFile
-                    }
-                }
-            }
-            nook_core::EnrollmentProvider::SharedProviderGrant(_) => {
-                nook_core::StorageProviderType::OauthFile
-            }
+            EnrollmentProvider::PersonalCredentialTransfer(provider) => match provider.data() {
+                PersonalEnrollmentProviderData::Local => StorageProviderType::Local,
+                PersonalEnrollmentProviderData::Github { .. } => StorageProviderType::Github,
+                PersonalEnrollmentProviderData::OauthFile { .. } => StorageProviderType::OauthFile,
+            },
+            EnrollmentProvider::SharedProviderGrant(_) => StorageProviderType::OauthFile,
         }
     }
 
     #[wasm_bindgen(getter, js_name = isSharedProviderGrant)]
     #[must_use]
     pub fn is_shared_provider_grant(&self) -> bool {
-        matches!(
-            self.0,
-            nook_core::EnrollmentProvider::SharedProviderGrant(_)
-        )
+        matches!(self.0, EnrollmentProvider::SharedProviderGrant(_))
     }
 
     #[wasm_bindgen(getter, js_name = onboardingType)]
@@ -114,52 +107,51 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = githubPat)]
     pub fn github_pat(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::Github { pat, .. },
-            ) => Ok(pat.clone()),
-            _ => Err(wasm_bindgen::JsError::new(
-                "enrollment provider is not GitHub",
-            )),
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::Github {
+                pat,
+                ..
+            }) => Ok(pat.clone()),
+            _ => Err(JsError::new("enrollment provider is not GitHub")),
         }
     }
 
     #[wasm_bindgen(getter, js_name = githubRepo)]
     pub fn github_repo(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::Github { repo, .. },
-            ) => Ok(repo.clone()),
-            _ => Err(wasm_bindgen::JsError::new(
-                "enrollment provider is not GitHub",
-            )),
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::Github {
+                repo,
+                ..
+            }) => Ok(repo.clone()),
+            _ => Err(JsError::new("enrollment provider is not GitHub")),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthPreset)]
     pub fn oauth_preset(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::OauthFile { preset, .. },
-            ) => Ok(preset.clone()),
-            nook_core::EnrollmentProviderDataRef::Shared(
-                nook_core::SharedEnrollmentProviderData::GoogleDrive { oauth_preset, .. },
-            ) => Ok(oauth_preset.clone()),
-            nook_core::EnrollmentProviderDataRef::Shared(
-                nook_core::SharedEnrollmentProviderData::ICloud { .. },
-            ) => Ok("icloud".to_owned()),
-            _ => Err(wasm_bindgen::JsError::new(
-                "enrollment provider does not use OAuth",
-            )),
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
+                preset,
+                ..
+            }) => Ok(preset.clone()),
+            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
+                oauth_preset,
+                ..
+            }) => Ok(oauth_preset.clone()),
+            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::ICloud { .. }) => {
+                Ok("icloud".to_owned())
+            }
+            _ => Err(JsError::new("enrollment provider does not use OAuth")),
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthAccessToken)]
     pub fn oauth_access_token(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::OauthFile { access_token, .. },
-            ) => Ok(access_token.clone()),
-            _ => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
+                access_token,
+                ..
+            }) => Ok(access_token.clone()),
+            _ => Err(JsError::new(
                 "enrollment provider does not carry an OAuth access token",
             )),
         }
@@ -168,10 +160,11 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = oauthRefresh)]
     pub fn oauth_refresh(&self) -> Result<NookOAuthRefreshCredential, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::OauthFile { refresh, .. },
-            ) => Ok(NookOAuthRefreshCredential(refresh.clone())),
-            _ => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
+                refresh,
+                ..
+            }) => Ok(NookOAuthRefreshCredential(refresh.clone())),
+            _ => Err(JsError::new(
                 "enrollment provider does not carry OAuth refresh state",
             )),
         }
@@ -180,10 +173,11 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = oauthExpiry)]
     pub fn oauth_expiry(&self) -> Result<NookOAuthTokenExpiry, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::OauthFile { expiry, .. },
-            ) => Ok(NookOAuthTokenExpiry(expiry.clone())),
-            _ => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
+                expiry,
+                ..
+            }) => Ok(NookOAuthTokenExpiry(expiry.clone())),
+            _ => Err(JsError::new(
                 "enrollment provider does not carry OAuth expiry state",
             )),
         }
@@ -192,10 +186,11 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = oauthRemoteFile)]
     pub fn oauth_remote_file(&self) -> Result<NookOAuthRemoteFile, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::OauthFile { remote_file, .. },
-            ) => Ok(NookOAuthRemoteFile(remote_file.clone())),
-            _ => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
+                remote_file,
+                ..
+            }) => Ok(NookOAuthRemoteFile(remote_file.clone())),
+            _ => Err(JsError::new(
                 "enrollment provider does not carry OAuth remote-file state",
             )),
         }
@@ -204,10 +199,11 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = oauthAccount)]
     pub fn oauth_account(&self) -> Result<NookOAuthAccountIdentity, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Personal(
-                nook_core::PersonalEnrollmentProviderData::OauthFile { account, .. },
-            ) => Ok(NookOAuthAccountIdentity(account.clone())),
-            _ => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Personal(PersonalEnrollmentProviderData::OauthFile {
+                account,
+                ..
+            }) => Ok(NookOAuthAccountIdentity(account.clone())),
+            _ => Err(JsError::new(
                 "enrollment provider does not carry OAuth account identity",
             )),
         }
@@ -216,13 +212,11 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentityKind)]
     pub fn shared_joiner_identity_kind(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Shared(
-                nook_core::SharedEnrollmentProviderData::GoogleDrive {
-                    joiner_identity_kind,
-                    ..
-                },
-            ) => Ok(joiner_identity_kind.clone()),
-            _ => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
+                joiner_identity_kind,
+                ..
+            }) => Ok(joiner_identity_kind.clone()),
+            _ => Err(JsError::new(
                 "enrollment provider does not require a shared joiner identity",
             )),
         }
@@ -231,12 +225,11 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
     pub fn shared_joiner_identity(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Shared(
-                nook_core::SharedEnrollmentProviderData::GoogleDrive {
-                    joiner_identity, ..
-                },
-            ) => Ok(joiner_identity.clone()),
-            _ => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
+                joiner_identity,
+                ..
+            }) => Ok(joiner_identity.clone()),
+            _ => Err(JsError::new(
                 "enrollment provider does not carry a shared joiner identity",
             )),
         }
@@ -245,13 +238,13 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = sharedStorageTargetId)]
     pub fn shared_storage_target_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.data() {
-            nook_core::EnrollmentProviderDataRef::Shared(
-                nook_core::SharedEnrollmentProviderData::GoogleDrive {
+            EnrollmentProviderDataRef::Shared(
+                SharedEnrollmentProviderData::GoogleDrive {
                     storage_target_id, ..
                 }
-                | nook_core::SharedEnrollmentProviderData::ICloud { storage_target_id },
+                | SharedEnrollmentProviderData::ICloud { storage_target_id },
             ) => Ok(storage_target_id.clone()),
-            nook_core::EnrollmentProviderDataRef::Personal(_) => Err(wasm_bindgen::JsError::new(
+            EnrollmentProviderDataRef::Personal(_) => Err(JsError::new(
                 "enrollment provider is not a shared provider grant",
             )),
         }
@@ -269,51 +262,52 @@ impl NookSyncProviderTarget {
     #[wasm_bindgen]
     #[must_use]
     pub fn local() -> Self {
-        Self(nook_core::SyncProviderTarget::Local)
+        Self(SyncProviderTarget::Local)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn github(repo: String, pat: String) -> Self {
-        Self(nook_core::SyncProviderTarget::Github(
-            nook_core::GithubSyncTarget { repo, pat },
-        ))
+        Self(SyncProviderTarget::Github(nook_core::GithubSyncTarget {
+            repo,
+            pat,
+        }))
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn empty() -> Self {
-        Self(nook_core::SyncProviderTarget::Empty)
+        Self(SyncProviderTarget::Empty)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn is_local(&self) -> bool {
-        matches!(self.0, nook_core::SyncProviderTarget::Local)
+        matches!(self.0, SyncProviderTarget::Local)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn is_local_folder(&self) -> bool {
-        matches!(self.0, nook_core::SyncProviderTarget::LocalFolder(_))
+        matches!(self.0, SyncProviderTarget::LocalFolder(_))
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn is_github(&self) -> bool {
-        matches!(self.0, nook_core::SyncProviderTarget::Github(_))
+        matches!(self.0, SyncProviderTarget::Github(_))
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        matches!(self.0, nook_core::SyncProviderTarget::Empty)
+        matches!(self.0, SyncProviderTarget::Empty)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn is_oauth_file(&self) -> bool {
-        matches!(self.0, nook_core::SyncProviderTarget::OauthFile(_))
+        matches!(self.0, SyncProviderTarget::OauthFile(_))
     }
 }
 
@@ -467,7 +461,7 @@ impl NookVaultSyncResult {
     #[wasm_bindgen(getter, js_name = accessStatus)]
     pub fn access_status(&self) -> Result<nook_core::VaultAccessStatus, wasm_bindgen::JsError> {
         self.access_status
-            .ok_or_else(|| wasm_bindgen::JsError::new("vault access was not assessed"))
+            .ok_or_else(|| JsError::new("vault access was not assessed"))
     }
 
     #[wasm_bindgen(getter)]

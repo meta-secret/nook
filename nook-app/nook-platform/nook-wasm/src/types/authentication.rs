@@ -1,4 +1,6 @@
 use super::wasm_bindgen;
+use nook_core::{AuthenticationWorkflowMatch, WebsiteLoginSaveDecision};
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone)]
@@ -103,13 +105,9 @@ impl NookAuthenticationWorkflowMatch {
     #[wasm_bindgen(getter)]
     pub fn state(&self) -> NookAuthenticationWorkflowMatchState {
         match self.0 {
-            nook_core::AuthenticationWorkflowMatch::NoMatch => {
-                NookAuthenticationWorkflowMatchState::NoMatch
-            }
-            nook_core::AuthenticationWorkflowMatch::Rejected => {
-                NookAuthenticationWorkflowMatchState::Rejected
-            }
-            nook_core::AuthenticationWorkflowMatch::Matched(_) => {
+            AuthenticationWorkflowMatch::NoMatch => NookAuthenticationWorkflowMatchState::NoMatch,
+            AuthenticationWorkflowMatch::Rejected => NookAuthenticationWorkflowMatchState::Rejected,
+            AuthenticationWorkflowMatch::Matched(_) => {
                 NookAuthenticationWorkflowMatchState::Matched
             }
         }
@@ -117,13 +115,13 @@ impl NookAuthenticationWorkflowMatch {
 
     pub fn snapshot(&self) -> Result<NookAuthenticationWorkflowSnapshot, wasm_bindgen::JsError> {
         match self.0 {
-            nook_core::AuthenticationWorkflowMatch::NoMatch => Err(wasm_bindgen::JsError::new(
-                "authentication workflow was not detected",
-            )),
-            nook_core::AuthenticationWorkflowMatch::Rejected => Err(wasm_bindgen::JsError::new(
+            AuthenticationWorkflowMatch::NoMatch => {
+                Err(JsError::new("authentication workflow was not detected"))
+            }
+            AuthenticationWorkflowMatch::Rejected => Err(JsError::new(
                 "authentication workflow observations were rejected",
             )),
-            nook_core::AuthenticationWorkflowMatch::Matched(snapshot) => {
+            AuthenticationWorkflowMatch::Matched(snapshot) => {
                 Ok(NookAuthenticationWorkflowSnapshot::from_core(snapshot))
             }
         }
@@ -359,19 +357,19 @@ enum WebsiteLoginSaveTarget {
 impl NookWebsiteLoginSavePlan {
     pub(crate) fn from_decision(decision: nook_core::WebsiteLoginSaveDecision) -> Self {
         match decision {
-            nook_core::WebsiteLoginSaveDecision::Create => Self {
+            WebsiteLoginSaveDecision::Create => Self {
                 decision: NookWebsiteLoginSaveDecision::Create,
                 target: WebsiteLoginSaveTarget::NoExistingSecret,
             },
-            nook_core::WebsiteLoginSaveDecision::Invalid => Self {
+            WebsiteLoginSaveDecision::Invalid => Self {
                 decision: NookWebsiteLoginSaveDecision::Invalid,
                 target: WebsiteLoginSaveTarget::NoExistingSecret,
             },
-            nook_core::WebsiteLoginSaveDecision::Update { secret_id } => Self {
+            WebsiteLoginSaveDecision::Update { secret_id } => Self {
                 decision: NookWebsiteLoginSaveDecision::Update,
                 target: WebsiteLoginSaveTarget::ExistingSecret(secret_id.to_string()),
             },
-            nook_core::WebsiteLoginSaveDecision::AlreadySaved { secret_id } => Self {
+            WebsiteLoginSaveDecision::AlreadySaved { secret_id } => Self {
                 decision: NookWebsiteLoginSaveDecision::AlreadySaved,
                 target: WebsiteLoginSaveTarget::ExistingSecret(secret_id.to_string()),
             },
@@ -386,7 +384,7 @@ impl NookWebsiteLoginSavePlan {
     #[wasm_bindgen(getter, js_name = secretId)]
     pub fn secret_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.target {
-            WebsiteLoginSaveTarget::NoExistingSecret => Err(wasm_bindgen::JsError::new(
+            WebsiteLoginSaveTarget::NoExistingSecret => Err(JsError::new(
                 "login save decision does not target an existing secret",
             )),
             WebsiteLoginSaveTarget::ExistingSecret(secret_id) => Ok(secret_id.clone()),

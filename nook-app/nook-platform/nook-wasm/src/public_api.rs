@@ -2,7 +2,14 @@ use super::{
     NookEnrollmentProvider, NookLocalFolderConfig, NookProviderReplicationCapability,
     NookStorageConnectArgs, NookVaultArchitecture, passkey_browser, storage, wasm_bindgen,
 };
+use crate::storage::{local_folder, session};
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
+use nook_core::{
+    ICloudShareRole, ICloudSharedTarget, ManagerStoreScopeRef, PasswordGenerationOptions,
+    ProviderOauthPreset, StorageProviderType, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret,
+    VaultArchitecture,
+};
+use wasm_bindgen::JsError;
 
 mod localization;
 pub use localization::*;
@@ -24,31 +31,31 @@ pub use shared_storage_grant::*;
 #[wasm_bindgen]
 #[must_use]
 pub fn is_vault_session_locked() -> bool {
-    storage::session::is_vault_session_locked()
+    session::is_vault_session_locked()
 }
 
 #[wasm_bindgen]
 pub fn set_vault_session_locked(locked: bool) {
-    storage::session::set_vault_session_locked(locked);
+    session::set_vault_session_locked(locked);
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn is_local_folder_backup_supported() -> bool {
-    storage::local_folder::is_local_folder_backup_supported()
+    local_folder::is_local_folder_backup_supported()
 }
 
 #[wasm_bindgen]
 pub async fn choose_local_folder_backup_directory()
 -> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
-    storage::local_folder::choose_local_folder_backup_directory()
+    local_folder::choose_local_folder_backup_directory()
         .await
         .map_err(Into::into)
 }
 
 #[wasm_bindgen]
 pub async fn remove_local_folder_handle(handle_id: String) -> Result<(), wasm_bindgen::JsError> {
-    storage::local_folder::remove_local_folder_handle(Some(handle_id))
+    local_folder::remove_local_folder_handle(Some(handle_id))
         .await
         .map_err(Into::into)
 }
@@ -111,7 +118,7 @@ pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
 #[wasm_bindgen]
 #[must_use]
 pub fn default_password_generation_options() -> nook_core::PasswordGenerationOptions {
-    nook_core::PasswordGenerationOptions::default()
+    PasswordGenerationOptions::default()
 }
 
 #[wasm_bindgen]
@@ -137,7 +144,7 @@ pub fn generate_totp_code(
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(authenticator_from_secret(secret)?
         .current_code(unix_seconds)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?
+        .map_err(|error| JsError::new(&error.to_string()))?
         .code)
 }
 
@@ -169,7 +176,7 @@ pub fn verify_totp_code(
         };
         let candidate = authenticator
             .current_code(shifted)
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+            .map_err(|error| JsError::new(&error.to_string()))?;
         if candidate.code == trimmed {
             return Ok(true);
         }
@@ -184,11 +191,10 @@ fn authenticator_from_secret(
         issuer: "Nook".to_owned(),
         account: String::new(),
         website_url: String::new(),
-        secret: nook_core::TotpSecret::parse(secret)
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?,
-        algorithm: nook_core::TotpAlgorithm::Sha1,
-        digits: nook_core::TotpDigits::default(),
-        period: nook_core::TotpPeriod::default(),
+        secret: TotpSecret::parse(secret).map_err(|error| JsError::new(&error.to_string()))?,
+        algorithm: TotpAlgorithm::Sha1,
+        digits: TotpDigits::default(),
+        period: TotpPeriod::default(),
         backup_codes: Vec::new(),
     })
 }
@@ -234,19 +240,14 @@ pub fn is_vault_password_recommended_length(password: &str) -> bool {
 #[wasm_bindgen]
 #[must_use]
 pub fn has_github_credentials(pat: &str) -> bool {
-    nook_core::has_provider_credentials(
-        nook_core::StorageProviderType::Github,
-        Some(pat),
-        None,
-        None,
-    )
+    nook_core::has_provider_credentials(StorageProviderType::Github, Some(pat), None, None)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn has_oauth_credentials(access_token: &str) -> bool {
     nook_core::has_provider_credentials(
-        nook_core::StorageProviderType::OauthFile,
+        StorageProviderType::OauthFile,
         None,
         Some(access_token),
         None,
@@ -257,7 +258,7 @@ pub fn has_oauth_credentials(access_token: &str) -> bool {
 #[must_use]
 pub fn has_local_folder_credentials(handle_id: &str) -> bool {
     nook_core::has_provider_credentials(
-        nook_core::StorageProviderType::LocalFolder,
+        StorageProviderType::LocalFolder,
         None,
         None,
         Some(handle_id),
@@ -323,8 +324,8 @@ pub fn active_vault_providers(
     scope: &NookManagerStoreScope,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let active_store_id = match scope.as_core() {
-        nook_core::ManagerStoreScopeRef::Unscoped => None,
-        nook_core::ManagerStoreScopeRef::Store(store_id) => Some(store_id),
+        ManagerStoreScopeRef::Unscoped => None,
+        ManagerStoreScopeRef::Store(store_id) => Some(store_id),
     };
     snapshot.providers = nook_core::active_vault_providers(&snapshot.providers, active_store_id);
     Ok(snapshot)
@@ -337,8 +338,8 @@ pub fn sync_providers_for_active_vault(
     scope: &NookManagerStoreScope,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let active_store_id = match scope.as_core() {
-        nook_core::ManagerStoreScopeRef::Unscoped => None,
-        nook_core::ManagerStoreScopeRef::Store(store_id) => Some(store_id),
+        ManagerStoreScopeRef::Unscoped => None,
+        ManagerStoreScopeRef::Store(store_id) => Some(store_id),
     };
     snapshot.providers =
         nook_core::sync_providers_for_active_vault(&snapshot.providers, active_store_id)?;
@@ -352,8 +353,8 @@ pub fn local_provider_for_active_vault(
     scope: &NookManagerStoreScope,
 ) -> Result<NookProviderSelection, wasm_bindgen::JsError> {
     let active_store_id = match scope.as_core() {
-        nook_core::ManagerStoreScopeRef::Unscoped => None,
-        nook_core::ManagerStoreScopeRef::Store(store_id) => Some(store_id),
+        ManagerStoreScopeRef::Unscoped => None,
+        ManagerStoreScopeRef::Store(store_id) => Some(store_id),
     };
     Ok(NookProviderSelection(
         nook_core::local_provider_for_active_vault(&snapshot.providers, active_store_id)?
@@ -406,7 +407,7 @@ pub fn staged_github_remote_storage_args(
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         nook_core::staged_remote_storage_args(
-            nook_core::StorageProviderType::Github,
+            StorageProviderType::Github,
             Some(github_pat),
             Some(github_repo),
             None,
@@ -421,7 +422,7 @@ pub fn staged_oauth_remote_storage_args(
 ) -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
         nook_core::staged_remote_storage_args(
-            nook_core::StorageProviderType::OauthFile,
+            StorageProviderType::OauthFile,
             None,
             None,
             Some(&oauth_file),
@@ -432,12 +433,7 @@ pub fn staged_oauth_remote_storage_args(
 #[wasm_bindgen]
 pub fn staged_local_remote_storage_args() -> Result<NookStagedStorageArgs, wasm_bindgen::JsError> {
     Ok(NookStagedStorageArgs::new(
-        nook_core::staged_remote_storage_args(
-            nook_core::StorageProviderType::Local,
-            None,
-            None,
-            None,
-        )?,
+        nook_core::staged_remote_storage_args(StorageProviderType::Local, None, None, None)?,
     ))
 }
 
@@ -489,15 +485,13 @@ pub fn create_icloud_shared_storage_target(
     short_guid: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
     let role = match role.trim() {
-        "owner" => nook_core::ICloudShareRole::Owner,
-        "participant" => nook_core::ICloudShareRole::Participant,
+        "owner" => ICloudShareRole::Owner,
+        "participant" => ICloudShareRole::Participant,
         other => {
-            return Err(wasm_bindgen::JsError::new(&format!(
-                "Unknown iCloud share role: {other}"
-            )));
+            return Err(JsError::new(&format!("Unknown iCloud share role: {other}")));
         }
     };
-    Ok(nook_core::ICloudSharedTarget::new(
+    Ok(ICloudSharedTarget::new(
         role,
         zone_name,
         owner_record_name,
@@ -511,9 +505,7 @@ pub fn create_icloud_shared_storage_target(
 pub fn parse_icloud_shared_storage_target(
     storage_target_id: &str,
 ) -> Result<nook_core::ICloudSharedTarget, wasm_bindgen::JsError> {
-    Ok(nook_core::ICloudSharedTarget::from_storage_id(
-        storage_target_id,
-    )?)
+    Ok(ICloudSharedTarget::from_storage_id(storage_target_id)?)
 }
 
 #[wasm_bindgen]
@@ -557,7 +549,7 @@ pub fn icloud_oauth_tokens_to_config(
 
 #[wasm_bindgen]
 pub fn default_vault_architecture() -> NookVaultArchitecture {
-    NookVaultArchitecture::from_core(nook_core::VaultArchitecture::default())
+    NookVaultArchitecture::from_core(VaultArchitecture::default())
 }
 
 #[wasm_bindgen]
@@ -618,8 +610,8 @@ pub fn provider_oauth_preset_for_provider(
 ) -> nook_core::ProviderOauthPreset {
     provider
         .oauth_file
-        .map_or(nook_core::ProviderOauthPreset::NotApplicable, |oauth| {
-            nook_core::ProviderOauthPreset::Preset(oauth.preset)
+        .map_or(ProviderOauthPreset::NotApplicable, |oauth| {
+            ProviderOauthPreset::Preset(oauth.preset)
         })
 }
 
@@ -629,7 +621,7 @@ pub fn provider_oauth_preset_for_provider(
 pub fn provider_oauth_preset_for_config(
     config: nook_core::OAuthFileConfigData,
 ) -> nook_core::ProviderOauthPreset {
-    nook_core::ProviderOauthPreset::Preset(config.preset)
+    ProviderOauthPreset::Preset(config.preset)
 }
 
 #[wasm_bindgen]
