@@ -68,7 +68,6 @@ pub struct PublicRecord {
 }
 
 pub struct PublicTuple(pub isize, u32);
-pub struct PublicGeneric<T: Iterator<Item = RawAlias>>(pub UserId, T);
 
 pub enum PublicEvent {
     Direct(f32),
@@ -81,9 +80,7 @@ mod reachable_only {
     }
 }
 
-pub trait Raw: Iterator<Item = RawAlias> {}
-
-pub fn leak_reachable_type<T: Raw>() -> reachable_only::Leaked {
+pub fn leak_reachable_type() -> reachable_only::Leaked {
     reachable_only::Leaked { raw: 0 }
 }
 

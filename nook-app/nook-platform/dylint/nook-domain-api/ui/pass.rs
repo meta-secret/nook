@@ -9,11 +9,14 @@ pub struct UserId(u64);
 pub struct AccountBalance(u64);
 pub struct Wrapper<T>(T);
 pub type DomainAlias = UserId;
+pub trait DeferredRawBound: Iterator<Item = u64> {}
 
 pub fn user<const N: usize>(id: [UserId; N]) -> Option<AccountBalance> {
     let _ = id;
     None
 }
+
+pub fn phase_two_predicate<T: DeferredRawBound>() {}
 
 pub fn wrapped_user(id: Wrapper<UserId>) -> Result<(AccountBalance, UserId), DomainError> {
     let _ = id;

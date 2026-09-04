@@ -13,9 +13,9 @@ use rustc_ast::attr::AttributeExt;
 use rustc_hir::def::{DefKind, Res};
 use rustc_hir::intravisit::{self, FnKind, Visitor, VisitorExt};
 use rustc_hir::{
-    AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind,
-    GenericParam, GenericParamKind, HirId, ImplItem, ImplItemKind, Item, ItemKind, Node, PrimTy,
-    QPath, TraitFn, TraitItem, TraitItemKind, TraitRef, Ty as HirTy, TyKind as HirTyKind, Variant,
+    AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind, HirId,
+    ImplItem, ImplItemKind, Item, ItemKind, Node, PrimTy, QPath, TraitFn, TraitItem, TraitItemKind,
+    Ty as HirTy, TyKind as HirTyKind, Variant,
 };
 use rustc_lint::{LateContext, LateLintPass, LintStore};
 use rustc_middle::ty::{self, Ty};
@@ -114,24 +114,6 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         if !matches!(item.kind, ItemKind::Fn { .. } | ItemKind::Mod(..)) {
             check_suppressions(cx, item.hir_id(), SuppressionScope::Broad);
         }
-        if matches!(item.kind, ItemKind::Struct(..) | ItemKind::Enum(..))
-            && !item.span.from_expansion()
-            && cx.effective_visibilities.is_reachable(item.owner_id.def_id)
-        {
-            let mut visitor = RawNumericHirVisitor(cx, false, Vec::new());
-            if let Some(generics) = item.kind.generics() {
-                visitor.visit_generics(generics);
-            }
-            if visitor.1 {
-                emit_api_diagnostic(
-                    cx,
-                    cx.tcx
-                        .def_ident_span(item.owner_id.def_id)
-                        .unwrap_or(item.span),
-                    "reachable struct or enum generic declaration",
-                );
-            }
-        }
     }
 
     fn check_fn(
@@ -185,7 +167,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         }
 
         let field_ty = cx.tcx.type_of(field.def_id).instantiate_identity();
-        let mut visitor = RawNumericHirVisitor(cx, false, Vec::new());
+        let mut visitor = RawNumericHirVisitor(cx, false);
         visitor.visit_ty_unambig(field.ty);
         if contains_raw_numeric(cx, field_ty) || visitor.1 {
             emit_api_diagnostic(cx, field.ty.span, "reachable struct or enum field");
@@ -254,31 +236,9 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
     }
 }
 
-struct RawNumericHirVisitor<'a, 'tcx>(&'a LateContext<'tcx>, bool, Vec<LocalDefId>);
+struct RawNumericHirVisitor<'a, 'tcx>(&'a LateContext<'tcx>, bool);
 
 impl<'tcx> Visitor<'tcx> for RawNumericHirVisitor<'_, 'tcx> {
-    fn visit_trait_ref(&mut self, trait_ref: &'tcx TraitRef<'tcx>) {
-        if let Res::Def(DefKind::Trait, id) = trait_ref.path.res
-            && let Some(id) = id.as_local()
-            && !self.2.contains(&id)
-        {
-            self.2.push(id);
-            let (_, _, _, _, _, generics, bounds, _) =
-                self.0.tcx.hir_expect_item(id).expect_trait();
-            self.visit_generics(generics);
-            for bound in bounds {
-                self.visit_param_bound(bound);
-            }
-        }
-        intravisit::walk_trait_ref(self, trait_ref);
-    }
-
-    fn visit_generic_param(&mut self, param: &'tcx GenericParam<'tcx>) {
-        if !matches!(param.kind, GenericParamKind::Const { .. }) {
-            intravisit::walk_generic_param(self, param);
-        }
-    }
-
     fn visit_ty(&mut self, hir_ty: &'tcx HirTy<'tcx, AmbigArg>) {
         let raw = match hir_ty.kind {
             HirTyKind::Path(QPath::Resolved(_, path)) => match path.res {
@@ -300,14 +260,10 @@ impl<'tcx> Visitor<'tcx> for RawNumericHirVisitor<'_, 'tcx> {
 
 fn declaration_contains_raw_numeric<'tcx>(
     cx: &LateContext<'tcx>,
-    local_def_id: LocalDefId,
     declaration: &'tcx FnDecl<'tcx>,
 ) -> bool {
-    let mut visitor = RawNumericHirVisitor(cx, false, Vec::new());
+    let mut visitor = RawNumericHirVisitor(cx, false);
     visitor.visit_fn_decl(declaration);
-    if let Some(generics) = cx.tcx.hir_node_by_def_id(local_def_id).generics() {
-        visitor.visit_generics(generics);
-    }
     visitor.1
 }
 
@@ -327,7 +283,7 @@ fn check_callable<'tcx>(
         .inputs_and_output
         .iter()
         .any(|ty| contains_raw_numeric(cx, ty))
-        || declaration_contains_raw_numeric(cx, local_def_id, declaration)
+        || declaration_contains_raw_numeric(cx, declaration)
     {
         let diagnostic_span = cx.tcx.def_ident_span(local_def_id).unwrap_or(span);
         emit_api_diagnostic(cx, diagnostic_span, "reachable function signature");

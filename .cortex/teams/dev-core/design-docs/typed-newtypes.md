@@ -171,7 +171,9 @@ The reason starts with `serialization boundary:`, `database boundary:`, or `FFI 
 Crate, module, type, and other blanket `allow` or expectation attributes are forbidden.
 Development core owns pass/fail UI fixtures, diagnostics snapshots, and staged crate activation.
 Hosted validation runs the locked standalone lint tests with the repository-pinned nightly toolchain.
-Nonlocal named-trait elaboration remains phase 2 and is outside this detector rollout.
+Phase 1 inspects concrete declared parameter, return, and public field types; it does not enforce generic predicates.
+One mandatory phase-2 semantic public-surface PR covers generic predicates and defaults, where clauses, associated type bounds, and enclosing impl or trait predicates.
+It also covers local and nonlocal named traits, reexports, and inherited methods before `nook-authenticator-domain` activation.
 
 ## Remaining type-safety checklist
 
