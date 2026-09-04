@@ -1,6 +1,6 @@
 //! Portable classification of browser-collected extension persistence state.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -35,7 +35,7 @@ impl<'de> Deserialize<'de> for ExtensionPersistenceArea {
             0 => Ok(Self::Pairing),
             1 => Ok(Self::EventLog),
             2 => Ok(Self::Provider),
-            value => Err(serde::de::Error::custom(format!(
+            value => Err(D::Error::custom(format!(
                 "invalid extension persistence area: {value}"
             ))),
         }

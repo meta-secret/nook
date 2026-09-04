@@ -1,6 +1,6 @@
 //! Closed decoder for extension-session status responses.
 
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -33,7 +33,7 @@ impl<'de> Deserialize<'de> for ExtensionSessionDeviceProtectionStatusWire {
             5 => Ok(Self::PinSetup),
             6 => Ok(Self::Unlocked),
             7 => Ok(Self::Error),
-            value => Err(serde::de::Error::custom(format!(
+            value => Err(D::Error::custom(format!(
                 "invalid extension session device protection status: {value}"
             ))),
         }

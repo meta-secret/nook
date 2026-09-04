@@ -3,6 +3,8 @@
 //! Browser adapters supply page text; this module owns which lines look like
 //! recovery codes versus prose, URLs, or hint copy.
 
+use std::collections::BTreeSet;
+
 const MAX_CANDIDATES: usize = 64;
 const MAX_CODE_LEN: usize = 64;
 const MIN_CODE_LEN: usize = 6;
@@ -39,7 +41,7 @@ pub fn contains_backup_code_candidate(text: &str) -> bool {
 #[must_use]
 pub fn extract_backup_code_candidates(text: &str) -> Vec<String> {
     let mut candidates = Vec::new();
-    let mut seen = std::collections::BTreeSet::new();
+    let mut seen = BTreeSet::new();
     for line in text.split(['\n', '\r']) {
         let BackupCodeCandidate::Accepted(value) = normalize_candidate(line) else {
             continue;

@@ -1,6 +1,8 @@
 //! Stable browser-companion vocabulary for authentication workflows.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::fmt;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -50,7 +52,7 @@ impl<'de> Deserialize<'de> for AuthenticationWorkflowKind {
             3 => Ok(Self::TotpChallenge),
             4 => Ok(Self::TotpEnrollment),
             5 => Ok(Self::Manual),
-            value => Err(serde::de::Error::custom(format!(
+            value => Err(D::Error::custom(format!(
                 "invalid authentication workflow kind: {value}"
             ))),
         }
@@ -103,7 +105,7 @@ impl<'de> Deserialize<'de> for AuthenticationWorkflowStage {
             3 => Ok(Self::Setup),
             4 => Ok(Self::Recovery),
             5 => Ok(Self::Manual),
-            value => Err(serde::de::Error::custom(format!(
+            value => Err(D::Error::custom(format!(
                 "invalid authentication workflow stage: {value}"
             ))),
         }
@@ -178,7 +180,7 @@ impl<'de> Deserialize<'de> for AuthenticationWorkflowAction {
             5 => Ok(Self::CreatePasskey),
             6 => Ok(Self::TakeOver),
             7 => Ok(Self::SaveBackupCodes),
-            value => Err(serde::de::Error::custom(format!(
+            value => Err(D::Error::custom(format!(
                 "invalid authentication workflow action: {value}"
             ))),
         }
@@ -191,7 +193,7 @@ mod tests {
 
     fn assert_numeric_roundtrip<T>(values: &[T]) -> anyhow::Result<()>
     where
-        T: Copy + PartialEq + std::fmt::Debug + Serialize + for<'de> Deserialize<'de>,
+        T: Copy + PartialEq + fmt::Debug + Serialize + for<'de> Deserialize<'de>,
     {
         for (expected, value) in values.iter().copied().enumerate() {
             let serialized = serde_json::to_string(&value)?;

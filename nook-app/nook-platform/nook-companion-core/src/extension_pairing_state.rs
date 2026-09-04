@@ -3,7 +3,7 @@
 mod legacy;
 
 pub use legacy::migrate_legacy_pairing_state_json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -247,7 +247,7 @@ impl ExtensionPairingRecord {
 
 impl ExtensionPairingState {
     pub fn validate(&self) -> Result<(), ExtensionPairingStateError> {
-        let mut keys = std::collections::HashSet::with_capacity(self.entries.len());
+        let mut keys = HashSet::with_capacity(self.entries.len());
         for entry in &self.entries {
             if !keys.insert(entry.key.as_str()) {
                 return Err(ExtensionPairingStateError::UnsupportedKey);

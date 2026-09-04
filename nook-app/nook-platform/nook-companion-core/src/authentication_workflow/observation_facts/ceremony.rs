@@ -5,9 +5,10 @@ use crate::authentication_workflow::{
 };
 use crate::page_field_classification::{
     AuthenticationAdvanceControlDecision, AuthenticationAdvanceControlObservation,
-    AuthenticationUsernameEvidence, PageControlSubmissionMethod,
-    has_safe_authentication_route_identity, has_safe_credential_update_route_identity,
-    looks_like_one_time_code_auto_submit_signal, one_time_code_ceremony_context_is_authenticated,
+    AuthenticationUsernameEvidence, MAX_AUTHENTICATION_CONTROL_TEXT_BYTES,
+    PageControlSubmissionMethod, has_safe_authentication_route_identity,
+    has_safe_credential_update_route_identity, looks_like_one_time_code_auto_submit_signal,
+    one_time_code_ceremony_context_is_authenticated,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -85,9 +86,7 @@ impl AuthenticationCeremonyContextObservation {
             &self.destination_identity,
         ]
         .into_iter()
-        .all(|value| {
-            value.len() <= crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        })
+        .all(|value| value.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
     }
 
     pub(super) fn is_authenticated(&self, fields: AuthenticationFieldObservationFacts) -> bool {
@@ -135,14 +134,13 @@ pub struct AuthenticationCeremonyObservationFacts {
 
 impl AuthenticationCeremonyObservationFacts {
     pub(super) fn is_bounded(&self) -> bool {
-        self.one_time_code_handler_signal.len()
-            <= crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        self.one_time_code_handler_signal.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.one_time_code_handler_signals.len()
                 <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize
-            && self.one_time_code_handler_signals.iter().all(|signal| {
-                signal.len()
-                    <= crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            })
+            && self
+                .one_time_code_handler_signals
+                .iter()
+                .all(|signal| signal.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
             && self.authentication_context.is_bounded()
     }
 
