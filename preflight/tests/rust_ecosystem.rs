@@ -198,6 +198,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "task: docker:rust-base",
         "task: docker:ecosystem:policy-tools",
         "task: docker:ci:cache:publish:rust-base",
+        "task: dylint:dependency-policy",
         "task: rust:dependency-policy",
         "task: preflight:dependency-policy",
         "task: fuzz:dependency-policy",
@@ -221,7 +222,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "policy-tools must translate explicit local publication into a cache-only Zot write"
     );
     assert!(
-        platform_tasks.contains("rust:dependency-policy:")
+        platform_tasks.contains("dylint:dependency-policy:")
+            && platform_tasks.contains("WORKSPACE: nook-app/nook-platform/dylint/nook-domain-api")
+            && platform_tasks.contains("rust:dependency-policy:")
             && platform_tasks.contains("fuzz:dependency-policy:")
             && platform_tasks.contains("WORKSPACE: nook-app/nook-platform/fuzz")
             && preflight_tasks.contains("preflight:dependency-policy:")
@@ -229,6 +232,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && !root_tasks.contains("taskfile: fuzz/Taskfile.yml")
             && root_tasks.contains("taskfile: agentic-ai/minds/Taskfile.yml"),
         "each Rust workspace must own dependency-policy in its Taskfile"
+    );
+    assert!(
+        docker_tasks.find("task: dylint:dependency-policy")
+            < docker_tasks.find("task: rust:dependency-policy"),
+        "standalone Dylint policy must run before the platform workspace policy"
     );
     assert!(
         docker_tasks.contains("rust-ecosystem-dependency-policy")

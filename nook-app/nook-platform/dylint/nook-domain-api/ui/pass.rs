@@ -8,6 +8,7 @@
 pub struct UserId(u64);
 pub struct AccountBalance(u64);
 pub struct Wrapper<T>(T);
+pub type DomainAlias = UserId;
 
 pub fn user(id: UserId) -> Option<AccountBalance> {
     let _ = id;
@@ -87,5 +88,13 @@ mod enabling_deny_is_not_suppression {}
 
 #[forbid(raw_numeric_public_api)]
 mod enabling_forbid_is_not_suppression {}
+
+pub async fn async_domain_output() -> Option<DomainAlias> {
+    None
+}
+
+pub struct DomainProjection {
+    pub values: Box<dyn Iterator<Item = DomainAlias>>,
+}
 
 fn main() {}

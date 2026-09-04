@@ -151,5 +151,21 @@ LL |         pub raw: u64,
    |
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
-warning: 19 warnings emitted
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:92:14
+   |
+LL | pub async fn async_raw_output() -> Option<RawAlias> {
+   |              ^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable struct or enum field
+  --> $DIR/fail.rs:97:17
+   |
+LL |     pub values: Box<dyn Iterator<Item = Option<RawAlias>>>,
+   |                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: 21 warnings emitted
 

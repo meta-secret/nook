@@ -10,9 +10,12 @@ extern crate rustc_span;
 
 use clippy_utils::diagnostics::span_lint_and_help;
 use rustc_ast::attr::AttributeExt;
+use rustc_hir::def::Res;
+use rustc_hir::intravisit::{self, FnKind, Visitor, VisitorExt};
 use rustc_hir::{
-    Attribute, CRATE_HIR_ID, FieldDef, ForeignItem, ForeignItemKind, HirId, ImplItem, ImplItemKind,
-    Item, ItemKind, Node, TraitFn, TraitItem, TraitItemKind, Variant, intravisit::FnKind,
+    AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind, HirId,
+    ImplItem, ImplItemKind, Item, ItemKind, Node, PrimTy, QPath, TraitFn, TraitItem, TraitItemKind,
+    Ty as HirTy, TyKind as HirTyKind, Variant,
 };
 use rustc_lint::{LateContext, LateLintPass, LintStore};
 use rustc_middle::ty::{self, Ty};
@@ -117,21 +120,21 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         &mut self,
         cx: &LateContext<'tcx>,
         _kind: FnKind<'tcx>,
-        _declaration: &'tcx rustc_hir::FnDecl<'tcx>,
+        declaration: &'tcx FnDecl<'tcx>,
         _body: &'tcx rustc_hir::Body<'tcx>,
         span: Span,
         local_def_id: LocalDefId,
     ) {
         let hir_id = cx.tcx.local_def_id_to_hir_id(local_def_id);
         check_suppressions(cx, hir_id, SuppressionScope::BoundaryItem);
-        check_callable(cx, local_def_id, span);
+        check_callable(cx, local_def_id, span, declaration);
     }
 
     fn check_trait_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx TraitItem<'tcx>) {
         match item.kind {
-            TraitItemKind::Fn(_, TraitFn::Required(_)) => {
+            TraitItemKind::Fn(signature, TraitFn::Required(_)) => {
                 check_suppressions(cx, item.hir_id(), SuppressionScope::BoundaryItem);
-                check_callable(cx, item.owner_id.def_id, item.ident.span);
+                check_callable(cx, item.owner_id.def_id, item.ident.span, signature.decl);
             }
             TraitItemKind::Fn(_, TraitFn::Provided(_)) => {}
             _ => check_suppressions(cx, item.hir_id(), SuppressionScope::Broad),
@@ -146,9 +149,9 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
 
     fn check_foreign_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx ForeignItem<'tcx>) {
         match item.kind {
-            ForeignItemKind::Fn(..) => {
+            ForeignItemKind::Fn(signature, ..) => {
                 check_suppressions(cx, item.hir_id(), SuppressionScope::BoundaryItem);
-                check_callable(cx, item.owner_id.def_id, item.ident.span);
+                check_callable(cx, item.owner_id.def_id, item.ident.span, signature.decl);
             }
             _ => check_suppressions(cx, item.hir_id(), SuppressionScope::Broad),
         }
@@ -164,7 +167,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         }
 
         let field_ty = cx.tcx.type_of(field.def_id).instantiate_identity();
-        if contains_raw_numeric(cx, field_ty) {
+        if contains_raw_numeric(cx, field_ty) || hir_type_contains_raw_numeric(field.ty) {
             emit_api_diagnostic(cx, field.ty.span, "reachable struct or enum field");
         }
     }
@@ -206,15 +209,68 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
             .inputs_and_output
             .iter()
             .any(|element| contains_raw_numeric(cx, element)),
-        ty::Alias(alias) => alias
-            .args
-            .types()
-            .any(|argument| contains_raw_numeric(cx, argument)),
+        ty::Dynamic(predicates, _) => predicates.projection_bounds().any(|projection| {
+            projection
+                .skip_binder()
+                .term
+                .as_type()
+                .is_some_and(|term| contains_raw_numeric(cx, term))
+        }),
+        ty::Alias(alias) => {
+            alias
+                .args
+                .types()
+                .any(|argument| contains_raw_numeric(cx, argument))
+                || matches!(alias.kind, ty::AliasTyKind::Opaque { def_id } if
+                    cx.tcx.explicit_item_bounds(def_id).instantiate(cx.tcx, alias.args).iter()
+                        .filter_map(|(clause, _)| clause.as_projection_clause())
+                        .any(|projection| projection.skip_binder().term.as_type()
+                            .is_some_and(|term| contains_raw_numeric(cx, term))))
+        }
         _ => false,
     }
 }
 
-fn check_callable(cx: &LateContext<'_>, local_def_id: LocalDefId, span: Span) {
+#[derive(Default)]
+struct RawNumericHirVisitor {
+    found: bool,
+}
+
+impl<'hir> Visitor<'hir> for RawNumericHirVisitor {
+    fn visit_ty(&mut self, hir_ty: &'hir HirTy<'hir, AmbigArg>) {
+        if matches!(
+            hir_ty.kind,
+            HirTyKind::Path(QPath::Resolved(_, path))
+                if matches!(
+                    path.res,
+                    Res::PrimTy(PrimTy::Int(_) | PrimTy::Uint(_) | PrimTy::Float(_))
+                )
+        ) {
+            self.found = true;
+        } else {
+            intravisit::walk_ty(self, hir_ty);
+        }
+    }
+}
+
+fn declaration_contains_raw_numeric(declaration: &FnDecl<'_>) -> bool {
+    let mut visitor = RawNumericHirVisitor::default();
+    visitor.visit_fn_decl(declaration);
+    visitor.found
+}
+
+fn hir_type_contains_raw_numeric(hir_ty: &HirTy<'_>) -> bool {
+    let mut visitor = RawNumericHirVisitor::default();
+    visitor.visit_ty_unambig(hir_ty);
+    visitor.found
+}
+
+fn check_callable(
+    cx: &LateContext<'_>,
+    local_def_id: LocalDefId,
+    span: Span,
+    declaration: &FnDecl<'_>,
+) {
     if span.from_expansion() || !cx.effective_visibilities.is_reachable(local_def_id) {
         return;
     }
@@ -225,6 +281,7 @@ fn check_callable(cx: &LateContext<'_>, local_def_id: LocalDefId, span: Span) {
         .inputs_and_output
         .iter()
         .any(|ty| contains_raw_numeric(cx, ty))
+        || declaration_contains_raw_numeric(declaration)
     {
         let diagnostic_span = cx.tcx.def_ident_span(local_def_id).unwrap_or(span);
         emit_api_diagnostic(cx, diagnostic_span, "reachable function signature");

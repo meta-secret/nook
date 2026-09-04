@@ -89,4 +89,12 @@ pub fn leak_reachable_type() -> reachable_only::Leaked {
     reachable_only::Leaked { raw: 0 }
 }
 
+pub async fn async_raw_output() -> Option<RawAlias> {
+    None
+}
+
+pub struct ProjectedField {
+    pub values: Box<dyn Iterator<Item = Option<RawAlias>>>,
+}
+
 fn main() {}

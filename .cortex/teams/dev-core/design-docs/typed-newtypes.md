@@ -154,6 +154,17 @@ enum VersionedVaultEventBody {
 
 `from_trusted` / `from_vault_record` for values already validated or emitted by this process. Do not use for external input.
 
+## Domain API lint rollout
+
+Development core owns the detector, suppression contract, and crate-by-crate rollout.
+`raw_numeric_public_api` detects raw numeric primitives in reachable domain APIs.
+`invalid_raw_numeric_api_suppression` validates narrow boundary expectations.
+Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
+An activated crate denies the detector and forbids lowering the suppression policy.
+`nook-app-common` is the first activated crate because its reachable API is clean.
+Serialization, database, and FFI expectations must be item-scoped and reason-bearing.
+Later crates migrate in dependency order, with each activation reviewed independently.
+
 ## Remaining type-safety checklist
 
 - [ ] `VaultEventSession` — `store_id: StoreId`, `heads: Vec<EventId>`, `key_epoch: KeyEpoch`
