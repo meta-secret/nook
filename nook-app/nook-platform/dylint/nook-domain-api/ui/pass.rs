@@ -29,6 +29,10 @@ pub trait TransitiveDomainBound: DomainBound {}
 pub fn transitive_domain_bound<T: TransitiveDomainBound>() {}
 pub fn external_domain_bound<T: external_api::CleanBound>() {}
 
+pub fn external_domain_projection<D: external_api::CleanAssociatedDecoder>() -> D::Error {
+    unimplemented!()
+}
+
 pub trait AssociatedDomain {
     type Values: Iterator<Item = DomainAlias>;
 }

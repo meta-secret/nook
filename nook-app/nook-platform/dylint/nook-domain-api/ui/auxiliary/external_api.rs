@@ -55,6 +55,14 @@ pub trait ReferenceRawDefault {
 
 pub trait ExternalMarker<T> {}
 
+pub trait RawAssociatedDecoder {
+    type Error: ExternalMarker<u64>;
+}
+
+pub trait CleanAssociatedDecoder {
+    type Error: ExternalMarker<ExternalId>;
+}
+
 struct Marker;
 
 impl ExternalMarker<u64> for Marker {}

@@ -257,7 +257,8 @@ fn is_struct_or_enum_field(cx: &LateContext<'_>, hir_id: HirId) -> bool {
 
 fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
     let Ok(normalized) = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), ty) else {
-        return contract_type_contains_raw(ty);
+        return contract_type_contains_raw(ty)
+            || matches!(ty.kind(), ty::Alias(alias) if alias_bounds_contain_raw(cx, alias));
     };
     let raw_args = |args: ty::GenericArgsRef<'tcx>| {
         args.types()
@@ -291,14 +292,16 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
                     ty::ExistentialPredicate::AutoTrait(_) => false,
                 })
         }
-        ty::Alias(alias) => {
-            raw_args(alias.args)
-                || matches!(alias.kind, ty::AliasTyKind::Opaque { def_id } if
-                    cx.tcx.explicit_item_bounds(def_id).iter_instantiated_copied(cx.tcx, alias.args)
-                        .any(|(clause, _)| clause_contains_raw(cx, clause, &mut Vec::new())))
-        }
+        ty::Alias(alias) => raw_args(alias.args) || alias_bounds_contain_raw(cx, alias),
         _ => false,
     }
+}
+
+fn alias_bounds_contain_raw<'tcx>(cx: &LateContext<'tcx>, alias: &ty::AliasTy<'tcx>) -> bool {
+    cx.tcx
+        .explicit_item_bounds(alias.kind.def_id())
+        .iter_instantiated_copied(cx.tcx, alias.args)
+        .any(|(clause, _)| clause_contains_raw(cx, clause, &mut Vec::new()))
 }
 
 fn clause_contains_raw<'tcx>(

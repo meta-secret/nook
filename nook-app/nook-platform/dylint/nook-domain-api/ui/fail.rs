@@ -105,6 +105,10 @@ pub fn named_bound<T: LocalRaw>() {}
 
 pub fn external_named_bound<T: external_api::RawBound>() {}
 
+pub fn unresolved_external_projection<D: external_api::RawAssociatedDecoder>() -> D::Error {
+    unimplemented!()
+}
+
 pub fn inline_projection<T: Iterator<Item = RawAlias>>() {}
 
 pub fn where_projection<T>()
