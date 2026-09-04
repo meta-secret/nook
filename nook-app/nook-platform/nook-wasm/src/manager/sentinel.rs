@@ -287,8 +287,8 @@ impl NookVaultManager {
         let mut session = nook_core::start_sentinel_unlock(
             store_id,
             nook_core::SentinelUnlockPolicy {
-                threshold: policy.threshold,
-                required_participants: policy.required_participants,
+                threshold: policy.threshold.into(),
+                required_participants: policy.required_participants.into(),
             },
             &records,
             &identity,
@@ -308,7 +308,7 @@ impl NookVaultManager {
             nook_core::add_sentinel_unlock_response(&mut session, own_response)?;
         }
         self.sentinel_unlock = CeremonyState::Active(session);
-        Ok(self.sentinel_unlock_session_status())
+        self.sentinel_unlock_session_status()
     }
 
     #[wasm_bindgen]
@@ -392,16 +392,18 @@ impl NookVaultManager {
             .sentinel_unlock
             .get_mut("No Sentinel unlock ceremony is active.")?;
         nook_core::add_sentinel_unlock_response(session, response)?;
-        Ok(self.sentinel_unlock_session_status())
+        self.sentinel_unlock_session_status()
     }
 
     #[wasm_bindgen]
-    pub fn sentinel_unlock_session_status(&self) -> NookSentinelUnlockSessionStatus {
+    pub fn sentinel_unlock_session_status(
+        &self,
+    ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
         match &self.sentinel_unlock {
             CeremonyState::Active(session) => NookSentinelUnlockSessionStatus::from_status(
                 nook_core::sentinel_unlock_status(session),
             ),
-            CeremonyState::Inactive => NookSentinelUnlockSessionStatus::inactive(),
+            CeremonyState::Inactive => Ok(NookSentinelUnlockSessionStatus::inactive()),
         }
     }
 
@@ -498,8 +500,8 @@ impl NookVaultManager {
         self.vault.architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             nook_core::SentinelPolicy {
-                threshold: delivery.policy.threshold,
-                required_participants: delivery.policy.participant_count,
+                threshold: delivery.policy.threshold.into(),
+                required_participants: delivery.policy.participant_count.into(),
                 ready_participants: 1,
             },
         );
@@ -573,23 +575,23 @@ impl NookVaultManager {
             .next()
             .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
         let version = first.version;
-        let threshold = first.threshold;
-        let required = first.required_participants;
+        let threshold = u8::from(first.threshold);
+        let required = u8::from(first.required_participants);
         let mut indexes = BTreeSet::new();
-        indexes.insert(first.share_index);
+        indexes.insert(u8::from(first.share_index));
         if !matches!(version, 1 | 2)
             || threshold < 2
             || threshold > required
             || required > 16
-            || first.share_index == 0
-            || first.share_index > required
+            || u8::from(first.share_index) == 0
+            || u8::from(first.share_index) > required
             || shares.any(|share| {
                 share.version != version
-                    || share.threshold != threshold
-                    || share.required_participants != required
-                    || share.share_index == 0
-                    || share.share_index > required
-                    || !indexes.insert(share.share_index)
+                    || u8::from(share.threshold) != threshold
+                    || u8::from(share.required_participants) != required
+                    || u8::from(share.share_index) == 0
+                    || u8::from(share.share_index) > required
+                    || !indexes.insert(share.share_index.into())
             })
         {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding.into());
@@ -651,9 +653,9 @@ mod tests {
                 DeviceId::parse(device_id)?,
                 nook_core::SentinelShareEnvelope {
                     version: 2,
-                    threshold: 3,
-                    required_participants: 5,
-                    share_index,
+                    threshold: 3.into(),
+                    required_participants: 5.into(),
+                    share_index: share_index.into(),
                     ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
                 },
             );
@@ -674,9 +676,9 @@ mod tests {
             DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
                 version: 2,
-                threshold: 2,
-                required_participants: 17,
-                share_index: 1,
+                threshold: 2.into(),
+                required_participants: 17.into(),
+                share_index: 1.into(),
                 ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
             },
         );
@@ -705,9 +707,9 @@ mod tests {
             DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
                 version: 2,
-                threshold: 3,
-                required_participants: 5,
-                share_index: 1,
+                threshold: 3.into(),
+                required_participants: 5.into(),
+                share_index: 1.into(),
                 ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
             },
         );

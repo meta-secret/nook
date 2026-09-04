@@ -96,8 +96,12 @@ impl NookVaultManager {
         label: String,
         password: String,
     ) -> Result<(), JsError> {
-        self.add_vault_password_with_work_factor(label, password, nook_core::PASSWORD_SCRYPT_LOG_N)
-            .await
+        self.add_vault_password_with_work_factor(
+            label,
+            password,
+            nook_core::PASSWORD_SCRYPT_LOG_N.into(),
+        )
+        .await
     }
 
     #[wasm_bindgen]
@@ -136,7 +140,7 @@ impl NookVaultManager {
             &label,
             &wasm_iso_timestamp(),
             &password,
-            work_factor,
+            work_factor.into(),
         )?;
 
         self.vault.password_entries.push(entry.clone());
@@ -166,7 +170,7 @@ impl NookVaultManager {
         self.update_vault_password_entry_with_work_factor(
             entry_id,
             password,
-            nook_core::PASSWORD_SCRYPT_LOG_N,
+            nook_core::PASSWORD_SCRYPT_LOG_N.into(),
         )
         .await
     }
@@ -216,7 +220,7 @@ impl NookVaultManager {
             let envelope = nook_core::attach_password_envelope_with_work_factor(
                 &keys,
                 &password,
-                work_factor,
+                work_factor.into(),
             )?;
             self.persist_vault_change(vec![VaultOperation::PasswordEnvelopeUpgraded {
                 entry_id: PasswordEntryId::parse(&entry_id)?,
@@ -523,7 +527,7 @@ mod metadata_tests {
             "Recovery",
             "2026-07-29T00:00:00Z",
             "correct horse battery staple",
-            E2E_PASSWORD_SCRYPT_LOG_N,
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
         )?;
         let mut manager = NookVaultManager::new();
         manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
@@ -600,7 +604,7 @@ mod wasm_tests {
                 label,
                 "2026-08-15T00:00:00Z",
                 password,
-                E2E_PASSWORD_SCRYPT_LOG_N,
+                E2E_PASSWORD_SCRYPT_LOG_N.into(),
             )?;
             entry.envelope.version = 1;
             entries.push(entry);
@@ -727,7 +731,7 @@ mod wasm_tests {
             "Recovery",
             "2026-07-13T00:00:00Z",
             "correct horse battery staple",
-            E2E_PASSWORD_SCRYPT_LOG_N,
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
         )?;
         let store_id = nook_core::generate_store_id()?.to_string();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
@@ -767,7 +771,7 @@ mod wasm_tests {
             "Recovery",
             "2026-08-16T00:00:00Z",
             "correct horse battery staple",
-            E2E_PASSWORD_SCRYPT_LOG_N,
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
         )?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();
@@ -811,7 +815,7 @@ mod wasm_tests {
             "Recovery",
             "2026-08-16T00:00:00Z",
             "correct horse battery staple",
-            E2E_PASSWORD_SCRYPT_LOG_N,
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
         )?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();

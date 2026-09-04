@@ -97,7 +97,7 @@ pub fn encrypt_enrollment_payload(
         },
         issued_at: payload.issued_at.clone(),
         kdf: ENROLLMENT_KDF.to_owned(),
-        iterations: PBKDF2_ITERATIONS,
+        iterations: PBKDF2_ITERATIONS.into(),
         salt: base64_url_encode(&salt),
         cipher: ENROLLMENT_CIPHER.to_owned(),
         iv: base64_url_encode(&iv),
@@ -120,7 +120,7 @@ pub fn decrypt_enrollment_payload(
     let salt = base64_url_decode(&envelope.salt)?;
     let iv = decode_fixed::<IV_LEN>(&envelope.iv)?;
     let ciphertext = base64_url_decode(&envelope.ct)?;
-    let key = derive_enrollment_key(password, &salt, envelope.iterations);
+    let key = derive_enrollment_key(password, &salt, envelope.iterations.into());
     let cipher = Aes256Gcm::new(&Array(key));
     let plaintext = cipher
         .decrypt(&Array(iv), ciphertext.as_slice())
@@ -212,7 +212,7 @@ fn validate_envelope(envelope: &EnrollmentCodeEnvelope) -> EnrollmentResult<()> 
     if envelope.kdf != ENROLLMENT_KDF || envelope.cipher != ENROLLMENT_CIPHER {
         return Err(EnrollmentError::UnsupportedEncryptionParameters);
     }
-    if envelope.iterations == 0 {
+    if u32::from(envelope.iterations) == 0 {
         return Err(EnrollmentError::MissingKdfParameters);
     }
     if envelope.entry_id.is_empty() {

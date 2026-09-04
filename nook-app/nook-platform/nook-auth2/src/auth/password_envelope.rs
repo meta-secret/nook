@@ -17,7 +17,7 @@
 
 use crate::VaultKeys;
 use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
-use crate::{AgeArmoredCiphertext, SymmetricKey};
+use crate::{AgeArmoredCiphertext, PasswordWorkFactor, SymmetricKey};
 use age::{
     scrypt,
     secrecy::{self, ExposeSecret},
@@ -33,7 +33,7 @@ use zeroize::{Zeroize, Zeroizing};
 /// Scrypt work factor for human-chosen passwords (~1s on a 2024 mid-tier laptop).
 /// Intentionally higher than `VaultCrypto`'s `log_n = 15`, which is tuned for
 /// 128-bit random keys with no brute-force surface.
-pub const PASSWORD_SCRYPT_LOG_N: u8 = 18;
+pub const PASSWORD_SCRYPT_LOG_N: PasswordWorkFactor = PasswordWorkFactor(18);
 
 /// Recommended minimum password length. UI layers should enforce a stricter
 /// entropy policy; this is the absolute floor below which we refuse to wrap.
@@ -78,7 +78,7 @@ pub struct PasswordUnlockEntry {
 pub struct PasswordEnvelope {
     pub version: u32,
     pub kdf: String,
-    pub work_factor: u8,
+    pub work_factor: PasswordWorkFactor,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub recipient: String,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -203,7 +203,7 @@ pub fn create_password_entry_with_work_factor(
     label: &str,
     created_at: &str,
     password: &str,
-    work_factor: u8,
+    work_factor: PasswordWorkFactor,
 ) -> PasswordResult<PasswordUnlockEntry> {
     let trimmed_label = label.trim();
     if trimmed_label.is_empty() {
@@ -260,9 +260,10 @@ pub fn attach_password_envelope(
 pub fn attach_password_envelope_with_work_factor(
     keys: &VaultKeys,
     password: &str,
-    work_factor: u8,
+    work_factor: PasswordWorkFactor,
 ) -> PasswordResult<PasswordEnvelope> {
-    if !(1..64).contains(&work_factor) {
+    let raw_work_factor = u8::from(work_factor);
+    if !(1..64).contains(&raw_work_factor) {
         return Err(PasswordError::InvalidWorkFactor);
     }
     if !is_vault_password_long_enough(password) {
@@ -279,7 +280,7 @@ pub fn attach_password_envelope_with_work_factor(
 
     let secret = secrecy::SecretString::from(password.to_owned());
     let mut password_recipient = scrypt::Recipient::new(secret);
-    password_recipient.set_work_factor(work_factor);
+    password_recipient.set_work_factor(raw_work_factor);
     let ciphertext = age_encrypt_scrypt(
         &password_recipient,
         wrapping_identity.expose_secret().as_bytes(),

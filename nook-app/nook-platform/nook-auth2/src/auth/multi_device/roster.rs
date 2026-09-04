@@ -326,7 +326,7 @@ mod tests {
         records.extend(create_sentinel_share_records(
             &keys,
             &[genesis.clone(), joiner.clone()],
-            2,
+            2.into(),
         )?);
 
         let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id())?;
