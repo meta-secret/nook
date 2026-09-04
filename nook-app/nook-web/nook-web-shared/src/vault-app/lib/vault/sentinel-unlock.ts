@@ -272,9 +272,12 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     state.startVaultSync();
   } catch (e) {
     state.isAuthenticated = false;
+    const status = state.requireManager().sentinel_unlock_session_status();
+    const replacement: UnlockSessionReplacement = { state, status };
+    replaceUnlockSession(replacement);
+    if (!status.active) state.sentinelUnlockRequest = "";
     if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
       state.sentinelCeremonyPrompt = true;
-      await refreshSentinelUnlockStatus(state);
       state.errorMsg = "";
       return;
     }
