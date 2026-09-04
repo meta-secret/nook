@@ -1,3 +1,6 @@
+// aux-build: external_api.rs
+
+#![feature(associated_type_defaults)]
 #![allow(dead_code)]
 #![cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -5,18 +8,68 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 
+extern crate external_api;
+
 pub struct UserId(u64);
 pub struct AccountBalance(u64);
 pub struct Wrapper<T>(T);
 pub type DomainAlias = UserId;
-pub trait DeferredRawBound: Iterator<Item = u64> {}
 
 pub fn user<const N: usize>(id: [UserId; N]) -> Option<AccountBalance> {
     let _ = id;
     None
 }
 
-pub fn phase_two_predicate<T: DeferredRawBound>() {}
+pub struct DefaultedDomain<T = DomainAlias>(pub UserId, std::marker::PhantomData<T>);
+pub struct ConstDefault<const N: usize = 4>(pub [UserId; N]);
+
+pub trait DomainBound: Iterator<Item = DomainAlias> {}
+pub trait TransitiveDomainBound: DomainBound {}
+
+pub fn transitive_domain_bound<T: TransitiveDomainBound>() {}
+pub fn external_domain_bound<T: external_api::CleanBound>() {}
+
+pub trait AssociatedDomain {
+    type Values: Iterator<Item = DomainAlias>;
+}
+
+pub trait AssociatedDomainDefault {
+    type Value = DomainAlias;
+}
+
+pub trait GenericAssociatedDomain {
+    type Values<T: Iterator<Item = DomainAlias>>;
+}
+
+pub trait LocalGenericDefault<T> {
+    fn inherited(&self, _value: T) {}
+}
+
+impl<T: DomainBound> Wrapper<T> {
+    pub fn clean(&self) {}
+}
+
+struct PrivateWrapper<T>(T);
+
+impl<T> PrivateWrapper<T>
+where
+    T: Iterator<Item = u64>,
+{
+    pub fn private_type_method(&self) {}
+}
+
+impl<T> Wrapper<T>
+where
+    T: Iterator<Item = u64>,
+{
+    fn private_method(&self) {}
+}
+
+pub use external_api::{CleanInherent, CleanRecord};
+
+impl external_api::CleanDefault for AccountBalance {}
+impl external_api::GenericDefault<UserId> for AccountBalance {}
+impl LocalGenericDefault<UserId> for Wrapper<UserId> {}
 
 pub fn wrapped_user(id: Wrapper<UserId>) -> Result<(AccountBalance, UserId), DomainError> {
     let _ = id;
