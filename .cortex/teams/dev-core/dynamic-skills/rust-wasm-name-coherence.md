@@ -21,8 +21,9 @@ boundary. A plain JavaScript reconstruction passed for a declared
 - Import, re-export, and call generated functions with that same `snake_case`
   name.
 - Preserve sanctioned type-only re-exports through facade modules.
-- Preserve authored Rust struct fields and enum variants in ordinary generated
-  boundary contracts.
+- Use authored Rust struct fields and enum variants for new generated boundary
+  contracts.
+- Make consumers use the exact names in the generated declaration.
 - Construct exported `#[wasm_bindgen]` objects through their generated classes.
 - Construct `Tsify` `from_wasm_abi` structural DTOs as the generated structural
   objects declared by that ABI.
@@ -30,10 +31,15 @@ boundary. A plain JavaScript reconstruction passed for a declared
 - Keep `js_name` only for property getters or setters and imported browser APIs.
 - Preserve established persisted and external field names at their narrow wire
   adapters.
+- Preserve established generated DTO ABI field names, including names that do
+  not match current Rust casing conventions.
 - Identify the schema owner and version for each persisted or external naming
   contract.
 - Follow the owning schema's documented version and migration policy before
   changing an established wire name.
+- Treat a change to an established generated DTO field name as an explicit ABI
+  migration. Update every generated-binding consumer and boundary test in that
+  migration.
 - Update generated-binding consumers atomically with a callable rename.
 
 ### Prohibited actions
@@ -42,6 +48,8 @@ boundary. A plain JavaScript reconstruction passed for a declared
 - Do not add `rename_all` merely to convert Rust names into JavaScript casing.
 - Do not remove a serialization rename from an established persisted or
   external wire contract merely to align casing.
+- Do not rename an established generated DTO field merely to align it with the
+  current authored Rust casing rule.
 - Do not add a second TypeScript interface over a generated Rust contract.
 - Do not reconstruct a declared `#[wasm_bindgen]` class input as a plain object
   or raw primitive.
@@ -74,7 +82,9 @@ Does not apply to:
 2. Distinguish exported callables from properties and imports.
 3. Remove callable renames and update every generated-binding consumer.
 4. Inventory `rename_all` and field-level renames on Rust-owned contracts.
-   Preserve established persisted or external names unless the owning
+   Distinguish new contracts from established generated, persisted, and
+   external ABI names.
+   Preserve established names unless an explicit ABI migration or the owning
    schema's version and migration policy authorizes the change.
 5. Remove generated callable casing aliases from imports and re-exports.
 6. Remove plain-object or raw-value reconstructions of parameters declared as

@@ -348,21 +348,16 @@ impl From<SyncProviderTarget> for WasmSyncProviderTarget {
 
 Rules:
 
+#### Required actions
+
 - A variant with independently named fields carries its own struct
   (`Github(GithubSyncProvider)`). Each state holds only the fields it owns.
 - Keep unit and scalar variants when they are the truthful domain and wire
   shape.
-- Do not change a persisted enum payload shape merely to make every variant
-  structurally uniform.
-- Do not use cross-variant field soup or `oauth_config_present`-style booleans
-  to stand in for a variant.
-- A configured variant must not contain optional fields for required
-  configuration. Use a separate absence/draft variant, such as `Empty`, rather
-  than `Github { pat: Option<String> }`.
+- Use a separate absence or draft variant, such as `Empty`, for incomplete
+  configuration.
 - Export a fieldless canonical core enum through `wasm_bindgen` directly.
 - Wrap a data-carrying core enum in one generated WASM object when required.
-- Do not mirror the enum in another bridge enum.
-- Do not expose `is_*` predicates that only decode its variant.
 - Return a canonical domain state or a typed variant payload when JavaScript
   must inspect an output.
 - Keep independent dimensions as separate enums.
@@ -370,10 +365,21 @@ Rules:
 - Keep serialization/validation in `nook-core`; the wrapper only bridges to JS.
 - When the declared ABI input is a `#[wasm_bindgen]` class, construct that
   generated class in JavaScript.
-- Do not replace a declared `#[wasm_bindgen]` class input with a plain object or
-  raw discriminant.
 - When `Tsify` with `from_wasm_abi` declares a structural DTO input, construct
   the generated structural object with its exact fields.
+
+#### Prohibited actions
+
+- Do not change a persisted enum payload shape merely to make every variant
+  structurally uniform.
+- Do not use cross-variant field soup or `oauth_config_present`-style booleans
+  to stand in for a variant.
+- Do not put optional fields for required configuration on a configured
+  variant.
+- Do not mirror the enum in another bridge enum.
+- Do not expose `is_*` predicates that only decode its variant.
+- Do not replace a declared `#[wasm_bindgen]` class input with a plain object or
+  raw discriminant.
 
 ### `Option<T>` is almost always a missing enum
 
