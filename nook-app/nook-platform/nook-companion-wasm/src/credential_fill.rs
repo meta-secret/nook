@@ -56,12 +56,14 @@ mod tests {
             .unwrap_or_else(|error| panic!("planning failed: {error:?}"));
         assert_eq!(plan.assignments.len(), 2);
 
-        let readonly = plan_companion_credential_fill(vec![nook_companion_core::AuthenticationFillFieldObservation {
-            field_index: 0,
-            current_password: true,
-            readonly: true,
-            ..Default::default()
-        }]);
+        let readonly = plan_companion_credential_fill(vec![
+            nook_companion_core::AuthenticationFillFieldObservation {
+                field_index: 0,
+                current_password: true,
+                readonly: true,
+                ..Default::default()
+            },
+        ]);
         assert!(readonly.is_err());
     }
 
