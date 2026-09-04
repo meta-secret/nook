@@ -77,6 +77,26 @@ impl CredentialFillFieldIndex {
 
 #[wasm_bindgen]
 impl CredentialFillFieldIndex {
+    #[must_use]
+    pub fn zero() -> Self {
+        Self::from_core(nook_companion_core::credential_fill::field::Index::ZERO)
+    }
+
+    #[must_use]
+    pub fn one() -> Self {
+        Self::from_core(nook_companion_core::credential_fill::field::Index::ONE)
+    }
+
+    #[must_use]
+    pub fn two() -> Self {
+        Self::from_core(nook_companion_core::credential_fill::field::Index::TWO)
+    }
+
+    #[must_use]
+    pub fn three() -> Self {
+        Self::from_core(nook_companion_core::credential_fill::field::Index::THREE)
+    }
+
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new(value: u32) -> Self {
@@ -169,7 +189,10 @@ impl CredentialFillObservation {
 
 #[wasm_bindgen]
 pub struct CredentialFillObservations {
-    inner: Vec<nook_companion_core::credential_fill::field::Observation>,
+    inner: Result<
+        Vec<nook_companion_core::credential_fill::field::Observation>,
+        nook_companion_core::credential_fill::CredentialFillRejection,
+    >,
 }
 
 #[wasm_bindgen]
@@ -182,30 +205,37 @@ impl CredentialFillObservations {
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Self {
-        Self { inner: Vec::new() }
+        Self {
+            inner: Ok(Vec::new()),
+        }
     }
 
-    pub fn add(
-        &mut self,
-        observation: &CredentialFillObservation,
-    ) -> Result<(), wasm_bindgen::JsError> {
-        if self.inner.len() >= Self::maximum_count().value as usize {
-            return Err(wasm_bindgen::JsError::new(
-                "the observed scope exceeds the field-count limit",
-            ));
+    pub fn add(&mut self, observation: &CredentialFillObservation) {
+        let Ok(fields) = &mut self.inner else {
+            return;
+        };
+        if fields.len() >= Self::maximum_count().value as usize {
+            self.inner = Err(
+                nook_companion_core::credential_fill::CredentialFillRejection::TooManyObservedFields,
+            );
+            return;
         }
-        self.inner.push(observation.as_core());
-        Ok(())
+        fields.push(observation.as_core());
     }
 }
 
 impl CredentialFillObservations {
-    fn maximum_count() -> nook_companion_core::credential_fill::field::Count {
-        nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT.into()
+    const fn maximum_count() -> nook_companion_core::credential_fill::field::Count {
+        nook_companion_core::credential_fill::field::Count::MAXIMUM
     }
 
-    fn as_core(&self) -> &[nook_companion_core::credential_fill::field::Observation] {
-        &self.inner
+    fn as_core(
+        &self,
+    ) -> Result<
+        &[nook_companion_core::credential_fill::field::Observation],
+        nook_companion_core::credential_fill::CredentialFillRejection,
+    > {
+        self.inner.as_deref().map_err(|rejection| *rejection)
     }
 }
 
@@ -329,26 +359,63 @@ impl CredentialFillResult {
 
 #[wasm_bindgen]
 pub fn plan_companion_credential_fill(fields: &CredentialFillObservations) -> CredentialFillResult {
-    CredentialFillResult::from_core(nook_companion_core::credential_fill::plan(fields.as_core()))
+    CredentialFillResult::from_core(
+        fields
+            .as_core()
+            .and_then(nook_companion_core::credential_fill::plan),
+    )
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
 
-    fn field(field_index: u32, role: &CredentialFillFieldRole) -> CredentialFillObservation {
+    fn field(
+        field_index: nook_companion_core::credential_fill::field::Index,
+        role: &CredentialFillFieldRole,
+    ) -> CredentialFillObservation {
         CredentialFillObservation::credential(
-            &CredentialFillFieldIndex::new(field_index),
+            &CredentialFillFieldIndex::from_core(field_index),
             role,
             &CredentialFillEditability::writable(),
         )
     }
 
     #[test]
+    fn field_index_factories_match_the_core_constants() {
+        for (field_index, expected) in [
+            (
+                CredentialFillFieldIndex::zero(),
+                nook_companion_core::credential_fill::field::Index::ZERO,
+            ),
+            (
+                CredentialFillFieldIndex::one(),
+                nook_companion_core::credential_fill::field::Index::ONE,
+            ),
+            (
+                CredentialFillFieldIndex::two(),
+                nook_companion_core::credential_fill::field::Index::TWO,
+            ),
+            (
+                CredentialFillFieldIndex::three(),
+                nook_companion_core::credential_fill::field::Index::THREE,
+            ),
+        ] {
+            assert_eq!(field_index.as_core(), expected);
+        }
+    }
+
+    #[test]
     fn wasm_owned_objects_delegate_to_core_policy() -> Result<(), wasm_bindgen::JsError> {
         let mut fields = CredentialFillObservations::new();
-        fields.add(&field(0, &CredentialFillFieldRole::username()))?;
-        fields.add(&field(1, &CredentialFillFieldRole::current_password()))?;
+        fields.add(&field(
+            nook_companion_core::credential_fill::field::Index::ZERO,
+            &CredentialFillFieldRole::username(),
+        ));
+        fields.add(&field(
+            nook_companion_core::credential_fill::field::Index::ONE,
+            &CredentialFillFieldRole::current_password(),
+        ));
 
         let result = plan_companion_credential_fill(&fields);
         assert_eq!(
@@ -358,12 +425,18 @@ mod tests {
         let mut plan = result.plan()?;
         let assignments = plan.take_assignments();
         assert_eq!(assignments.len(), 2);
-        assert_eq!(assignments[0].field_index().value(), 0);
+        assert_eq!(
+            assignments[0].field_index().as_core(),
+            nook_companion_core::credential_fill::field::Index::ZERO
+        );
         assert_eq!(
             assignments[0].credential(),
             nook_companion_core::credential_fill::CredentialKind::Username
         );
-        assert_eq!(assignments[1].field_index().value(), 1);
+        assert_eq!(
+            assignments[1].field_index().as_core(),
+            nook_companion_core::credential_fill::field::Index::ONE
+        );
         assert_eq!(
             assignments[1].credential(),
             nook_companion_core::credential_fill::CredentialKind::CurrentPassword
@@ -374,14 +447,14 @@ mod tests {
 
     #[test]
     fn rejected_result_exposes_the_typed_core_rejection() -> Result<(), wasm_bindgen::JsError> {
-        let field_index = CredentialFillFieldIndex::new(0);
+        let field_index = CredentialFillFieldIndex::zero();
         let observation = CredentialFillObservation::credential(
             &field_index,
             &CredentialFillFieldRole::current_password(),
             &CredentialFillEditability::readonly(),
         );
         let mut fields = CredentialFillObservations::new();
-        fields.add(&observation)?;
+        fields.add(&observation);
 
         let result = plan_companion_credential_fill(&fields);
         assert_eq!(
@@ -391,6 +464,45 @@ mod tests {
         assert_eq!(
             result.rejection()?,
             nook_companion_core::credential_fill::CredentialFillRejection::PasswordFieldsReadonly
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn observation_overflow_is_typed_terminal_and_keeps_the_input_borrowed()
+    -> Result<(), wasm_bindgen::JsError> {
+        let observation = field(
+            nook_companion_core::credential_fill::field::Index::ZERO,
+            &CredentialFillFieldRole::username(),
+        );
+        let expected_observation = observation.as_core();
+        let mut fields = CredentialFillObservations::new();
+        for _ in 0..CredentialFillObservations::maximum_count().value {
+            fields.add(&observation);
+        }
+
+        fields.add(&observation);
+        fields.add(&observation);
+        assert_eq!(observation.as_core(), expected_observation);
+
+        for _ in 0..2 {
+            let result = plan_companion_credential_fill(&fields);
+            assert_eq!(
+                result.kind(),
+                nook_companion_core::credential_fill::CredentialFillPlanningOutcome::Rejected
+            );
+            assert_eq!(
+                result.rejection()?,
+                nook_companion_core::credential_fill::CredentialFillRejection::TooManyObservedFields
+            );
+        }
+
+        let mut reusable_fields = CredentialFillObservations::new();
+        reusable_fields.add(&observation);
+        let result = plan_companion_credential_fill(&reusable_fields);
+        assert_eq!(
+            result.kind(),
+            nook_companion_core::credential_fill::CredentialFillPlanningOutcome::Planned
         );
         Ok(())
     }

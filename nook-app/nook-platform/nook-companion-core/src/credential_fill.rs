@@ -50,6 +50,13 @@ pub mod field {
         pub value: u32,
     }
 
+    impl Count {
+        /// Canonical maximum number of fields accepted in one observed scope.
+        pub const MAXIMUM: Self = Self {
+            value: crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+        };
+    }
+
     impl From<u32> for Count {
         fn from(value: u32) -> Self {
             Self { value }
@@ -187,6 +194,14 @@ pub mod field {
             );
             Ok(())
         }
+
+        #[test]
+        fn maximum_count_wraps_the_canonical_observation_limit() {
+            assert_eq!(
+                Count::MAXIMUM,
+                Count::from(crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
+            );
+        }
     }
 }
 
@@ -248,8 +263,7 @@ pub struct Plan {
 /// sole current-password or generic-password field. A scope with only a
 /// username field still plans a username fill; every other shape fails closed.
 pub fn plan(fields: &[field::Observation]) -> Result<Plan, CredentialFillRejection> {
-    let maximum_field_count = field::Count::from(crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT);
-    if fields.len() > maximum_field_count.value as usize {
+    if fields.len() > field::Count::MAXIMUM.value as usize {
         return Err(CredentialFillRejection::TooManyObservedFields);
     }
     let mut observed_field_indices = std::collections::HashSet::with_capacity(fields.len());
@@ -553,10 +567,41 @@ mod tests {
     }
 
     #[test]
-    fn fails_closed_before_scanning_an_oversized_scope() {
+    fn accepts_the_maximum_observation_count() -> anyhow::Result<()> {
+        let mut fields = Vec::with_capacity(field::Count::MAXIMUM.value as usize);
+        fields.push(field(field::Index::ZERO, field::CredentialRole::Username));
+        fields.extend((1..field::Count::MAXIMUM.value).map(|value| {
+            readonly_field(field::Index::from(value), field::CredentialRole::Username)
+        }));
+
+        let plan = plan(&fields)?;
+        assert_eq!(
+            plan.assignments,
+            vec![Assignment {
+                field_index: field::Index::ZERO,
+                credential: CredentialKind::Username,
+            }]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_one_observation_above_the_maximum() {
+        let fields = (0..=field::Count::MAXIMUM.value)
+            .map(|value| readonly_field(field::Index::from(value), field::CredentialRole::Username))
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            plan(&fields),
+            Err(CredentialFillRejection::TooManyObservedFields)
+        );
+    }
+
+    #[test]
+    fn rejects_overflow_before_scanning_duplicate_indices() {
         let fields = vec![
             field(field::Index::ZERO, field::CredentialRole::Username);
-            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1
+            field::Count::MAXIMUM.value as usize + 1
         ];
         assert_eq!(
             plan(&fields),

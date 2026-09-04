@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest'
 import {
   CredentialFillEditability,
   CredentialFillFieldRole,
+  CredentialFillObservations,
   CredentialFillRejection,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
@@ -51,6 +52,7 @@ const AMBIGUOUS_USERNAME_PAGE = new SimulatedLoginPageIdentity(
 )
 const FIRST_REPLACED_PAGE = new SimulatedLoginPageIdentity('first-replaced')
 const SECOND_REPLACED_PAGE = new SimulatedLoginPageIdentity('second-replaced')
+const OVERSIZED_PAGE = new SimulatedLoginPageIdentity('oversized-page')
 
 const EMPTY_USERNAME_FIELD: SimulatedCredentialFieldDefinition = {
   kind: SimulatedCredentialFieldKind.Credential,
@@ -756,6 +758,57 @@ describe('deterministic zero-vault login page journeys', () => {
     expect(firstResult).toEqual(expected)
     expect(secondResult).toEqual(expected)
     expect(laterPageEvents).toEqual([])
+  })
+
+  test('returns a typed rejection for an oversized page without mutation', () => {
+    const fields: SimulatedCredentialFieldDefinition[] = []
+    const maxCount = CredentialFillObservations.max_count()
+    try {
+      for (let ordinal = 0; ordinal <= maxCount.value; ordinal += 1) {
+        fields.push({
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: new SimulatedCredentialFieldIdentity(
+            `oversized-field-${ordinal}`,
+          ),
+          name: `oversized-field-${ordinal}`,
+          roleFactory: () => CredentialFillFieldRole.username(),
+          editabilityFactory: () => CredentialFillEditability.writable(),
+          value: `original-value-${ordinal}`,
+        })
+      }
+    } finally {
+      maxCount.free()
+    }
+    const journey: CredentialFillJourneyRequest = {
+      credentials: FAKE_CREDENTIALS,
+      pages: [
+        {
+          page_identity: OVERSIZED_PAGE,
+          fields,
+          observed_field_identities: fields.map(
+            (field) => field.field_identity,
+          ),
+        },
+      ],
+    }
+    const unchangedFields = fields.map((field) => ({
+      field_identity: field.field_identity,
+      name: field.name,
+      value: field.value,
+    }))
+    const expected: CredentialFillJourneyOutcome[] = [
+      {
+        kind: CredentialFillJourneyOutcomeKind.Rejected,
+        rejection: CredentialFillRejection.TooManyObservedFields,
+        snapshot: { page_identity: OVERSIZED_PAGE, fields: unchangedFields },
+      },
+    ]
+
+    const firstResult = simulateLoginJourney(journey)
+    const secondResult = simulateLoginJourney(journey)
+
+    expect(firstResult).toEqual(expected)
+    expect(secondResult).toEqual(expected)
   })
 
   test('disposes a replaced page before materializing its successor', () => {
