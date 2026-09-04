@@ -1,6 +1,7 @@
 import {
   AccountPickerAuthorizationLifecycle,
   CleanupEvidence,
+  type CleanupTransitionOutcome,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import {
@@ -133,12 +134,9 @@ export async function beginAccountPickerAuthorizationCleanup(): Promise<AccountP
 // eslint-disable-next-line max-params -- The WASM lifecycle transition requires its epoch and completion class.
 export async function completeAccountPickerAuthorizationCleanup(
   authorizationGeneration: string,
-  fullCleanupCompleted: boolean,
-): Promise<void> {
+  evidence: CleanupEvidence,
+): Promise<CleanupTransitionOutcome> {
   await initializedAccountPickerAuthorizationState()
-  const evidence = fullCleanupCompleted
-    ? CleanupEvidence.Full
-    : CleanupEvidence.Partial
   try {
     if (
       currentAccountPickerAuthorizationState().is_final_cleanup(
@@ -152,9 +150,13 @@ export async function completeAccountPickerAuthorizationCleanup(
     releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
     throw error
   }
-  accountPickerAuthorizationState = currentAccountPickerAuthorizationState()
-    .complete_cleanup(authorizationGeneration, evidence)
-    .into_lifecycle()
+  const transition = currentAccountPickerAuthorizationState().complete_cleanup(
+    authorizationGeneration,
+    evidence,
+  )
+  const outcome = transition.outcome()
+  accountPickerAuthorizationState = transition.into_lifecycle()
+  return outcome
 }
 
 export function releaseAccountPickerAuthorizationCleanup(

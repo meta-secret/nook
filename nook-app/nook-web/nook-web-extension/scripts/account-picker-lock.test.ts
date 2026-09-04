@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { CleanupEvidence } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -54,7 +55,7 @@ describe('account picker authorization cleanup', () => {
     const result = await accountPickers.loadLoginPicker('persisted-request')
     await accountPickers.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
-      true,
+      CleanupEvidence.Full,
     )
     expect(
       accountPickers.accountPickerAuthorizationIsCurrent(
@@ -63,7 +64,7 @@ describe('account picker authorization cleanup', () => {
     ).toBe(false)
     await accountPickers.completeAccountPickerAuthorizationCleanup(
       overlap.authorizationGeneration,
-      true,
+      CleanupEvidence.Full,
     )
     expect(
       accountPickers.accountPickerAuthorizationIsCurrent(
@@ -82,7 +83,7 @@ describe('account picker authorization cleanup', () => {
     const removal = storage.holdRemoval()
     const completing = authorization.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
-      true,
+      CleanupEvidence.Full,
     )
     const callback = await removal
     const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
@@ -95,7 +96,7 @@ describe('account picker authorization cleanup', () => {
     ).toBe(false)
     await authorization.completeAccountPickerAuthorizationCleanup(
       overlap.authorizationGeneration,
-      true,
+      CleanupEvidence.Full,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -112,7 +113,7 @@ describe('account picker authorization cleanup', () => {
     const removal = storage.holdRemoval()
     const completing = authorization.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
-      true,
+      CleanupEvidence.Full,
     )
     const rejected = expect(completing).rejects.toThrow('removal denied')
     const callback = await removal
@@ -121,7 +122,7 @@ describe('account picker authorization cleanup', () => {
     await rejected
     await authorization.completeAccountPickerAuthorizationCleanup(
       overlap.authorizationGeneration,
-      false,
+      CleanupEvidence.Partial,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -132,7 +133,7 @@ describe('account picker authorization cleanup', () => {
       await authorization.beginAccountPickerAuthorizationCleanup()
     await authorization.completeAccountPickerAuthorizationCleanup(
       fullCleanup.authorizationGeneration,
-      true,
+      CleanupEvidence.Full,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -147,7 +148,12 @@ describe('account picker authorization cleanup', () => {
     new AuthorizationStorageFixture()
     const old = await authorization.accountPickerAuthorizationGeneration()
     const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
-    await authorization.completeAccountPickerAuthorizationCleanup(old, true)
+    const rejected =
+      await authorization.completeAccountPickerAuthorizationCleanup(
+        old,
+        CleanupEvidence.Full,
+      )
+    expect(rejected).toHaveProperty('error')
     authorization.releaseAccountPickerAuthorizationCleanup(old)
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
@@ -156,7 +162,7 @@ describe('account picker authorization cleanup', () => {
     ).toBe(false)
     await authorization.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
-      false,
+      CleanupEvidence.Partial,
     )
     expect(
       authorization.accountPickerAuthorizationIsCurrent(
