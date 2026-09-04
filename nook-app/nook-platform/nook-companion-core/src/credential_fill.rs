@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// Credential kind assigned to one field in a fill plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-pub enum AuthenticationCredentialKind {
+pub enum CredentialKind {
     Username,
     CurrentPassword,
 }
@@ -165,7 +165,7 @@ pub mod field {
 
 /// Why a fill plan cannot be produced for the observed fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize, Deserialize)]
-pub enum AuthenticationCredentialFillError {
+pub enum Error {
     /// The host supplied more field observations than the portable boundary permits.
     #[error("the observed scope exceeds the field-count limit")]
     TooManyObservedFields,
@@ -195,15 +195,15 @@ pub enum AuthenticationCredentialFillError {
 
 /// Rust-owned decision for which field receives which credential kind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthenticationCredentialFillAssignment {
+pub struct Assignment {
     pub field_index: field::Index,
-    pub credential: AuthenticationCredentialKind,
+    pub credential: CredentialKind,
 }
 
 /// A complete, host-executable fill plan.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AuthenticationCredentialFillPlan {
-    pub assignments: Vec<AuthenticationCredentialFillAssignment>,
+pub struct Plan {
+    pub assignments: Vec<Assignment>,
 }
 
 /// Plan which observed fields receive the username and current password.
@@ -211,31 +211,29 @@ pub struct AuthenticationCredentialFillPlan {
 /// Mirrors the host's fill contract: fill the first username field, then a
 /// sole current-password or generic-password field. A scope with only a
 /// username field still plans a username fill; every other shape fails closed.
-pub fn plan_authentication_credential_fill(
-    fields: &[field::Observation],
-) -> Result<AuthenticationCredentialFillPlan, AuthenticationCredentialFillError> {
+pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
     if fields.len() > crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize {
-        return Err(AuthenticationCredentialFillError::TooManyObservedFields);
+        return Err(Error::TooManyObservedFields);
     }
     for (offset, field) in fields.iter().enumerate() {
         if fields[..offset]
             .iter()
             .any(|candidate| candidate.field_index() == field.field_index())
         {
-            return Err(AuthenticationCredentialFillError::DuplicateFieldIndex);
+            return Err(Error::DuplicateFieldIndex);
         }
     }
     if fields
         .iter()
         .any(|field| matches!(field, field::Observation::NewPassword(_)))
     {
-        return Err(AuthenticationCredentialFillError::NewPasswordFieldPresent);
+        return Err(Error::NewPasswordFieldPresent);
     }
     if fields
         .iter()
         .any(|field| matches!(field, field::Observation::OneTimeCode(_)))
     {
-        return Err(AuthenticationCredentialFillError::OneTimeCodeFieldPresent);
+        return Err(Error::OneTimeCodeFieldPresent);
     }
 
     let writable_username_fields = fields
@@ -271,36 +269,36 @@ pub fn plan_authentication_credential_fill(
         .collect::<Vec<_>>();
 
     if writable_username_fields.len() > 1 {
-        return Err(AuthenticationCredentialFillError::AmbiguousUsernameField);
+        return Err(Error::AmbiguousUsernameField);
     }
     let username_field_index = writable_username_fields.first().copied();
     if username_field_index.is_none() && password_fields.is_empty() {
-        return Err(AuthenticationCredentialFillError::NoCredentialField);
+        return Err(Error::NoCredentialField);
     }
     if password_fields.len() > 1 {
-        return Err(AuthenticationCredentialFillError::AmbiguousPasswordField);
+        return Err(Error::AmbiguousPasswordField);
     }
     let password_field = password_fields.first().copied();
     if password_field
         .is_some_and(|(_, editability)| matches!(editability, field::Editability::Readonly))
     {
-        return Err(AuthenticationCredentialFillError::PasswordFieldsReadonly);
+        return Err(Error::PasswordFieldsReadonly);
     }
 
     let mut assignments = Vec::new();
     if let Some(field_index) = username_field_index {
-        assignments.push(AuthenticationCredentialFillAssignment {
+        assignments.push(Assignment {
             field_index,
-            credential: AuthenticationCredentialKind::Username,
+            credential: CredentialKind::Username,
         });
     }
     if let Some((field_index, _)) = password_field {
-        assignments.push(AuthenticationCredentialFillAssignment {
+        assignments.push(Assignment {
             field_index,
-            credential: AuthenticationCredentialKind::CurrentPassword,
+            credential: CredentialKind::CurrentPassword,
         });
     }
-    Ok(AuthenticationCredentialFillPlan { assignments })
+    Ok(Plan { assignments })
 }
 
 #[cfg(test)]
@@ -354,17 +352,17 @@ mod tests {
 
     #[test]
     fn plans_username_first_then_current_password() -> anyhow::Result<()> {
-        let plan = plan_authentication_credential_fill(&login_form())?;
+        let plan = plan(&login_form())?;
         assert_eq!(
             plan.assignments,
             vec![
-                AuthenticationCredentialFillAssignment {
+                Assignment {
                     field_index: 0.into(),
-                    credential: AuthenticationCredentialKind::Username,
+                    credential: CredentialKind::Username,
                 },
-                AuthenticationCredentialFillAssignment {
+                Assignment {
                     field_index: 1.into(),
-                    credential: AuthenticationCredentialKind::CurrentPassword,
+                    credential: CredentialKind::CurrentPassword,
                 },
             ]
         );
@@ -374,12 +372,12 @@ mod tests {
     #[test]
     fn plans_username_only_fill_for_identifier_step() -> anyhow::Result<()> {
         let username_only = vec![field(2, field::CredentialRole::Username)];
-        let plan = plan_authentication_credential_fill(&username_only)?;
+        let plan = plan(&username_only)?;
         assert_eq!(
             plan.assignments,
-            vec![AuthenticationCredentialFillAssignment {
+            vec![Assignment {
                 field_index: 2.into(),
-                credential: AuthenticationCredentialKind::Username,
+                credential: CredentialKind::Username,
             }]
         );
         Ok(())
@@ -388,12 +386,12 @@ mod tests {
     #[test]
     fn plans_password_only_fill_for_password_step() -> anyhow::Result<()> {
         let password_only = vec![field(0, field::CredentialRole::CurrentPassword)];
-        let plan = plan_authentication_credential_fill(&password_only)?;
+        let plan = plan(&password_only)?;
         assert_eq!(
             plan.assignments,
-            vec![AuthenticationCredentialFillAssignment {
+            vec![Assignment {
                 field_index: 0.into(),
-                credential: AuthenticationCredentialKind::CurrentPassword,
+                credential: CredentialKind::CurrentPassword,
             }]
         );
         Ok(())
@@ -405,17 +403,17 @@ mod tests {
             field(0, field::CredentialRole::Username),
             field(1, field::CredentialRole::GenericPassword),
         ];
-        let plan = plan_authentication_credential_fill(&generic_login)?;
+        let plan = plan(&generic_login)?;
         assert_eq!(
             plan.assignments,
             vec![
-                AuthenticationCredentialFillAssignment {
+                Assignment {
                     field_index: 0.into(),
-                    credential: AuthenticationCredentialKind::Username,
+                    credential: CredentialKind::Username,
                 },
-                AuthenticationCredentialFillAssignment {
+                Assignment {
                     field_index: 1.into(),
-                    credential: AuthenticationCredentialKind::CurrentPassword,
+                    credential: CredentialKind::CurrentPassword,
                 },
             ]
         );
@@ -424,29 +422,20 @@ mod tests {
 
     #[test]
     fn fails_closed_without_credential_fields() {
-        assert_eq!(
-            plan_authentication_credential_fill(&[]),
-            Err(AuthenticationCredentialFillError::NoCredentialField)
-        );
+        assert_eq!(plan(&[]), Err(Error::NoCredentialField));
         let otp_only = vec![one_time_code_field(0)];
-        assert_eq!(
-            plan_authentication_credential_fill(&otp_only),
-            Err(AuthenticationCredentialFillError::OneTimeCodeFieldPresent)
-        );
+        assert_eq!(plan(&otp_only), Err(Error::OneTimeCodeFieldPresent));
         let new_password_only = vec![new_password_field(0)];
         assert_eq!(
-            plan_authentication_credential_fill(&new_password_only),
-            Err(AuthenticationCredentialFillError::NewPasswordFieldPresent)
+            plan(&new_password_only),
+            Err(Error::NewPasswordFieldPresent)
         );
     }
 
     #[test]
     fn fails_closed_when_all_password_fields_are_readonly() {
         let readonly_password = vec![readonly_field(0, field::CredentialRole::CurrentPassword)];
-        assert_eq!(
-            plan_authentication_credential_fill(&readonly_password),
-            Err(AuthenticationCredentialFillError::PasswordFieldsReadonly)
-        );
+        assert_eq!(plan(&readonly_password), Err(Error::PasswordFieldsReadonly));
     }
 
     #[test]
@@ -455,10 +444,7 @@ mod tests {
             field(0, field::CredentialRole::CurrentPassword),
             field(1, field::CredentialRole::CurrentPassword),
         ];
-        assert_eq!(
-            plan_authentication_credential_fill(&ambiguous),
-            Err(AuthenticationCredentialFillError::AmbiguousPasswordField)
-        );
+        assert_eq!(plan(&ambiguous), Err(Error::AmbiguousPasswordField));
     }
 
     #[test]
@@ -473,10 +459,7 @@ mod tests {
                 field(1, field::CredentialRole::GenericPassword),
             ],
         ] {
-            assert_eq!(
-                plan_authentication_credential_fill(&ambiguous),
-                Err(AuthenticationCredentialFillError::AmbiguousPasswordField)
-            );
+            assert_eq!(plan(&ambiguous), Err(Error::AmbiguousPasswordField));
         }
     }
 
@@ -486,10 +469,7 @@ mod tests {
             field(4, field::CredentialRole::Username),
             field(4, field::CredentialRole::CurrentPassword),
         ];
-        assert_eq!(
-            plan_authentication_credential_fill(&duplicate),
-            Err(AuthenticationCredentialFillError::DuplicateFieldIndex)
-        );
+        assert_eq!(plan(&duplicate), Err(Error::DuplicateFieldIndex));
     }
 
     #[test]
@@ -498,10 +478,7 @@ mod tests {
             field(0, field::CredentialRole::Username);
             crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1
         ];
-        assert_eq!(
-            plan_authentication_credential_fill(&fields),
-            Err(AuthenticationCredentialFillError::TooManyObservedFields)
-        );
+        assert_eq!(plan(&fields), Err(Error::TooManyObservedFields));
     }
 
     #[test]
@@ -510,26 +487,17 @@ mod tests {
             field(0, field::CredentialRole::Username),
             field(1, field::CredentialRole::Username),
         ];
-        assert_eq!(
-            plan_authentication_credential_fill(&ambiguous),
-            Err(AuthenticationCredentialFillError::AmbiguousUsernameField)
-        );
+        assert_eq!(plan(&ambiguous), Err(Error::AmbiguousUsernameField));
     }
 
     #[test]
     fn rejects_unsafe_scope_before_planning_username_only_fill() {
         for (unsafe_field, expected) in [
-            (
-                new_password_field(1),
-                AuthenticationCredentialFillError::NewPasswordFieldPresent,
-            ),
-            (
-                one_time_code_field(1),
-                AuthenticationCredentialFillError::OneTimeCodeFieldPresent,
-            ),
+            (new_password_field(1), Error::NewPasswordFieldPresent),
+            (one_time_code_field(1), Error::OneTimeCodeFieldPresent),
         ] {
             let fields = vec![field(0, field::CredentialRole::Username), unsafe_field];
-            assert_eq!(plan_authentication_credential_fill(&fields), Err(expected));
+            assert_eq!(plan(&fields), Err(expected));
         }
     }
 
@@ -539,12 +507,12 @@ mod tests {
             readonly_field(0, field::CredentialRole::Username),
             field(1, field::CredentialRole::CurrentPassword),
         ];
-        let plan = plan_authentication_credential_fill(&fields)?;
+        let plan = plan(&fields)?;
         assert_eq!(
             plan.assignments,
-            vec![AuthenticationCredentialFillAssignment {
+            vec![Assignment {
                 field_index: 1.into(),
-                credential: AuthenticationCredentialKind::CurrentPassword,
+                credential: CredentialKind::CurrentPassword,
             }]
         );
         Ok(())
@@ -556,15 +524,15 @@ mod tests {
             username: "test-user@example.test",
             password: "correct-horse-battery-staple-1",
         };
-        let plan = plan_authentication_credential_fill(&login_form())?;
+        let plan = plan(&login_form())?;
         let simulated = plan
             .assignments
             .iter()
             .map(|assignment| TestFilledField {
                 field_index: assignment.field_index,
                 value: match assignment.credential {
-                    AuthenticationCredentialKind::Username => credentials.username,
-                    AuthenticationCredentialKind::CurrentPassword => credentials.password,
+                    CredentialKind::Username => credentials.username,
+                    CredentialKind::CurrentPassword => credentials.password,
                 },
             })
             .collect::<Vec<_>>();
@@ -587,11 +555,8 @@ mod tests {
     #[test]
     fn contract_serialization_preserves_rust_source_names() -> anyhow::Result<()> {
         for (value, expected) in [
-            (AuthenticationCredentialKind::Username, r#""Username""#),
-            (
-                AuthenticationCredentialKind::CurrentPassword,
-                r#""CurrentPassword""#,
-            ),
+            (CredentialKind::Username, r#""Username""#),
+            (CredentialKind::CurrentPassword, r#""CurrentPassword""#),
         ] {
             assert_eq!(serde_json::to_string(&value)?, expected);
         }
@@ -615,38 +580,20 @@ mod tests {
             assert_eq!(serde_json::to_string(&value)?, expected);
         }
         for (value, expected) in [
+            (Error::TooManyObservedFields, r#""TooManyObservedFields""#),
+            (Error::DuplicateFieldIndex, r#""DuplicateFieldIndex""#),
             (
-                AuthenticationCredentialFillError::TooManyObservedFields,
-                r#""TooManyObservedFields""#,
-            ),
-            (
-                AuthenticationCredentialFillError::DuplicateFieldIndex,
-                r#""DuplicateFieldIndex""#,
-            ),
-            (
-                AuthenticationCredentialFillError::NewPasswordFieldPresent,
+                Error::NewPasswordFieldPresent,
                 r#""NewPasswordFieldPresent""#,
             ),
             (
-                AuthenticationCredentialFillError::OneTimeCodeFieldPresent,
+                Error::OneTimeCodeFieldPresent,
                 r#""OneTimeCodeFieldPresent""#,
             ),
-            (
-                AuthenticationCredentialFillError::NoCredentialField,
-                r#""NoCredentialField""#,
-            ),
-            (
-                AuthenticationCredentialFillError::PasswordFieldsReadonly,
-                r#""PasswordFieldsReadonly""#,
-            ),
-            (
-                AuthenticationCredentialFillError::AmbiguousPasswordField,
-                r#""AmbiguousPasswordField""#,
-            ),
-            (
-                AuthenticationCredentialFillError::AmbiguousUsernameField,
-                r#""AmbiguousUsernameField""#,
-            ),
+            (Error::NoCredentialField, r#""NoCredentialField""#),
+            (Error::PasswordFieldsReadonly, r#""PasswordFieldsReadonly""#),
+            (Error::AmbiguousPasswordField, r#""AmbiguousPasswordField""#),
+            (Error::AmbiguousUsernameField, r#""AmbiguousUsernameField""#),
         ] {
             assert_eq!(serde_json::to_string(&value)?, expected);
         }
@@ -668,13 +615,13 @@ mod tests {
             serde_json::to_string(&one_time_code_field(2))?,
             r#"{"OneTimeCode":{"field_index":{"value":2}}}"#
         );
-        let plan = plan_authentication_credential_fill(&login_form())?;
+        let plan = plan(&login_form())?;
         let serialized = serde_json::to_string(&plan)?;
         assert_eq!(
             serialized,
             r#"{"assignments":[{"field_index":{"value":0},"credential":"Username"},{"field_index":{"value":1},"credential":"CurrentPassword"}]}"#
         );
-        let roundtrip: AuthenticationCredentialFillPlan = serde_json::from_str(&serialized)?;
+        let roundtrip: Plan = serde_json::from_str(&serialized)?;
         assert_eq!(roundtrip, plan);
         Ok(())
     }

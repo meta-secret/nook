@@ -20,7 +20,7 @@ mod authenticator_options_response;
 mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
-mod credential_fill;
+pub mod credential_fill;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
@@ -113,11 +113,6 @@ pub use authenticator_preview_response::{
 };
 pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
-};
-pub use credential_fill::{
-    AuthenticationCredentialFillAssignment, AuthenticationCredentialFillError,
-    AuthenticationCredentialFillPlan, AuthenticationCredentialKind, field,
-    plan_authentication_credential_fill,
 };
 pub use extension_pairing_state::{
     CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY,

@@ -10,10 +10,10 @@ pub enum CredentialFillKind {
 }
 
 impl CredentialFillKind {
-    const fn from_core(value: nook_companion_core::AuthenticationCredentialKind) -> Self {
+    const fn from_core(value: nook_companion_core::credential_fill::CredentialKind) -> Self {
         match value {
-            nook_companion_core::AuthenticationCredentialKind::Username => Self::Username,
-            nook_companion_core::AuthenticationCredentialKind::CurrentPassword => {
+            nook_companion_core::credential_fill::CredentialKind::Username => Self::Username,
+            nook_companion_core::credential_fill::CredentialKind::CurrentPassword => {
                 Self::CurrentPassword
             }
         }
@@ -29,11 +29,15 @@ pub enum CredentialFillFieldRole {
 }
 
 impl CredentialFillFieldRole {
-    const fn into_core(self) -> nook_companion_core::field::CredentialRole {
+    const fn into_core(self) -> nook_companion_core::credential_fill::field::CredentialRole {
         match self {
-            Self::Username => nook_companion_core::field::CredentialRole::Username,
-            Self::CurrentPassword => nook_companion_core::field::CredentialRole::CurrentPassword,
-            Self::GenericPassword => nook_companion_core::field::CredentialRole::GenericPassword,
+            Self::Username => nook_companion_core::credential_fill::field::CredentialRole::Username,
+            Self::CurrentPassword => {
+                nook_companion_core::credential_fill::field::CredentialRole::CurrentPassword
+            }
+            Self::GenericPassword => {
+                nook_companion_core::credential_fill::field::CredentialRole::GenericPassword
+            }
         }
     }
 }
@@ -46,10 +50,10 @@ pub enum CredentialFillEditability {
 }
 
 impl CredentialFillEditability {
-    const fn into_core(self) -> nook_companion_core::field::Editability {
+    const fn into_core(self) -> nook_companion_core::credential_fill::field::Editability {
         match self {
-            Self::Writable => nook_companion_core::field::Editability::Writable,
-            Self::Readonly => nook_companion_core::field::Editability::Readonly,
+            Self::Writable => nook_companion_core::credential_fill::field::Editability::Writable,
+            Self::Readonly => nook_companion_core::credential_fill::field::Editability::Readonly,
         }
     }
 }
@@ -57,15 +61,15 @@ impl CredentialFillEditability {
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct CredentialFillFieldIndex {
-    inner: nook_companion_core::field::Index,
+    inner: nook_companion_core::credential_fill::field::Index,
 }
 
 impl CredentialFillFieldIndex {
-    const fn from_core(value: nook_companion_core::field::Index) -> Self {
+    const fn from_core(value: nook_companion_core::credential_fill::field::Index) -> Self {
         Self { inner: value }
     }
 
-    const fn as_core(&self) -> nook_companion_core::field::Index {
+    const fn as_core(&self) -> nook_companion_core::credential_fill::field::Index {
         self.inner
     }
 }
@@ -90,11 +94,11 @@ impl CredentialFillFieldIndex {
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct CredentialFillObservation {
-    inner: nook_companion_core::field::Observation,
+    inner: nook_companion_core::credential_fill::field::Observation,
 }
 
 impl CredentialFillObservation {
-    const fn as_core(&self) -> nook_companion_core::field::Observation {
+    const fn as_core(&self) -> nook_companion_core::credential_fill::field::Observation {
         self.inner
     }
 }
@@ -109,7 +113,7 @@ impl CredentialFillObservation {
         editability: CredentialFillEditability,
     ) -> Self {
         Self {
-            inner: nook_companion_core::field::Credential {
+            inner: nook_companion_core::credential_fill::field::Credential {
                 field_index: field_index.as_core(),
                 role: role.into_core(),
                 editability: editability.into_core(),
@@ -122,7 +126,10 @@ impl CredentialFillObservation {
     #[must_use]
     pub fn new_password(field_index: &CredentialFillFieldIndex) -> Self {
         Self {
-            inner: nook_companion_core::field::NewPassword::from(field_index.as_core()).into(),
+            inner: nook_companion_core::credential_fill::field::NewPassword::from(
+                field_index.as_core(),
+            )
+            .into(),
         }
     }
 
@@ -130,14 +137,17 @@ impl CredentialFillObservation {
     #[must_use]
     pub fn one_time_code(field_index: &CredentialFillFieldIndex) -> Self {
         Self {
-            inner: nook_companion_core::field::OneTimeCode::from(field_index.as_core()).into(),
+            inner: nook_companion_core::credential_fill::field::OneTimeCode::from(
+                field_index.as_core(),
+            )
+            .into(),
         }
     }
 }
 
 #[wasm_bindgen]
 pub struct CredentialFillObservations {
-    inner: Vec<nook_companion_core::field::Observation>,
+    inner: Vec<nook_companion_core::credential_fill::field::Observation>,
 }
 
 #[wasm_bindgen]
@@ -164,7 +174,7 @@ impl CredentialFillObservations {
 }
 
 impl CredentialFillObservations {
-    fn as_core(&self) -> &[nook_companion_core::field::Observation] {
+    fn as_core(&self) -> &[nook_companion_core::credential_fill::field::Observation] {
         &self.inner
     }
 }
@@ -177,11 +187,11 @@ impl Default for CredentialFillObservations {
 
 #[wasm_bindgen]
 pub struct CredentialFillAssignment {
-    inner: nook_companion_core::AuthenticationCredentialFillAssignment,
+    inner: nook_companion_core::credential_fill::Assignment,
 }
 
 impl CredentialFillAssignment {
-    const fn from_core(value: nook_companion_core::AuthenticationCredentialFillAssignment) -> Self {
+    const fn from_core(value: nook_companion_core::credential_fill::Assignment) -> Self {
         Self { inner: value }
     }
 }
@@ -203,11 +213,11 @@ impl CredentialFillAssignment {
 
 #[wasm_bindgen]
 pub struct CredentialFillPlan {
-    assignments: Vec<nook_companion_core::AuthenticationCredentialFillAssignment>,
+    assignments: Vec<nook_companion_core::credential_fill::Assignment>,
 }
 
 impl CredentialFillPlan {
-    fn from_core(value: nook_companion_core::AuthenticationCredentialFillPlan) -> Self {
+    fn from_core(value: nook_companion_core::credential_fill::Plan) -> Self {
         Self {
             assignments: value.assignments,
         }
@@ -229,7 +239,7 @@ impl CredentialFillPlan {
 pub fn plan_companion_credential_fill(
     fields: &CredentialFillObservations,
 ) -> Result<CredentialFillPlan, wasm_bindgen::JsError> {
-    nook_companion_core::plan_authentication_credential_fill(fields.as_core())
+    nook_companion_core::credential_fill::plan(fields.as_core())
         .map(CredentialFillPlan::from_core)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
