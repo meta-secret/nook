@@ -324,9 +324,8 @@ function materializeCredentialForm(
   definitions: SimulatedCredentialFieldDefinitions,
 ): SimulatedCredentialForm {
   const form: SimulatedCredentialForm = []
-  let fieldIndexValue = 3
   try {
-    for (const definition of definitions) {
+    for (const [fieldIndexValue, definition] of definitions.entries()) {
       const field_index = new CredentialFillFieldIndex(fieldIndexValue)
       const request: MaterializeCredentialFieldRequest = {
         definition,
@@ -334,7 +333,6 @@ function materializeCredentialForm(
       }
       const field = materializeCredentialField(request)
       form.push(field)
-      fieldIndexValue += 8
     }
     return form
   } catch (error) {

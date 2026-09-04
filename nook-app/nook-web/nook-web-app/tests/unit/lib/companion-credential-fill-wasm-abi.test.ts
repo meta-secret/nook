@@ -84,7 +84,7 @@ describe('companion credential-fill WASM ABI', () => {
   })
 
   test('fails closed for a generated readonly credential field', () => {
-    const fieldIndex = new CredentialFillFieldIndex(0)
+    const fieldIndex = CredentialFillFieldIndex.zero()
     const currentPasswordRole = CredentialFillFieldRole.current_password()
     const readonly = CredentialFillEditability.readonly()
     const observation = CredentialFillObservation.credential(
@@ -113,8 +113,8 @@ describe('companion credential-fill WASM ABI', () => {
   })
 
   test('fails closed for generated unsafe observation variants', () => {
-    const newPasswordIndex = new CredentialFillFieldIndex(1)
-    const oneTimeCodeIndex = new CredentialFillFieldIndex(2)
+    const newPasswordIndex = CredentialFillFieldIndex.one()
+    const oneTimeCodeIndex = CredentialFillFieldIndex.two()
     const newPassword = CredentialFillObservation.new_password(newPasswordIndex)
     const oneTimeCode =
       CredentialFillObservation.one_time_code(oneTimeCodeIndex)
@@ -156,8 +156,8 @@ describe('companion credential-fill WASM ABI', () => {
     }
   })
 
-  test('rejects an observation above the generated batch bound', () => {
-    const fieldIndex = new CredentialFillFieldIndex(0)
+  test('returns a typed rejection above the generated batch bound', () => {
+    const fieldIndex = CredentialFillFieldIndex.zero()
     const usernameRole = CredentialFillFieldRole.username()
     const writable = CredentialFillEditability.writable()
     const observation = CredentialFillObservation.credential(
@@ -170,10 +170,29 @@ describe('companion credential-fill WASM ABI', () => {
 
     try {
       expect(maxCount).toBeInstanceOf(CredentialFillObservationCount)
-      for (let count = 0; count < maxCount.value; count += 1) {
+      for (let count = 0; count <= maxCount.value; count += 1) {
         fields.add(observation)
       }
-      expect(() => fields.add(observation)).toThrow()
+      const result = plan_companion_credential_fill(fields)
+      try {
+        expect(result).toBeInstanceOf(CredentialFillResult)
+        expect(result.kind).toBe(CredentialFillPlanningOutcome.Rejected)
+        expect(result.rejection()).toBe(
+          CredentialFillRejection.TooManyObservedFields,
+        )
+      } finally {
+        result.free()
+      }
+      fields.add(observation)
+      const repeatedResult = plan_companion_credential_fill(fields)
+      try {
+        expect(repeatedResult.kind).toBe(CredentialFillPlanningOutcome.Rejected)
+        expect(repeatedResult.rejection()).toBe(
+          CredentialFillRejection.TooManyObservedFields,
+        )
+      } finally {
+        repeatedResult.free()
+      }
     } finally {
       fields.free()
       observation.free()
