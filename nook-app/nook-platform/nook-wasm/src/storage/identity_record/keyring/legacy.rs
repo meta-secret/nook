@@ -1,5 +1,7 @@
 //! Compatibility migration for the pre-keyring active app key fields.
 
+use nook_core::{AppId, LocalIdentityKeyringEntry};
+
 use crate::{NookError, storage::indexed_db};
 
 use super::{delete_key, validate_keyring_directory_binding, write_keyring};
@@ -43,7 +45,7 @@ pub(super) async fn migrate_legacy_active_key(
         }
         return Ok(false);
     };
-    let app_id = nook_core::AppId::parse(app_id.as_deref().unwrap_or_default())
+    let app_id = AppId::parse(app_id.as_deref().unwrap_or_default())
         .map_err(|error| NookError::Database(error.to_string()))?;
     let wrapped = nook_core::parse_wrapped_device_identity(&wrapped)?;
 
@@ -82,7 +84,7 @@ pub(super) async fn migrate_legacy_active_key(
         ));
     };
     keyring
-        .insert(nook_core::LocalIdentityKeyringEntry::legacy(
+        .insert(LocalIdentityKeyringEntry::legacy(
             identity_id,
             app_id,
             wrapped,

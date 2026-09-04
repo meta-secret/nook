@@ -1,5 +1,9 @@
 //! GitHub immutable event file adapter (`put_event_if_absent`).
 
+use reqwest::{Client, StatusCode};
+use std::path::Path;
+use std::str;
+
 use crate::NookError;
 use crate::storage::github::{fetch_github_vault, write_github_text_file};
 use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
@@ -38,9 +42,9 @@ fn event_id_from_tree_path(path: &str) -> Option<String> {
     let name = path
         .strip_prefix(&format!("{EVENT_LOG_ROOT}/"))
         .filter(|relative| !relative.contains('/'))?;
-    if let Some(extension) = std::path::Path::new(name).extension()
+    if let Some(extension) = Path::new(name).extension()
         && extension.eq_ignore_ascii_case("yaml")
-        && let Some(stem) = std::path::Path::new(name).file_stem()
+        && let Some(stem) = Path::new(name).file_stem()
         && let Some(digest) = stem.to_str()
         && is_sha256_base64url_digest(digest)
     {
@@ -51,7 +55,7 @@ fn event_id_from_tree_path(path: &str) -> Option<String> {
 
 pub(crate) async fn list_github_event_ids(pat: &str, repo: &str) -> Result<Vec<String>, NookError> {
     let pat = pat.trim();
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let mut event_ids = Vec::new();
 
     let repo_response = client
@@ -63,7 +67,7 @@ pub(crate) async fn list_github_event_ids(pat: &str, repo: &str) -> Result<Vec<S
         .send()
         .await?;
 
-    if repo_response.status() == reqwest::StatusCode::NOT_FOUND {
+    if repo_response.status() == StatusCode::NOT_FOUND {
         return Ok(Vec::new());
     }
     if !repo_response.status().is_success() {
@@ -88,7 +92,7 @@ pub(crate) async fn list_github_event_ids(pat: &str, repo: &str) -> Result<Vec<S
         .send()
         .await?;
 
-    if tree_response.status() == reqwest::StatusCode::NOT_FOUND {
+    if tree_response.status() == StatusCode::NOT_FOUND {
         return Ok(Vec::new());
     }
     if !tree_response.status().is_success() {
@@ -164,7 +168,7 @@ pub(crate) async fn put_github_event_if_absent(
     }
 
     let path = event_id.storage_path();
-    let content = std::str::from_utf8(bytes)
+    let content = str::from_utf8(bytes)
         .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
 
     for attempt in 0..3 {

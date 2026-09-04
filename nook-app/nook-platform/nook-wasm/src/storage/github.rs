@@ -8,6 +8,9 @@
 //! Network errors bubble up as `NookError::Network` (from `reqwest`) or
 //! `NookError::GitHub` for protocol-shaped failures.
 
+use js_sys::Date;
+use reqwest::{Client, StatusCode};
+
 use crate::NookError;
 use serde::{Deserialize, Serialize};
 
@@ -67,7 +70,7 @@ struct GitHubUserResponse {
 }
 
 fn github_cache_bust_url(url: &str) -> String {
-    let stamp = js_sys::Date::now();
+    let stamp = Date::now();
     if url.contains('?') {
         format!("{url}&_={stamp}")
     } else {
@@ -93,7 +96,7 @@ pub(crate) async fn fetch_github_username(pat: &str) -> Result<String, NookError
     }
 
     let url = "https://api.github.com/user";
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let response = client
         .get(url)
         .header("Authorization", format!("Bearer {pat}"))
@@ -103,7 +106,7 @@ pub(crate) async fn fetch_github_username(pat: &str) -> Result<String, NookError
         .send()
         .await?;
 
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+    if response.status() == StatusCode::UNAUTHORIZED {
         log_github_api_failure("user", "", "", response.status());
         return Err(NookError::GitHub(
             "GitHub rejected your token (401). Check that it is valid, not expired, and has repo access.".to_owned(),
@@ -127,7 +130,7 @@ pub(crate) async fn fetch_github_username(pat: &str) -> Result<String, NookError
 
 pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(), NookError> {
     let pat = pat.trim();
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let check_url = format!("https://api.github.com/repos/{repo}");
     let check = client
         .get(&check_url)
@@ -142,7 +145,7 @@ pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(
         return Ok(());
     }
 
-    if check.status() != reqwest::StatusCode::NOT_FOUND {
+    if check.status() != StatusCode::NOT_FOUND {
         let status = check.status();
         log_github_api_failure("repo_check", repo, "", status);
         return Err(NookError::GitHub(format!(
@@ -173,8 +176,7 @@ pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(
         .send()
         .await?;
 
-    if create.status().is_success() || create.status() == reqwest::StatusCode::UNPROCESSABLE_ENTITY
-    {
+    if create.status().is_success() || create.status() == StatusCode::UNPROCESSABLE_ENTITY {
         // 422 = repo already exists (race) or name taken under another account
         return Ok(());
     }
@@ -191,7 +193,7 @@ async fn fetch_github_file_at_path(
     repo: &str,
     path: &str,
 ) -> Result<Option<GitHubVaultFile>, NookError> {
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let mut request = client.get(github_cache_bust_url(&format!(
         "https://api.github.com/repos/{repo}/contents/{path}"
     )));
@@ -200,7 +202,7 @@ async fn fetch_github_file_at_path(
     }
     let file_response = request.send().await?;
 
-    if file_response.status() == reqwest::StatusCode::NOT_FOUND {
+    if file_response.status() == StatusCode::NOT_FOUND {
         return Ok(None);
     }
 
@@ -248,7 +250,7 @@ pub(crate) async fn fetch_github_vault(
         return fetch_github_file_at_path(pat, repo, path).await;
     }
 
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let apply_headers = |request: reqwest::RequestBuilder| {
         let mut request = request;
         for (name, value) in github_get_headers(pat) {
@@ -262,7 +264,7 @@ pub(crate) async fn fetch_github_vault(
     let list_url = github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/"));
     let list_response = apply_headers(client.get(&list_url)).send().await?;
 
-    if list_response.status() == reqwest::StatusCode::NOT_FOUND {
+    if list_response.status() == StatusCode::NOT_FOUND {
         if let Some(flag) = root_empty {
             *flag = true;
         }
@@ -313,7 +315,7 @@ pub(crate) async fn write_github_text_file(
         .map_err(|e| NookError::Serialization(format!("Failed to serialize body: {}", e)))?;
 
     let url = format!("https://api.github.com/repos/{}/contents/{}", repo, path);
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let response = client
         .put(&url)
         .header("Authorization", format!("Bearer {}", pat.trim()))
@@ -328,7 +330,7 @@ pub(crate) async fn write_github_text_file(
     if !response.status().is_success() {
         let status = response.status();
         log_github_api_failure("file_write", repo, path, status);
-        let message = if status == reqwest::StatusCode::NOT_FOUND {
+        let message = if status == StatusCode::NOT_FOUND {
             format!(
                 "Cannot write to {repo}/{path} (404). Ensure your PAT has repo scope and you can access {repo}."
             )

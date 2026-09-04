@@ -1,5 +1,8 @@
 //! Atomic persistence for verified event appends.
 
+use rexie::TransactionMode;
+use std::rc;
+
 use crate::{NookError, storage::open_nook_database};
 use nook_core::{EventGraph, EventId, EventInsertStatus, LocalEventStore, VaultEvent};
 use std::collections::BTreeSet;
@@ -241,13 +244,13 @@ async fn write_events<const COUNT: usize>(
     Ok(heads)
 }
 
-async fn begin_append_transaction()
--> Result<(std::rc::Rc<rexie::Rexie>, rexie::Transaction), NookError> {
+async fn begin_append_transaction() -> Result<(rc::Rc<rexie::Rexie>, rexie::Transaction), NookError>
+{
     let rexie = open_nook_database().await?;
     let transaction = rexie
         .transaction(
             &[STORE_EVENTS, STORE_PROJECTIONS],
-            rexie::TransactionMode::ReadWrite,
+            TransactionMode::ReadWrite,
         )
         .map_err(|error| NookError::IndexedDb(format!("Event transaction error: {error:?}")))?;
     Ok((rexie, transaction))

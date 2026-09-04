@@ -1,5 +1,7 @@
 //! Crash-safe Simple-vault genesis marker lifecycle.
 
+use nook_core::{IsoTimestamp, SigningIdentity, StoreId};
+
 use std::{cell::RefCell, rc::Rc};
 
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
@@ -212,7 +214,7 @@ impl PendingSimpleGenesis {
 }
 
 fn legacy_simple_genesis_timestamp() -> nook_core::IsoTimestamp {
-    nook_core::IsoTimestamp::from_trusted("1970-01-01T00:00:00.000Z".to_owned())
+    IsoTimestamp::from_trusted("1970-01-01T00:00:00.000Z".to_owned())
 }
 
 pub(super) fn decode_pending_simple_genesis(raw: &str) -> Result<PendingSimpleGenesis, NookError> {
@@ -283,7 +285,7 @@ pub(crate) async fn begin_or_resume_simple_genesis(
         store_id: nook_core::generate_store_id()
             .map_err(|error| NookError::Database(error.to_string()))?,
         identity_id: identity.identity_id,
-        created_at: nook_core::IsoTimestamp::parse(&wasm_iso_timestamp())
+        created_at: IsoTimestamp::parse(&wasm_iso_timestamp())
             .map_err(|error| NookError::Database(error.to_string()))?,
         event_state: PendingSimpleGenesisEvent::AwaitingEvent,
         flow: PendingSimpleGenesisFlow::Ordinary,
@@ -465,7 +467,7 @@ pub(crate) fn resume_staged_simple_genesis_signing_seed(
 
 fn validate_genesis_signing_seed(event_yaml: &str, signing_seed: &str) -> Result<(), NookError> {
     let event = nook_core::parse_event_storage_bytes(event_yaml.as_bytes())?;
-    let signing = nook_core::SigningIdentity::from_seed_hex_stored(signing_seed)?;
+    let signing = SigningIdentity::from_seed_hex_stored(signing_seed)?;
     if event.body.actor_signing_public_key != signing.public_key() {
         return Err(NookError::Database(
             "Pinned Simple genesis event does not match the stored signing seed.".to_owned(),
@@ -480,8 +482,8 @@ pub(crate) async fn pending_simple_genesis_for_store(
     if store_id.is_empty() {
         return Ok(None);
     }
-    let store_id = nook_core::StoreId::parse(store_id)
-        .map_err(|error| NookError::Database(error.to_string()))?;
+    let store_id =
+        StoreId::parse(store_id).map_err(|error| NookError::Database(error.to_string()))?;
     let Some(pending) = pending_simple_genesis().await? else {
         return Ok(None);
     };
@@ -502,6 +504,11 @@ pub(super) async fn clear_pending_simple_genesis_for_test() -> Result<(), NookEr
 
 #[cfg(test)]
 mod tests {
+    use nook_core::{
+        AppKey, EventId, IdentityId, IsoTimestamp, SigningIdentity, VaultEvent,
+        VaultEventSchemaVersion,
+    };
+
     use super::*;
     use crate::storage::identity_record::{
         SimpleGenesisCompletion, clear_identity_directory_for_test, clear_pending_simple_genesis,
@@ -515,9 +522,9 @@ mod tests {
     #[wasm_bindgen_test]
     async fn pending_genesis_survives_selection_change() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
-        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let app_key = AppKey::generate().map_err(map_domain_error)?;
         let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
-        let another_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let another_key = AppKey::generate().map_err(map_domain_error)?;
         let selected_key = another_key.clone();
         update_identity_directory(move |directory| {
             directory
@@ -539,7 +546,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn migrates_legacy_top_level_event_yaml() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
-        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let app_key = AppKey::generate().map_err(map_domain_error)?;
         let identity = ensure_local_identity_for_app_key(&app_key, "Personal").await?;
         let raw = serde_json::json!({
             "storeId": nook_core::generate_store_id().map_err(map_domain_error)?,
@@ -564,7 +571,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn pending_genesis_reuses_first_complete_signed_event() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
-        let app_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let app_key = AppKey::generate().map_err(map_domain_error)?;
         let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
         let first = persist_simple_genesis_event(
             &pending,
@@ -592,19 +599,19 @@ mod tests {
 
     #[test]
     fn rejects_mismatched_plaintext_legacy_signing_seed() -> anyhow::Result<()> {
-        let app_key = nook_core::AppKey::generate()?;
-        let (event_signing, _) = nook_core::SigningIdentity::generate()?;
-        let (_, mismatched_seed) = nook_core::SigningIdentity::generate()?;
+        let app_key = AppKey::generate()?;
+        let (event_signing, _) = SigningIdentity::generate()?;
+        let (_, mismatched_seed) = SigningIdentity::generate()?;
         let store_id = nook_core::generate_store_id()?;
-        let event = nook_core::VaultEvent::sign(
+        let event = VaultEvent::sign(
             nook_core::VaultEventBody {
-                schema_version: nook_core::VaultEventSchemaVersion::CURRENT,
+                schema_version: VaultEventSchemaVersion::CURRENT,
                 store_id: store_id.clone(),
                 actor_id: event_signing.actor_id()?,
                 actor_signing_public_key: event_signing.public_key(),
                 parents: Vec::new(),
-                created_at: nook_core::IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
-                key_epoch: nook_core::EventId::from_sha256_hex(
+                created_at: IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
+                key_epoch: EventId::from_sha256_hex(
                     nook_core::sha256_hex(store_id.as_str().as_bytes()).as_str(),
                 )?,
                 operations: Vec::new(),
@@ -614,8 +621,8 @@ mod tests {
         let event_yaml = String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?)?;
         let mut pending = PendingSimpleGenesis {
             store_id,
-            identity_id: nook_core::IdentityId::generate()?,
-            created_at: nook_core::IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
+            identity_id: IdentityId::generate()?,
+            created_at: IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
             event_state: PendingSimpleGenesisEvent::LegacyUnsealedEventPinned {
                 event_yaml,
                 signing_seed: mismatched_seed.as_str().to_owned(),

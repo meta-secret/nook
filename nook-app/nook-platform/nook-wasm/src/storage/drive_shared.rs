@@ -5,6 +5,9 @@
 //! dedicated My Drive folder, share it with another account, and sync event
 //! files under that parent.
 
+use nook_core::i18n_keys;
+use reqwest::Client;
+
 use crate::NookError;
 use serde::Deserialize;
 
@@ -54,7 +57,7 @@ pub(crate) async fn create_shared_vault_folder(
             trimmed
         }
     };
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let response = client
         .post("https://www.googleapis.com/drive/v3/files")
         .query(&[("fields", "id,name")])
@@ -104,7 +107,7 @@ pub(crate) async fn share_folder_with_email(
             "Joiner email is required to grant shared Drive access.".to_owned(),
         ));
     }
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let url = format!(
         "https://www.googleapis.com/drive/v3/files/{}/permissions",
         urlencoding::encode(folder_id)
@@ -140,7 +143,7 @@ pub(crate) async fn verify_shared_vault_folder(
 ) -> Result<(String, String), NookError> {
     let token = nook_core::validate_oauth_access_token(access_token)?;
     let folder_id = nook_core::normalize_google_drive_folder_ref(folder_ref)?;
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let url = format!(
         "https://www.googleapis.com/drive/v3/files/{}",
         urlencoding::encode(folder_id.as_str())
@@ -164,7 +167,7 @@ pub(crate) async fn verify_shared_vault_folder(
     })?;
     if parsed.mime_type.as_deref() != Some("application/vnd.google-apps.folder") {
         return Err(NookError::Drive(
-            nook_core::i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER.to_owned(),
+            i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER.to_owned(),
         ));
     }
     if parsed
@@ -173,7 +176,7 @@ pub(crate) async fn verify_shared_vault_folder(
         != Some(true)
     {
         return Err(NookError::Drive(
-            nook_core::i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE.to_owned(),
+            i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE.to_owned(),
         ));
     }
     Ok((

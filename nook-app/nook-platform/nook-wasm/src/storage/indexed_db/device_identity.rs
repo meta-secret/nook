@@ -1,3 +1,7 @@
+use crate::storage::identity_record;
+use nook_core::AppId;
+use rexie::TransactionMode;
+
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -8,14 +12,16 @@ use super::{
     APP_ID_KEY, APP_KEY_WRAPPED_KEY, DEVICE_ID_KEY, NookError, WRAPPED_DEVICE_IDENTITY_KEY,
     open_nook_database, read_string_preferring,
 };
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::{DeviceProtectionStatus, WrappedDeviceIdentity};
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 async fn device_identity_protection_status() -> Result<nook_core::DeviceProtectionStatus, NookError>
 {
     let Some((_, wrapped)) = load_wrapped_device_identity().await? else {
-        return Ok(nook_core::DeviceProtectionStatus::Missing);
+        return Ok(DeviceProtectionStatus::Missing);
     };
-    nook_core::DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).ok_or_else(|| {
+    DeviceProtectionStatus::from_persisted(wrapped.protection_mode()).ok_or_else(|| {
         NookError::IndexedDb(format!(
             "Unsupported persisted device-protection status: {}",
             wrapped.protection_mode()
@@ -38,11 +44,9 @@ async fn device_identity_device_mode() -> Result<DeviceProtectionDeviceModeState
         return Ok(DeviceProtectionDeviceModeState::Missing);
     };
     Ok(match wrapped {
-        nook_core::WrappedDeviceIdentity::Pin(_) => DeviceProtectionDeviceModeState::Pin,
-        nook_core::WrappedDeviceIdentity::PasskeyDerived(_) => {
-            DeviceProtectionDeviceModeState::Standard
-        }
-        nook_core::WrappedDeviceIdentity::PasskeyWrappedLocal(_) => {
+        WrappedDeviceIdentity::Pin(_) => DeviceProtectionDeviceModeState::Pin,
+        WrappedDeviceIdentity::PasskeyDerived(_) => DeviceProtectionDeviceModeState::Standard,
+        WrappedDeviceIdentity::PasskeyWrappedLocal(_) => {
             DeviceProtectionDeviceModeState::AntiHacker
         }
     })
@@ -50,7 +54,7 @@ async fn device_identity_device_mode() -> Result<DeviceProtectionDeviceModeState
 
 pub(crate) async fn load_wrapped_device_identity()
 -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
-    if let Some(entry) = crate::storage::identity_record::load_selected_entry().await? {
+    if let Some(entry) = identity_record::load_selected_entry().await? {
         return Ok(Some((
             entry.app_id().as_str().to_owned(),
             entry.wrapped_app_key().clone(),
@@ -62,9 +66,8 @@ pub(crate) async fn load_wrapped_device_identity()
 pub(crate) async fn load_wrapped_device_identity_for_app_id(
     app_id: &str,
 ) -> Result<Option<(String, nook_core::WrappedDeviceIdentity)>, NookError> {
-    let app_id =
-        nook_core::AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
-    if let Some(entry) = crate::storage::identity_record::load_entry_for_app_id(&app_id).await? {
+    let app_id = AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
+    if let Some(entry) = identity_record::load_entry_for_app_id(&app_id).await? {
         return Ok(Some((
             entry.app_id().as_str().to_owned(),
             entry.wrapped_app_key().clone(),
@@ -82,7 +85,7 @@ async fn load_legacy_wrapped_device_identity()
     // the same snapshot so a concurrent replacement cannot fabricate a mixed
     // app-key record from two different commits.
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .transaction(&["vault"], TransactionMode::ReadOnly)
         .map_err(|error| {
             NookError::IndexedDb(format!("App key read transaction error: {error:?}"))
         })?;
@@ -127,7 +130,7 @@ pub(crate) async fn save_wrapped_device_identity(
 ) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store("vault")
@@ -191,11 +194,19 @@ pub(crate) async fn put_wrapped_device_identity(
 
 pub(crate) async fn delete_device_identity_for_recovery(
     expected_app_id: Option<nook_core::AppId>,
-) -> Result<crate::storage::identity_record::LocalIdentityRecovery, NookError> {
-    crate::storage::identity_record::delete_identity_directory_for_recovery(expected_app_id).await
+) -> Result<identity_record::LocalIdentityRecovery, NookError> {
+    identity_record::delete_identity_directory_for_recovery(expected_app_id).await
 }
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
+    use crate::storage::identity_record::simple_genesis;
+    use crate::storage::{identity_record, indexed_db};
+    use nook_core::{
+        AppKey, DeviceIdentity, DeviceKeyProtectionSetup, DeviceProtectionStatus, IdentityDirectory,
+    };
+    use rexie::Rexie;
+    use wasm_bindgen::JsError;
+
     use super::*;
     use wasm_bindgen_test::*;
 
@@ -203,16 +214,16 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn verified_passkey_identity_metadata_round_trips() -> Result<(), wasm_bindgen::JsError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
+        let _ = Rexie::delete("nook_db").await;
         assert_eq!(
             device_identity_protection_status().await?,
-            nook_core::DeviceProtectionStatus::Missing
+            DeviceProtectionStatus::Missing
         );
 
-        let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
+        let setup = DeviceKeyProtectionSetup::generate()?;
         let secret =
             nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])?;
-        let identity = nook_core::DeviceIdentity::from_secret_str(&secret)?;
+        let identity = DeviceIdentity::from_secret_str(&secret)?;
         let wrapped = nook_core::passkey_derived_device_identity_record(
             &[7u8; 32],
             setup.user_handle(),
@@ -220,9 +231,9 @@ mod tests {
         )?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
 
-        let (_, reloaded) = load_wrapped_device_identity().await?.ok_or_else(|| {
-            wasm_bindgen::JsError::new("wrapped device identity record should exist")
-        })?;
+        let (_, reloaded) = load_wrapped_device_identity()
+            .await?
+            .ok_or_else(|| JsError::new("wrapped device identity record should exist"))?;
         assert_eq!(reloaded.protection_mode(), "passkey");
         assert_eq!(reloaded.device_mode()?, "standard");
         assert_eq!(
@@ -235,8 +246,8 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn pin_identity_reports_explicit_pin_device_mode() -> Result<(), wasm_bindgen::JsError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let _ = Rexie::delete("nook_db").await;
+        let identity = DeviceIdentity::generate()?;
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
 
@@ -251,8 +262,8 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn wrapped_identity_without_device_id_is_rejected() -> Result<(), wasm_bindgen::JsError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let _ = Rexie::delete("nook_db").await;
+        let identity = DeviceIdentity::generate()?;
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
@@ -265,21 +276,21 @@ mod tests {
     #[wasm_bindgen_test]
     async fn live_app_id_lookup_is_independent_of_persisted_selection()
     -> Result<(), wasm_bindgen::JsError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let first_key = nook_core::AppKey::generate()?;
-        let second_key = nook_core::AppKey::generate()?;
+        let _ = Rexie::delete("nook_db").await;
+        let first_key = AppKey::generate()?;
+        let second_key = AppKey::generate()?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        crate::storage::identity_record::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        crate::storage::identity_record::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &second_key,
             &second_wrapped,
             None,
@@ -290,14 +301,14 @@ mod tests {
         let (app_id, reloaded) =
             load_wrapped_device_identity_for_app_id(first_key.app_id().as_str())
                 .await?
-                .ok_or_else(|| wasm_bindgen::JsError::new("first identity record is missing"))?;
+                .ok_or_else(|| JsError::new("first identity record is missing"))?;
 
         assert_eq!(app_id, first_key.app_id().as_str());
         assert_eq!(reloaded, first_wrapped);
         assert_eq!(
             load_wrapped_device_identity()
                 .await?
-                .ok_or_else(|| wasm_bindgen::JsError::new("selected identity record is missing"))?
+                .ok_or_else(|| JsError::new("selected identity record is missing"))?
                 .0,
             second_key.app_id().as_str()
         );
@@ -307,44 +318,38 @@ mod tests {
     #[wasm_bindgen_test]
     async fn recovery_atomically_forgets_app_key_and_identity_ownership()
     -> Result<(), wasm_bindgen::JsError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let _ = Rexie::delete("nook_db").await;
+        let identity = DeviceIdentity::generate()?;
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
-        crate::storage::indexed_db::idb_put_string(
-            crate::storage::identity_record::IDENTITY_DIRECTORY_KEY,
-            &serde_json::to_string(&nook_core::IdentityDirectory::empty())?,
+        indexed_db::idb_put_string(
+            identity_record::IDENTITY_DIRECTORY_KEY,
+            &serde_json::to_string(&IdentityDirectory::empty())?,
         )
         .await?;
-        crate::storage::indexed_db::idb_put_string(
-            crate::storage::identity_record::simple_genesis::PENDING_SIMPLE_GENESIS_KEY,
-            "pending",
-        )
-        .await?;
-        crate::storage::indexed_db::idb_put_string("vault:preserved", "ciphertext").await?;
+        indexed_db::idb_put_string(simple_genesis::PENDING_SIMPLE_GENESIS_KEY, "pending").await?;
+        indexed_db::idb_put_string("vault:preserved", "ciphertext").await?;
 
         let recovery = delete_device_identity_for_recovery(Some(identity.app_id().clone())).await?;
 
         assert!(load_wrapped_device_identity().await?.is_none());
         assert!(
-            crate::storage::identity_record::load_identity_directory()
+            identity_record::load_identity_directory()
                 .await?
                 .identities()
                 .is_empty()
         );
         assert!(
-            idb_get_string(
-                crate::storage::identity_record::simple_genesis::PENDING_SIMPLE_GENESIS_KEY,
-            )
-            .await?
-            .is_none()
+            idb_get_string(simple_genesis::PENDING_SIMPLE_GENESIS_KEY,)
+                .await?
+                .is_none()
         );
         assert_eq!(
             idb_get_string("vault:preserved").await?,
             Some("ciphertext".to_owned())
         );
-        crate::storage::identity_record::complete_identity_recovery_cleanup(&recovery).await?;
+        identity_record::complete_identity_recovery_cleanup(&recovery).await?;
         Ok(())
     }
 }

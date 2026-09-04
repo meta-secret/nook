@@ -1,5 +1,8 @@
 //! Google Drive immutable event file adapter.
 
+use reqwest::Client;
+use std::str;
+
 use crate::NookError;
 use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
 use nook_core::{DriveEventParent, EventId, VaultEvent, parse_remote_event_storage_bytes};
@@ -101,7 +104,7 @@ pub(crate) async fn list_drive_event_ids(
         url.push_str("&spaces=");
         url.push_str(spaces);
     }
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let mut event_ids = Vec::new();
     let mut page_token: Option<String> = None;
 
@@ -177,7 +180,7 @@ pub(crate) async fn fetch_drive_event_optional(
         return Ok(None);
     }
 
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let mut candidates = Vec::with_capacity(file_ids.len());
     for file_id in file_ids {
         candidates.push(download_drive_event_file(&client, token, &file_id).await?);
@@ -206,7 +209,7 @@ async fn lookup_drive_event_file_ids(
         list_url.push_str("&spaces=");
         list_url.push_str(spaces);
     }
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let response = client
         .get(&list_url)
         .header("Authorization", format!("Bearer {token}"))
@@ -285,7 +288,7 @@ pub(crate) async fn put_drive_event_if_absent(
             "event_id": event_id.as_str(),
         }
     });
-    let content = std::str::from_utf8(bytes)
+    let content = str::from_utf8(bytes)
         .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
 
     let boundary = "nook_event_boundary";
@@ -302,7 +305,7 @@ pub(crate) async fn put_drive_event_if_absent(
     body.push_str(boundary);
     body.push_str("--");
 
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let response = client
         .post("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart")
         .header("Authorization", format!("Bearer {token}"))

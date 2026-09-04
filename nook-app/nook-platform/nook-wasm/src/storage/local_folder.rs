@@ -1,5 +1,10 @@
 //! Browser File System Access adapter for local-folder sync providers.
 
+use gloo_file::File;
+use js_sys::{Boolean, Date, JsString, Math};
+use nook_core::EventId;
+use rexie::{ObjectStore, Rexie, TransactionMode};
+
 use crate::NookError;
 use gloo_file::futures::read_as_text;
 use js_sys::{Array, AsyncIterator, Function, Object, Promise, Reflect};
@@ -54,7 +59,7 @@ fn js_error(context: &str, value: &Object) -> NookError {
     let message = value
         .as_string()
         .or_else(|| {
-            Reflect::get(value, &js_sys::JsString::from("message"))
+            Reflect::get(value, &JsString::from("message"))
                 .ok()
                 .and_then(|message| message.as_string())
         })
@@ -63,7 +68,7 @@ fn js_error(context: &str, value: &Object) -> NookError {
 }
 
 fn get_property(target: &Object, property: &str) -> Result<Object, NookError> {
-    Reflect::get(target, &js_sys::JsString::from(property))
+    Reflect::get(target, &JsString::from(property))
         .map(JsCast::unchecked_into)
         .map_err(|e| js_error(&format!("Could not read {property}"), &e.unchecked_into()))
 }
@@ -109,12 +114,8 @@ async fn call_method1(target: &Object, name: &str, arg: &Object) -> Result<Objec
 
 fn object_with_bool(name: &str, value: bool) -> Result<Object, NookError> {
     let object = Object::new();
-    Reflect::set(
-        &object,
-        &js_sys::JsString::from(name),
-        &js_sys::Boolean::from(value),
-    )
-    .map_err(|e| js_error("Could not build options object", &e.unchecked_into()))?;
+    Reflect::set(&object, &JsString::from(name), &Boolean::from(value))
+        .map_err(|e| js_error("Could not build options object", &e.unchecked_into()))?;
     Ok(object)
 }
 
@@ -122,17 +123,17 @@ fn readwrite_permission_descriptor() -> Result<Object, NookError> {
     let object = Object::new();
     Reflect::set(
         &object,
-        &js_sys::JsString::from("mode"),
-        &js_sys::JsString::from("readwrite"),
+        &JsString::from("mode"),
+        &JsString::from("readwrite"),
     )
     .map_err(|e| js_error("Could not build permission descriptor", &e.unchecked_into()))?;
     Ok(object)
 }
 
 async fn open_handle_db() -> Result<rexie::Rexie, NookError> {
-    rexie::Rexie::builder(DB_NAME)
+    Rexie::builder(DB_NAME)
         .version(1)
-        .add_object_store(rexie::ObjectStore::new(STORE_NAME).key_path("id"))
+        .add_object_store(ObjectStore::new(STORE_NAME).key_path("id"))
         .build()
         .await
         .map_err(|e| NookError::IndexedDb(format!("Local folder IndexedDB build error: {e:?}")))
@@ -142,7 +143,7 @@ pub(crate) async fn clear_local_folder_db() -> Result<(), NookError> {
     MEMORY_HANDLES.with(|handles| handles.borrow_mut().clear());
     let rexie = open_handle_db().await?;
     let transaction = rexie
-        .transaction(&[STORE_NAME], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE_NAME], TransactionMode::ReadWrite)
         .map_err(|e| {
             NookError::IndexedDb(format!("Local folder clear transaction error: {e:?}"))
         })?;
@@ -168,19 +169,15 @@ async fn store_directory_handle(handle_id: &str, handle: Object) -> Result<(), N
 
     let rexie = open_handle_db().await?;
     let transaction = rexie
-        .transaction(&[STORE_NAME], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE_NAME], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Local folder transaction error: {e:?}")))?;
     let store = transaction
         .store(STORE_NAME)
         .map_err(|e| NookError::IndexedDb(format!("Local folder store error: {e:?}")))?;
     let row = Object::new();
-    Reflect::set(
-        &row,
-        &js_sys::JsString::from("id"),
-        &js_sys::JsString::from(handle_id),
-    )
-    .map_err(|e| js_error("Could not store local folder id", &e.unchecked_into()))?;
-    Reflect::set(&row, &js_sys::JsString::from("handle"), &handle)
+    Reflect::set(&row, &JsString::from("id"), &JsString::from(handle_id))
+        .map_err(|e| js_error("Could not store local folder id", &e.unchecked_into()))?;
+    Reflect::set(&row, &JsString::from("handle"), &handle)
         .map_err(|e| js_error("Could not store local folder handle", &e.unchecked_into()))?;
     store
         .put(&row, None)
@@ -200,12 +197,12 @@ async fn load_directory_handle(handle_id: &str) -> Result<Option<Object>, NookEr
 
     let rexie = open_handle_db().await?;
     let transaction = rexie
-        .transaction(&[STORE_NAME], rexie::TransactionMode::ReadOnly)
+        .transaction(&[STORE_NAME], TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Local folder transaction error: {e:?}")))?;
     let store = transaction
         .store(STORE_NAME)
         .map_err(|e| NookError::IndexedDb(format!("Local folder store error: {e:?}")))?;
-    let key = js_sys::JsString::from(handle_id);
+    let key = JsString::from(handle_id);
     let row = store
         .get(key.into())
         .await
@@ -241,13 +238,13 @@ pub(crate) async fn remove_local_folder_handle(handle_id: Option<String>) -> Res
 
     let rexie = open_handle_db().await?;
     let transaction = rexie
-        .transaction(&[STORE_NAME], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE_NAME], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Local folder transaction error: {e:?}")))?;
     let store = transaction
         .store(STORE_NAME)
         .map_err(|e| NookError::IndexedDb(format!("Local folder store error: {e:?}")))?;
     store
-        .delete(js_sys::JsString::from(handle_id).into())
+        .delete(JsString::from(handle_id).into())
         .await
         .map_err(|e| NookError::IndexedDb(format!("Local folder handle delete error: {e:?}")))?;
     transaction
@@ -309,8 +306,8 @@ async fn ensure_write_permission(handle: &Object) -> Result<(), NookError> {
 fn random_handle_id() -> String {
     format!(
         "folder_{}_{}",
-        js_sys::Date::now().round(),
-        js_sys::Math::random().to_string().replace("0.", "")
+        Date::now().round(),
+        Math::random().to_string().replace("0.", "")
     )
 }
 
@@ -325,8 +322,8 @@ pub(crate) async fn choose_local_folder_backup_directory()
     let options = Object::new();
     Reflect::set(
         &options,
-        &js_sys::JsString::from("id"),
-        &js_sys::JsString::from("nook-local-backup"),
+        &JsString::from("id"),
+        &JsString::from("nook-local-backup"),
     )
     .map_err(|e| {
         js_error(
@@ -336,8 +333,8 @@ pub(crate) async fn choose_local_folder_backup_directory()
     })?;
     Reflect::set(
         &options,
-        &js_sys::JsString::from("mode"),
-        &js_sys::JsString::from("readwrite"),
+        &JsString::from("mode"),
+        &JsString::from("readwrite"),
     )
     .map_err(|e| {
         js_error(
@@ -391,7 +388,7 @@ async fn child_directory(
             "Local folder handle cannot open subdirectories.".to_owned(),
         ));
     };
-    let call = function.call2(parent, &js_sys::JsString::from(name), &options);
+    let call = function.call2(parent, &JsString::from(name), &options);
     match call {
         Ok(promise) => await_object(promise.unchecked_into(), "getDirectoryHandle failed")
             .await
@@ -423,13 +420,13 @@ async fn event_directory(root: &Object, create: bool) -> Result<Option<Object>, 
 
 fn event_id_from_file_name(name: &str) -> Option<nook_core::EventId> {
     let digest = name.strip_suffix(".yaml")?;
-    nook_core::EventId::parse(&format!("sha256u:{digest}")).ok()
+    EventId::parse(&format!("sha256u:{digest}")).ok()
 }
 
 fn event_file_name(event_id: &str) -> Result<String, NookError> {
     Ok(format!(
         "{}.yaml",
-        nook_core::EventId::parse(event_id)?.encoded_digest()
+        EventId::parse(event_id)?.encoded_digest()
     ))
 }
 
@@ -496,7 +493,7 @@ async fn read_file_text(file_handle: &Object) -> Result<String, NookError> {
     let web_file: web_sys::File = file.dyn_into().map_err(|_| {
         NookError::Database("Local folder handle did not return a File.".to_owned())
     })?;
-    let gloo_file = gloo_file::File::from(web_file);
+    let gloo_file = File::from(web_file);
     read_as_text(&gloo_file)
         .await
         .map_err(|e| NookError::Database(format!("Local folder file read failed: {e}")))
@@ -549,7 +546,7 @@ pub(crate) async fn write_local_folder_event_files(
             NookError::Database(format!("Could not create backup event file: {name}"))
         })?;
         let writable = call_method0(&file, "createWritable").await?;
-        let content: Object = js_sys::JsString::from(record.content.as_str()).unchecked_into();
+        let content: Object = JsString::from(record.content.as_str()).unchecked_into();
         call_method1(&writable, "write", &content).await?;
         call_method0(&writable, "close").await?;
     }
@@ -567,7 +564,7 @@ async fn child_file(
             "Local folder handle cannot open files.".to_owned(),
         ));
     };
-    let call = function.call2(parent, &js_sys::JsString::from(name), &options);
+    let call = function.call2(parent, &JsString::from(name), &options);
     match call {
         Ok(promise) => await_object(promise.unchecked_into(), "getFileHandle failed")
             .await

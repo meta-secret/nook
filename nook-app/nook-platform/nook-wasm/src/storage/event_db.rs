@@ -2,6 +2,8 @@
 
 mod security_epoch;
 
+use rexie::TransactionMode;
+
 pub(crate) use security_epoch::{
     save_security_epoch_event_pair, save_verified_event, save_verified_remote_events,
 };
@@ -42,7 +44,7 @@ async fn vault_get(key: &str) -> Result<Option<String>, NookError> {
 async fn store_get(store_name: &str, key: &str) -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&[store_name], rexie::TransactionMode::ReadOnly)
+        .transaction(&[store_name], TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store(store_name)
@@ -73,7 +75,7 @@ async fn vault_put(key: &str, value: &str) -> Result<(), NookError> {
 async fn store_put(store_name: &str, key: &str, value: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
+        .transaction(&[store_name], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store(store_name)
@@ -96,7 +98,7 @@ async fn store_put(store_name: &str, key: &str, value: &str) -> Result<(), NookE
 async fn store_delete(store_name: &str, key: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
+        .transaction(&[store_name], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store(store_name)
@@ -184,7 +186,7 @@ pub(crate) async fn load_local_event_store_strict(
 ) -> Result<LocalEventStore, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+        .transaction(&[STORE_EVENTS], TransactionMode::ReadOnly)
         .map_err(|error| NookError::IndexedDb(format!("Transaction error: {error:?}")))?;
     let store = transaction
         .store(STORE_EVENTS)
@@ -292,7 +294,7 @@ pub(crate) async fn clear_local_event_store(store_id: &str) -> Result<(), NookEr
     let event_prefix = format!("event:{store_id}:");
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE_EVENTS], TransactionMode::ReadWrite)
         .map_err(|error| NookError::IndexedDb(format!("Event cleanup error: {error:?}")))?;
     let store = transaction
         .store(STORE_EVENTS)
@@ -326,7 +328,7 @@ pub(crate) async fn save_event_bytes(
 ) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE_EVENTS], TransactionMode::ReadWrite)
         .map_err(|error| NookError::IndexedDb(format!("Event transaction error: {error:?}")))?;
     let store = transaction.store(STORE_EVENTS).map_err(|error| {
         NookError::IndexedDb(format!("Event transaction store error: {error:?}"))
@@ -453,6 +455,9 @@ pub(crate) async fn remove_outbox_entry(
 
 #[cfg(test)]
 mod tests {
+    use nook_core::{EventId, IsoTimestamp, Sha256Hex, SigningIdentity, VaultOperation};
+    use rexie::TransactionMode;
+
     use super::*;
     use wasm_bindgen_test::*;
 
@@ -473,7 +478,7 @@ mod tests {
 
         let rexie = open_nook_database().await?;
         let transaction = rexie
-            .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+            .transaction(&[STORE_EVENTS], TransactionMode::ReadOnly)
             .map_err(|error| NookError::IndexedDb(format!("Test transaction error: {error:?}")))?;
         let store = transaction.store(STORE_EVENTS).map_err(|error| {
             NookError::IndexedDb(format!("Test transaction store error: {error:?}"))
@@ -526,7 +531,7 @@ mod tests {
 
         let rexie = open_nook_database().await?;
         let transaction = rexie
-            .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+            .transaction(&[STORE_EVENTS], TransactionMode::ReadOnly)
             .map_err(|error| NookError::IndexedDb(format!("Test transaction error: {error:?}")))?;
         let store = transaction.store(STORE_EVENTS).map_err(|error| {
             NookError::IndexedDb(format!("Test transaction store error: {error:?}"))
@@ -582,18 +587,18 @@ mod tests {
     async fn transactional_loader_rejects_event_row_with_wrong_id() -> Result<(), NookError> {
         let store_id = nook_core::generate_store_id()?;
         let indexed_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
-        let (signing, _) = nook_core::SigningIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
         let actor_id = signing.actor_id()?;
-        let key_epoch = nook_core::EventId::parse(indexed_id)?;
+        let key_epoch = EventId::parse(indexed_id)?;
         let (_, event_bytes) = nook_core::build_signed_event(nook_core::AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &signing,
             parents: Vec::new(),
             key_epoch: &key_epoch,
-            created_at: &nook_core::IsoTimestamp::from_trusted("2026-08-15T00:00:00Z".to_owned()),
-            operations: vec![nook_core::VaultOperation::VaultImported {
-                source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+            created_at: &IsoTimestamp::from_trusted("2026-08-15T00:00:00Z".to_owned()),
+            operations: vec![VaultOperation::VaultImported {
+                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }],
@@ -617,7 +622,7 @@ mod tests {
 
         let rexie = open_nook_database().await?;
         let transaction = rexie
-            .transaction(&[STORE_EVENTS], rexie::TransactionMode::ReadOnly)
+            .transaction(&[STORE_EVENTS], TransactionMode::ReadOnly)
             .map_err(|error| NookError::IndexedDb(format!("Test transaction error: {error:?}")))?;
         let store = transaction.store(STORE_EVENTS).map_err(|error| {
             NookError::IndexedDb(format!("Test transaction store error: {error:?}"))

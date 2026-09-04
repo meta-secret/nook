@@ -1,5 +1,8 @@
 //! iCloud `CloudKit` private/shared-database adapter for immutable event records.
 
+use reqwest::Client;
+use std::{collections, str};
+
 use crate::NookError;
 use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
 use nook_core::{EventId, ICloudEventTarget, ICloudShareRole, VaultEvent};
@@ -41,7 +44,7 @@ struct ICloudRecord {
     #[serde(rename = "recordName")]
     record_name: String,
     #[serde(default)]
-    fields: Option<std::collections::HashMap<String, ICloudFieldValue>>,
+    fields: Option<collections::HashMap<String, ICloudFieldValue>>,
 }
 
 #[derive(Deserialize)]
@@ -232,7 +235,7 @@ async fn lookup_vault_record(
         record_name,
         "CloudKit lookup prepared"
     );
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let body = with_icloud_zone(
         json!({
             "records": [{ "recordName": record_name }]
@@ -281,7 +284,7 @@ pub(crate) async fn list_icloud_event_ids(
     target: &ICloudEventTarget,
 ) -> Result<Vec<String>, NookError> {
     let token = nook_core::validate_oauth_access_token(web_auth_token)?;
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let mut event_ids = Vec::new();
     let mut continuation_marker: Option<String> = None;
     const OPERATION: &str = "query";
@@ -512,7 +515,7 @@ pub(crate) async fn put_icloud_event_if_absent(
     bytes: &[u8],
 ) -> Result<(), NookError> {
     let token = nook_core::validate_oauth_access_token(web_auth_token)?;
-    let content = std::str::from_utf8(bytes)
+    let content = str::from_utf8(bytes)
         .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
     let expected_event = parse_expected_event_storage_bytes(bytes, event_id, "CloudKit")?;
     let record_name = icloud_event_record_name(event_id);
@@ -539,7 +542,7 @@ pub(crate) async fn put_icloud_event_if_absent(
     }
 
     let body = icloud_event_create_body(target, event_id, &record_name, content);
-    let client = reqwest::Client::new();
+    let client = Client::new();
     const OPERATION: &str = "modify";
     const PATH: &str = "records/modify";
     log_icloud_request_start(OPERATION, PATH, token.as_ref());
