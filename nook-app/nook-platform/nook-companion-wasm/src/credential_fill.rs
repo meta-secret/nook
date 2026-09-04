@@ -267,7 +267,7 @@ impl CredentialFillPlan {
 
 enum CredentialFillResultState {
     Planned(nook_companion_core::credential_fill::Plan),
-    Rejected(nook_companion_core::credential_fill::Rejection),
+    Rejected(nook_companion_core::credential_fill::CredentialFillRejection),
 }
 
 #[wasm_bindgen]
@@ -279,7 +279,7 @@ impl CredentialFillResult {
     fn from_core(
         value: Result<
             nook_companion_core::credential_fill::Plan,
-            nook_companion_core::credential_fill::Rejection,
+            nook_companion_core::credential_fill::CredentialFillRejection,
         >,
     ) -> Self {
         let inner = match value {
@@ -294,13 +294,13 @@ impl CredentialFillResult {
 impl CredentialFillResult {
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn kind(&self) -> nook_companion_core::credential_fill::PlanningOutcome {
+    pub fn kind(&self) -> nook_companion_core::credential_fill::CredentialFillPlanningOutcome {
         match &self.inner {
             CredentialFillResultState::Planned(_) => {
-                nook_companion_core::credential_fill::PlanningOutcome::Planned
+                nook_companion_core::credential_fill::CredentialFillPlanningOutcome::Planned
             }
             CredentialFillResultState::Rejected(_) => {
-                nook_companion_core::credential_fill::PlanningOutcome::Rejected
+                nook_companion_core::credential_fill::CredentialFillPlanningOutcome::Rejected
             }
         }
     }
@@ -316,7 +316,8 @@ impl CredentialFillResult {
 
     pub fn rejection(
         &self,
-    ) -> Result<nook_companion_core::credential_fill::Rejection, wasm_bindgen::JsError> {
+    ) -> Result<nook_companion_core::credential_fill::CredentialFillRejection, wasm_bindgen::JsError>
+    {
         let CredentialFillResultState::Rejected(rejection) = &self.inner else {
             return Err(wasm_bindgen::JsError::new(
                 "a planned credential-fill result has no rejection",
@@ -352,7 +353,7 @@ mod tests {
         let result = plan_companion_credential_fill(&fields);
         assert_eq!(
             result.kind(),
-            nook_companion_core::credential_fill::PlanningOutcome::Planned
+            nook_companion_core::credential_fill::CredentialFillPlanningOutcome::Planned
         );
         let mut plan = result.plan()?;
         let assignments = plan.take_assignments();
@@ -385,11 +386,11 @@ mod tests {
         let result = plan_companion_credential_fill(&fields);
         assert_eq!(
             result.kind(),
-            nook_companion_core::credential_fill::PlanningOutcome::Rejected
+            nook_companion_core::credential_fill::CredentialFillPlanningOutcome::Rejected
         );
         assert_eq!(
             result.rejection()?,
-            nook_companion_core::credential_fill::Rejection::PasswordFieldsReadonly
+            nook_companion_core::credential_fill::CredentialFillRejection::PasswordFieldsReadonly
         );
         Ok(())
     }
