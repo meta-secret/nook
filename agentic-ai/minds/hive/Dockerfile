@@ -15,6 +15,7 @@ ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
 ARG SCCACHE_BUCKET=nook-sccache
 ARG CARGO_CHEF_VERSION=0.1.77
 ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
+ARG LLVM_COV_VERSION=0.8.7
 
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_BUILD_JOBS=2
@@ -45,7 +46,11 @@ RUN apt-get update \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN rustup component add clippy rustfmt
+RUN rustup component add clippy rustfmt llvm-tools-preview
+
+RUN curl -fsSL \
+      "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v${LLVM_COV_VERSION}/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz" \
+    | tar xz -C /usr/local/cargo/bin
 
 RUN curl -fsSL \
       "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
@@ -221,6 +226,17 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
     && test -n "$(find /opt/nook/hive-tests -type f -perm /111 -print -quit)" \
     && nook-sccache-report hive-test-compile
 
+FROM test-source AS coverage
+
+ARG RUST_COVERAGE_FLOOR=90
+RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
+    for package in hive lace; do \
+      cargo llvm-cov test --locked -p "$package" \
+        --fail-under-lines "${RUST_COVERAGE_FLOOR}"; \
+    done \
+    && nook-sccache-report hive-per-package-coverage \
+    && install -D /dev/null /opt/nook/hive-coverage-passed
+
 FROM scratch AS test-export
 
 COPY --from=test-compile /opt/nook/hive-tests /hive-tests
@@ -247,6 +263,7 @@ RUN groupadd --gid 1000 hive \
 FROM scratch AS verify-export
 
 COPY --from=check /opt/nook/hive-check-passed /hive-check-passed
+COPY --from=coverage /opt/nook/hive-coverage-passed /hive-coverage-passed
 COPY --from=test-export /hive-tests /hive-tests
 COPY --from=sandbox-package-check /opt/nook/hive-sandbox-package-passed /hive-sandbox-package-passed
 COPY --from=worker-runtime-toolchain /opt/nook/hive-login-shell-toolchain-passed /hive-login-shell-toolchain-passed

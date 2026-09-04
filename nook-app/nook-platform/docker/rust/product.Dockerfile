@@ -255,6 +255,14 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 
+# wasm-bindgen coverage needs a pinned nightly compiler. Keep this install on a
+# manifest-only branch so source edits do not redownload the toolchain.
+FROM builder-wasm-deps AS wasm-coverage-toolchain
+
+ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
+RUN rustup toolchain install "${WASM_COVERAGE_NIGHTLY}" --component llvm-tools-preview \
+    && rustup target add --toolchain "${WASM_COVERAGE_NIGHTLY}" wasm32-unknown-unknown
+
 # Source overlay for bulk native leaves. Keep this after cook so builder-*-deps stay
 # manifest-stable; platform tree edits invalidate only this stage and its consumers.
 FROM builder-core-deps AS rust-platform
@@ -347,7 +355,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
+    && for package in nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core; do \
+         cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$FLOOR" \
+           > "/tmp/${package}-coverage-summary.txt"; \
+       done \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
@@ -711,6 +723,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 FROM builder-wasm-source AS builder-wasm-tests
 
+ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
+
+COPY --from=wasm-coverage-toolchain /usr/local/rustup /usr/local/rustup
+
 # Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the
 # later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -733,7 +749,18 @@ COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     wasm-pack test --node --release nook-wasm \
-    && nook-sccache-report wasm-node-test
+    && wasm-pack test --node --release nook-companion-wasm \
+    && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
+    && test -x "$runner" \
+    && floor="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
+    && for package in nook-companion-wasm nook-wasm; do \
+         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" \
+         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Cinstrument-coverage -Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" \
+         RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test \
+           --target wasm32-unknown-unknown --release -p "$package" \
+           --fail-under-lines "$floor"; \
+       done \
+    && nook-sccache-report wasm-node-test-and-coverage
 
 FROM scratch AS wasm-export
 

@@ -1,7 +1,30 @@
 {
   "lines_percent": 90.0,
-  "package": "nook-core+nook-auth2+nook-replication+nook-event-log",
-  "tool": "cargo llvm-cov nextest --profile ci -p nook-app-common -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log",
-  "updated": "2026-06-30",
-  "note": "Minimum combined line coverage for Nook's portable Rust crates (90%). CI fails below this threshold. When measured coverage is under 90%, agents should add Rust tests in the same task."
+  "policy": "Each testable first-party Rust package independently meets the line floor.",
+  "enforced_packages": [
+    "nook-app-common",
+    "nook-authenticator-domain",
+    "nook-auth2",
+    "nook-replication",
+    "nook-event-log",
+    "nook-companion-core",
+    "nook-core",
+    "nook-companion-wasm",
+    "nook-wasm",
+    "hive",
+    "lace",
+    "nook-preflight"
+  ],
+  "excluded_packages": [
+    {
+      "package": "nook-fuzz",
+      "reason": "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
+    },
+    {
+      "package": "arrayref",
+      "reason": "Vendored third-party patch; upstream source is outside Nook's authored coverage policy."
+    }
+  ],
+  "updated": "2026-09-04",
+  "note": "CI fails when any enforced package is below 90%; package results are never aggregated for the failure decision."
 }

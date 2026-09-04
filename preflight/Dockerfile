@@ -44,12 +44,14 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 FROM build AS test
 
 COPY --from=repository-source / /meta-secret/nook
+COPY nook-app/nook-platform/nook-core/coverage-floor.json /opt/nook/coverage-floor.json
 ENV NOOK_REPO_ROOT=/meta-secret/nook
 ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo test --locked \
-    && nook-sccache-report preflight-test
+    floor="$(jq -r '.lines_percent' /opt/nook/coverage-floor.json)" \
+    && cargo llvm-cov test --locked -p nook-preflight --fail-under-lines "$floor" \
+    && nook-sccache-report preflight-test-and-coverage
 
 FROM scratch AS cli-export
 
