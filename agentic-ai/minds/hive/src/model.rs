@@ -1,4 +1,6 @@
+use serde::de;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
@@ -61,8 +63,8 @@ impl TaskId {
     }
 }
 
-impl std::fmt::Display for TaskId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for TaskId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -85,8 +87,8 @@ impl AgentId {
     }
 }
 
-impl std::fmt::Display for AgentId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for AgentId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -109,8 +111,8 @@ impl AttemptId {
     }
 }
 
-impl std::fmt::Display for AttemptId {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for AttemptId {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -133,8 +135,8 @@ impl LeaseToken {
     }
 }
 
-impl std::fmt::Display for LeaseToken {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for LeaseToken {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(&self.0)
     }
 }
@@ -463,7 +465,7 @@ impl<'de> Deserialize<'de> for TerminalResult {
         D: serde::Deserializer<'de>,
     {
         let wire = WireTerminalResult::deserialize(deserializer)?;
-        Self::try_from(wire).map_err(serde::de::Error::custom)
+        Self::try_from(wire).map_err(de::Error::custom)
     }
 }
 
@@ -596,7 +598,7 @@ mod tests {
         });
         let error = match serde_json::from_value::<TerminalResult>(completed_with_blocker) {
             Ok(_) => {
-                return Err(crate::error::HiveError::message(
+                return Err(crate::HiveError::message(
                     "completed result with a blocker was accepted",
                 ));
             }
@@ -619,7 +621,7 @@ mod tests {
         });
         let error = match serde_json::from_value::<TerminalResult>(blocked_without_blocker) {
             Ok(_) => {
-                return Err(crate::error::HiveError::message(
+                return Err(crate::HiveError::message(
                     "blocked result without a blocker was accepted",
                 ));
             }
@@ -642,7 +644,7 @@ mod tests {
         });
         let error = match serde_json::from_value::<TerminalResult>(blocked_obsolete) {
             Ok(_) => {
-                return Err(crate::error::HiveError::message(
+                return Err(crate::HiveError::message(
                     "blocked obsolete result was accepted",
                 ));
             }
@@ -671,7 +673,7 @@ mod tests {
 
         let error = match serde_json::from_value::<TerminalResult>(terminal_result) {
             Ok(_) => {
-                return Err(crate::error::HiveError::message(
+                return Err(crate::HiveError::message(
                     "empty terminal content was accepted",
                 ));
             }

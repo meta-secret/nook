@@ -221,7 +221,7 @@ fn latest_delivery_generation<'a>(
         .skip(1)
         .any(|(generation, _)| *generation == latest_generation)
     {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is ambiguous: multiple PRs use generation {latest_generation}"
         )));
     }
@@ -240,13 +240,13 @@ fn delivery_generation(base: &str, candidate: &str) -> Option<u64> {
 
 fn validate_hive_marker(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     if !pull_request.title.starts_with("[Hive] ") {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} lacks the `[Hive]` title marker",
             pull_request.number
         )));
     }
     if !pull_request.labels.iter().any(|label| label.name == "hive") {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} lacks the `hive` label",
             pull_request.number
         )));
@@ -268,7 +268,7 @@ async fn validate_squash_merge(
     )
     .await?;
     if parents.split_whitespace().count() != 1 {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery violated squash-only history: merge {} has multiple parents",
             merge_commit.oid
         )));
@@ -280,7 +280,7 @@ async fn validate_squash_merge(
     .await?;
     let expected_suffix = format!("(#{})", pull_request.number);
     if !subject.ends_with(&expected_suffix) {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery violated squash-only history: merge {} lacks PR suffix {}",
             merge_commit.oid, expected_suffix
         )));
@@ -290,13 +290,13 @@ async fn validate_squash_merge(
 
 fn validate_merged_hive_pull_request(pull_request: &DeliveryPullRequest) -> crate::HiveResult<()> {
     if pull_request.state != "MERGED" {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} is {}",
             pull_request.number, pull_request.state
         )));
     }
     if pull_request.merge_commit.is_none() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} has no squash merge",
             pull_request.number
         )));
@@ -313,7 +313,7 @@ fn validate_full_e2e_checks(
         .iter()
         .any(|label| label.name == "ci:full-e2e")
     {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks `ci:full-e2e`",
             pull_request.number, pull_request.head_ref_oid
         )));
@@ -328,7 +328,7 @@ fn validate_full_e2e_checks(
             .filter(|check| check.name == required_check)
             .collect::<Vec<_>>();
         if !successful_or_merge_cancelled(&matching, successful_main_contains_merge) {
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `{}`",
                 pull_request.number, pull_request.head_ref_oid, required_check
             )));
@@ -347,7 +347,7 @@ fn validate_repository_checks(
         .filter(|check| check.name == "Verify and preview")
         .collect::<Vec<_>>();
     if !successful_or_merge_cancelled(&verify_checks, successful_main_contains_merge) {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} at {} lacks successful exact-head `Verify and preview`",
             pull_request.number, pull_request.head_ref_oid
         )));
@@ -372,7 +372,7 @@ fn validate_repository_checks(
             continue;
         }
         if checks.iter().any(|check| check.status != "COMPLETED") {
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: repository check `{name}` is still running"
             )));
         }
@@ -380,7 +380,7 @@ fn validate_repository_checks(
             .iter()
             .find(|check| !matches!(check.conclusion.as_str(), "SKIPPED" | "NEUTRAL"))
         {
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: repository check `{name}` concluded {}",
                 check.conclusion
             )));
@@ -416,6 +416,9 @@ fn successful_or_merge_cancelled(
 #[cfg(test)]
 mod tests {
     use crate::HiveContext;
+    use std::fs;
+    use std::path;
+    use std::process;
 
     use super::{
         DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, delivery_generation,
@@ -473,8 +476,8 @@ mod tests {
         }
     }
 
-    fn git(repository: &std::path::Path, arguments: &[&str]) -> crate::HiveResult<String> {
-        let output = std::process::Command::new("git")
+    fn git(repository: &path::Path, arguments: &[&str]) -> crate::HiveResult<String> {
+        let output = process::Command::new("git")
             .args(arguments)
             .current_dir(repository)
             .output()?;
@@ -518,7 +521,7 @@ mod tests {
             repository.path(),
             &["config", "user.email", "hive@example.invalid"],
         )?;
-        std::fs::write(repository.path().join("repair.txt"), "base\n")?;
+        fs::write(repository.path().join("repair.txt"), "base\n")?;
         git(repository.path(), &["add", "repair.txt"])?;
         git(repository.path(), &["commit", "--quiet", "-m", "base"])?;
         let root_commit = git(repository.path(), &["rev-parse", "HEAD"])?;
@@ -529,7 +532,7 @@ mod tests {
             .ok_or_else(|| crate::HiveError::message("parentless commit was accepted as squash"))?;
         assert!(history_error.to_string().contains("multiple parents"));
 
-        std::fs::write(repository.path().join("repair.txt"), "base\nrepair\n")?;
+        fs::write(repository.path().join("repair.txt"), "base\nrepair\n")?;
         git(repository.path(), &["add", "repair.txt"])?;
         git(
             repository.path(),
@@ -539,7 +542,7 @@ mod tests {
         let valid = pull_request(42, "repair", "MERGED", Some(&valid_commit));
         validate_squash_merge(repository.path(), &valid).await?;
 
-        std::fs::write(
+        fs::write(
             repository.path().join("repair.txt"),
             "base\nrepair\nfollow-up\n",
         )?;
@@ -653,7 +656,7 @@ mod tests {
         let error = validate_merged_hive_pull_request(&pull_request(42, "repair", "OPEN", None))
             .err()
             .ok_or_else(|| {
-                crate::error::HiveError::message("an open pull request cannot complete a Hive task")
+                crate::HiveError::message("an open pull request cannot complete a Hive task")
             })?;
 
         assert!(error.to_string().contains("PR #42 is OPEN"));
@@ -665,9 +668,7 @@ mod tests {
         let error = validate_merged_hive_pull_request(&pull_request(42, "repair", "MERGED", None))
             .err()
             .ok_or_else(|| {
-                crate::error::HiveError::message(
-                    "a merge without its commit cannot prove Main delivery",
-                )
+                crate::HiveError::message("a merge without its commit cannot prove Main delivery")
             })?;
 
         assert!(error.to_string().contains("no squash merge"));
@@ -710,9 +711,7 @@ mod tests {
         let error = latest_delivery_generation(&pull_requests, "codex/hive-task")
             .err()
             .ok_or_else(|| {
-                crate::error::HiveError::message(
-                    "duplicate generations cannot identify one delivery",
-                )
+                crate::HiveError::message("duplicate generations cannot identify one delivery")
             })?;
 
         assert!(error.to_string().contains("multiple PRs use generation 2"));
@@ -745,9 +744,7 @@ mod tests {
         let error = validate_full_e2e_checks(&pull_request, false)
             .err()
             .ok_or_else(|| {
-                crate::error::HiveError::message(
-                    "a Hive repair without the opt-in label cannot complete",
-                )
+                crate::HiveError::message("a Hive repair without the opt-in label cannot complete")
             })?;
 
         assert!(error.to_string().contains("lacks `ci:full-e2e`"));
@@ -783,7 +780,7 @@ mod tests {
         let error = validate_repository_checks(&pull_request, false)
             .err()
             .ok_or_else(|| {
-                crate::error::HiveError::message(
+                crate::HiveError::message(
                     "a failed applicable repository workflow cannot complete a Hive task",
                 )
             })?;
@@ -812,9 +809,7 @@ mod tests {
         let error = validate_full_e2e_checks(&pull_request, true)
             .err()
             .ok_or_else(|| {
-                crate::error::HiveError::message(
-                    "a failed exact-head e2e run remains a delivery failure",
-                )
+                crate::HiveError::message("a failed exact-head e2e run remains a delivery failure")
             })?;
         assert!(error.to_string().contains("Full browser e2e"));
         Ok(())
@@ -834,7 +829,7 @@ mod tests {
         let error = validate_repository_checks(&pull_request, true)
             .err()
             .ok_or_else(|| {
-                crate::error::HiveError::message("Main does not exercise Hive-only verification")
+                crate::HiveError::message("Main does not exercise Hive-only verification")
             })?;
         assert!(error.to_string().contains("Hive Rust"));
         Ok(())

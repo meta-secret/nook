@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::env;
 use std::future::Future;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
@@ -56,7 +57,7 @@ impl CodexOptions {
             reasoning_effort: DEFAULT_CODEX_REASONING_EFFORT.to_owned(),
             arg0_paths: Arg0DispatchPaths::default(),
             access: CodexAccess::ReadOnly,
-            github_token: std::env::var("GH_TOKEN").ok(),
+            github_token: env::var("GH_TOKEN").ok(),
             activity_sender: None,
         }
     }
@@ -399,7 +400,7 @@ async fn submit_and_wait(
     }
 
     let stderr = io::stderr();
-    let decorate = stderr.is_terminal() && std::env::var_os("NO_COLOR").is_none();
+    let decorate = stderr.is_terminal() && env::var_os("NO_COLOR").is_none();
     let mut progress = match kind {
         TurnKind::Planning => TurnProgress::Planning(ProgressReporter::new(stderr, decorate)),
         TurnKind::Task(task_id) => {
@@ -469,6 +470,8 @@ async fn submit_and_wait(
 mod tests {
     use super::*;
     use crate::HiveContext;
+    use std::time;
+    use tokio::fs as async_fs;
 
     #[derive(serde::Deserialize)]
     struct RecordedExecution {
@@ -794,10 +797,10 @@ mod tests {
             &log,
             &["/bin/sh".into(), "-c".into(), "cargo test -p hive".into()],
             1,
-            std::time::Duration::from_secs(3),
+            time::Duration::from_secs(3),
         )
         .await?;
-        let line = tokio::fs::read_to_string(&log).await?;
+        let line = async_fs::read_to_string(&log).await?;
         let record: RecordedExecution = serde_json::from_str(line.trim())?;
         assert_eq!(record.command, "cargo test");
         assert_eq!(record.category, "test");
@@ -812,7 +815,7 @@ mod tests {
             &absent,
             &["git".into(), "status".into()],
             0,
-            std::time::Duration::ZERO,
+            time::Duration::ZERO,
         )
         .await?;
         assert!(!absent.exists());

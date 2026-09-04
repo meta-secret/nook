@@ -1,6 +1,11 @@
+use std::fs;
 use std::future::Future;
+use std::io;
+use std::path;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::fs as async_fs;
+use tokio::time as async_time;
 
 use crate::HiveContext;
 
@@ -15,9 +20,9 @@ pub async fn prepare_dispatcher_health(health_path: &Path) -> crate::HiveResult<
         progress_path.clone(),
         next_path(&progress_path),
     ] {
-        match tokio::fs::remove_file(&path).await {
+        match async_fs::remove_file(&path).await {
             Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
             Err(error) => {
                 return Err(error).with_hive_context(|| {
                     format!(
@@ -45,9 +50,9 @@ where
     let progress_path = progress_path(health_path);
     record_health(&progress_path).await?;
     tokio::pin!(future);
-    let timeout = tokio::time::sleep(OPERATION_TIMEOUT);
+    let timeout = async_time::sleep(OPERATION_TIMEOUT);
     tokio::pin!(timeout);
-    let mut interval = tokio::time::interval(PROGRESS_INTERVAL);
+    let mut interval = async_time::interval(PROGRESS_INTERVAL);
     interval.tick().await;
     loop {
         tokio::select! {
@@ -65,9 +70,9 @@ pub(super) async fn sleep_while_recording_dispatcher_progress(
     duration: Duration,
 ) -> crate::HiveResult<()> {
     let progress_path = progress_path(health_path);
-    let sleep = tokio::time::sleep(duration);
+    let sleep = async_time::sleep(duration);
     tokio::pin!(sleep);
-    let mut interval = tokio::time::interval(PROGRESS_INTERVAL);
+    let mut interval = async_time::interval(PROGRESS_INTERVAL);
     interval.tick().await;
     loop {
         tokio::select! {
@@ -80,7 +85,7 @@ pub(super) async fn sleep_while_recording_dispatcher_progress(
 async fn record_health(health_path: &Path) -> crate::HiveResult<()> {
     let timestamp = unix_timestamp_seconds(SystemTime::now())?;
     let next_health_path = next_path(health_path);
-    tokio::fs::write(&next_health_path, format!("{timestamp}\n"))
+    async_fs::write(&next_health_path, format!("{timestamp}\n"))
         .await
         .with_hive_context(|| {
             format!(
@@ -88,7 +93,7 @@ async fn record_health(health_path: &Path) -> crate::HiveResult<()> {
                 next_health_path.display()
             )
         })?;
-    tokio::fs::rename(&next_health_path, health_path)
+    async_fs::rename(&next_health_path, health_path)
         .await
         .with_hive_context(|| {
             format!(
@@ -98,15 +103,15 @@ async fn record_health(health_path: &Path) -> crate::HiveResult<()> {
         })
 }
 
-fn progress_path(health_path: &Path) -> std::path::PathBuf {
+fn progress_path(health_path: &Path) -> path::PathBuf {
     path_with_suffix(health_path, ".progress")
 }
 
-fn next_path(health_path: &Path) -> std::path::PathBuf {
+fn next_path(health_path: &Path) -> path::PathBuf {
     path_with_suffix(health_path, ".next")
 }
 
-fn path_with_suffix(path: &Path, suffix: &str) -> std::path::PathBuf {
+fn path_with_suffix(path: &Path, suffix: &str) -> path::PathBuf {
     let mut path = path.as_os_str().to_owned();
     path.push(suffix);
     path.into()
@@ -137,7 +142,7 @@ fn check_workbench_dispatcher_health_at(
     now: SystemTime,
     process_root: &Path,
 ) -> crate::HiveResult<()> {
-    let heartbeat = std::fs::read_to_string(health_path).with_hive_context(|| {
+    let heartbeat = fs::read_to_string(health_path).with_hive_context(|| {
         format!(
             "read Workbench dispatcher health heartbeat at {}",
             health_path.display()
@@ -152,14 +157,14 @@ fn check_workbench_dispatcher_health_at(
         "Workbench dispatcher health heartbeat is later than the current system time",
     )?;
     if age > max_age.as_secs() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Workbench dispatcher health heartbeat is {age} seconds old"
         )));
     }
 
     let zombies = zombie_process_count(process_root)?;
     if zombies != 0 {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Workbench dispatcher has {zombies} unreaped child processes"
         )));
     }
@@ -170,7 +175,7 @@ fn unix_timestamp_seconds(time: SystemTime) -> crate::HiveResult<u64> {
     Ok(time
         .duration_since(UNIX_EPOCH)
         .map_err(|error| {
-            crate::error::HiveError::message(format!(
+            crate::HiveError::message(format!(
                 "system time is earlier than the Unix epoch: {error}"
             ))
         })?
@@ -179,7 +184,7 @@ fn unix_timestamp_seconds(time: SystemTime) -> crate::HiveResult<u64> {
 
 fn zombie_process_count(process_root: &Path) -> crate::HiveResult<usize> {
     let mut zombies = 0;
-    for entry in std::fs::read_dir(process_root)
+    for entry in fs::read_dir(process_root)
         .with_hive_context(|| format!("read process information at {}", process_root.display()))?
     {
         let entry = entry?;
@@ -192,9 +197,9 @@ fn zombie_process_count(process_root: &Path) -> crate::HiveResult<usize> {
             continue;
         }
         let stat_path = entry.path().join("stat");
-        let stat = match std::fs::read_to_string(&stat_path) {
+        let stat = match fs::read_to_string(&stat_path) {
             Ok(stat) => stat,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
             Err(error) => {
                 return Err(error).with_hive_context(|| {
                     format!("read process state at {}", stat_path.display())
@@ -213,6 +218,7 @@ fn zombie_process_count(process_root: &Path) -> crate::HiveResult<usize> {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
     use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[test]
@@ -220,10 +226,10 @@ mod tests {
         let root = tempfile::tempdir()?;
         let health = root.path().join("health");
         let processes = root.path().join("proc");
-        std::fs::create_dir(&processes)?;
-        std::fs::write(&health, "100\n")?;
-        std::fs::create_dir(processes.join("1"))?;
-        std::fs::write(processes.join("1/stat"), "1 (hive) S 0 0 0\n")?;
+        fs::create_dir(&processes)?;
+        fs::write(&health, "100\n")?;
+        fs::create_dir(processes.join("1"))?;
+        fs::write(processes.join("1/stat"), "1 (hive) S 0 0 0\n")?;
 
         super::check_workbench_dispatcher_health_at(
             &health,
@@ -240,8 +246,8 @@ mod tests {
         );
         assert!(stale.is_err());
 
-        std::fs::create_dir(processes.join("2"))?;
-        std::fs::write(processes.join("2/stat"), "2 (git) Z 1 0 0\n")?;
+        fs::create_dir(processes.join("2"))?;
+        fs::write(processes.join("2/stat"), "2 (git) Z 1 0 0\n")?;
         let zombie = super::check_workbench_dispatcher_health_at(
             &health,
             Duration::from_secs(10),
@@ -257,8 +263,8 @@ mod tests {
         let root = tempfile::tempdir()?;
         let health = root.path().join("health");
         let next = health.with_extension("next");
-        std::fs::write(&health, "100\n")?;
-        std::fs::write(&next, "101\n")?;
+        fs::write(&health, "100\n")?;
+        fs::write(&next, "101\n")?;
 
         super::prepare_dispatcher_health(&health).await?;
 
@@ -274,7 +280,7 @@ mod tests {
         let root = tempfile::tempdir()?;
         let health = root.path().join("dispatcher-health");
         let processes = root.path().join("proc");
-        std::fs::create_dir(&processes)?;
+        fs::create_dir(&processes)?;
         super::record_dispatcher_health(&health).await?;
         assert!(health.exists());
         assert!(!super::next_path(&health).exists());
@@ -309,9 +315,9 @@ mod tests {
         let root = tempfile::tempdir()?;
         let health = root.path().join("health");
         let processes = root.path().join("proc");
-        std::fs::create_dir(&processes)?;
+        fs::create_dir(&processes)?;
 
-        std::fs::write(&health, "not-a-timestamp\n")?;
+        fs::write(&health, "not-a-timestamp\n")?;
         assert!(
             super::check_workbench_dispatcher_health_at(
                 &health,
@@ -321,7 +327,7 @@ mod tests {
             )
             .is_err()
         );
-        std::fs::write(&health, "101\n")?;
+        fs::write(&health, "101\n")?;
         let future = super::check_workbench_dispatcher_health_at(
             &health,
             Duration::from_secs(10),
@@ -338,8 +344,8 @@ mod tests {
         assert!(super::unix_timestamp_seconds(UNIX_EPOCH - Duration::from_secs(1)).is_err());
         assert!(super::zombie_process_count(&root.path().join("missing-proc")).is_err());
 
-        std::fs::create_dir(processes.join("not-a-process"))?;
-        std::fs::create_dir(processes.join("42"))?;
+        fs::create_dir(processes.join("not-a-process"))?;
+        fs::create_dir(processes.join("42"))?;
         assert_eq!(super::zombie_process_count(&processes)?, 0);
         Ok(())
     }

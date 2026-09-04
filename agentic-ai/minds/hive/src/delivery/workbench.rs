@@ -10,7 +10,7 @@ pub(super) async fn validate_workbench_completion(
 ) -> crate::HiveResult<()> {
     let task_base = task_id.split("-run-").next().unwrap_or(task_id);
     if !task_base.starts_with("main-failure-") {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "Hive repair task id does not identify its Workbench incident",
         ));
     }
@@ -34,24 +34,24 @@ pub(super) async fn validate_workbench_completion(
         )
     });
     if !completed_status {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: Workbench incident {task_base}.md is not completed"
         )));
     }
     if !incident.contains(&format!("#{pull_request_number}"))
         && !incident.contains(&format!("/pull/{pull_request_number}"))
     {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: Workbench incident does not link PR #{pull_request_number}"
         )));
     }
     if !incident.contains(main_sha) {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: Workbench incident does not record green Main SHA {main_sha}"
         )));
     }
     if !incident.to_ascii_lowercase().contains("worklog") {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "Hive repair delivery is incomplete: Workbench incident has no linked worklog",
         ));
     }
