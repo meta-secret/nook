@@ -62,6 +62,32 @@ describe('companion credential-fill WASM ABI', () => {
           true,
         ),
     },
+    {
+      name: 'a card-security-code password input',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['cc-csc'],
+          'card security code',
+          true,
+        ),
+    },
+    {
+      name: 'a field with conflicting username and cc-csc tokens',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          ['username', 'cc-csc'],
+          'account username',
+          true,
+        ),
+    },
   ])('returns closed Ignored for $name', (classifierCase) => {
     const fieldIndex = classifierCase.fieldIndexFactory()
     const field = classifierCase.fieldFactory()
@@ -124,6 +150,34 @@ describe('companion credential-fill WASM ABI', () => {
           true,
         ),
       expectedCredential: CredentialKind.CurrentPassword,
+    },
+    {
+      name: 'explicit username despite OTP-like identity',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Text,
+          false,
+          false,
+          ['username'],
+          'verification code',
+          true,
+        ),
+      expectedCredential: CredentialKind.Username,
+    },
+    {
+      name: 'explicit email despite OTP-like identity',
+      fieldIndexFactory: () => CredentialFillFieldIndex.zero(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Email,
+          false,
+          false,
+          ['email'],
+          'one time code',
+          true,
+        ),
+      expectedCredential: CredentialKind.Username,
     },
   ])('classifies $name into a planned assignment', (classifierCase) => {
     const fieldIndex = classifierCase.fieldIndexFactory()
@@ -272,6 +326,34 @@ describe('companion credential-fill WASM ABI', () => {
           false,
           ['one-time-code'],
           'account email username',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+    {
+      name: 'email with explicit one-time-code and username tokens',
+      fieldIndexFactory: () => CredentialFillFieldIndex.two(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Email,
+          false,
+          false,
+          ['username', 'one-time-code'],
+          'account email',
+          true,
+        ),
+      expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,
+    },
+    {
+      name: 'password with explicit one-time-code and cc-csc tokens',
+      fieldIndexFactory: () => CredentialFillFieldIndex.three(),
+      fieldFactory: () =>
+        new NookPageInputFieldObservation(
+          PageInputType.Password,
+          false,
+          false,
+          ['one-time-code', 'cc-csc'],
+          'card security code',
           true,
         ),
       expectedRejection: CredentialFillRejection.OneTimeCodeFieldPresent,

@@ -8,8 +8,11 @@ mod authentication_advance_control;
 mod control_identity;
 mod destination_identity;
 mod form_identity;
+mod input_role;
 mod one_time_code_progression;
 mod passkey;
+
+pub(crate) use input_role::{AuthenticationInputRole, classify_authentication_input_role};
 
 /// Maximum byte length for each DOM-controlled authentication identity string.
 pub const MAX_AUTHENTICATION_CONTROL_TEXT_BYTES: usize = 512;
@@ -183,65 +186,6 @@ pub fn looks_like_one_time_code_field(field: &PageInputFieldObservation) -> bool
         classify_authentication_input_role(field),
         AuthenticationInputRole::OneTimeCode(_)
     )
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Username;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct OneTimeCode;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct Unrelated;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum AuthenticationInputRole {
-    Username(Username),
-    OneTimeCode(OneTimeCode),
-    Unrelated(Unrelated),
-}
-
-pub(crate) fn classify_authentication_input_role(
-    field: &PageInputFieldObservation,
-) -> AuthenticationInputRole {
-    if has_autocomplete_token(&field.autocomplete_tokens, "one-time-code") {
-        return AuthenticationInputRole::OneTimeCode(OneTimeCode);
-    }
-    if matches!(
-        field.input_type,
-        PageInputType::Text | PageInputType::Tel | PageInputType::Number | PageInputType::Password
-    ) {
-        // Tokenized identity avoids CSS substring false positives such as "hotpot".
-        let identity = expand_identity_text(&field.identity_text);
-        if !identity.is_empty()
-            && !one_time_code_negative(&identity)
-            && one_time_code_positive(&identity)
-        {
-            return AuthenticationInputRole::OneTimeCode(OneTimeCode);
-        }
-    }
-
-    if matches!(
-        field.input_type,
-        PageInputType::Text | PageInputType::Email | PageInputType::Tel
-    ) {
-        if has_autocomplete_token(&field.autocomplete_tokens, "username")
-            || has_autocomplete_token(&field.autocomplete_tokens, "email")
-        {
-            return AuthenticationInputRole::Username(Username);
-        }
-        let identity = expand_identity_text(&field.identity_text);
-        if identity.is_empty() || username_negative(&identity) {
-            return AuthenticationInputRole::Unrelated(Unrelated);
-        }
-        if username_positive(&identity)
-            || (field.input_type == PageInputType::Email && field.login_context)
-        {
-            return AuthenticationInputRole::Username(Username);
-        }
-    }
-
-    AuthenticationInputRole::Unrelated(Unrelated)
 }
 
 /// True when a checkbox/control label looks like terms / privacy acceptance.

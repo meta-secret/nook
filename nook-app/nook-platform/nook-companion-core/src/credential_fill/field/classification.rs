@@ -73,6 +73,9 @@ pub fn classify(field_index: Index, field: &crate::PageInputFieldObservation) ->
             })
             .into()
         }
+        crate::page_field_classification::AuthenticationInputRole::NonAuthentication(_) => {
+            Classification::Ignored(field_index.into())
+        }
         crate::page_field_classification::AuthenticationInputRole::Unrelated(_) => {
             if field.input_type != crate::PageInputType::Password {
                 return Classification::Ignored(field_index.into());
@@ -152,8 +155,28 @@ mod tests {
             (
                 page_input(
                     crate::PageInputType::Email,
-                    &["one-time-code", "username"],
+                    &["one-time-code", "username", "cc-csc"],
                     "account email",
+                ),
+                Classification::from(Observation::from(OneTimeCode::from(Index::ZERO))),
+            ),
+            (
+                page_input(
+                    crate::PageInputType::Text,
+                    &["username"],
+                    "verification code",
+                ),
+                Classification::from(Observation::from(Credential {
+                    field_index: Index::ZERO,
+                    role: CredentialRole::Username,
+                    editability: Editability::Writable,
+                })),
+            ),
+            (
+                page_input(
+                    crate::PageInputType::Text,
+                    &[],
+                    "username verification code",
                 ),
                 Classification::from(Observation::from(OneTimeCode::from(Index::ZERO))),
             ),
@@ -304,6 +327,13 @@ mod tests {
                 field.disabled = true;
                 field
             },
+            page_input(
+                crate::PageInputType::Text,
+                &["username", "cc-csc"],
+                "account email",
+            ),
+            page_input(crate::PageInputType::Password, &["cc-csc"], ""),
+            page_input(crate::PageInputType::Password, &[], "card security code"),
             page_input(crate::PageInputType::Text, &[], "search"),
         ] {
             let classification = classify(Index::ZERO, &field);
