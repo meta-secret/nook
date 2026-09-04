@@ -194,4 +194,13 @@ where
     }
 }
 
+impl From<PredicateCount> for usize
+where
+    usize: Copy,
+{
+    fn from(value: PredicateCount) -> Self {
+        value.0
+    }
+}
+
 fn main() {}

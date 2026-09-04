@@ -165,7 +165,8 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
             emit_api_diagnostic(cx, item.span, "reachable external crate reexport");
         }
         if let ItemKind::Impl(Impl { of_trait, .. }) = item.kind
-            && local_type_is_reachable(cx, cx.tcx.type_of(item.owner_id).instantiate_identity())
+            && (local_type_is_reachable(cx, cx.tcx.type_of(item.owner_id).instantiate_identity())
+                || is_canonical_numeric_newtype_from_impl(cx, item.owner_id.def_id.to_def_id()))
             && impl_exposes_reachable_surface(cx, item.owner_id.def_id, of_trait)
         {
             let impl_id = item.owner_id.def_id.to_def_id();
@@ -704,7 +705,11 @@ fn local_numeric_newtype_primitive<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -
     let ty::Adt(definition, arguments) = ty.kind() else {
         return None;
     };
-    if !definition.did().is_local() || !definition.is_struct() || !arguments.is_empty() {
+    let definition_id = definition.did().as_local()?;
+    if !cx.effective_visibilities.is_reachable(definition_id)
+        || !definition.is_struct()
+        || !arguments.is_empty()
+    {
         return None;
     }
 

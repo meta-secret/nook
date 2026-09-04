@@ -369,5 +369,17 @@ LL | | }
    |
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
-warning: 44 warnings emitted
+warning: raw numeric primitive exposed in reachable impl generic declaration
+  --> $DIR/fail.rs:197:1
+   |
+LL | / impl From<PredicateCount> for usize
+LL | | where
+LL | |     usize: Copy,
+...  |
+LL | | }
+   | |_^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: 45 warnings emitted
 
