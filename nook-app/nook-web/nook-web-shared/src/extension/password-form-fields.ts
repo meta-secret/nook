@@ -32,6 +32,11 @@ export type PasswordFieldQuery = {
   formScope?: PasswordFormScope;
 };
 
+type OwnedObservationBoundsRequest = {
+  root: ParentNode;
+  formScope: PasswordFormScope;
+};
+
 type ScopedInputFieldQuery = {
   root: ParentNode;
   selector: string;
@@ -51,6 +56,13 @@ type AssociatedFormFieldSelectorRequest = {
 type TypeButtonPromotionScopeRequest = {
   container: Element;
   field: HTMLElement;
+};
+
+export type LocalOwnedLoginObservationRootRequest = {
+  owner: HTMLFormElement;
+  passwordFields: readonly HTMLInputElement[];
+  usernameFields: readonly HTMLInputElement[];
+  oneTimeCodeFields: readonly HTMLInputElement[];
 };
 
 export type UnownedAuthContainerRequest = {
@@ -159,6 +171,61 @@ function associatedFormFieldSelector({
     .join(",");
 }
 
+export function localOwnedLoginObservationRoot({
+  owner,
+  passwordFields,
+  usernameFields,
+  oneTimeCodeFields,
+}: LocalOwnedLoginObservationRootRequest): ParentNode {
+  const ownedPasswordFields = passwordFields.filter(
+    (field) => field.form === owner,
+  );
+  const ownedUsernameFields = usernameFields.filter(
+    (field) => field.form === owner,
+  );
+  const [passwordField] = ownedPasswordFields;
+  const [usernameField] = ownedUsernameFields;
+  if (
+    ownedPasswordFields.length !== 1 ||
+    ownedUsernameFields.length !== 1 ||
+    oneTimeCodeFields.some((field) => field.form === owner) ||
+    !passwordField ||
+    !usernameField
+  ) {
+    return owner.ownerDocument;
+  }
+  const currentPasswordTokenRequest: AutocompleteTokenMatchRequest = {
+    field: passwordField,
+    expected: "current-password",
+  };
+  if (!hasAutocompleteToken(currentPasswordTokenRequest)) {
+    return owner.ownerDocument;
+  }
+  let container = passwordField.parentElement;
+  while (container && container !== owner) {
+    if (container.contains(usernameField)) {
+      if (
+        pageHasManualCheckpoint(owner) &&
+        !pageHasManualCheckpoint(container)
+      ) {
+        return owner.ownerDocument;
+      }
+      return container;
+    }
+    container = container.parentElement;
+  }
+  return owner.ownerDocument;
+}
+
+export function ownedObservationIsLocallyBounded({
+  root,
+  formScope,
+}: OwnedObservationBoundsRequest): boolean {
+  return formScope.kind === PasswordFormScopeKind.Owned &&
+    root !== formScope.owner &&
+    root !== formScope.owner.ownerDocument;
+}
+
 function findFields({
   root,
   selector,
@@ -169,7 +236,11 @@ function findFields({
     const seen = new Set<HTMLInputElement>();
     const fields: HTMLInputElement[] = [];
     for (const field of owner.querySelectorAll<HTMLInputElement>(selector)) {
-      if (field.form === owner) {
+      if (
+        field.form === owner &&
+        (root === owner.ownerDocument ||
+          (root instanceof Node && root.contains(field)))
+      ) {
         seen.add(field);
         fields.push(field);
       }
@@ -183,7 +254,12 @@ function findFields({
         associatedFormFieldSelector(associatedSelectorRequest),
       );
       for (const field of associated) {
-        if (!seen.has(field) && field.form === owner) {
+        if (
+          !seen.has(field) &&
+          field.form === owner &&
+          (root === owner.ownerDocument ||
+            (root instanceof Node && root.contains(field)))
+        ) {
           seen.add(field);
           fields.push(field);
         }

@@ -22,6 +22,14 @@ import {
   type SiteFixtureLoginJourneyRequest,
 } from './companion-credential-fill-simulation'
 
+const LOCAL_USERNAME = new SimulatedCredentialFieldIdentity('local-username')
+const LOCAL_PASSWORD = new SimulatedCredentialFieldIdentity('local-password')
+const HEADER_USERNAME = new SimulatedCredentialFieldIdentity('header-username')
+const SEARCH_FIELD = new SimulatedCredentialFieldIdentity('search-field')
+const NEWSLETTER_FIELD = new SimulatedCredentialFieldIdentity(
+  'newsletter-field',
+)
+
 const FAKE_CREDENTIALS: FakeLoginCredentials = {
   username: 'fixture-user@example.test',
   password: 'fixture-password',
@@ -82,6 +90,110 @@ function assertTemplateOutcome(
 }
 
 describe('canonical mock-auth credential-fill matrix', () => {
+  test('fills only the bounded login fields from a polluted page-wide form', () => {
+    const pageIdentity = new SimulatedLoginPageIdentity('page-wide-aspnet-form')
+    const fields: CredentialFillJourneyRequest['pages'][number]['fields'] = [
+      {
+        kind: SimulatedCredentialFieldKind.Classified,
+        field_identity: HEADER_USERNAME,
+        name: 'header username',
+        field: { autocomplete: 'username', name: 'header-user' },
+        value: 'header-value',
+      },
+      {
+        kind: SimulatedCredentialFieldKind.Classified,
+        field_identity: SEARCH_FIELD,
+        name: 'search',
+        field: { type: 'search', name: 'search' },
+        value: 'account help',
+      },
+      {
+        kind: SimulatedCredentialFieldKind.Classified,
+        field_identity: LOCAL_USERNAME,
+        name: 'username',
+        field: { autocomplete: 'username', name: 'username' },
+        value: '',
+      },
+      {
+        kind: SimulatedCredentialFieldKind.Classified,
+        field_identity: LOCAL_PASSWORD,
+        name: 'password',
+        field: {
+          type: 'password',
+          autocomplete: 'current-password',
+          name: 'password',
+        },
+        value: '',
+      },
+      {
+        kind: SimulatedCredentialFieldKind.Classified,
+        field_identity: NEWSLETTER_FIELD,
+        name: 'newsletter',
+        field: { type: 'email', name: 'newsletter-email' },
+        value: 'reader@example.test',
+      },
+    ]
+    const boundedRequest: CredentialFillJourneyRequest = {
+      credentials: FAKE_CREDENTIALS,
+      pages: [
+        {
+          page_identity: pageIdentity,
+          fields,
+          observed_field_identities: [LOCAL_USERNAME, LOCAL_PASSWORD],
+        },
+      ],
+    }
+    const first = simulateLoginJourney(boundedRequest)
+    const second = simulateLoginJourney(boundedRequest)
+    expect(first).toEqual(second)
+    expect(first).toMatchObject([
+      {
+        kind: CredentialFillJourneyOutcomeKind.Completed,
+        snapshot: {
+          fields: [
+            { value: 'header-value' },
+            { value: 'account help' },
+            { value: FAKE_CREDENTIALS.username },
+            { value: FAKE_CREDENTIALS.password },
+            { value: 'reader@example.test' },
+          ],
+        },
+      },
+    ])
+
+    const pollutedRequest: CredentialFillJourneyRequest = {
+      credentials: FAKE_CREDENTIALS,
+      pages: [
+        {
+          page_identity: pageIdentity,
+          fields,
+          observed_field_identities: [
+            HEADER_USERNAME,
+            SEARCH_FIELD,
+            LOCAL_USERNAME,
+            LOCAL_PASSWORD,
+            NEWSLETTER_FIELD,
+          ],
+        },
+      ],
+    }
+    expect(simulateLoginJourney(pollutedRequest)).toMatchObject([
+      {
+        kind: CredentialFillJourneyOutcomeKind.Rejected,
+        rejection: CredentialFillRejection.AmbiguousUsernameField,
+        snapshot: {
+          fields: [
+            { value: 'header-value' },
+            { value: 'account help' },
+            { value: '' },
+            { value: '' },
+            { value: 'reader@example.test' },
+          ],
+        },
+      },
+    ])
+  })
+
   test('simulates every template twice and covers every site mapping', () => {
     const templateIds = listShellTemplateIds()
     expect(templateIds).toHaveLength(23)

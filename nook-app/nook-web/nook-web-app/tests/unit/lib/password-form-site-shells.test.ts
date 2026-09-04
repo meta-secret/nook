@@ -1,7 +1,16 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
+  AuthenticationWorkflowAction,
+  CompanionAuthenticationWorkflowMatchKind,
+  classify_companion_authentication_workflow_facts,
+  companion_authentication_workflow_match_kind,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  authenticationPageObservationFacts,
   fillLoginCredentials,
+  FormSubmissionResult,
   PasswordFormQueryKind,
+  submitLoginForm,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
@@ -10,6 +19,148 @@ afterEach(() => {
 })
 
 describe('popular-site login shells', () => {
+  test('isolates and fills a local login inside a polluted page-wide form', () => {
+    document.body.innerHTML = `
+      <form id="aspnetForm" method="post">
+        <header>
+          <input name="header-user" autocomplete="username" hidden />
+          <input name="header-password" type="password" autocomplete="current-password" hidden />
+          <input name="search" type="search" value="account help" />
+          <button type="submit">Search</button>
+        </header>
+        <main class="login-panel">
+          <input name="username" autocomplete="username" />
+          <input name="password" type="password" autocomplete="current-password" />
+          <button id="login-submit" type="submit">Sign in</button>
+        </main>
+        <footer>
+          <input name="newsletter-email" type="email" value="reader@example.test" />
+          <button type="submit">Subscribe</button>
+        </footer>
+      </form>
+    `
+
+    const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations).toHaveLength(1)
+    const [observation] = observations
+    if (!observation) throw new Error('expected local login observation')
+    expect(observation.root).toBe(document.querySelector('.login-panel'))
+    expect(observation.summary).toMatchObject({
+      usernameFieldCount: 1,
+      currentPasswordFieldCount: 1,
+      passwordFieldCount: 1,
+    })
+
+    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
+      credentials: {
+        username: 'pilot@nook.test',
+        password: 'extension-fill-password',
+      },
+      kind: PasswordFormQueryKind.Scoped,
+      ...observation,
+    }
+    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(
+      document.querySelector<HTMLInputElement>('[name="username"]')?.value,
+    ).toBe('pilot@nook.test')
+    expect(
+      document.querySelector<HTMLInputElement>('[name="password"]')?.value,
+    ).toBe('extension-fill-password')
+    expect(
+      document.querySelector<HTMLInputElement>('[name="search"]')?.value,
+    ).toBe('account help')
+    expect(
+      document.querySelector<HTMLInputElement>('[name="newsletter-email"]')
+        ?.value,
+    ).toBe('reader@example.test')
+  })
+
+  test('keeps a page-wide owner when a rendered OTP sibling is present', () => {
+    document.body.innerHTML = `
+      <form>
+        <main class="login-panel">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+        </main>
+        <aside><input autocomplete="one-time-code" /></aside>
+      </form>
+    `
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+  })
+
+  test('does not submit outside a bounded page-wide login panel', () => {
+    document.body.innerHTML = `
+      <form id="aspnetForm" method="post">
+        <header><button id="header-submit" type="submit">Sign in</button></header>
+        <main class="login-panel">
+          <input name="username" autocomplete="username" />
+          <input name="password" type="password" autocomplete="current-password" />
+        </main>
+        <footer><button id="footer-submit" type="submit">Continue</button></footer>
+      </form>
+    `
+    const activations: Event[] = []
+    const form = document.querySelector<HTMLFormElement>('#aspnetForm')
+    const header = document.querySelector<HTMLButtonElement>('#header-submit')
+    const footer = document.querySelector<HTMLButtonElement>('#footer-submit')
+    if (!form || !header || !footer) {
+      throw new Error('expected page-wide submission fixture')
+    }
+    form.addEventListener('submit', (event) => activations.push(event))
+    header.addEventListener('click', (event) => activations.push(event))
+    footer.addEventListener('click', (event) => activations.push(event))
+
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected bounded login observation')
+    expect(observation.root).toBe(document.querySelector('.login-panel'))
+    const request: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      ...observation,
+    }
+    expect(submitLoginForm(request)).toBe(FormSubmissionResult.NotObserved)
+    expect(activations).toEqual([])
+  })
+
+  test('preserves a same-form checkpoint outside the local login panel', () => {
+    document.body.innerHTML = `
+      <form id="aspnetForm" method="post">
+        <main class="login-panel">
+          <input name="username" autocomplete="username" />
+          <input name="password" type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </main>
+        <aside>
+          <label><input type="checkbox" name="terms" /> I agree to the terms</label>
+        </aside>
+      </form>
+    `
+
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected checkpoint observation')
+    expect(observation.root).toBe(document)
+    expect(observation.summary.manualCheckpointPresent).toBe(true)
+    const factsRequest: Parameters<
+      typeof authenticationPageObservationFacts
+    >[0] = {
+      observation,
+      authenticatorSetupHint: false,
+    }
+    const classificationRequest: Parameters<
+      typeof classify_companion_authentication_workflow_facts
+    >[0] = {
+      observations: [authenticationPageObservationFacts(factsRequest)],
+    }
+    const match = classify_companion_authentication_workflow_facts(
+      classificationRequest,
+    )
+    expect(companion_authentication_workflow_match_kind(match)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.Matched,
+    )
+    if (!('snapshot' in match)) throw new Error('expected matched workflow')
+    expect(match.snapshot.action).toBe(AuthenticationWorkflowAction.TakeOver)
+  })
+
   test('returns no workflow for ordinary pages and email-only newsletters', () => {
     document.body.innerHTML = `
       <main><p>Documentation</p></main>
