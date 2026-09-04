@@ -15,6 +15,8 @@ ARG SCCACHE_ENDPOINT=https://sccache.dev.nokey.sh
 ARG SCCACHE_BUCKET=nook-sccache
 ARG CARGO_CHEF_VERSION=0.1.77
 ARG CARGO_CHEF_SHA256=a3733ab416c3ffddd37914cd13919ca05fee1a1cf654f3016dcfe7f399d89cd1
+ARG LLVM_COV_VERSION=0.8.7
+ARG LLVM_COV_SHA256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168
 
 ENV CARGO_INCREMENTAL=0
 ENV CARGO_BUILD_JOBS=2
@@ -45,7 +47,14 @@ RUN apt-get update \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN rustup component add clippy rustfmt
+RUN rustup component add clippy rustfmt llvm-tools-preview
+
+RUN curl -fsSL \
+      "https://github.com/taiki-e/cargo-llvm-cov/releases/download/v${LLVM_COV_VERSION}/cargo-llvm-cov-x86_64-unknown-linux-gnu.tar.gz" \
+      -o /tmp/cargo-llvm-cov.tar.gz \
+    && echo "${LLVM_COV_SHA256}  /tmp/cargo-llvm-cov.tar.gz" | sha256sum -c - \
+    && tar xzf /tmp/cargo-llvm-cov.tar.gz -C /usr/local/cargo/bin \
+    && rm -f /tmp/cargo-llvm-cov.tar.gz
 
 RUN curl -fsSL \
       "https://github.com/mozilla/sccache/releases/download/v${SCCACHE_VERSION}/sccache-v${SCCACHE_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
@@ -207,7 +216,8 @@ FROM test-source AS test-compile
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/hive-tests \
-    && cargo test --locked --workspace --no-run --message-format=json \
+    && eval "$(cargo llvm-cov show-env --export-prefix)" \
+    && CARGO_TARGET_DIR=target/llvm-cov-target cargo test --locked --workspace --no-run --message-format=json \
       > /tmp/hive-test-artifacts.jsonl \
     && jq -r \
       'select(.reason == "compiler-artifact" and .profile.test == true and .executable != null) | .executable' \
@@ -221,9 +231,30 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
     && test -n "$(find /opt/nook/hive-tests -type f -perm /111 -print -quit)" \
     && nook-sccache-report hive-test-compile
 
+FROM test-compile AS coverage
+
+ARG HIVE_RUST_COVERAGE_FLOOR
+ARG LACE_RUST_COVERAGE_FLOOR
+COPY --from=hive-coverage-profiles / /tmp/hive-coverage-profiles
+RUN test -n "$(find /tmp/hive-coverage-profiles -name '*.profraw' -print -quit)" \
+    && mkdir -p target/llvm-cov-target \
+    && find /tmp/hive-coverage-profiles -name '*.profraw' -exec cp {} target/llvm-cov-target/ \; \
+    && { coverage_status=0; \
+      cargo llvm-cov report -p hive \
+        --fail-under-lines "${HIVE_RUST_COVERAGE_FLOOR}" || coverage_status=1; \
+      cargo llvm-cov report -p lace \
+        --fail-under-lines "${LACE_RUST_COVERAGE_FLOOR}" || coverage_status=1; \
+      test "$coverage_status" -eq 0; } \
+    && nook-sccache-report hive-per-package-coverage \
+    && install -D /dev/null /opt/nook/hive-coverage-passed
+
 FROM scratch AS test-export
 
 COPY --from=test-compile /opt/nook/hive-tests /hive-tests
+
+FROM scratch AS coverage-export
+
+COPY --from=coverage /opt/nook/hive-coverage-passed /hive-coverage-passed
 
 FROM toolchain AS sandbox-package-check
 

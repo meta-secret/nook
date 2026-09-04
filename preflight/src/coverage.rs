@@ -253,8 +253,10 @@ fn is_base_coverage_input(path: &Path) -> bool {
         || path == Path::new("nook-app/nook-platform/Cargo.toml")
         || path.starts_with("nook-app/nook-platform/nook-app-common")
         || path.starts_with("nook-app/nook-platform/nook-auth2")
+        || path.starts_with("nook-app/nook-platform/nook-authenticator-domain")
         || path.starts_with("nook-app/nook-platform/nook-replication")
         || path.starts_with("nook-app/nook-platform/nook-event-log")
+        || path.starts_with("nook-app/nook-platform/nook-companion-core")
         || (path.starts_with("nook-app/nook-platform/nook-core")
             && path != Path::new("nook-app/nook-platform/nook-core/docker-bake.hcl"))
 }

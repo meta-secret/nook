@@ -419,8 +419,8 @@ mod tests {
 
     use super::{
         DeliveryCheck, DeliveryCommit, DeliveryLabel, DeliveryPullRequest, delivery_generation,
-        latest_delivery_generation, validate_full_e2e_checks, validate_merged_hive_pull_request,
-        validate_repository_checks,
+        latest_delivery_generation, validate_full_e2e_checks, validate_hive_marker,
+        validate_merged_hive_pull_request, validate_repository_checks, validate_squash_merge,
     };
 
     fn pull_request(
@@ -471,6 +471,140 @@ mod tests {
                 },
             ],
         }
+    }
+
+    fn git(repository: &std::path::Path, arguments: &[&str]) -> crate::HiveResult<String> {
+        let output = std::process::Command::new("git")
+            .args(arguments)
+            .current_dir(repository)
+            .output()?;
+        if !output.status.success() {
+            return Err(crate::HiveError::message(format!(
+                "fixture git {arguments:?} failed with {}",
+                output.status
+            )));
+        }
+        Ok(String::from_utf8(output.stdout)?.trim().to_owned())
+    }
+
+    #[tokio::test]
+    async fn delivery_metadata_history_and_repository_checks_enforce_completion_contracts()
+    -> crate::HiveResult<()> {
+        let mut marked = pull_request(42, "repair", "MERGED", Some("pending"));
+        validate_hive_marker(&marked)?;
+        marked.title = "repair without marker".to_owned();
+        let title_error = validate_hive_marker(&marked)
+            .err()
+            .ok_or_else(|| crate::HiveError::message("unmarked delivery title was accepted"))?;
+        assert!(title_error.to_string().contains("title marker"));
+        marked.title = "[Hive] repair".to_owned();
+        marked.labels.retain(|label| label.name != "hive");
+        let label_error = validate_hive_marker(&marked)
+            .err()
+            .ok_or_else(|| crate::HiveError::message("unlabelled Hive delivery was accepted"))?;
+        assert!(label_error.to_string().contains("lacks the `hive` label"));
+
+        let repository = tempfile::tempdir()?;
+        let missing_commit = pull_request(42, "repair", "MERGED", None);
+        let commit_error = validate_squash_merge(repository.path(), &missing_commit)
+            .await
+            .err()
+            .ok_or_else(|| crate::HiveError::message("missing squash commit was accepted"))?;
+        assert!(commit_error.to_string().contains("no merge commit"));
+
+        git(repository.path(), &["init", "--quiet"])?;
+        git(repository.path(), &["config", "user.name", "Hive Test"])?;
+        git(
+            repository.path(),
+            &["config", "user.email", "hive@example.invalid"],
+        )?;
+        std::fs::write(repository.path().join("repair.txt"), "base\n")?;
+        git(repository.path(), &["add", "repair.txt"])?;
+        git(repository.path(), &["commit", "--quiet", "-m", "base"])?;
+        let root_commit = git(repository.path(), &["rev-parse", "HEAD"])?;
+        let root_delivery = pull_request(42, "repair", "MERGED", Some(&root_commit));
+        let history_error = validate_squash_merge(repository.path(), &root_delivery)
+            .await
+            .err()
+            .ok_or_else(|| crate::HiveError::message("parentless commit was accepted as squash"))?;
+        assert!(history_error.to_string().contains("multiple parents"));
+
+        std::fs::write(repository.path().join("repair.txt"), "base\nrepair\n")?;
+        git(repository.path(), &["add", "repair.txt"])?;
+        git(
+            repository.path(),
+            &["commit", "--quiet", "-m", "repair invariant (#42)"],
+        )?;
+        let valid_commit = git(repository.path(), &["rev-parse", "HEAD"])?;
+        let valid = pull_request(42, "repair", "MERGED", Some(&valid_commit));
+        validate_squash_merge(repository.path(), &valid).await?;
+
+        std::fs::write(
+            repository.path().join("repair.txt"),
+            "base\nrepair\nfollow-up\n",
+        )?;
+        git(repository.path(), &["add", "repair.txt"])?;
+        git(
+            repository.path(),
+            &["commit", "--quiet", "-m", "missing pull request suffix"],
+        )?;
+        let invalid_commit = git(repository.path(), &["rev-parse", "HEAD"])?;
+        let invalid = pull_request(42, "repair", "MERGED", Some(&invalid_commit));
+        let subject_error = validate_squash_merge(repository.path(), &invalid)
+            .await
+            .err()
+            .ok_or_else(|| {
+                crate::HiveError::message("squash commit without its PR suffix was accepted")
+            })?;
+        assert!(subject_error.to_string().contains("lacks PR suffix (#42)"));
+
+        let mut checks = pull_request(42, "repair", "MERGED", Some(&valid_commit));
+        checks.status_check_rollup.push(DeliveryCheck {
+            name: "Security audit".to_owned(),
+            status: "IN_PROGRESS".to_owned(),
+            conclusion: String::new(),
+            started_at: "2026-09-04T01:00:00Z".to_owned(),
+            workflow_name: "Security".to_owned(),
+        });
+        let pending = validate_repository_checks(&checks, false)
+            .err()
+            .ok_or_else(|| crate::HiveError::message("pending repository check was accepted"))?;
+        assert!(pending.to_string().contains("still running"));
+
+        checks
+            .status_check_rollup
+            .retain(|check| check.name != "Security audit");
+        let mut missing_verify = checks.clone();
+        missing_verify
+            .status_check_rollup
+            .retain(|check| check.name != "Verify and preview");
+        let missing = validate_repository_checks(&missing_verify, false)
+            .err()
+            .ok_or_else(|| {
+                crate::HiveError::message("missing repository verification was accepted")
+            })?;
+        assert!(missing.to_string().contains("Verify and preview"));
+
+        let mut missing_e2e = checks.clone();
+        missing_e2e
+            .status_check_rollup
+            .retain(|check| check.name != "Full browser e2e (main fix)");
+        let missing = validate_full_e2e_checks(&missing_e2e, false)
+            .err()
+            .ok_or_else(|| crate::HiveError::message("missing browser e2e check was accepted"))?;
+        assert!(missing.to_string().contains("Full browser e2e"));
+
+        for conclusion in ["SKIPPED", "NEUTRAL"] {
+            checks.status_check_rollup.push(DeliveryCheck {
+                name: "Advisory".to_owned(),
+                status: "COMPLETED".to_owned(),
+                conclusion: conclusion.to_owned(),
+                started_at: "2026-09-04T01:00:00Z".to_owned(),
+                workflow_name: "Advisory".to_owned(),
+            });
+        }
+        validate_repository_checks(&checks, false)?;
+        Ok(())
     }
 
     #[test]

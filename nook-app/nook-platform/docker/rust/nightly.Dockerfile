@@ -28,6 +28,7 @@ RUN cargo install cargo-dylint dylint-link \
 FROM rust-ecosystem-nightly AS rust-dylint
 
 ARG DYLINT_NIGHTLY=nightly-2026-04-16
+ARG RUST_DYLINT_COVERAGE_FLOOR
 
 WORKDIR /meta-secret/nook
 COPY nook-app/nook-platform/ nook-app/nook-platform/
@@ -39,8 +40,15 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check \
     && rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs \
-    && RUSTC_WRAPPER= RUSTFLAGS= cargo test \
-      --manifest-path dylint/nook-domain-api/Cargo.toml --locked \
+    && RUSTC_WRAPPER= RUSTFLAGS= cargo llvm-cov test -p nook_domain_api \
+      --manifest-path dylint/nook-domain-api/Cargo.toml --locked --no-report \
+    && toolchain_id="$(rustup show active-toolchain | cut -d' ' -f1)" \
+    && test -n "$toolchain_id" \
+    && lint_object="dylint/nook-domain-api/target/debug/libnook_domain_api@${toolchain_id}.so" \
+    && test -f "$lint_object" \
+    && ln "$lint_object" dylint/nook-domain-api/target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so \
+    && cargo llvm-cov report -p nook_domain_api --manifest-path dylint/nook-domain-api/Cargo.toml \
+      --locked --fail-under-lines "${RUST_DYLINT_COVERAGE_FLOOR:?}" \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
     && cargo dylint --all -- --all-targets \
     && nook-sccache-report rust-dylint

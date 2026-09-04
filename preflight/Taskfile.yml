@@ -49,12 +49,12 @@ vars:
 
 tasks:
   preflight:
-    desc: Run all repository-wide invariant tests.
+    desc: Run all repository-wide invariant tests with the independent 90% line floor.
     cmds:
       - task: preflight:test
 
   preflight:test:
-    desc: Run the Rust preflight test suite in Docker.
+    desc: Run the Rust preflight test suite and coverage floor in Docker.
     dir: '{{.REPO_ROOT}}'
     deps:
       - sccache:ensure

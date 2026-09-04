@@ -3,6 +3,7 @@ members = [
     "hive",
     "lace",
 ]
+exclude = ["vendor/arrayref"]
 resolver = "3"
 
 [workspace.package]
