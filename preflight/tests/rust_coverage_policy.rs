@@ -22,11 +22,8 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
         "every Cargo package must be independently enforced or explicitly excluded"
     );
     assert!(enforced.is_disjoint(&excluded_names));
-    assert!(
-        policy["lines_percent"]
-            .as_f64()
-            .is_some_and(|floor| floor >= 90.0)
-    );
+    let policy_floor = policy["lines_percent"].as_f64();
+    assert!(policy_floor.is_some_and(|floor| floor >= 90.0));
     let package_floors = policy["package_lines_percent"]
         .as_object()
         .context("package_lines_percent must be an object")?;
@@ -198,7 +195,6 @@ fn read(path: &Path) -> anyhow::Result<String> {
 fn read_json(path: &Path) -> anyhow::Result<Value> {
     serde_json::from_str(&read(path)?).with_context(|| format!("parse {}", path.display()))
 }
-
 fn string_set(value: &Value, key: &str) -> anyhow::Result<BTreeSet<String>> {
     value[key]
         .as_array()
@@ -212,7 +208,6 @@ fn string_set(value: &Value, key: &str) -> anyhow::Result<BTreeSet<String>> {
         })
         .collect()
 }
-
 fn excluded_packages(value: &Value) -> anyhow::Result<BTreeMap<String, String>> {
     value["excluded_packages"]
         .as_array()
@@ -229,7 +224,6 @@ fn excluded_packages(value: &Value) -> anyhow::Result<BTreeMap<String, String>> 
         })
         .collect()
 }
-
 fn discover_packages(root: &Path) -> anyhow::Result<BTreeMap<String, PathBuf>> {
     let mut manifests = Vec::new();
     collect_manifests(root, &mut manifests)?;
@@ -260,7 +254,6 @@ fn discover_packages(root: &Path) -> anyhow::Result<BTreeMap<String, PathBuf>> {
     }
     Ok(packages)
 }
-
 fn collect_manifests(directory: &Path, output: &mut Vec<PathBuf>) -> anyhow::Result<()> {
     for entry in fs::read_dir(directory).with_context(|| format!("read {}", directory.display()))? {
         let entry = entry?;
