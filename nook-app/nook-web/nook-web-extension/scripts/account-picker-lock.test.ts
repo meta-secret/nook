@@ -115,11 +115,11 @@ describe('account picker authorization cleanup', () => {
       cleanup.authorizationGeneration,
       CleanupEvidence.Full,
     )
-    const rejected = expect(completing).rejects.toThrow('removal denied')
+    const rejected = completing.catch((error: Error) => error)
     const callback = await removal
     const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
     storage.failRemoval(callback)
-    await rejected
+    expect(await rejected).toEqual(new Error('removal denied'))
     await authorization.completeAccountPickerAuthorizationCleanup(
       overlap.authorizationGeneration,
       CleanupEvidence.Partial,
