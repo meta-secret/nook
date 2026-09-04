@@ -247,7 +247,7 @@ fn check_suppression_attributes(
     scope: SuppressionScope,
 ) {
     for attribute in attributes {
-        if attribute.span().from_expansion() || !attribute_mentions_api_lint(attribute) {
+        if !attribute_mentions_api_lint(attribute) || attribute.span().from_expansion() {
             continue;
         }
 
