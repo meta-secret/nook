@@ -443,7 +443,7 @@ impl IdentityDirectory {
             public_key: app_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
-        });
+        })?;
         Ok(selected.identity_id.clone())
     }
 

@@ -28,6 +28,9 @@ pub enum MultiDeviceError {
     #[error("Invalid device identity: {0}")]
     InvalidDeviceIdentity(String),
 
+    #[error("Identity control epoch cannot advance beyond its supported range.")]
+    IdentityControlEpochOverflow,
+
     #[error("Identity label is required.")]
     IdentityLabelEmpty,
 

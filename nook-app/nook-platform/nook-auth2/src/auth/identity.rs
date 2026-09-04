@@ -191,7 +191,7 @@ impl IdentityRecord {
         }
         let keys = generate_vault_keys()?;
         let vault_dek = wrap_vault_keys_for_members(&keys, &self.members, store_id)?;
-        self.control_epoch = self.control_epoch.next();
+        self.control_epoch = self.next_control_epoch()?;
         self.vault_deks.push(vault_dek);
         Ok(keys)
     }
@@ -239,6 +239,11 @@ impl IdentityRecord {
         member: &IdentityMember,
         keys_by_store: &[(StoreId, VaultKeys)],
     ) -> MultiDeviceResult<()> {
+        let next_control_epoch = if keys_by_store.is_empty() {
+            None
+        } else {
+            Some(self.next_control_epoch()?)
+        };
         for (store_id, keys) in keys_by_store {
             let index = self
                 .vault_deks
@@ -295,8 +300,8 @@ impl IdentityRecord {
             replacement.key_epoch = key_epoch;
             self.vault_deks[index] = replacement;
         }
-        if !keys_by_store.is_empty() {
-            self.control_epoch = self.control_epoch.next();
+        if let Some(next_control_epoch) = next_control_epoch {
+            self.control_epoch = next_control_epoch;
         }
         Ok(())
     }
@@ -311,8 +316,7 @@ impl IdentityRecord {
                 "app key is already a member of this identity".to_owned(),
             ));
         }
-        self.add_prevalidated_member(member);
-        Ok(())
+        self.add_prevalidated_member(member)
     }
 
     pub fn set_member_signing_public_key(
@@ -326,20 +330,29 @@ impl IdentityRecord {
             .find(|member| &member.app_id == app_id)
             .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
         if member.signing_public_key != *signing_public_key {
+            let next_control_epoch = self
+                .control_epoch
+                .next()
+                .ok_or(MultiDeviceError::IdentityControlEpochOverflow)?;
             member.signing_public_key = signing_public_key.clone();
-            self.control_epoch = self.control_epoch.next();
+            self.control_epoch = next_control_epoch;
         }
         Ok(())
     }
 
-    pub(crate) fn add_prevalidated_member(&mut self, member: IdentityMember) {
+    pub(crate) fn add_prevalidated_member(
+        &mut self,
+        member: IdentityMember,
+    ) -> MultiDeviceResult<()> {
         let is_new = self
             .members
             .iter()
             .all(|existing| existing.app_id != member.app_id);
         debug_assert!(is_new, "identity member must be validated before mutation");
+        let next_control_epoch = self.next_control_epoch()?;
         self.members.push(member);
-        self.control_epoch = self.control_epoch.next();
+        self.control_epoch = next_control_epoch;
+        Ok(())
     }
 
     pub fn remove_member(&mut self, app_id: &AppId) -> MultiDeviceResult<()> {
@@ -357,6 +370,7 @@ impl IdentityRecord {
                 "identity must keep at least one app key".to_owned(),
             ));
         }
+        let next_control_epoch = self.next_control_epoch()?;
         for vault_dek in &mut self.vault_deks {
             vault_dek
                 .secrets_envelopes
@@ -366,7 +380,7 @@ impl IdentityRecord {
                 .retain(|envelope| &envelope.app_id != app_id);
         }
         self.members.remove(index);
-        self.control_epoch = self.control_epoch.next();
+        self.control_epoch = next_control_epoch;
         Ok(())
     }
 
@@ -440,8 +454,9 @@ impl IdentityRecord {
             wrap_vault_keys_for_members(&keys, &authorized_members, store_id.clone())?;
         rewrapped.key_epoch = next_epoch;
         if *vault_dek != rewrapped {
+            let next_control_epoch = self.next_control_epoch()?;
             self.vault_deks[vault_dek_index] = rewrapped;
-            self.control_epoch = self.control_epoch.next();
+            self.control_epoch = next_control_epoch;
         }
         Ok(())
     }
@@ -482,9 +497,16 @@ impl IdentityRecord {
         }
         let mut vault_dek = wrap_vault_keys_for_members(&keys, &authorized_members, store_id)?;
         vault_dek.key_epoch = reconciliation.epoch_update.committed_epoch();
+        let next_control_epoch = self.next_control_epoch()?;
         self.vault_deks.push(vault_dek);
-        self.control_epoch = self.control_epoch.next();
+        self.control_epoch = next_control_epoch;
         Ok(())
+    }
+
+    fn next_control_epoch(&self) -> MultiDeviceResult<IdentityControlEpoch> {
+        self.control_epoch
+            .next()
+            .ok_or(MultiDeviceError::IdentityControlEpochOverflow)
     }
 
     /// Synthesize an identity from a legacy vault member + auth envelopes.
@@ -572,6 +594,19 @@ mod tests {
         };
         let store = StoreId::before_genesis_placeholder();
         assert!(identity.generate_vault_dek(store).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn control_epoch_overflow_rejects_vault_mutation() -> anyhow::Result<()> {
+        let app_key = AppKey::generate()?;
+        let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
+        identity.control_epoch = u64::MAX.into();
+        assert!(matches!(
+            identity.generate_vault_dek(StoreId::before_genesis_placeholder()),
+            Err(MultiDeviceError::IdentityControlEpochOverflow)
+        ));
+        assert!(identity.vault_deks.is_empty());
         Ok(())
     }
 
