@@ -20,7 +20,7 @@ mod tests {
         role: nook_companion_core::AuthenticationFillFieldRole,
     ) -> nook_companion_core::AuthenticationFillFieldObservation {
         nook_companion_core::AuthenticationFillFieldObservation {
-            field_index,
+            field_index: nook_companion_core::AuthenticationFillFieldIndex::new(field_index),
             role,
             editability: nook_companion_core::AuthenticationFillFieldEditability::Writable,
         }
@@ -42,7 +42,7 @@ mod tests {
 
         let readonly = plan_companion_credential_fill(vec![
             nook_companion_core::AuthenticationFillFieldObservation {
-                field_index: 0,
+                field_index: nook_companion_core::AuthenticationFillFieldIndex::new(0),
                 role: nook_companion_core::AuthenticationFillFieldRole::CurrentPassword,
                 editability: nook_companion_core::AuthenticationFillFieldEditability::Readonly,
             },

@@ -40,12 +40,26 @@ pub enum AuthenticationFillFieldEditability {
     Readonly,
 }
 
+/// Host-assigned identity for one field inside the observed scope.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct AuthenticationFillFieldIndex {
+    pub value: u32,
+}
+
+impl AuthenticationFillFieldIndex {
+    #[must_use]
+    pub const fn new(value: u32) -> Self {
+        Self { value }
+    }
+}
+
 /// Host-observed identity for one candidate fill field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationFillFieldObservation {
     /// Zero-based field index inside the observed scope, assigned by the host.
-    pub field_index: u32,
+    pub field_index: AuthenticationFillFieldIndex,
     pub role: AuthenticationFillFieldRole,
     pub editability: AuthenticationFillFieldEditability,
 }
@@ -85,7 +99,7 @@ pub enum AuthenticationCredentialFillError {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationCredentialFillAssignment {
-    pub field_index: u32,
+    pub field_index: AuthenticationFillFieldIndex,
     pub credential: AuthenticationCredentialKind,
 }
 
@@ -207,7 +221,7 @@ mod tests {
 
     #[derive(Debug, PartialEq, Eq)]
     struct TestFilledField {
-        field_index: u32,
+        field_index: AuthenticationFillFieldIndex,
         value: &'static str,
     }
 
@@ -216,7 +230,7 @@ mod tests {
         role: AuthenticationFillFieldRole,
     ) -> AuthenticationFillFieldObservation {
         AuthenticationFillFieldObservation {
-            field_index,
+            field_index: AuthenticationFillFieldIndex::new(field_index),
             role,
             editability: AuthenticationFillFieldEditability::Writable,
         }
@@ -227,7 +241,7 @@ mod tests {
         role: AuthenticationFillFieldRole,
     ) -> AuthenticationFillFieldObservation {
         AuthenticationFillFieldObservation {
-            field_index,
+            field_index: AuthenticationFillFieldIndex::new(field_index),
             role,
             editability: AuthenticationFillFieldEditability::Readonly,
         }
@@ -247,11 +261,11 @@ mod tests {
             plan.assignments,
             vec![
                 AuthenticationCredentialFillAssignment {
-                    field_index: 0,
+                    field_index: AuthenticationFillFieldIndex::new(0),
                     credential: AuthenticationCredentialKind::Username,
                 },
                 AuthenticationCredentialFillAssignment {
-                    field_index: 1,
+                    field_index: AuthenticationFillFieldIndex::new(1),
                     credential: AuthenticationCredentialKind::CurrentPassword,
                 },
             ]
@@ -266,7 +280,7 @@ mod tests {
         assert_eq!(
             plan.assignments,
             vec![AuthenticationCredentialFillAssignment {
-                field_index: 2,
+                field_index: AuthenticationFillFieldIndex::new(2),
                 credential: AuthenticationCredentialKind::Username,
             }]
         );
@@ -280,7 +294,7 @@ mod tests {
         assert_eq!(
             plan.assignments,
             vec![AuthenticationCredentialFillAssignment {
-                field_index: 0,
+                field_index: AuthenticationFillFieldIndex::new(0),
                 credential: AuthenticationCredentialKind::CurrentPassword,
             }]
         );
@@ -298,11 +312,11 @@ mod tests {
             plan.assignments,
             vec![
                 AuthenticationCredentialFillAssignment {
-                    field_index: 0,
+                    field_index: AuthenticationFillFieldIndex::new(0),
                     credential: AuthenticationCredentialKind::Username,
                 },
                 AuthenticationCredentialFillAssignment {
-                    field_index: 1,
+                    field_index: AuthenticationFillFieldIndex::new(1),
                     credential: AuthenticationCredentialKind::CurrentPassword,
                 },
             ]
@@ -437,7 +451,7 @@ mod tests {
         assert_eq!(
             plan.assignments,
             vec![AuthenticationCredentialFillAssignment {
-                field_index: 1,
+                field_index: AuthenticationFillFieldIndex::new(1),
                 credential: AuthenticationCredentialKind::CurrentPassword,
             }]
         );
@@ -466,11 +480,11 @@ mod tests {
             simulated,
             vec![
                 TestFilledField {
-                    field_index: 0,
+                    field_index: AuthenticationFillFieldIndex::new(0),
                     value: credentials.username,
                 },
                 TestFilledField {
-                    field_index: 1,
+                    field_index: AuthenticationFillFieldIndex::new(1),
                     value: credentials.password,
                 },
             ]
@@ -555,14 +569,18 @@ mod tests {
 
         let observation = field(0, AuthenticationFillFieldRole::Username);
         assert_eq!(
+            serde_json::to_string(&AuthenticationFillFieldIndex::new(0))?,
+            r#"{"value":0}"#
+        );
+        assert_eq!(
             serde_json::to_string(&observation)?,
-            r#"{"field_index":0,"role":"Username","editability":"Writable"}"#
+            r#"{"field_index":{"value":0},"role":"Username","editability":"Writable"}"#
         );
         let plan = plan_authentication_credential_fill(&login_form())?;
         let serialized = serde_json::to_string(&plan)?;
         assert_eq!(
             serialized,
-            r#"{"assignments":[{"field_index":0,"credential":"Username"},{"field_index":1,"credential":"CurrentPassword"}]}"#
+            r#"{"assignments":[{"field_index":{"value":0},"credential":"Username"},{"field_index":{"value":1},"credential":"CurrentPassword"}]}"#
         );
         let roundtrip: AuthenticationCredentialFillPlan = serde_json::from_str(&serialized)?;
         assert_eq!(roundtrip, plan);
