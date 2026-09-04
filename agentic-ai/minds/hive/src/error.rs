@@ -283,3 +283,82 @@ impl<T> HiveContext<T> for Option<T> {
         self.ok_or_else(|| HiveError::message(context()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{HiveContext, HiveError};
+
+    #[tokio::test]
+    async fn context_preserves_typed_sources_and_accumulates_operations() -> crate::HiveResult<()> {
+        let Err(json_error) = serde_json::from_str::<serde_json::Value>("{") else {
+            return Err(HiveError::message("invalid JSON fixture parsed"));
+        };
+        let Err(model_error) = crate::model::TaskId::new("") else {
+            return Err(HiveError::message("empty identifier fixture was accepted"));
+        };
+        let Err(utf8_error) = String::from_utf8(vec![0xff]) else {
+            return Err(HiveError::message("invalid UTF-8 fixture decoded"));
+        };
+        let Err(integer_conversion_error) = u8::try_from(300) else {
+            return Err(HiveError::message("oversized integer fixture converted"));
+        };
+        let Err(integer_parse_error) = "invalid".parse::<u64>() else {
+            return Err(HiveError::message("invalid integer fixture parsed"));
+        };
+        let Err(environment_error) = std::env::var("NOOK_TEST_VARIABLE_THAT_MUST_NOT_EXIST") else {
+            return Err(HiveError::message("absent fixture variable was present"));
+        };
+        let cases = [
+            HiveError::from(std::io::Error::other("disk unavailable")),
+            HiveError::from(json_error),
+            HiveError::from(model_error),
+            HiveError::from(crate::codex::CodexError::Run("turn failed".into())),
+            HiveError::from(utf8_error),
+            HiveError::from(integer_conversion_error),
+            HiveError::from(integer_parse_error),
+            HiveError::from(environment_error),
+        ];
+        for error in cases {
+            let contextual = error
+                .at_operation("inner operation".into())
+                .at_operation("outer operation".into());
+            let rendered = contextual.to_string();
+            assert!(rendered.starts_with("outer operation: inner operation:"));
+        }
+
+        let (sender, mut receiver) = tokio::sync::watch::channel(false);
+        drop(sender);
+        let Err(watch) = receiver.changed().await else {
+            return Err(HiveError::message("closed watch unexpectedly changed"));
+        };
+        assert!(
+            HiveError::from(watch)
+                .at_operation("watch".into())
+                .to_string()
+                .starts_with("watch:")
+        );
+        let Err(joined) = tokio::spawn(async {
+            assert!(
+                !std::hint::black_box(true),
+                "expected test panic for JoinError conversion"
+            );
+        })
+        .await
+        else {
+            return Err(HiveError::message("panicking task joined successfully"));
+        };
+        assert!(
+            HiveError::from(joined)
+                .at_operation("join".into())
+                .to_string()
+                .starts_with("join:")
+        );
+
+        let missing: Option<()> = None;
+        let Err(missing) = missing.hive_context("required state") else {
+            return Err(HiveError::message("missing option produced a value"));
+        };
+        assert_eq!(missing.to_string(), "required state");
+        Ok(())
+    }
+}

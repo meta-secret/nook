@@ -277,3 +277,92 @@ impl ObserverStore for ObserverCoordinatorStore {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ObserverCoordinatorStore, ObserverRequest, ObserverResponse, ObserverStore, default_locale,
+    };
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::UnixListener;
+
+    #[tokio::test]
+    async fn observer_client_round_trips_values_and_rejects_protocol_mismatches()
+    -> crate::HiveResult<()> {
+        let root = tempfile::tempdir()?;
+        let socket = root.path().join("observer.sock");
+        let listener = UnixListener::bind(&socket)?;
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await?;
+            let (reader, mut writer) = stream.into_split();
+            let mut requests = BufReader::new(reader).lines();
+            let responses = [
+                ObserverResponse::Snapshot(serde_json::json!({"ready": 2})),
+                ObserverResponse::Task(Some(serde_json::json!({"id": "task-7"}))),
+                ObserverResponse::Task(None),
+                ObserverResponse::Error("coordinator unavailable".into()),
+            ];
+            for response in responses {
+                let Some(request) = requests.next_line().await? else {
+                    return Err(crate::HiveError::message(
+                        "observer client closed before sending its request",
+                    ));
+                };
+                serde_json::from_str::<ObserverRequest>(&request)?;
+                writer.write_all(&serde_json::to_vec(&response)?).await?;
+                writer.write_all(b"\n").await?;
+                writer.flush().await?;
+            }
+            let Some(final_request) = requests.next_line().await? else {
+                return Err(crate::HiveError::message(
+                    "observer client closed before the final request",
+                ));
+            };
+            serde_json::from_str::<ObserverRequest>(&final_request)?;
+            Ok::<(), crate::HiveError>(())
+        });
+        let client = ObserverCoordinatorStore::connect(&socket).await?;
+
+        assert_eq!(default_locale(), "en");
+        assert_eq!(
+            client.observer_snapshot_value("en").await?,
+            serde_json::json!({"ready": 2})
+        );
+        assert_eq!(
+            client.observer_task_value("task-7", "ru").await?,
+            Some(serde_json::json!({"id": "task-7"}))
+        );
+        let Err(mismatch) = client.observer_snapshot_value("en").await else {
+            return Err(crate::HiveError::message(
+                "task response satisfied a snapshot request",
+            ));
+        };
+        assert!(
+            mismatch
+                .to_string()
+                .contains("unexpected observer coordinator response")
+        );
+        let Err(remote_error) = client.observer_task_value("task-8", "en").await else {
+            return Err(crate::HiveError::message(
+                "remote observer error did not cross the private channel",
+            ));
+        };
+        assert!(remote_error.to_string().contains("coordinator unavailable"));
+        let Err(closed) = client.observer_snapshot_value("en").await else {
+            return Err(crate::HiveError::message(
+                "closed observer channel returned state",
+            ));
+        };
+        let crate::HiveError::Message { message } = closed else {
+            return Err(crate::HiveError::message(
+                "observer channel closure lost its typed protocol error",
+            ));
+        };
+        assert_eq!(
+            message,
+            "Hive observer coordinator closed its private channel"
+        );
+        server.await??;
+        Ok(())
+    }
+}

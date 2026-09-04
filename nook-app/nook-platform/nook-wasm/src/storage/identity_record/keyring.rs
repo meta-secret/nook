@@ -933,7 +933,7 @@ mod tests {
         let _ = Rexie::delete("nook_db").await;
         let (app_key, wrapped, _) = create_pin_identity("Personal", "first-secret", None).await?;
         indexed_db::save_wrapped_device_identity(app_key.app_id().as_str(), &wrapped).await?;
-        identity_record::clear_identity_directory_for_test().await?;
+        indexed_db::idb_delete_key(identity_record::IDENTITY_DIRECTORY_KEY).await?;
         assert!(super::load_keyring().await.is_err());
         assert!(
             indexed_db::idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
