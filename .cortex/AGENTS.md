@@ -234,9 +234,23 @@ prohibited. This is a universal P1 rule.
 This format applies to Gizmo Prime, every real Team Agent or subagent, and
 every user-visible skill-driven action.
 
+Put only the existing metadata fields in a fenced `text` block:
+
 ```text
-HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
+HH:mm:(<PR>):<ACTOR>:<ACTION>
 ```
+
+For example:
+
+```text
+01:25:(pending):Gizmo Prime:CLARIFY
+```
+
+Clarified the user-visible communication format.
+
+Write the human-readable description as ordinary Markdown immediately after
+the fence. Do not add a PR prefix, arrow, or description to the metadata line,
+and do not rename, reorder, or remove its time, PR, actor, or action fields.
 
 - Use `(<number>)` with the exact positive pull-request number that the
   activity currently serves, for example `(1263)`.
