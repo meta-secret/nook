@@ -61,6 +61,13 @@ where
         Self::default()
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: accepts opaque immutable event storage bytes"
+        )
+    )]
     pub fn put_event(&mut self, event_id: Id, storage_bytes: Vec<u8>) -> ReplicaInsertStatus {
         let status = classify_immutable_insert(
             self.events.get(&event_id).map(Vec::as_slice),
@@ -78,6 +85,13 @@ where
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: returns opaque immutable event storage bytes"
+        )
+    )]
     pub fn get_bytes(&self, event_id: &Id) -> Option<&[u8]> {
         self.events.get(event_id).map(Vec::as_slice)
     }
@@ -87,6 +101,13 @@ where
         self.events.keys().cloned().collect()
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: queues opaque immutable event storage bytes"
+        )
+    )]
     pub fn queue_outbox(
         &mut self,
         provider_id: &str,
@@ -101,6 +122,13 @@ where
         status
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: releases opaque immutable event storage bytes from the provider outbox"
+        )
+    )]
     pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &Id) -> Option<Vec<u8>> {
         self.outbox
             .get_mut(provider_id)
@@ -108,6 +136,13 @@ where
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: snapshots opaque immutable event storage bytes for one provider outbox"
+        )
+    )]
     pub fn pending_outbox(&self, provider_id: &str) -> Vec<(Id, Vec<u8>)> {
         self.outbox
             .get(provider_id)
@@ -123,6 +158,13 @@ where
     /// Snapshot durable outbox entries so an application can carry them across
     /// a validated rebuild of its accepted event set.
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: snapshots opaque immutable event storage bytes across provider outboxes"
+        )
+    )]
     pub fn outbox_entries(&self) -> Vec<(String, Id, Vec<u8>)> {
         self.outbox
             .iter()

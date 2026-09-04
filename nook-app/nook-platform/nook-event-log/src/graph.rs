@@ -37,7 +37,7 @@ impl EventGraph {
 
     #[must_use]
     pub fn len(&self) -> usize {
-        self.causal.len()
+        self.events.len()
     }
 
     #[must_use]
