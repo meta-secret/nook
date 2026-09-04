@@ -265,13 +265,70 @@ impl CredentialFillPlan {
     }
 }
 
+enum CredentialFillResultState {
+    Planned(nook_companion_core::credential_fill::Plan),
+    Rejected(nook_companion_core::credential_fill::Rejection),
+}
+
 #[wasm_bindgen]
-pub fn plan_companion_credential_fill(
-    fields: &CredentialFillObservations,
-) -> Result<CredentialFillPlan, wasm_bindgen::JsError> {
-    nook_companion_core::credential_fill::plan(fields.as_core())
-        .map(CredentialFillPlan::from_core)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+pub struct CredentialFillResult {
+    inner: CredentialFillResultState,
+}
+
+impl CredentialFillResult {
+    fn from_core(
+        value: Result<
+            nook_companion_core::credential_fill::Plan,
+            nook_companion_core::credential_fill::Rejection,
+        >,
+    ) -> Self {
+        let inner = match value {
+            Ok(plan) => CredentialFillResultState::Planned(plan),
+            Err(rejection) => CredentialFillResultState::Rejected(rejection),
+        };
+        Self { inner }
+    }
+}
+
+#[wasm_bindgen]
+impl CredentialFillResult {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn kind(&self) -> nook_companion_core::credential_fill::PlanningOutcome {
+        match &self.inner {
+            CredentialFillResultState::Planned(_) => {
+                nook_companion_core::credential_fill::PlanningOutcome::Planned
+            }
+            CredentialFillResultState::Rejected(_) => {
+                nook_companion_core::credential_fill::PlanningOutcome::Rejected
+            }
+        }
+    }
+
+    pub fn plan(&self) -> Result<CredentialFillPlan, wasm_bindgen::JsError> {
+        let CredentialFillResultState::Planned(plan) = &self.inner else {
+            return Err(wasm_bindgen::JsError::new(
+                "a rejected credential-fill result has no plan",
+            ));
+        };
+        Ok(CredentialFillPlan::from_core(plan.clone()))
+    }
+
+    pub fn rejection(
+        &self,
+    ) -> Result<nook_companion_core::credential_fill::Rejection, wasm_bindgen::JsError> {
+        let CredentialFillResultState::Rejected(rejection) = &self.inner else {
+            return Err(wasm_bindgen::JsError::new(
+                "a planned credential-fill result has no rejection",
+            ));
+        };
+        Ok(*rejection)
+    }
+}
+
+#[wasm_bindgen]
+pub fn plan_companion_credential_fill(fields: &CredentialFillObservations) -> CredentialFillResult {
+    CredentialFillResult::from_core(nook_companion_core::credential_fill::plan(fields.as_core()))
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
@@ -292,7 +349,12 @@ mod tests {
         fields.add(&field(0, &CredentialFillFieldRole::username()))?;
         fields.add(&field(1, &CredentialFillFieldRole::current_password()))?;
 
-        let mut plan = plan_companion_credential_fill(&fields)?;
+        let result = plan_companion_credential_fill(&fields);
+        assert_eq!(
+            result.kind(),
+            nook_companion_core::credential_fill::PlanningOutcome::Planned
+        );
+        let mut plan = result.plan()?;
         let assignments = plan.take_assignments();
         assert_eq!(assignments.len(), 2);
         assert_eq!(assignments[0].field_index().value(), 0);
@@ -306,6 +368,29 @@ mod tests {
             nook_companion_core::credential_fill::CredentialKind::CurrentPassword
         );
         assert!(plan.take_assignments().is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn rejected_result_exposes_the_typed_core_rejection() -> Result<(), wasm_bindgen::JsError> {
+        let field_index = CredentialFillFieldIndex::new(0);
+        let observation = CredentialFillObservation::credential(
+            &field_index,
+            &CredentialFillFieldRole::current_password(),
+            &CredentialFillEditability::readonly(),
+        );
+        let mut fields = CredentialFillObservations::new();
+        fields.add(&observation)?;
+
+        let result = plan_companion_credential_fill(&fields);
+        assert_eq!(
+            result.kind(),
+            nook_companion_core::credential_fill::PlanningOutcome::Rejected
+        );
+        assert_eq!(
+            result.rejection()?,
+            nook_companion_core::credential_fill::Rejection::PasswordFieldsReadonly
+        );
         Ok(())
     }
 }
