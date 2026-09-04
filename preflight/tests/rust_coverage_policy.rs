@@ -85,8 +85,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(platform_tasks.contains(".package_lines_percent[$package]"));
     assert!(product.contains("--fail-under-lines \"$floor\""));
     assert!(platform_tasks.contains("--fail-under-lines \"$floor\""));
-    assert!(platform_tasks.contains("set -e"));
-    assert!(platform_tasks.contains("|| coverage_status=1"));
+    assert!(platform_tasks.contains("set -e") && platform_tasks.contains("|| coverage_status=1"));
     assert!(nightly.contains("cargo llvm-cov test -p nook_domain_api"));
     assert!(nightly.contains("rustup show active-toolchain | cut -d' ' -f1"));
     assert!(
@@ -98,7 +97,10 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(nightly.contains("--fail-under-lines \"$(jq -er"));
     assert!(nightly.contains(".package_lines_percent[\"nook_domain_api\"] | numbers"));
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
+    assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
+    assert!(product.contains("llvm-cov clean --workspace"));
     assert!(product.contains("llvm-cov test --release -p nook-wasm --no-report"));
+    assert!(product.contains("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true"));
     assert_eq!(product.matches("--features browser-wasm-tests").count(), 2);
     assert!(product.contains(
         "llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm"
@@ -130,10 +132,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
     assert!(hive.contains("cargo llvm-cov report -p lace"));
     assert!(hive.contains("--fail-under-lines \"${LACE_RUST_COVERAGE_FLOOR}\""));
-    assert!(hive.contains("coverage_status=0;"));
+    assert!(hive.contains("coverage_status=0;") && !hive.contains("ARG RUST_COVERAGE_FLOOR="));
     assert_eq!(hive.matches("|| coverage_status=1;").count(), 2);
     assert!(hive.contains("test \"$coverage_status\" -eq 0"));
-    assert!(!hive.contains("ARG RUST_COVERAGE_FLOOR="));
     assert!(hive.contains(
         "ARG LLVM_COV_SHA256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168"
     ));
@@ -167,8 +168,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!preflight.contains("/opt/nook/preflight"));
     assert!(!preflight.contains("/opt/nook/coverage-floor.json"));
     assert!(minds_manifest.contains("exclude = [\"vendor/arrayref\"]"));
-    assert!(fuzz_manifest.contains("cargo-fuzz = true"));
-    assert!(fuzz_manifest.contains("test = false"));
+    assert!(fuzz_manifest.contains("cargo-fuzz = true") && fuzz_manifest.contains("test = false"));
     Ok(())
 }
 fn repository_root() -> anyhow::Result<PathBuf> {
