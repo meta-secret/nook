@@ -233,8 +233,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 
 FROM test-compile AS coverage
 
-ARG HIVE_RUST_COVERAGE_FLOOR=60
-ARG LACE_RUST_COVERAGE_FLOOR=75
+ARG HIVE_RUST_COVERAGE_FLOOR
+ARG LACE_RUST_COVERAGE_FLOOR
 COPY --from=hive-coverage-profiles / /tmp/hive-coverage-profiles
 RUN test -n "$(find /tmp/hive-coverage-profiles -name '*.profraw' -print -quit)" \
     && mkdir -p target/llvm-cov-target \

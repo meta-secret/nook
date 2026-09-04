@@ -151,7 +151,7 @@ tasks:
         command=(docker buildx build
           --platform linux/amd64
           --build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
-          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}")
+          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}" --build-arg "HIVE_RUST_COVERAGE_FLOOR=$(jq -er '.package_lines_percent.hive | numbers' "$HIVE_TASK_DIR/../../../nook-app/nook-platform/nook-core/coverage-floor.json")" --build-arg "LACE_RUST_COVERAGE_FLOOR=$(jq -er '.package_lines_percent.lace | numbers' "$HIVE_TASK_DIR/../../../nook-app/nook-platform/nook-core/coverage-floor.json")")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi

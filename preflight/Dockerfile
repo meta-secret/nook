@@ -50,7 +50,7 @@ ENV NOOK_REPO_ROOT=/meta-secret/nook
 ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    floor="$(jq -r '.lines_percent' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
+    floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
     && cargo llvm-cov test --locked -p nook-preflight --fail-under-lines "$floor" \
     && nook-sccache-report preflight-test-and-coverage
 

@@ -87,14 +87,14 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(platform_tasks.contains("set -e"));
     assert!(platform_tasks.contains("|| coverage_status=1"));
     assert!(nightly.contains("cargo llvm-cov test -p nook_domain_api"));
-    assert!(nightly.contains("--locked --no-report"));
     assert!(nightly.contains("rustup show active-toolchain | cut -d' ' -f1"));
     assert!(nightly.contains("test -n \"$toolchain_id\""));
     assert!(
         nightly
             .contains("dylint/nook-domain-api/target/debug/libnook_domain_api@${toolchain_id}.so")
     );
-    assert!(nightly.contains("--locked --fail-under-lines 90"));
+    assert!(nightly.contains("--fail-under-lines \"$(jq -er"));
+    assert!(nightly.contains(".package_lines_percent[\"nook_domain_api\"] | numbers"));
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));
@@ -121,12 +121,12 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
     let browser_execution = wasm_coverage_stage
-        .split_once("\nRUN echo \"nook-wasm declared coverage tests:")
-        .context("browser execution RUN")?
+        .split_once("\nRUN curl -fsSL https://bun.sh/install")
+        .context("secret-free browser install and execution RUN")?
         .1;
     assert!(!browser_execution.contains("--mount=type=secret"));
-    assert!(hive.contains("ARG HIVE_RUST_COVERAGE_FLOOR=60"));
-    assert!(hive.contains("ARG LACE_RUST_COVERAGE_FLOOR=75"));
+    assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
+    assert!(hive_tasks.contains(".package_lines_percent.lace | numbers"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));
     assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
     assert!(hive.contains("cargo llvm-cov report -p lace"));
@@ -160,9 +160,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         "chef and dependency roots must keep generated Cargo output outside repository source"
     );
     assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
-    assert!(preflight.contains(
-        "floor=\"$(jq -r '.lines_percent' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)\""
-    ));
+    assert!(preflight.contains(".package_lines_percent[\"nook-preflight\"] | numbers"));
     assert!(preflight.contains(
         "COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight"
     ));

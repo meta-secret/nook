@@ -743,21 +743,10 @@ ARG PLAYWRIGHT_CHROMIUM_VERSION=140.0.7339.16
 ARG PLAYWRIGHT_CHROMEDRIVER_SHA256=f40639ecc590adea9583a15066afd8e2e3e84173435dc4e31d9b01afcc41bd66
 ENV BUN_INSTALL=/usr/local/bun PATH="/usr/local/bun/bin:${PATH}" PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright CHROMEDRIVER=/usr/local/bin/chromedriver
 
-# minicov compiles its compiler runtime while cargo llvm-cov prepares the browser test binary.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends clang unzip \
-    && curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}" \
-    && bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
-    && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
-    && bunx playwright@${PLAYWRIGHT_VERSION} install chromium \
-    && chromium="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name headless_shell -print -quit)" \
-    && test -x "$chromium" && ln -s "$chromium" /usr/local/bin/google-chrome \
-    && curl -fsSL "https://storage.googleapis.com/chrome-for-testing-public/${PLAYWRIGHT_CHROMIUM_VERSION}/linux64/chromedriver-linux64.zip" -o /tmp/chromedriver.zip \
-    && echo "${PLAYWRIGHT_CHROMEDRIVER_SHA256}  /tmp/chromedriver.zip" | sha256sum -c - \
-    && unzip -q /tmp/chromedriver.zip -d /tmp/chromedriver \
-    && install -m 0755 /tmp/chromedriver/chromedriver-linux64/chromedriver "$CHROMEDRIVER" \
-    && rm -rf /tmp/chromedriver /tmp/chromedriver.zip /var/lib/apt/lists/* \
-    && clang --version && "$CHROMEDRIVER" --version
+    && rm -rf /var/lib/apt/lists/* \
+    && clang --version
 
 COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /opt/nook/wasm-clippy-passed
 COPY --from=builder-wasm-build \
@@ -775,7 +764,19 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-report \
     && nook-sccache-report wasm-node-test-and-coverage
 
-RUN echo "nook-wasm declared coverage tests: native=82 browser=147" && wasm-pack test --node --release nook-wasm \
+RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}" \
+    && bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
+    && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
+    && bunx playwright@${PLAYWRIGHT_VERSION} install chromium \
+    && chromium="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name headless_shell -print -quit)" \
+    && test -x "$chromium" && ln -s "$chromium" /usr/local/bin/google-chrome \
+    && curl -fsSL "https://storage.googleapis.com/chrome-for-testing-public/${PLAYWRIGHT_CHROMIUM_VERSION}/linux64/chromedriver-linux64.zip" -o /tmp/chromedriver.zip \
+    && echo "${PLAYWRIGHT_CHROMEDRIVER_SHA256}  /tmp/chromedriver.zip" | sha256sum -c - \
+    && unzip -q /tmp/chromedriver.zip -d /tmp/chromedriver \
+    && install -m 0755 /tmp/chromedriver/chromedriver-linux64/chromedriver "$CHROMEDRIVER" \
+    && rm -rf /tmp/chromedriver /tmp/chromedriver.zip \
+    && "$CHROMEDRIVER" --version \
+    && echo "nook-wasm declared coverage tests: native=82 browser=147" && wasm-pack test --node --release nook-wasm \
     && wasm-pack test --node --release nook-companion-wasm \
     && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
     && test -x "$runner" \
