@@ -89,6 +89,50 @@ describe('popular-site login shells', () => {
     expect(submitLoginForm(request)).toBe(FormSubmissionResult.NotObserved)
   })
 
+  test.each([
+    { kind: 'native dialog', open: '<dialog open>', close: '</dialog>' },
+    { kind: 'ARIA form', open: '<section role="form">', close: '</section>' },
+  ])(
+    'does not trust a generic $kind as a login boundary',
+    ({ open, close }) => {
+      document.body.innerHTML = `<form>${open}<section><input autocomplete="username" /></section>
+      <aside><input type="password" autocomplete="current-password" /></aside>
+      <button id="delete-account" type="submit">Continue</button>${close}</form>`
+      const [observation] = summarizeAuthenticationWorkflowForms()
+      if (!observation) throw new Error('expected generic semantic observation')
+      expect(observation.root).toBe(document)
+      const request: Parameters<typeof submitLoginForm>[0] = {
+        kind: PasswordFormQueryKind.Scoped,
+        ...observation,
+      }
+      expect(submitLoginForm(request)).toBe(FormSubmissionResult.NotObserved)
+    },
+  )
+
+  test.each([
+    {
+      kind: 'dialog',
+      open: '<dialog open class="login-dialog">',
+      close: '</dialog>',
+    },
+    {
+      kind: 'form',
+      open: '<section role="form" class="sign-in-panel">',
+      close: '</section>',
+    },
+  ])(
+    'retains an authentication-identified $kind boundary',
+    ({ open, close }) => {
+      document.body.innerHTML = `<form>${open}<section><input autocomplete="username" /></section>
+      <aside><input type="password" autocomplete="current-password" /></aside>
+      <button type="submit">Sign in</button>${close}</form>`
+
+      expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(
+        document.querySelector('.login-dialog, .sign-in-panel'),
+      )
+    },
+  )
+
   test('indexes a large field set by exact form owner', () => {
     document.body.innerHTML = Array.from(
       { length: 101 },

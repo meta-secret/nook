@@ -775,7 +775,6 @@ function containerHasSemanticSubmitControl(container: Element): boolean {
 }
 
 function containerLooksLikeExplicitAuthSurface(container: Element): boolean {
-  if (container.matches('dialog, [role="dialog"], [role="form"]')) return true;
   return containerHasAuthenticationIdentity(container);
 }
 
