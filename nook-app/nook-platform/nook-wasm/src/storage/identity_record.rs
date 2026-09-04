@@ -664,7 +664,7 @@ pub(crate) async fn validate_vault_identity_enrollment(
 
 #[cfg(test)]
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
-    crate::storage::indexed_db::clear_vault_db().await
+    indexed_db::clear_vault_db().await
 }
 
 #[cfg(test)]
