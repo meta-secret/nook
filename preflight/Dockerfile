@@ -5,7 +5,8 @@
 
 FROM rust-base AS chef
 
-WORKDIR /opt/nook/preflight
+ENV CARGO_TARGET_DIR=/meta-secret/preflight-target
+WORKDIR /meta-secret/nook/preflight
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
 RUN mkdir -p src \
     && printf 'fn main() {}\n' > src/main.rs \
@@ -14,8 +15,9 @@ RUN cargo chef prepare --recipe-path recipe.json
 
 FROM rust-base AS deps
 
-WORKDIR /opt/nook/preflight
-COPY --from=chef /opt/nook/preflight/recipe.json recipe.json
+ENV CARGO_TARGET_DIR=/meta-secret/preflight-target
+WORKDIR /meta-secret/nook/preflight
+COPY --from=chef /meta-secret/nook/preflight/recipe.json recipe.json
 COPY preflight/Cargo.toml preflight/Cargo.lock ./
 RUN mkdir -p src \
     && printf 'fn main() {}\n' > src/main.rs \
@@ -38,7 +40,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo clippy --locked --all-targets -- -D warnings \
     && cargo test --locked --no-run \
     && cargo build --locked --bin nook-preflight \
-    && strip target/debug/nook-preflight \
+    && strip /meta-secret/preflight-target/debug/nook-preflight \
     && nook-sccache-report preflight-build
 
 FROM build AS test
@@ -48,9 +50,10 @@ ENV NOOK_REPO_ROOT=/meta-secret/nook
 ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo test --locked \
-    && nook-sccache-report preflight-test
+    floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
+    && cargo llvm-cov test --locked -p nook-preflight --fail-under-lines "$floor" \
+    && nook-sccache-report preflight-test-and-coverage
 
 FROM scratch AS cli-export
 
-COPY --from=build /opt/nook/preflight/target/debug/nook-preflight /nook-preflight
+COPY --from=build /meta-secret/preflight-target/debug/nook-preflight /nook-preflight

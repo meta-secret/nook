@@ -454,7 +454,15 @@ fn with_linux_sandbox_override(
 
 #[cfg(test)]
 mod tests {
-    use super::{Arg0DispatchPaths, PathBuf, install_rustls_crypto_provider};
+    use clap::Parser;
+
+    use super::{
+        Arg0DispatchPaths, Cli, Command, PathBuf, QueueAction, install_rustls_crypto_provider,
+    };
+
+    fn parse(arguments: &[&str]) -> hive::HiveResult<Cli> {
+        Cli::try_parse_from(arguments).map_err(|error| hive::HiveError::message(error.to_string()))
+    }
 
     #[test]
     fn production_tls_crypto_provider_is_available() -> hive::HiveResult<()> {
@@ -479,5 +487,273 @@ mod tests {
         );
 
         assert_eq!(paths.codex_linux_sandbox_exe, Some(replacement));
+    }
+
+    #[test]
+    fn worker_and_service_commands_preserve_explicit_and_default_configuration()
+    -> hive::HiveResult<()> {
+        let worker = parse(&[
+            "hive",
+            "worker",
+            "--agent-id",
+            "agent-7",
+            "--pod-name",
+            "pod-7",
+            "--workspace",
+            "/tmp/worker",
+            "--lease-seconds",
+            "90",
+            "--heartbeat-seconds",
+            "30",
+            "--poll-min-seconds",
+            "2",
+            "--poll-max-seconds",
+            "4",
+            "--codex-linux-sandbox-exe",
+            "/bin/sandbox",
+        ])?;
+        let Command::Worker {
+            agent_id,
+            pod_name,
+            repository_url,
+            workspace,
+            lease_seconds,
+            heartbeat_seconds,
+            poll_min_seconds,
+            poll_max_seconds,
+            codex_linux_sandbox_exe,
+            ..
+        } = worker.command
+        else {
+            return Err(hive::HiveError::message(
+                "worker command parsed as another variant",
+            ));
+        };
+        assert_eq!(agent_id, "agent-7");
+        assert_eq!(pod_name, "pod-7");
+        assert_eq!(repository_url, "https://github.com/meta-secret/nook.git");
+        assert_eq!(workspace, PathBuf::from("/tmp/worker"));
+        assert_eq!((lease_seconds, heartbeat_seconds), (90, 30));
+        assert_eq!((poll_min_seconds, poll_max_seconds), (2, 4));
+        assert_eq!(codex_linux_sandbox_exe, Some(PathBuf::from("/bin/sandbox")));
+
+        let coordinator = parse(&["hive", "coordinator", "--socket", "/tmp/coordinator"])?;
+        assert!(matches!(
+            coordinator.command,
+            Command::Coordinator { socket } if socket.as_path() == std::path::Path::new("/tmp/coordinator")
+        ));
+        let observer = parse(&[
+            "hive",
+            "observer",
+            "--address",
+            "127.0.0.1:8081",
+            "--dashboard",
+            "/tmp/dashboard",
+            "--coordinator-socket",
+            "/tmp/observer-coordinator",
+        ])?;
+        assert!(matches!(
+            observer.command,
+            Command::Observer { address, dashboard, coordinator_socket }
+                if address.to_string() == "127.0.0.1:8081"
+                    && dashboard.as_path() == std::path::Path::new("/tmp/dashboard")
+                    && coordinator_socket.as_path() == std::path::Path::new("/tmp/observer-coordinator")
+        ));
+        let observer_coordinator = parse(&[
+            "hive",
+            "observer-coordinator",
+            "--socket",
+            "/tmp/observer-store",
+        ])?;
+        assert!(matches!(
+            observer_coordinator.command,
+            Command::ObserverCoordinator { socket } if socket.as_path() == std::path::Path::new("/tmp/observer-store")
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_auth_and_queue_commands_keep_their_typed_actions() -> hive::HiveResult<()> {
+        let dispatcher = parse(&[
+            "hive",
+            "workbench-dispatcher",
+            "--repository-url",
+            "https://example.invalid/workbench.git",
+            "--checkout",
+            "/tmp/workbench",
+            "--health-path",
+            "/tmp/health",
+            "--poll-seconds",
+            "45",
+        ])?;
+        assert!(matches!(
+            dispatcher.command,
+            Command::WorkbenchDispatcher {
+                repository_url,
+                checkout,
+                health_path,
+                poll_seconds: 45,
+            } if repository_url == "https://example.invalid/workbench.git"
+                && checkout.as_path() == std::path::Path::new("/tmp/workbench")
+                && health_path.as_path() == std::path::Path::new("/tmp/health")
+        ));
+        let health = parse(&[
+            "hive",
+            "workbench-dispatcher-health",
+            "--health-path",
+            "/tmp/health",
+            "--max-age-seconds",
+            "120",
+            "--progress",
+        ])?;
+        assert!(matches!(
+            health.command,
+            Command::WorkbenchDispatcherHealth {
+                health_path,
+                max_age_seconds: 120,
+                progress: true,
+            } if health_path.as_path() == std::path::Path::new("/tmp/health")
+        ));
+        let broker = parse(&[
+            "hive",
+            "auth-broker",
+            "--socket",
+            "/tmp/auth.sock",
+            "--auth-source",
+            "/tmp/source.json",
+            "--auth-home",
+            "/tmp/auth-home",
+        ])?;
+        assert!(matches!(
+            broker.command,
+            Command::AuthBroker { socket, auth_source, auth_home }
+                if socket.as_path() == std::path::Path::new("/tmp/auth.sock")
+                    && auth_source.as_path() == std::path::Path::new("/tmp/source.json")
+                    && auth_home.as_path() == std::path::Path::new("/tmp/auth-home")
+        ));
+
+        for (arguments, expected) in [
+            (
+                vec!["hive", "queue", "status", "--limit", "17"],
+                QueueAction::Status { limit: 17 },
+            ),
+            (
+                vec![
+                    "hive",
+                    "queue",
+                    "retry-failed-main",
+                    "--task-id",
+                    "task-1",
+                    "--release-id",
+                    "release-1",
+                ],
+                QueueAction::RetryFailedMain {
+                    task_id: "task-1".into(),
+                    release_id: "release-1".into(),
+                },
+            ),
+            (
+                vec![
+                    "hive",
+                    "queue",
+                    "cancel",
+                    "--task-id",
+                    "task-2",
+                    "--reason",
+                    "obsolete",
+                ],
+                QueueAction::Cancel {
+                    task_id: "task-2".into(),
+                    reason: "obsolete".into(),
+                },
+            ),
+        ] {
+            let queue = parse(&arguments)?;
+            match (queue.command, expected) {
+                (Command::Queue { action }, QueueAction::Status { limit }) => {
+                    assert!(
+                        matches!(action, QueueAction::Status { limit: actual } if actual == limit)
+                    );
+                }
+                (
+                    Command::Queue { action },
+                    QueueAction::RetryFailedMain {
+                        task_id,
+                        release_id,
+                    },
+                ) => {
+                    assert!(
+                        matches!(action, QueueAction::RetryFailedMain { task_id: actual_task, release_id: actual_release } if actual_task == task_id && actual_release == release_id)
+                    );
+                }
+                (Command::Queue { action }, QueueAction::Cancel { task_id, reason }) => {
+                    assert!(
+                        matches!(action, QueueAction::Cancel { task_id: actual_task, reason: actual_reason } if actual_task == task_id && actual_reason == reason)
+                    );
+                }
+                _ => return Err(hive::HiveError::message("queue action parsed incorrectly")),
+            }
+        }
+        assert!(matches!(
+            parse(&["hive", "migrate"])?.command,
+            Command::Migrate
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn enqueue_command_parses_dependency_and_attempt_contracts() -> hive::HiveResult<()> {
+        let enqueue = parse(&[
+            "hive",
+            "enqueue",
+            "--id",
+            "task-9",
+            "--kind",
+            "main-repair",
+            "--prompt",
+            "repair main",
+            "--source-commit",
+            "0123456789abcdef0123456789abcdef01234567",
+            "--priority",
+            "100",
+            "--max-attempts",
+            "5",
+            "--depends-on",
+            "task-1,task-2",
+        ])?;
+        let Command::Enqueue {
+            id,
+            kind,
+            prompt,
+            source_commit,
+            priority,
+            max_attempts,
+            depends_on,
+        } = enqueue.command
+        else {
+            return Err(hive::HiveError::message(
+                "enqueue parsed as another variant",
+            ));
+        };
+        assert_eq!(id, "task-9");
+        assert_eq!(kind, "main-repair");
+        assert_eq!(prompt, "repair main");
+        assert_eq!(source_commit.len(), 40);
+        assert_eq!((priority, max_attempts), (100, 5));
+        assert_eq!(depends_on, vec!["task-1".to_owned(), "task-2".to_owned()]);
+        assert!(
+            Cli::try_parse_from([
+                "hive",
+                "worker",
+                "--agent-id",
+                "agent-1",
+                "--pod-name",
+                "pod-1",
+                "--lease-seconds",
+                "not-a-number",
+            ])
+            .is_err()
+        );
+        Ok(())
     }
 }

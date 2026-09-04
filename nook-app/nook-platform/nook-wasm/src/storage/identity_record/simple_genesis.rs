@@ -10,8 +10,6 @@ use super::{
     ensure_local_identity_for_app_key, genesis_flow::PendingSimpleGenesisFlow,
     staged_genesis::StagedSimpleGenesisIdentity,
 };
-#[cfg(test)]
-use crate::storage::indexed_db::idb_delete_key;
 use crate::storage::indexed_db::{
     StringUpdateGuard, StringUpdateResult, idb_get_string, idb_update_string,
 };
@@ -495,11 +493,6 @@ pub(crate) async fn pending_simple_genesis() -> Result<Option<PendingSimpleGenes
         .await?
         .map(|raw| decode_pending_simple_genesis(&raw))
         .transpose()
-}
-
-#[cfg(test)]
-pub(super) async fn clear_pending_simple_genesis_for_test() -> Result<(), NookError> {
-    idb_delete_key(PENDING_SIMPLE_GENESIS_KEY).await
 }
 
 #[cfg(test)]

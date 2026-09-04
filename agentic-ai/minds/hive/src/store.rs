@@ -85,7 +85,7 @@ pub trait TaskStore: Clone + Send + Sync + 'static {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use std::collections::{BTreeMap, BTreeSet};
     use std::sync::{Arc, Mutex};
     use std::time::{Duration, Instant};
@@ -111,7 +111,7 @@ mod tests {
     }
 
     #[derive(Clone, Default)]
-    struct MemoryStore {
+    pub(crate) struct MemoryStore {
         tasks: Arc<Mutex<BTreeMap<String, TestTask>>>,
     }
 
@@ -645,7 +645,7 @@ mod tests {
         }
     }
 
-    fn task(id: &str, dependencies: Vec<TaskId>) -> crate::HiveResult<EnqueueTask> {
+    pub(crate) fn task(id: &str, dependencies: Vec<TaskId>) -> crate::HiveResult<EnqueueTask> {
         Ok(EnqueueTask {
             id: TaskId::new(id)?,
             kind: "code".to_owned(),

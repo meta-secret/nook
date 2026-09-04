@@ -440,6 +440,12 @@ mod tests {
     async fn destructive_recovery_forgets_stale_identity_ownership() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         let inaccessible_key = AppKey::generate().map_err(map_domain_error)?;
+        let wrapped = nook_core::wrap_device_identity_with_pin(
+            &inaccessible_key.secret_string(),
+            "test-pin",
+        )?;
+        identity_record::save_protected_local_identity(&inaccessible_key, &wrapped, "Personal")
+            .await?;
         let pending = begin_or_resume_simple_genesis(&inaccessible_key, "Personal").await?;
         let store_id = pending.store_id.clone();
         let _ = generate_vault_dek_for_identity(
@@ -452,10 +458,8 @@ mod tests {
         let marker_v1 = format!("pending_identity_reconciliation_v1:{store_id}");
         idb_put_string(&marker_v2, "stale-v2").await?;
         idb_put_string(&marker_v1, "stale-v1").await?;
-        idb_put_string(indexed_db::APP_ID_KEY, inaccessible_key.app_id().as_str()).await?;
-
-        let recovery =
-            delete_identity_directory_for_recovery(Some(inaccessible_key.app_id().clone())).await?;
+        let current_app_id = keyring::load_keyring().await?.entries()[0].app_id().clone();
+        let recovery = delete_identity_directory_for_recovery(Some(current_app_id)).await?;
 
         assert!(idb_get_string(&marker_v2).await?.is_none());
         assert!(idb_get_string(&marker_v1).await?.is_none());
@@ -830,8 +834,6 @@ mod tests {
             "Personal",
         )
         .await?;
-        let pending = begin_or_resume_simple_genesis(&first_key, "Personal").await?;
-        assert_eq!(pending.identity_id, first.identity.identity_id);
         identity_record::save_new_protected_local_identity(
             &second_key,
             &second_wrapped,
@@ -839,6 +841,8 @@ mod tests {
             "Work",
         )
         .await?;
+        let pending = begin_or_resume_simple_genesis(&first_key, "Personal").await?;
+        assert_eq!(pending.identity_id, first.identity.identity_id);
 
         let recovery =
             delete_identity_directory_for_recovery(Some(second_key.app_id().clone())).await?;
