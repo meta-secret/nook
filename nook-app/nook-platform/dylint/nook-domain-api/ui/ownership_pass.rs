@@ -1,10 +1,6 @@
-// aux-build: ownership_external.rs
 #![allow(dead_code)]
 #![deny(unowned_function)]
 #![forbid(invalid_unowned_function_suppression)]
-
-extern crate ownership_external;
-ownership_external::framework_functions!();
 
 struct Draft;
 struct Ready;

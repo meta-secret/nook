@@ -2,7 +2,7 @@ use clippy_utils::{diagnostics::span_lint_and_help, is_test_function};
 use rustc_ast::attr::AttributeExt;
 use rustc_hir::{Attribute, Item, ItemKind, Node, def::DefKind};
 use rustc_lint::{LateContext, LateLintPass};
-use rustc_session::{declare_lint, declare_lint_pass};
+use rustc_session::{declare_lint, declare_lint_pass, lint::LintExpectationId};
 use rustc_span::sym;
 
 declare_lint! {
@@ -83,9 +83,12 @@ impl<'tcx> LateLintPass<'tcx> for FunctionOwnership {
             // belongs only to the exact function carrying its attribute.
             if cx
                 .tcx
-                .lint_level_spec_at_node(UNOWNED_FUNCTION, item.hir_id())
-                .lint_id()
-                .is_some_and(|expectation| expectation.hir_id != item.hir_id())
+                .lint_level_at_node(UNOWNED_FUNCTION, item.hir_id())
+                .lint_id
+                .is_some_and(|expectation| {
+                    !matches!(expectation, LintExpectationId::Stable { hir_id, .. }
+                        if hir_id == item.hir_id())
+                })
             {
                 span_lint_and_help(
                     cx,

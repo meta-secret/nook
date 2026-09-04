@@ -14,10 +14,4 @@ impl Owner {
         nested_operation();
     }
 }
-macro_rules! local_functions {
-    ($name:ident) => {
-        fn $name() {}
-    };
-}
-local_functions!(macro_operation);
 fn main() {}

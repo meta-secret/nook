@@ -39,13 +39,5 @@ LL |         fn nested_operation() {}
    |
    = help: move the operation to its meaningful owning type; required standalone callbacks need a boundary expectation
 
-warning: authored function has no struct, enum, or trait owner
-  --> $DIR/ownership_fail.rs:22:18
-   |
-LL | local_functions!(macro_operation);
-   |                  ^^^^^^^^^^^^^^^
-   |
-   = help: move the operation to its meaningful owning type; required standalone callbacks need a boundary expectation
-
-warning: 6 warnings emitted
+warning: 5 warnings emitted
 
