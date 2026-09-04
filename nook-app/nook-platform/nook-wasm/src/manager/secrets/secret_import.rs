@@ -345,6 +345,13 @@ impl NookVaultManager {
     /// Import supported entries from an unencrypted 1Password 1PUX archive in
     /// one signed event. The archive is parsed in memory and never persisted.
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `import_onepassword_pux` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn import_onepassword_pux(
         &mut self,
         archive: Vec<u8>,
@@ -365,6 +372,13 @@ impl NookVaultManager {
     /// Safari browsing-data ZIP export in one signed event. The export is
     /// parsed only in memory.
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `import_apple_passwords_export` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn import_apple_passwords_export(
         &mut self,
         export: Vec<u8>,
@@ -403,6 +417,13 @@ impl NookVaultManager {
     /// Import supported items from an unencrypted Dashlane CSV or CSV ZIP export
     /// in one signed event. The export is parsed only in memory.
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `import_dashlane_export` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn import_dashlane_export(
         &mut self,
         export: Vec<u8>,
@@ -442,6 +463,13 @@ impl NookVaultManager {
     /// export or decrypted data.json in one signed event. The export is parsed
     /// in memory and never persisted.
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `import_proton_pass` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn import_proton_pass(
         &mut self,
         export: Vec<u8>,

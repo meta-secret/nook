@@ -19,11 +19,25 @@ impl NookPasskeySetup {
 #[wasm_bindgen]
 impl NookPasskeySetup {
     #[wasm_bindgen(getter, js_name = userHandle)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `user_handle` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub fn user_handle(&self) -> Vec<u8> {
         self.user_handle.clone()
     }
 
     #[wasm_bindgen(getter, js_name = prfInput)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `prf_input` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub fn prf_input(&self) -> Vec<u8> {
         self.prf_input.clone()
     }
@@ -85,11 +99,25 @@ impl NookPasskeyUnlockOptions {
 #[wasm_bindgen]
 impl NookPasskeyUnlockOptions {
     #[wasm_bindgen(getter, js_name = credentialId)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `credential_id` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub fn credential_id(&self) -> Vec<u8> {
         self.credential_id.clone()
     }
 
     #[wasm_bindgen(getter, js_name = prfInput)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `prf_input` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub fn prf_input(&self) -> Vec<u8> {
         self.prf_input.clone()
     }

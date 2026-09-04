@@ -148,6 +148,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `current_authenticator_code_for_fill` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub async fn current_authenticator_code_for_fill(
         &mut self,
         secret_id: &str,

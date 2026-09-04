@@ -159,6 +159,13 @@ impl NookVaultEventAccessDiagnostic {
     }
 
     #[wasm_bindgen(getter, js_name = encryptedPayloads)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the encrypted-payload count as a JavaScript Number scalar"
+        )
+    )]
     pub fn encrypted_payloads(&self) -> u32 {
         self.encrypted_payloads
     }

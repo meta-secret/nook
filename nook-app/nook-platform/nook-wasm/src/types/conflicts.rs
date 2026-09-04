@@ -84,6 +84,13 @@ impl NookProviderVaultDecisionProjection {
 impl NookPendingSyncConflict {
     /// E2E/dev seam for rendering a Rust-owned content conflict without storage I/O.
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `for_testing_content` version or epoch through a JavaScript Number scalar"
+        )
+    )]
     pub fn for_testing_content(
         provider_label: String,
         local_version: u32,
@@ -126,6 +133,13 @@ impl NookPendingSyncConflict {
 
     #[wasm_bindgen]
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `content` version or epoch through a JavaScript Number scalar"
+        )
+    )]
     pub fn content(
         provider_id: String,
         provider_label: String,
@@ -298,6 +312,13 @@ impl NookPendingSyncConflict {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `content_local_version` version or epoch through a JavaScript Number scalar"
+        )
+    )]
     pub fn content_local_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         let nook_core::VaultSyncConflict::Content(details) = &self.conflict else {
             return Err(wasm_bindgen::JsError::new(
@@ -310,6 +331,13 @@ impl NookPendingSyncConflict {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `content_remote_version` version or epoch through a JavaScript Number scalar"
+        )
+    )]
     pub fn content_remote_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         let nook_core::VaultSyncConflict::Content(details) = &self.conflict else {
             return Err(wasm_bindgen::JsError::new(

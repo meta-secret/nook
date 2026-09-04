@@ -295,6 +295,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `connect_with_password` paging values through JavaScript Number scalars"
+        )
+    )]
     pub async fn connect_with_password(
         &mut self,
         storage_mode: String,

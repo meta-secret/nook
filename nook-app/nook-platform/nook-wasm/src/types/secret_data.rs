@@ -25,18 +25,39 @@ impl NookSecretPage {
 impl NookSecretPage {
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the secret-page total as a JavaScript Number scalar"
+        )
+    )]
     pub fn total(&self) -> u32 {
         self.total
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `offset` paging values through JavaScript Number scalars"
+        )
+    )]
     pub fn offset(&self) -> u32 {
         self.offset
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `limit` paging values through JavaScript Number scalars"
+        )
+    )]
     pub fn limit(&self) -> u32 {
         self.limit
     }
@@ -60,18 +81,39 @@ pub struct NookImportResult {
 impl NookImportResult {
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `imported` numeric values through JavaScript Number scalars"
+        )
+    )]
     pub fn imported(&self) -> u32 {
         self.imported
     }
 
     #[wasm_bindgen(getter, js_name = skippedUnsupported)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `skipped_unsupported` numeric values through JavaScript Number scalars"
+        )
+    )]
     pub fn skipped_unsupported(&self) -> u32 {
         self.skipped_unsupported
     }
 
     #[wasm_bindgen(getter, js_name = skippedDuplicates)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `skipped_duplicates` numeric values through JavaScript Number scalars"
+        )
+    )]
     pub fn skipped_duplicates(&self) -> u32 {
         self.skipped_duplicates
     }
@@ -191,6 +233,13 @@ impl NookSecretFormFields {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `file_attachment` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn file_attachment(
         title: String,
         file_name: String,
@@ -230,18 +279,39 @@ impl NookTotpCode {
 
     #[wasm_bindgen(getter, js_name = secondsRemaining)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects remaining TOTP seconds as a JavaScript Number scalar"
+        )
+    )]
     pub fn seconds_remaining(&self) -> u32 {
         self.seconds_remaining
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `period` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn period(&self) -> u32 {
         self.period
     }
 
     #[wasm_bindgen(getter, js_name = expiresAtUnixSeconds)]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `expires_at_unix_seconds` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn expires_at_unix_seconds(&self) -> f64 {
         self.expires_at_unix_seconds
     }
