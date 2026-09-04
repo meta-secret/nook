@@ -226,7 +226,7 @@ enum VersionedVaultEventBody {
 
 Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
 Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
-`nook-app-common` is the first clean activation; later crates migrate in dependency order.
+`nook-app-common` and `nook-authenticator-domain` are activated; later crates migrate in dependency order.
 Activate a migrated crate only while the Dylint library is loaded:
 
 ```rust

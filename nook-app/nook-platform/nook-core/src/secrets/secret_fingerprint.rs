@@ -204,8 +204,8 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
         SecretValue::Authenticator(authenticator) => {
             append_field(&mut bytes, authenticator.secret.as_str());
             append_field(&mut bytes, authenticator.algorithm.as_str());
-            append_field(&mut bytes, authenticator.digits.get().to_string().as_str());
-            append_field(&mut bytes, authenticator.period.get().to_string().as_str());
+            append_field(&mut bytes, authenticator.digits.to_string().as_str());
+            append_field(&mut bytes, authenticator.period.to_string().as_str());
             let mut backup_codes = authenticator
                 .backup_codes
                 .iter()

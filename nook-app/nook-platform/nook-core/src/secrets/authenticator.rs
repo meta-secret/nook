@@ -107,8 +107,6 @@ impl AuthenticatorSecret {
             return Err(ValidationError::AuthenticatorIssuerRequired);
         }
         TotpSecret::parse(self.secret.as_str())?;
-        parse_totp_digits(self.digits.get())?;
-        parse_totp_period(self.period.get())?;
         Ok(())
     }
 
@@ -117,8 +115,6 @@ impl AuthenticatorSecret {
         self.account = self.account.trim().to_owned();
         self.website_url = self.website_url.trim().to_owned();
         self.secret = TotpSecret::parse(self.secret.as_str())?;
-        self.digits = parse_totp_digits(self.digits.get())?;
-        self.period = parse_totp_period(self.period.get())?;
         let normalized_backup_codes = backup_codes::soft_normalize_backup_codes(&self.backup_codes);
         self.backup_codes.zeroize();
         self.backup_codes = normalized_backup_codes;
@@ -142,7 +138,7 @@ impl AuthenticatorSecret {
 
     pub fn current_code(&self, unix_seconds: u64) -> Result<TotpCode, ValidationError> {
         self.validate()?;
-        let period = self.period.get();
+        let period = self.period.duration().as_secs();
         let counter = unix_seconds / period;
         let key = self.secret.decoded()?;
         let counter_bytes = counter.to_be_bytes();
@@ -171,12 +167,12 @@ impl AuthenticatorSecret {
             | (u32::from(digest[offset + 1]) << 16)
             | (u32::from(digest[offset + 2]) << 8)
             | u32::from(digest[offset + 3]);
-        let modulus = 10_u32.pow(self.digits.get());
-        let code = format!(
-            "{:0width$}",
-            binary % modulus,
-            width = self.digits.get() as usize
-        );
+        let (modulus, width) = match self.digits {
+            TotpDigits::Six => (1_000_000, 6),
+            TotpDigits::Seven => (10_000_000, 7),
+            TotpDigits::Eight => (100_000_000, 8),
+        };
+        let code = format!("{:0width$}", binary % modulus, width = width);
         Ok(TotpCode {
             code,
             seconds_remaining: period - (unix_seconds % period),
@@ -507,8 +503,8 @@ mod tests {
         assert_eq!(item.issuer, "Example Co");
         assert_eq!(item.account, "alice@example.com");
         assert_eq!(item.algorithm, TotpAlgorithm::Sha256);
-        assert_eq!(item.digits.get(), 8);
-        assert_eq!(item.period.get(), 45);
+        assert_eq!(item.digits, TotpDigits::Eight);
+        assert_eq!(item.period.duration().as_secs(), 45);
         assert_eq!(item.backup_codes, ["first-code", "second-code"]);
         item.zeroize();
         assert!(item.secret.as_str().is_empty());
@@ -577,8 +573,8 @@ mod tests {
         assert_eq!(preview.issuer, "Example Co");
         assert_eq!(preview.account, "alice@example.com");
         assert_eq!(preview.algorithm, TotpAlgorithm::Sha256);
-        assert_eq!(preview.digits.get(), 8);
-        assert_eq!(preview.period.get(), 45);
+        assert_eq!(preview.digits, TotpDigits::Eight);
+        assert_eq!(preview.period.duration().as_secs(), 45);
         assert!(
             AuthenticatorSecret::preview_otpauth_uri("otpauth://hotp/x?secret=JBSWY3DPEHPK3PXP")
                 .is_err()

@@ -326,8 +326,12 @@ impl NookOtpauthPreview {
             account: preview.account,
             website_url: preview.website_url,
             algorithm: preview.algorithm.as_str().to_owned(),
-            digits: preview.digits.get(),
-            period: u32::try_from(preview.period.get()).unwrap_or(u32::MAX),
+            digits: match preview.digits {
+                nook_core::TotpDigits::Six => 6,
+                nook_core::TotpDigits::Seven => 7,
+                nook_core::TotpDigits::Eight => 8,
+            },
+            period: u32::try_from(preview.period.serialized_value()).unwrap_or(u32::MAX),
         }
     }
 

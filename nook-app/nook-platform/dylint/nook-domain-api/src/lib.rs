@@ -257,7 +257,7 @@ fn is_struct_or_enum_field(cx: &LateContext<'_>, hir_id: HirId) -> bool {
 
 fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
     let Ok(normalized) = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), ty) else {
-        return true;
+        return unresolved_type_contains_raw(cx, ty);
     };
     let raw_args = |args: ty::GenericArgsRef<'tcx>| {
         args.types()
@@ -292,13 +292,86 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
                 })
         }
         ty::Alias(alias) => {
-            raw_args(alias.args)
-                || matches!(alias.kind, ty::AliasTyKind::Opaque { def_id } if
-                    cx.tcx.explicit_item_bounds(def_id).iter_instantiated_copied(cx.tcx, alias.args)
-                        .any(|(clause, _)| clause_contains_raw(cx, clause, &mut Vec::new())))
+            raw_args(alias.args) || alias_bounds_contain_raw(cx, alias, &mut Vec::new())
         }
         _ => false,
     }
+}
+
+fn unresolved_type_contains_raw<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
+    unresolved_type_contains_raw_inner(cx, ty, &mut Vec::new())
+}
+
+fn unresolved_type_contains_raw_inner<'tcx>(
+    cx: &LateContext<'tcx>,
+    ty: Ty<'tcx>,
+    stack: &mut Vec<DefId>,
+) -> bool {
+    match ty.kind() {
+        ty::Int(_) | ty::Uint(_) | ty::Float(_) => true,
+        ty::Adt(_, arguments) | ty::FnDef(_, arguments) => {
+            unresolved_args_contain_raw(cx, arguments, stack)
+        }
+        ty::Array(element, _)
+        | ty::Slice(element)
+        | ty::RawPtr(element, _)
+        | ty::Ref(_, element, _) => unresolved_type_contains_raw_inner(cx, *element, stack),
+        ty::Tuple(elements) => elements
+            .iter()
+            .any(|element| unresolved_type_contains_raw_inner(cx, element, stack)),
+        ty::FnPtr(signature, _) => signature
+            .skip_binder()
+            .inputs_and_output
+            .iter()
+            .any(|element| unresolved_type_contains_raw_inner(cx, element, stack)),
+        ty::Dynamic(predicates, _) => {
+            predicates
+                .iter()
+                .any(|predicate| match predicate.skip_binder() {
+                    ty::ExistentialPredicate::Trait(trait_ref) => {
+                        unresolved_args_contain_raw(cx, trait_ref.args, stack)
+                    }
+                    ty::ExistentialPredicate::Projection(projection) => projection
+                        .term
+                        .as_type()
+                        .is_some_and(|term| unresolved_type_contains_raw_inner(cx, term, stack)),
+                    ty::ExistentialPredicate::AutoTrait(_) => false,
+                })
+        }
+        ty::Alias(alias) => {
+            unresolved_args_contain_raw(cx, alias.args, stack)
+                || alias_bounds_contain_raw(cx, alias, stack)
+        }
+        _ => false,
+    }
+}
+
+fn unresolved_args_contain_raw<'tcx>(
+    cx: &LateContext<'tcx>,
+    args: ty::GenericArgsRef<'tcx>,
+    stack: &mut Vec<DefId>,
+) -> bool {
+    args.types()
+        .any(|argument| unresolved_type_contains_raw_inner(cx, argument, stack))
+}
+
+fn alias_bounds_contain_raw<'tcx>(
+    cx: &LateContext<'tcx>,
+    alias: &ty::AliasTy<'tcx>,
+    stack: &mut Vec<DefId>,
+) -> bool {
+    let def_id = alias.kind.def_id();
+    if stack.contains(&def_id) {
+        return false;
+    }
+    stack.push(def_id);
+    let found = cx
+        .tcx
+        .explicit_item_bounds(alias.kind.def_id())
+        .iter_instantiated_copied(cx.tcx, alias.args)
+        .any(|(clause, _)| clause_contains_raw(cx, clause, stack));
+    stack.pop();
+    found
 }
 
 fn clause_contains_raw<'tcx>(
@@ -306,63 +379,37 @@ fn clause_contains_raw<'tcx>(
     clause: ty::Clause<'tcx>,
     stack: &mut Vec<DefId>,
 ) -> bool {
-    let args_contain =
-        |args: ty::GenericArgsRef<'tcx>| args.types().any(contract_type_contains_raw);
     match clause.kind().skip_binder() {
         ty::ClauseKind::Trait(predicate) => {
-            args_contain(predicate.trait_ref.args)
+            predicate
+                .trait_ref
+                .args
+                .types()
+                .any(|ty| unresolved_type_contains_raw_inner(cx, ty, stack))
                 || named_trait_contains_raw(cx, predicate.def_id(), predicate.trait_ref.args, stack)
         }
         ty::ClauseKind::Projection(predicate) => {
-            args_contain(predicate.projection_term.args)
+            predicate
+                .projection_term
+                .args
+                .types()
+                .any(|ty| unresolved_type_contains_raw_inner(cx, ty, stack))
                 || predicate
                     .term
                     .as_type()
-                    .is_some_and(contract_type_contains_raw)
+                    .is_some_and(|ty| unresolved_type_contains_raw_inner(cx, ty, stack))
         }
-        ty::ClauseKind::TypeOutlives(predicate) => contract_type_contains_raw(predicate.0),
+        ty::ClauseKind::TypeOutlives(predicate) => {
+            unresolved_type_contains_raw_inner(cx, predicate.0, stack)
+        }
         ty::ClauseKind::HostEffect(predicate) => {
-            args_contain(predicate.trait_ref.args)
+            predicate
+                .trait_ref
+                .args
+                .types()
+                .any(|ty| unresolved_type_contains_raw_inner(cx, ty, stack))
                 || named_trait_contains_raw(cx, predicate.def_id(), predicate.trait_ref.args, stack)
         }
-        _ => false,
-    }
-}
-
-fn contract_type_contains_raw(ty: Ty<'_>) -> bool {
-    match ty.kind() {
-        ty::Int(_) | ty::Uint(_) | ty::Float(_) => true,
-        ty::Adt(_, arguments) | ty::FnDef(_, arguments) => {
-            arguments.types().any(contract_type_contains_raw)
-        }
-        ty::Array(element, _)
-        | ty::Slice(element)
-        | ty::RawPtr(element, _)
-        | ty::Ref(_, element, _) => contract_type_contains_raw(*element),
-        ty::Tuple(elements) => elements.iter().any(contract_type_contains_raw),
-        ty::FnPtr(signature, _) => signature
-            .skip_binder()
-            .inputs_and_output
-            .iter()
-            .any(contract_type_contains_raw),
-        ty::Dynamic(predicates, _) => {
-            predicates
-                .iter()
-                .any(|predicate| match predicate.skip_binder() {
-                    ty::ExistentialPredicate::Trait(trait_ref) => {
-                        trait_ref.args.types().any(contract_type_contains_raw)
-                    }
-                    ty::ExistentialPredicate::Projection(projection) => {
-                        projection.args.types().any(contract_type_contains_raw)
-                            || projection
-                                .term
-                                .as_type()
-                                .is_some_and(contract_type_contains_raw)
-                    }
-                    ty::ExistentialPredicate::AutoTrait(_) => false,
-                })
-        }
-        ty::Alias(alias) => alias.args.types().any(contract_type_contains_raw),
         _ => false,
     }
 }

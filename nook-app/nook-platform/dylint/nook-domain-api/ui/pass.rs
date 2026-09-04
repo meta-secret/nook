@@ -29,6 +29,19 @@ pub trait TransitiveDomainBound: DomainBound {}
 pub fn transitive_domain_bound<T: TransitiveDomainBound>() {}
 pub fn external_domain_bound<T: external_api::CleanBound>() {}
 
+pub fn external_domain_projection<D: external_api::CleanAssociatedDecoder>() -> D::Error {
+    unimplemented!()
+}
+
+pub fn nested_external_domain_projection<D: external_api::CleanAssociatedDecoder>()
+-> Result<DomainAlias, D::Error> {
+    unimplemented!()
+}
+
+pub fn nested_domain_bound_projection<D: external_api::NestedCleanAssociatedDecoder>() -> D::Error {
+    unimplemented!()
+}
+
 pub trait AssociatedDomain {
     type Values: Iterator<Item = DomainAlias>;
 }
@@ -70,6 +83,25 @@ pub use external_api::{CleanInherent, CleanRecord};
 impl external_api::CleanDefault for AccountBalance {}
 impl external_api::GenericDefault<UserId> for AccountBalance {}
 impl LocalGenericDefault<UserId> for Wrapper<UserId> {}
+
+pub trait GenericAssociatedError {
+    type Error;
+
+    fn inherited<D>(&self) -> Result<UserId, D::Error>
+    where
+        D: Decoder,
+    {
+        Err(unimplemented!())
+    }
+}
+
+pub trait Decoder {
+    type Error;
+}
+
+impl GenericAssociatedError for AccountBalance {
+    type Error = DomainError;
+}
 
 pub fn wrapped_user(id: Wrapper<UserId>) -> Result<(AccountBalance, UserId), DomainError> {
     let _ = id;
