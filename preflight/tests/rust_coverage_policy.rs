@@ -89,6 +89,18 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains("--fail-under-lines \"$floor\""));
     assert!(product.contains("wasm-pack test --node --release nook-wasm"));
     assert!(product.contains("wasm-pack test --node --release nook-companion-wasm"));
+    let wasm_coverage_stage = product
+        .split_once("FROM builder-wasm-tests AS builder-wasm")
+        .and_then(|(_, remainder)| {
+            remainder
+                .split_once("FROM scratch AS wasm-export")
+                .map(|(stage, _)| stage)
+        })
+        .context("builder-wasm must be a bounded product image stage")?;
+    assert!(wasm_coverage_stage.contains("apt-get install -y --no-install-recommends clang"));
+    assert!(wasm_coverage_stage.contains("clang --version"));
+    assert!(wasm_coverage_stage.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
+    assert!(wasm_coverage_stage.contains("--fail-under-lines \"$floor\""));
 
     assert!(hive.contains("ARG HIVE_RUST_COVERAGE_FLOOR=60"));
     assert!(hive.contains("ARG LACE_RUST_COVERAGE_FLOOR=75"));

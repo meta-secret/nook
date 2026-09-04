@@ -737,6 +737,12 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 FROM builder-wasm-tests AS builder-wasm
 
+# minicov compiles its compiler runtime while cargo llvm-cov prepares the browser test binary.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends clang \
+    && rm -rf /var/lib/apt/lists/* \
+    && clang --version
+
 COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /opt/nook/wasm-clippy-passed
 COPY --from=builder-wasm-build \
     /meta-secret/nook/nook-app/nook-web/nook-web-shared/src/vault-app/lib/nook-wasm \
