@@ -220,6 +220,10 @@ function nodeTouchesOwnedFormAssociation({
   ) {
     return true
   }
+  const associatedLabel = element.closest('label')
+  if (associatedLabel?.control && controls.includes(associatedLabel.control)) {
+    return true
+  }
   return Array.from(element.querySelectorAll('label')).some((label) => {
     const control = label.control
     return control ? controls.includes(control) : false

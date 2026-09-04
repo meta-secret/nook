@@ -5,7 +5,6 @@ import {
   authenticationMutationImpact,
   mutationBelongsOnlyToMountedWidget,
   mutationCanChangeAuthenticationWorkflows,
-  mutationTouchesAuthenticationWorkflow,
   recordAuthenticationRecoveryEvidenceState,
 } from '../../../../nook-web-extension/src/content/autofill/authentication-surface-observation'
 
@@ -83,21 +82,34 @@ describe('authentication surface mutation filtering', () => {
     expect(mutationBelongsOnlyToMountedWidget(formInsertionRequest)).toBe(false)
   })
 
-  test('tracks externally associated controls as part of an owned form', () => {
+  test('remounts for external controls and their native labels', () => {
     document.body.innerHTML = `
       <form id="login"><input autocomplete="username" /></form>
+      <label id="submit-label" for="submit">Account action</label>
       <button id="submit" form="login" type="submit">Sign in</button>
     `
     const form = document.querySelector<HTMLFormElement>('#login')
     const submit = document.querySelector<HTMLButtonElement>('#submit')
-    if (!form || !submit) throw new Error('expected form fixture')
+    const label = document.querySelector<HTMLLabelElement>('#submit-label')
+    const labelText = label?.firstChild
+    if (!form || !submit || !label || !(labelText instanceof Text)) {
+      throw new Error('expected form fixture')
+    }
 
-    const request: Parameters<typeof mutationTouchesAuthenticationWorkflow>[0] =
-      {
-        record: attributeMutation(submit),
-        workflow: observation(form),
+    for (const record of [
+      attributeMutation(submit),
+      attributeMutation(label),
+      { type: 'characterData', target: labelText } as unknown as MutationRecord,
+    ]) {
+      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+        records: [record],
+        mountedHost: false,
+        renderedWorkflow: observation(form),
       }
-    expect(mutationTouchesAuthenticationWorkflow(request)).toBe(true)
+      expect(
+        authenticationMutationImpact(request).shouldRemountRenderedWorkflow,
+      ).toBe(true)
+    }
   })
 
   test('bounds invalidation while retaining explicit owner and label dependencies', () => {
