@@ -96,12 +96,12 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));
-    assert!(product.contains("llvm-cov test --release -p nook-wasm --no-report"));
+    assert!(product
+        .split_once("llvm-cov test --release -p nook-wasm --no-report")
+        .and_then(|(_, later)| later.split_once("llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-report"))
+        .is_some_and(|(_, later)| later.contains("--features browser-wasm-tests --fail-under-lines \"$nook_wasm_floor\"")));
     assert!(product.contains("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true"));
     assert_eq!(product.matches("--features browser-wasm-tests").count(), 2);
-    assert!(product.contains(
-        "llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm"
-    ));
     assert!(product.contains(".package_lines_percent[\"nook-wasm\"]"));
     assert!(product.contains("--fail-under-lines \"$nook_wasm_floor\""));
     let wasm_coverage_stage = product
