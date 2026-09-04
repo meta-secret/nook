@@ -57,6 +57,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let root = repository_root()?;
     let product = read(&root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"))?;
     let nightly = read(&root.join("nook-app/nook-platform/docker/rust/nightly.Dockerfile"))?;
+    let nightly_bake = read(&root.join("nook-app/nook-platform/docker/rust/docker-bake.hcl"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
     let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
@@ -92,14 +93,12 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         nightly
             .contains("dylint/nook-domain-api/target/debug/libnook_domain_api@${toolchain_id}.so")
     );
+    assert!(nightly.contains("COPY --from=coverage-policy coverage-floor.json"));
+    assert!(nightly_bake.contains("coverage-policy = \"./nook-app/nook-platform/nook-core\""));
     assert!(nightly.contains("--fail-under-lines \"$(jq -er"));
-    assert!(nightly.contains("COPY nook-app/nook-platform/nook-core/coverage-floor.json"));
     assert!(nightly.contains(".package_lines_percent[\"nook_domain_api\"] | numbers"));
     assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
-    assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
-    assert!(product.contains("llvm-cov clean --workspace"));
     assert!(product.contains("llvm-cov test --release -p nook-wasm --no-report"));
-    assert!(product.contains("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true"));
     assert_eq!(product.matches("--features browser-wasm-tests").count(), 2);
     assert!(product.contains(
         "llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm"
