@@ -100,6 +100,10 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(nightly.contains(
         "--manifest-path dylint/nook-domain-api/Cargo.toml --locked --fail-under-lines 90"
     ));
+    assert!(nightly.contains("--locked --no-report"));
+    assert!(nightly.contains("set -- target/llvm-cov-target/debug/libnook_domain_api@*.so"));
+    assert!(nightly.contains("test \"$#\" -eq 1 && test -f \"$1\""));
+    assert!(nightly.contains("libnook_domain_api-c0ffee.so"));
 
     assert!(product.contains("for package in nook-companion-wasm nook-wasm; do"));
     assert!(product.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
@@ -124,6 +128,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_coverage_stage.contains("clang --version"));
     assert!(wasm_coverage_stage.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
     assert!(wasm_coverage_stage.contains("--fail-under-lines \"$floor\""));
+    assert!(wasm_coverage_stage.contains(
+        "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
+    ));
 
     assert!(hive.contains("ARG HIVE_RUST_COVERAGE_FLOOR=60"));
     assert!(hive.contains("ARG LACE_RUST_COVERAGE_FLOOR=75"));

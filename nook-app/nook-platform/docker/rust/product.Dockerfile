@@ -763,7 +763,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && coverage_status=0 \
     && for package in nook-companion-wasm nook-wasm; do \
          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" \
-         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Cinstrument-coverage -Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" \
+         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" \
          RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test \
            --target wasm32-unknown-unknown --release -p "$package" \
            --fail-under-lines "$floor" || coverage_status=1; \

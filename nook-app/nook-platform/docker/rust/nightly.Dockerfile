@@ -40,6 +40,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check \
     && rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs \
     && RUSTC_WRAPPER= RUSTFLAGS= cargo llvm-cov test -p nook_domain_api \
+      --manifest-path dylint/nook-domain-api/Cargo.toml --locked --no-report \
+    && set -- target/llvm-cov-target/debug/libnook_domain_api@*.so \
+    && test "$#" -eq 1 && test -f "$1" \
+    && ln "$1" target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so \
+    && cargo llvm-cov report -p nook_domain_api \
       --manifest-path dylint/nook-domain-api/Cargo.toml --locked --fail-under-lines 90 \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
     && cargo dylint --all -- --all-targets \
