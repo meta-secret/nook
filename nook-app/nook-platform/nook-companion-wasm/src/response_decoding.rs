@@ -75,7 +75,7 @@ pub fn decode_login_picker_open_response(
 pub fn decode_authenticator_picker_open_response(
     response: nook_companion_core::AuthenticatorPickerOpenResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorPickerOpenResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authenticator_picker_open_response(response)
+    nook_companion_core::AuthenticatorPickerOpenResponse::from_wire(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -91,7 +91,7 @@ pub fn decode_authentication_outcome_response(
 pub fn decode_authenticator_backup_attach_response(
     response: nook_companion_core::AuthenticatorBackupAttachResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorBackupAttachResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authenticator_backup_attach_response(response)
+    nook_companion_core::AuthenticatorBackupAttachResponse::from_wire(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -99,7 +99,7 @@ pub fn decode_authenticator_backup_attach_response(
 pub fn decode_authenticator_enrollment_stage_response(
     response: nook_companion_core::AuthenticatorEnrollmentStageResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorEnrollmentStageResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authenticator_enrollment_stage_response(response)
+    nook_companion_core::AuthenticatorEnrollmentStageResponse::from_wire(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -107,7 +107,7 @@ pub fn decode_authenticator_enrollment_stage_response(
 pub fn decode_authenticator_enrollment_confirm_response(
     response: nook_companion_core::AuthenticatorEnrollmentConfirmResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorEnrollmentConfirmResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authenticator_enrollment_confirm_response(response)
+    nook_companion_core::AuthenticatorEnrollmentConfirmResponse::from_wire(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -123,7 +123,7 @@ pub fn decode_generated_password_response(
 pub fn decode_authenticator_options_response(
     response: nook_companion_core::AuthenticatorOptionsResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorOptionsResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authenticator_options_response(response)
+    nook_companion_core::AuthenticatorOptionsResponse::from_wire(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -131,6 +131,6 @@ pub fn decode_authenticator_options_response(
 pub fn decode_authenticator_preview_response(
     response: nook_companion_core::AuthenticatorPreviewResponseWire,
 ) -> Result<nook_companion_core::AuthenticatorPreviewResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_authenticator_preview_response(response)
+    nook_companion_core::AuthenticatorPreviewResponse::from_wire(response)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }

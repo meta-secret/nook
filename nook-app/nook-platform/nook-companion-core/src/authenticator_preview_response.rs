@@ -1,5 +1,11 @@
 //! Typed runtime response boundary for validated TOTP enrollment previews.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use nook_authenticator_domain::{TotpAlgorithm, TotpDigits, TotpPeriod};
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
@@ -107,47 +113,51 @@ pub enum AuthenticatorPreviewResponse {
 #[error("authenticator preview response is malformed")]
 pub struct AuthenticatorPreviewResponseDecodeError;
 
-pub fn decode_authenticator_preview_response(
-    wire: AuthenticatorPreviewResponseWire,
-) -> Result<AuthenticatorPreviewResponse, AuthenticatorPreviewResponseDecodeError> {
-    match wire {
-        AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
-            ok: true,
-            preview,
-            vault_store_id,
-            vault_name,
-        }) if !preview.issuer.trim().is_empty()
-            && !vault_store_id.trim().is_empty()
-            && !vault_name.trim().is_empty() =>
-        {
-            Ok(AuthenticatorPreviewResponse::Ready {
-                kind: AuthenticatorPreviewResponseKind::Ready,
-                preview: AuthenticatorEnrollmentPreview {
-                    issuer: preview.issuer,
-                    account: preview.account,
-                    website_url: preview.website_url,
-                    algorithm: preview.algorithm,
-                    digits: preview.digits,
-                    period: preview.period,
+impl AuthenticatorPreviewResponse {
+    pub fn from_wire(
+        wire: AuthenticatorPreviewResponseWire,
+    ) -> Result<AuthenticatorPreviewResponse, AuthenticatorPreviewResponseDecodeError> {
+        match wire {
+            AuthenticatorPreviewResponseWire::Available(
+                AuthenticatorPreviewAvailableWire::Ready {
+                    ok: true,
+                    preview,
+                    vault_store_id,
+                    vault_name,
                 },
-                vault_store_id,
-            })
-        }
-        AuthenticatorPreviewResponseWire::Available(
-            AuthenticatorPreviewAvailableWire::Unavailable { ok: true },
-        ) => Ok(AuthenticatorPreviewResponse::Unavailable {
-            kind: AuthenticatorPreviewResponseKind::Unavailable,
-        }),
-        AuthenticatorPreviewResponseWire::Rejected(AuthenticatorPreviewRejectedWire {
-            ok: false,
-            reason,
-        }) if !reason.trim().is_empty() => Ok(AuthenticatorPreviewResponse::Rejected {
-            kind: AuthenticatorPreviewResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticatorPreviewResponseWire::Available(_)
-        | AuthenticatorPreviewResponseWire::Rejected(_) => {
-            Err(AuthenticatorPreviewResponseDecodeError)
+            ) if !preview.issuer.trim().is_empty()
+                && !vault_store_id.trim().is_empty()
+                && !vault_name.trim().is_empty() =>
+            {
+                Ok(AuthenticatorPreviewResponse::Ready {
+                    kind: AuthenticatorPreviewResponseKind::Ready,
+                    preview: AuthenticatorEnrollmentPreview {
+                        issuer: preview.issuer,
+                        account: preview.account,
+                        website_url: preview.website_url,
+                        algorithm: preview.algorithm,
+                        digits: preview.digits,
+                        period: preview.period,
+                    },
+                    vault_store_id,
+                })
+            }
+            AuthenticatorPreviewResponseWire::Available(
+                AuthenticatorPreviewAvailableWire::Unavailable { ok: true },
+            ) => Ok(AuthenticatorPreviewResponse::Unavailable {
+                kind: AuthenticatorPreviewResponseKind::Unavailable,
+            }),
+            AuthenticatorPreviewResponseWire::Rejected(AuthenticatorPreviewRejectedWire {
+                ok: false,
+                reason,
+            }) if !reason.trim().is_empty() => Ok(AuthenticatorPreviewResponse::Rejected {
+                kind: AuthenticatorPreviewResponseKind::Rejected,
+                reason,
+            }),
+            AuthenticatorPreviewResponseWire::Available(_)
+            | AuthenticatorPreviewResponseWire::Rejected(_) => {
+                Err(AuthenticatorPreviewResponseDecodeError)
+            }
         }
     }
 }
@@ -156,34 +166,14 @@ pub fn decode_authenticator_preview_response(
 mod tests {
     use super::*;
 
-    fn preview(algorithm: TotpAlgorithm) -> AuthenticatorEnrollmentPreviewWire {
-        AuthenticatorEnrollmentPreviewWire {
-            issuer: "Nook".to_owned(),
-            account: "alice".to_owned(),
-            website_url: "https://example.com".to_owned(),
-            algorithm,
-            digits: TotpDigits::default(),
-            period: TotpPeriod::default(),
-        }
-    }
-
-    fn ready_wire(
-        ok: bool,
-        vault_store_id: &str,
-        vault_name: &str,
-    ) -> AuthenticatorPreviewResponseWire {
-        AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
-            ok,
-            preview: preview(TotpAlgorithm::Sha256),
-            vault_store_id: vault_store_id.to_owned(),
-            vault_name: vault_name.to_owned(),
-        })
-    }
-
     #[test]
     fn decodes_each_authenticator_preview_response_variant() {
         assert_eq!(
-            decode_authenticator_preview_response(ready_wire(true, "vault", "Personal")),
+            AuthenticatorPreviewResponse::from_wire(Fixture::ready_wire(
+                Fixture::preview(TotpAlgorithm::Sha256),
+                "vault",
+                "Personal"
+            )),
             Ok(AuthenticatorPreviewResponse::Ready {
                 kind: AuthenticatorPreviewResponseKind::Ready,
                 preview: AuthenticatorEnrollmentPreview {
@@ -198,7 +188,7 @@ mod tests {
             })
         );
         assert_eq!(
-            decode_authenticator_preview_response(AuthenticatorPreviewResponseWire::Available(
+            AuthenticatorPreviewResponse::from_wire(AuthenticatorPreviewResponseWire::Available(
                 AuthenticatorPreviewAvailableWire::Unavailable { ok: true },
             )),
             Ok(AuthenticatorPreviewResponse::Unavailable {
@@ -206,7 +196,7 @@ mod tests {
             })
         );
         assert_eq!(
-            decode_authenticator_preview_response(AuthenticatorPreviewResponseWire::Rejected(
+            AuthenticatorPreviewResponse::from_wire(AuthenticatorPreviewResponseWire::Rejected(
                 AuthenticatorPreviewRejectedWire {
                     ok: false,
                     reason: "vault-locked".to_owned(),
@@ -222,7 +212,12 @@ mod tests {
     #[test]
     fn rejects_contradictory_authenticator_preview_success_states() {
         for contradictory in [
-            ready_wire(false, "vault", "Personal"),
+            AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
+                ok: false,
+                preview: Fixture::preview(TotpAlgorithm::Sha256),
+                vault_store_id: "vault".to_owned(),
+                vault_name: "Personal".to_owned(),
+            }),
             AuthenticatorPreviewResponseWire::Available(
                 AuthenticatorPreviewAvailableWire::Unavailable { ok: false },
             ),
@@ -232,7 +227,7 @@ mod tests {
             }),
         ] {
             assert_eq!(
-                decode_authenticator_preview_response(contradictory),
+                AuthenticatorPreviewResponse::from_wire(contradictory),
                 Err(AuthenticatorPreviewResponseDecodeError)
             );
         }
@@ -240,26 +235,20 @@ mod tests {
 
     #[test]
     fn rejects_missing_authenticator_preview_domain_identity() {
-        let mut blank_issuer = ready_wire(true, "vault", "Personal");
-        let AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
-            preview,
-            ..
-        }) = &mut blank_issuer
-        else {
-            unreachable!("ready fixture must stay ready")
-        };
-        preview.issuer = " ".to_owned();
+        let mut blank_preview = Fixture::preview(TotpAlgorithm::Sha256);
+        blank_preview.issuer = " ".to_owned();
+        let blank_issuer = Fixture::ready_wire(blank_preview, "vault", "Personal");
         for malformed in [
             blank_issuer,
-            ready_wire(true, " ", "Personal"),
-            ready_wire(true, "vault", " "),
+            Fixture::ready_wire(Fixture::preview(TotpAlgorithm::Sha256), " ", "Personal"),
+            Fixture::ready_wire(Fixture::preview(TotpAlgorithm::Sha256), "vault", " "),
             AuthenticatorPreviewResponseWire::Rejected(AuthenticatorPreviewRejectedWire {
                 ok: false,
                 reason: " ".to_owned(),
             }),
         ] {
             assert_eq!(
-                decode_authenticator_preview_response(malformed),
+                AuthenticatorPreviewResponse::from_wire(malformed),
                 Err(AuthenticatorPreviewResponseDecodeError)
             );
         }
@@ -273,6 +262,34 @@ mod tests {
             r#"{"ok":true,"status":"ready","preview":{"issuer":"Nook","account":"alice","websiteUrl":"https://example.com","algorithm":"SHA1","digits":6,"period":-1},"vaultStoreId":"vault","vaultName":"Personal"}"#,
         ] {
             assert!(serde_json::from_str::<AuthenticatorPreviewResponseWire>(malformed).is_err());
+        }
+    }
+
+    struct Fixture;
+
+    impl Fixture {
+        fn preview(algorithm: TotpAlgorithm) -> AuthenticatorEnrollmentPreviewWire {
+            AuthenticatorEnrollmentPreviewWire {
+                issuer: "Nook".to_owned(),
+                account: "alice".to_owned(),
+                website_url: "https://example.com".to_owned(),
+                algorithm,
+                digits: TotpDigits::default(),
+                period: TotpPeriod::default(),
+            }
+        }
+
+        fn ready_wire(
+            preview: AuthenticatorEnrollmentPreviewWire,
+            vault_store_id: &str,
+            vault_name: &str,
+        ) -> AuthenticatorPreviewResponseWire {
+            AuthenticatorPreviewResponseWire::Available(AuthenticatorPreviewAvailableWire::Ready {
+                ok: true,
+                preview,
+                vault_store_id: vault_store_id.to_owned(),
+                vault_name: vault_name.to_owned(),
+            })
         }
     }
 }
