@@ -18,5 +18,9 @@ dylint_testing = "=6.0.1"
 
 [workspace]
 
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+
 [package.metadata.rust-analyzer]
 rustc_private = true

@@ -38,6 +38,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     let pr = read(".github/workflows/pr.yml")?;
     let quality = read(".cortex/teams/sre/workflows/quality.md")?;
     let workspace = read("nook-app/nook-platform/Cargo.toml")?;
+    let dylint_manifest = read("nook-app/nook-platform/dylint/nook-domain-api/Cargo.toml")?;
     let rust_lineage_dockerfile = read("nook-app/nook-platform/docker/rust/product.Dockerfile")?;
     let rust_dockerfile = [
         "nook-app/nook-platform/docker/rust/product.Dockerfile",
@@ -281,6 +282,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "COPY nook-app/nook-platform/ nook-app/nook-platform/",
         "cargo fuzz run",
         "RUSTC_WRAPPER= RUSTFLAGS= cargo test",
+        "cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings",
         "cargo dylint --all",
         "--manifest-path dylint/nook-domain-api/Cargo.toml",
         "KANI_VERSION=0.67.0",
@@ -487,6 +489,11 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             .is_file()
     );
     assert!(workspace.contains("[workspace.metadata.kani.flags]"));
+    assert!(
+        dylint_manifest.contains("[lints.clippy]")
+            && dylint_manifest.contains("all = { level = \"warn\", priority = -1 }")
+            && dylint_manifest.contains("pedantic = { level = \"warn\", priority = -1 }")
+    );
     assert!(
         workspace.contains("[workspace.metadata.dylint]")
             && workspace.contains("{ path = \"dylint/nook-domain-api\" }")

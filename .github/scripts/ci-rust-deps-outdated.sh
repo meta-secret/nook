@@ -46,6 +46,7 @@ if [ -n "${RUST_DEPS_OUTDATED_REPORT:-}" ]; then
   : > "$RUST_DEPS_OUTDATED_REPORT"
 fi
 check_manifest nook-app/nook-platform
+check_manifest nook-app/nook-platform/dylint/nook-domain-api
 check_manifest nook-app/nook-platform/fuzz
 check_manifest agentic-ai/minds
 check_manifest preflight

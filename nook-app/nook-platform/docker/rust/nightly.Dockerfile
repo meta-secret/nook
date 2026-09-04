@@ -39,6 +39,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     RUSTC_WRAPPER= RUSTFLAGS= cargo test \
       --manifest-path dylint/nook-domain-api/Cargo.toml --locked \
+    && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
     && cargo dylint --all -- --all-targets \
     && nook-sccache-report rust-dylint
 
