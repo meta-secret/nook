@@ -167,6 +167,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         if let ItemKind::Impl(Impl { of_trait, .. }) = item.kind
             && local_type_is_reachable(cx, cx.tcx.type_of(item.owner_id).instantiate_identity())
             && impl_exposes_reachable_surface(cx, item.owner_id.def_id, of_trait)
+            && !is_canonical_numeric_newtype_from_impl(cx, item.owner_id.def_id.to_def_id())
         {
             let impl_id = item.owner_id.def_id.to_def_id();
             if definition_surface_contains_raw(cx, impl_id, &mut Vec::new()) {
@@ -660,6 +661,13 @@ fn check_callable<'tcx>(
     if span.from_expansion() || !cx.effective_visibilities.is_reachable(local_def_id) {
         return;
     }
+    if cx
+        .tcx
+        .impl_of_assoc(local_def_id.to_def_id())
+        .is_some_and(|impl_id| is_canonical_numeric_newtype_from_impl(cx, impl_id))
+    {
+        return;
+    }
 
     let signature = cx.tcx.fn_sig(local_def_id).instantiate_identity();
     let signature = signature.skip_binder();
@@ -674,6 +682,42 @@ fn check_callable<'tcx>(
         let diagnostic_span = cx.tcx.def_ident_span(local_def_id).unwrap_or(span);
         emit_api_diagnostic(cx, diagnostic_span, "reachable function signature");
     }
+}
+
+fn is_canonical_numeric_newtype_from_impl(cx: &LateContext<'_>, impl_id: DefId) -> bool {
+    let Some(trait_ref) = cx.tcx.impl_opt_trait_ref(impl_id) else {
+        return false;
+    };
+    let trait_ref = trait_ref.instantiate_identity();
+    if !cx.tcx.is_diagnostic_item(sym::From, trait_ref.def_id) {
+        return false;
+    }
+
+    let mut types = trait_ref.args.types();
+    let (Some(target), Some(source), None) = (types.next(), types.next(), types.next()) else {
+        return false;
+    };
+    local_numeric_newtype_primitive(cx, target).is_some_and(|primitive| primitive == source)
+        || local_numeric_newtype_primitive(cx, source).is_some_and(|primitive| primitive == target)
+}
+
+fn local_numeric_newtype_primitive<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> Option<Ty<'tcx>> {
+    let ty::Adt(definition, arguments) = ty.kind() else {
+        return None;
+    };
+    if !definition.did().is_local() || !definition.is_struct() || !arguments.is_empty() {
+        return None;
+    }
+
+    let mut fields = definition.non_enum_variant().fields.iter();
+    let (Some(field), None) = (fields.next(), fields.next()) else {
+        return None;
+    };
+    if field.vis.is_public() {
+        return None;
+    }
+    let field_ty = field.ty(cx.tcx, arguments);
+    matches!(field_ty.kind(), ty::Int(_) | ty::Uint(_) | ty::Float(_)).then_some(field_ty)
 }
 
 #[derive(Clone, Copy)]

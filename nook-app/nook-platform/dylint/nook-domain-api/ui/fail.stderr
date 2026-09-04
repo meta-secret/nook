@@ -341,5 +341,21 @@ LL | impl LocalGenericDefault<u64> for Wrapper<UserId> {}
    |
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
-warning: 41 warnings emitted
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:171:8
+   |
+LL |     fn from(value: u64) -> Self {
+   |        ^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: raw numeric primitive exposed in reachable function signature
+  --> $DIR/fail.rs:181:8
+   |
+LL |     fn from_like(value: u64) -> Self {
+   |        ^^^^^^^^^
+   |
+   = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
+
+warning: 43 warnings emitted
 

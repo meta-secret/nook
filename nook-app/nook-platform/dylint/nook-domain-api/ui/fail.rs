@@ -165,4 +165,22 @@ impl external_api::GenericDefault<u64> for UserId {}
 impl external_api::ReferenceRawDefault for &UserId {}
 impl LocalGenericDefault<u64> for Wrapper<UserId> {}
 
+pub struct Pair(u64, u64);
+
+impl From<u64> for Pair {
+    fn from(value: u64) -> Self {
+        Self(value, value)
+    }
+}
+
+pub trait FromLike<T> {
+    fn from_like(value: T) -> Self;
+}
+
+impl FromLike<u64> for UserId {
+    fn from_like(value: u64) -> Self {
+        Self(value)
+    }
+}
+
 fn main() {}
