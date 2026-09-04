@@ -72,6 +72,32 @@ impl NookSentinelUnlockSessionStatus {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::NookSentinelUnlockSessionStatus;
+    use nook_core::SentinelUnlockStatus;
+
+    #[test]
+    fn unlock_status_bridge_projects_counts_and_rejects_overflow()
+    -> Result<(), wasm_bindgen::JsError> {
+        let status = SentinelUnlockStatus {
+            collected: 2.into(),
+            threshold: 3.into(),
+            ready: false,
+        };
+        let projected = NookSentinelUnlockSessionStatus::from_status(status)?;
+        assert_eq!(projected.collected, 2);
+
+        let overflow = SentinelUnlockStatus {
+            collected: 256.into(),
+            threshold: 3.into(),
+            ready: true,
+        };
+        assert!(NookSentinelUnlockSessionStatus::from_status(overflow).is_err());
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 pub struct NookSentinelStoredDeliverySummary {
     store_id: String,
