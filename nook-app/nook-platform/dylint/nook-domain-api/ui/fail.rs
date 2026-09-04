@@ -25,9 +25,7 @@ pub type EveryNumericPrimitive = (
 
 pub fn every_numeric_primitive(_value: EveryNumericPrimitive) {}
 
-pub fn direct_parameter(_id: u64) {}
-
-pub fn nested_return() -> Option<Result<Vec<(u16, i32)>, f64>> {
+pub fn direct_parameter(_id: u64) -> Option<Result<Vec<(u16, i32)>, f64>> {
     None
 }
 
@@ -35,9 +33,7 @@ pub fn aliased_return() -> RawAlias {
     0
 }
 
-pub fn tuple_parameter(_value: (UserId, u32)) {}
-
-pub fn array_return() -> [i16; 2] {
+pub fn tuple_parameter(_value: (UserId, u32)) -> [i16; 2] {
     [0; 2]
 }
 
@@ -84,7 +80,9 @@ mod reachable_only {
     }
 }
 
-pub fn leak_reachable_type<T: Iterator<Item = RawAlias>>() -> reachable_only::Leaked {
+pub trait Raw: Iterator<Item = RawAlias> {}
+
+pub fn leak_reachable_type<T: Raw>() -> reachable_only::Leaked {
     reachable_only::Leaked { raw: 0 }
 }
 
