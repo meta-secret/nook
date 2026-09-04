@@ -14,6 +14,7 @@ use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     MultiDeviceError, MultiDeviceResult, StoreId, StoredSecretRecord,
 };
+use crate::{SentinelParticipantCount, SentinelShareIndex, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -23,16 +24,16 @@ const UNLOCK_VERSION: u32 = 1;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelUnlockPolicy {
-    pub threshold: u8,
-    pub required_participants: u8,
+    pub threshold: SentinelThreshold,
+    pub required_participants: SentinelParticipantCount,
 }
 
 impl SentinelUnlockPolicy {
     pub fn validate(self) -> MultiDeviceResult<()> {
-        if self.threshold < 2
-            || self.required_participants < 2
-            || self.threshold > self.required_participants
-            || self.required_participants > 16
+        if u8::from(self.threshold) < 2
+            || u8::from(self.required_participants) < 2
+            || u8::from(self.threshold) > u8::from(self.required_participants)
+            || u8::from(self.required_participants) > 16
         {
             return Err(MultiDeviceError::InvalidSentinelThreshold);
         }
@@ -62,7 +63,7 @@ pub struct SentinelUnlockResponse {
     pub policy: SentinelUnlockPolicy,
     pub participant_device_id: DeviceId,
     pub participant_signing_public_key: DeviceSigningPublicKey,
-    pub share_index: u8,
+    pub share_index: SentinelShareIndex,
     pub ciphertext: AgeArmoredCiphertext,
     pub signature: String,
 }
@@ -70,8 +71,8 @@ pub struct SentinelUnlockResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelUnlockStatus {
-    pub collected: u8,
-    pub threshold: u8,
+    pub collected: SentinelParticipantCount,
+    pub threshold: SentinelThreshold,
     pub ready: bool,
 }
 
@@ -148,8 +149,8 @@ pub fn respond_to_sentinel_unlock_request(
     if opened_share.threshold != request.policy.threshold
         || opened_share.required_participants != request.policy.required_participants
         || opened_share.device_id != identity.device_id().as_str()
-        || opened_share.share_index == 0
-        || opened_share.share_index > request.policy.required_participants
+        || u8::from(opened_share.share_index) == 0
+        || u8::from(opened_share.share_index) > u8::from(request.policy.required_participants)
     {
         return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
     }
@@ -213,11 +214,12 @@ pub fn add_sentinel_unlock_response(
 
 #[must_use]
 pub fn sentinel_unlock_status(session: &SentinelUnlockSession) -> SentinelUnlockStatus {
-    let collected = u8::try_from(session.responses.len()).unwrap_or(u8::MAX);
+    let collected =
+        SentinelParticipantCount::from(u8::try_from(session.responses.len()).unwrap_or(u8::MAX));
     SentinelUnlockStatus {
         collected,
         threshold: session.request.policy.threshold,
-        ready: collected >= session.request.policy.threshold,
+        ready: session.responses.len() >= usize::from(u8::from(session.request.policy.threshold)),
     }
 }
 
@@ -237,10 +239,10 @@ pub fn finalize_sentinel_unlock(
     {
         return Err(MultiDeviceError::SentinelUnlockRecipientMismatch);
     }
-    if responses.len() < usize::from(request.policy.threshold) {
+    if responses.len() < usize::from(u8::from(request.policy.threshold)) {
         return Err(MultiDeviceError::NotEnoughSentinelShares {
             threshold: request.policy.threshold,
-            available: responses.len(),
+            available: responses.len().into(),
         });
     }
 
@@ -304,8 +306,8 @@ fn validate_response_binding(
         || response.store_id != request.store_id
         || response.policy != request.policy
         || response.participant_signing_public_key.is_empty()
-        || response.share_index == 0
-        || response.share_index > request.policy.required_participants
+        || u8::from(response.share_index) == 0
+        || u8::from(response.share_index) > u8::from(request.policy.required_participants)
     {
         return Err(MultiDeviceError::InvalidSentinelUnlockSession);
     }
@@ -380,7 +382,8 @@ mod tests {
             .iter()
             .map(|identity| (identity.device_id().clone(), identity.public_key()))
             .collect::<Vec<_>>();
-        let (keys, records) = create_sentinel_root_share_records_for_recipients(&recipients, 2)?;
+        let (keys, records) =
+            create_sentinel_root_share_records_for_recipients(&recipients, 2.into())?;
         let requester = participants[2].clone();
         Ok(Fixture {
             keys,
@@ -390,8 +393,8 @@ mod tests {
             requester_signing: signing_key(90),
             store_id: StoreId::parse("store_AAAAAAAAAAA")?,
             policy: SentinelUnlockPolicy {
-                threshold: 2,
-                required_participants: 3,
+                threshold: 2.into(),
+                required_participants: 3.into(),
             },
         })
     }
@@ -434,8 +437,8 @@ mod tests {
         assert_eq!(
             sentinel_unlock_status(&session),
             SentinelUnlockStatus {
-                collected: 1,
-                threshold: 2,
+                collected: 1.into(),
+                threshold: 2.into(),
                 ready: false,
             }
         );
@@ -499,7 +502,7 @@ mod tests {
         let mut first_session = session(&fixture)?;
         let first_request = sentinel_unlock_request(&first_session);
         let mut tampered_request = first_request.clone();
-        tampered_request.policy.threshold = 3;
+        tampered_request.policy.threshold = 3.into();
         assert!(matches!(
             respond_to_sentinel_unlock_request(
                 &tampered_request,
@@ -520,7 +523,7 @@ mod tests {
         ));
 
         let mut tampered_response = response;
-        tampered_response.share_index = 2;
+        tampered_response.share_index = 2.into();
         assert!(matches!(
             add_sentinel_unlock_response(&mut first_session, tampered_response),
             Err(MultiDeviceError::InvalidSentinelUnlockSignature)

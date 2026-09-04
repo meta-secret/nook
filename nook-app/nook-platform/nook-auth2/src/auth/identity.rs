@@ -6,8 +6,8 @@ use super::identity_dek_grant;
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, DeviceSigningPublicKey,
-    IdentityVaultEventId, StoreId, VaultKeys, encrypt_for_recipient, generate_id,
-    generate_vault_keys,
+    IdentityControlEpoch, IdentityVaultEventId, StoreId, VaultKeys, encrypt_for_recipient,
+    generate_id, generate_vault_keys,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -133,7 +133,7 @@ pub struct MemberDekEnvelope {
 pub struct IdentityRecord {
     pub identity_id: IdentityId,
     pub label: String,
-    pub control_epoch: u64,
+    pub control_epoch: IdentityControlEpoch,
     pub members: Vec<IdentityMember>,
     pub vault_deks: Vec<IdentityVaultDek>,
 }
@@ -148,7 +148,7 @@ impl IdentityRecord {
         Ok(Self {
             identity_id: IdentityId::generate()?,
             label: label.into(),
-            control_epoch: 1,
+            control_epoch: 1.into(),
             members: vec![IdentityMember {
                 app_id: app_key.app_id().clone(),
                 auth_id: app_key.auth_id(),
@@ -191,7 +191,7 @@ impl IdentityRecord {
         }
         let keys = generate_vault_keys()?;
         let vault_dek = wrap_vault_keys_for_members(&keys, &self.members, store_id)?;
-        self.control_epoch = self.control_epoch.saturating_add(1);
+        self.control_epoch = self.control_epoch.next();
         self.vault_deks.push(vault_dek);
         Ok(keys)
     }
@@ -296,7 +296,7 @@ impl IdentityRecord {
             self.vault_deks[index] = replacement;
         }
         if !keys_by_store.is_empty() {
-            self.control_epoch = self.control_epoch.saturating_add(1);
+            self.control_epoch = self.control_epoch.next();
         }
         Ok(())
     }
@@ -327,7 +327,7 @@ impl IdentityRecord {
             .ok_or(MultiDeviceError::IdentityEnrollmentRequired)?;
         if member.signing_public_key != *signing_public_key {
             member.signing_public_key = signing_public_key.clone();
-            self.control_epoch = self.control_epoch.saturating_add(1);
+            self.control_epoch = self.control_epoch.next();
         }
         Ok(())
     }
@@ -339,7 +339,7 @@ impl IdentityRecord {
             .all(|existing| existing.app_id != member.app_id);
         debug_assert!(is_new, "identity member must be validated before mutation");
         self.members.push(member);
-        self.control_epoch = self.control_epoch.saturating_add(1);
+        self.control_epoch = self.control_epoch.next();
     }
 
     pub fn remove_member(&mut self, app_id: &AppId) -> MultiDeviceResult<()> {
@@ -366,7 +366,7 @@ impl IdentityRecord {
                 .retain(|envelope| &envelope.app_id != app_id);
         }
         self.members.remove(index);
-        self.control_epoch = self.control_epoch.saturating_add(1);
+        self.control_epoch = self.control_epoch.next();
         Ok(())
     }
 
@@ -441,7 +441,7 @@ impl IdentityRecord {
         rewrapped.key_epoch = next_epoch;
         if *vault_dek != rewrapped {
             self.vault_deks[vault_dek_index] = rewrapped;
-            self.control_epoch = self.control_epoch.saturating_add(1);
+            self.control_epoch = self.control_epoch.next();
         }
         Ok(())
     }
@@ -483,7 +483,7 @@ impl IdentityRecord {
         let mut vault_dek = wrap_vault_keys_for_members(&keys, &authorized_members, store_id)?;
         vault_dek.key_epoch = reconciliation.epoch_update.committed_epoch();
         self.vault_deks.push(vault_dek);
-        self.control_epoch = self.control_epoch.saturating_add(1);
+        self.control_epoch = self.control_epoch.next();
         Ok(())
     }
 
@@ -500,7 +500,7 @@ impl IdentityRecord {
         Ok(Self {
             identity_id,
             label: label.into(),
-            control_epoch: 1,
+            control_epoch: 1.into(),
             members: vec![member.clone()],
             vault_deks: vec![IdentityVaultDek {
                 store_id,
@@ -566,7 +566,7 @@ mod tests {
         let mut identity = IdentityRecord {
             identity_id: IdentityId::generate()?,
             label: "Empty".to_owned(),
-            control_epoch: 1,
+            control_epoch: 1.into(),
             members: Vec::new(),
             vault_deks: Vec::new(),
         };

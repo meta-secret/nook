@@ -466,7 +466,7 @@ impl NookVaultManager {
         let envelope = nook_core::attach_password_envelope_with_work_factor(
             &prepared.new_keys,
             password,
-            work_factor,
+            work_factor.into(),
         )?;
 
         let password_entries = self.vault.password_entries.clone();
@@ -511,7 +511,8 @@ mod tests {
             "id": "pwdentry001", "label": "Legacy", "created_at": "2026-08-15T00:00:00Z",
             "envelope": { "version": 1, "kdf": "scrypt", "work_factor": 10, "ciphertext": "old" }
         }))?;
-        let envelope = nook_core::attach_password_envelope_with_work_factor(&keys, "updated", 10)?;
+        let envelope =
+            nook_core::attach_password_envelope_with_work_factor(&keys, "updated", 10.into())?;
         let entries = rewrap_password_entries(
             &[legacy],
             &keys,

@@ -102,9 +102,9 @@ pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate:
             .map(|delivery| crate::SentinelShareIssuedPayload {
                 device_id: delivery.device_id.clone(),
                 version: delivery.share.version,
-                threshold: delivery.share.threshold,
-                required_participants: delivery.share.required_participants,
-                share_index: delivery.share.share_index,
+                threshold: delivery.share.threshold.into(),
+                required_participants: delivery.share.required_participants.into(),
+                share_index: delivery.share.share_index.into(),
                 ciphertext: delivery.share.ciphertext.clone(),
             })
             .collect(),
@@ -120,8 +120,8 @@ pub fn start_sentinel_genesis(
     nook_auth2::start_sentinel_genesis(
         identity,
         signing.signing_key(),
-        args.participant_count,
-        args.threshold,
+        args.participant_count.into(),
+        args.threshold.into(),
         args.label,
     )
 }
@@ -169,9 +169,9 @@ pub fn finalize_sentinel_genesis(
         // genesis, readiness, quorum, or later provider configuration.
         replication_type: ReplicationType::Personal,
         sentinel: SentinelConfiguration::Enabled(SentinelPolicy {
-            threshold: policy.threshold,
-            required_participants: policy.participant_count,
-            ready_participants: policy.participant_count,
+            threshold: policy.threshold.into(),
+            required_participants: policy.participant_count.into(),
+            ready_participants: policy.participant_count.into(),
         }),
     };
     architecture.validate_records(&stored_records)?;

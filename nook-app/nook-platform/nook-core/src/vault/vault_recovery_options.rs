@@ -204,7 +204,7 @@ mod tests {
             "Emergency kit",
             "2026-07-22T00:00:00Z",
             "correct horse battery staple",
-            10,
+            10.into(),
         )?;
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE_ID)?,
@@ -343,7 +343,7 @@ mod tests {
             "Old recovery",
             "2026-07-22T00:00:00Z",
             "correct horse battery staple",
-            10,
+            10.into(),
         )?;
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE_ID)?,

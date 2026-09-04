@@ -24,11 +24,11 @@ impl NookSentinelUnlockSessionStatus {
         }
     }
 
-    pub(crate) const fn from_status(status: nook_core::SentinelUnlockStatus) -> Self {
+    pub(crate) fn from_status(status: nook_core::SentinelUnlockStatus) -> Self {
         Self {
             active: true,
-            collected: status.collected,
-            threshold: status.threshold,
+            collected: status.collected.into(),
+            threshold: status.threshold.into(),
             ready: status.ready,
         }
     }
@@ -85,8 +85,8 @@ impl NookSentinelStoredDeliverySummary {
         Self {
             store_id,
             session_id: delivery.session_id.as_str().to_owned(),
-            participant_count: delivery.policy.participant_count,
-            threshold: delivery.policy.threshold,
+            participant_count: delivery.policy.participant_count.into(),
+            threshold: delivery.policy.threshold.into(),
         }
     }
 

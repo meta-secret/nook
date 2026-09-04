@@ -3,21 +3,22 @@ use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
     MultiDeviceResult, StoreId, StoredSecretRecord,
 };
+use crate::{SentinelParticipantCount, SentinelThreshold};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelGenesisPolicy {
-    pub participant_count: u8,
-    pub threshold: u8,
+    pub participant_count: SentinelParticipantCount,
+    pub threshold: SentinelThreshold,
 }
 
 impl SentinelGenesisPolicy {
     pub fn validate(self) -> MultiDeviceResult<()> {
-        if self.threshold < 2
-            || self.participant_count < 2
-            || self.participant_count > 16
-            || self.threshold > self.participant_count
+        if u8::from(self.threshold) < 2
+            || u8::from(self.participant_count) < 2
+            || u8::from(self.participant_count) > 16
+            || u8::from(self.threshold) > u8::from(self.participant_count)
         {
             return Err(MultiDeviceError::InvalidSentinelThreshold);
         }
@@ -90,7 +91,7 @@ impl SentinelGenesisSession {
 
     #[must_use]
     pub fn is_complete(&self) -> bool {
-        self.participants.len() == usize::from(self.request.policy.participant_count)
+        self.participants.len() == usize::from(u8::from(self.request.policy.participant_count))
     }
 }
 

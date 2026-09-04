@@ -209,7 +209,7 @@ fn authenticator_from_secret(
     )
 )]
 pub fn vault_password_min_length() -> u32 {
-    u32::try_from(nook_core::vault_password_min_length()).unwrap_or(u32::MAX)
+    u32::try_from(usize::from(nook_core::vault_password_min_length())).unwrap_or(u32::MAX)
 }
 
 #[wasm_bindgen]
@@ -222,7 +222,10 @@ pub fn vault_password_min_length() -> u32 {
     )
 )]
 pub fn vault_password_recommended_min_length() -> u32 {
-    u32::try_from(nook_core::vault_password_recommended_min_length()).unwrap_or(u32::MAX)
+    u32::try_from(usize::from(
+        nook_core::vault_password_recommended_min_length(),
+    ))
+    .unwrap_or(u32::MAX)
 }
 
 #[wasm_bindgen]

@@ -102,8 +102,8 @@ fn recover_with_passphrase(
     let first = shares
         .first()
         .ok_or(MultiDeviceError::NotEnoughSentinelShares {
-            threshold: 2,
-            available: 0,
+            threshold: 2.into(),
+            available: 0.into(),
         })?;
 
     if shares.iter().any(|share| {
@@ -125,8 +125,8 @@ fn recover_with_passphrase(
     let required = usize::from(first.member_threshold);
     if shares.len() < required {
         return Err(MultiDeviceError::NotEnoughSentinelShares {
-            threshold: first.member_threshold,
-            available: shares.len(),
+            threshold: first.member_threshold.into(),
+            available: shares.len().into(),
         });
     }
 
@@ -225,8 +225,8 @@ fn split_secret(threshold: u8, share_count: u8, secret: &[u8]) -> MultiDeviceRes
 fn recover_secret(threshold: u8, shares: &[RawShare]) -> MultiDeviceResult<Vec<u8>> {
     if threshold == 0 || shares.len() < usize::from(threshold) {
         return Err(MultiDeviceError::NotEnoughSentinelShares {
-            threshold,
-            available: shares.len(),
+            threshold: threshold.into(),
+            available: shares.len().into(),
         });
     }
     if threshold == 1 {

@@ -3,6 +3,7 @@
 use super::age_crypto::AgeCryptoError;
 use super::validation::ValidationError;
 use super::vault_crypto::VaultCryptoError;
+use crate::{SentinelParticipantCount, SentinelRecordCount, SentinelThreshold};
 use thiserror::Error;
 
 pub type MultiDeviceResult<T> = Result<T, MultiDeviceError>;
@@ -115,7 +116,10 @@ pub enum MultiDeviceError {
     SentinelGenesisRosterFull,
 
     #[error("Sentinel genesis needs {required} participants, but has {available}.")]
-    SentinelGenesisIncomplete { required: u8, available: usize },
+    SentinelGenesisIncomplete {
+        required: SentinelParticipantCount,
+        available: SentinelParticipantCount,
+    },
 
     #[error("Sentinel genesis share delivery is not addressed to this device.")]
     SentinelGenesisDeliveryRecipientMismatch,
@@ -144,7 +148,10 @@ pub enum MultiDeviceError {
     SentinelUnlockRecipientMismatch,
 
     #[error("Not enough sentinel shares: need {threshold}, got {available}.")]
-    NotEnoughSentinelShares { threshold: u8, available: usize },
+    NotEnoughSentinelShares {
+        threshold: SentinelThreshold,
+        available: SentinelRecordCount,
+    },
 
     #[error("Invalid sentinel share record JSON")]
     SentinelShareJson(#[source] serde_json::Error),

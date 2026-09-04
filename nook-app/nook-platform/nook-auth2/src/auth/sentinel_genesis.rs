@@ -16,6 +16,7 @@ use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
     MultiDeviceResult, StoreId, StoredSecretRecord,
 };
+use crate::{SentinelParticipantCount, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
 pub use links::{
     build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
@@ -30,8 +31,8 @@ const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
 pub fn start_sentinel_genesis(
     identity: &DeviceIdentity,
     signing_key: &SigningKey,
-    participant_count: u8,
-    threshold: u8,
+    participant_count: SentinelParticipantCount,
+    threshold: SentinelThreshold,
     label: String,
 ) -> MultiDeviceResult<SentinelGenesisSession> {
     let policy = SentinelGenesisPolicy {
@@ -187,7 +188,8 @@ pub fn add_sentinel_genesis_response(
             device_id: response.participant.device_id.to_string(),
         });
     }
-    if session.participants.len() >= usize::from(session.request.policy.participant_count) {
+    if session.participants.len() >= usize::from(u8::from(session.request.policy.participant_count))
+    {
         return Err(MultiDeviceError::SentinelGenesisRosterFull);
     }
     session.participants.push(response.participant);
@@ -214,7 +216,9 @@ pub fn finalize_sentinel_genesis_shares(
     if !session.is_complete() {
         return Err(MultiDeviceError::SentinelGenesisIncomplete {
             required: session.request.policy.participant_count,
-            available: session.participants.len(),
+            available: u8::try_from(session.participants.len())
+                .unwrap_or(u8::MAX)
+                .into(),
         });
     }
     if signing_public_key(initiator_signing_key) != session.request.initiator_signing_public_key
@@ -310,8 +314,8 @@ pub fn accept_sentinel_genesis_share_delivery(
     }
     if delivery.share.threshold != delivery.policy.threshold
         || delivery.share.required_participants != delivery.policy.participant_count
-        || delivery.share.share_index == 0
-        || delivery.share.share_index > delivery.policy.participant_count
+        || u8::from(delivery.share.share_index) == 0
+        || u8::from(delivery.share.share_index) > u8::from(delivery.policy.participant_count)
     {
         return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
@@ -520,32 +524,32 @@ mod tests {
     fn policy_requires_real_threshold() {
         assert!(
             SentinelGenesisPolicy {
-                participant_count: 3,
-                threshold: 2
+                participant_count: 3.into(),
+                threshold: 2.into()
             }
             .validate()
             .is_ok()
         );
         assert!(
             SentinelGenesisPolicy {
-                participant_count: 3,
-                threshold: 1
+                participant_count: 3.into(),
+                threshold: 1.into()
             }
             .validate()
             .is_err()
         );
         assert!(
             SentinelGenesisPolicy {
-                participant_count: 2,
-                threshold: 3
+                participant_count: 2.into(),
+                threshold: 3.into()
             }
             .validate()
             .is_err()
         );
         assert!(
             SentinelGenesisPolicy {
-                participant_count: 17,
-                threshold: 2
+                participant_count: 17.into(),
+                threshold: 2.into()
             }
             .validate()
             .is_err()
@@ -556,7 +560,8 @@ mod tests {
     fn standalone_public_key_announcement_is_rejected_for_enrollment() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let peer = DeviceIdentity::generate()?;
         let peer_signing = signing_key()?;
         let announcement =
@@ -584,7 +589,8 @@ mod tests {
     fn owner_can_name_a_verified_session_bound_participant() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let (peer, _, response) = participant(&session.request, "Peer")?;
         let payload = serde_json::to_string(&response)?;
 
@@ -606,7 +612,8 @@ mod tests {
     fn response_is_session_bound_signed_and_unique() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let (_, _, response) = participant(&session.request, "Peer")?;
         let duplicate = response.clone();
         add_sentinel_genesis_response(&mut session, response)?;
@@ -622,10 +629,17 @@ mod tests {
     fn tampered_response_and_cross_session_response_fail() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let mut first = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let mut first =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let second_owner = DeviceIdentity::generate()?;
         let second_signing = signing_key()?;
-        let second = start_sentinel_genesis(&second_owner, &second_signing, 2, 2, "Other".into())?;
+        let second = start_sentinel_genesis(
+            &second_owner,
+            &second_signing,
+            2.into(),
+            2.into(),
+            "Other".into(),
+        )?;
         let (_, _, mut response) = participant(&first.request, "Peer")?;
         let cross = response.clone();
         response.participant.label = "Mallory".into();
@@ -650,14 +664,16 @@ mod tests {
     fn finalize_is_all_participants_or_nothing_and_deliveries_are_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let incomplete = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let incomplete =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let store_id = StoreId::parse("store_AAAAAAAAAAA")?;
         assert!(matches!(
             finalize_sentinel_genesis_shares(incomplete, &store_id, &owner_signing),
             Err(MultiDeviceError::SentinelGenesisIncomplete { .. })
         ));
 
-        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let (peer, _, response) = participant(&session.request, "Peer")?;
         add_sentinel_genesis_response(&mut session, response)?;
         let expected_request = session.request.clone();
@@ -683,7 +699,8 @@ mod tests {
     fn no_full_key_envelope_and_quorum_is_required() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let mut session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 3.into(), 2.into(), "Owner".into())?;
         let (peer_a, _, a) = participant(&session.request, "A")?;
         let (peer_b, _, b) = participant(&session.request, "B")?;
         add_sentinel_genesis_response(&mut session, a)?;
@@ -699,10 +716,8 @@ mod tests {
                 VaultMetaRecord::Auth(..)
             ))
         );
-        assert_eq!(
-            super::super::multi_device::count_sentinel_share_records(&issued.records),
-            3
-        );
+        let share_count = super::super::multi_device::count_sentinel_share_records(&issued.records);
+        assert_eq!(usize::from(share_count), 3);
         assert!(
             super::super::multi_device::reconstruct_sentinel_vault_keys(
                 &issued.records,
