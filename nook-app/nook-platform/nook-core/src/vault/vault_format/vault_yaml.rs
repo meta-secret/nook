@@ -290,12 +290,12 @@ mod tests {
             r#""protection":"passkey-wrapped-local""#,
             r#""protection":"future-local-wrapper""#,
         );
-        let mut invalid_typed_value: serde_json::Value = serde_json::from_str(&local_record)?;
-        invalid_typed_value["credentialId"] = serde_json::Value::from(7);
         let invalid_typed = StoredSecretRecord {
             key: sid("typed_wrapper_shape"),
             secret_type: Some(SecretType::Login),
-            value: StoredRecordPayload::from_trusted(serde_json::to_string(&invalid_typed_value)?),
+            value: StoredRecordPayload::from_trusted(
+                r#"{"version":4,"protection":"passkey-wrapped-local","credentialId":7,"userHandle":"local","prfInput":"local","kdf":"HKDF-SHA256"}"#.to_owned(),
+            ),
         };
         assert_ne!(unsupported, local_record);
         assert_ne!(unknown, local_record);
