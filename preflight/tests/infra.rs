@@ -1,4 +1,9 @@
-use std::{fs, path::PathBuf, process::Command};
+use std::{
+    collections::{HashMap, HashSet},
+    env, fs,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 use anyhow::Context;
 
@@ -8,7 +13,7 @@ mod kubernetes_cache_sim;
 mod remote_platform_contracts;
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
@@ -42,7 +47,7 @@ fn production_dockerfiles(directory: PathBuf) -> Vec<PathBuf> {
                 if matches!(
                     directory_name.to_str(),
                     Some(".git" | "target" | "node_modules")
-                ) || relative == std::path::Path::new("infra/sim/bake-cache")
+                ) || relative == Path::new("infra/sim/bake-cache")
                 {
                     continue;
                 }
@@ -88,8 +93,8 @@ fn production_dockerfiles_never_resolve_docker_hub_directly() {
             .expect("Dockerfile must stay beneath the repository root");
         let path = relative.to_string_lossy();
         let dockerfile = read(&path);
-        let mut image_arguments = std::collections::HashMap::new();
-        let mut stages = std::collections::HashSet::new();
+        let mut image_arguments = HashMap::new();
+        let mut stages = HashSet::new();
 
         for line in dockerfile.lines().map(str::trim) {
             if let Some(frontend) = line.strip_prefix("# syntax=") {

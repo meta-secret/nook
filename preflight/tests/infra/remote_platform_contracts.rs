@@ -1,12 +1,12 @@
 use std::{
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::Context;
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )

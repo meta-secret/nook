@@ -1,9 +1,9 @@
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::{env, fs, process};
 
 #[test]
 fn wasm_source_does_not_use_js_value() -> anyhow::Result<()> {
-    let repository_root = std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     );
@@ -48,10 +48,7 @@ fn wasm_callable_names_preserve_rust_provenance_end_to_end() -> anyhow::Result<(
 }
 
 fn wasm_callable_fixture_root() -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "nook-wasm-callable-provenance-{}",
-        std::process::id()
-    ))
+    env::temp_dir().join(format!("nook-wasm-callable-provenance-{}", process::id()))
 }
 
 fn create_wasm_callable_fixture(root: &Path) -> anyhow::Result<()> {

@@ -1,10 +1,11 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use proc_macro2::Span;
 use syn::spanned::Spanned;
-use syn::visit::Visit;
+use syn::visit::{self, Visit};
 use syn::{
     Attribute, Expr, FnArg, ImplItemFn, ItemFn, LitStr, ReturnType, Signature, Token, Type,
     Visibility,
@@ -51,7 +52,7 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<
         if path.is_dir() {
             if !path
                 .file_name()
-                .and_then(std::ffi::OsStr::to_str)
+                .and_then(OsStr::to_str)
                 .is_some_and(|name| matches!(name, "target" | "node_modules"))
             {
                 collect_rust_files(&path, files)?;
@@ -221,7 +222,7 @@ fn type_contains_option(value: &Type) -> bool {
                 self.found = true;
                 return;
             }
-            syn::visit::visit_type_path(self, path);
+            visit::visit_type_path(self, path);
         }
     }
 
@@ -279,11 +280,11 @@ fn span_line(span: Span) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{env, process};
 
     #[test]
     fn reports_implicit_boundary_absence_but_allows_named_types() -> anyhow::Result<()> {
-        let root =
-            std::env::temp_dir().join(format!("nook-rust-tsify-state-{}", std::process::id()));
+        let root = env::temp_dir().join(format!("nook-rust-tsify-state-{}", process::id()));
         let source_root = root.join("nook-app/nook-platform/nook-core/src");
         if root.exists() {
             fs::remove_dir_all(&root)?;
