@@ -298,6 +298,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-authenticator-domain -p nook-auth2 \
+    && cargo test --locked -p nook-auth2 --doc \
     && nook-sccache-report native-auth-coverage
 
 COPY nook-app/nook-platform/nook-replication nook-replication
