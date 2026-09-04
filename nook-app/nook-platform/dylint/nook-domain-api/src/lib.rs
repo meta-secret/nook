@@ -386,6 +386,7 @@ fn emit_api_diagnostic(cx: &LateContext<'_>, span: Span, boundary: &str) {
 fn ui() {
     dylint_testing::ui::Test::src_base(env!("CARGO_PKG_NAME"), "ui")
         .rustc_flags([
+            "--edition=2024",
             "--warn=raw_numeric_public_api",
             "--warn=invalid_raw_numeric_api_suppression",
         ])
