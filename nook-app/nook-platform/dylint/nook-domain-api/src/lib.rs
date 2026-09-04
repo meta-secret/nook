@@ -257,8 +257,7 @@ fn is_struct_or_enum_field(cx: &LateContext<'_>, hir_id: HirId) -> bool {
 
 fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
     let Ok(normalized) = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), ty) else {
-        return contract_type_contains_raw(ty)
-            || matches!(ty.kind(), ty::Alias(alias) if alias_bounds_contain_raw(cx, alias));
+        return unresolved_type_contains_raw(cx, ty);
     };
     let raw_args = |args: ty::GenericArgsRef<'tcx>| {
         args.types()
@@ -289,6 +288,44 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
                         .term
                         .as_type()
                         .is_some_and(|term| contains_raw_numeric(cx, term)),
+                    ty::ExistentialPredicate::AutoTrait(_) => false,
+                })
+        }
+        ty::Alias(alias) => raw_args(alias.args) || alias_bounds_contain_raw(cx, alias),
+        _ => false,
+    }
+}
+
+fn unresolved_type_contains_raw<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
+    let raw_args = |args: ty::GenericArgsRef<'tcx>| {
+        args.types()
+            .any(|argument| unresolved_type_contains_raw(cx, argument))
+    };
+
+    match ty.kind() {
+        ty::Int(_) | ty::Uint(_) | ty::Float(_) => true,
+        ty::Adt(_, arguments) | ty::FnDef(_, arguments) => raw_args(arguments),
+        ty::Array(element, _)
+        | ty::Slice(element)
+        | ty::RawPtr(element, _)
+        | ty::Ref(_, element, _) => unresolved_type_contains_raw(cx, *element),
+        ty::Tuple(elements) => elements
+            .iter()
+            .any(|element| unresolved_type_contains_raw(cx, element)),
+        ty::FnPtr(signature, _) => signature
+            .skip_binder()
+            .inputs_and_output
+            .iter()
+            .any(|element| unresolved_type_contains_raw(cx, element)),
+        ty::Dynamic(predicates, _) => {
+            predicates
+                .iter()
+                .any(|predicate| match predicate.skip_binder() {
+                    ty::ExistentialPredicate::Trait(trait_ref) => raw_args(trait_ref.args),
+                    ty::ExistentialPredicate::Projection(projection) => projection
+                        .term
+                        .as_type()
+                        .is_some_and(|term| unresolved_type_contains_raw(cx, term)),
                     ty::ExistentialPredicate::AutoTrait(_) => false,
                 })
         }

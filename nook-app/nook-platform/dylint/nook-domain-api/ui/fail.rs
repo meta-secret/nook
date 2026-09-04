@@ -109,6 +109,11 @@ pub fn unresolved_external_projection<D: external_api::RawAssociatedDecoder>() -
     unimplemented!()
 }
 
+pub fn nested_unresolved_external_projection<D: external_api::RawAssociatedDecoder>()
+-> Result<UserId, D::Error> {
+    unimplemented!()
+}
+
 pub fn inline_projection<T: Iterator<Item = RawAlias>>() {}
 
 pub fn where_projection<T>()

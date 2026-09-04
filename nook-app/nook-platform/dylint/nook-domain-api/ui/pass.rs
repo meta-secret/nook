@@ -33,6 +33,11 @@ pub fn external_domain_projection<D: external_api::CleanAssociatedDecoder>() -> 
     unimplemented!()
 }
 
+pub fn nested_external_domain_projection<D: external_api::CleanAssociatedDecoder>()
+-> Result<DomainAlias, D::Error> {
+    unimplemented!()
+}
+
 pub trait AssociatedDomain {
     type Values: Iterator<Item = DomainAlias>;
 }
