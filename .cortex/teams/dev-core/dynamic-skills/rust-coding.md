@@ -26,90 +26,147 @@ When you see `Option<T>`, ask:
 
 ## Preferred Pattern
 
-- Model closed sets as Rust enums, not `String`.
-- Model different workflow states as enum variants, not optional fields inside a
-  reused struct.
-- Put fields only on the variant/sub-struct that actually owns them.
-- Required persisted or signed values use required validated newtypes. Never use
-  `Option<T>`, empty strings, or a `Missing` enum variant.
-- Use `Option<T>` only when absence is the truthful structural contract, not a
-  disguised product state. Legitimate examples include iterator/lookup results,
-  an optional caller filter, an uninitialized cache, and external API fields.
+### Required actions
+
+- Model closed sets as Rust enums.
+- Model different workflow states as enum variants with state-owned fields.
+- Put each field on the variant or sub-struct that owns it.
+- Give an enum variant a dedicated payload struct when it owns multiple
+  independently named fields.
+  - Keep each field on the payload for the state that owns it.
+- Keep unit variants and scalar payload variants when those are the truthful
+  domain and wire shapes.
+- Use a nested enum when one semantic category refines another.
+  - For example, model `CredentialRole::Password(Password::Current)`.
+- Keep orthogonal concepts as separate enums.
+- Put domain behavior on the type that owns the required knowledge.
+  - Prefer methods that validate, transform, or return a domain state.
+  - Match the enum directly so new variants remain compiler-visible.
+- Narrow enum variants before reading their payloads.
+  - Prefer a positive `let ... else` followed by simple named-field checks when
+    every other variant is intentionally handled the same way.
+  - Use an exhaustive `match` when variants represent evolving domain decisions
+    or require distinct behavior.
+- Use a membership collection for uniqueness checks.
+  - Prefer `HashSet::insert` when rejecting duplicate identifiers.
+- Group a focused vocabulary under its owning module.
+  - Use concise names such as `field::Index` and `field::Observation`.
+  - Keep focused model and serialization tests beside that module.
+
+#### Boundary, error, and WASM requirements
+
+- Required persisted or signed values use required validated newtypes.
+- Reserve `Option<T>` for truthful structural absence. Legitimate examples
+  include iterator or lookup results, optional caller filters, uninitialized
+  caches, and external API fields.
 - When a missing value violates an invariant, add a precise `thiserror` variant.
-  Return `Result<T, DomainError>` and propagate it with `?`. Do not use either
-  `Option<T>` or a decorative `Missing` enum variant for failure.
+  Return `Result<T, DomainError>` and propagate it with `?`.
 - When absence means unauthenticated, unauthorized, pending, unsupported,
   configured versus unconfigured, or another named state, use an enum. Put
   state-specific values on the owning variant.
-- Do not create a one-variant wrapper enum just to avoid `Option<T>`. If callers
-  genuinely ask a lookup question, `Option<T>` is the precise Rust result.
-- Do not call `.unwrap()`, `.expect(...)`, or `.expect_err(...)` in authored
-  Rust. Production code returns, propagates, or explicitly classifies failure.
-  Every fallible test returns a concrete or `anyhow::Result` and propagates with
+- Return `Option<T>` when callers genuinely ask whether a lookup result exists.
+- Production code returns, propagates, or explicitly classifies failure.
+- Every fallible test returns a concrete or `anyhow::Result` and propagates with
   `?`, including locally constructed fixtures.
-- Keep `anyhow` test-only. Production libraries, binaries, examples, and build
-  scripts use concrete `thiserror` enums with operation-specific variants and
-  typed sources. Only `#[cfg(test)]` unit tests and integration tests under
-  `tests/` may use `anyhow`. Crates declare it under `[dev-dependencies]`.
-- Do not use `String` for typed domain values such as timestamps, YAML payloads,
-  YAML payloads, storage/provider types, vault/store ids, event ids, or secret
-  keys. Prefer existing core newtypes (`IsoTimestamp`, `StoredVaultYaml`,
-  `StoreId`, `EventId`, `SymmetricKey`, etc.) or add one.
-- Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
+- Production libraries, binaries, examples, and build scripts use concrete
+  `thiserror` enums with operation-specific variants and typed sources.
+- Test crates that use `anyhow` declare it under `[dev-dependencies]`.
+- Represent typed domain values with existing core newtypes such as
+  `IsoTimestamp`, `StoredVaultYaml`, `StoreId`, `EventId`, and `SymmetricKey`.
+  Add a newtype when the domain has no existing one.
+- Keep raw YAML or JSON strings at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
-  wire strings only when crossing storage, provider, or JS boundaries.
+  wire strings when crossing storage, provider, or JS boundaries.
 - Tests of a known JSON contract serialize and deserialize through the concrete
-  Rust wire or domain type, then assert typed fields and enum variants. Do not
-  index `serde_json::Value` or use `Value::is_null()` for field-value
-  assertions: indexing conflates an omitted property with JSON `null`, discards
-  enum exhaustiveness, and turns schema drift into a runtime assertion.
+  Rust wire or domain type, then assert typed fields and enum variants.
 - Raw `serde_json::Value` is reserved for tests whose actual subject is unknown,
   malformed, or deliberately partial JSON. A narrow `Value::Object`/`.get()`
-  assertion may verify that a serializer omitted or renamed a property, but
-  domain values still require a typed round trip.
-- Do not expose WASM DTO fields named `yaml` for event/vault records when the
-  real payload is a typed domain value. Use typed fields such as
-  `event: VaultEvent` internally and across merge/sync APIs; add explicit
-  parse/serialize helpers for the narrow browser file/provider boundary that
-  must read or write YAML text.
-- Secret material that does not cross JS directly should use validated secret
-  newtypes and avoid raw `String` storage. If a session cache still has to hold a
-  string for WASM compatibility, convert from the typed value at the narrowest
-  boundary and zeroize it on reset/drop.
+  assertion may verify that a serializer omitted or renamed a property. Domain
+  values still require a typed round trip.
+- Use typed fields such as `event: VaultEvent` internally and across merge or
+  sync APIs. Add explicit parse or serialize helpers for a narrow browser file
+  or provider boundary that reads or writes YAML text.
+- Secret material that stays in Rust uses validated secret newtypes. A session
+  cache that must hold a string for WASM compatibility converts from the typed
+  value at the narrowest boundary and zeroizes it on reset or drop.
 - Convert loose persisted/browser JSON into typed Rust states at the boundary.
 - Keep domain validation next to the Rust type that makes the state explicit.
-- Before adding a new struct or enum, search for an equivalent core type. Reuse
-  the canonical type instead of duplicating DTOs across `nook-core` and
-  `nook-wasm`; WASM wrappers should delegate to core types when possible.
+- Before adding a new struct or enum, search for an equivalent core type.
+- Reuse canonical types across `nook-core` and `nook-wasm`.
+- Make WASM wrappers delegate to core types when possible.
 - Keep stateful WASM manager objects composed from cohesive private state
-  structs instead of flat field bags. Provider credentials/cache, vault session
-  state, device identity, event-log state, status channels, and outbox state
-  should not all live as sibling fields on one exported manager.
+  structs.
 - Model stateful WASM concepts as real `#[wasm_bindgen]` structs with
   constructors and methods. JavaScript/Svelte should create the struct instance
-  directly, keep that instance in app state/storage, and call methods on it.
-  Do not create mutable global config (`OnceCell`, `thread_local`, static
-  setters) for per-app runtime state, and do not add TypeScript wrapper
-  functions whose only job is to simulate state around a WASM object. If Rust
-  owns the state, expose the object; if TypeScript owns the browser lifecycle,
-  store/pass the WASM object from Svelte state explicitly.
-- Keep `nook-core` organized by domain module groups (`auth`, `crypto`,
-  `secrets`, `sync`, `vault`). Do not add new domain files directly under
-  `nook-app/nook-platform/nook-core/src`; place them in the owning group and re-export through
-  `lib.rs` only when they are part of the stable public core API.
-- Rust-owned `Tsify`/WASM domain contracts never author `undefined`, `null`, or
-  `void` field states. Do not pair `Option<T>` with a
-  `#[tsify(type = "... | undefined")]` override: that merely exports the same
-  unnamed absence twice. When absence means not-applicable, unconfigured,
-  pending, manual, or another domain state, use a named Rust enum and derive
-  the generated boundary type from it.
+  directly, keep that instance in app state or storage, and call methods on it.
+- Expose a WASM object when Rust owns the state.
+- Store or pass the WASM object explicitly from Svelte state when TypeScript
+  owns the browser lifecycle.
+- Keep `nook-core` organized by domain module groups such as `auth`, `crypto`,
+  `secrets`, `sync`, and `vault`.
+- Place new core domain files in their owning group. Re-export them through
+  `lib.rs` when they belong to the stable public core API.
+- Represent not-applicable, unconfigured, pending, manual, or another named
+  domain state with a Rust enum. Derive the generated boundary type from it.
 - Truthful structural omission in external or persisted wire formats may still
-  use `Option<T>` internally without a handwritten absence override. A
-  `Tsify`-derived field or `wasm_bindgen` parameter/return must not expose
-  `Option<T>` because generated TypeScript recreates unnamed absence. Normalize
-  it into a named domain state before the exported boundary.
-- `void` remains TypeScript's unit/effect return type, equivalent to Rust `()`;
-  it is not a serialized field-state escape hatch.
+  use `Option<T>` internally.
+- Normalize domain absence into a named state before a `Tsify`-derived field or
+  `wasm_bindgen` parameter crosses the exported boundary.
+- Use TypeScript `void`, equivalent to Rust `()`, for unit or effect returns.
+
+### Prohibited actions
+
+- Do not use one shared field bag for unrelated enum variants.
+- Do not represent different workflow states as optional fields in one reused
+  struct.
+- Do not flatten a refining category into unrelated top-level variants.
+- Do not replace a unit or scalar enum payload with a dedicated struct merely
+  for structural uniformity.
+- Do not change a persisted enum's payload shape without the explicit wire
+  contract or migration required by the task.
+- Do not nest editability, visibility, or another independent dimension under a
+  role merely because both describe one record.
+- Do not add `is_*` methods that only decode one enum variant into `bool`.
+- Do not use `let ... else` when doing so would silently collapse variants that
+  need exhaustive domain handling.
+- Avoid negated compound conditions and deeply nested destructuring patterns.
+- Do not scan every prior element when a membership collection expresses the
+  same uniqueness rule.
+- Do not use `Option<T>`, empty strings, or a `Missing` enum variant for required
+  persisted or signed values.
+- Do not use `Option<T>` or a decorative `Missing` variant for failure.
+- Do not create a one-variant wrapper enum merely to avoid `Option<T>`.
+- Do not call `.unwrap()`, `.expect(...)`, or `.expect_err(...)` in authored
+  Rust.
+- Do not use `anyhow` in production libraries, binaries, examples, or build
+  scripts. Restrict it to `#[cfg(test)]` unit tests and integration tests under
+  `tests/`.
+- Do not use raw `String` for typed domain values such as timestamps, YAML
+  payloads, provider types, vault or store ids, event ids, or secret keys.
+- Do not keep raw YAML or JSON strings past an I/O boundary.
+- Do not index `serde_json::Value` or use `Value::is_null()` for known-contract
+  field-value assertions.
+- Do not expose a WASM DTO field named `yaml` when an event or vault payload has
+  a typed domain representation.
+- Do not store secret material that remains in Rust as raw `String`.
+- Do not duplicate equivalent DTOs across `nook-core` and `nook-wasm`.
+- Do not flatten provider credentials, vault sessions, device identity,
+  event-log state, status channels, and outbox state into sibling fields on one
+  exported manager.
+- Do not create mutable global configuration with `OnceCell`, `thread_local`, or
+  static setters for per-app runtime state.
+- Do not add a TypeScript wrapper whose only purpose is to simulate state around
+  a WASM object.
+- Do not add new domain files directly under
+  `nook-app/nook-platform/nook-core/src`.
+- Do not author `undefined`, `null`, or `void` field states in Rust-owned
+  `Tsify` or WASM domain contracts.
+- Do not pair `Option<T>` with a `#[tsify(type = "... | undefined")]` override.
+- Do not add a handwritten absence override to a truthful structural `Option<T>`
+  in an external or persisted wire format.
+- Do not expose `Option<T>` through a `Tsify`-derived field or `wasm_bindgen`
+  parameter or return.
+- Do not use `void` as a serialized field-state escape hatch.
 
 ## Enums instead of booleans
 
@@ -152,7 +209,8 @@ An enum carries the domain meaning in the type and in every variant.
 - Distinct enum types prevent parameters from being swapped accidentally.
 - A new case becomes another variant of the same coherent vocabulary.
 - Exhaustive matching forces every decision point to handle that new case.
-- An enum-of-structs keeps state-specific data on the variant that owns it.
+- State-owned enum payloads keep variant-specific data on the variant that owns
+  it.
 - Mutually exclusive states become the only representable states.
 - Persisted and generated contracts retain semantic names instead of anonymous
   bits.
@@ -209,6 +267,8 @@ The allowed cases are intentionally narrow.
 - A private predicate answers a literal yes-or-no query such as `is_empty()` or
   `contains()`. Consume that result immediately. Do not store it as domain
   state or pass it onward as a policy or mode argument.
+- A standard-library membership operation such as `HashSet::insert` may return
+  `bool`. Consume it immediately as control flow.
 
 Additional boundary rules:
 
@@ -218,8 +278,9 @@ Additional boundary rules:
 - Every retained public parameter, stored field, or lint allowance involving
   `bool` documents which narrow exception applies. Test fixtures and internal
   DTOs do not receive a blanket exemption.
-- Do not serialize a boolean that can be derived from an enum. Expose a narrow
-  predicate method when a caller genuinely asks a yes-or-no question.
+- Do not serialize a boolean that can be derived from an enum.
+- Do not expose a semantic predicate merely to avoid returning or matching the
+  domain enum.
 
 ## Options or enums
 
@@ -435,6 +496,16 @@ whether a value exists.
   dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
+- Check variants with independently named multi-field payloads for dedicated
+  payload structs.
+- Preserve truthful unit, scalar, and persisted enum wire shapes.
+- Check related categories for a truthful nested-enum boundary.
+- Keep independent dimensions as separate types.
+- Search changed enums for `is_*` methods that only reveal a variant.
+- Replace quadratic duplicate scans with a membership collection.
+- Prefer flat `let ... else` variant narrowing in multi-step filters only when
+  every other variant is intentionally equivalent.
+- Require an exhaustive `match` for evolving domain decisions.
 - Inventory authored Rust `bool` fields, parameters, returns, and lint
   allowances in the changed scope.
 - Replace every domain, state, policy, mode, command, configuration, persisted,

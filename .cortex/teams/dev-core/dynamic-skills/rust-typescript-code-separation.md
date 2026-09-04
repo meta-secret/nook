@@ -83,11 +83,30 @@ Put app/domain types in Rust first:
   performs a real boundary task such as constructing/freeing WASM values,
   applying UI defaults, or translating browser state. Removing a Svelte proxy
   alone is not a wrapper responsibility; snapshot directly at the call site.
+- **Generated ABI construction**
+  - **Required actions**
+    - When a generated ABI parameter is a `#[wasm_bindgen]` class, construct the
+      real generated class.
+    - When `Tsify` with `from_wasm_abi` defines a generated structural DTO
+      parameter, construct its generated structural object directly.
+    - Export a canonical fieldless core enum directly when `wasm_bindgen`
+      supports it.
+  - **Prohibited actions**
+    - Do not pass a structurally similar plain object in place of a declared
+      `#[wasm_bindgen]` class.
+    - Do not wrap a generated structural DTO in an unnecessary WASM class.
+    - Do not mirror a canonical core enum in the bridge or translate its
+      variants manually.
 - Preserve semantic Rust identifier names in generated WASM declarations.
-  Svelte state and function signatures must use `StoreId`, `PasswordEntryId`,
-  and other available generated identifier types instead of widening them to
-  `string`. Optional identifiers use `$state<StoreId>()`; absence and identifier
-  identity are separate concerns.
+  Use `StoreId`, `PasswordEntryId`, and other available generated declarations
+  instead of spelling their primitive representation directly.
+- Treat a generated identifier as nominally safe only when its declaration is
+  actually branded, opaque, or class-backed. A generated alias of plain
+  `string` preserves contract naming and searchability, but it does not prevent
+  identifiers from being interchanged.
+- Use a generated nominal identifier in Svelte state and function signatures.
+  Keep absence separate, for example `$state<StoreId>()` when `StoreId` is
+  nominal.
 - Treat TypeScript string-literal unions that describe authentication, vault
   unlock, recovery, Sentinel, provider, or session workflows as missing Rust
   enums. Export the canonical `nook-core` enum through WASM and compare its
@@ -165,10 +184,16 @@ web layer keeps only form/UI state.
 
 ```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct GithubEnrollmentProvider {
+    pub pat: String,
+    pub repo: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub enum EnrollmentProvider {
     Local,
-    Github { pat: String, repo: String },
+    Github(GithubEnrollmentProvider),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -179,13 +204,6 @@ pub struct EnrollmentIssueInput {
 ```
 
 ```rust
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StorageProviderType {
-    Local,
-    Github,
-}
-
 #[wasm_bindgen]
 pub struct NookEnrollmentProvider {
     inner: EnrollmentProvider,
@@ -203,15 +221,10 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen]
     pub fn github(repo: String, pat: String) -> Self {
         Self {
-            inner: EnrollmentProvider::Github { pat, repo },
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = "type")]
-    pub fn provider_type(&self) -> StorageProviderType {
-        match self.inner {
-            EnrollmentProvider::Local => StorageProviderType::Local,
-            EnrollmentProvider::Github { .. } => StorageProviderType::Github,
+            inner: EnrollmentProvider::Github(GithubEnrollmentProvider {
+                pat,
+                repo,
+            }),
         }
     }
 }
@@ -269,7 +282,7 @@ export function syncProviderTargetKey(
     outcome at the boundary.
   - Return a meaningfully named discriminated union.
 
-### Model sum types as an enum-of-structs, wrap it for wasm
+### Model sum types with state-owned payloads, wrap them for wasm
 
 When a wasm export needs many parameters — especially several optional ones —
 that is a design smell. Do **not** flatten the variants into one stringly-typed
@@ -288,53 +301,41 @@ pub struct NookSyncProviderTarget {
 }
 ```
 
-Instead, model the state as a real `nook-core` enum whose variants each carry a
-dedicated struct, then expose a **thin `#[wasm_bindgen]` newtype wrapper** over
-the core enum with `is_*` / `as_*` accessors. This mirrors the MetaSecret
-`WasmVaultStatus(VaultStatus)` pattern
-([vault.rs](https://raw.githubusercontent.com/meta-secret/meta-secret-core/refs/heads/main/meta-secret/core/src/node/common/model/vault/vault.rs)):
+Model the state as a real core enum. Give variants with independently named
+multi-field payloads dedicated structs. Keep unit and scalar variants when they
+are the truthful domain or persisted wire shape. Use a thin `#[wasm_bindgen]`
+object only when the core enum cannot cross the generated boundary directly.
 
 ```rust
-// nook-core: owned enum-of-structs, serializable, testable, no wasm behavior.
+// nook-core: enum with state-owned payloads; serializable and testable.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct LocalSyncProvider;
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct GithubSyncProvider {
     pub repo: String,
     pub pat: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub enum SyncProviderTarget {
     Empty,
-    Local(LocalSyncProvider),
+    Local,
     Github(GithubSyncProvider),
     // OauthFile(OauthFileSyncProvider), ...
 }
 ```
 
 ```rust
-// nook-wasm: thin newtype wrapper over the core enum.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+// nook-wasm: generated object that owns the canonical core enum.
 #[wasm_bindgen]
 pub struct WasmSyncProviderTarget(SyncProviderTarget);
 
 #[wasm_bindgen]
 impl WasmSyncProviderTarget {
-    pub fn is_local(&self) -> bool {
-        matches!(&self.0, SyncProviderTarget::Local(_))
+    pub fn local() -> Self {
+        Self(SyncProviderTarget::Local)
     }
 
-    pub fn as_github(&self) -> Option<GithubSyncProvider> {
-        match &self.0 {
-            SyncProviderTarget::Github(github) => Some(github.clone()),
-            _ => None,
-        }
+    pub fn github(repo: String, pat: String) -> Self {
+        Self(SyncProviderTarget::Github(GithubSyncProvider { repo, pat }))
     }
 }
 
@@ -347,18 +348,38 @@ impl From<SyncProviderTarget> for WasmSyncProviderTarget {
 
 Rules:
 
-- The **variant carries its own struct** (`Github(GithubSyncProvider)`), so each
-  state only holds the fields it actually has — no cross-variant field soup, no
-  `oauth_config_present`-style booleans standing in for a variant.
-- A configured variant must not contain optional fields for required
-  configuration. Use a separate absence/draft variant, such as `Empty`, rather
-  than `Github { pat: Option<String> }`.
-- The **wasm type is a newtype wrapper** `Wasm...(CoreEnum)`, not a hand-copied
-  mirror of every field. Expose `is_*` predicates and `as_*` accessors that
-  return the per-variant struct.
+#### Required actions
+
+- A variant with independently named fields carries its own struct
+  (`Github(GithubSyncProvider)`). Each state holds only the fields it owns.
+- Keep unit and scalar variants when they are the truthful domain and wire
+  shape.
+- Use a separate absence or draft variant, such as `Empty`, for incomplete
+  configuration.
+- Export a fieldless canonical core enum through `wasm_bindgen` directly.
+- Wrap a data-carrying core enum in one generated WASM object when required.
+- Return a canonical domain state or a typed variant payload when JavaScript
+  must inspect an output.
+- Keep independent dimensions as separate enums.
+- Use a nested enum only when one category refines another category.
 - Keep serialization/validation in `nook-core`; the wrapper only bridges to JS.
-- Use raw string/option arguments only for genuinely simple one-off boundary
-  helpers where an enum or wrapper would not reduce ambiguity.
+- When the declared ABI input is a `#[wasm_bindgen]` class, construct that
+  generated class in JavaScript.
+- When `Tsify` with `from_wasm_abi` declares a structural DTO input, construct
+  the generated structural object with its exact fields.
+
+#### Prohibited actions
+
+- Do not change a persisted enum payload shape merely to make every variant
+  structurally uniform.
+- Do not use cross-variant field soup or `oauth_config_present`-style booleans
+  to stand in for a variant.
+- Do not put optional fields for required configuration on a configured
+  variant.
+- Do not mirror the enum in another bridge enum.
+- Do not expose `is_*` predicates that only decode its variant.
+- Do not replace a declared `#[wasm_bindgen]` class input with a plain object or
+  raw discriminant.
 
 ### `Option<T>` is almost always a missing enum
 
@@ -397,11 +418,11 @@ Why the enum wins almost always:
 - **Exhaustive matching.** Adding a state forces every `match` to be revisited;
   an `Option` silently keeps compiling and quietly loses meaning.
 - **No invalid states.** Multiple sibling `Option` fields encode a combinatorial
-  soup of impossible combinations; a single enum-of-structs makes only the legal
-  combinations representable.
+  soup of impossible combinations. An enum with state-owned payloads makes only
+  the legal combinations representable.
 
-Apply this at the design layer that owns the data — usually `nook-core` — and let
-`nook-wasm` bridge the enum to JS with `is_*` / `as_*` accessors as above.
+Apply this at the design layer that owns the data, usually `nook-core`.
+Let `nook-wasm` expose the canonical enum or a generated object that owns it.
 
 When `Option<T>` is still acceptable (do not force an enum):
 
@@ -414,7 +435,7 @@ When `Option<T>` is still acceptable (do not force an enum):
   do not create an enum variant that merely renames failure.
 - When two or more `Option` fields co-vary (present/absent together), that is the
   clearest case that they should collapse into one enum variant carrying a struct
-  — see the `GithubSyncProvider` enum-of-structs pattern above.
+  — see the `GithubSyncProvider` state-owned payload pattern above.
 
 ## Application Checklist
 
@@ -433,11 +454,12 @@ When `Option<T>` is still acceptable (do not force an enum):
       raw `JsValue` and paint a TypeScript type over it with
       `unchecked_return_type` / `unchecked_param_type`; derive the declaration
       and conversion from the Rust type (for example with `Tsify`).
-- [ ] Re-export generated WASM bindings directly; remove local aliases and
-      same-argument forwarding functions that add no lifecycle or translation
-      behavior.
+- [ ] Re-export generated WASM bindings directly. Remove callable casing aliases
+      and same-argument forwarding functions that add no lifecycle or
+      translation behavior. Preserve sanctioned type-only facade re-exports.
 - [ ] Search Svelte state and function parameters for domain identifiers typed
-      as `string`; replace them with the generated Rust/WASM identifier type.
+      as `string`. Use the exact generated contract declaration. Claim nominal
+      safety only when that declaration is branded, opaque, or class-backed.
 - [ ] Search `$state<"...">` and exported TypeScript unions for domain
       workflows; delete write-only or constant state, otherwise move the closed
       set to a Rust/WASM enum.
@@ -446,8 +468,14 @@ When `Option<T>` is still acceptable (do not force an enum):
       TypeScript summaries solely to simplify ownership.
 - [ ] Treat long wasm functions with many optional parameters (or a flattened
       stringly-typed struct) as a design smell. Model the state as a `nook-core`
-      enum-of-structs and expose a thin `#[wasm_bindgen]` newtype wrapper with
-      `is_*` / `as_*` accessors instead.
+      enum with state-owned payloads and expose a generated object that owns the
+      core value.
+- [ ] Export canonical fieldless core enums directly instead of mirroring them
+      in the WASM bridge.
+- [ ] Remove `is_*` methods that only decode enum variants.
+- [ ] Return domain states or typed payload objects from semantic APIs.
+- [ ] Preserve generated Rust names instead of rebuilding case-renamed plain
+      objects in TypeScript.
 - [ ] Treat every `Option<String>` / `Option<T>` in an owned domain type as a
       missing enum. Ask what each state means and replace it with a named enum
       (e.g. `Empty` / `Text(String)`) unless it is a genuine two-state boundary
