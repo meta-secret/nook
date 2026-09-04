@@ -55,7 +55,7 @@
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
-  <form id="login-form" method="post" action="/totp/login" {onsubmit}>
+  <form id="login-form" method="post" action="/auth/login" {onsubmit}>
     <label
       >Email <input
         autocomplete="username"

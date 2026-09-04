@@ -102,7 +102,6 @@ async function performScanAndRender(): Promise<void> {
     0,
     MAX_AUTHENTICATION_WORKFLOW_TRANSPORT_OBSERVATIONS,
   )
-  console.debug('[nook-auth-boundary] observed', workflowForms.length)
   // Setup material starts an enrollment ceremony. Recovery hints remain part
   // of an active OTP challenge so Rust can keep code fill as the primary action,
   // while a direct backup-code-only page still exposes the save ceremony.
@@ -150,7 +149,6 @@ async function performScanAndRender(): Promise<void> {
   }
   const classifiedWorkflows =
     classifiedAuthenticationWorkflowObservations(classifiedRequest)
-  console.debug('[nook-auth-boundary] classified', classifiedWorkflows.length)
   if (classifiedWorkflows.length === 0) {
     removeScannedWidget()
     return
@@ -166,7 +164,6 @@ async function performScanAndRender(): Promise<void> {
   }
   const delivery =
     await sendAuthenticationWorkflowSnapshotRuntimeMessage(message)
-  console.debug('[nook-auth-boundary] delivery', delivery.kind)
   if (sequence !== scanState.sequence) return
   if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
     removeScannedWidget()
@@ -174,7 +171,6 @@ async function performScanAndRender(): Promise<void> {
   }
   const { response } = delivery
   const { verdict, loginMatches } = response
-  console.debug('[nook-auth-boundary] verdict', verdict.kind)
   if (
     verdict.kind !== AuthenticationWorkflowSnapshotResponseKind.Matched ||
     !('snapshot' in verdict) ||
@@ -184,10 +180,6 @@ async function performScanAndRender(): Promise<void> {
     return
   }
   const { snapshot } = verdict
-  console.debug(
-    '[nook-auth-boundary] presentation',
-    authentication_workflow_pilot_presentation_capability(snapshot),
-  )
   const selected = classifiedWorkflows[snapshot.observationIndex]
   if (
     authentication_workflow_pilot_presentation_capability(snapshot) === 'hidden'

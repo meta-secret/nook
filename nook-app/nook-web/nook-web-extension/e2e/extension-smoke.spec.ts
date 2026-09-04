@@ -35,7 +35,6 @@ import {
   installForcePinDeviceProtection,
 } from './helpers/pin-device'
 import { lockExtensionSession } from './helpers/paired-pin-extension'
-import { completeCompanionPopupUnlock } from './helpers/paired-vault-companion-unlock'
 import { ExtensionSessionMessageType } from '../src/offscreen/session-message-dispatch'
 
 const chromiumExecutablePath = ((v) => (v ? v : ''))(
@@ -454,7 +453,6 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await replacementPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
-    await completeCompanionPopupUnlock({ page: replacementPopupPage })
     await expect(
       replacementPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
@@ -509,7 +507,6 @@ test('keeps the extension vault independent and switches after valid re-pairing'
     await verifiedPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html`,
     )
-    await completeCompanionPopupUnlock({ page: verifiedPopupPage })
     await expect(
       verifiedPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()

@@ -37,7 +37,7 @@
   {#if error}
     <p class="error" role="alert" data-nook-auth-outcome="error">{error}</p>
   {/if}
-  <form {onsubmit}>
+  <form method="post" action="/auth/register" {onsubmit}>
     <input autocomplete="username" name="email" type="email" />
     <input autocomplete="new-password" name="password" type="password" />
     <input

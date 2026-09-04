@@ -9,12 +9,6 @@ import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
 test('fill only the local login inside a page-wide ASP.NET form', async ({
   page,
 }) => {
-  const boundaryDiagnostics: string[] = []
-  page.on('console', (message) => {
-    if (message.text().startsWith('[nook-auth-boundary]')) {
-      boundaryDiagnostics.push(message.text())
-    }
-  })
   const messages = await loadPilotMessages()
   const stubArgs = {
     localizedMessages: messages,
@@ -36,19 +30,6 @@ test('fill only the local login inside a page-wide ASP.NET form', async ({
 
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  expect(boundaryDiagnostics).toEqual(
-    expect.arrayContaining([
-      '[nook-auth-boundary] observed 1',
-      '[nook-auth-boundary] classified 1',
-      '[nook-auth-boundary] delivery delivered',
-      '[nook-auth-boundary] presentation propose-action',
-    ]),
-  )
-  for (const diagnostic of boundaryDiagnostics) {
-    expect(diagnostic).toMatch(
-      /^\[nook-auth-boundary\] (observed \d+|classified \d+|delivery delivered|verdict 0|presentation propose-action)$/,
-    )
-  }
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
 
