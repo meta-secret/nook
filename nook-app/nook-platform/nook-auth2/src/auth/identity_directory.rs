@@ -640,8 +640,10 @@ mod tests {
         let later_key = AppKey::generate()?;
         let _ =
             directory.open_or_generate_vault_dek(&extension_key, crate::generate_store_id()?)?;
+        let enrollment =
+            directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal");
         assert!(matches!(
-            directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal"),
+            enrollment,
             Err(MultiDeviceError::IdentityEnrollmentRequired)
         ));
         Ok(())
