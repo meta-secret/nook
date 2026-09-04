@@ -79,6 +79,23 @@ impl<'tcx> LateLintPass<'tcx> for FunctionOwnership {
             let ItemKind::Fn { ident, .. } = item.kind else {
                 return;
             };
+            // Rust expectations inherit into nested items. A boundary exception
+            // belongs only to the exact function carrying its attribute.
+            if cx
+                .tcx
+                .lint_level_spec_at_node(UNOWNED_FUNCTION, item.hir_id())
+                .lint_id()
+                .is_some_and(|expectation| expectation.hir_id != item.hir_id())
+            {
+                span_lint_and_help(
+                    cx,
+                    INVALID_UNOWNED_FUNCTION_SUPPRESSION,
+                    ident.span,
+                    "inherited suppression of `unowned_function`",
+                    None,
+                    "move this function to its owning type or give this required callback its own boundary expectation",
+                );
+            }
             span_lint_and_help(
                 cx,
                 UNOWNED_FUNCTION,

@@ -7,7 +7,7 @@
     reason = "framework boundary: blanket module exception"
 )]
 mod broad {
-    fn helper() {}
+    // Blanket expectations are invalid even on an empty module.
 }
 #[expect(unowned_function, reason = "FFI boundary: a type is not a callback")]
 struct Owner;
