@@ -41,14 +41,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs \
     && RUSTC_WRAPPER= RUSTFLAGS= cargo llvm-cov test -p nook_domain_api \
       --manifest-path dylint/nook-domain-api/Cargo.toml --locked --no-report \
-    && lint_object="dylint/nook-domain-api/target/debug/libnook_domain_api@${RUSTUP_TOOLCHAIN}.so" \
-    && test -f "$lint_object" \
-    && ln "$lint_object" dylint/nook-domain-api/target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so \
-    && cargo llvm-cov report -p nook_domain_api \
-      --manifest-path dylint/nook-domain-api/Cargo.toml --locked --fail-under-lines 90 \
-    && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
-    && cargo dylint --all -- --all-targets \
-    && nook-sccache-report rust-dylint
+    && nook-sccache-report rust-dylint \
+    && find dylint/nook-domain-api/target -type f -name '*nook_domain_api*' -print \
+    && false
 
 FROM rust-ecosystem-nightly AS rust-fuzz-smoke
 

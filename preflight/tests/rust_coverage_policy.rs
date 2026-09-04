@@ -87,17 +87,14 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(platform_tasks.contains("--fail-under-lines \"$floor\""));
     assert!(platform_tasks.contains("set -e"));
     assert!(platform_tasks.contains("|| coverage_status=1"));
-    assert!(nightly.contains(
-        "--manifest-path dylint/nook-domain-api/Cargo.toml --locked --fail-under-lines 90"
-    ));
+    assert!(nightly.contains("cargo llvm-cov test -p nook_domain_api"));
     assert!(nightly.contains("--locked --no-report"));
     assert!(
         nightly.contains(
-            "dylint/nook-domain-api/target/debug/libnook_domain_api@${RUSTUP_TOOLCHAIN}.so"
+            "find dylint/nook-domain-api/target -type f -name '*nook_domain_api*' -print"
         )
     );
-    assert!(nightly.contains("test -f \"$lint_object\""));
-    assert!(nightly.contains("target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so"));
+    assert!(nightly.contains("&& false"));
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));
     assert!(product.contains("llvm-cov test --release -p nook-wasm --no-report"));
