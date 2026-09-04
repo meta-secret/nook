@@ -255,6 +255,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 
+FROM builder-wasm-deps AS wasm-coverage-toolchain
+ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
+RUN rustup toolchain install "${WASM_COVERAGE_NIGHTLY}" --component llvm-tools-preview \
+    && rustup target add --toolchain "${WASM_COVERAGE_NIGHTLY}" wasm32-unknown-unknown
 # Source overlay for bulk native leaves. Keep this after cook so builder-*-deps stay
 # manifest-stable; platform tree edits invalidate only this stage and its consumers.
 FROM builder-core-deps AS rust-platform
@@ -345,10 +349,14 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # export must not rerun the Rust tests.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
-    && mkdir -p /opt/nook/coverage/nook-core \
+    mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
-    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only --fail-under-lines "$FLOOR" > /opt/nook/coverage/nook-core/summary.txt \
+    && coverage_status=0 \
+    && for package in nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core; do \
+         floor="$(jq -r --arg package "$package" '.package_lines_percent[$package]' nook-core/coverage-floor.json)"; cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$floor" || coverage_status=1; \
+       done \
+    && test "$coverage_status" -eq 0 \
+    && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
     && cp nook-core/coverage-floor.json /opt/nook/coverage/nook-core/coverage-floor.json \
@@ -711,7 +719,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report wasm-build
 
 FROM builder-wasm-source AS builder-wasm-tests
-
+ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
+COPY --from=wasm-coverage-toolchain /usr/local/rustup /usr/local/rustup
 # Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the
 # later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -720,7 +729,18 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
 
-FROM builder-wasm-tests AS builder-wasm
+FROM builder-wasm-tests AS builder-wasm-handoff
+
+ARG BUN_VERSION=1.3.14
+ARG PLAYWRIGHT_VERSION=1.55.0
+ARG PLAYWRIGHT_CHROMIUM_VERSION=140.0.7339.16
+ARG PLAYWRIGHT_CHROMEDRIVER_SHA256=f40639ecc590adea9583a15066afd8e2e3e84173435dc4e31d9b01afcc41bd66
+ENV BUN_INSTALL=/usr/local/bun PATH="/usr/local/bun/bin:${PATH}" PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright CHROMEDRIVER=/usr/local/bin/chromedriver
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends clang unzip \
+    && rm -rf /var/lib/apt/lists/* \
+    && clang --version
 
 COPY --from=builder-wasm-clippy /opt/nook/wasm-clippy-passed /opt/nook/wasm-clippy-passed
 COPY --from=builder-wasm-build \
@@ -733,8 +753,33 @@ COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    wasm-pack test --node --release nook-wasm \
-    && nook-sccache-report wasm-node-test
+    cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov clean --workspace \
+    && RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --release -p nook-wasm --no-report \
+    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \
+    && nook-sccache-report wasm-node-test-and-coverage
+
+FROM builder-wasm-handoff AS builder-wasm
+RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}" \
+    && bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
+    && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
+    && bunx playwright@${PLAYWRIGHT_VERSION} install chromium \
+    && chromium="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name headless_shell -print -quit)" \
+    && test -x "$chromium" && ln -s "$chromium" /usr/local/bin/google-chrome \
+    && curl -fsSL "https://storage.googleapis.com/chrome-for-testing-public/${PLAYWRIGHT_CHROMIUM_VERSION}/linux64/chromedriver-linux64.zip" -o /tmp/chromedriver.zip \
+    && echo "${PLAYWRIGHT_CHROMEDRIVER_SHA256}  /tmp/chromedriver.zip" | sha256sum -c - \
+    && unzip -q /tmp/chromedriver.zip -d /tmp/chromedriver \
+    && install -m 0755 /tmp/chromedriver/chromedriver-linux64/chromedriver "$CHROMEDRIVER" \
+    && rm -rf /tmp/chromedriver /tmp/chromedriver.zip \
+    && "$CHROMEDRIVER" --version \
+    && echo "nook-wasm declared coverage tests: native=82 browser=147" && wasm-pack test --node --release nook-wasm \
+    && wasm-pack test --node --release nook-companion-wasm \
+    && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
+    && test -x "$runner" \
+    && companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" \
+    && nook_wasm_floor="$(jq -r '.package_lines_percent["nook-wasm"]' nook-core/coverage-floor.json)" \
+    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines "$companion_floor" \
+    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor" \
+    && touch /opt/nook/wasm-coverage-passed
 
 FROM scratch AS wasm-export
 
@@ -765,12 +810,13 @@ RUN cargo fmt --all -- --check
 # context. The web solve never consumes or materializes the multi-GB builder-wasm snapshot.
 FROM scratch AS web-artifacts
 
-COPY --from=builder-wasm /opt/nook/wasm-handoff /nook-wasm
+COPY --from=builder-wasm-handoff /opt/nook/wasm-handoff /nook-wasm
 COPY --from=builder-debug /opt/nook/coverage /coverage
+COPY --from=builder-wasm /opt/nook/wasm-coverage-passed /coverage/wasm-coverage-passed
 
 # On-demand sealed Rust image for explicit `task rust:*`, `task wasm:*`, and Rust formatting
 # commands. Normal setup/CI does not load this multi-GB image into Docker's runtime image store.
-FROM builder-wasm AS nook-rust
+FROM builder-wasm-handoff AS nook-rust
 
 WORKDIR /meta-secret/nook
 
@@ -783,38 +829,9 @@ RUN test -f nook-app/Taskfile.yml \
     && git add -A \
     && git commit -q -m "nook-rust source snapshot" >/dev/null
 
-# Browser-only wasm tests are manual/debug. Install Chromium only for this on-demand target so the
-# normal Rust/WASM branch does not carry Playwright's browser and system-library layers.
-FROM nook-rust AS nook-rust-browser
-
-ARG BUN_VERSION=1.3.14
-ARG PLAYWRIGHT_VERSION=1.55.0
-ARG PLAYWRIGHT_CHROMIUM_VERSION=140.0.7339.16
-ARG PLAYWRIGHT_CHROMEDRIVER_SHA256=f40639ecc590adea9583a15066afd8e2e3e84173435dc4e31d9b01afcc41bd66
-
-ENV BUN_INSTALL=/usr/local/bun
-ENV PATH="${BUN_INSTALL}/bin:${PATH}"
-ENV PLAYWRIGHT_BROWSERS_PATH=/opt/nook/ms-playwright
-ENV CHROMEDRIVER=/usr/local/bin/chromedriver
-
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends unzip \
-    && rm -rf /var/lib/apt/lists/* \
-    && curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}" \
-    && bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
-    && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
-    && bunx playwright@${PLAYWRIGHT_VERSION} install chromium \
-    && chromium="$(find "$PLAYWRIGHT_BROWSERS_PATH" -type f -name headless_shell -print -quit)" \
-    && test -x "$chromium" \
-    && ln -s "$chromium" /usr/local/bin/google-chrome \
-    && curl -fsSL \
-        "https://storage.googleapis.com/chrome-for-testing-public/${PLAYWRIGHT_CHROMIUM_VERSION}/linux64/chromedriver-linux64.zip" \
-        -o /tmp/chromedriver.zip \
-    && echo "${PLAYWRIGHT_CHROMEDRIVER_SHA256}  /tmp/chromedriver.zip" | sha256sum -c - \
-    && unzip -q /tmp/chromedriver.zip -d /tmp/chromedriver \
-    && install -m 0755 /tmp/chromedriver/chromedriver-linux64/chromedriver "$CHROMEDRIVER" \
-    && rm -rf /tmp/chromedriver /tmp/chromedriver.zip \
-    && rm -rf /var/lib/apt/lists/*
+# Browser tooling is already present because hosted nook-wasm coverage exercises browser suites.
+FROM builder-wasm AS nook-rust-browser
+COPY --from=nook-rust /meta-secret/nook /meta-secret/nook
 
 # -----------------------------------------------------------------------------
 

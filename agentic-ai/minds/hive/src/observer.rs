@@ -44,6 +44,17 @@ pub async fn run_observer<S: ObserverStore>(
     address: SocketAddr,
     dashboard: PathBuf,
 ) -> crate::HiveResult<()> {
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .with_hive_context(|| format!("bind Hive observer to {address}"))?;
+    run_observer_on_listener(store, listener, dashboard).await
+}
+
+async fn run_observer_on_listener<S: ObserverStore>(
+    store: S,
+    listener: tokio::net::TcpListener,
+    dashboard: PathBuf,
+) -> crate::HiveResult<()> {
     let index = dashboard.join("index.html");
     let assets = ServeDir::new(dashboard).fallback(ServeFile::new(index));
     let app = Router::new()
@@ -52,9 +63,6 @@ pub async fn run_observer<S: ObserverStore>(
         .route("/api/tasks/{task_id}", get(task_detail))
         .fallback_service(assets)
         .with_state(ObserverState { store });
-    let listener = tokio::net::TcpListener::bind(address)
-        .await
-        .with_hive_context(|| format!("bind Hive observer to {address}"))?;
     axum::serve(listener, app)
         .await
         .hive_context("serve Hive observer")
@@ -564,7 +572,71 @@ impl ObserverStore for Neo4jTaskStore {
 
 #[cfg(test)]
 mod tests {
-    use super::ObserverRequest;
+    use async_trait::async_trait;
+    use axum::extract::{Path, Query, State};
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    use serde_json::{Value, json};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::{
+        LocaleQuery, ObserverRequest, ObserverState, ObserverStore, health, overview, task_detail,
+    };
+
+    #[derive(Clone)]
+    enum FixtureStore {
+        Ready,
+        Failed,
+    }
+
+    #[async_trait]
+    impl ObserverStore for FixtureStore {
+        async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
+            match self {
+                Self::Ready => Ok(json!({"locale": locale, "tasks": 2})),
+                Self::Failed => Err(crate::HiveError::message("database unavailable")),
+            }
+        }
+
+        async fn observer_task_value(
+            &self,
+            task_id: &str,
+            locale: &str,
+        ) -> crate::HiveResult<Option<Value>> {
+            match self {
+                Self::Ready if task_id == "task-1" => {
+                    Ok(Some(json!({"id": task_id, "locale": locale})))
+                }
+                Self::Ready => Ok(None),
+                Self::Failed => Err(crate::HiveError::message("database unavailable")),
+            }
+        }
+    }
+
+    async fn http_get(address: std::net::SocketAddr, path: &str) -> crate::HiveResult<String> {
+        let mut attempts = 0;
+        let mut stream = loop {
+            attempts += 1;
+            match tokio::net::TcpStream::connect(address).await {
+                Ok(stream) => break stream,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::ConnectionRefused && attempts < 100 =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        };
+        stream
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await?;
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).await?;
+        Ok(String::from_utf8(response)?)
+    }
 
     #[test]
     fn observer_protocol_exposes_only_bounded_read_operations() -> crate::HiveResult<()> {
@@ -582,6 +654,111 @@ mod tests {
             assert!(!payload.contains("enqueue"));
             assert!(!payload.contains("activity"));
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn observer_handlers_preserve_success_not_found_and_unavailable_statuses()
+    -> crate::HiveResult<()> {
+        assert_eq!(health().await, StatusCode::NO_CONTENT);
+        let state = ObserverState {
+            store: FixtureStore::Ready,
+        };
+        let snapshot = match overview(
+            State(state.clone()),
+            Query(LocaleQuery {
+                locale: "ru".into(),
+            }),
+        )
+        .await
+        {
+            Ok(snapshot) => snapshot.0,
+            Err(_) => return Err(crate::HiveError::message("ready overview failed")),
+        };
+        assert_eq!(snapshot, json!({"locale": "ru", "tasks": 2}));
+        let task = match task_detail(
+            State(state.clone()),
+            Path("task-1".into()),
+            Query(LocaleQuery {
+                locale: "en".into(),
+            }),
+        )
+        .await
+        {
+            Ok(task) => task.0,
+            Err(_) => return Err(crate::HiveError::message("known task was not returned")),
+        };
+        assert_eq!(task, json!({"id": "task-1", "locale": "en"}));
+
+        let Err(missing) = task_detail(
+            State(state),
+            Path("missing".into()),
+            Query(LocaleQuery {
+                locale: "en".into(),
+            }),
+        )
+        .await
+        else {
+            return Err(crate::HiveError::message(
+                "missing observer task was returned",
+            ));
+        };
+        let missing = missing.into_response();
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+        let Err(unavailable) = overview(
+            State(ObserverState {
+                store: FixtureStore::Failed,
+            }),
+            Query(LocaleQuery {
+                locale: "en".into(),
+            }),
+        )
+        .await
+        else {
+            return Err(crate::HiveError::message(
+                "failed observer store returned an overview",
+            ));
+        };
+        let unavailable = unavailable.into_response();
+        assert_eq!(unavailable.status(), StatusCode::SERVICE_UNAVAILABLE);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn observer_server_routes_health_api_and_dashboard_requests() -> crate::HiveResult<()> {
+        let root = tempfile::tempdir()?;
+        let dashboard = root.path().join("dashboard");
+        tokio::fs::create_dir(&dashboard).await?;
+        tokio::fs::write(dashboard.join("index.html"), "Hive dashboard fixture").await?;
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let address = listener.local_addr()?;
+        let server = tokio::spawn(super::run_observer_on_listener(
+            FixtureStore::Ready,
+            listener,
+            dashboard,
+        ));
+
+        let health = http_get(address, "/healthz").await?;
+        assert!(health.starts_with("HTTP/1.1 204 No Content"));
+        let overview = http_get(address, "/api/overview?locale=ru").await?;
+        assert!(overview.starts_with("HTTP/1.1 200 OK"));
+        assert!(overview.contains(r#"{"locale":"ru","tasks":2}"#));
+        let task = http_get(address, "/api/tasks/task-1?locale=en").await?;
+        assert!(task.starts_with("HTTP/1.1 200 OK"));
+        assert!(task.contains(r#"{"id":"task-1","locale":"en"}"#));
+        let missing = http_get(address, "/api/tasks/missing?locale=en").await?;
+        assert!(missing.starts_with("HTTP/1.1 404 Not Found"));
+        let dashboard = http_get(address, "/").await?;
+        assert!(dashboard.contains("Hive dashboard fixture"));
+
+        server.abort();
+        let Err(cancelled) = server.await else {
+            return Err(crate::HiveError::message(
+                "observer server stopped without cancellation",
+            ));
+        };
+        assert!(cancelled.is_cancelled());
         Ok(())
     }
 }

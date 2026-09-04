@@ -386,4 +386,53 @@ mod tests {
         assert!(serde_json::from_str::<BrokerRequest>(r#"{"refresh":true}"#)?.refresh);
         Ok(())
     }
+
+    #[tokio::test]
+    async fn broker_client_rejects_closed_and_malformed_private_channels() -> crate::HiveResult<()>
+    {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        use tokio::net::UnixListener;
+
+        let root = tempfile::tempdir()?;
+        let closed_socket = root.path().join("closed.sock");
+        let listener = UnixListener::bind(&closed_socket)?;
+        let closed_server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await?;
+            let mut channel = BufReader::new(stream);
+            let mut request = String::new();
+            channel.read_line(&mut request).await?;
+            assert!(!serde_json::from_str::<BrokerRequest>(&request)?.refresh);
+            Ok::<(), crate::HiveError>(())
+        });
+        let client = BrokerExternalAuth::connect(&closed_socket).await?;
+        let closed =
+            client.validate().await.err().ok_or_else(|| {
+                crate::HiveError::message("closed auth broker returned credentials")
+            })?;
+        assert_eq!(
+            closed.to_string(),
+            "Hive auth broker closed the private channel"
+        );
+        closed_server.await??;
+
+        let malformed_socket = root.path().join("malformed.sock");
+        let listener = UnixListener::bind(&malformed_socket)?;
+        let malformed_server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await?;
+            let mut channel = BufReader::new(stream);
+            let mut request = String::new();
+            channel.read_line(&mut request).await?;
+            assert!(serde_json::from_str::<BrokerRequest>(&request)?.refresh);
+            channel.get_mut().write_all(b"not-json\n").await?;
+            channel.get_mut().flush().await?;
+            Ok::<(), crate::HiveError>(())
+        });
+        let client = BrokerExternalAuth::connect(&malformed_socket).await?;
+        let malformed = client.refresh_and_validate().await.err().ok_or_else(|| {
+            crate::HiveError::message("malformed auth response produced credentials")
+        })?;
+        assert_eq!(malformed.kind(), std::io::ErrorKind::Other);
+        malformed_server.await??;
+        Ok(())
+    }
 }

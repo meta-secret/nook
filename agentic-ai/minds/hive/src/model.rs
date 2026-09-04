@@ -503,7 +503,10 @@ impl TerminalResult {
 
 #[cfg(test)]
 mod tests {
-    use super::{EnqueueTask, ModelError, TaskId, TaskTrigger, TerminalResult};
+    use super::{
+        ActivityKind, AgentId, AttemptId, ClaimOutcome, EnqueueTask, LeaseToken, ModelError,
+        TaskId, TaskTrigger, TerminalResult,
+    };
 
     #[test]
     fn enqueue_rejects_self_dependency() -> crate::HiveResult<()> {
@@ -675,6 +678,186 @@ mod tests {
             Err(error) => error,
         };
         assert!(error.to_string().contains("summary must not be empty"));
+        Ok(())
+    }
+
+    #[test]
+    fn identifiers_triggers_and_activity_kinds_have_stable_wire_values() -> crate::HiveResult<()> {
+        assert_eq!(TaskId::new("task-1")?.to_string(), "task-1");
+        assert_eq!(AgentId::new("agent-1")?.to_string(), "agent-1");
+        assert_eq!(AttemptId::new("attempt-1")?.to_string(), "attempt-1");
+        assert_eq!(LeaseToken::new("lease-1")?.to_string(), "lease-1");
+        assert!(TaskId::new(" ").is_err());
+        assert!(AgentId::new("\n").is_err());
+        assert!(AttemptId::new("\t").is_err());
+        assert!(LeaseToken::new("").is_err());
+
+        assert_eq!(TaskTrigger::AgentDependency.as_str(), "agent-dependency");
+        assert_eq!(
+            TaskTrigger::GitHubMainFailure.as_str(),
+            "github-main-failure"
+        );
+        assert_eq!(TaskTrigger::ManualCli.as_str(), "manual-cli");
+        let kinds = [
+            (ActivityKind::Started, "started"),
+            (ActivityKind::Action, "action"),
+            (ActivityKind::Result, "result"),
+            (ActivityKind::Edit, "edit"),
+            (ActivityKind::Warning, "warning"),
+            (ActivityKind::Retry, "retry"),
+            (ActivityKind::Report, "report"),
+            (ActivityKind::Error, "error"),
+        ];
+        for (kind, expected) in kinds {
+            assert_eq!(kind.as_str(), expected);
+        }
+        assert!(ClaimOutcome::NoTask.is_idle());
+        assert_eq!(
+            ClaimOutcome::NoTask.into_claimed(),
+            Err(ModelError::NoClaimableTask)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn enqueue_validation_rejects_each_invalid_domain_field() -> crate::HiveResult<()> {
+        let valid = EnqueueTask {
+            id: TaskId::new("task")?,
+            kind: "code".into(),
+            trigger: TaskTrigger::ManualCli,
+            prompt: "Implement behavior".into(),
+            source_commit: "0123456789abcdef0123456789abcdef01234567".into(),
+            priority: 0,
+            max_attempts: 1,
+            dependencies: Vec::new(),
+        };
+        assert!(valid.validate().is_ok());
+        for (task, expected) in [
+            (
+                {
+                    let mut task = valid.clone();
+                    task.kind = " ".into();
+                    task
+                },
+                ModelError::EmptyTaskKind,
+            ),
+            (
+                {
+                    let mut task = valid.clone();
+                    task.prompt = "".into();
+                    task
+                },
+                ModelError::EmptyTaskPrompt,
+            ),
+            (
+                {
+                    let mut task = valid.clone();
+                    task.source_commit = "not-a-sha".into();
+                    task
+                },
+                ModelError::InvalidSourceCommit,
+            ),
+            (
+                {
+                    let mut task = valid.clone();
+                    task.max_attempts = 0;
+                    task
+                },
+                ModelError::InvalidMaxAttempts,
+            ),
+        ] {
+            assert_eq!(task.validate(), Err(expected));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn terminal_results_expose_typed_content_and_reject_remaining_invalid_states()
+    -> crate::HiveResult<()> {
+        let blocked: TerminalResult = serde_json::from_value(serde_json::json!({
+            "status": "blocked",
+            "summary": "Waiting for prerequisite",
+            "changed_files": ["src/worker.rs"],
+            "tests": ["cargo test -p hive"],
+            "obsolete": false,
+            "blocker": {
+                "present": true,
+                "id": "repair-cache",
+                "title": "Repair cache",
+                "prompt": "Restore the cache invariant"
+            }
+        }))?;
+        assert_eq!(blocked.summary(), "Waiting for prerequisite");
+        assert_eq!(blocked.changed_files(), ["src/worker.rs"]);
+        assert_eq!(blocked.tests(), ["cargo test -p hive"]);
+        assert!(!blocked.is_obsolete());
+
+        let completed: TerminalResult = serde_json::from_value(serde_json::json!({
+            "status": "completed",
+            "summary": "Retired obsolete task",
+            "changed_files": [],
+            "tests": ["delivery state inspected"],
+            "obsolete": true,
+            "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+        }))?;
+        assert!(completed.is_obsolete());
+
+        let invalid = [
+            (
+                serde_json::json!({
+                    "status": "failed", "summary": "failed", "changed_files": [], "tests": [],
+                    "obsolete": true,
+                    "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+                }),
+                "cannot retire",
+            ),
+            (
+                serde_json::json!({
+                    "status": "failed", "summary": "failed", "changed_files": [], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": true, "id": "repair", "title": "Repair", "prompt": "Do it" }
+                }),
+                "must not report a blocker",
+            ),
+            (
+                serde_json::json!({
+                    "status": "blocked", "summary": "blocked", "changed_files": [], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": true, "id": "repair", "title": "", "prompt": "Do it" }
+                }),
+                "must include a title",
+            ),
+            (
+                serde_json::json!({
+                    "status": "blocked", "summary": "blocked", "changed_files": [], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": true, "id": "repair", "title": "Repair", "prompt": "" }
+                }),
+                "must include a prompt",
+            ),
+            (
+                serde_json::json!({
+                    "status": "completed", "summary": "done", "changed_files": [""], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+                }),
+                "changed_files entries must not be empty",
+            ),
+            (
+                serde_json::json!({
+                    "status": "completed", "summary": "done", "changed_files": [], "tests": [""],
+                    "obsolete": false,
+                    "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+                }),
+                "tests entries must not be empty",
+            ),
+        ];
+        for (value, expected) in invalid {
+            let error = serde_json::from_value::<TerminalResult>(value)
+                .err()
+                .ok_or_else(|| crate::HiveError::message("invalid terminal result was accepted"))?;
+            assert!(error.to_string().contains(expected));
+        }
         Ok(())
     }
 }
