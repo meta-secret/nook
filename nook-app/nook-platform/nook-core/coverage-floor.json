@@ -13,7 +13,8 @@
     "nook-wasm",
     "hive",
     "lace",
-    "nook-preflight"
+    "nook-preflight",
+    "nook_domain_api"
   ],
   "package_lines_percent": {
     "nook-app-common": 90.0,
@@ -27,7 +28,8 @@
     "nook-wasm": 90.0,
     "hive": 60.0,
     "lace": 75.0,
-    "nook-preflight": 90.0
+    "nook-preflight": 90.0,
+    "nook_domain_api": 90.0
   },
   "excluded_packages": [
     {

@@ -63,6 +63,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
 fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow::Result<()> {
     let root = repository_root()?;
     let product = read(&root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"))?;
+    let nightly = read(&root.join("nook-app/nook-platform/docker/rust/nightly.Dockerfile"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
     let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
@@ -75,7 +76,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
 
     for package in &enforced {
         assert!(
-            [&product, &platform_tasks, &hive, &preflight]
+            [&product, &nightly, &platform_tasks, &hive, &preflight]
                 .iter()
                 .flat_map(|source| source.lines())
                 .filter(|line| line.contains("llvm-cov") || line.contains("for package in"))
@@ -96,6 +97,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     ));
     assert!(platform_tasks.contains("set -e"));
     assert!(platform_tasks.contains("|| coverage_status=1"));
+    assert!(nightly.contains(
+        "--manifest-path dylint/nook-domain-api/Cargo.toml --locked --fail-under-lines 90"
+    ));
 
     assert!(product.contains("for package in nook-companion-wasm nook-wasm; do"));
     assert!(product.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));

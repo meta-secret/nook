@@ -848,6 +848,7 @@ at 60 percent and Lace at 75 percent; the successor raises both to 90 percent.
   report is artifact-only and cannot mask a package failure. Artifacts are
   written to `/opt/nook/coverage/nook-core` in the image.
 - The WASM lane independently covers `nook-companion-wasm` and `nook-wasm`.
+- The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
 - Hive verification runs instrumented Hive and Lace binaries in the existing
   Neo4j-enabled runtime, then imports their profiles for separate reports.
 - Preflight enforces its own floor from the canonical repository source root.
