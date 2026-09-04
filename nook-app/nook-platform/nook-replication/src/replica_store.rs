@@ -191,6 +191,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use proptest::collection;
     use proptest::prelude::*;
 
     #[test]
@@ -250,8 +251,8 @@ mod tests {
     proptest! {
         #[test]
         fn missing_event_ids_are_sorted_set_difference(
-            local in proptest::collection::btree_set(any::<u8>(), 0..64),
-            remote in proptest::collection::btree_set(any::<u8>(), 0..64),
+            local in collection::btree_set(any::<u8>(), 0..64),
+            remote in collection::btree_set(any::<u8>(), 0..64),
         ) {
             let mut store = ReplicaStore::new();
             for event_id in &local {
@@ -283,12 +284,14 @@ mod tests {
 
 #[cfg(all(test, loom))]
 mod loom_tests {
-    use loom::sync::{Arc, Mutex};
+    use std::panic;
+
+    use loom::sync::{self, Arc, Mutex};
     use loom::thread;
 
     fn lock_store(
         store: &Mutex<super::ReplicaStore<u8>>,
-    ) -> loom::sync::MutexGuard<'_, super::ReplicaStore<u8>> {
+    ) -> sync::MutexGuard<'_, super::ReplicaStore<u8>> {
         match store.lock() {
             Ok(guard) => guard,
             Err(poisoned) => poisoned.into_inner(),
@@ -296,11 +299,11 @@ mod loom_tests {
     }
 
     fn join_writer(
-        writer: loom::thread::JoinHandle<super::ReplicaInsertStatus>,
+        writer: thread::JoinHandle<super::ReplicaInsertStatus>,
     ) -> super::ReplicaInsertStatus {
         match writer.join() {
             Ok(status) => status,
-            Err(payload) => std::panic::resume_unwind(payload),
+            Err(payload) => panic::resume_unwind(payload),
         }
     }
 
