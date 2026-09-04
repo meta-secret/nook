@@ -38,6 +38,7 @@ default-unwind = "8"
 
 [workspace.metadata.dylint]
 libraries = [
+    { path = "dylint/nook-domain-api" },
     { git = "https://github.com/trailofbits/dylint", tag = "v6.0.1", pattern = [
         "examples/general/non_local_effect_before_unhandled_error",
     ] },

@@ -277,7 +277,9 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo install cargo-dylint dylint-link",
         "COPY nook-app/nook-platform/ nook-app/nook-platform/",
         "cargo fuzz run",
+        "RUSTC_WRAPPER= RUSTFLAGS= cargo test",
         "cargo dylint --all",
+        "--manifest-path dylint/nook-domain-api/Cargo.toml",
         "KANI_VERSION=0.67.0",
         "cargo kani setup",
         "cargo kani --package nook-replication",
@@ -480,7 +482,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             .is_file()
     );
     assert!(workspace.contains("[workspace.metadata.kani.flags]"));
-    assert!(workspace.contains("[workspace.metadata.dylint]"));
+    assert!(
+        workspace.contains("[workspace.metadata.dylint]")
+            && workspace.contains("{ path = \"dylint/nook-domain-api\" }")
+    );
     assert!(replication.contains("proptest!"));
     assert!(replication.contains("insta::assert_debug_snapshot!"));
     assert!(replication.contains("loom::model"));

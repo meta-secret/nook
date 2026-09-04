@@ -1,0 +1,12 @@
+error[E0453]: allow(invalid_raw_numeric_api_suppression) incompatible with previous forbid
+  --> $DIR/suppression_forbid.rs:3:9
+   |
+LL | #![forbid(invalid_raw_numeric_api_suppression)]
+   |           ----------------------------------- `forbid` level set here
+LL |
+LL | #[allow(invalid_raw_numeric_api_suppression)]
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ overruled by previous forbid
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0453`.

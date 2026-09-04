@@ -3,6 +3,11 @@
 //! This crate is deliberately a leaf in the application dependency graph. It
 //! owns only cross-cutting facilities that both authentication and vault-domain
 //! crates need without depending on either of them.
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 
 mod generated;
 mod i18n;

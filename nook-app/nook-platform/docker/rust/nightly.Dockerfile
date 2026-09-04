@@ -37,7 +37,9 @@ ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo dylint --all -- --all-targets \
+    RUSTC_WRAPPER= RUSTFLAGS= cargo test \
+      --manifest-path dylint/nook-domain-api/Cargo.toml \
+    && cargo dylint --all -- --all-targets \
     && nook-sccache-report rust-dylint
 
 FROM rust-ecosystem-nightly AS rust-fuzz-smoke
