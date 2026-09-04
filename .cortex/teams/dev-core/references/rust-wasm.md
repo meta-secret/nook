@@ -271,24 +271,29 @@ ends.
 ## 6. Testing
 
 - Test vault formats, crypto, validation, and passwords in `nook-core`.
-- A product change that introduces or changes a generated-package ABI must test
-  that ABI from JavaScript or TypeScript.
-  - Place and wire the test into the relevant existing consumer test and CI
-    path.
-  - Import the generated package built for that consumer path.
-  - Construct actual exported WASM classes through their generated API when a
-    parameter is declared as a `#[wasm_bindgen]` class.
-  - Construct generated structural DTO objects when a parameter is declared
-    through `Tsify` with `from_wasm_abi`.
-  - Call the exported planner or operation through the generated binding.
-  - Do not substitute a Serde round trip followed by a direct Rust call.
-  - Exercise ownership according to by-value or by-reference parameters.
-  - Free every still-owned wrapper exactly once.
-- Do not assume or claim that a repository-wide generated-package test harness
-  exists. Use the relevant existing consumer test and CI path.
 - Keep domain policy failures authoritative in focused core tests.
-- When a product change introduces or changes public `JsError` behavior, cover
-  that behavior through the relevant generated-package consumer test path.
+- **Generated-package ABI changes**
+  - **Required actions**
+    - Test an introduced or changed generated-package ABI from JavaScript or
+      TypeScript.
+    - Place and wire the test into the relevant existing consumer test and CI
+      path.
+    - Import the generated package built for that consumer path.
+    - Construct exported WASM classes through their generated API when a
+      parameter is declared as a `#[wasm_bindgen]` class.
+    - Construct generated structural DTO objects when a parameter is declared
+      through `Tsify` with `from_wasm_abi`.
+    - Call the exported planner or operation through the generated binding.
+    - Exercise ownership according to by-value or by-reference parameters.
+    - Free every still-owned wrapper exactly once.
+    - Cover introduced or changed public `JsError` behavior through the
+      relevant generated-package consumer test path.
+  - **Prohibited actions**
+    - Do not substitute a Serde round trip followed by a direct Rust call.
+    - Do not assume or claim that a repository-wide generated-package test
+      harness exists.
+    - Do not invent a generic harness instead of using the relevant existing
+      consumer test and CI path.
 - **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-app/nook-platform/nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
 - **Fast tests:** `task rust:test` (nextest only, no coverage instrumentation).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.

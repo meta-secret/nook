@@ -21,19 +21,27 @@ boundary. A plain JavaScript reconstruction passed for a declared
 - Import, re-export, and call generated functions with that same `snake_case`
   name.
 - Preserve sanctioned type-only re-exports through facade modules.
-- Preserve authored Rust struct fields and enum variants in generated contracts.
+- Preserve authored Rust struct fields and enum variants in ordinary generated
+  boundary contracts.
 - Construct exported `#[wasm_bindgen]` objects through their generated classes.
 - Construct `Tsify` `from_wasm_abi` structural DTOs as the generated structural
   objects declared by that ABI.
 - Prefer direct cross-language coherence over TypeScript naming conventions.
 - Keep `js_name` only for property getters or setters and imported browser APIs.
-- Keep an external protocol's fixed field names at its narrow wire adapter.
+- Preserve established persisted and external field names at their narrow wire
+  adapters.
+- Identify the schema owner and version for each persisted or external naming
+  contract.
+- Follow the owning schema's documented version and migration policy before
+  changing an established wire name.
 - Update generated-binding consumers atomically with a callable rename.
 
 ### Prohibited actions
 
 - Do not use `as` to restore a casing alias for a generated callable.
 - Do not add `rename_all` merely to convert Rust names into JavaScript casing.
+- Do not remove a serialization rename from an established persisted or
+  external wire contract merely to align casing.
 - Do not add a second TypeScript interface over a generated Rust contract.
 - Do not reconstruct a declared `#[wasm_bindgen]` class input as a plain object
   or raw primitive.
@@ -52,7 +60,7 @@ Does not apply to:
 
 - Exported getter or setter property names.
 - Imported browser or third-party JavaScript APIs.
-- Fixed names owned by an external protocol.
+- Fixed names owned by a persisted schema or external protocol.
 
 ## Examples
 
@@ -66,6 +74,8 @@ Does not apply to:
 2. Distinguish exported callables from properties and imports.
 3. Remove callable renames and update every generated-binding consumer.
 4. Inventory `rename_all` and field-level renames on Rust-owned contracts.
+   Preserve established persisted or external names unless the owning
+   schema's version and migration policy authorizes the change.
 5. Remove generated callable casing aliases from imports and re-exports.
 6. Remove plain-object or raw-value reconstructions of parameters declared as
    generated classes.
