@@ -153,6 +153,17 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         {
             emit_api_diagnostic(cx, path.span, "reachable external reexport");
         }
+        if reachable
+            && matches!(item.kind, ItemKind::ExternCrate(..))
+            && cx
+                .tcx
+                .extern_mod_stmt_cnum(item.owner_id.def_id)
+                .is_some_and(|crate_num| {
+                    external_surface_contains_raw(cx, crate_num.as_def_id(), &mut Vec::new())
+                })
+        {
+            emit_api_diagnostic(cx, item.span, "reachable external crate reexport");
+        }
         if let ItemKind::Impl(Impl { of_trait, .. }) = item.kind
             && local_type_is_reachable(cx, cx.tcx.type_of(item.owner_id).instantiate_identity())
             && impl_exposes_reachable_surface(cx, item.owner_id.def_id, of_trait)
@@ -284,9 +295,7 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
             raw_args(alias.args)
                 || matches!(alias.kind, ty::AliasTyKind::Opaque { def_id } if
                     cx.tcx.explicit_item_bounds(def_id).iter_instantiated_copied(cx.tcx, alias.args)
-                        .filter_map(|(clause, _)| clause.as_projection_clause())
-                        .any(|projection| projection.skip_binder().term.as_type()
-                            .is_some_and(|term| contains_raw_numeric(cx, term))))
+                        .any(|(clause, _)| clause_contains_raw(cx, clause, &mut Vec::new())))
         }
         _ => false,
     }
@@ -382,17 +391,27 @@ fn definition_surface_contains_raw(
     def_id: DefId,
     stack: &mut Vec<DefId>,
 ) -> bool {
+    let args = ty::GenericArgs::identity_for_item(cx.tcx, def_id);
+    instantiated_definition_surface_contains_raw(cx, def_id, args, stack)
+}
+
+fn instantiated_definition_surface_contains_raw<'tcx>(
+    cx: &LateContext<'tcx>,
+    def_id: DefId,
+    args: ty::GenericArgsRef<'tcx>,
+    stack: &mut Vec<DefId>,
+) -> bool {
     let defaults = cx.tcx.generics_of(def_id).own_params.iter().any(|param| {
         !matches!(param.kind, ty::GenericParamDefKind::Const { .. })
             && param.default_value(cx.tcx).is_some_and(|value| {
-                contains_raw_numeric(cx, value.instantiate_identity().expect_ty())
+                contains_raw_numeric(cx, value.instantiate(cx.tcx, args).expect_ty())
             })
     });
     defaults
         || cx
             .tcx
             .explicit_predicates_of(def_id)
-            .instantiate_own_identity()
+            .instantiate_own(cx.tcx, args)
             .any(|(clause, _)| clause_contains_raw(cx, clause, stack))
         || (cx.tcx.def_kind(def_id) == DefKind::Trait
             && cx
@@ -410,23 +429,34 @@ fn associated_type_surface_contains_raw(
     def_id: DefId,
     stack: &mut Vec<DefId>,
 ) -> bool {
-    cx.tcx
-        .explicit_item_bounds(def_id)
-        .iter_identity_copied()
-        .any(|(clause, _)| clause_contains_raw(cx, clause, stack))
+    definition_surface_contains_raw(cx, def_id, stack)
+        || cx
+            .tcx
+            .explicit_item_bounds(def_id)
+            .iter_identity_copied()
+            .any(|(clause, _)| clause_contains_raw(cx, clause, stack))
         || (cx.tcx.defaultness(def_id).has_value()
             && contains_raw_numeric(cx, cx.tcx.type_of(def_id).instantiate_identity()))
 }
 
 fn callable_surface_contains_raw(cx: &LateContext<'_>, def_id: DefId) -> bool {
+    let args = ty::GenericArgs::identity_for_item(cx.tcx, def_id);
+    instantiated_callable_surface_contains_raw(cx, def_id, args)
+}
+
+fn instantiated_callable_surface_contains_raw<'tcx>(
+    cx: &LateContext<'tcx>,
+    def_id: DefId,
+    args: ty::GenericArgsRef<'tcx>,
+) -> bool {
     cx.tcx
         .fn_sig(def_id)
-        .instantiate_identity()
+        .instantiate(cx.tcx, args)
         .skip_binder()
         .inputs_and_output
         .iter()
         .any(|ty| contains_raw_numeric(cx, ty))
-        || definition_surface_contains_raw(cx, def_id, &mut Vec::new())
+        || instantiated_definition_surface_contains_raw(cx, def_id, args, &mut Vec::new())
 }
 
 fn external_surface_contains_raw(
@@ -448,6 +478,18 @@ fn external_surface_contains_raw(
                             cx,
                             cx.tcx.type_of(field.did).instantiate_identity(),
                         )
+                })
+                || cx.tcx.inherent_impls(def_id).iter().any(|impl_id| {
+                    definition_surface_contains_raw(cx, *impl_id, &mut Vec::new())
+                        || cx
+                            .tcx
+                            .associated_items(*impl_id)
+                            .in_definition_order()
+                            .any(|item| {
+                                matches!(item.kind, AssocKind::Fn { .. })
+                                    && cx.tcx.visibility(item.def_id).is_public()
+                                    && callable_surface_contains_raw(cx, item.def_id)
+                            })
                 })
         }
         DefKind::Trait => {
@@ -477,11 +519,16 @@ fn external_surface_contains_raw(
 }
 
 fn local_type_is_reachable(cx: &LateContext<'_>, ty: Ty<'_>) -> bool {
-    ty.ty_adt_def().is_some_and(|adt| {
-        adt.did()
-            .as_local()
-            .is_some_and(|id| cx.effective_visibilities.is_reachable(id))
-    })
+    match ty.kind() {
+        ty::Adt(adt, _) if adt.did().is_local() => cx
+            .effective_visibilities
+            .is_reachable(adt.did().expect_local()),
+        ty::Adt(adt, args) if adt.is_fundamental() => {
+            args.types().any(|ty| local_type_is_reachable(cx, ty))
+        }
+        ty::Ref(_, inner, _) => local_type_is_reachable(cx, *inner),
+        _ => false,
+    }
 }
 
 fn impl_exposes_reachable_surface(
@@ -510,14 +557,19 @@ fn inherited_surface_contains_raw(
     trait_id: Option<DefId>,
 ) -> bool {
     trait_id.is_some_and(|trait_id| {
-        if trait_id.is_local() {
-            return false;
-        }
         let implemented = cx.tcx.impl_item_implementor_ids(impl_id);
+        let trait_ref = cx.tcx.impl_trait_ref(impl_id).instantiate_identity();
         cx.tcx
             .provided_trait_methods(trait_id)
             .filter(|method| !implemented.contains_key(&method.def_id))
-            .any(|method| callable_surface_contains_raw(cx, method.def_id))
+            .any(|method| {
+                let args = ty::GenericArgs::identity_for_item(cx.tcx, method.def_id).rebase_onto(
+                    cx.tcx,
+                    trait_id,
+                    trait_ref.args,
+                );
+                instantiated_callable_surface_contains_raw(cx, method.def_id, args)
+            })
     })
 }
 

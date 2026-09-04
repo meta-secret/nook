@@ -37,6 +37,14 @@ pub trait AssociatedDomainDefault {
     type Value = DomainAlias;
 }
 
+pub trait GenericAssociatedDomain {
+    type Values<T: Iterator<Item = DomainAlias>>;
+}
+
+pub trait LocalGenericDefault<T> {
+    fn inherited(&self, _value: T) {}
+}
+
 impl<T: DomainBound> Wrapper<T> {
     pub fn clean(&self) {}
 }
@@ -57,9 +65,11 @@ where
     fn private_method(&self) {}
 }
 
-pub use external_api::CleanRecord;
+pub use external_api::{CleanInherent, CleanRecord};
 
 impl external_api::CleanDefault for AccountBalance {}
+impl external_api::GenericDefault<UserId> for AccountBalance {}
+impl LocalGenericDefault<UserId> for Wrapper<UserId> {}
 
 pub fn wrapped_user(id: Wrapper<UserId>) -> Result<(AccountBalance, UserId), DomainError> {
     let _ = id;

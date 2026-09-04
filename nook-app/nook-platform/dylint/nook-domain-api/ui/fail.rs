@@ -4,7 +4,7 @@
 #![allow(dead_code)]
 #![allow(private_interfaces)]
 
-extern crate external_api;
+pub extern crate external_api;
 
 pub type RawAlias = u128;
 pub type RawSink = dyn Fn(u64) -> RawAlias;
@@ -121,6 +121,14 @@ pub trait AssociatedDefault {
     type Value = RawAlias;
 }
 
+pub trait GenericAssociatedType {
+    type Values<T: Iterator<Item = RawAlias>>;
+}
+
+pub trait LocalGenericDefault<T> {
+    fn inherited(&self, _value: T) {}
+}
+
 pub trait EnclosingTrait<T>
 where
     T: Iterator<Item = RawAlias>,
@@ -137,7 +145,11 @@ where
 
 pub use external_api::RawRecord;
 pub use external_api::raw_module::*;
+pub use external_api::{RawInherent, raw_opaque};
 
 impl external_api::RawDefault for UserId {}
+impl external_api::GenericDefault<u64> for UserId {}
+impl external_api::ReferenceRawDefault for &UserId {}
+impl LocalGenericDefault<u64> for Wrapper<UserId> {}
 
 fn main() {}
