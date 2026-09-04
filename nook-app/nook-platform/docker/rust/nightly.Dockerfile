@@ -10,7 +10,7 @@ ARG CARGO_DYLINT_VERSION=6.0.1
 # cargo-fuzz has a usable release binary. cargo-dylint release binaries bake a
 # CI-only driver path, so install the pinned crates once into this image layer.
 RUN rustup toolchain install "${DYLINT_NIGHTLY}" \
-      --component clippy,llvm-tools-preview,rustc-dev
+      --component clippy,rustfmt,llvm-tools-preview,rustc-dev
 
 RUN curl -fsSL \
       "https://github.com/rust-fuzz/cargo-fuzz/releases/download/${CARGO_FUZZ_VERSION}/cargo-fuzz-${CARGO_FUZZ_VERSION}-x86_64-unknown-linux-musl.tar.gz" \
