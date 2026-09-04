@@ -205,7 +205,7 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
             .skip_binder()
             .inputs_and_output
             .iter()
-            .any(|element| contains_raw_numeric(cx, *element)),
+            .any(|element| contains_raw_numeric(cx, element)),
         ty::Alias(alias) => alias
             .args
             .types()
@@ -224,7 +224,7 @@ fn check_callable(cx: &LateContext<'_>, local_def_id: LocalDefId, span: Span) {
     if signature
         .inputs_and_output
         .iter()
-        .any(|ty| contains_raw_numeric(cx, *ty))
+        .any(|ty| contains_raw_numeric(cx, ty))
     {
         let diagnostic_span = cx.tcx.def_ident_span(local_def_id).unwrap_or(span);
         emit_api_diagnostic(cx, diagnostic_span, "reachable function signature");

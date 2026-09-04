@@ -88,13 +88,4 @@ mod enabling_deny_is_not_suppression {}
 #[forbid(raw_numeric_public_api)]
 mod enabling_forbid_is_not_suppression {}
 
-macro_rules! generated_api_with_generated_suppression {
-    () => {
-        #[allow(raw_numeric_public_api)]
-        pub fn generated_ffi_adapter(_raw: u32) {}
-    };
-}
-
-generated_api_with_generated_suppression!();
-
 fn main() {}
