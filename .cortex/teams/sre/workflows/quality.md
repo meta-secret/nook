@@ -526,7 +526,6 @@ Use this workflow for quality, CI, and deployment changes.
     - Human-readable coverage tables must not be scraped with shell.
     - `nook-app/nook-platform/nook-core/coverage-floor.json` exhaustively classifies every Cargo package.
     - PR #1319 stages companion WASM at 18%, Hive at 60%, and `nook-wasm` at 51%; every other enforced package requires 90%.
-    - The authenticator-domain 90% gate remains proposed until hosted validation proves the new tests satisfy it.
     - A required successor raises every testable first-party package to at least 90%. Only the explicit non-testable `nook-fuzz` harness and vendored `arrayref` exclusions remain.
     - Package-specific hosted native, WASM, Dylint, Hive, and preflight lanes are the coverage enforcement points; reporting never substitutes for those gates.
 20. **Coverage cache preservation:** Warm the full portable coverage graph with
