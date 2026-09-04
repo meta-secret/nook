@@ -435,10 +435,12 @@ tasks:
         GHA_CACHE_WRITE_ENABLED=
         {{.DOCKER}} buildx bake
         {{.NOOK_BAKE_FILES}}
+        --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")"
         rust-dylint
       - |
         if [ -n "${GHA_CACHE_WRITE_ENABLED:-}" ] || [ "${NOOK_REGISTRY_CACHE_LOCAL_PUBLISH:-}" = "1" ]; then
           GHA_CACHE_WRITE_ENABLED=1 {{.DOCKER}} buildx bake \
             {{.NOOK_BAKE_FILES}} \
+            --set "rust-dylint.args.RUST_DYLINT_COVERAGE_FLOOR=$(jq -er '.package_lines_percent["nook_domain_api"] | numbers' "{{.REPO_ROOT}}/nook-app/nook-platform/nook-core/coverage-floor.json")" \
             rust-dylint
         fi

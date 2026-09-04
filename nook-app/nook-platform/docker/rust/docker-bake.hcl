@@ -368,7 +368,6 @@ target "rust-dylint" {
   platforms  = ["linux/amd64"]
   contexts = {
     rust-base = "target:rust-base"
-    coverage-policy = "./nook-app/nook-platform/nook-core"
   }
   cache-from = rust_ecosystem_dylint_cache_from
   cache-to   = rust_ecosystem_dylint_cache_to
