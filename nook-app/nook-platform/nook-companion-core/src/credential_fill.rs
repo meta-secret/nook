@@ -126,14 +126,13 @@ pub mod field {
         #[test]
         fn variant_payloads_preserve_their_field_index() {
             for observation in [
-                Credential {
+                Observation::from(Credential {
                     field_index: 1.into(),
                     role: CredentialRole::Username,
                     editability: Editability::Writable,
-                }
-                .into(),
-                NewPassword::from(Index::from(1)).into(),
-                OneTimeCode::from(Index::from(1)).into(),
+                }),
+                Observation::from(NewPassword::from(Index::from(1))),
+                Observation::from(OneTimeCode::from(Index::from(1))),
             ] {
                 assert_eq!(observation.field_index(), Index::from(1));
             }
