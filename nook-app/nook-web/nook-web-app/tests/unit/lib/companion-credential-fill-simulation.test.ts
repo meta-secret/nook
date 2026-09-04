@@ -66,7 +66,9 @@ function applyCredentialPlan(
             candidate.field_index.value === assignedFieldIndex.value,
         )
         if (!field) {
-          throw new Error('credential fill plan referenced an unknown fake field')
+          throw new Error(
+            'credential fill plan referenced an unknown fake field',
+          )
         }
         field.value = FAKE_CREDENTIAL_VALUES[assignment.credential]
       } finally {
