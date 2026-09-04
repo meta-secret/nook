@@ -1,8 +1,5 @@
 use super::{NookError, NookProviderSyncRevision, wasm_bindgen};
-use nook_core::{
-    ProviderVaultDecision, ProviderVaultDecisionReason, ProviderVaultIdentityEligibility,
-    VaultSyncConflict, VaultSyncConflictKind,
-};
+use nook_core::VaultSyncConflict;
 use std::collections::BTreeMap;
 use wasm_bindgen::JsError;
 
@@ -375,7 +372,10 @@ impl NookPendingSyncConflict {
 #[cfg(test)]
 mod pending_sync_conflict_tests {
     use super::*;
-    use nook_core::{CurrentVaultReplaceability, IdentityVaultAppGrantKind};
+    use nook_core::{
+        CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecision,
+        ProviderVaultDecisionReason, ProviderVaultIdentityEligibility, VaultSyncConflictKind,
+    };
 
     #[test]
     fn pending_store_id_factory_marks_unsaved_provider() -> Result<(), wasm_bindgen::JsError> {

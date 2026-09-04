@@ -6,6 +6,9 @@
 
 use std::cell::Cell;
 
+#[cfg(test)]
+use nook_core::VaultApplication;
+
 thread_local! {
     static CONFIGURED_APPLICATION: Cell<Option<nook_core::VaultApplication>> = const { Cell::new(None) };
 }

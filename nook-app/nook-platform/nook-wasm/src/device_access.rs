@@ -1,8 +1,7 @@
 //! Read-only dashboard projection for browser device and vault access metadata.
 
 use nook_core::{
-    AppId, DeviceAccessIdentityState, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment,
-    PasskeyBackupState, StoreId,
+    AppId, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment, PasskeyBackupState, StoreId,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -701,7 +700,7 @@ mod browser_tests {
     use super::*;
     use crate::NookError;
     use crate::storage::identity_record;
-    use nook_core::{AppKey, DeviceId, IdentityRecord};
+    use nook_core::{AppKey, DeviceAccessIdentityState, DeviceId, IdentityRecord};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);

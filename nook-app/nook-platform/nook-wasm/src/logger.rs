@@ -36,7 +36,6 @@ use tracing_subscriber::filter::LevelFilter;
 use tracing_subscriber::fmt::format::DefaultFields;
 use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::Registry;
-use tracing_subscriber::reload;
 use tracing_subscriber::reload::Layer as ReloadLayer;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::wasm_bindgen;
