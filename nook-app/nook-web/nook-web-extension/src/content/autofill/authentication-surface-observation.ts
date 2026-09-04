@@ -70,6 +70,11 @@ export type AuthenticationMutationImpact = {
   shouldScheduleScan: boolean
 }
 
+type OwnedFormAssociationRequest = {
+  node: Node
+  boundary: HTMLFormElement
+}
+
 const AUTHENTICATION_WORKFLOW_MUTATION_SELECTOR = [
   'a[href]',
   'canvas',
@@ -187,7 +192,38 @@ export function mutationBelongsOnlyToMountedWidget(
 export function authenticationWorkflowBoundary(
   workflow: PasswordFormObservation,
 ): ParentNode {
+  if (
+    workflow.formScope.kind === 'owned' &&
+    workflow.root === workflow.formScope.owner.ownerDocument
+  ) {
+    return workflow.formScope.owner
+  }
   return workflow.root
+}
+
+function nodeTouchesOwnedFormAssociation({
+  node,
+  boundary,
+}: OwnedFormAssociationRequest): boolean {
+  const controls = Array.from(boundary.elements)
+  let element: Element
+  if (node instanceof Element) element = node
+  else if (node.parentElement instanceof Element) element = node.parentElement
+  else return false
+  if (
+    controls.some(
+      (control) =>
+        control === element ||
+        control.contains(element) ||
+        element.contains(control),
+    )
+  ) {
+    return true
+  }
+  return Array.from(element.querySelectorAll('label')).some((label) => {
+    const control = label.control
+    return control ? controls.includes(control) : false
+  })
 }
 
 type WorkflowLabelDependencyRequest = {
@@ -318,9 +354,20 @@ export function mutationTouchesAuthenticationWorkflow(
   if (mutationTouchesWorkflowLabelDependency(labelDependencyRequest)) {
     return true
   }
+  if (boundary instanceof HTMLFormElement) {
+    const associationRequest: OwnedFormAssociationRequest = {
+      node: record.target,
+      boundary,
+    }
+    if (nodeTouchesOwnedFormAssociation(associationRequest)) return true
+  }
   if (record.type !== 'childList') return false
   return [...record.addedNodes, ...record.removedNodes].some((node) => {
     if (boundary.contains(node) || node.contains(boundary)) return true
+    if (boundary instanceof HTMLFormElement) {
+      const associationRequest: OwnedFormAssociationRequest = { node, boundary }
+      return nodeTouchesOwnedFormAssociation(associationRequest)
+    }
     return false
   })
 }
