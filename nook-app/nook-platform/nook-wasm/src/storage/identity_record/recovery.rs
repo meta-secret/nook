@@ -452,8 +452,6 @@ mod tests {
         let marker_v1 = format!("pending_identity_reconciliation_v1:{store_id}");
         idb_put_string(&marker_v2, "stale-v2").await?;
         idb_put_string(&marker_v1, "stale-v1").await?;
-        idb_put_string(indexed_db::APP_ID_KEY, inaccessible_key.app_id().as_str()).await?;
-
         let recovery =
             delete_identity_directory_for_recovery(Some(inaccessible_key.app_id().clone())).await?;
 

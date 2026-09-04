@@ -62,7 +62,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     );
     Ok(())
 }
-
 #[test]
 fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow::Result<()> {
     let root = repository_root()?;
@@ -77,7 +76,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let fuzz_manifest = read(&root.join("nook-app/nook-platform/fuzz/Cargo.toml"))?;
     let policy = read_json(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
     let enforced = string_set(&policy, "enforced_packages")?;
-
     for package in &enforced {
         assert!(
             [&product, &nightly, &platform_tasks, &hive, &preflight]
@@ -89,7 +87,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
             "{package} has no hosted coverage command"
         );
     }
-
     let portable = "nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core";
     assert!(product.contains(&format!("for package in {portable}; do")));
     assert!(platform_tasks.contains(&format!("packages=\"{portable}\"")));
@@ -110,7 +107,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(nightly.contains("-name 'libnook_domain_api@*.so' -print"));
     assert!(nightly.contains("test \"$#\" -eq 1 && test -f \"$1\""));
     assert!(nightly.contains("$(dirname \"$1\")/libnook_domain_api-c0ffee.so"));
-
     assert!(product.contains("for package in nook-companion-wasm nook-wasm; do"));
     assert!(product.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
     assert!(product.contains("--target wasm32-unknown-unknown --release -p \"$package\""));
@@ -140,7 +136,6 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_coverage_stage.contains(
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
-
     assert!(hive.contains("ARG HIVE_RUST_COVERAGE_FLOOR=60"));
     assert!(hive.contains("ARG LACE_RUST_COVERAGE_FLOOR=75"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));
@@ -185,24 +180,20 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(!preflight.contains("/meta-secret/nook/preflight/target"));
     assert!(!preflight.contains("/opt/nook/preflight"));
     assert!(!preflight.contains("/opt/nook/coverage-floor.json"));
-
     assert!(minds_manifest.contains("exclude = [\"vendor/arrayref\"]"));
     assert!(fuzz_manifest.contains("cargo-fuzz = true"));
     assert!(fuzz_manifest.contains("test = false"));
     Ok(())
 }
-
 fn repository_root() -> anyhow::Result<PathBuf> {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .map(Path::to_path_buf)
         .context("preflight manifest must have a repository parent")
 }
-
 fn read(path: &Path) -> anyhow::Result<String> {
     fs::read_to_string(path).with_context(|| format!("read {}", path.display()))
 }
-
 fn read_json(path: &Path) -> anyhow::Result<Value> {
     serde_json::from_str(&read(path)?).with_context(|| format!("parse {}", path.display()))
 }
