@@ -92,6 +92,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         .and_then(|(_, later)| later.split_once("llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \\\n    && nook-sccache-report wasm-node-test-and-coverage"))
         .is_some_and(|(_, later)| later.contains("--features browser-wasm-tests --fail-under-lines \"$nook_wasm_floor\"")));
     assert!(product.contains("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true"));
+    assert!(product.contains(
+        "WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=\"$runner\""
+    ));
     assert_eq!(product.matches("--features browser-wasm-tests").count(), 2);
     assert!(product.contains(".package_lines_percent[\"nook-wasm\"]"));
     assert!(product.contains("--fail-under-lines \"$nook_wasm_floor\""));
