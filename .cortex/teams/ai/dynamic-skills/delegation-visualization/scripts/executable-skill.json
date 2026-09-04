@@ -3,7 +3,7 @@
   "id": "delegation-visualization",
   "executionKind": "in-process-read-only",
   "requestKind": "gizmo-delegation-visualization-v1",
-  "resultKind": "gizmo-delegation-tree-v1",
+  "resultKind": "gizmo-delegation-yaml-v1",
   "policyPaths": [
     ".cortex/teams/ai/dynamic-skills/delegation-visualization/SKILL.md"
   ],

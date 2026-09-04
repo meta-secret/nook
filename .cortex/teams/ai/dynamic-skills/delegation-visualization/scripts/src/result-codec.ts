@@ -1,3 +1,4 @@
+import { stringify as stringifyYaml } from 'yaml';
 import {
   DelegationVisualizationContractKind,
   DELEGATION_VISUALIZATION_RESULT_BYTE_LIMIT,
@@ -7,12 +8,12 @@ import {
 
 enum DelegationVisualizationResultField {
   Kind = 'kind',
-  Tree = 'tree',
+  Yaml = 'yaml',
 }
 
 type DelegationVisualizationResultTransport = {
   readonly kind: string | false;
-  readonly tree: string | false;
+  readonly yaml: string | false;
 };
 
 const UTF8_ENCODER = new TextEncoder();
@@ -50,13 +51,13 @@ export function decodeDelegationVisualizationResult(
       expected.includes(key as DelegationVisualizationResultField),
     ) ||
     transport.kind !== DelegationVisualizationContractKind.Result ||
-    typeof transport.tree !== 'string'
+    typeof transport.yaml !== 'string'
   ) {
     throw new DelegationVisualizationResultVerificationError();
   }
   return {
     kind: DelegationVisualizationContractKind.Result,
-    tree: transport.tree,
+    yaml: transport.yaml,
   };
 }
 
@@ -68,20 +69,17 @@ type VerifyDelegationVisualizationResultRequest = {
 export function verifyDelegationVisualizationResult(
   input: VerifyDelegationVisualizationResultRequest,
 ): DelegationVisualizationResult {
-  const expectedLines = ['gizmo'];
-  const lastTaskIndex = input.request.tasks.length - 1;
-  for (const [index, task] of input.request.tasks.entries()) {
-    const lastTask = index === lastTaskIndex;
-    expectedLines.push(`${lastTask ? '└─' : '├─'} ${task.team}`);
-    const dependencySuffix =
-      task.dependencies.length === 0
-        ? ''
-        : ` [after: ${task.dependencies.join(', ')}]`;
-    expectedLines.push(
-      `${lastTask ? '  ' : '│ '}└─ ${task.description}${dependencySuffix}`,
-    );
-  }
-  if (input.result.tree !== `${expectedLines.join('\n')}\n`) {
+  const expectedDocument = {
+    gizmo: {
+      tasks: input.request.tasks.map((task) => ({
+        id: task.id,
+        team: task.team,
+        description: task.description,
+        depends_on: task.dependencies,
+      })),
+    },
+  };
+  if (input.result.yaml !== stringifyYaml(expectedDocument)) {
     throw new DelegationVisualizationResultVerificationError();
   }
   return input.result;

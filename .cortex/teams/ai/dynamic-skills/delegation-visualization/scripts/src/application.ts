@@ -14,7 +14,7 @@ export function executeDelegationVisualizationApplication(
 ): DelegationVisualizationResult {
   const candidate: DelegationVisualizationResult = {
     kind: DelegationVisualizationContractKind.Result,
-    tree: renderDelegationVisualization(request),
+    yaml: renderDelegationVisualization(request),
   };
   const result = decodeDelegationVisualizationResult(JSON.stringify(candidate));
   return verifyDelegationVisualizationResult({ request, result });

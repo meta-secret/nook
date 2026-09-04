@@ -53,7 +53,7 @@ type CliResponse = {
       readonly line: number;
       readonly message: string;
     }[];
-    readonly tree?: string;
+    readonly yaml?: string;
     readonly actions?: readonly {
       readonly description: string;
       readonly exampleRequest: string;
@@ -224,13 +224,19 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(outcome.exitCode).toBe(0);
     expect(response.family).toBe(SkillRequestFamily.DelegationVisualization);
     expect(response.operation).toBe('render');
-    expect(response.result?.tree).toBe(
+    expect(response.result?.yaml).toBe(
       [
-        'gizmo',
-        '├─ ai',
-        '│ └─ update Cortex',
-        '└─ web-development',
-        '  └─ create security key component [after: update-cortex]',
+        'gizmo:',
+        '  tasks:',
+        '    - id: update-cortex',
+        '      team: ai',
+        '      description: update Cortex',
+        '      depends_on: []',
+        '    - id: create-security-key',
+        '      team: web-development',
+        '      description: create security key component',
+        '      depends_on:',
+        '        - update-cortex',
         '',
       ].join('\n'),
     );

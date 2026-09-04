@@ -6,7 +6,7 @@ export const DELEGATION_VISUALIZATION_RESULT_BYTE_LIMIT = 64 * 1_024;
 
 export enum DelegationVisualizationContractKind {
   Request = 'gizmo-delegation-visualization-v1',
-  Result = 'gizmo-delegation-tree-v1',
+  Result = 'gizmo-delegation-yaml-v1',
 }
 
 export enum DelegationVisualizationTeam {
@@ -31,5 +31,5 @@ export type RenderDelegationVisualizationRequest = {
 
 export type DelegationVisualizationResult = {
   readonly kind: DelegationVisualizationContractKind.Result;
-  readonly tree: string;
+  readonly yaml: string;
 };
