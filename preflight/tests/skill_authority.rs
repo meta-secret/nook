@@ -1,9 +1,14 @@
-fn is_regular_file(path: &std::path::Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+};
+
+fn is_regular_file(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_file())
 }
 
-fn is_regular_directory(path: &std::path::Path) -> bool {
-    std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+fn is_regular_directory(path: &Path) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
 }
 
 fn is_kebab_slug(value: &str) -> bool {
@@ -16,7 +21,7 @@ fn is_kebab_slug(value: &str) -> bool {
         })
 }
 
-fn is_valid_application_root(cortex_root: &std::path::Path, path: &std::path::Path) -> bool {
+fn is_valid_application_root(cortex_root: &Path, path: &Path) -> bool {
     let Ok(relative) = path.strip_prefix(cortex_root) else {
         return false;
     };
@@ -64,12 +69,12 @@ fn is_valid_application_root(cortex_root: &std::path::Path, path: &std::path::Pa
 
 #[test]
 fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
-    let root = std::env::var_os("NOOK_REPO_ROOT").map_or_else(
-        || std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
-        std::path::PathBuf::from,
+    let root = env::var_os("NOOK_REPO_ROOT").map_or_else(
+        || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
+        PathBuf::from,
     );
     anyhow::ensure!(!root.join("skills-lock.json").exists());
-    let readme = std::fs::read_to_string(root.join("README.md"))?;
+    let readme = fs::read_to_string(root.join("README.md"))?;
     anyhow::ensure!(
         readme.contains("Project skill semantics live only in team-owned Markdown under `.cortex`")
             && readme.contains(
@@ -93,7 +98,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
         "CODEX.md",
         ".cursor/rules.md",
     ] {
-        let content = std::fs::read_to_string(root.join(path))?;
+        let content = fs::read_to_string(root.join(path))?;
         for marker in obsolete {
             anyhow::ensure!(
                 !content.contains(marker),
@@ -106,7 +111,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     let mut cortex_pending = vec![cortex_root.clone()];
     let mut application_roots = Vec::new();
     while let Some(directory) = cortex_pending.pop() {
-        for entry in std::fs::read_dir(directory)? {
+        for entry in fs::read_dir(directory)? {
             let entry = entry?;
             let file_type = entry.file_type()?;
             if file_type.is_symlink() || !file_type.is_dir() {
@@ -122,7 +127,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
         }
     }
     application_roots.sort();
-    let taskfile = std::fs::read_to_string(root.join(".task/agentic-ai.yml"))?;
+    let taskfile = fs::read_to_string(root.join(".task/agentic-ai.yml"))?;
     anyhow::ensure!(
         !taskfile.contains("SKILL_APPLICATION_DIRS"),
         "skills tasks cannot maintain a manual executable-package inventory"
@@ -135,7 +140,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
     let mut pending = vec![prompt_root.clone()];
     pending.extend(application_roots);
     while let Some(directory) = pending.pop() {
-        for entry in std::fs::read_dir(directory)? {
+        for entry in fs::read_dir(directory)? {
             let entry = entry?;
             let file_type = entry.file_type()?;
             let path = entry.path();
@@ -149,7 +154,7 @@ fn active_root_guidance_uses_cortex_skill_authority() -> anyhow::Result<()> {
             } else if path.file_name().is_some_and(|name| name == "SKILL.md") {
                 anyhow::bail!("executable applications cannot mirror skill cards");
             } else if path.starts_with(&prompt_root) {
-                let content = std::fs::read_to_string(&path)?;
+                let content = fs::read_to_string(&path)?;
                 for marker in obsolete {
                     anyhow::ensure!(
                         !content.contains(marker),

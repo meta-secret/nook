@@ -1,3 +1,4 @@
+use super::hosted_delivery_contracts;
 use super::*;
 
 #[test]
@@ -54,7 +55,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         !verify.contains("_web:build:parallel"),
         "the sealed image already contains the validated production web build"
     );
-    super::hosted_delivery_contracts::assert_main_web_e2e_core_contract(&ci);
+    hosted_delivery_contracts::assert_main_web_e2e_core_contract(&ci);
 
     let web = read(&root, "nook-app/nook-web/Taskfile.yml");
     let e2e = section(
@@ -68,7 +69,7 @@ fn ci_reuses_wasm_and_web_artifacts_instead_of_rebuilding_them() -> anyhow::Resu
         "the e2e task must rely on the freshness-checked build instead of rebuilding unconditionally"
     );
 
-    super::hosted_delivery_contracts::assert_e2e_build_if_needed_contract(&root);
+    hosted_delivery_contracts::assert_e2e_build_if_needed_contract(&root);
 
     let extension = read(&root, "nook-app/nook-web/nook-web-extension/Taskfile.yml");
     let extension_check = section(

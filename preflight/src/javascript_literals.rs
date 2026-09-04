@@ -1,3 +1,5 @@
+use std::str::Chars;
+
 pub(super) fn static_javascript_string(
     node: tree_sitter::Node<'_>,
     source: &str,
@@ -82,7 +84,7 @@ fn decode_javascript_escapes(source: &str) -> Option<String> {
     Some(decoded)
 }
 
-fn decode_unicode_escape(chars: &mut std::str::Chars<'_>) -> Option<char> {
+fn decode_unicode_escape(chars: &mut Chars<'_>) -> Option<char> {
     if chars.clone().next() == Some('{') {
         chars.next();
         let mut value = 0_u32;
@@ -101,7 +103,7 @@ fn decode_unicode_escape(chars: &mut std::str::Chars<'_>) -> Option<char> {
     decode_fixed_hex(chars, 4)
 }
 
-fn decode_fixed_hex(chars: &mut std::str::Chars<'_>, digits: usize) -> Option<char> {
+fn decode_fixed_hex(chars: &mut Chars<'_>, digits: usize) -> Option<char> {
     let mut value = 0_u32;
     for _ in 0..digits {
         value = value

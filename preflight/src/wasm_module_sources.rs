@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
+use std::ffi::OsStr;
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::javascript_literals::{
     semantic_javascript_name as semantic_node_name, static_javascript_string,
@@ -208,7 +209,7 @@ fn local_factory_return_type(
     let source = fs::read_to_string(path).ok()?;
     let language = if path
         .extension()
-        .and_then(std::ffi::OsStr::to_str)
+        .and_then(OsStr::to_str)
         .is_some_and(|extension| matches!(extension, "tsx" | "jsx"))
     {
         tree_sitter_typescript::LANGUAGE_TSX.into()
@@ -489,7 +490,7 @@ fn local_forwarded_exports(path: &Path) -> Option<Vec<ForwardedExport>> {
     let source = fs::read_to_string(path).ok()?;
     let language = if path
         .extension()
-        .and_then(std::ffi::OsStr::to_str)
+        .and_then(OsStr::to_str)
         .is_some_and(|extension| matches!(extension, "tsx" | "jsx"))
     {
         tree_sitter_typescript::LANGUAGE_TSX.into()
@@ -871,7 +872,7 @@ fn required_module(node: tree_sitter::Node<'_>, source: &str) -> Option<String> 
 fn strip_module_extension(mut path: PathBuf) -> PathBuf {
     if path
         .extension()
-        .and_then(std::ffi::OsStr::to_str)
+        .and_then(OsStr::to_str)
         .is_some_and(|extension| MODULE_EXTENSIONS.contains(&extension))
     {
         path.set_extension("");
@@ -883,8 +884,8 @@ fn normalize_local_module_path(path: &Path) -> PathBuf {
     let mut normalized = PathBuf::new();
     for component in path.components() {
         match component {
-            std::path::Component::CurDir => {}
-            std::path::Component::ParentDir => {
+            Component::CurDir => {}
+            Component::ParentDir => {
                 normalized.pop();
             }
             component => normalized.push(component.as_os_str()),
@@ -895,16 +896,16 @@ fn normalize_local_module_path(path: &Path) -> PathBuf {
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{env, fs, io, path::PathBuf, process};
 
     use super::{is_wasm_callable_export, is_wasm_callable_source};
 
-    fn temp_root(name: &str) -> std::path::PathBuf {
-        std::env::temp_dir().join(format!("nook-{name}-{}", std::process::id()))
+    fn temp_root(name: &str) -> PathBuf {
+        env::temp_dir().join(format!("nook-{name}-{}", process::id()))
     }
 
     #[test]
-    fn follows_arbitrary_local_reexport_chains() -> Result<(), std::io::Error> {
+    fn follows_arbitrary_local_reexport_chains() -> Result<(), io::Error> {
         let root = temp_root("wasm-facade");
         fs::create_dir_all(&root)?;
         fs::write(root.join("bridge.ts"), "export * from '$app-wasm';")?;
@@ -916,7 +917,7 @@ mod tests {
     }
 
     #[test]
-    fn follows_import_then_export_facades() -> Result<(), std::io::Error> {
+    fn follows_import_then_export_facades() -> Result<(), io::Error> {
         let root = temp_root("wasm-import-export-facade");
         fs::create_dir_all(&root)?;
         fs::write(
@@ -935,7 +936,7 @@ mod tests {
     }
 
     #[test]
-    fn follows_commonjs_facade_exports() -> Result<(), std::io::Error> {
+    fn follows_commonjs_facade_exports() -> Result<(), io::Error> {
         let root = temp_root("wasm-commonjs-facade");
         fs::create_dir_all(&root)?;
         fs::write(
@@ -954,7 +955,7 @@ mod tests {
     }
 
     #[test]
-    fn preserves_provenance_per_exported_symbol() -> Result<(), std::io::Error> {
+    fn preserves_provenance_per_exported_symbol() -> Result<(), io::Error> {
         let root = temp_root("wasm-mixed-facade");
         fs::create_dir_all(&root)?;
         fs::write(
