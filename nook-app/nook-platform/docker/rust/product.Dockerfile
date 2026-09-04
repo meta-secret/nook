@@ -815,7 +815,7 @@ COPY --from=builder-wasm /opt/nook/wasm-coverage-passed /coverage/wasm-coverage-
 
 # On-demand sealed Rust image for explicit `task rust:*`, `task wasm:*`, and Rust formatting
 # commands. Normal setup/CI does not load this multi-GB image into Docker's runtime image store.
-FROM builder-wasm AS nook-rust
+FROM builder-wasm-handoff AS nook-rust
 
 WORKDIR /meta-secret/nook
 
@@ -829,7 +829,8 @@ RUN test -f nook-app/Taskfile.yml \
     && git commit -q -m "nook-rust source snapshot" >/dev/null
 
 # Browser tooling is already present because hosted nook-wasm coverage exercises browser suites.
-FROM nook-rust AS nook-rust-browser
+FROM builder-wasm AS nook-rust-browser
+COPY --from=nook-rust /meta-secret/nook /meta-secret/nook
 
 # -----------------------------------------------------------------------------
 

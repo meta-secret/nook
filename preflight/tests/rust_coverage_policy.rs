@@ -12,22 +12,15 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     let excluded_names = excluded.keys().cloned().collect::<BTreeSet<_>>();
     let discovered = discover_packages(&root)?;
     let classified: BTreeSet<_> = enforced.union(&excluded_names).cloned().collect();
-    assert_eq!(
-        discovered.keys().cloned().collect::<BTreeSet<_>>(),
-        classified,
-        "every Cargo package must be independently enforced or explicitly excluded"
-    );
+    let discovered_names = discovered.keys().cloned().collect::<BTreeSet<_>>();
+    assert_eq!(discovered_names, classified);
     assert!(enforced.is_disjoint(&excluded_names));
-    let policy_floor = policy["lines_percent"].as_f64();
-    assert!(policy_floor.is_some_and(|floor| floor >= 90.0));
+    assert!(matches!(policy["lines_percent"].as_f64(), Some(floor) if floor >= 90.0));
     let package_floors = policy["package_lines_percent"]
         .as_object()
         .context("package_lines_percent must be an object")?;
-    assert_eq!(
-        package_floors.keys().cloned().collect::<BTreeSet<_>>(),
-        enforced,
-        "every enforced package must have an explicit coverage entry"
-    );
+    let floor_names = package_floors.keys().cloned().collect::<BTreeSet<_>>();
+    assert_eq!(floor_names, enforced);
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
             "nook-wasm" => 51.0,
@@ -57,6 +50,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let docker_tasks = read(&root.join("nook-app/nook-platform/docker/Taskfile.yml"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
+    let hive_ci = read(&root.join(".github/workflows/hive.yml"))?;
     let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
     let hive_arc = read(&root.join("agentic-ai/minds/hive/run-arc-tests.sh"))?;
     let preflight = read(&root.join("preflight/Dockerfile"))?;
@@ -125,6 +119,8 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(browser.contains("https://bun.sh/install") && !browser.contains("--mount=type=secret"));
     assert!(product.contains("--from=builder-wasm-handoff /opt/nook/wasm-handoff"));
     assert!(product.contains("--from=builder-wasm /opt/nook/wasm-coverage-passed"));
+    assert!(product.contains("FROM builder-wasm-handoff AS nook-rust"));
+    assert_eq!(hive_ci.matches("nook-core/coverage-floor.json").count(), 2);
     assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
     assert!(hive_tasks.contains(".package_lines_percent.lace | numbers"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));
@@ -155,8 +151,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         preflight
             .matches("ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
             .count(),
-        2,
-        "chef and dependency roots must keep generated Cargo output outside repository source"
+        2
     );
     assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
     assert!(preflight.contains(".package_lines_percent[\"nook-preflight\"] | numbers"));
