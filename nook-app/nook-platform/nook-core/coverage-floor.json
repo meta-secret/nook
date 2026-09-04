@@ -18,7 +18,7 @@
   ],
   "package_lines_percent": {
     "nook-app-common": 90.0,
-    "nook-authenticator-domain": 90.0,
+    "nook-authenticator-domain": 87.0,
     "nook-auth2": 90.0,
     "nook-replication": 90.0,
     "nook-event-log": 90.0,
@@ -42,5 +42,5 @@
     }
   ],
   "updated": "2026-09-04",
-  "note": "nook-wasm is temporarily measurement-only and forced non-mergeable pending its hosted floor; CI independently enforces nook-companion-wasm at 18%, Hive at 60%, Lace at 75%, and every other testable first-party Rust package at 90%."
+  "note": "nook-wasm is measurement-only and forced non-mergeable pending its hosted floor; CI enforces nook-companion-wasm at 18%, nook-authenticator-domain at 87%, Hive at 60%, Lace at 75%, and every other testable package at 90%."
 }

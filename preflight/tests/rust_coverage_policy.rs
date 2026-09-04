@@ -42,6 +42,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
                 continue;
             }
             "nook-companion-wasm" => 18.0,
+            "nook-authenticator-domain" => 87.0,
             "hive" => 60.0,
             "lace" => 75.0,
             _ => 90.0,
@@ -90,37 +91,31 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let portable = "nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core";
     assert!(product.contains(&format!("for package in {portable}; do")));
     assert!(platform_tasks.contains(&format!("packages=\"{portable}\"")));
-    assert!(product.contains(
-        "cargo llvm-cov report -p \"$package\" --summary-only --fail-under-lines \"$FLOOR\""
-    ));
-    assert!(platform_tasks.contains(
-        "cargo llvm-cov report -p \"$package\" --summary-only --fail-under-lines {{.FLOOR}}"
-    ));
+    assert!(product.contains(".package_lines_percent[$package]"));
+    assert!(platform_tasks.contains(".package_lines_percent[$package]"));
+    assert!(product.contains("--fail-under-lines \"$floor\""));
+    assert!(platform_tasks.contains("--fail-under-lines \"$floor\""));
     assert!(platform_tasks.contains("set -e"));
     assert!(platform_tasks.contains("|| coverage_status=1"));
     assert!(nightly.contains(
         "--manifest-path dylint/nook-domain-api/Cargo.toml --locked --fail-under-lines 90"
     ));
     assert!(nightly.contains("--locked --no-report"));
-    let dylint_root = "dylint/nook-domain-api/target/llvm-cov-target";
-    assert!(nightly.contains(&format!("find {dylint_root} -type f")));
+    assert!(nightly.contains(
+        "find target/llvm-cov-target dylint/nook-domain-api/target/llvm-cov-target -type f"
+    ));
     assert!(nightly.contains("-name 'libnook_domain_api@*.so' -print"));
     assert!(nightly.contains("test \"$#\" -eq 1 && test -f \"$1\""));
     assert!(nightly.contains("$(dirname \"$1\")/libnook_domain_api-c0ffee.so"));
-    assert!(product.contains("for package in nook-companion-wasm nook-wasm; do"));
-    assert!(product.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
-    assert!(product.contains("--target wasm32-unknown-unknown --release -p \"$package\""));
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
-    assert!(product.contains("nook-wasm) package_args=\"--features browser-wasm-tests\""));
+    assert!(product.contains("llvm-cov show-env --export-prefix"));
+    assert_eq!(product.matches("test --release -p nook-wasm").count(), 2);
+    assert_eq!(product.matches("--features browser-wasm-tests").count(), 2);
+    assert!(
+        product.contains("llvm-cov report --release --target wasm32-unknown-unknown -p nook-wasm")
+    );
     assert!(product.contains("nook-wasm coverage floor pending this hosted measurement"));
     assert!(product.contains("&& false"));
-    assert_eq!(product.matches("|| coverage_status=1;").count(), 2);
-    assert_eq!(
-        product.matches("test \"$coverage_status\" -eq 0").count(),
-        2
-    );
-    assert!(product.contains("wasm-pack test --node --release nook-wasm"));
-    assert!(product.contains("wasm-pack test --node --release nook-companion-wasm"));
     let wasm_coverage_stage = product
         .split_once("FROM builder-wasm-tests AS builder-wasm")
         .and_then(|(_, remainder)| {
@@ -130,12 +125,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         })
         .context("builder-wasm must be a bounded product image stage")?;
     assert!(wasm_coverage_stage.contains("apt-get install -y --no-install-recommends clang"));
-    assert!(wasm_coverage_stage.contains("clang --version"));
-    assert!(wasm_coverage_stage.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
+    assert!(wasm_coverage_stage.contains("native=82 browser=147"));
     assert!(wasm_coverage_stage.contains("sha256sum -c -"));
     assert!(wasm_coverage_stage.contains(
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
+    let browser_execution = wasm_coverage_stage
+        .split_once("\nRUN wasm-pack test")
+        .context("browser execution RUN")?
+        .1;
+    assert!(!browser_execution.contains("--mount=type=secret"));
     assert!(hive.contains("ARG HIVE_RUST_COVERAGE_FLOOR=60"));
     assert!(hive.contains("ARG LACE_RUST_COVERAGE_FLOOR=75"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));

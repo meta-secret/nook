@@ -117,9 +117,6 @@ tasks:
 
   _rust:coverage:check:
     desc: Run portable Rust crate coverage once, then enforce the line floor independently per package.
-    vars:
-      FLOOR:
-        sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json
     cmds:
       - |-
         set -e
@@ -131,7 +128,8 @@ tasks:
           --summary-only
         coverage_status=0
         for package in $packages; do
-          cargo llvm-cov report -p "$package" --summary-only --fail-under-lines {{.FLOOR}} || coverage_status=1
+          floor="$(jq -r --arg package "$package" '.package_lines_percent[$package]' nook-core/coverage-floor.json)"
+          cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$floor" || coverage_status=1
         done
         test "$coverage_status" -eq 0
 

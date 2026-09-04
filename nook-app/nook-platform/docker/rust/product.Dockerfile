@@ -352,12 +352,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 # export must not rerun the Rust tests.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
-    && mkdir -p /opt/nook/coverage/nook-core \
+    mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
     && coverage_status=0 \
     && for package in nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core; do \
-         cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$FLOOR" || coverage_status=1; \
+         floor="$(jq -r --arg package "$package" '.package_lines_percent[$package]' nook-core/coverage-floor.json)"; cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$floor" || coverage_status=1; \
        done \
     && test "$coverage_status" -eq 0 \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
@@ -771,24 +770,20 @@ COPY --from=builder-wasm-build /opt/nook/wasm-handoff /opt/nook/wasm-handoff
 
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    wasm-pack test --node --release nook-wasm \
+    CARGO_LLVM_COV_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov show-env --export-prefix > /tmp/nook-wasm-coverage-env \
+    && ( . /tmp/nook-wasm-coverage-env; CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" test --release -p nook-wasm --no-run \
+      && CARGO_TARGET_DIR=target/llvm-cov-target CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run ) \
+    && nook-sccache-report wasm-node-test-and-coverage
+
+RUN echo "nook-wasm declared coverage tests: native=82 browser=147" && wasm-pack test --node --release nook-wasm \
     && wasm-pack test --node --release nook-companion-wasm \
     && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
     && test -x "$runner" \
-    && coverage_status=0 \
-    && for package in nook-companion-wasm nook-wasm; do \
-         case "$package" in \
-           nook-companion-wasm) package_args="--fail-under-lines $(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" ;; \
-           nook-wasm) package_args="--features browser-wasm-tests" ;; \
-         esac; \
-         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" \
-         CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" \
-         RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test \
-           --target wasm32-unknown-unknown --release -p "$package" \
-           $package_args || coverage_status=1; \
-       done \
-    && test "$coverage_status" -eq 0 \
-    && nook-sccache-report wasm-node-test-and-coverage \
+    && companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" \
+    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines "$companion_floor" \
+    && ( . /tmp/nook-wasm-coverage-env; CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" test --release -p nook-wasm \
+      && CARGO_TARGET_DIR=target/llvm-cov-target CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests ) \
+    && cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov report --release --target wasm32-unknown-unknown -p nook-wasm \
     && echo "nook-wasm coverage floor pending this hosted measurement" >&2 \
     && false
 

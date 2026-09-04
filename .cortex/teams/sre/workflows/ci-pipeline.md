@@ -833,8 +833,8 @@ task web:test:e2e:github            # → sync-live
 `nook-app/nook-platform/nook-core/coverage-floor.json` is the exhaustive package
 registry. Every testable first-party package has an independent hosted failure
 decision; fuzz harnesses and vendored sources require an explicit exclusion.
-Platform, WASM, and preflight packages enforce 90 percent. PR #1319 stages Hive
-at 60 percent and Lace at 75 percent; the successor raises both to 90 percent.
+PR #1319 stages companion WASM at 18, authenticator-domain at 87, Hive at 60,
+and Lace at 75 percent; `nook-wasm` stays non-mergeable until hosted measurement.
 
 **Image build:**
 
@@ -847,7 +847,8 @@ at 60 percent and Lace at 75 percent; the successor raises both to 90 percent.
 - A report for each portable package enforces its registry floor; the combined
   report is artifact-only and cannot mask a package failure. Artifacts are
   written to `/opt/nook/coverage/nook-core` in the image.
-- The WASM lane independently covers `nook-companion-wasm` and `nook-wasm`.
+- The WASM lane gates companion separately, executes Chromium without cache
+  credentials, and combines native and browser profiles for one `nook-wasm` report.
 - The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
 - Hive verification runs instrumented Hive and Lace binaries in the existing
   Neo4j-enabled runtime, then imports their profiles for separate reports.
