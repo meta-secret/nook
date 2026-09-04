@@ -225,8 +225,8 @@ enum VersionedVaultEventBody {
 ## Remaining type-safety checklist
 
 - [ ] Raw identifier and count primitives are absent from domain and WASM
-      signatures unless an external protocol owns the representation or an
-      explicit edge getter unwraps the value for JavaScript.
+      signatures unless an external protocol owns the representation.
+- [ ] An explicit edge getter may unwrap a primitive for JavaScript.
 - [ ] Infallible single-field wrappers implement `From<Primitive>`.
 - [ ] Aggregate construction keeps independent field names visible.
 - [ ] Associated constants cover only common values with stable meaning.
