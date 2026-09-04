@@ -203,7 +203,7 @@ pub fn classify_companion_credential_fill_field(
     field_index: &CredentialFillFieldIndex,
     field: &NookPageInputFieldObservation,
 ) -> CredentialFillFieldClassification {
-    CredentialFillFieldClassification::from_core(field::classify(
+    CredentialFillFieldClassification::from_core(field::Classification::from_page_input(
         field_index.as_core(),
         field.as_core(),
     ))
@@ -403,7 +403,11 @@ impl CredentialFillResult {
 
 #[wasm_bindgen]
 pub fn plan_companion_credential_fill(fields: &CredentialFillObservations) -> CredentialFillResult {
-    CredentialFillResult::from_core(fields.as_core().and_then(credential_fill::plan))
+    CredentialFillResult::from_core(
+        fields
+            .as_core()
+            .and_then(credential_fill::Plan::from_fields),
+    )
 }
 
 #[cfg(all(test, not(target_arch = "wasm32")))]
