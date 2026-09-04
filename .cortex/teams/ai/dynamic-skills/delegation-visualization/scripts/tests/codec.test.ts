@@ -67,4 +67,14 @@ describe('delegation visualization codec', () => {
       decodeDelegationVisualizationRequest(JSON.stringify(extra)),
     ).toThrow();
   });
+
+  test('rejects YAML-non-printable C1 description characters', () => {
+    for (const character of ['\u0080', '\u0086', '\u009f']) {
+      const invalid = request();
+      invalid.tasks[0]!.description = `blocked${character}`;
+      expect(() =>
+        decodeDelegationVisualizationRequest(JSON.stringify(invalid)),
+      ).toThrow();
+    }
+  });
 });
