@@ -353,6 +353,7 @@ impl ExtensionPairingState {
     }
 }
 
+#[derive(Clone, Copy)]
 enum PairingSelection {
     Select,
     KeepCurrent,

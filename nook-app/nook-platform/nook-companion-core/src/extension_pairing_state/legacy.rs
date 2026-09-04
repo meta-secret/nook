@@ -44,6 +44,22 @@ enum LegacyExtensionPairingRecord {
     Setup(LegacyExtensionReadySetup),
 }
 
+impl LegacyExtensionReadySetup {
+    fn validate(&self) -> Result<(), ExtensionPairingStateError> {
+        if self.status != ExtensionReadySetupStatus::Ready
+            || self.device_label.trim().is_empty()
+            || self.paired_vaults.is_empty()
+            || setup
+                .paired_vaults
+                .iter()
+                .any(|vault| vault.trim().is_empty())
+        {
+            return Err(ExtensionPairingStateError::InvalidLegacyState);
+        }
+        Ok(())
+    }
+}
+
 impl ExtensionPairingState {
     pub fn migrate_legacy_json(
         value: &str,
@@ -59,16 +75,7 @@ impl ExtensionPairingState {
             })
             .cloned()
             .ok_or(ExtensionPairingStateError::InvalidLegacyState)?;
-        if setup.status != ExtensionReadySetupStatus::Ready
-            || setup.device_label.trim().is_empty()
-            || setup.paired_vaults.is_empty()
-            || setup
-                .paired_vaults
-                .iter()
-                .any(|vault| vault.trim().is_empty())
-        {
-            return Err(ExtensionPairingStateError::InvalidLegacyState);
-        }
+        setup.validate()?;
         let mut matching = records.iter().filter_map(|(key, record)| match record {
             LegacyExtensionPairingRecord::CompleteGrant(grant)
                 if grant.vault_name == setup.selected_vault_name =>
