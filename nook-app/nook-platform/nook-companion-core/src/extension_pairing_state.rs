@@ -1,7 +1,9 @@
 //! Typed extension pairing records shared by browser storage and policy.
 
+mod authority;
 mod legacy;
 
+pub use authority::*;
 pub use legacy::migrate_legacy_pairing_state_json;
 use std::collections::{HashMap, HashSet};
 

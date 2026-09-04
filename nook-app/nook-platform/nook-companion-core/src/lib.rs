@@ -115,14 +115,16 @@ pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
 };
 pub use extension_pairing_state::{
-    CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY,
-    ExtensionConnectScope, ExtensionPairingEntry, ExtensionPairingGrantApproval,
+    AuthorizedExtensionGrant, CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX,
+    EXTENSION_SETUP_KEY, ExtensionConnectScope, ExtensionGrantAuthority,
+    ExtensionGrantAuthorityRequest, ExtensionPairingEntry, ExtensionPairingGrantApproval,
     ExtensionPairingGrantRemovalInput, ExtensionPairingRecord, ExtensionPairingState,
     ExtensionPairingStateError, ExtensionPairingVaultType, ExtensionReadySetup,
     ExtensionReadySetupStatus, ExtensionSetupAfterRemoval, ImportedExtensionEventLog,
-    RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
-    create_pairing_state, grant_storage_key, is_ready_pairing_setup_json,
-    is_stored_pairing_grant_json, migrate_legacy_pairing_state_json, refresh_pairing_grant,
+    PairingStorageJson, RefreshExtensionPairingGrantInput, RequestedPairingVaultId,
+    SelectedExtensionPairingGrant, StoredExtensionPairingGrant, create_pairing_state,
+    grant_storage_key, is_ready_pairing_setup_json, is_stored_pairing_grant_json,
+    migrate_legacy_pairing_state_json, refresh_pairing_grant,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
