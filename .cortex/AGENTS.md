@@ -285,7 +285,9 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
   - Report the command's completion, failure, or interruption with elapsed
     time.
 - During a long command or external wait, emit a `WAIT` update at least once
-  per minute.
+  every five minutes.
+- When there is no meaningful new evidence, limit the description to the exact
+  operation identifier, elapsed time, and `in progress`.
 - Identify the exact operation in every `WAIT` line.
   - For local Task execution, name the exact `task <task-name>` command.
   - For hosted execution, name the GitHub run or job ID and include its
