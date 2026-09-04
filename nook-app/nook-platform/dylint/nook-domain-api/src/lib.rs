@@ -263,7 +263,7 @@ fn check_suppression_attributes(
             }
             "reason must identify exactly a serialization, database, or FFI boundary"
         } else {
-            "a nonempty boundary reason is required"
+            "a nonempty boundary reason must be present"
         };
 
         let diagnostic_span = attribute.path_span().unwrap_or_else(|| attribute.span());

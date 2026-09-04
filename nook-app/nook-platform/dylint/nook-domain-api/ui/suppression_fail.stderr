@@ -21,7 +21,7 @@ warning: invalid suppression of `raw_numeric_public_api`
 LL | #[expect(raw_numeric_public_api)]
    |   ^^^^^^
    |
-   = help: a nonempty boundary reason is required
+   = help: a nonempty boundary reason must be present
 
 warning: invalid suppression of `raw_numeric_public_api`
   --> $DIR/suppression_fail.rs:20:3
@@ -49,3 +49,4 @@ LL |     raw_numeric_public_api,
    = note: `#[warn(unfulfilled_lint_expectations)]` on by default
 
 warning: 6 warnings emitted
+
