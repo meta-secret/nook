@@ -79,6 +79,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
             "cargo llvm-cov test --locked -p nook-preflight --fail-under-lines \"$floor\""
         )
     );
+    assert!(preflight.contains("WORKDIR /meta-secret/nook/preflight"));
+    assert!(preflight.contains("ENV NOOK_REPO_ROOT=/meta-secret/nook"));
+    assert!(preflight.contains(
+        "floor=\"$(jq -r '.lines_percent' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)\""
+    ));
+    assert!(preflight.contains(
+        "COPY --from=build /meta-secret/nook/preflight/target/debug/nook-preflight /nook-preflight"
+    ));
+    assert!(!preflight.contains("/opt/nook/preflight"));
+    assert!(!preflight.contains("/opt/nook/coverage-floor.json"));
 
     assert!(minds_manifest.contains("exclude = [\"vendor/arrayref\"]"));
     assert!(fuzz_manifest.contains("cargo-fuzz = true"));
