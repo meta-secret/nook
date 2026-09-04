@@ -29,9 +29,8 @@ pub mod field {
         pub value: u32,
     }
 
-    impl Index {
-        #[must_use]
-        pub const fn new(value: u32) -> Self {
+    impl From<u32> for Index {
+        fn from(value: u32) -> Self {
             Self { value }
         }
     }
@@ -59,10 +58,26 @@ pub mod field {
         pub editability: Editability,
     }
 
+    impl From<(Index, CredentialRole, Editability)> for Credential {
+        fn from((field_index, role, editability): (Index, CredentialRole, Editability)) -> Self {
+            Self {
+                field_index,
+                role,
+                editability,
+            }
+        }
+    }
+
     /// Facts carried only by a new-password field.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     pub struct NewPassword {
         pub field_index: Index,
+    }
+
+    impl From<Index> for NewPassword {
+        fn from(field_index: Index) -> Self {
+            Self { field_index }
+        }
     }
 
     /// Facts carried only by a one-time-code field.
@@ -71,12 +86,36 @@ pub mod field {
         pub field_index: Index,
     }
 
+    impl From<Index> for OneTimeCode {
+        fn from(field_index: Index) -> Self {
+            Self { field_index }
+        }
+    }
+
     /// Host-observed field with variant-specific authentication semantics.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     pub enum Observation {
         Credential(Credential),
         NewPassword(NewPassword),
         OneTimeCode(OneTimeCode),
+    }
+
+    impl From<Credential> for Observation {
+        fn from(field: Credential) -> Self {
+            Self::Credential(field)
+        }
+    }
+
+    impl From<NewPassword> for Observation {
+        fn from(field: NewPassword) -> Self {
+            Self::NewPassword(field)
+        }
+    }
+
+    impl From<OneTimeCode> for Observation {
+        fn from(field: OneTimeCode) -> Self {
+            Self::OneTimeCode(field)
+        }
     }
 
     impl Observation {
@@ -97,43 +136,32 @@ pub mod field {
         #[test]
         fn variant_payloads_preserve_their_field_index() {
             for observation in [
-                Observation::Credential(Credential {
-                    field_index: Index::new(1),
-                    role: CredentialRole::Username,
-                    editability: Editability::Writable,
-                }),
-                Observation::NewPassword(NewPassword {
-                    field_index: Index::new(1),
-                }),
-                Observation::OneTimeCode(OneTimeCode {
-                    field_index: Index::new(1),
-                }),
+                Credential::from((1.into(), CredentialRole::Username, Editability::Writable))
+                    .into(),
+                NewPassword::from(Index::from(1)).into(),
+                OneTimeCode::from(Index::from(1)).into(),
             ] {
-                assert_eq!(observation.field_index(), Index::new(1));
+                assert_eq!(observation.field_index(), Index::from(1));
             }
         }
 
         #[test]
         fn serialization_preserves_source_names_and_payload_boundaries() -> anyhow::Result<()> {
-            let credential = Observation::Credential(Credential {
-                field_index: Index::new(0),
-                role: CredentialRole::Username,
-                editability: Editability::Writable,
-            });
+            let credential = Observation::from(Credential::from((
+                0.into(),
+                CredentialRole::Username,
+                Editability::Writable,
+            )));
             assert_eq!(
                 serde_json::to_string(&credential)?,
                 r#"{"Credential":{"field_index":{"value":0},"role":"Username","editability":"Writable"}}"#
             );
             assert_eq!(
-                serde_json::to_string(&Observation::NewPassword(NewPassword {
-                    field_index: Index::new(1),
-                }))?,
+                serde_json::to_string(&Observation::from(NewPassword::from(Index::from(1))))?,
                 r#"{"NewPassword":{"field_index":{"value":1}}}"#
             );
             assert_eq!(
-                serde_json::to_string(&Observation::OneTimeCode(OneTimeCode {
-                    field_index: Index::new(2),
-                }))?,
+                serde_json::to_string(&Observation::from(OneTimeCode::from(Index::from(2))))?,
                 r#"{"OneTimeCode":{"field_index":{"value":2}}}"#
             );
             Ok(())
@@ -298,31 +326,19 @@ mod tests {
     }
 
     fn field(field_index: u32, role: field::CredentialRole) -> field::Observation {
-        field::Observation::Credential(field::Credential {
-            field_index: field::Index::new(field_index),
-            role,
-            editability: field::Editability::Writable,
-        })
+        field::Credential::from((field_index.into(), role, field::Editability::Writable)).into()
     }
 
     fn readonly_field(field_index: u32, role: field::CredentialRole) -> field::Observation {
-        field::Observation::Credential(field::Credential {
-            field_index: field::Index::new(field_index),
-            role,
-            editability: field::Editability::Readonly,
-        })
+        field::Credential::from((field_index.into(), role, field::Editability::Readonly)).into()
     }
 
     fn new_password_field(field_index: u32) -> field::Observation {
-        field::Observation::NewPassword(field::NewPassword {
-            field_index: field::Index::new(field_index),
-        })
+        field::NewPassword::from(field::Index::from(field_index)).into()
     }
 
     fn one_time_code_field(field_index: u32) -> field::Observation {
-        field::Observation::OneTimeCode(field::OneTimeCode {
-            field_index: field::Index::new(field_index),
-        })
+        field::OneTimeCode::from(field::Index::from(field_index)).into()
     }
 
     fn login_form() -> Vec<field::Observation> {
@@ -339,11 +355,11 @@ mod tests {
             plan.assignments,
             vec![
                 AuthenticationCredentialFillAssignment {
-                    field_index: field::Index::new(0),
+                    field_index: 0.into(),
                     credential: AuthenticationCredentialKind::Username,
                 },
                 AuthenticationCredentialFillAssignment {
-                    field_index: field::Index::new(1),
+                    field_index: 1.into(),
                     credential: AuthenticationCredentialKind::CurrentPassword,
                 },
             ]
@@ -358,7 +374,7 @@ mod tests {
         assert_eq!(
             plan.assignments,
             vec![AuthenticationCredentialFillAssignment {
-                field_index: field::Index::new(2),
+                field_index: 2.into(),
                 credential: AuthenticationCredentialKind::Username,
             }]
         );
@@ -372,7 +388,7 @@ mod tests {
         assert_eq!(
             plan.assignments,
             vec![AuthenticationCredentialFillAssignment {
-                field_index: field::Index::new(0),
+                field_index: 0.into(),
                 credential: AuthenticationCredentialKind::CurrentPassword,
             }]
         );
@@ -390,11 +406,11 @@ mod tests {
             plan.assignments,
             vec![
                 AuthenticationCredentialFillAssignment {
-                    field_index: field::Index::new(0),
+                    field_index: 0.into(),
                     credential: AuthenticationCredentialKind::Username,
                 },
                 AuthenticationCredentialFillAssignment {
-                    field_index: field::Index::new(1),
+                    field_index: 1.into(),
                     credential: AuthenticationCredentialKind::CurrentPassword,
                 },
             ]
@@ -523,7 +539,7 @@ mod tests {
         assert_eq!(
             plan.assignments,
             vec![AuthenticationCredentialFillAssignment {
-                field_index: field::Index::new(1),
+                field_index: 1.into(),
                 credential: AuthenticationCredentialKind::CurrentPassword,
             }]
         );
@@ -552,11 +568,11 @@ mod tests {
             simulated,
             vec![
                 TestFilledField {
-                    field_index: field::Index::new(0),
+                    field_index: 0.into(),
                     value: credentials.username,
                 },
                 TestFilledField {
-                    field_index: field::Index::new(1),
+                    field_index: 1.into(),
                     value: credentials.password,
                 },
             ]
@@ -633,7 +649,7 @@ mod tests {
 
         let observation = field(0, field::CredentialRole::Username);
         assert_eq!(
-            serde_json::to_string(&field::Index::new(0))?,
+            serde_json::to_string(&field::Index::from(0))?,
             r#"{"value":0}"#
         );
         assert_eq!(

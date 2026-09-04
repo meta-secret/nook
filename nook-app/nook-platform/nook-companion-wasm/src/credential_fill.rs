@@ -76,7 +76,7 @@ impl CredentialFillFieldIndex {
     #[must_use]
     pub fn new(value: u32) -> Self {
         Self {
-            inner: nook_companion_core::field::Index::new(value),
+            inner: value.into(),
         }
     }
 
@@ -109,13 +109,12 @@ impl CredentialFillObservation {
         editability: CredentialFillEditability,
     ) -> Self {
         Self {
-            inner: nook_companion_core::field::Observation::Credential(
-                nook_companion_core::field::Credential {
-                    field_index: field_index.as_core(),
-                    role: role.into_core(),
-                    editability: editability.into_core(),
-                },
-            ),
+            inner: nook_companion_core::field::Credential::from((
+                field_index.as_core(),
+                role.into_core(),
+                editability.into_core(),
+            ))
+            .into(),
         }
     }
 
@@ -123,11 +122,7 @@ impl CredentialFillObservation {
     #[must_use]
     pub fn new_password(field_index: &CredentialFillFieldIndex) -> Self {
         Self {
-            inner: nook_companion_core::field::Observation::NewPassword(
-                nook_companion_core::field::NewPassword {
-                    field_index: field_index.as_core(),
-                },
-            ),
+            inner: nook_companion_core::field::NewPassword::from(field_index.as_core()).into(),
         }
     }
 
@@ -135,11 +130,7 @@ impl CredentialFillObservation {
     #[must_use]
     pub fn one_time_code(field_index: &CredentialFillFieldIndex) -> Self {
         Self {
-            inner: nook_companion_core::field::Observation::OneTimeCode(
-                nook_companion_core::field::OneTimeCode {
-                    field_index: field_index.as_core(),
-                },
-            ),
+            inner: nook_companion_core::field::OneTimeCode::from(field_index.as_core()).into(),
         }
     }
 }
