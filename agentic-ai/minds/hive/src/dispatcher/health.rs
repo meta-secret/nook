@@ -213,7 +213,7 @@ fn zombie_process_count(process_root: &Path) -> crate::HiveResult<usize> {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, UNIX_EPOCH};
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
     #[test]
     fn dispatcher_health_rejects_stale_heartbeats_and_unreaped_children() -> crate::HiveResult<()> {
@@ -273,10 +273,17 @@ mod tests {
     -> crate::HiveResult<()> {
         let root = tempfile::tempdir()?;
         let health = root.path().join("dispatcher-health");
+        let processes = root.path().join("proc");
+        std::fs::create_dir(&processes)?;
         super::record_dispatcher_health(&health).await?;
         assert!(health.exists());
         assert!(!super::next_path(&health).exists());
-        super::check_workbench_dispatcher_health(&health, Duration::from_secs(5))?;
+        super::check_workbench_dispatcher_health_at(
+            &health,
+            Duration::from_secs(5),
+            SystemTime::now(),
+            &processes,
+        )?;
 
         let result = super::while_recording_dispatcher_progress(&health, async {
             Ok::<_, crate::HiveError>("finished")
@@ -284,7 +291,12 @@ mod tests {
         .await?;
         assert_eq!(result, "finished");
         assert!(super::progress_path(&health).exists());
-        super::check_workbench_dispatcher_progress(&health, Duration::from_secs(5))?;
+        super::check_workbench_dispatcher_health_at(
+            &super::progress_path(&health),
+            Duration::from_secs(5),
+            SystemTime::now(),
+            &processes,
+        )?;
 
         super::sleep_while_recording_dispatcher_progress(&health, Duration::ZERO).await?;
         assert!(super::progress_path(&health).exists());

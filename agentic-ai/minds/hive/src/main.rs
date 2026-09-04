@@ -540,7 +540,7 @@ mod tests {
         let coordinator = parse(&["hive", "coordinator", "--socket", "/tmp/coordinator"])?;
         assert!(matches!(
             coordinator.command,
-            Command::Coordinator { socket } if socket == PathBuf::from("/tmp/coordinator")
+            Command::Coordinator { socket } if socket.as_path() == std::path::Path::new("/tmp/coordinator")
         ));
         let observer = parse(&[
             "hive",
@@ -556,8 +556,8 @@ mod tests {
             observer.command,
             Command::Observer { address, dashboard, coordinator_socket }
                 if address.to_string() == "127.0.0.1:8081"
-                    && dashboard == PathBuf::from("/tmp/dashboard")
-                    && coordinator_socket == PathBuf::from("/tmp/observer-coordinator")
+                    && dashboard.as_path() == std::path::Path::new("/tmp/dashboard")
+                    && coordinator_socket.as_path() == std::path::Path::new("/tmp/observer-coordinator")
         ));
         let observer_coordinator = parse(&[
             "hive",
@@ -567,7 +567,7 @@ mod tests {
         ])?;
         assert!(matches!(
             observer_coordinator.command,
-            Command::ObserverCoordinator { socket } if socket == PathBuf::from("/tmp/observer-store")
+            Command::ObserverCoordinator { socket } if socket.as_path() == std::path::Path::new("/tmp/observer-store")
         ));
         Ok(())
     }
@@ -594,8 +594,8 @@ mod tests {
                 health_path,
                 poll_seconds: 45,
             } if repository_url == "https://example.invalid/workbench.git"
-                && checkout == PathBuf::from("/tmp/workbench")
-                && health_path == PathBuf::from("/tmp/health")
+                && checkout.as_path() == std::path::Path::new("/tmp/workbench")
+                && health_path.as_path() == std::path::Path::new("/tmp/health")
         ));
         let health = parse(&[
             "hive",
@@ -612,7 +612,7 @@ mod tests {
                 health_path,
                 max_age_seconds: 120,
                 progress: true,
-            } if health_path == PathBuf::from("/tmp/health")
+            } if health_path.as_path() == std::path::Path::new("/tmp/health")
         ));
         let broker = parse(&[
             "hive",
@@ -627,9 +627,9 @@ mod tests {
         assert!(matches!(
             broker.command,
             Command::AuthBroker { socket, auth_source, auth_home }
-                if socket == PathBuf::from("/tmp/auth.sock")
-                    && auth_source == PathBuf::from("/tmp/source.json")
-                    && auth_home == PathBuf::from("/tmp/auth-home")
+                if socket.as_path() == std::path::Path::new("/tmp/auth.sock")
+                    && auth_source.as_path() == std::path::Path::new("/tmp/source.json")
+                    && auth_home.as_path() == std::path::Path::new("/tmp/auth-home")
         ));
 
         for (arguments, expected) in [
