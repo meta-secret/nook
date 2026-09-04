@@ -192,28 +192,26 @@ export function mutationBelongsOnlyToMountedWidget(
 export function authenticationWorkflowBoundary(
   workflow: PasswordFormObservation,
 ): ParentNode {
-  return workflow.formScope.kind === 'unowned'
-    ? workflow.root
-    : workflow.formScope.owner
+  if (
+    workflow.formScope.kind === 'owned' &&
+    workflow.root === workflow.formScope.owner.ownerDocument
+  ) {
+    return workflow.formScope.owner
+  }
+  return workflow.root
 }
 
-function nodeTouchesOwnedFormAssociation(
-  request: OwnedFormAssociationRequest,
-): boolean {
-  const { node, boundary } = request
-  const controlBelongsToBoundary = (control: HTMLElement): boolean =>
-    (control instanceof HTMLButtonElement ||
-      control instanceof HTMLInputElement ||
-      control instanceof HTMLSelectElement ||
-      control instanceof HTMLTextAreaElement ||
-      control instanceof HTMLOutputElement) &&
-    control.form === boundary
+function nodeTouchesOwnedFormAssociation({
+  node,
+  boundary,
+}: OwnedFormAssociationRequest): boolean {
+  const controls = Array.from(boundary.elements)
   let element: Element
   if (node instanceof Element) element = node
   else if (node.parentElement instanceof Element) element = node.parentElement
   else return false
   if (
-    Array.from(boundary.elements).some(
+    controls.some(
       (control) =>
         control === element ||
         control.contains(element) ||
@@ -223,17 +221,118 @@ function nodeTouchesOwnedFormAssociation(
     return true
   }
   const associatedLabel = element.closest('label')
-  if (
-    associatedLabel?.control &&
-    controlBelongsToBoundary(associatedLabel.control)
-  ) {
+  if (associatedLabel?.control && controls.includes(associatedLabel.control)) {
     return true
   }
-  return Array.from(element.querySelectorAll('label')).some(
-    (label) =>
-      Boolean(label.control) &&
-      controlBelongsToBoundary(label.control as HTMLElement),
+  return Array.from(element.querySelectorAll('label')).some((label) => {
+    const control = label.control
+    return control ? controls.includes(control) : false
+  })
+}
+
+type WorkflowLabelDependencyRequest = {
+  record: MutationRecord
+  boundary: ParentNode
+}
+
+function mutationTouchesWorkflowLabelDependency(
+  request: WorkflowLabelDependencyRequest,
+): boolean {
+  const { record, boundary } = request
+  const referencedIds = new Set<string>()
+  for (const control of boundary.querySelectorAll<HTMLElement>(
+    '[aria-labelledby]',
+  )) {
+    const labelledBy = control.getAttribute('aria-labelledby')
+    if (!labelledBy) continue
+    for (const id of labelledBy.split(/\s+/u)) {
+      if (id) referencedIds.add(id)
+    }
+  }
+  const controlIds = new Set<string>()
+  const nativeLabels = new Set<HTMLLabelElement>()
+  for (const control of boundary.querySelectorAll<
+    | HTMLButtonElement
+    | HTMLInputElement
+    | HTMLSelectElement
+    | HTMLTextAreaElement
+  >('button, input, select, textarea')) {
+    if (control.id) controlIds.add(control.id)
+    if (control.labels) {
+      for (const label of control.labels) nativeLabels.add(label)
+    }
+  }
+  const changedNodes =
+    record.type === 'childList'
+      ? [...record.addedNodes, ...record.removedNodes]
+      : [record.target]
+  if (record.type === 'childList' && record.target instanceof Element) {
+    const target = record.target
+    if (
+      [...nativeLabels].some(
+        (label) => label === target || label.contains(target),
+      ) ||
+      (target.id && referencedIds.has(target.id)) ||
+      (target instanceof HTMLLabelElement && controlIds.has(target.htmlFor))
+    ) {
+      return true
+    }
+  }
+  const previousIdentityRequest: PreviousIdentityDependencyRequest = {
+    record,
+    referencedIds,
+    controlIds,
+  }
+  return (
+    changedNodes.some((node) => {
+      const element =
+        node instanceof Element
+          ? node
+          : node.parentElement instanceof Element
+            ? node.parentElement
+            : false
+      if (!element) return false
+      if (
+        [...nativeLabels].some(
+          (label) => label.contains(element) || element.contains(label),
+        )
+      ) {
+        return true
+      }
+      const identifiedElements = [
+        element,
+        ...element.querySelectorAll<HTMLElement>('[id]'),
+      ]
+      if (
+        identifiedElements.some(
+          (candidate) => candidate.id && referencedIds.has(candidate.id),
+        )
+      ) {
+        return true
+      }
+      const labels = [
+        ...(element instanceof HTMLLabelElement ? [element] : []),
+        ...element.querySelectorAll<HTMLLabelElement>('label'),
+      ]
+      return labels.some((label) => controlIds.has(label.htmlFor))
+    }) || mutationPreviousIdentityTouchesWorkflow(previousIdentityRequest)
   )
+}
+
+type PreviousIdentityDependencyRequest = {
+  record: MutationRecord
+  referencedIds: ReadonlySet<string>
+  controlIds: ReadonlySet<string>
+}
+
+function mutationPreviousIdentityTouchesWorkflow({
+  record,
+  referencedIds,
+  controlIds,
+}: PreviousIdentityDependencyRequest): boolean {
+  if (record.type !== 'attributes' || !record.oldValue) return false
+  if (record.attributeName === 'id') return referencedIds.has(record.oldValue)
+  return record.attributeName === 'for' && controlIds.has(record.oldValue)
 }
 
 export function mutationTouchesAuthenticationWorkflow(
@@ -252,24 +351,28 @@ export function mutationTouchesAuthenticationWorkflow(
   ) {
     return true
   }
-  if (
-    boundary instanceof HTMLFormElement &&
-    (() => {
-      const associationRequest: OwnedFormAssociationRequest = {
-        node: record.target,
-        boundary,
-      }
-      return nodeTouchesOwnedFormAssociation(associationRequest)
-    })()
-  ) {
+  const labelDependencyRequest: WorkflowLabelDependencyRequest = {
+    record,
+    boundary,
+  }
+  if (mutationTouchesWorkflowLabelDependency(labelDependencyRequest)) {
     return true
+  }
+  if (boundary instanceof HTMLFormElement) {
+    const associationRequest: OwnedFormAssociationRequest = {
+      node: record.target,
+      boundary,
+    }
+    if (nodeTouchesOwnedFormAssociation(associationRequest)) return true
   }
   if (record.type !== 'childList') return false
   return [...record.addedNodes, ...record.removedNodes].some((node) => {
     if (boundary.contains(node) || node.contains(boundary)) return true
-    if (!(boundary instanceof HTMLFormElement)) return false
-    const associationRequest: OwnedFormAssociationRequest = { node, boundary }
-    return nodeTouchesOwnedFormAssociation(associationRequest)
+    if (boundary instanceof HTMLFormElement) {
+      const associationRequest: OwnedFormAssociationRequest = { node, boundary }
+      return nodeTouchesOwnedFormAssociation(associationRequest)
+    }
+    return false
   })
 }
 

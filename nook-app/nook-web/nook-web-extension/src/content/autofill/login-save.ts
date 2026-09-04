@@ -6,6 +6,7 @@ import {
   readLoginCredentials,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { ownedObservationIsLocallyBounded } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
   AuthenticationOutcomeResponseKind,
   AuthenticationOutcomeVerdict,
@@ -307,7 +308,13 @@ async function stageSaveOfferForCredentials({
 
 export function captureSubmittedLogin(event: Event): void {
   const target = event.target
-  if (!(target instanceof HTMLFormElement) || widgetState.busy) return
+  if (
+    !(event instanceof SubmitEvent) ||
+    !(target instanceof HTMLFormElement) ||
+    widgetState.busy
+  ) {
+    return
+  }
   const observations = summarizeAuthenticationWorkflowForms()
   const workflow = observations.find(
     (candidate) =>
@@ -315,6 +322,22 @@ export function captureSubmittedLogin(event: Event): void {
       candidate.formScope.owner === target,
   )
   if (!workflow || workflow.summary.passwordFieldCount === 0) return
+  const { submitter } = event
+  if (submitter) {
+    if (
+      !(
+        submitter instanceof HTMLButtonElement ||
+        submitter instanceof HTMLInputElement
+      ) ||
+      submitter.form !== target ||
+      (ownedObservationIsLocallyBounded(workflow) &&
+        !workflow.root.contains(submitter))
+    ) {
+      return
+    }
+  } else if (ownedObservationIsLocallyBounded(workflow)) {
+    return
+  }
   const nookTypedArgs0_1: Parameters<typeof readLoginCredentials>[0] = {
     kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,

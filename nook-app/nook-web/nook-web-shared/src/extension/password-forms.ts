@@ -21,6 +21,8 @@ import {
   findUsernameFields,
   hasAutocompleteToken,
   isAuthUsernameField,
+  localOwnedLoginObservationRoot,
+  ownedObservationIsLocallyBounded,
   controlAssociatesWithObservation,
   isLocallyAdjacentToOwnedForm,
   nearestUnownedAuthContainer,
@@ -32,6 +34,7 @@ import {
 } from "./password-form-fields";
 import type {
   ControlObservationAssociationRequest,
+  LocalOwnedLoginObservationRootRequest,
   LocalOwnedFormAdjacencyRequest,
   PasskeyControlLookup,
   PasswordFieldQuery,
@@ -215,34 +218,29 @@ function scopedControlRoot({
   root,
   formScope,
 }: PasswordFormObservation): ParentNode {
-  return formScope.kind === PasswordFormScopeKind.Owned
+  return formScope.kind === PasswordFormScopeKind.Owned &&
+    (root === formScope.owner.ownerDocument || root === formScope.owner)
     ? formScope.owner.ownerDocument
     : root;
 }
 function scopedAdvanceControls(
   observation: PasswordFormObservation,
-): HTMLElement[] {
-  const queryRoot =
-    observation.formScope.kind === PasswordFormScopeKind.Owned
-      ? observation.formScope.owner.ownerDocument
-      : observation.root;
+): LoginAdvanceControl[] {
   return Array.from(
-    queryRoot.querySelectorAll<HTMLElement>(
+    scopedControlRoot(observation).querySelectorAll<HTMLElement>(
       authenticationAdvanceControlSelector,
     ),
-  ).filter((control) => {
+  ).filter((control): control is LoginAdvanceControl => {
     if (
-      !(control instanceof HTMLButtonElement) &&
-      !(control instanceof HTMLInputElement)
-    ) {
-      return false;
-    }
+      !(control instanceof HTMLButtonElement ||
+        control instanceof HTMLInputElement)
+    ) return false;
     return observation.formScope.kind === PasswordFormScopeKind.Owned
       ? control.form === observation.formScope.owner
       : !control.form;
   });
 }
-type SemanticSubmitControlPair = [HTMLElement, HTMLElement];
+type SemanticSubmitControlPair = [LoginAdvanceControl, LoginAdvanceControl];
 function semanticSubmitControlsFirst(
   ...pair: SemanticSubmitControlPair
 ): number {
@@ -531,6 +529,7 @@ export function authenticationPageObservationFacts({
   );
   const implicitSubmissionAvailable =
     observation.formScope.kind === PasswordFormScopeKind.Owned &&
+    !ownedObservationIsLocallyBounded(observation) &&
     !boundedAdvanceObservations.some(
       ({ actionability }) => actionability === "actionable",
     ) &&
@@ -606,7 +605,8 @@ export function authenticationPageObservationFacts({
         ? "present"
         : "absent",
       implicitSubmissionMethod:
-        observation.formScope.kind === PasswordFormScopeKind.Owned
+        observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        !ownedObservationIsLocallyBounded(observation)
           ? formSubmissionMethod(observation.formScope.owner)
           : PageControlSubmissionMethod.Absent,
       advanceControl: implicitSubmissionAvailable
@@ -683,17 +683,27 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
     );
   });
   const observations: PasswordFormObservation[] = forms.map((form) => {
+    const formScope: PasswordFormScope = {
+      kind: PasswordFormScopeKind.Owned,
+      owner: form,
+    };
+    const observationRootRequest: LocalOwnedLoginObservationRootRequest = {
+      owner: form,
+      passwordFields: allPasswordFields,
+      usernameFields: authUsernameFields,
+      oneTimeCodeFields: allOneTimeCodeFields,
+    };
+    const observationRoot = localOwnedLoginObservationRoot(
+      observationRootRequest,
+    );
     const summaryArgs: Parameters<typeof summarizeRoot>[0] = {
       kind: PasswordFormQueryKind.Scoped,
-      root,
-      formScope: {
-        kind: PasswordFormScopeKind.Owned,
-        owner: form,
-      },
+      root: observationRoot,
+      formScope,
     };
     return {
-      root,
-      formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+      root: observationRoot,
+      formScope,
       summary: summarizeRoot(summaryArgs),
     };
   });
@@ -887,12 +897,7 @@ function findApprovedOwnedAdvanceControl({
         )));
   return (
     observation &&
-    (((v) => (v ? v : false))(Array.from(
-      form.ownerDocument.querySelectorAll<LoginAdvanceControl>(
-        authenticationAdvanceControlSelector,
-      ),
-    )
-      .filter((control) => control.form === form)
+    (((v) => (v ? v : false))(scopedAdvanceControls(observation)
       .sort(semanticSubmitControlsFirst)
       .find((control) => {
         if (!isRenderedControl(control)) return false;
@@ -970,6 +975,10 @@ export function submitLoginForm(
       return activation.result;
     }
   }
+  if (
+    request.kind === PasswordFormQueryKind.Scoped &&
+    ownedObservationIsLocallyBounded(request)
+  ) return FormSubmissionResult.NotObserved;
   if (!passwordField) {
     const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = {
       ...request,

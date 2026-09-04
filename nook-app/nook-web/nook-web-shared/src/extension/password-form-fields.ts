@@ -15,6 +15,8 @@ import {
   strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
+import { containerHasAuthenticationIdentity } from "./password-form-container-identity";
+import { ownedAuthenticationFields } from "./password-form-owned-field-index";
 
 void companionWasmReady;
 
@@ -30,6 +32,11 @@ export type PasswordFormScope =
 export type PasswordFieldQuery = {
   root?: ParentNode;
   formScope?: PasswordFormScope;
+};
+
+type OwnedObservationBoundsRequest = {
+  root: ParentNode;
+  formScope: PasswordFormScope;
 };
 
 type ScopedInputFieldQuery = {
@@ -51,6 +58,13 @@ type AssociatedFormFieldSelectorRequest = {
 type TypeButtonPromotionScopeRequest = {
   container: Element;
   field: HTMLElement;
+};
+
+export type LocalOwnedLoginObservationRootRequest = {
+  owner: HTMLFormElement;
+  passwordFields: readonly HTMLInputElement[];
+  usernameFields: readonly HTMLInputElement[];
+  oneTimeCodeFields: readonly HTMLInputElement[];
 };
 
 export type UnownedAuthContainerRequest = {
@@ -159,6 +173,73 @@ function associatedFormFieldSelector({
     .join(",");
 }
 
+export function localOwnedLoginObservationRoot({
+  owner,
+  passwordFields,
+  usernameFields,
+  oneTimeCodeFields,
+}: LocalOwnedLoginObservationRootRequest): ParentNode {
+  const ownedFieldsRequest: Parameters<typeof ownedAuthenticationFields>[0] = {
+    owner,
+    passwordFields,
+    usernameFields,
+    oneTimeCodeFields,
+  };
+  const {
+    passwordFields: ownedPasswordFields,
+    usernameFields: ownedUsernameFields,
+    oneTimeCodeFields: ownedOneTimeCodeFields,
+  } = ownedAuthenticationFields(ownedFieldsRequest);
+  const [passwordField] = ownedPasswordFields;
+  const [usernameField] = ownedUsernameFields;
+  if (
+    ownedPasswordFields.length !== 1 ||
+    ownedUsernameFields.length !== 1 ||
+    ownedOneTimeCodeFields.length > 0 ||
+    !passwordField ||
+    !usernameField
+  ) {
+    return owner.ownerDocument;
+  }
+  const currentPasswordTokenRequest: AutocompleteTokenMatchRequest = {
+    field: passwordField,
+    expected: "current-password",
+  };
+  if (!hasAutocompleteToken(currentPasswordTokenRequest)) {
+    return owner.ownerDocument;
+  }
+  let container = passwordField.parentElement;
+  while (container && container !== owner) {
+    if (container.contains(usernameField)) {
+      if (!owner.contains(container)) return owner.ownerDocument;
+      if (!containerLooksLikeExplicitAuthSurface(container)) {
+        container = container.parentElement;
+        continue;
+      }
+      if (
+        ownedFormHasManualCheckpoint(owner) &&
+        !pageHasManualCheckpoint(container)
+      ) {
+        return owner.ownerDocument;
+      }
+      return container;
+    }
+    container = container.parentElement;
+  }
+  return owner.ownerDocument;
+}
+
+export function ownedObservationIsLocallyBounded({
+  root,
+  formScope,
+}: OwnedObservationBoundsRequest): boolean {
+  return (
+    formScope.kind === PasswordFormScopeKind.Owned &&
+    root !== formScope.owner &&
+    root !== formScope.owner.ownerDocument
+  );
+}
+
 function findFields({
   root,
   selector,
@@ -169,7 +250,11 @@ function findFields({
     const seen = new Set<HTMLInputElement>();
     const fields: HTMLInputElement[] = [];
     for (const field of owner.querySelectorAll<HTMLInputElement>(selector)) {
-      if (field.form === owner) {
+      if (
+        field.form === owner &&
+        (root === owner.ownerDocument ||
+          (root instanceof Node && root.contains(field)))
+      ) {
         seen.add(field);
         fields.push(field);
       }
@@ -183,7 +268,12 @@ function findFields({
         associatedFormFieldSelector(associatedSelectorRequest),
       );
       for (const field of associated) {
-        if (!seen.has(field) && field.form === owner) {
+        if (
+          !seen.has(field) &&
+          field.form === owner &&
+          (root === owner.ownerDocument ||
+            (root instanceof Node && root.contains(field)))
+        ) {
           seen.add(field);
           fields.push(field);
         }
@@ -234,7 +324,11 @@ export function findPasswordFields({
 
 function inputIsEffectivelyDisabled(field: HTMLInputElement): boolean {
   if (field.disabled || field.matches(":disabled")) return true;
-  for (let ancestor = field.parentElement; ancestor; ancestor = ancestor.parentElement) {
+  for (
+    let ancestor = field.parentElement;
+    ancestor;
+    ancestor = ancestor.parentElement
+  ) {
     if (!(ancestor instanceof HTMLFieldSetElement) || !ancestor.disabled) {
       continue;
     }
@@ -289,7 +383,7 @@ function rawFieldIdentityText(field: HTMLInputElement): string {
 }
 
 function autocompleteTokens(field: HTMLInputElement): string[] {
-  return (((v) => (v ? v : ""))(field.getAttribute("autocomplete")))
+  return ((v) => (v ? v : ""))(field.getAttribute("autocomplete"))
     .split(/\s+/u)
     .map((token) => token.trim())
     .filter(Boolean);
@@ -340,9 +434,11 @@ function hasLoginContext(field: HTMLInputElement): boolean {
       control instanceof HTMLInputElement ? control.value : "",
     ].join(" "),
   );
-  const [authenticationAdvanceControlLabel = advanceControlLabels.join(" ")] = [advanceControlLabels.find((label) =>
+  const [authenticationAdvanceControlLabel = advanceControlLabels.join(" ")] = [
+    advanceControlLabels.find((label) =>
       looks_like_login_advance_control_label(label),
-    )];
+    ),
+  ];
   const doc = field.ownerDocument;
   const observation = new NookLoginContextObservation(
     form
@@ -498,7 +594,7 @@ export function preferredOneTimeCodeFillField(
   fields: OneTimeCodeFieldList,
 ): HTMLInputElement | false {
   const preferred = fields.find(fieldHasOneTimeCodeAutoSubmitHandler);
-  return preferred ? preferred : (((v) => (v ? v : false))(fields[0]));
+  return preferred ? preferred : ((v) => (v ? v : false))(fields[0]);
 }
 
 export function hasAutocompleteToken({
@@ -549,7 +645,9 @@ export function findPasskeyControls(
   root: ParentNode = document,
 ): PasskeyControlCandidate[] {
   const descendants = Array.from(
-    ((v) => (v ? v : []))(root.querySelectorAll?.<HTMLElement>(passkeyControlSelector)),
+    ((v) => (v ? v : []))(
+      root.querySelectorAll?.<HTMLElement>(passkeyControlSelector),
+    ),
   );
   const rooted =
     root instanceof HTMLElement && root.matches(passkeyControlSelector)
@@ -586,7 +684,9 @@ export function pageHasPasskeyControl(root: ParentNode = document): boolean {
 }
 
 function localActivationControlLabel(control: Element): string {
-  const labelledBy = (((v) => (v ? v : ""))(control.getAttribute("aria-labelledby")))
+  const labelledBy = ((v) => (v ? v : ""))(
+    control.getAttribute("aria-labelledby"),
+  )
     .split(/\s+/u)
     .filter(Boolean)
     .flatMap((id) => {
@@ -675,9 +775,7 @@ function containerHasSemanticSubmitControl(container: Element): boolean {
 }
 
 function containerLooksLikeExplicitAuthSurface(container: Element): boolean {
-  return container.matches(
-    'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
-  );
+  return containerHasAuthenticationIdentity(container);
 }
 
 function containerIsFormlessAuthenticationScope({
@@ -865,23 +963,36 @@ export function pageHasManualCheckpoint(root: ParentNode): boolean {
   ) {
     return true;
   }
-  const checkboxes = Array.from(
-    root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+  if (
+    Array.from(
+      root.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
+    ).some(checkboxHasManualCheckpoint)
+  )
+    return true;
+  return looks_like_email_verification_body(
+    ((v) => (v ? v : ""))(root.textContent),
   );
-  for (const checkbox of checkboxes) {
-    const label = checkbox.labels?.[0];
-    const ariaLabel = checkbox.attributes.getNamedItem("aria-label");
-    const labeled = (label
-      ? label.textContent
-        ? label.textContent
-        : ""
-      : ariaLabel
-        ? ariaLabel.value
-        : checkbox.name
-    ).toLowerCase();
-    if (looks_like_manual_checkpoint_label(labeled)) {
-      return true;
-    }
-  }
-  return looks_like_email_verification_body(((v) => (v ? v : ""))(root.textContent));
+}
+
+function checkboxHasManualCheckpoint(checkbox: HTMLInputElement): boolean {
+  const label = checkbox.labels?.[0];
+  const ariaLabel = checkbox.attributes.getNamedItem("aria-label");
+  const labeled = label
+    ? ((v) => (v ? v : ""))(label.textContent)
+    : ariaLabel
+      ? ariaLabel.value
+      : checkbox.name;
+  return looks_like_manual_checkpoint_label(labeled.toLowerCase());
+}
+
+function ownedFormHasManualCheckpoint(owner: HTMLFormElement): boolean {
+  const fieldQuery: ScopedInputFieldQuery = {
+    root: owner.ownerDocument,
+    selector: 'input[type="checkbox"]',
+    formScope: { kind: PasswordFormScopeKind.Owned, owner },
+  };
+  return (
+    pageHasManualCheckpoint(owner) ||
+    findFields(fieldQuery).some(checkboxHasManualCheckpoint)
+  );
 }

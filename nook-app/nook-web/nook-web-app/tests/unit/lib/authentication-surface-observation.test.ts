@@ -5,7 +5,6 @@ import {
   authenticationMutationImpact,
   mutationBelongsOnlyToMountedWidget,
   mutationCanChangeAuthenticationWorkflows,
-  mutationTouchesAuthenticationWorkflow,
   recordAuthenticationRecoveryEvidenceState,
 } from '../../../../nook-web-extension/src/content/autofill/authentication-surface-observation'
 
@@ -26,9 +25,12 @@ function attributeMutation(target: Node): MutationRecord {
   return { type: 'attributes', target } as MutationRecord
 }
 
-function observation(form: HTMLFormElement): PasswordFormObservation {
+function observation(
+  form: HTMLFormElement,
+  root: ParentNode = document,
+): PasswordFormObservation {
   return {
-    root: document,
+    root,
     formScope: { kind: 'owned', owner: form },
     summary: {
       passwordFieldCount: 1,
@@ -80,21 +82,60 @@ describe('authentication surface mutation filtering', () => {
     expect(mutationBelongsOnlyToMountedWidget(formInsertionRequest)).toBe(false)
   })
 
-  test('tracks externally associated controls as part of an owned form', () => {
+  test('remounts for external controls and their native labels', () => {
     document.body.innerHTML = `
       <form id="login"><input autocomplete="username" /></form>
+      <label id="submit-label" for="submit">Account action</label>
       <button id="submit" form="login" type="submit">Sign in</button>
     `
     const form = document.querySelector<HTMLFormElement>('#login')
     const submit = document.querySelector<HTMLButtonElement>('#submit')
-    if (!form || !submit) throw new Error('expected form fixture')
+    const label = document.querySelector<HTMLLabelElement>('#submit-label')
+    const labelText = label?.firstChild
+    if (!form || !submit || !label || !(labelText instanceof Text)) {
+      throw new Error('expected form fixture')
+    }
 
-    const request: Parameters<typeof mutationTouchesAuthenticationWorkflow>[0] =
-      {
-        record: attributeMutation(submit),
-        workflow: observation(form),
+    for (const record of [
+      attributeMutation(submit),
+      attributeMutation(label),
+      { type: 'characterData', target: labelText } as unknown as MutationRecord,
+    ]) {
+      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+        records: [record],
+        mountedHost: false,
+        renderedWorkflow: observation(form),
       }
-    expect(mutationTouchesAuthenticationWorkflow(request)).toBe(true)
+      expect(
+        authenticationMutationImpact(request).shouldRemountRenderedWorkflow,
+      ).toBe(true)
+    }
+  })
+
+  test('bounds invalidation while retaining explicit owner and label dependencies', () => {
+    document.body.innerHTML = `<form id="login" action="/login"><header><input id="search" /><span id="username-label">Account</span></header>
+      <main class="login-panel"><input aria-labelledby="username-label" autocomplete="username" /><input type="password" /></main>
+      <footer><button type="submit">Subscribe</button></footer></form>`
+    const form = document.querySelector<HTMLFormElement>('#login')
+    const root = document.querySelector<HTMLElement>('.login-panel')
+    const search = document.querySelector<HTMLInputElement>('#search')
+    const label = document.querySelector<HTMLElement>('#username-label')
+    if (!form || !root || !search || !label) {
+      throw new Error('expected bounded mutation fixture')
+    }
+    const renderedWorkflow = observation(form, root)
+    const insertedSearch = document.createElement('input')
+    const impact = (record: MutationRecord) =>
+      authenticationMutationImpact({
+        records: [record],
+        mountedHost: false,
+        renderedWorkflow,
+      }).shouldRemountRenderedWorkflow
+
+    expect(impact(attributeMutation(search))).toBe(false)
+    expect(impact(childListMutation(form, [insertedSearch]))).toBe(false)
+    expect(impact(attributeMutation(form))).toBe(true)
+    expect(impact(attributeMutation(label))).toBe(true)
   })
 
   test('observes submit destination changes', () => {

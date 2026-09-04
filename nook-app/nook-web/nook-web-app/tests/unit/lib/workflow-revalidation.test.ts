@@ -466,6 +466,48 @@ describe('credential-bearing workflow revalidation', () => {
     expect(act).not.toHaveBeenCalled()
   })
 
+  test('ignores unrelated owner controls outside a bounded workflow root', async () => {
+    document.body.innerHTML = `
+      <form action="/login" method="post">
+        <header><input id="search" type="search" /></header>
+        <main class="login-panel">
+          <input autocomplete="username" />
+          <input type="password" autocomplete="current-password" />
+          <button type="submit">Sign in</button>
+        </main>
+        <footer><input type="email" name="newsletter-email" /></footer>
+      </form>
+    `
+    const workflow = firstWorkflow()
+    expect(workflow.root).toBe(document.querySelector('.login-panel'))
+    runtime.sendSnapshot.mockImplementation(async (message) => {
+      const search = document.querySelector<HTMLInputElement>('#search')
+      if (search) search.replaceWith(search.cloneNode(true))
+      return matchedDeliveryWithSelectedFacts(
+        message,
+        AuthenticationWorkflowAction.ContinueWithNook,
+      )
+    })
+    const act = vi.fn(() => ({
+      kind: RevalidatedAuthenticationActResultKind.Acted,
+    }))
+
+    await expect(
+      performRevalidatedAuthenticationAction({
+        workflow,
+        expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+        observationBinding: {
+          kind: AuthenticationObservationBindingKind.Unbound,
+        },
+        approvalIsActive: () => true,
+        act,
+      }),
+    ).resolves.toEqual({
+      kind: RevalidatedAuthenticationActionOutcomeKind.Acted,
+    })
+    expect(act).toHaveBeenCalledOnce()
+  })
+
   test('requires the bound workflow to remain selected from every current candidate', async () => {
     document.body.innerHTML = `
       <form action="/login" method="post">
