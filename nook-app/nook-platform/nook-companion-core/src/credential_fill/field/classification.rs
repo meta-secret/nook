@@ -1,3 +1,4 @@
+use super::super::CredentialFillFieldClassificationOutcome;
 use super::{
     Credential, CredentialRole, Editability, Index, NewPassword, Observation, OneTimeCode, Password,
 };
@@ -43,10 +44,10 @@ impl From<Observation> for Classification {
 
 impl Classification {
     #[must_use]
-    pub const fn outcome(self) -> super::super::CredentialFillFieldClassificationOutcome {
+    pub const fn outcome(self) -> CredentialFillFieldClassificationOutcome {
         match self {
-            Self::Ignored(_) => super::super::CredentialFillFieldClassificationOutcome::Ignored,
-            Self::Observed(_) => super::super::CredentialFillFieldClassificationOutcome::Observed,
+            Self::Ignored(_) => CredentialFillFieldClassificationOutcome::Ignored,
+            Self::Observed(_) => CredentialFillFieldClassificationOutcome::Observed,
         }
     }
 
@@ -254,7 +255,7 @@ mod tests {
             );
             assert_eq!(
                 expected.outcome(),
-                super::super::super::CredentialFillFieldClassificationOutcome::Observed
+                CredentialFillFieldClassificationOutcome::Observed
             );
         }
     }
@@ -349,7 +350,7 @@ mod tests {
             assert_eq!(classification, Classification::Ignored(Index::ZERO.into()));
             assert_eq!(
                 classification.outcome(),
-                super::super::super::CredentialFillFieldClassificationOutcome::Ignored
+                CredentialFillFieldClassificationOutcome::Ignored
             );
         }
     }

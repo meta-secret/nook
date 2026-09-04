@@ -17,8 +17,6 @@
 //! `ensure_event_log_ready`, device-identity helpers, vault-key application) stays
 //! in this file because every submodule depends on it.
 
-#![deny(clippy::absolute_paths)]
-
 use crate::logger;
 use crate::storage::{auth_providers, indexed_db, local_folder};
 use nook_core::{

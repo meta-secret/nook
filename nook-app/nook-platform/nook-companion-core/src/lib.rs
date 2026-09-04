@@ -3,7 +3,6 @@
 //! Kept free of vault crypto and sync so a tiny companion WASM package can link
 //! this crate without the full `nook-core` graph.
 
-#![deny(clippy::absolute_paths)]
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,

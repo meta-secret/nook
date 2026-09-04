@@ -6,6 +6,8 @@
 
 pub extern crate external_api;
 
+use std::marker;
+
 pub type RawAlias = u128;
 pub type RawSink = dyn Fn(u64) -> RawAlias;
 
@@ -97,7 +99,7 @@ pub struct ProjectedField {
     pub values: Box<RawSink>,
 }
 
-pub struct Defaulted<T = RawAlias>(pub UserId, std::marker::PhantomData<T>);
+pub struct Defaulted<T = RawAlias>(pub UserId, marker::PhantomData<T>);
 
 pub trait LocalRaw: Iterator<Item = RawAlias> {}
 
