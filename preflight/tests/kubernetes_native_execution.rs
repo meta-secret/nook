@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, fs, path::PathBuf, process::Command};
+use std::{collections::BTreeSet, env, fs, mem, path::PathBuf, process::Command};
 
 use anyhow::Result;
 
@@ -28,7 +28,7 @@ const EXPECTED_REMOTE_CATALOG: &[&str] = &[
 ];
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
@@ -119,7 +119,7 @@ fn cluster_job_blocks(workflow: &str) -> Vec<String> {
         let is_job_heading =
             line.starts_with("  ") && !line.starts_with("    ") && line.trim_end().ends_with(':');
         if is_job_heading && !current.is_empty() {
-            blocks.push(std::mem::take(&mut current));
+            blocks.push(mem::take(&mut current));
         }
         if is_job_heading || !current.is_empty() {
             current.push_str(line);

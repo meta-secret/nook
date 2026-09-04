@@ -1,5 +1,5 @@
-use std::fs;
 use std::path::PathBuf;
+use std::{env, fs};
 
 use nook_preflight::source_size::{
     AUTHORED_SOURCE_LINE_LIMIT, SOURCE_SIZE_REMEDIATION, UNIT_TEST_COLOCATION_REMEDIATION,
@@ -7,7 +7,7 @@ use nook_preflight::source_size::{
 };
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )

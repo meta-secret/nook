@@ -3,14 +3,15 @@ use nook_preflight::coverage::{
 };
 use std::collections::HashMap;
 use std::env;
-use std::ffi::OsString;
+use std::ffi::{OsStr, OsString};
 use std::io;
 use std::path::PathBuf;
+use std::process;
 
 fn main() {
     if let Err(error) = run(env::args_os().skip(1)) {
         eprintln!("nook-preflight: {error}");
-        std::process::exit(2);
+        process::exit(2);
     }
 }
 
@@ -79,10 +80,7 @@ fn parse_options(
     Ok(options)
 }
 
-fn required<'a>(
-    options: &'a HashMap<String, OsString>,
-    name: &str,
-) -> io::Result<&'a std::ffi::OsStr> {
+fn required<'a>(options: &'a HashMap<String, OsString>, name: &str) -> io::Result<&'a OsStr> {
     options
         .get(name)
         .map(OsString::as_os_str)

@@ -1,8 +1,8 @@
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 #[test]
 fn dockerfiles_do_not_use_buildkit_cache_mounts() -> anyhow::Result<()> {
-    let repository_root = std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    let repository_root = env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     );
