@@ -12,7 +12,6 @@
     "nook-companion-wasm",
     "nook-wasm",
     "hive",
-    "lace",
     "nook-preflight",
     "nook_domain_api"
   ],
@@ -27,7 +26,6 @@
     "nook-companion-wasm": 18.0,
     "nook-wasm": 51.0,
     "hive": 60.0,
-    "lace": 75.0,
     "nook-preflight": 90.0,
     "nook_domain_api": 90.0
   },
@@ -42,5 +40,5 @@
     }
   ],
   "updated": "2026-09-04",
-  "note": "CI enforces nook-companion-wasm at 18%, nook-wasm at 51%, nook-authenticator-domain at 87%, Hive at 60%, Lace at 75%, and every other testable package at 90%."
+  "note": "CI enforces nook-companion-wasm at 18%, nook-wasm at 51%, nook-authenticator-domain at 87%, Hive at 60%, and every other testable package at 90%."
 }

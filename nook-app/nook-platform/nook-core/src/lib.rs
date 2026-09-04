@@ -414,7 +414,7 @@ pub use vault_sentinel_genesis::{
     create_sentinel_genesis_public_key_announcement, finalize_sentinel_genesis,
     respond_to_sentinel_genesis_request, sentinel_genesis_operations, start_sentinel_genesis,
 };
-pub use vault_sentinel_unlock::{respond_to_sentinel_unlock_request, start_sentinel_unlock};
+pub use vault_sentinel_unlock::SentinelUnlockSigning;
 pub use vault_session::{
     DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage, SecretTypeFilter,
     apply_user_records_to_armored_session, apply_user_records_to_encrypted_session,

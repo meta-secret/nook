@@ -4,9 +4,12 @@
 //! creates a response and while the requester finalizes a quorum. The public
 //! protocol types expose only signed metadata and age-encrypted ciphertext.
 
+mod response;
+
+pub use response::CheckedSentinelUnlockRequest;
+
 use super::multi_device::{
-    DeviceIdentity, OpenedSentinelShare, VaultKeys, device_id_from_public_key,
-    encrypt_for_recipient, generate_id, open_sentinel_share_for_identity,
+    DeviceIdentity, OpenedSentinelShare, VaultKeys, device_id_from_public_key, generate_id,
     reconstruct_sentinel_vault_keys_from_opened,
 };
 use super::sentinel_signing;
@@ -132,57 +135,6 @@ pub fn start_sentinel_unlock(
 #[must_use]
 pub fn sentinel_unlock_request(session: &SentinelUnlockSession) -> SentinelUnlockRequest {
     session.request.clone()
-}
-
-pub fn respond_to_sentinel_unlock_request(
-    request: &SentinelUnlockRequest,
-    records: &[StoredSecretRecord],
-    identity: &DeviceIdentity,
-    signing_key: &SigningKey,
-    authorized_requester_signing_key: &DeviceSigningPublicKey,
-) -> MultiDeviceResult<SentinelUnlockResponse> {
-    validate_request(request)?;
-    if &request.requester_signing_public_key != authorized_requester_signing_key {
-        return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
-    }
-    let opened_share = open_sentinel_share_for_identity(records, identity)?;
-    if opened_share.threshold != request.policy.threshold
-        || opened_share.required_participants != request.policy.required_participants
-        || opened_share.device_id != identity.device_id().as_str()
-        || u8::from(opened_share.share_index) == 0
-        || u8::from(opened_share.share_index) > u8::from(request.policy.required_participants)
-    {
-        return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
-    }
-    let participant_signing_public_key = signing_public_key(signing_key);
-    let contribution = SentinelUnlockContribution {
-        version: UNLOCK_VERSION,
-        session_id: request.session_id.clone(),
-        store_id: request.store_id.clone(),
-        policy: request.policy,
-        participant_device_id: identity.device_id().clone(),
-        participant_signing_public_key: participant_signing_public_key.clone(),
-        opened_share,
-    };
-    let plaintext = serde_json::to_vec(&contribution)
-        .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)?;
-    let mut response = SentinelUnlockResponse {
-        version: UNLOCK_VERSION,
-        session_id: request.session_id.clone(),
-        store_id: request.store_id.clone(),
-        policy: request.policy,
-        participant_device_id: identity.device_id().clone(),
-        participant_signing_public_key,
-        share_index: contribution.opened_share.share_index,
-        ciphertext: encrypt_for_recipient(&plaintext, &request.requester_encryption_public_key)?,
-        signature: String::new(),
-    };
-    response.signature = hex::encode(
-        signing_key
-            .sign(&response_signing_bytes(&response)?)
-            .to_bytes(),
-    );
-    Ok(response)
 }
 
 /// Verify and collect an opaque response. Decryption is intentionally delayed
@@ -357,11 +309,9 @@ fn verify_signature(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::create_sentinel_root_share_records_for_recipients;
-
-    fn signing_key(fill: u8) -> SigningKey {
-        SigningKey::from_bytes(&[fill; 32])
-    }
+    use crate::{
+        create_sentinel_root_share_records_for_recipients, open_sentinel_share_for_identity,
+    };
 
     struct Fixture {
         keys: VaultKeys,
@@ -373,62 +323,13 @@ mod tests {
         policy: SentinelUnlockPolicy,
     }
 
-    fn fixture() -> anyhow::Result<Fixture> {
-        let participants = (0..3)
-            .map(|_| DeviceIdentity::generate())
-            .collect::<Result<Vec<_>, _>>()?;
-        let recipients = participants
-            .iter()
-            .map(|identity| (identity.device_id().clone(), identity.public_key()))
-            .collect::<Vec<_>>();
-        let (keys, records) =
-            create_sentinel_root_share_records_for_recipients(&recipients, 2.into())?;
-        let requester = participants[2].clone();
-        Ok(Fixture {
-            keys,
-            records,
-            participants,
-            requester,
-            requester_signing: signing_key(90),
-            store_id: StoreId::parse("store_AAAAAAAAAAA")?,
-            policy: SentinelUnlockPolicy {
-                threshold: 2.into(),
-                required_participants: 3.into(),
-            },
-        })
-    }
-
-    fn session(fixture: &Fixture) -> anyhow::Result<SentinelUnlockSession> {
-        Ok(start_sentinel_unlock(
-            fixture.store_id.clone(),
-            fixture.policy,
-            &fixture.records,
-            &fixture.requester,
-            &fixture.requester_signing,
-        )?)
-    }
-
-    fn response(
-        fixture: &Fixture,
-        request: &SentinelUnlockRequest,
-        index: usize,
-    ) -> anyhow::Result<SentinelUnlockResponse> {
-        Ok(respond_to_sentinel_unlock_request(
-            request,
-            &fixture.records,
-            &fixture.participants[index],
-            &signing_key(u8::try_from(index + 1)?),
-            &signing_public_key(&fixture.requester_signing),
-        )?)
-    }
-
     #[test]
     fn signed_two_of_three_responses_unlock_without_exposing_mnemonics() -> anyhow::Result<()> {
-        let fixture = fixture()?;
-        let mut session = session(&fixture)?;
+        let fixture = Fixture::new()?;
+        let mut session = fixture.session()?;
         let request = sentinel_unlock_request(&session);
-        let first = response(&fixture, &request, 0)?;
-        let second = response(&fixture, &request, 1)?;
+        let first = fixture.response(&request, 0)?;
+        let second = fixture.response(&request, 1)?;
         let local_plaintext =
             open_sentinel_share_for_identity(&fixture.records, &fixture.participants[0])?;
         assert!(!serde_json::to_string(&first)?.contains(&local_plaintext.share));
@@ -452,10 +353,10 @@ mod tests {
 
     #[test]
     fn below_quorum_and_wrong_requester_are_rejected() -> anyhow::Result<()> {
-        let fixture = fixture()?;
-        let mut session = session(&fixture)?;
+        let fixture = Fixture::new()?;
+        let mut session = fixture.session()?;
         let request = sentinel_unlock_request(&session);
-        add_sentinel_unlock_response(&mut session, response(&fixture, &request, 0)?)?;
+        add_sentinel_unlock_response(&mut session, fixture.response(&request, 0)?)?;
         assert!(matches!(
             finalize_sentinel_unlock(session.clone(), &fixture.requester),
             Err(MultiDeviceError::NotEnoughSentinelShares { .. })
@@ -470,10 +371,10 @@ mod tests {
 
     #[test]
     fn duplicate_device_and_share_index_are_rejected() -> anyhow::Result<()> {
-        let fixture = fixture()?;
-        let mut session = session(&fixture)?;
+        let fixture = Fixture::new()?;
+        let mut session = fixture.session()?;
         let request = sentinel_unlock_request(&session);
-        let first = response(&fixture, &request, 0)?;
+        let first = fixture.response(&request, 0)?;
         let duplicate_index = first.share_index;
         add_sentinel_unlock_response(&mut session, first.clone())?;
         assert!(matches!(
@@ -481,10 +382,10 @@ mod tests {
             Err(MultiDeviceError::DuplicateSentinelUnlockParticipant { .. })
         ));
 
-        let mut second = response(&fixture, &request, 1)?;
+        let mut second = fixture.response(&request, 1)?;
         second.share_index = duplicate_index;
         second.signature = hex::encode(
-            signing_key(2)
+            Fixture::signing_key(2)
                 .sign(&response_signing_bytes(&second)?)
                 .to_bytes(),
         );
@@ -497,24 +398,18 @@ mod tests {
 
     #[test]
     fn tampered_request_response_and_wrong_session_are_rejected() -> anyhow::Result<()> {
-        let fixture = fixture()?;
-        let mut first_session = session(&fixture)?;
+        let fixture = Fixture::new()?;
+        let mut first_session = fixture.session()?;
         let first_request = sentinel_unlock_request(&first_session);
         let mut tampered_request = first_request.clone();
         tampered_request.policy.threshold = 3.into();
         assert!(matches!(
-            respond_to_sentinel_unlock_request(
-                &tampered_request,
-                &fixture.records,
-                &fixture.participants[0],
-                &signing_key(1),
-                &signing_public_key(&fixture.requester_signing),
-            ),
+            tampered_request.check(&signing_public_key(&fixture.requester_signing)),
             Err(MultiDeviceError::InvalidSentinelUnlockSignature)
         ));
 
-        let response = response(&fixture, &first_request, 0)?;
-        let second_session = session(&fixture)?;
+        let response = fixture.response(&first_request, 0)?;
+        let second_session = fixture.session()?;
         let mut wrong_session = second_session;
         assert!(matches!(
             add_sentinel_unlock_response(&mut wrong_session, response.clone()),
@@ -532,9 +427,9 @@ mod tests {
 
     #[test]
     fn unenrolled_requester_receives_no_unlock_response() -> anyhow::Result<()> {
-        let fixture = fixture()?;
+        let fixture = Fixture::new()?;
         let unknown_identity = DeviceIdentity::generate()?;
-        let unknown_signing = signing_key(91);
+        let unknown_signing = Fixture::signing_key(91);
         let session = start_sentinel_unlock(
             fixture.store_id.clone(),
             fixture.policy,
@@ -545,15 +440,129 @@ mod tests {
         let request = sentinel_unlock_request(&session);
 
         assert!(matches!(
-            respond_to_sentinel_unlock_request(
-                &request,
+            request.check(&signing_public_key(&fixture.requester_signing)),
+            Err(MultiDeviceError::InvalidSentinelUnlockPayload)
+        ));
+        Ok(())
+    }
+    #[test]
+    fn checking_preserves_policy_then_signature_then_expected_key_precedence() -> anyhow::Result<()>
+    {
+        let fixture = Fixture::new()?;
+        let request = sentinel_unlock_request(&fixture.session()?);
+        let wrong_key = signing_public_key(&Fixture::signing_key(92));
+        let mut invalid_policy = request.clone();
+        invalid_policy.policy.threshold = 1.into();
+        assert!(matches!(
+            invalid_policy.check(&wrong_key),
+            Err(MultiDeviceError::InvalidSentinelThreshold)
+        ));
+        let mut invalid_signature = request.clone();
+        invalid_signature.signature = "00".to_owned();
+        assert!(matches!(
+            invalid_signature.check(&wrong_key),
+            Err(MultiDeviceError::InvalidSentinelUnlockSignature)
+        ));
+        assert!(matches!(
+            request.check(&wrong_key),
+            Err(MultiDeviceError::InvalidSentinelUnlockPayload)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn checked_response_still_requires_the_participants_local_share() -> anyhow::Result<()> {
+        let fixture = Fixture::new()?;
+        let request = sentinel_unlock_request(&fixture.session()?);
+        let checked = request.check(&signing_public_key(&fixture.requester_signing))?;
+        let stranger = DeviceIdentity::generate()?;
+        assert!(
+            matches!(checked.respond(&fixture.records, &stranger, &Fixture::signing_key(93)),
+            Err(MultiDeviceError::SentinelShareNotFound { device_id }) if device_id == stranger.device_id().as_str())
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn checked_response_rejects_a_signed_policy_that_does_not_match_the_share() -> anyhow::Result<()>
+    {
+        let fixture = Fixture::new()?;
+        let session = start_sentinel_unlock(
+            fixture.store_id.clone(),
+            SentinelUnlockPolicy {
+                threshold: 3.into(),
+                required_participants: 3.into(),
+            },
+            &fixture.records,
+            &fixture.requester,
+            &fixture.requester_signing,
+        )?;
+        let checked = sentinel_unlock_request(&session)
+            .check(&signing_public_key(&fixture.requester_signing))?;
+        assert!(matches!(
+            checked.respond(
                 &fixture.records,
                 &fixture.participants[0],
-                &signing_key(1),
-                &signing_public_key(&fixture.requester_signing),
+                &Fixture::signing_key(1)
             ),
             Err(MultiDeviceError::InvalidSentinelUnlockPayload)
         ));
         Ok(())
+    }
+
+    impl Fixture {
+        fn signing_key(fill: u8) -> SigningKey {
+            SigningKey::from_bytes(&[fill; 32])
+        }
+
+        fn new() -> anyhow::Result<Fixture> {
+            let participants = (0..3)
+                .map(|_| DeviceIdentity::generate())
+                .collect::<Result<Vec<_>, _>>()?;
+            let recipients = participants
+                .iter()
+                .map(|identity| (identity.device_id().clone(), identity.public_key()))
+                .collect::<Vec<_>>();
+            let (keys, records) =
+                create_sentinel_root_share_records_for_recipients(&recipients, 2.into())?;
+            let requester = participants[2].clone();
+            Ok(Fixture {
+                keys,
+                records,
+                participants,
+                requester,
+                requester_signing: Self::signing_key(90),
+                store_id: StoreId::parse("store_AAAAAAAAAAA")?,
+                policy: SentinelUnlockPolicy {
+                    threshold: 2.into(),
+                    required_participants: 3.into(),
+                },
+            })
+        }
+
+        fn session(&self) -> anyhow::Result<SentinelUnlockSession> {
+            Ok(start_sentinel_unlock(
+                self.store_id.clone(),
+                self.policy,
+                &self.records,
+                &self.requester,
+                &self.requester_signing,
+            )?)
+        }
+
+        fn response(
+            &self,
+            request: &SentinelUnlockRequest,
+            index: usize,
+        ) -> anyhow::Result<SentinelUnlockResponse> {
+            Ok(request
+                .clone()
+                .check(&signing_public_key(&self.requester_signing))?
+                .respond(
+                    &self.records,
+                    &self.participants[index],
+                    &Self::signing_key(u8::try_from(index + 1)?),
+                )?)
+        }
     }
 }

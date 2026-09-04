@@ -688,7 +688,7 @@ those exact-head gates.
 - extension e2e.
 
 - The additional targets validate the separate fuzz workspace.
-  - They also compile, lint, and test Hive and Lace in the Minds workspace.
+  - They also compile, lint, and test Hive in the Minds workspace.
 - Credentialed real-provider `sync-live` e2e remains a separate manual
   validation.
   - It creates disposable external-provider state.
@@ -834,7 +834,7 @@ task web:test:e2e:github            # → sync-live
 registry. Every testable first-party package has an independent hosted failure
 decision; fuzz harnesses and vendored sources require an explicit exclusion.
 PR #1319 stages companion WASM at 18, authenticator-domain at 87, Hive at 60,
-Lace at 75, and `nook-wasm` at 51 percent.
+and `nook-wasm` at 51 percent.
 
 **Image build:**
 
@@ -850,8 +850,8 @@ Lace at 75, and `nook-wasm` at 51 percent.
 - The WASM lane gates companion separately, executes Chromium without cache
   credentials, and combines native and browser profiles for one `nook-wasm` report.
 - The rust-dylint lane independently covers `nook_domain_api` at 90 percent.
-- Hive verification runs instrumented Hive and Lace binaries in the existing
-  Neo4j-enabled runtime, then imports their profiles for separate reports.
+- Hive verification runs instrumented Hive binaries in the existing
+  Neo4j-enabled runtime, then imports their profiles for reporting.
 - Preflight enforces its own floor from the canonical repository source root.
 - Coverage-floor updates require complete independent hosted package results;
   the portable aggregate diagnostic is not an update authority.
