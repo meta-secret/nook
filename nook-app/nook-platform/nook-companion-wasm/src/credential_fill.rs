@@ -174,6 +174,11 @@ pub struct CredentialFillObservations {
 
 #[wasm_bindgen]
 impl CredentialFillObservations {
+    #[must_use]
+    pub fn max_count() -> u32 {
+        nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+    }
+
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new() -> Self {
