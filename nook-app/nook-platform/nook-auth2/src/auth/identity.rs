@@ -239,11 +239,9 @@ impl IdentityRecord {
         member: &IdentityMember,
         keys_by_store: &[(StoreId, VaultKeys)],
     ) -> MultiDeviceResult<()> {
-        let next_control_epoch = if keys_by_store.is_empty() {
-            None
-        } else {
-            Some(self.next_control_epoch()?)
-        };
+        let next_control_epoch = (!keys_by_store.is_empty())
+            .then(|| self.next_control_epoch())
+            .transpose()?;
         for (store_id, keys) in keys_by_store {
             let index = self
                 .vault_deks

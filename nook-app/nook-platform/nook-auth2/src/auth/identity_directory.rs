@@ -437,14 +437,14 @@ impl IdentityDirectory {
             }
         }
         let selected = self.selected_mut()?;
-        selected.add_prevalidated_member(IdentityMember {
+        let result = selected.add_prevalidated_member(IdentityMember {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
-        })?;
-        Ok(selected.identity_id.clone())
+        });
+        result.map(|()| selected.identity_id.clone())
     }
 
     /// Drop directory ownership sealed to an inaccessible installation key.
