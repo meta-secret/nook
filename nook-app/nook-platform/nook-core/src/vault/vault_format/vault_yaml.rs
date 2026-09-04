@@ -161,15 +161,11 @@ fn is_local_device_wrapper(value: &str) -> bool {
     let Ok(serde_json::Value::Object(fields)) = serde_json::from_str(value) else {
         return false;
     };
-    // Match the deserializer's required structural fields, independent of version or
-    // protection validity, so unknown/future local wrappers cannot become vault secrets.
+    // Marker fields can be missing or malformed in corrupted/future local wrappers.
+    // Identify browser-local material by the remaining required structural fields.
     let has_fields = |required: &[&str]| required.iter().all(|field| fields.contains_key(*field));
-    fields
-        .get("protection")
-        .is_some_and(serde_json::Value::is_string)
-        && has_fields(&["version"])
-        && (has_fields(&["credentialId", "userHandle", "prfInput", "kdf"])
-            || has_fields(&["kdf", "iterations", "salt", "cipher", "nonce", "ciphertext"]))
+    has_fields(&["credentialId", "userHandle", "prfInput", "kdf"])
+        || has_fields(&["kdf", "iterations", "salt", "cipher", "nonce", "ciphertext"])
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -290,6 +286,11 @@ mod tests {
             r#""protection":"passkey-wrapped-local""#,
             r#""protection":"future-local-wrapper""#,
         );
+        let missing = local_record.replace(r#""protection":"passkey-wrapped-local","#, "");
+        let numeric = local_record.replace(
+            "\"protection\":\"passkey-wrapped-local\"",
+            "\"protection\":7",
+        );
         let invalid_typed = StoredSecretRecord {
             key: sid("typed_wrapper_shape"),
             secret_type: Some(SecretType::Login),
@@ -299,11 +300,13 @@ mod tests {
         };
         assert_ne!(unsupported, local_record);
         assert_ne!(unknown, local_record);
+        assert_ne!(missing, local_record);
+        assert_ne!(numeric, local_record);
         assert!(matches!(
             partition_yaml_records(&[invalid_typed]),
             Err(VaultFormatError::InvalidAuthRecord(_))
         ));
-        let records = [local_record, unsupported, unknown]
+        let records = [local_record, unsupported, unknown, missing, numeric]
             .into_iter()
             .enumerate()
             .map(|(index, value)| StoredSecretRecord {
