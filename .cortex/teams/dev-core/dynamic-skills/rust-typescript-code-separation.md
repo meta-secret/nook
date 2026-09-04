@@ -83,20 +83,30 @@ Put app/domain types in Rust first:
   performs a real boundary task such as constructing/freeing WASM values,
   applying UI defaults, or translating browser state. Removing a Svelte proxy
   alone is not a wrapper responsibility; snapshot directly at the call site.
-- When a generated ABI parameter is a `#[wasm_bindgen]` class, construct the
-  real generated class.
-- Do not pass a structurally similar plain object in place of that class.
-- When `Tsify` with `from_wasm_abi` defines a generated structural DTO
-  parameter, construct its generated structural object directly.
-- Do not wrap a generated structural DTO in an unnecessary WASM class.
-- Export a canonical fieldless core enum directly when `wasm_bindgen` supports
-  it.
-- Do not mirror that enum in the bridge or translate its variants manually.
+- **Generated ABI construction**
+  - **Required actions**
+    - When a generated ABI parameter is a `#[wasm_bindgen]` class, construct the
+      real generated class.
+    - When `Tsify` with `from_wasm_abi` defines a generated structural DTO
+      parameter, construct its generated structural object directly.
+    - Export a canonical fieldless core enum directly when `wasm_bindgen`
+      supports it.
+  - **Prohibited actions**
+    - Do not pass a structurally similar plain object in place of a declared
+      `#[wasm_bindgen]` class.
+    - Do not wrap a generated structural DTO in an unnecessary WASM class.
+    - Do not mirror a canonical core enum in the bridge or translate its
+      variants manually.
 - Preserve semantic Rust identifier names in generated WASM declarations.
-  Svelte state and function signatures must use `StoreId`, `PasswordEntryId`,
-  and other available generated identifier types instead of widening them to
-  `string`. Optional identifiers use `$state<StoreId>()`; absence and identifier
-  identity are separate concerns.
+  Use `StoreId`, `PasswordEntryId`, and other available generated declarations
+  instead of spelling their primitive representation directly.
+- Treat a generated identifier as nominally safe only when its declaration is
+  actually branded, opaque, or class-backed. A generated alias of plain
+  `string` preserves contract naming and searchability, but it does not prevent
+  identifiers from being interchanged.
+- Use a generated nominal identifier in Svelte state and function signatures.
+  Keep absence separate, for example `$state<StoreId>()` when `StoreId` is
+  nominal.
 - Treat TypeScript string-literal unions that describe authentication, vault
   unlock, recovery, Sentinel, provider, or session workflows as missing Rust
   enums. Export the canonical `nook-core` enum through WASM and compare its
@@ -442,7 +452,8 @@ When `Option<T>` is still acceptable (do not force an enum):
       and same-argument forwarding functions that add no lifecycle or
       translation behavior. Preserve sanctioned type-only facade re-exports.
 - [ ] Search Svelte state and function parameters for domain identifiers typed
-      as `string`; replace them with the generated Rust/WASM identifier type.
+      as `string`. Use the exact generated contract declaration. Claim nominal
+      safety only when that declaration is branded, opaque, or class-backed.
 - [ ] Search `$state<"...">` and exported TypeScript unions for domain
       workflows; delete write-only or constant state, otherwise move the closed
       set to a Rust/WASM enum.

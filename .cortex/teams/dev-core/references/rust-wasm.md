@@ -125,18 +125,23 @@ data shapes.** Use `#[wasm_bindgen]` classes for object-owned boundaries. Use
 surface as `JsError`. Browser adapters use the narrowest typed `web-sys` /
 `js-sys` object supported by the external API.
 
+### Required actions
+
 - Keep domain identifiers and counts wrapped at the WASM boundary.
 - Expose a primitive getter only for explicit edge unwrapping.
 - Export a canonical fieldless core enum directly through `wasm_bindgen`.
-- Do not create a mirrored bridge enum or translate variants manually.
 - Wrap data-carrying core enums in generated WASM objects when direct export is
   unavailable.
 - When an ABI parameter is a `#[wasm_bindgen]` class, make JavaScript construct
   it through generated constructors or static factories.
-- Do not accept a plain object, string tag, or raw discriminant in place of a
-  declared `#[wasm_bindgen]` class.
 - When `Tsify` with `from_wasm_abi` declares a structural DTO parameter, accept
   the generated structural object with its exact fields.
+
+### Prohibited actions
+
+- Do not create a mirrored bridge enum or translate variants manually.
+- Do not accept a plain object, string tag, or raw discriminant in place of a
+  declared `#[wasm_bindgen]` class.
 - Do not introduce a WASM class merely to replace a generated structural DTO.
 
 Syntax-aware repository preflight rejects authored `JsValue` paths before

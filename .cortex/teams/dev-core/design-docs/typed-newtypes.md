@@ -172,11 +172,17 @@ let credential = Credential {
 };
 ```
 
-- Do not implement `From<(A, B, C)>` for independent aggregate fields.
-- Do not add a trivial `new(a, b, c)` that only hides those field names.
+#### Required actions
+
+- Construct independent aggregate fields with named struct literals.
 - Reserve `From<T>` for one clear semantic conversion.
 - Keep aggregate validation in a named fallible constructor when it enforces an
   invariant.
+
+#### Prohibited actions
+
+- Do not implement `From<(A, B, C)>` for independent aggregate fields.
+- Do not add a trivial `new(a, b, c)` that only hides those field names.
 
 ### Serde-transparent string newtype
 
