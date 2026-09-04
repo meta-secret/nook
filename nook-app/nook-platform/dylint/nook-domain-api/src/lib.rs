@@ -125,7 +125,9 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
             if visitor.1 {
                 emit_api_diagnostic(
                     cx,
-                    item.ident.span,
+                    cx.tcx
+                        .def_ident_span(item.owner_id.def_id)
+                        .unwrap_or(item.span),
                     "reachable struct or enum generic declaration",
                 );
             }
