@@ -5,10 +5,11 @@ import {
   CredentialFillEditability,
   CredentialFillFieldIndex,
   CredentialFillFieldRole,
-  CredentialFillKind,
   CredentialFillObservation,
+  CredentialFillObservationCount,
   CredentialFillObservations,
   CredentialFillPlan,
+  CredentialKind,
   plan_companion_credential_fill,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
@@ -49,16 +50,12 @@ describe('companion credential-fill WASM ABI', () => {
         const assignedPasswordKind = passwordAssignment.credential
         try {
           expect(assignedUsernameIndex.value).toBe(4)
-          expect(assignedUsernameKind).toBeInstanceOf(CredentialFillKind)
-          expect(assignedUsernameKind.is_username()).toBe(true)
+          expect(assignedUsernameKind).toBe(CredentialKind.Username)
           expect(assignedPasswordIndex.value).toBe(7)
-          expect(assignedPasswordKind).toBeInstanceOf(CredentialFillKind)
-          expect(assignedPasswordKind.is_current_password()).toBe(true)
+          expect(assignedPasswordKind).toBe(CredentialKind.CurrentPassword)
         } finally {
           assignedUsernameIndex.free()
           assignedPasswordIndex.free()
-          assignedUsernameKind.free()
-          assignedPasswordKind.free()
         }
       } finally {
         for (const assignment of assignments) assignment.free()
@@ -142,7 +139,8 @@ describe('companion credential-fill WASM ABI', () => {
     const maxCount = CredentialFillObservations.max_count()
 
     try {
-      for (let count = 0; count < maxCount; count += 1) {
+      expect(maxCount).toBeInstanceOf(CredentialFillObservationCount)
+      for (let count = 0; count < maxCount.value; count += 1) {
         fields.add(observation)
       }
       expect(() => fields.add(observation)).toThrow(
@@ -154,6 +152,7 @@ describe('companion credential-fill WASM ABI', () => {
       writable.free()
       usernameRole.free()
       fieldIndex.free()
+      maxCount.free()
     }
   })
 })
