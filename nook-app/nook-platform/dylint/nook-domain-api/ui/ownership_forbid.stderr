@@ -1,0 +1,12 @@
+error[E0453]: allow(invalid_unowned_function_suppression) incompatible with previous forbid
+  --> $DIR/ownership_forbid.rs:3:9
+   |
+LL | #![forbid(invalid_unowned_function_suppression)]
+   |           ------------------------------------ `forbid` level set here
+LL |
+LL | #[allow(invalid_unowned_function_suppression)]
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ overruled by previous forbid
+
+error: aborting due to 1 previous error
+
+For more information about this error, try `rustc --explain E0453`.

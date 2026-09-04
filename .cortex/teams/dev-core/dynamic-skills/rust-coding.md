@@ -1,5 +1,27 @@
 # Rust Coding
 
+## Priority: type-safe action graphs
+
+The highest-priority Rust modeling rule is
+[action ownership and typestate](../design-docs/rust-action-ownership.md).
+Most meaningful action flows must encode their legal transitions in types.
+The simplest default is distinct data-carrying structs with their own methods.
+
+### Required actions
+
+- Put authored functions on their meaningful struct, enum, or trait owner.
+- Consume the prior state when a transition replaces its capabilities.
+- Keep advanced state construction private to the validating transition.
+- Review new or changed Rust against this policy before its lint scope activates.
+- Follow the linked authority for precise boundary exceptions and rollout.
+
+### Prohibited actions
+
+- Do not introduce unowned public, private, or nested helper functions.
+- Do not replace free functions with an unrelated `Utils` namespace.
+- Do not manufacture advanced states through public fields or unchecked APIs.
+- Do not add artificial phases to a pure operation with no lifecycle.
+
 ## Purpose
 
 Keep Rust domain models precise. Use this when a struct has optional fields,
@@ -29,7 +51,8 @@ When you see `Option<T>`, ask:
 ### Required actions
 
 - Model closed sets as Rust enums.
-- Model different workflow states as enum variants with state-owned fields.
+- Model runtime alternatives as enum variants with state-owned fields.
+- Model legal action sequencing with the typestate authority above.
 - Put each field on the variant or sub-struct that owns it.
 - Give an enum variant a dedicated payload struct when it owns multiple
   independently named fields.

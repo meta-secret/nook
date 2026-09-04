@@ -26,6 +26,8 @@ use rustc_span::{
     sym,
 };
 
+mod function_ownership;
+
 dylint_linting::dylint_library!();
 
 declare_lint! {
@@ -96,11 +98,23 @@ declare_lint_pass! {
     clippy::no_mangle_with_rust_abi,
     reason = "Dylint 6.0.1 requires this Rust ABI loader entry point"
 )]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        unowned_function,
+        reason = "framework boundary: Dylint loader requires register_lints entrypoint"
+    )
+)]
 #[unsafe(no_mangle)]
 pub fn register_lints(session: &Session, lint_store: &mut LintStore) {
     dylint_linting::init_config(session);
     lint_store.register_lints(&[RAW_NUMERIC_PUBLIC_API, INVALID_RAW_NUMERIC_API_SUPPRESSION]);
     lint_store.register_late_pass(|_| Box::new(DomainApi));
+    lint_store.register_lints(&[
+        function_ownership::UNOWNED_FUNCTION,
+        function_ownership::INVALID_UNOWNED_FUNCTION_SUPPRESSION,
+    ]);
+    lint_store.register_late_pass(|_| Box::new(function_ownership::FunctionOwnership));
 }
 
 impl<'tcx> LateLintPass<'tcx> for DomainApi {
