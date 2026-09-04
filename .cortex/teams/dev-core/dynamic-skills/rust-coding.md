@@ -30,6 +30,28 @@ When you see `Option<T>`, ask:
 - Model different workflow states as enum variants, not optional fields inside a
   reused struct.
 - Put fields only on the variant/sub-struct that actually owns them.
+- Give every data-carrying enum variant a dedicated payload struct.
+  - Keep each field on the payload for the state that owns it.
+  - Do not use one shared field bag for unrelated variants.
+- Use a nested enum when one semantic category refines another.
+  - For example, model `CredentialRole::Password(Password::Current)` instead of
+    placing `CurrentPassword` beside unrelated top-level roles.
+- Keep orthogonal concepts as separate enums.
+  - Do not nest editability, visibility, or another independent dimension under
+    a role merely because both describe one record.
+- Put domain behavior on the type that owns the required knowledge.
+  - Prefer methods that validate, transform, or return a domain state.
+  - Do not add `is_*` methods that only decode one enum variant into `bool`.
+  - Match the enum directly so new variants remain compiler-visible.
+- Narrow enum variants before reading their payloads.
+  - Prefer a positive `let ... else` followed by simple named-field checks.
+  - Avoid negated compound conditions and deeply nested destructuring patterns.
+- Use a membership collection for uniqueness checks.
+  - Prefer `HashSet::insert` when rejecting duplicate identifiers.
+  - Do not scan every prior element when the collection can express membership.
+- Group a focused vocabulary under its owning module.
+  - Use concise names such as `field::Index` and `field::Observation`.
+  - Keep focused model and serialization tests beside that module.
 - Required persisted or signed values use required validated newtypes. Never use
   `Option<T>`, empty strings, or a `Missing` enum variant.
 - Use `Option<T>` only when absence is the truthful structural contract, not a
@@ -209,6 +231,8 @@ The allowed cases are intentionally narrow.
 - A private predicate answers a literal yes-or-no query such as `is_empty()` or
   `contains()`. Consume that result immediately. Do not store it as domain
   state or pass it onward as a policy or mode argument.
+- A standard-library membership operation such as `HashSet::insert` may return
+  `bool`. Consume it immediately as control flow.
 
 Additional boundary rules:
 
@@ -218,8 +242,9 @@ Additional boundary rules:
 - Every retained public parameter, stored field, or lint allowance involving
   `bool` documents which narrow exception applies. Test fixtures and internal
   DTOs do not receive a blanket exemption.
-- Do not serialize a boolean that can be derived from an enum. Expose a narrow
-  predicate method when a caller genuinely asks a yes-or-no question.
+- Do not serialize a boolean that can be derived from an enum.
+- Do not expose a semantic predicate merely to avoid returning or matching the
+  domain enum.
 
 ## Options or enums
 
@@ -435,6 +460,12 @@ whether a value exists.
   dependencies.
 - Check that helper APIs accept typed variants/enums instead of strings or
   optional field bags.
+- Check data-carrying variants for dedicated payload structs.
+- Check related categories for a truthful nested-enum boundary.
+- Keep independent dimensions as separate types.
+- Search changed enums for `is_*` methods that only reveal a variant.
+- Replace quadratic duplicate scans with a membership collection.
+- Prefer flat `let ... else` variant narrowing in multi-step filters.
 - Inventory authored Rust `bool` fields, parameters, returns, and lint
   allowances in the changed scope.
 - Replace every domain, state, policy, mode, command, configuration, persisted,

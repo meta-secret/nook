@@ -2,11 +2,17 @@
 
 ## Overview
 
-**Status:** In progress — prefer newtypes over raw `String` / `u32` in `nook-core` domain APIs.
+**Status:** In progress — prefer domain wrappers over raw primitives in Rust
+domain APIs and typed WASM boundaries.
 
 ## Why
 
-A bare `String` does not tell the compiler what the value _means_. `DevicePublicKey` vs `DeviceSigningPublicKey` vs `SymmetricKey` are all strings on the wire but must never be swapped. Newtypes make intent explicit and turn mix-ups into compile errors.
+A bare primitive does not tell the compiler what the value means. This applies
+to identifiers, counts, versions, and wire strings.
+
+`DevicePublicKey`, `DeviceSigningPublicKey`, and `SymmetricKey` are strings on
+the wire. They must never be swapped. Newtypes make intent explicit and turn
+mix-ups into compile errors.
 
 The vault will carry **multiple schema versions** concurrently (events, envelopes, projection). Version fields should be newtypes (`VaultEventSchemaVersion`, `PasswordEnvelopeVersion`, …) so each struct's supported range is checked at parse time, not ad-hoc `u32` comparisons scattered through the code.
 
@@ -103,7 +109,12 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
 
 ### WASM / JS boundary
 
-`nook-wasm` getters may still return `String` / `Option<String>`. Parse into newtypes **inside** Rust before calling `nook-core`. Do not duplicate validation in TypeScript.
+Keep identifiers and counts wrapped across the Rust/WASM boundary. Unwrap a
+primitive only through an explicit edge getter when JavaScript must consume it.
+
+`nook-wasm` getters may still return a wire `String` when the external API owns
+that representation. Parse it into a newtype inside Rust before calling core.
+Do not duplicate validation in TypeScript.
 
 ### Legitimately raw (for now)
 
@@ -115,6 +126,57 @@ The vault will carry **multiple schema versions** concurrently (events, envelope
   - **Reason:** Encoding primitive
 
 ## Patterns
+
+### Single-field primitive wrapper
+
+Use one wrapper for each domain meaning.
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FieldIndex {
+    pub value: u32,
+}
+
+impl From<u32> for FieldIndex {
+    fn from(value: u32) -> Self {
+        Self { value }
+    }
+}
+
+impl FieldIndex {
+    pub const ZERO: Self = Self { value: 0 };
+    pub const ONE: Self = Self { value: 1 };
+}
+```
+
+- Use `From<Primitive>` for an infallible single-field wrapper.
+- Use a parser or `TryFrom` when construction validates the value.
+- Add associated constants only for common values with stable meaning.
+- Keep dynamic values on the normal conversion path.
+- Preserve the wrapper through domain and WASM calls.
+- Expose the primitive only at an explicit external edge.
+- Use `#[serde(transparent)]` only when the owned wire format must remain the
+  primitive.
+- Keep a named `value` field when the serialized contract must retain the
+  wrapper shape.
+
+### Aggregate construction
+
+Construct aggregates with named fields.
+
+```rust
+let credential = Credential {
+    field_index,
+    role,
+    editability,
+};
+```
+
+- Do not implement `From<(A, B, C)>` for independent aggregate fields.
+- Do not add a trivial `new(a, b, c)` that only hides those field names.
+- Reserve `From<T>` for one clear semantic conversion.
+- Keep aggregate validation in a named fallible constructor when it enforces an
+  invariant.
 
 ### Serde-transparent string newtype
 
@@ -155,6 +217,12 @@ enum VersionedVaultEventBody {
 `from_trusted` / `from_vault_record` for values already validated or emitted by this process. Do not use for external input.
 
 ## Remaining type-safety checklist
+
+- [ ] Raw identifier and count primitives are absent from domain and WASM
+      signatures unless an external protocol owns the representation.
+- [ ] Infallible single-field wrappers implement `From<Primitive>`.
+- [ ] Aggregate construction keeps independent field names visible.
+- [ ] Associated constants cover only common values with stable meaning.
 
 - [ ] `VaultEventSession` — `store_id: StoreId`, `heads: Vec<EventId>`, `key_epoch: KeyEpoch`
 - [ ] `VaultProjection` maps — `BTreeMap<SecretId, …>` instead of `String` keys

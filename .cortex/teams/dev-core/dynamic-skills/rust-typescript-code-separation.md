@@ -83,6 +83,12 @@ Put app/domain types in Rust first:
   performs a real boundary task such as constructing/freeing WASM values,
   applying UI defaults, or translating browser state. Removing a Svelte proxy
   alone is not a wrapper responsibility; snapshot directly at the call site.
+- Construct real generated WASM classes for typed boundary inputs.
+- Do not pass a structurally similar plain object in place of a WASM-owned
+  object.
+- Export a canonical fieldless core enum directly when `wasm_bindgen` supports
+  it.
+- Do not mirror that enum in the bridge or translate its variants manually.
 - Preserve semantic Rust identifier names in generated WASM declarations.
   Svelte state and function signatures must use `StoreId`, `PasswordEntryId`,
   and other available generated identifier types instead of widening them to
@@ -165,10 +171,15 @@ web layer keeps only form/UI state.
 
 ```rust
 #[derive(Clone, Debug, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all = "lowercase")]
+pub struct GithubEnrollmentProvider {
+    pub pat: String,
+    pub repo: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum EnrollmentProvider {
     Local,
-    Github { pat: String, repo: String },
+    Github(GithubEnrollmentProvider),
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -179,13 +190,6 @@ pub struct EnrollmentIssueInput {
 ```
 
 ```rust
-#[wasm_bindgen]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StorageProviderType {
-    Local,
-    Github,
-}
-
 #[wasm_bindgen]
 pub struct NookEnrollmentProvider {
     inner: EnrollmentProvider,
@@ -203,15 +207,10 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen]
     pub fn github(repo: String, pat: String) -> Self {
         Self {
-            inner: EnrollmentProvider::Github { pat, repo },
-        }
-    }
-
-    #[wasm_bindgen(getter, js_name = "type")]
-    pub fn provider_type(&self) -> StorageProviderType {
-        match self.inner {
-            EnrollmentProvider::Local => StorageProviderType::Local,
-            EnrollmentProvider::Github { .. } => StorageProviderType::Github,
+            inner: EnrollmentProvider::Github(GithubEnrollmentProvider {
+                pat,
+                repo,
+            }),
         }
     }
 }
@@ -288,27 +287,22 @@ pub struct NookSyncProviderTarget {
 }
 ```
 
-Instead, model the state as a real `nook-core` enum whose variants each carry a
-dedicated struct, then expose a **thin `#[wasm_bindgen]` newtype wrapper** over
-the core enum with `is_*` / `as_*` accessors. This mirrors the MetaSecret
-`WasmVaultStatus(VaultStatus)` pattern
-([vault.rs](https://raw.githubusercontent.com/meta-secret/meta-secret-core/refs/heads/main/meta-secret/core/src/node/common/model/vault/vault.rs)):
+Model the state as a real core enum. Give every data-carrying variant a
+dedicated struct. Use a thin `#[wasm_bindgen]` object only when the core enum
+cannot cross the generated boundary directly.
 
 ```rust
 // nook-core: owned enum-of-structs, serializable, testable, no wasm behavior.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct LocalSyncProvider;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct GithubSyncProvider {
     pub repo: String,
     pub pat: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub enum SyncProviderTarget {
     Empty,
     Local(LocalSyncProvider),
@@ -318,23 +312,18 @@ pub enum SyncProviderTarget {
 ```
 
 ```rust
-// nook-wasm: thin newtype wrapper over the core enum.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+// nook-wasm: generated object that owns the canonical core enum.
 #[wasm_bindgen]
 pub struct WasmSyncProviderTarget(SyncProviderTarget);
 
 #[wasm_bindgen]
 impl WasmSyncProviderTarget {
-    pub fn is_local(&self) -> bool {
-        matches!(&self.0, SyncProviderTarget::Local(_))
+    pub fn local() -> Self {
+        Self(SyncProviderTarget::Local(LocalSyncProvider))
     }
 
-    pub fn as_github(&self) -> Option<GithubSyncProvider> {
-        match &self.0 {
-            SyncProviderTarget::Github(github) => Some(github.clone()),
-            _ => None,
-        }
+    pub fn github(repo: String, pat: String) -> Self {
+        Self(SyncProviderTarget::Github(GithubSyncProvider { repo, pat }))
     }
 }
 
@@ -353,12 +342,17 @@ Rules:
 - A configured variant must not contain optional fields for required
   configuration. Use a separate absence/draft variant, such as `Empty`, rather
   than `Github { pat: Option<String> }`.
-- The **wasm type is a newtype wrapper** `Wasm...(CoreEnum)`, not a hand-copied
-  mirror of every field. Expose `is_*` predicates and `as_*` accessors that
-  return the per-variant struct.
+- Export a fieldless canonical core enum through `wasm_bindgen` directly.
+- Wrap a data-carrying core enum in one generated WASM object when required.
+- Do not mirror the enum in another bridge enum.
+- Do not expose `is_*` predicates that only decode its variant.
+- Return a canonical domain state or a typed variant payload when JavaScript
+  must inspect an output.
+- Keep independent dimensions as separate enums.
+- Use a nested enum only when one category refines another category.
 - Keep serialization/validation in `nook-core`; the wrapper only bridges to JS.
-- Use raw string/option arguments only for genuinely simple one-off boundary
-  helpers where an enum or wrapper would not reduce ambiguity.
+- Construct the generated class in JavaScript.
+- Do not reconstruct the input as a plain object or raw discriminant.
 
 ### `Option<T>` is almost always a missing enum
 
@@ -400,8 +394,8 @@ Why the enum wins almost always:
   soup of impossible combinations; a single enum-of-structs makes only the legal
   combinations representable.
 
-Apply this at the design layer that owns the data — usually `nook-core` — and let
-`nook-wasm` bridge the enum to JS with `is_*` / `as_*` accessors as above.
+Apply this at the design layer that owns the data, usually `nook-core`.
+Let `nook-wasm` expose the canonical enum or a generated object that owns it.
 
 When `Option<T>` is still acceptable (do not force an enum):
 
@@ -446,8 +440,13 @@ When `Option<T>` is still acceptable (do not force an enum):
       TypeScript summaries solely to simplify ownership.
 - [ ] Treat long wasm functions with many optional parameters (or a flattened
       stringly-typed struct) as a design smell. Model the state as a `nook-core`
-      enum-of-structs and expose a thin `#[wasm_bindgen]` newtype wrapper with
-      `is_*` / `as_*` accessors instead.
+      enum-of-structs and expose a generated object that owns the core value.
+- [ ] Export canonical fieldless core enums directly instead of mirroring them
+      in the WASM bridge.
+- [ ] Remove `is_*` methods that only decode enum variants.
+- [ ] Return domain states or typed payload objects from semantic APIs.
+- [ ] Preserve generated Rust names instead of rebuilding case-renamed plain
+      objects in TypeScript.
 - [ ] Treat every `Option<String>` / `Option<T>` in an owned domain type as a
       missing enum. Ask what each state means and replace it with a named enum
       (e.g. `Empty` / `Text(String)`) unless it is a genuine two-state boundary
