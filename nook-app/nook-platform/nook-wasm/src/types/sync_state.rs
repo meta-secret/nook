@@ -21,6 +21,13 @@ impl NookVaultLastSync {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `synced` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn synced(at_unix_milliseconds: f64) -> Result<Self, wasm_bindgen::JsError> {
         let at_unix_milliseconds = valid_javascript_milliseconds(at_unix_milliseconds)
             .map_err(wasm_bindgen::JsError::new)?;
@@ -39,6 +46,13 @@ impl NookVaultLastSync {
 
     #[wasm_bindgen(getter, js_name = syncedAtUnixMilliseconds)]
     #[allow(clippy::cast_precision_loss)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `synced_at_unix_milliseconds` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn synced_at_unix_milliseconds(&self) -> Result<f64, wasm_bindgen::JsError> {
         match &self.0 {
             nook_core::VaultLastSync::Synced {
@@ -189,11 +203,25 @@ impl NookSyncConflictReview {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `content_local_version` version or epoch through a JavaScript Number scalar"
+        )
+    )]
     pub fn content_local_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         self.conflict()?.content_local_version()
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `content_remote_version` version or epoch through a JavaScript Number scalar"
+        )
+    )]
     pub fn content_remote_version(&self) -> Result<u32, wasm_bindgen::JsError> {
         self.conflict()?.content_remote_version()
     }

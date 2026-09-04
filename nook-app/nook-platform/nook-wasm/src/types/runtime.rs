@@ -189,6 +189,13 @@ pub struct NookVaultClientPolicy;
 impl NookVaultClientPolicy {
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `manual_sync_has_target` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn manual_sync_has_target(
         &self,
         local_vault_present: bool,
@@ -235,6 +242,13 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `edit_block_reason` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn edit_block_reason(
         &self,
         security_conflict_count: u32,
@@ -250,6 +264,13 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `edits_blocked` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn edits_blocked(
         &self,
         security_conflict_count: u32,
@@ -264,6 +285,13 @@ impl NookVaultClientPolicy {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `edit_block_message` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn edit_block_message(
         &self,
         security_conflict_count: u32,
@@ -301,6 +329,13 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `should_use_join_provider_for_connect` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn should_use_join_provider_for_connect(
         &self,
         authenticated: bool,
@@ -317,6 +352,13 @@ impl NookVaultClientPolicy {
     #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `should_sync_from_providers` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn should_sync_from_providers(
         &self,
         sync_blocked: bool,
@@ -358,6 +400,13 @@ impl NookVaultClientPolicy {
     #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `vault_sync_timer_tick_decision` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn vault_sync_timer_tick_decision(
         &self,
         verifying: bool,
@@ -384,6 +433,13 @@ impl NookVaultClientPolicy {
     #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `vault_storage_sync_decision` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn vault_storage_sync_decision(
         &self,
         sync_blocked: bool,
@@ -414,6 +470,13 @@ impl NookVaultClientPolicy {
     #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `should_auto_unlock` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn should_auto_unlock(
         &self,
         session_explicitly_locked: bool,
@@ -451,6 +514,13 @@ impl NookVaultClientPolicy {
     #[wasm_bindgen]
     #[must_use]
     #[allow(clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `should_show_login_vault_picker` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn should_show_login_vault_picker(
         &self,
         authenticated: bool,
@@ -487,6 +557,13 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `vault_connect_probe_decision` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn vault_connect_probe_decision(
         &self,
         access_status: nook_core::VaultAccessStatus,
@@ -502,6 +579,13 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `vault_connect_gate_decision` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn vault_connect_gate_decision(
         &self,
         access_status: nook_core::VaultAccessStatus,
@@ -566,6 +650,13 @@ impl NookVaultClientPolicy {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `normalized_secret_page_offset` paging values through JavaScript Number scalars"
+        )
+    )]
     pub fn normalized_secret_page_offset(
         &self,
         total: u32,
@@ -689,6 +780,13 @@ impl NookRuntimeConfig {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `resolve_vault_idle_timeout_ms` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: &str) -> u32 {
         self.policy
             .resolve_vault_idle_timeout_ms(nook_core::RuntimeConfigValue::Set(raw_timeout_ms))
@@ -696,6 +794,13 @@ impl NookRuntimeConfig {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `resolve_default_vault_idle_timeout_ms` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn resolve_default_vault_idle_timeout_ms(&self) -> u32 {
         self.policy
             .resolve_vault_idle_timeout_ms(nook_core::RuntimeConfigValue::Unset)
@@ -703,6 +808,13 @@ impl NookRuntimeConfig {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `resolve_vault_idle_warning_ms` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: &str) -> u32 {
         self.policy
             .resolve_vault_idle_warning_ms(nook_core::RuntimeConfigValue::Set(raw_warning_ms))
@@ -710,6 +822,13 @@ impl NookRuntimeConfig {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `resolve_default_vault_idle_warning_ms` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn resolve_default_vault_idle_warning_ms(&self) -> u32 {
         self.policy
             .resolve_vault_idle_warning_ms(nook_core::RuntimeConfigValue::Unset)
@@ -717,6 +836,13 @@ impl NookRuntimeConfig {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `resolve_vault_sync_interval_ms` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: &str) -> u32 {
         self.policy
             .resolve_vault_sync_interval_ms(nook_core::RuntimeConfigValue::Set(raw_interval_ms))
@@ -724,6 +850,13 @@ impl NookRuntimeConfig {
 
     #[wasm_bindgen]
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `resolve_default_vault_sync_interval_ms` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn resolve_default_vault_sync_interval_ms(&self) -> u32 {
         self.policy
             .resolve_vault_sync_interval_ms(nook_core::RuntimeConfigValue::Unset)

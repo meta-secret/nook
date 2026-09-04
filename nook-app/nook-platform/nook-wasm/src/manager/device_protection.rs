@@ -602,6 +602,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `finish_device_protection` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn finish_device_protection(
         &mut self,
         credential_id: Vec<u8>,
@@ -620,6 +627,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `finish_device_protection_with_mode` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn finish_device_protection_with_mode(
         &mut self,
         credential_id: Vec<u8>,
@@ -677,6 +691,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `recover_device_protection_with_passkey_material` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn recover_device_protection_with_passkey_material(
         &mut self,
         credential_id: Vec<u8>,
@@ -762,6 +783,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exchanges `unlock_device_identity` bytes with JavaScript as a Uint8Array"
+        )
+    )]
     pub async fn unlock_device_identity(&mut self, mut prf_output: Vec<u8>) -> Result<(), JsError> {
         let result: Result<(), NookError> = async {
             let (stored_device_id, record) =

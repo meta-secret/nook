@@ -29,6 +29,13 @@ pub fn is_known_bip39_word(word: &str) -> bool {
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects `suggest_bip39_words` paging values through JavaScript Number scalars"
+    )
+)]
 pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
     nook_core::suggest_bip39_words(prefix, limit as usize)
         .into_iter()
@@ -38,6 +45,13 @@ pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the `is_bip39_word_sequence_valid` count through a JavaScript Number scalar"
+    )
+)]
 pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> bool {
     nook_core::is_bip39_word_sequence_valid(text, expected_word_count as usize)
 }

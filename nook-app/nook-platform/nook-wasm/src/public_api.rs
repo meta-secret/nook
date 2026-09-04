@@ -60,6 +60,13 @@ pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: exchanges `build_passkey_prf_request_options` bytes with JavaScript as a Uint8Array"
+    )
+)]
 pub fn build_passkey_prf_request_options(
     rp_id: &str,
     credential_id: Vec<u8>,
@@ -70,6 +77,13 @@ pub fn build_passkey_prf_request_options(
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: exchanges `build_passkey_creation_options` bytes with JavaScript as a Uint8Array"
+    )
+)]
 pub fn build_passkey_creation_options(
     rp_id: &str,
     rp_name: &str,
@@ -110,6 +124,13 @@ pub fn generate_password(
 
 /// Generate an RFC 6238 TOTP code from a base32 secret via `nook-core`.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the `generate_totp_code` timestamp or duration through a JavaScript Number scalar"
+    )
+)]
 pub fn generate_totp_code(
     secret: &str,
     unix_seconds: u64,
@@ -122,6 +143,13 @@ pub fn generate_totp_code(
 
 /// Verify a TOTP code against a base32 secret with a ±1-step window.
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the `verify_totp_code` timestamp or duration through a JavaScript Number scalar"
+    )
+)]
 pub fn verify_totp_code(
     secret: &str,
     code: &str,
@@ -167,12 +195,26 @@ fn authenticator_from_secret(
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the `vault_password_min_length` count through a JavaScript Number scalar"
+    )
+)]
 pub fn vault_password_min_length() -> u32 {
     u32::try_from(nook_core::vault_password_min_length()).unwrap_or(u32::MAX)
 }
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the `vault_password_recommended_min_length` count through a JavaScript Number scalar"
+    )
+)]
 pub fn vault_password_recommended_min_length() -> u32 {
     u32::try_from(nook_core::vault_password_recommended_min_length()).unwrap_or(u32::MAX)
 }

@@ -123,6 +123,13 @@ impl NookVaultManager {
 
     #[allow(clippy::needless_pass_by_value)]
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `query_prepared_secret_page_js` paging values through JavaScript Number scalars"
+        )
+    )]
     pub async fn query_prepared_secret_page_js(
         &mut self,
         query: &str,
@@ -142,6 +149,13 @@ impl NookVaultManager {
 
     #[allow(clippy::needless_pass_by_value)]
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects `query_secret_page_js` paging values through JavaScript Number scalars"
+        )
+    )]
     pub fn query_secret_page_js(
         &self,
         query: &str,
@@ -173,6 +187,13 @@ impl NookVaultManager {
     }
 
     #[wasm_bindgen]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `current_authenticator_code` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn current_authenticator_code(
         &self,
         id: &str,

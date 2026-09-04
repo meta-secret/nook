@@ -16,6 +16,13 @@ pub struct NookAuthenticationPageObservation(nook_core::AuthenticationPageObserv
 impl NookAuthenticationPageObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: accepts browser-observed field and account counts as JavaScript Number scalars"
+        )
+    )]
     pub fn new(
         username_field_count: u32,
         current_password_field_count: u32,
@@ -130,6 +137,13 @@ pub struct NookAuthenticationOutcomeObservation(nook_core::AuthenticationOutcome
 impl NookAuthenticationOutcomeObservation {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: accepts elapsed authentication milliseconds as a JavaScript Number scalar"
+        )
+    )]
     pub fn new(
         navigated_away_from_auth_path: bool,
         auth_fields_present: bool,
@@ -212,11 +226,25 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 
     #[wasm_bindgen(getter, js_name = currentStep)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the current workflow step as a JavaScript Number scalar"
+        )
+    )]
     pub fn current_step(&self) -> u8 {
         self.0.current_step
     }
 
     #[wasm_bindgen(getter, js_name = totalSteps)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the total workflow steps as a JavaScript Number scalar"
+        )
+    )]
     pub fn total_steps(&self) -> u8 {
         self.0.total_steps
     }
@@ -232,6 +260,13 @@ impl NookAuthenticationWorkflowSnapshot {
     }
 
     #[wasm_bindgen(getter, js_name = observationIndex)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the workflow observation index as a JavaScript Number scalar"
+        )
+    )]
     pub fn observation_index(&self) -> u32 {
         self.0.observation_index
     }

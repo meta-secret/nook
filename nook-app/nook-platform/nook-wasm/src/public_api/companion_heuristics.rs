@@ -124,6 +124,13 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the authentication-form ranking as a JavaScript Number scalar"
+    )
+)]
 pub fn authentication_form_observation_priority(
     observation: &NookAuthenticationPageObservation,
 ) -> u8 {

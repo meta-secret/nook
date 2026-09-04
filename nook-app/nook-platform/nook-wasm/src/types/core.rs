@@ -155,6 +155,13 @@ impl NookVaultArchitecture {
 
     #[wasm_bindgen]
     #[allow(clippy::needless_pass_by_value)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `sentinel` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn sentinel(
         device_mode: nook_core::DeviceMode,
         replication_type: nook_core::ReplicationType,
@@ -192,16 +199,37 @@ impl NookVaultArchitecture {
     }
 
     #[wasm_bindgen(getter, js_name = sentinel_threshold)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `sentinel_threshold` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn sentinel_threshold(&self) -> Result<u8, wasm_bindgen::JsError> {
         Ok(self.0.sentinel.policy()?.threshold)
     }
 
     #[wasm_bindgen(getter, js_name = sentinel_required_participants)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `sentinel_required_participants` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn sentinel_required_participants(&self) -> Result<u8, wasm_bindgen::JsError> {
         Ok(self.0.sentinel.policy()?.required_participants)
     }
 
     #[wasm_bindgen(getter, js_name = sentinel_ready_participants)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `sentinel_ready_participants` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn sentinel_ready_participants(&self) -> Result<u8, wasm_bindgen::JsError> {
         Ok(self.0.sentinel.policy()?.ready_participants)
     }
@@ -356,11 +384,25 @@ impl NookOtpauthPreview {
     }
 
     #[wasm_bindgen(getter)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `digits` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn digits(&self) -> u32 {
         self.digits
     }
 
     #[wasm_bindgen(getter)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `period` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn period(&self) -> u32 {
         self.period
     }
