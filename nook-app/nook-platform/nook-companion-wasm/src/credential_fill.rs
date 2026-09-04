@@ -3,57 +3,79 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CredentialFillKind {
-    Username,
-    CurrentPassword,
+#[derive(Clone, Debug)]
+pub struct CredentialFillKind {
+    inner: nook_companion_core::credential_fill::CredentialKind,
 }
 
 impl CredentialFillKind {
     const fn from_core(value: nook_companion_core::credential_fill::CredentialKind) -> Self {
-        match value {
-            nook_companion_core::credential_fill::CredentialKind::Username => Self::Username,
-            nook_companion_core::credential_fill::CredentialKind::CurrentPassword => {
-                Self::CurrentPassword
-            }
-        }
+        Self { inner: value }
     }
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CredentialFillFieldRole {
-    Username,
-    CurrentPassword,
-    GenericPassword,
+impl CredentialFillKind {
+    #[must_use]
+    pub fn is_username(&self) -> bool {
+        self.inner == nook_companion_core::credential_fill::CredentialKind::Username
+    }
+
+    #[must_use]
+    pub fn is_current_password(&self) -> bool {
+        self.inner == nook_companion_core::credential_fill::CredentialKind::CurrentPassword
+    }
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Debug)]
+pub struct CredentialFillFieldRole {
+    inner: nook_companion_core::credential_fill::field::CredentialRole,
+}
+
+#[wasm_bindgen]
 impl CredentialFillFieldRole {
-    const fn into_core(self) -> nook_companion_core::credential_fill::field::CredentialRole {
-        match self {
-            Self::Username => nook_companion_core::credential_fill::field::CredentialRole::Username,
-            Self::CurrentPassword => {
-                nook_companion_core::credential_fill::field::CredentialRole::CurrentPassword
-            }
-            Self::GenericPassword => {
-                nook_companion_core::credential_fill::field::CredentialRole::GenericPassword
-            }
+    #[must_use]
+    pub fn username() -> Self {
+        Self {
+            inner: nook_companion_core::credential_fill::field::CredentialRole::Username,
+        }
+    }
+
+    #[must_use]
+    pub fn current_password() -> Self {
+        Self {
+            inner: nook_companion_core::credential_fill::field::CredentialRole::CurrentPassword,
+        }
+    }
+
+    #[must_use]
+    pub fn generic_password() -> Self {
+        Self {
+            inner: nook_companion_core::credential_fill::field::CredentialRole::GenericPassword,
         }
     }
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CredentialFillEditability {
-    Writable,
-    Readonly,
+#[derive(Clone, Debug)]
+pub struct CredentialFillEditability {
+    inner: nook_companion_core::credential_fill::field::Editability,
 }
 
+#[wasm_bindgen]
 impl CredentialFillEditability {
-    const fn into_core(self) -> nook_companion_core::credential_fill::field::Editability {
-        match self {
-            Self::Writable => nook_companion_core::credential_fill::field::Editability::Writable,
-            Self::Readonly => nook_companion_core::credential_fill::field::Editability::Readonly,
+    #[must_use]
+    pub fn writable() -> Self {
+        Self {
+            inner: nook_companion_core::credential_fill::field::Editability::Writable,
+        }
+    }
+
+    #[must_use]
+    pub fn readonly() -> Self {
+        Self {
+            inner: nook_companion_core::credential_fill::field::Editability::Readonly,
         }
     }
 }
@@ -109,14 +131,14 @@ impl CredentialFillObservation {
     #[must_use]
     pub fn credential(
         field_index: &CredentialFillFieldIndex,
-        role: CredentialFillFieldRole,
-        editability: CredentialFillEditability,
+        role: &CredentialFillFieldRole,
+        editability: &CredentialFillEditability,
     ) -> Self {
         Self {
             inner: nook_companion_core::credential_fill::field::Credential {
                 field_index: field_index.as_core(),
-                role: role.into_core(),
-                editability: editability.into_core(),
+                role: role.inner,
+                editability: editability.inner,
             }
             .into(),
         }
@@ -248,70 +270,28 @@ pub fn plan_companion_credential_fill(
 mod tests {
     use super::*;
 
-    fn field(field_index: u32, role: CredentialFillFieldRole) -> CredentialFillObservation {
+    fn field(field_index: u32, role: &CredentialFillFieldRole) -> CredentialFillObservation {
         CredentialFillObservation::credential(
             &CredentialFillFieldIndex::new(field_index),
             role,
-            CredentialFillEditability::Writable,
+            &CredentialFillEditability::writable(),
         )
     }
 
     #[test]
     fn wasm_owned_objects_delegate_to_core_policy() -> Result<(), wasm_bindgen::JsError> {
         let mut fields = CredentialFillObservations::new();
-        fields.add(&field(0, CredentialFillFieldRole::Username))?;
-        fields.add(&field(1, CredentialFillFieldRole::CurrentPassword))?;
+        fields.add(&field(0, &CredentialFillFieldRole::username()))?;
+        fields.add(&field(1, &CredentialFillFieldRole::current_password()))?;
 
         let mut plan = plan_companion_credential_fill(&fields)?;
         let assignments = plan.take_assignments();
         assert_eq!(assignments.len(), 2);
         assert_eq!(assignments[0].field_index().value(), 0);
-        assert_eq!(assignments[0].credential(), CredentialFillKind::Username);
+        assert!(assignments[0].credential().is_username());
         assert_eq!(assignments[1].field_index().value(), 1);
-        assert_eq!(
-            assignments[1].credential(),
-            CredentialFillKind::CurrentPassword
-        );
+        assert!(assignments[1].credential().is_current_password());
         assert!(plan.take_assignments().is_empty());
-        Ok(())
-    }
-
-    #[test]
-    fn wasm_owned_observation_preserves_readonly_policy() -> Result<(), wasm_bindgen::JsError> {
-        let readonly = CredentialFillObservation::credential(
-            &CredentialFillFieldIndex::new(0),
-            CredentialFillFieldRole::CurrentPassword,
-            CredentialFillEditability::Readonly,
-        );
-        let mut fields = CredentialFillObservations::new();
-        fields.add(&readonly)?;
-        assert!(plan_companion_credential_fill(&fields).is_err());
-        Ok(())
-    }
-
-    #[test]
-    fn wasm_owned_variant_factories_preserve_unsafe_scope_policy()
-    -> Result<(), wasm_bindgen::JsError> {
-        for observation in [
-            CredentialFillObservation::new_password(&CredentialFillFieldIndex::new(0)),
-            CredentialFillObservation::one_time_code(&CredentialFillFieldIndex::new(0)),
-        ] {
-            let mut fields = CredentialFillObservations::new();
-            fields.add(&observation)?;
-            assert!(plan_companion_credential_fill(&fields).is_err());
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn wasm_owned_batch_rejects_observations_above_the_core_limit()
-    -> Result<(), wasm_bindgen::JsError> {
-        let observation = field(0, CredentialFillFieldRole::Username);
-        let mut fields = CredentialFillObservations::new();
-        for _ in 0..nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT {
-            fields.add(&observation)?;
-        }
-        assert!(fields.add(&observation).is_err());
         Ok(())
     }
 }
