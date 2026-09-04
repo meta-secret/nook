@@ -899,7 +899,6 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
     for required in [
         "cargo outdated --workspace --root-deps-only --exit-code 1",
         "check_manifest nook-app/nook-platform",
-        "check_manifest nook-app/nook-platform/dylint/nook-domain-api",
         "check_manifest nook-app/nook-platform/fuzz",
         "check_manifest agentic-ai/minds",
         "check_manifest preflight",
@@ -913,7 +912,6 @@ fn rust_dependency_updates_are_coordinated_by_gizmo_and_delegated_to_teams() -> 
     let prompt = read(&root, ".github/prompts/rust-dependency-update-agent.md");
     for required in [
         "`nook-app/nook-platform/`",
-        "`nook-app/nook-platform/dylint/nook-domain-api/`",
         "`nook-app/nook-platform/fuzz/`",
         "`agentic-ai/minds/`",
         "`preflight/`",

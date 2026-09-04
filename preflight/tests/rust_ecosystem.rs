@@ -490,6 +490,14 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
     );
     assert!(workspace.contains("[workspace.metadata.kani.flags]"));
     assert!(
+        read(".github/scripts/ci-rust-deps-outdated.sh")?
+            .contains("check_manifest nook-app/nook-platform/dylint/nook-domain-api")
+    );
+    assert!(
+        read(".github/prompts/rust-dependency-update-agent.md")?
+            .contains("`nook-app/nook-platform/dylint/nook-domain-api/`")
+    );
+    assert!(
         dylint_manifest.contains("[lints.clippy]")
             && dylint_manifest.contains("all = { level = \"warn\", priority = -1 }")
             && dylint_manifest.contains("pedantic = { level = \"warn\", priority = -1 }")
