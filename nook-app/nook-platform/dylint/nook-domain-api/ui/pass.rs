@@ -12,8 +12,21 @@ extern crate external_api;
 
 pub struct UserId(u64);
 pub struct AccountBalance(u64);
+pub struct DynamicCount(usize);
 pub struct Wrapper<T>(T);
 pub type DomainAlias = UserId;
+
+impl From<usize> for DynamicCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<DynamicCount> for usize {
+    fn from(value: DynamicCount) -> Self {
+        value.0
+    }
+}
 
 pub fn user<const N: usize>(id: [UserId; N]) -> Option<AccountBalance> {
     let _ = id;

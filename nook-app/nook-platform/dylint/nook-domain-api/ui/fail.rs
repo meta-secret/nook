@@ -165,4 +165,42 @@ impl external_api::GenericDefault<u64> for UserId {}
 impl external_api::ReferenceRawDefault for &UserId {}
 impl LocalGenericDefault<u64> for Wrapper<UserId> {}
 
+pub struct Pair(u64, u64);
+
+impl From<u64> for Pair {
+    fn from(value: u64) -> Self {
+        Self(value, value)
+    }
+}
+
+pub trait FromLike<T> {
+    fn from_like(value: T) -> Self;
+}
+
+impl FromLike<u64> for UserId {
+    fn from_like(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+pub struct PredicateCount(usize);
+
+impl From<usize> for PredicateCount
+where
+    usize: Copy,
+{
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<PredicateCount> for usize
+where
+    usize: Copy,
+{
+    fn from(value: PredicateCount) -> Self {
+        value.0
+    }
+}
+
 fn main() {}

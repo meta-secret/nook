@@ -4,6 +4,27 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt;
 
+/// Number of immutable events indexed by a causal graph.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct CausalGraphEventCount(usize);
+
+impl CausalGraphEventCount {
+    pub const EMPTY: Self = Self(0);
+    pub const SINGLE_EVENT: Self = Self(1);
+}
+
+impl From<usize> for CausalGraphEventCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<CausalGraphEventCount> for usize {
+    fn from(value: CausalGraphEventCount) -> Self {
+        value.0
+    }
+}
+
 /// Result of indexing an immutable event and its parent set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CausalInsertStatus<Id> {
@@ -69,8 +90,8 @@ where
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.parents.len()
+    pub fn len(&self) -> CausalGraphEventCount {
+        CausalGraphEventCount(self.parents.len())
     }
 
     #[must_use]
@@ -397,6 +418,28 @@ mod tests {
 
     fn id(value: &str) -> String {
         value.to_owned()
+    }
+
+    #[test]
+    fn event_count_has_typed_empty_and_single_event_states() {
+        let mut graph = CausalGraph::new();
+        assert_eq!(graph.len(), CausalGraphEventCount::EMPTY);
+
+        graph.insert(id("root"), Vec::new());
+
+        assert_eq!(graph.len(), CausalGraphEventCount::SINGLE_EVENT);
+    }
+
+    #[test]
+    fn event_count_round_trips_dynamic_values_above_one() {
+        let mut graph = CausalGraph::new();
+        for event_id in ["first", "second", "third"] {
+            graph.insert(id(event_id), Vec::new());
+        }
+        let count = CausalGraphEventCount::from(3);
+
+        assert_eq!(graph.len(), count);
+        assert_eq!(usize::from(count), 3);
     }
 
     #[test]
