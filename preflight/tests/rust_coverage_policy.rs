@@ -27,7 +27,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
             "nook-companion-wasm" => 18.0,
             "nook-authenticator-domain" => 87.0,
             "hive" => 60.0,
-            "lace" => 75.0,
             _ => 90.0,
         };
         assert!(floor.as_f64().is_some_and(|floor| floor >= expected));
