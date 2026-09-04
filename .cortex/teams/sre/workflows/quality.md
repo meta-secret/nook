@@ -98,8 +98,9 @@ Use this workflow for quality, CI, and deployment changes.
    - `PR / Rust ecosystem / Dependency policy and RustSec` —
      `task docker:ecosystem:dependency-policy` builds pinned `cargo-deny` and
      `cargo-audit` via `docker:ecosystem:policy-tools`, then runs each workspace
-     task (`rust:dependency-policy`, `preflight:dependency-policy`,
-     `fuzz:dependency-policy`, `minds:dependency-policy`) through the cache-only
+     task (`dylint:dependency-policy`, `rust:dependency-policy`,
+     `preflight:dependency-policy`, `fuzz:dependency-policy`,
+     `minds:dependency-policy`) through the cache-only
      `rust-ecosystem-dependency-policy` BuildKit target.
      Never aggregate multiple workspaces into one Dockerfile RUN.
      Never export or load the policy-tools image into a Docker daemon.
@@ -450,8 +451,7 @@ Use this workflow for quality, CI, and deployment changes.
     #### Manual and scheduled jobs
     - Credentialed `sync-live` validation is manual through `e2e-pr.yml`.
     - Weekly: `rust-dependency-updates.yml` audits every direct dependency in each Rust root.
-    - The roots include `nook-app/nook-platform/`, `nook-app/nook-platform/dylint/nook-domain-api/`, and its fuzz workspace.
-    - They also include `agentic-ai/minds/` and `preflight/`.
+    - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
     - A finding starts an isolated AI agent.
     - The agent updates all outdated Rust dependencies.
     - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000`.

@@ -32,7 +32,6 @@ ${RUST_DEPS_OUTDATED_REPORT}
 1. Record the exact 40-character baseline commit.
 2. Inventory every direct dependency in these Rust roots:
    - `nook-app/nook-platform/`;
-   - `nook-app/nook-platform/dylint/nook-domain-api/`;
    - `nook-app/nook-platform/fuzz/`;
    - `agentic-ai/minds/`; and
    - `preflight/`.
