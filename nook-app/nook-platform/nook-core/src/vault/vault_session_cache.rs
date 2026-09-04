@@ -69,7 +69,8 @@ mod tests {
         let keys = generate_vault_keys()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)?;
+        let shares =
+            create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2.into())?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {

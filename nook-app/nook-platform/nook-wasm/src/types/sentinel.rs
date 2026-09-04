@@ -24,13 +24,17 @@ impl NookSentinelUnlockSessionStatus {
         }
     }
 
-    pub(crate) const fn from_status(status: nook_core::SentinelUnlockStatus) -> Self {
-        Self {
+    pub(crate) fn from_status(status: nook_core::SentinelUnlockStatus) -> Result<Self, JsError> {
+        Ok(Self {
             active: true,
-            collected: status.collected,
-            threshold: status.threshold,
+            collected: u8::try_from(usize::from(status.collected)).map_err(|_| {
+                JsError::new(
+                    "Sentinel unlock contribution count exceeds the JavaScript bridge limit.",
+                )
+            })?,
+            threshold: status.threshold.into(),
             ready: status.ready,
-        }
+        })
     }
 
     #[wasm_bindgen(getter)]
@@ -68,6 +72,33 @@ impl NookSentinelUnlockSessionStatus {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::NookSentinelUnlockSessionStatus;
+    use nook_core::SentinelUnlockStatus;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn unlock_status_bridge_projects_counts_and_rejects_overflow()
+    -> Result<(), wasm_bindgen::JsError> {
+        let status = SentinelUnlockStatus {
+            collected: 2.into(),
+            threshold: 3.into(),
+            ready: false,
+        };
+        let projected = NookSentinelUnlockSessionStatus::from_status(status)?;
+        assert_eq!(projected.collected, 2);
+
+        let overflow = SentinelUnlockStatus {
+            collected: 256.into(),
+            threshold: 3.into(),
+            ready: true,
+        };
+        assert!(NookSentinelUnlockSessionStatus::from_status(overflow).is_err());
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 pub struct NookSentinelStoredDeliverySummary {
     store_id: String,
@@ -85,8 +116,8 @@ impl NookSentinelStoredDeliverySummary {
         Self {
             store_id,
             session_id: delivery.session_id.as_str().to_owned(),
-            participant_count: delivery.policy.participant_count,
-            threshold: delivery.policy.threshold,
+            participant_count: delivery.policy.participant_count.into(),
+            threshold: delivery.policy.threshold.into(),
         }
     }
 

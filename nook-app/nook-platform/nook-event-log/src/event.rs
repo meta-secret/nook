@@ -715,7 +715,7 @@ mod tests {
                 envelope: PasswordEnvelope {
                     version: 1,
                     kdf: "scrypt".to_owned(),
-                    work_factor: 18,
+                    work_factor: 18.into(),
                     recipient: String::new(),
                     wrapped_keys: String::new(),
                     ciphertext: "age-ciphertext".to_owned(),

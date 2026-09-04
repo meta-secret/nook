@@ -52,8 +52,8 @@ pub(super) fn reconstruct_secret_bytes(
 ) -> MultiDeviceResult<Vec<u8>> {
     if shares.len() < usize::from(threshold) {
         return Err(MultiDeviceError::NotEnoughSentinelShares {
-            threshold,
-            available: shares.len(),
+            threshold: threshold.into(),
+            available: shares.len().into(),
         });
     }
     let length = shares

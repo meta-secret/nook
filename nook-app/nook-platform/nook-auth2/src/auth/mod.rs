@@ -1,6 +1,7 @@
 //! App-key, identity, enrollment, and unlock-domain primitives.
 
 pub mod device_key_protection;
+mod domain_numbers;
 pub mod enrollment;
 pub mod identity;
 mod identity_dek_grant;
@@ -15,6 +16,12 @@ mod sentinel_genesis_types;
 mod sentinel_signing;
 pub mod sentinel_unlock;
 mod slip39;
+
+pub use domain_numbers::{
+    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, MockPasskeyCredentialCount,
+    PasswordWorkFactor, SentinelParticipantCount, SentinelRecordCount, SentinelShareCount,
+    SentinelShareIndex, SentinelThreshold,
+};
 
 #[cfg(any(test, feature = "mock-passkey"))]
 pub mod mock_passkey {
@@ -31,6 +38,7 @@ pub mod mock_passkey {
     use sha2::{Digest, Sha256};
     use thiserror::Error;
 
+    use crate::MockPasskeyCredentialCount;
     use crate::errors::DeviceKeyProtectionError;
 
     const MOCK_CREDENTIAL_ID_LEN: usize = 32;
@@ -355,8 +363,8 @@ pub mod mock_passkey {
         }
 
         #[must_use]
-        pub fn credential_count(&self) -> usize {
-            self.credentials.len()
+        pub fn credential_count(&self) -> MockPasskeyCredentialCount {
+            self.credentials.len().into()
         }
 
         fn generate_unique_credential_id(&self) -> MockPasskeyResult<Vec<u8>> {
@@ -547,7 +555,7 @@ pub mod mock_passkey {
             );
 
             assert!(matches!(result, Err(MockPasskeyError::AuthorizationDenied)));
-            assert_eq!(authenticator.credential_count(), 0);
+            assert_eq!(usize::from(authenticator.credential_count()), 0);
         }
 
         #[test]
@@ -737,7 +745,7 @@ pub mod mock_passkey {
                 ))
             ));
             assert!(matches!(bad_rp, Err(MockPasskeyError::RpIdEmpty)));
-            assert_eq!(authenticator.credential_count(), 0);
+            assert_eq!(usize::from(authenticator.credential_count()), 0);
         }
     }
 }

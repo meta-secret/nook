@@ -352,10 +352,10 @@ impl VaultArchitecture {
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
                         !matches!(share.version, 1 | 2)
-                            || share.threshold != policy.threshold
-                            || share.required_participants != policy.required_participants
-                            || share.share_index == 0
-                            || share.share_index > policy.required_participants
+                            || u8::from(share.threshold) != policy.threshold
+                            || u8::from(share.required_participants) != policy.required_participants
+                            || u8::from(share.share_index) == 0
+                            || u8::from(share.share_index) > policy.required_participants
                     })
                 {
                     return Err(ValidationError::InvalidSentinelShareSet);
@@ -542,7 +542,7 @@ mod tests {
         let keys = crate::generate_vault_keys()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -573,8 +573,11 @@ mod tests {
                 ready_participants: 2,
             },
         );
-        let shares =
-            crate::create_sentinel_share_records(&keys, &[first.clone(), second.clone()], 2)?;
+        let shares = crate::create_sentinel_share_records(
+            &keys,
+            &[first.clone(), second.clone()],
+            2.into(),
+        )?;
         architecture.validate_records(&shares)?;
 
         let auth = crate::genesis_auth_record(&first, &keys.secrets_key, &keys.members_key)?;
@@ -623,7 +626,7 @@ mod tests {
         let keys = crate::generate_vault_keys()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
         assert_eq!(
             VaultArchitecture::default().validate_records(&shares),
             Err(ValidationError::SimpleVaultHasSentinelShares)

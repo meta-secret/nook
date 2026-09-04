@@ -299,7 +299,7 @@ mod tests {
         let keys = crate::generate_vault_keys()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
+        let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             crate::SentinelPolicy {

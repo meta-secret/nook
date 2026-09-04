@@ -376,9 +376,9 @@ impl NookVaultManager {
                 .map(|delivery| nook_core::SentinelShareIssuedPayload {
                     device_id: delivery.device_id.clone(),
                     version: delivery.share.version,
-                    threshold: delivery.share.threshold,
-                    required_participants: delivery.share.required_participants,
-                    share_index: delivery.share.share_index,
+                    threshold: delivery.share.threshold.into(),
+                    required_participants: delivery.share.required_participants.into(),
+                    share_index: delivery.share.share_index.into(),
                     ciphertext: delivery.share.ciphertext.clone(),
                 })
                 .collect(),

@@ -191,7 +191,7 @@ mod tests {
                 envelope: crate::PasswordEnvelope {
                     version: 1,
                     kdf: "scrypt".to_owned(),
-                    work_factor: 10,
+                    work_factor: 10.into(),
                     recipient: String::new(),
                     wrapped_keys: String::new(),
                     ciphertext: "c".to_owned()
