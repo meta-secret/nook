@@ -352,10 +352,10 @@ mod tests {
         AUTHORED_SOURCE_LINE_LIMIT, ExternalUnitTestModuleViolation, SourceSizeViolation,
         external_rust_unit_test_modules, source_size_violations,
     };
-    use std::fs;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{env, fs, process};
 
     static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -568,10 +568,10 @@ mod tests {
 
     fn temporary_directory() -> anyhow::Result<PathBuf> {
         let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let process_id = std::process::id();
+        let process_id = process::id();
         let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let path =
-            std::env::temp_dir().join(format!("nook-source-size-{process_id}-{unique}-{sequence}"));
+            env::temp_dir().join(format!("nook-source-size-{process_id}-{unique}-{sequence}"));
         fs::create_dir(&path)?;
         Ok(path)
     }

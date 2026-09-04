@@ -1,6 +1,6 @@
 use anyhow::Context as _;
 use std::{
-    fs,
+    env, fs, io,
     path::{Path, PathBuf},
     process,
     sync::atomic::{AtomicU64, Ordering},
@@ -35,7 +35,7 @@ struct TemporaryDirectory {
 impl TemporaryDirectory {
     fn create(name: &str) -> anyhow::Result<Self> {
         let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
+        let path = env::temp_dir().join(format!(
             "nook-preflight-{name}-{}-{sequence}",
             process::id()
         ));
@@ -52,7 +52,7 @@ impl Drop for TemporaryDirectory {
 }
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
@@ -66,7 +66,7 @@ fn read(path: &str) -> String {
 fn files_under(path: &Path, excluded_roots: &[PathBuf]) -> anyhow::Result<Vec<PathBuf>> {
     let root_metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => {
             return Err(error).with_context(|| format!("failed to inspect {}", path.display()));
         }
@@ -147,7 +147,7 @@ fn validated_executable_workspace_dependencies(root: &Path) -> anyhow::Result<Ve
             );
             Ok(vec![dependency_root])
         }
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Vec::new()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(Vec::new()),
         Err(error) => Err(error.into()),
     }
 }

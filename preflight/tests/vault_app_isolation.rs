@@ -1,13 +1,13 @@
 use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
+    env, fs,
+    os::unix::fs::{self as unix_fs, PermissionsExt},
     path::{Path, PathBuf},
-    process::Command,
+    process::{self, Command},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
