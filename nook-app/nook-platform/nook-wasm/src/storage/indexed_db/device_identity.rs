@@ -1,5 +1,5 @@
 use crate::storage::identity_record;
-use nook_core::{AppId, DeviceProtectionStatus, WrappedDeviceIdentity};
+use nook_core::AppId;
 use rexie::TransactionMode;
 
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -12,6 +12,8 @@ use super::{
     APP_ID_KEY, APP_KEY_WRAPPED_KEY, DEVICE_ID_KEY, NookError, WRAPPED_DEVICE_IDENTITY_KEY,
     open_nook_database, read_string_preferring,
 };
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::{DeviceProtectionStatus, WrappedDeviceIdentity};
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 async fn device_identity_protection_status() -> Result<nook_core::DeviceProtectionStatus, NookError>

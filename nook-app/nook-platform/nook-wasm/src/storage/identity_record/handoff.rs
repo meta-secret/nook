@@ -1,12 +1,12 @@
 //! Atomic identity handoff persistence and authorization checks.
 
-#[cfg(test)]
 use crate::manager;
 use crate::manager::PendingExtensionIdentityEnrollment;
 use crate::storage::event_db;
 use nook_core::{IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultEventId};
 use rexie::TransactionMode;
 
+#[cfg(test)]
 use super::load_identity_directory;
 use super::{IDENTITY_DIRECTORY_KEY, map_domain_error};
 use crate::{NookError, storage::open_nook_database};

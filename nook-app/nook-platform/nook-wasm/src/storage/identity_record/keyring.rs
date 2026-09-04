@@ -6,7 +6,7 @@ use crate::storage::{event_db, indexed_db};
 use nook_core::{IdentitySelection, LocalIdentityKeyring, LocalIdentityKeyringEntry};
 use rexie::TransactionMode;
 
-use crate::{NookError, storage::indexed_db};
+use crate::NookError;
 
 use super::{load_directory_for_write, map_domain_error, write_identity_directory};
 
