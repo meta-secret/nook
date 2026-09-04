@@ -2,7 +2,13 @@ use super::{ExtensionEventLogImportStatus, ExternalEventLogRecord, NookVaultMana
 use crate::NookError;
 use crate::manager::{CeremonyState, EventLogSessionState, SyncOutboxState, VaultSessionState};
 use crate::storage::event_db::{clear_local_event_store, load_local_event_store};
+use crate::storage::indexed_db;
 use nook_core::EventId;
+use nook_core::{
+    DeviceId, DevicePublicKey, DeviceSigningPublicKey, SentinelGenesisPhase, StoreId,
+    VaultApplication, VaultMetaState,
+};
+use std::mem;
 
 struct ExtensionImportTargets {
     store_id: nook_core::StoreId,
@@ -44,9 +50,9 @@ impl NookVaultManager {
         self.event_log = previous_event_log;
         self.sync_outbox = previous_sync_outbox;
         if let Some(store_id) = previous_active_store_id {
-            crate::storage::indexed_db::switch_active_vault(store_id).await?;
+            indexed_db::switch_active_vault(store_id).await?;
         } else {
-            crate::storage::indexed_db::clear_active_vault_id().await?;
+            indexed_db::clear_active_vault_id().await?;
         }
         Ok(())
     }
@@ -57,13 +63,13 @@ impl NookVaultManager {
         expected_device_public_key: &str,
         expected_device_signing_public_key: &str,
     ) -> Result<ExtensionImportTargets, NookError> {
-        let store_id = nook_core::StoreId::parse(expected_store_id)?;
-        let device_id = nook_core::DeviceId::parse(expected_device_id)?;
-        let device_public_key = nook_core::DevicePublicKey::parse(expected_device_public_key)?;
+        let store_id = StoreId::parse(expected_store_id)?;
+        let device_id = DeviceId::parse(expected_device_id)?;
+        let device_public_key = DevicePublicKey::parse(expected_device_public_key)?;
         let device_signing_public_key =
-            nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
+            DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
         let (stored_device_id, _) =
-            crate::storage::indexed_db::load_wrapped_device_identity_for_app_id(device_id.as_str())
+            indexed_db::load_wrapped_device_identity_for_app_id(device_id.as_str())
                 .await?
                 .ok_or_else(|| {
                     NookError::IndexedDb(
@@ -107,7 +113,7 @@ impl NookVaultManager {
         )?;
         // Derive envelopes from the same loaded graph, not a prior in-memory
         // meta snapshot that may disagree after quarantine filtering.
-        let mut granted_meta = nook_core::VaultMetaState::default();
+        let mut granted_meta = VaultMetaState::default();
         nook_core::materialize_vault_meta_from_graph(&graph, &mut granted_meta)?;
         let auth_id = nook_core::dec_auth_id_from_public_key(&targets.device_public_key)?;
         let has_device_envelope = granted_meta.auth.contains_key(&auth_id);
@@ -162,7 +168,7 @@ impl NookVaultManager {
         expected_device_signing_public_key: &str,
         records: Vec<ExternalEventLogRecord>,
     ) -> Result<ExtensionEventLogImportStatus, NookError> {
-        if self.application != nook_core::VaultApplication::Extension {
+        if self.application != VaultApplication::Extension {
             return Err(NookError::Database(
                 "Extension event-log import requires the extension application capability."
                     .to_owned(),
@@ -189,10 +195,10 @@ impl NookVaultManager {
         }
         Self::validate_extension_import_records(&targets.store_id, &records)?;
 
-        let previous_active_store_id = crate::storage::indexed_db::get_active_vault_id().await?;
-        let mut previous_vault = std::mem::take(&mut self.vault);
-        let mut previous_event_log = std::mem::take(&mut self.event_log);
-        let mut previous_sync_outbox = std::mem::take(&mut self.sync_outbox);
+        let previous_active_store_id = indexed_db::get_active_vault_id().await?;
+        let mut previous_vault = mem::take(&mut self.vault);
+        let mut previous_event_log = mem::take(&mut self.event_log);
+        let mut previous_sync_outbox = mem::take(&mut self.sync_outbox);
         let import = async {
             let merged = self.sync_external_event_log_records(records).await?;
             self.evaluate_extension_import_grant(&targets, merged.len())
@@ -205,7 +211,7 @@ impl NookVaultManager {
                 previous_event_log.reset();
                 previous_sync_outbox.reset();
                 self.sentinel_genesis = CeremonyState::Inactive;
-                self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
+                self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
                 self.pending_sentinel_genesis_request = CeremonyState::Inactive;
                 self.sentinel_unlock = CeremonyState::Inactive;
                 Ok(status)

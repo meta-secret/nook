@@ -3,6 +3,7 @@
 use super::{NookVaultManager, VaultNameState};
 use crate::storage::event_db::load_local_event_store;
 use crate::types::NookVaultAccessReport;
+use nook_core::{ProjectionDiagnosticInput, StoreId, VaultRecoverySummary};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -25,8 +26,8 @@ impl NookVaultManager {
         if raw_store_id.is_empty() {
             return Err(JsError::new("No staged vault is available."));
         }
-        let store_id = nook_core::StoreId::parse(raw_store_id)
-            .map_err(|error| JsError::new(&error.to_string()))?;
+        let store_id =
+            StoreId::parse(raw_store_id).map_err(|error| JsError::new(&error.to_string()))?;
         let store = load_local_event_store(store_id.as_str()).await?;
         let graph = store.load_graph(store_id.as_str())?;
         let options = nook_core::vault_recovery_options(&graph, store_id.as_str())?;
@@ -36,7 +37,7 @@ impl NookVaultManager {
                 nook_core::default_vault_name_for_store_id(store_id.as_str())
             }
         };
-        Ok(nook_core::VaultRecoverySummary::from_options(
+        Ok(VaultRecoverySummary::from_options(
             store_id, vault_name, options,
         ))
     }
@@ -73,9 +74,9 @@ impl NookVaultManager {
         }
 
         let projection = match &projection {
-            DiagnosticProjection::Unavailable => nook_core::ProjectionDiagnosticInput::Unavailable,
+            DiagnosticProjection::Unavailable => ProjectionDiagnosticInput::Unavailable,
             DiagnosticProjection::Loaded(projection) => {
-                nook_core::ProjectionDiagnosticInput::Available(projection)
+                ProjectionDiagnosticInput::Available(projection)
             }
         };
         let mut report =

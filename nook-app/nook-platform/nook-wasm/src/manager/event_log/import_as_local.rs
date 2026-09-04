@@ -2,6 +2,7 @@
 
 use super::NookVaultManager;
 use crate::NookError;
+use crate::storage::indexed_db;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -17,12 +18,12 @@ impl NookVaultManager {
         if trimmed.is_empty() {
             return Ok(());
         }
-        let Some(_) = crate::storage::indexed_db::load_vault_blob(trimmed).await? else {
+        let Some(_) = indexed_db::load_vault_blob(trimmed).await? else {
             return Err(NookError::Database(format!(
                 "Import as new vault removed the previous local vault {trimmed}."
             )));
         };
-        let registry = crate::storage::indexed_db::list_vault_registry_entries().await?;
+        let registry = indexed_db::list_vault_registry_entries().await?;
         if registry.iter().any(|entry| entry.store_id == trimmed) {
             return Ok(());
         }
@@ -36,9 +37,7 @@ impl NookVaultManager {
         if trimmed.is_empty() {
             return Ok((trimmed, false));
         }
-        let existed = crate::storage::indexed_db::load_vault_blob(&trimmed)
-            .await?
-            .is_some();
+        let existed = indexed_db::load_vault_blob(&trimmed).await?.is_some();
         Ok((trimmed, existed))
     }
 }

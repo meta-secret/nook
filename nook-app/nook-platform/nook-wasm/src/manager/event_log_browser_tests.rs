@@ -1,9 +1,21 @@
+use super::super::PendingExtensionIdentityEnrollment;
+use super::super::device_protection::PendingExtensionIdentityHandoff;
 use super::*;
+use crate::DeviceProtectionDeviceModeState;
+use crate::identity_record::NookIdentityDirectorySelectionKind;
 use crate::storage::indexed_db::{
     get_active_vault_id, import_vault_blob, list_vault_registry_entries, load_from_indexed_db,
     load_vault_blob, switch_active_vault,
 };
+use crate::storage::{event_db, identity_record, indexed_db};
 use crate::vault_api::list_local_vaults;
+use nook_core::{
+    AppKey, ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity,
+    DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus, IdentityId, IdentitySelection,
+    SigningIdentity, StorageMode, VaultApplication, VaultArchitecture, VaultNameRef,
+    VaultOperation, VaultStoreIdentity, VaultStoreIdentityRef, VaultType, VaultUnlock,
+    VaultVersionWrite,
+};
 use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_browser);
@@ -31,7 +43,7 @@ async fn pin_protection_bootstraps_the_initial_identity() -> anyhow::Result<()> 
     assert_eq!(snapshot.length(), 1);
     assert_eq!(
         snapshot.selection_kind(),
-        crate::identity_record::NookIdentityDirectorySelectionKind::Selected
+        NookIdentityDirectorySelectionKind::Selected
     );
     assert_eq!(
         snapshot
@@ -54,7 +66,7 @@ async fn passkey_protection_bootstraps_the_initial_identity() -> anyhow::Result<
         .delete_local_browser_data()
         .await
         .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-    let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
+    let setup = DeviceKeyProtectionSetup::generate()?;
 
     manager
         .finish_device_protection(
@@ -95,20 +107,19 @@ async fn authenticated_legacy_key_bootstraps_keyring_and_preserves_signer() -> a
         .delete_local_browser_data()
         .await
         .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-    let app_key = nook_core::AppKey::generate()?;
+    let app_key = AppKey::generate()?;
     let wrapped =
         nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "legacy identity pin")?;
-    let (legacy_signing, legacy_seed) = nook_core::SigningIdentity::generate()?;
-    crate::storage::indexed_db::save_wrapped_device_identity(app_key.app_id().as_str(), &wrapped)
-        .await?;
-    crate::storage::event_db::save_signing_seed(legacy_seed.as_str()).await?;
+    let (legacy_signing, legacy_seed) = SigningIdentity::generate()?;
+    indexed_db::save_wrapped_device_identity(app_key.app_id().as_str(), &wrapped).await?;
+    event_db::save_signing_seed(legacy_seed.as_str()).await?;
 
     manager
         .unlock_pin_device_identity("legacy identity pin".to_owned())
         .await
         .map_err(|error| anyhow::anyhow!("unlock legacy identity: {error:?}"))?;
 
-    let keyring = crate::storage::identity_record::load_keyring().await?;
+    let keyring = identity_record::load_keyring().await?;
     assert_eq!(keyring.entries().len(), 1);
     assert_eq!(keyring.entries()[0].app_id(), app_key.app_id());
     assert!(keyring.entries()[0].has_signing_seed());
@@ -116,11 +127,7 @@ async fn authenticated_legacy_key_bootstraps_keyring_and_preserves_signer() -> a
         manager.ensure_signing_identity().await?.public_key(),
         legacy_signing.public_key()
     );
-    assert!(
-        crate::storage::event_db::load_signing_seed()
-            .await?
-            .is_none()
-    );
+    assert!(event_db::load_signing_seed().await?.is_none());
     manager
         .delete_local_browser_data()
         .await
@@ -152,11 +159,7 @@ async fn local_identities_never_fall_back_to_the_singleton_signing_seed() -> any
         .identity_id();
     let first_app_id = manager.device_id();
     let first_signing_public_key = manager.ensure_signing_identity().await?.public_key();
-    assert!(
-        crate::storage::event_db::load_signing_seed()
-            .await?
-            .is_none()
-    );
+    assert!(event_db::load_signing_seed().await?.is_none());
 
     manager
         .begin_local_identity_creation("Work")
@@ -202,21 +205,14 @@ async fn local_identities_never_fall_back_to_the_singleton_signing_seed() -> any
     );
     let second_signing_public_key = manager.ensure_signing_identity().await?.public_key();
     assert_ne!(first_signing_public_key, second_signing_public_key);
-    assert!(
-        crate::storage::event_db::load_signing_seed()
-            .await?
-            .is_none()
-    );
+    assert!(event_db::load_signing_seed().await?.is_none());
 
     manager
         .activate_local_identity(first_identity_id.clone())
         .await
         .map_err(|error| anyhow::anyhow!("select first identity: {error:?}"))?;
     assert_eq!(manager.device_id(), first_app_id);
-    crate::storage::identity_record::select_local_identity(nook_core::IdentityId::parse(
-        &second_identity_id,
-    )?)
-    .await?;
+    identity_record::select_local_identity(IdentityId::parse(&second_identity_id)?).await?;
     assert_eq!(
         manager
             .local_identity_recovery_app_id()
@@ -232,11 +228,7 @@ async fn local_identities_never_fall_back_to_the_singleton_signing_seed() -> any
         manager.ensure_signing_identity().await?.public_key(),
         first_signing_public_key
     );
-    assert!(
-        crate::storage::event_db::load_signing_seed()
-            .await?
-            .is_none()
-    );
+    assert!(event_db::load_signing_seed().await?.is_none());
     manager.lock_device_identity();
     assert_eq!(manager.device_id(), first_app_id);
     assert_eq!(
@@ -272,7 +264,7 @@ async fn simple_genesis_uses_the_tabs_app_key_after_another_tab_switches_identit
         .await
         .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
     let first_key = first_tab.device_identity()?;
-    let first_identity_id = crate::storage::identity_record::load_identity_directory()
+    let first_identity_id = identity_record::load_identity_directory()
         .await?
         .identity_for_app_key(&first_key)?
         .ok_or_else(|| anyhow::anyhow!("first identity is missing"))?;
@@ -286,7 +278,7 @@ async fn simple_genesis_uses_the_tabs_app_key_after_another_tab_switches_identit
         .finish_pin_device_protection("second identity pin".to_owned())
         .await
         .map_err(|error| anyhow::anyhow!("protect second identity: {error:?}"))?;
-    let selected_by_second_tab = crate::storage::identity_record::load_identity_directory()
+    let selected_by_second_tab = identity_record::load_identity_directory()
         .await?
         .selected()?
         .identity_id
@@ -299,10 +291,10 @@ async fn simple_genesis_uses_the_tabs_app_key_after_another_tab_switches_identit
 
     assert_eq!(pending.identity_id, first_identity_id);
     assert_eq!(
-        crate::storage::identity_record::load_identity_directory()
+        identity_record::load_identity_directory()
             .await?
             .selection(),
-        &nook_core::IdentitySelection::Selected(selected_by_second_tab),
+        &IdentitySelection::Selected(selected_by_second_tab),
     );
     first_tab
         .delete_local_browser_data()
@@ -324,7 +316,7 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
         .await
         .map_err(|error| anyhow::anyhow!("protect first identity: {error:?}"))?;
     let first_key = first_tab.device_identity()?;
-    let first_identity_id = crate::storage::identity_record::load_identity_directory()
+    let first_identity_id = identity_record::load_identity_directory()
         .await?
         .identity_for_app_key(&first_key)?
         .ok_or_else(|| anyhow::anyhow!("first identity is missing"))?;
@@ -338,30 +330,28 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
         .finish_pin_device_protection("second identity pin".to_owned())
         .await
         .map_err(|error| anyhow::anyhow!("protect second identity: {error:?}"))?;
-    let selected_by_second_tab = crate::storage::identity_record::load_identity_directory()
+    let selected_by_second_tab = identity_record::load_identity_directory()
         .await?
         .selected()?
         .identity_id
         .clone();
     assert_ne!(selected_by_second_tab, first_identity_id);
 
-    let extension_key = nook_core::AppKey::generate()?;
-    let (extension_signer, extension_signing_seed) = nook_core::SigningIdentity::generate()?;
-    let (authorizer_signer, _) = nook_core::SigningIdentity::generate()?;
+    let extension_key = AppKey::generate()?;
+    let (extension_signer, extension_signing_seed) = SigningIdentity::generate()?;
+    let (authorizer_signer, _) = SigningIdentity::generate()?;
     first_tab.device.id = extension_key.app_id().as_str().to_owned();
     first_tab.device.identity_private_key = extension_key.secret_string().into_inner();
-    first_tab.device.pending_extension_handoff = Some(
-        super::super::device_protection::PendingExtensionIdentityHandoff {
-            enrollment: super::super::PendingExtensionIdentityEnrollment::VaultCreation {
-                authorizer: Some(first_key.clone()),
-            },
-            authorizer_signing: Some((first_key.app_id().clone(), authorizer_signer.public_key())),
-            signing_public_key: extension_signer.public_key(),
-            handoff_signing_seed: extension_signing_seed.as_str().to_owned(),
-            persist_signing_seed: true,
-            previous_session_signing_seed: String::new(),
+    first_tab.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
+        enrollment: PendingExtensionIdentityEnrollment::VaultCreation {
+            authorizer: Some(first_key.clone()),
         },
-    );
+        authorizer_signing: Some((first_key.app_id().clone(), authorizer_signer.public_key())),
+        signing_public_key: extension_signer.public_key(),
+        handoff_signing_seed: extension_signing_seed.as_str().to_owned(),
+        persist_signing_seed: true,
+        previous_session_signing_seed: String::new(),
+    });
 
     let pending = first_tab
         .initialize_genesis_vault_with_identity(&extension_key)
@@ -376,10 +366,10 @@ async fn staged_genesis_uses_the_live_authorizer_after_another_tab_switches_iden
         Some(first_identity_id),
     );
     assert_eq!(
-        crate::storage::identity_record::load_identity_directory()
+        identity_record::load_identity_directory()
             .await?
             .selection(),
-        &nook_core::IdentitySelection::Selected(selected_by_second_tab),
+        &IdentitySelection::Selected(selected_by_second_tab),
     );
     first_tab
         .delete_local_browser_data()
@@ -447,10 +437,7 @@ async fn locked_passkey_tab_ignores_another_tabs_selection() -> anyhow::Result<(
         .unlock_device_identity(first_prf_output.clone())
         .await
         .map_err(|error| anyhow::anyhow!("unlock first passkey identity: {error:?}"))?;
-    crate::storage::identity_record::select_local_identity(nook_core::IdentityId::parse(
-        &second_identity_id,
-    )?)
-    .await?;
+    identity_record::select_local_identity(IdentityId::parse(&second_identity_id)?).await?;
     manager.lock_device_identity();
     let retained_request = manager
         .identity_directory_snapshot_request()
@@ -475,7 +462,7 @@ async fn locked_passkey_tab_ignores_another_tabs_selection() -> anyhow::Result<(
     );
     assert_eq!(
         retained_snapshot.device_access().identity_state(),
-        nook_core::DeviceAccessIdentityState::Locked
+        DeviceAccessIdentityState::Locked
     );
 
     assert_eq!(
@@ -483,14 +470,14 @@ async fn locked_passkey_tab_ignores_another_tabs_selection() -> anyhow::Result<(
             .device_protection_status()
             .await
             .map_err(|error| anyhow::anyhow!("read retained protection: {error:?}"))?,
-        nook_core::DeviceProtectionStatus::Passkey
+        DeviceProtectionStatus::Passkey
     );
     assert_eq!(
         manager
             .device_protection_device_mode()
             .await
             .map_err(|error| anyhow::anyhow!("read retained device mode: {error:?}"))?,
-        crate::DeviceProtectionDeviceModeState::Standard
+        DeviceProtectionDeviceModeState::Standard
     );
     let options = manager
         .passkey_unlock_options()
@@ -538,12 +525,10 @@ async fn keyring_backed_simple_genesis_keeps_the_signer_out_of_the_singleton_see
     manager.bootstrap_simple_event_log_genesis(&pending).await?;
 
     assert!(
-        crate::storage::event_db::load_signing_seed()
-            .await?
-            .is_none(),
+        event_db::load_signing_seed().await?.is_none(),
         "keyring-backed genesis must not recreate the plaintext singleton signer"
     );
-    let entry = crate::storage::identity_record::load_entry_for_app_id(identity.app_id())
+    let entry = identity_record::load_entry_for_app_id(identity.app_id())
         .await?
         .ok_or_else(|| anyhow::anyhow!("protected identity keyring entry is missing"))?;
     assert!(entry.has_signing_seed());
@@ -565,11 +550,7 @@ async fn failed_reprotection_zeroizes_the_existing_local_app_key() -> anyhow::Re
         .finish_pin_device_protection("first identity pin".to_owned())
         .await
         .map_err(|error| anyhow::anyhow!("protect identity: {error:?}"))?;
-    crate::storage::indexed_db::idb_put_string(
-        crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
-        "pending",
-    )
-    .await?;
+    indexed_db::idb_put_string(identity_record::PENDING_SIMPLE_GENESIS_KEY, "pending").await?;
 
     let result = manager
         .finish_pin_device_protection("replacement pin".to_owned())
@@ -583,12 +564,9 @@ async fn failed_reprotection_zeroizes_the_existing_local_app_key() -> anyhow::Re
             .map_err(|error| anyhow::anyhow!(
                 "read protection after failed replacement: {error:?}"
             ))?,
-        nook_core::DeviceProtectionStatus::Pin
+        DeviceProtectionStatus::Pin
     );
-    crate::storage::indexed_db::idb_delete_key(
-        crate::storage::identity_record::PENDING_SIMPLE_GENESIS_KEY,
-    )
-    .await?;
+    indexed_db::idb_delete_key(identity_record::PENDING_SIMPLE_GENESIS_KEY).await?;
     manager
         .delete_local_browser_data()
         .await
@@ -607,7 +585,7 @@ struct ImportFixture {
 
 async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
     let mut source = NookVaultManager::new();
-    source.application = nook_core::VaultApplication::Extension;
+    source.application = VaultApplication::Extension;
     source
         .delete_local_browser_data()
         .await
@@ -623,7 +601,7 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
     source.persist_projection_cache().await?;
     if with_update {
         source
-            .append_vault_operations(vec![nook_core::VaultOperation::VaultCleared])
+            .append_vault_operations(vec![VaultOperation::VaultCleared])
             .await
             .map_err(|error| anyhow::anyhow!("append candidate update: {error}"))?;
     }
@@ -653,18 +631,18 @@ async fn replacement_manager(
     let previous_store_id = nook_core::generate_store_id()?.to_string();
     let previous_projection = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
         &[],
-        &nook_core::VaultUnlock::Keys,
+        &VaultUnlock::Keys,
         &[],
-        nook_core::VaultStoreIdentityRef::Assigned(&previous_store_id),
-        nook_core::VaultNameRef::Named("Previous vault"),
-        nook_core::VaultVersionWrite::Initial,
-        &nook_core::VaultArchitecture::default(),
+        VaultStoreIdentityRef::Assigned(&previous_store_id),
+        VaultNameRef::Named("Previous vault"),
+        VaultVersionWrite::Initial,
+        &VaultArchitecture::default(),
     )?;
     import_vault_blob(previous_projection.as_str(), Some("Previous vault")).await?;
     switch_active_vault(&previous_store_id).await?;
 
     let mut replacement = NookVaultManager::new();
-    replacement.application = nook_core::VaultApplication::Extension;
+    replacement.application = VaultApplication::Extension;
     replacement.device.id.clone_from(&fixture.device_id);
     replacement
         .device
@@ -676,7 +654,7 @@ async fn replacement_manager(
     replacement.event_log.signing_seed = "previous-signing-seed".to_owned();
     replacement.event_log.key_epoch = "previous-key-epoch".to_owned();
     replacement.sync_outbox.provider_id = "previous-provider".to_owned();
-    replacement.sync_outbox.storage_mode = nook_core::StorageMode::Github;
+    replacement.sync_outbox.storage_mode = StorageMode::Github;
     replacement.sync_outbox.access_token = "previous-access-token".to_owned();
     replacement.sync_outbox.repo_arg = "previous/repository".to_owned();
     Ok((replacement, previous_store_id))
@@ -701,7 +679,7 @@ async fn assert_rollback(
         .ok_or_else(|| anyhow::anyhow!("restored active projection is missing"))?;
     assert_eq!(
         nook_core::read_vault_store_id(&projection)?,
-        nook_core::VaultStoreIdentity::Assigned(previous_store_id.to_owned())
+        VaultStoreIdentity::Assigned(previous_store_id.to_owned())
     );
     Ok(())
 }
@@ -711,8 +689,8 @@ async fn extension_repair_import_replaces_sentinel_vault_and_preserves_device() 
 {
     let fixture = import_fixture(false).await?;
     let (mut replacement, _) = replacement_manager(&fixture).await?;
-    replacement.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
-        nook_core::DeviceMode::Standard,
+    replacement.vault.architecture = VaultArchitecture::sentinel_personal(
+        DeviceMode::Standard,
         nook_core::SentinelPolicy {
             threshold: 2,
             required_participants: 3,
@@ -730,10 +708,7 @@ async fn extension_repair_import_replaces_sentinel_vault_and_preserves_device() 
         .await?;
     assert!(status.access_granted);
     assert_eq!(replacement.vault.store_id, fixture.store_id);
-    assert_eq!(
-        replacement.vault.architecture.vault_type,
-        nook_core::VaultType::Simple
-    );
+    assert_eq!(replacement.vault.architecture.vault_type, VaultType::Simple);
     assert_eq!(replacement.device.id, fixture.device_id);
     assert_eq!(
         replacement.device.identity_private_key,
@@ -789,7 +764,7 @@ async fn extension_import_rejects_a_grant_for_an_inactive_identity() -> anyhow::
 async fn denied_extension_import_restores_session_and_active_projection() -> anyhow::Result<()> {
     let fixture = import_fixture(false).await?;
     let (mut replacement, previous_store_id) = replacement_manager(&fixture).await?;
-    let unrelated_signing_key = nook_core::SigningIdentity::generate()?.0.public_key();
+    let unrelated_signing_key = SigningIdentity::generate()?.0.public_key();
     let status = replacement
         .import_extension_event_log_records(
             &fixture.store_id,
@@ -806,7 +781,7 @@ async fn denied_extension_import_restores_session_and_active_projection() -> any
 #[wasm_bindgen_test]
 async fn locked_external_import_preserves_prior_vault_and_password_entries() -> anyhow::Result<()> {
     let mut source = NookVaultManager::new();
-    source.application = nook_core::VaultApplication::Simple;
+    source.application = VaultApplication::Simple;
     source
         .delete_local_browser_data()
         .await
@@ -837,18 +812,18 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
     let previous_store_id = nook_core::generate_store_id()?.to_string();
     let previous_projection = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
         &[],
-        &nook_core::VaultUnlock::Keys,
+        &VaultUnlock::Keys,
         &[],
-        nook_core::VaultStoreIdentityRef::Assigned(&previous_store_id),
-        nook_core::VaultNameRef::Named("Empty local vault"),
-        nook_core::VaultVersionWrite::Initial,
-        &nook_core::VaultArchitecture::default(),
+        VaultStoreIdentityRef::Assigned(&previous_store_id),
+        VaultNameRef::Named("Empty local vault"),
+        VaultVersionWrite::Initial,
+        &VaultArchitecture::default(),
     )?;
     import_vault_blob(previous_projection.as_str(), Some("Empty local vault")).await?;
     switch_active_vault(&previous_store_id).await?;
 
     let mut importer = NookVaultManager::new();
-    importer.application = nook_core::VaultApplication::Simple;
+    importer.application = VaultApplication::Simple;
     importer.vault.store_id.clone_from(&previous_store_id);
     importer.reset_vault_session();
     let _ = importer.sync_external_event_log_records(records).await?;
@@ -880,9 +855,9 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
         .map_err(|error| anyhow::anyhow!("list local vaults: {error:?}"))?;
     assert_eq!(local_vaults.len(), 2);
 
-    let stranger = nook_core::DeviceIdentity::generate()?;
+    let stranger = DeviceIdentity::generate()?;
     let status = nook_core::assess_connect_access(&importer.stored_records_snapshot(), &stranger);
-    assert_eq!(status, nook_core::ConnectAccessStatus::NeedsEnrollment);
+    assert_eq!(status, ConnectAccessStatus::NeedsEnrollment);
     Ok(())
 }
 
@@ -897,7 +872,7 @@ async fn staged_extension_import_without_ancestors_restores_session_and_active_p
         .ok_or_else(|| anyhow::anyhow!("candidate update event is missing"))?;
     let dependent = fixture.records.remove(dependent_index);
     for record in &fixture.records {
-        crate::storage::event_db::remove_event_fixture(&fixture.store_id, &record.event_id).await?;
+        event_db::remove_event_fixture(&fixture.store_id, &record.event_id).await?;
     }
     let (mut replacement, previous_store_id) = replacement_manager(&fixture).await?;
     let status = replacement

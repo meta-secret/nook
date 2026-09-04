@@ -5,11 +5,18 @@
 //! methods are reachable when the vault is in password mode — the
 //! password-mode counterpart is `connect_with_password` (`manager::password`).
 
+use super::event_log::SecurityEpochRotationFailure;
 use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultCryptoState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, apply_member_records, load_stored_vault, wasm_iso_timestamp};
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
+use nook_core::{
+    AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MemberLabel, MultiDeviceError,
+    SecretId, SentinelConfiguration, StorageMode, SymmetricKey, VaultMetaState, VaultOperation,
+    VaultType,
+};
+use std::mem;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -63,8 +70,7 @@ impl NookVaultManager {
             }
         }
 
-        let auth_id =
-            nook_core::SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
+        let auth_id = SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
         if self
             .stored_records_snapshot()
             .iter()
@@ -76,17 +82,16 @@ impl NookVaultManager {
             .into());
         }
         let signing = self.ensure_signing_identity().await?;
-        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
-            signing.verifying_key().as_bytes(),
-        ));
-        self.append_vault_operations(vec![nook_core::VaultOperation::JoinRequested {
+        let signing_pk =
+            DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
+        self.append_vault_operations(vec![VaultOperation::JoinRequested {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key().clone(),
             signing_public_key: signing_pk,
-            label: nook_core::MemberLabel::from_trusted(String::new()),
+            label: MemberLabel::from_trusted(String::new()),
         }])
         .await?;
-        if self.storage.mode != nook_core::StorageMode::Local {
+        if self.storage.mode != StorageMode::Local {
             self.flush_event_outbox().await?;
         }
         Ok(())
@@ -112,17 +117,16 @@ impl NookVaultManager {
         // Fresh enrolment — adopt the remote unlock mode.
         self.capture_vault_unlock(&content)?;
 
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelCeremonyRequired.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
 
         let format = nook_core::detect_stored_format(&content)?;
         let mut records = nook_core::deserialize_stored(&content, format)?;
-        let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
-        let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;
+        let parsed_secrets = SymmetricKey::parse(&secrets_key)?;
+        let parsed_members = SymmetricKey::parse(&members_key)?;
 
-        let auth_id =
-            nook_core::SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
+        let auth_id = SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
         records.retain(|record| record.key != auth_id);
         records.retain(|record| !nook_core::is_members_stored_record(record));
         let (auth, members) = nook_core::enroll_device_with_keys(
@@ -134,7 +138,7 @@ impl NookVaultManager {
         records.push(auth);
         records.extend(members);
 
-        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
+        self.vault.meta = VaultMetaState::from_stored_records(&records);
         self.persist_vault_change(Vec::new()).await?;
 
         let updated = nook_core::serialize_stored(&records, format)?;
@@ -161,20 +165,19 @@ impl NookVaultManager {
     pub async fn create_join_request(&mut self, requested_at: String) -> Result<(), JsError> {
         let identity = self.device_identity()?;
         let signing = self.ensure_signing_identity().await?;
-        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
-            signing.verifying_key().as_bytes(),
-        ));
+        let signing_pk =
+            DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
         let record = nook_core::create_join_request_record_with_signing_key(
             &identity,
             &requested_at,
             &signing_pk,
         )?;
         self.vault.meta.apply_record(&record);
-        self.persist_vault_change(vec![nook_core::VaultOperation::JoinRequested {
+        self.persist_vault_change(vec![VaultOperation::JoinRequested {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key().clone(),
             signing_public_key: signing_pk,
-            label: nook_core::MemberLabel::from_trusted(String::new()),
+            label: MemberLabel::from_trusted(String::new()),
         }])
         .await?;
         Ok(())
@@ -190,16 +193,16 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
         let pending = nook_core::list_join_requests(&records);
-        let join_device = nook_core::DeviceId::parse(&join_device_id)?;
+        let join_device = DeviceId::parse(&join_device_id)?;
         let join = pending
             .into_iter()
             .find(|entry| entry.device_id == join_device)
             .ok_or_else(|| NookError::Database("Join request not found.".to_owned()))?;
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
+        let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
+        let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let mut operations = Vec::new();
         match self.vault.architecture.vault_type {
-            nook_core::VaultType::Simple => {
+            VaultType::Simple => {
                 let (auth_record, join_key, member_records) = nook_core::approve_join_request(
                     &secrets_key,
                     &members_key,
@@ -213,18 +216,18 @@ impl NookVaultManager {
                 let envelopes: nook_core::AuthEnvelopes =
                     serde_json::from_str(auth_record.value.as_str())
                         .map_err(|e| NookError::Serialization(e.to_string()))?;
-                operations.push(nook_core::VaultOperation::JoinApproved {
+                operations.push(VaultOperation::JoinApproved {
                     device_id: join.device_id.clone(),
                     encryption_public_key: join.public_key.clone(),
                     signing_public_key: join.signing_public_key.clone(),
-                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                    label: MemberLabel::from_trusted(String::new()),
                     secrets_key_ciphertext: envelopes.secrets_key.clone(),
                     members_key_ciphertext: envelopes.members_key.clone(),
                 });
             }
-            nook_core::VaultType::Sentinel => {
+            VaultType::Sentinel => {
                 if !self.vault.meta.sentinel_shares.is_empty() {
-                    return Err(nook_core::MultiDeviceError::SentinelGenesisRosterFull.into());
+                    return Err(MultiDeviceError::SentinelGenesisRosterFull.into());
                 }
                 let new_member = nook_core::member_from_join(&join)?;
                 let roster = match nook_core::resolve_member_roster(&records, &members_key) {
@@ -239,11 +242,11 @@ impl NookVaultManager {
                     .meta
                     .remove_key(&nook_core::join_record_key(&join.device_id));
                 apply_member_records(&mut self.vault.meta, &member_records);
-                operations.push(nook_core::VaultOperation::SentinelParticipantEnrolled {
+                operations.push(VaultOperation::SentinelParticipantEnrolled {
                     device_id: join.device_id.clone(),
                     encryption_public_key: join.public_key.clone(),
                     signing_public_key: join.signing_public_key.clone(),
-                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                    label: MemberLabel::from_trusted(String::new()),
                 });
                 if let Some(share_op) = self.maybe_issue_sentinel_shares(&roster)? {
                     operations.push(share_op);
@@ -260,7 +263,7 @@ impl NookVaultManager {
     ) -> Result<Option<nook_core::VaultOperation>, NookError> {
         let policy = self.vault.architecture.sentinel.policy_or_default();
         if roster.len() > usize::from(policy.required_participants) {
-            return Err(nook_core::MultiDeviceError::SentinelGenesisRosterFull.into());
+            return Err(MultiDeviceError::SentinelGenesisRosterFull.into());
         }
         if roster.len() < usize::from(policy.required_participants) {
             return Ok(None);
@@ -269,8 +272,8 @@ impl NookVaultManager {
             return Ok(None);
         }
         let keys = nook_core::VaultKeys {
-            secrets_key: nook_core::SymmetricKey::parse(&self.vault.secrets_key)?,
-            members_key: nook_core::SymmetricKey::parse(&self.vault.members_key)?,
+            secrets_key: SymmetricKey::parse(&self.vault.secrets_key)?,
+            members_key: SymmetricKey::parse(&self.vault.members_key)?,
         };
         let recipients: Vec<(nook_core::DeviceId, nook_core::DevicePublicKey)> = roster
             .iter()
@@ -293,7 +296,7 @@ impl NookVaultManager {
                     NookError::Database("Invalid sentinel share record key.".to_owned())
                 })?;
             shares.push(nook_core::SentinelShareIssuedPayload {
-                device_id: nook_core::DeviceId::parse(device_id)?,
+                device_id: DeviceId::parse(device_id)?,
                 version: envelope.version,
                 threshold: envelope.threshold,
                 required_participants: envelope.required_participants,
@@ -302,13 +305,11 @@ impl NookVaultManager {
             });
         }
         self.vault.architecture.sentinel =
-            nook_core::SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
+            SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
                 ready_participants: u8::try_from(shares.len()).unwrap_or(u8::MAX),
                 ..policy
             });
-        Ok(Some(nook_core::VaultOperation::SentinelSharesIssued {
-            shares,
-        }))
+        Ok(Some(VaultOperation::SentinelSharesIssued { shares }))
     }
 }
 
@@ -327,13 +328,13 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
         let join = nook_core::JoinRequest {
-            device_id: nook_core::DeviceId::parse(&join_device_id)?,
-            public_key: nook_core::DevicePublicKey::parse(&join_public_key)?,
-            signing_public_key: nook_core::DeviceSigningPublicKey::parse(&join_signing_public_key)?,
+            device_id: DeviceId::parse(&join_device_id)?,
+            public_key: DevicePublicKey::parse(&join_public_key)?,
+            signing_public_key: DeviceSigningPublicKey::parse(&join_signing_public_key)?,
             requested_at: wasm_iso_timestamp(),
         };
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
+        let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
+        let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let (auth_record, _join_key, member_records) = nook_core::approve_join_request(
             &secrets_key,
             &members_key,
@@ -345,11 +346,11 @@ impl NookVaultManager {
         apply_member_records(&mut self.vault.meta, &member_records);
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let operations = vec![nook_core::VaultOperation::JoinApproved {
+        let operations = vec![VaultOperation::JoinApproved {
             device_id: join.device_id.clone(),
             encryption_public_key: join.public_key.clone(),
             signing_public_key: join.signing_public_key.clone(),
-            label: nook_core::MemberLabel::from_trusted(label),
+            label: MemberLabel::from_trusted(label),
             secrets_key_ciphertext: envelopes.secrets_key.clone(),
             members_key_ciphertext: envelopes.members_key.clone(),
         }];
@@ -371,7 +372,7 @@ impl NookVaultManager {
         join_device_id: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let records = self.stored_records_snapshot();
-        let join_device = nook_core::DeviceId::parse(&join_device_id)?;
+        let join_device = DeviceId::parse(&join_device_id)?;
         if !records.iter().any(|record| {
             nook_core::parse_join_request(record.value.as_str())
                 .is_ok_and(|join| join.device_id == join_device)
@@ -379,8 +380,8 @@ impl NookVaultManager {
             return Err(NookError::Database("Join request not found.".to_owned()).into());
         }
         let updated = nook_core::deny_join_request(&records, &join_device);
-        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&updated);
-        self.persist_vault_change(vec![nook_core::VaultOperation::JoinDenied {
+        self.vault.meta = VaultMetaState::from_stored_records(&updated);
+        self.persist_vault_change(vec![VaultOperation::JoinDenied {
             device_id: join_device,
         }])
         .await?;
@@ -393,8 +394,8 @@ impl NookVaultManager {
         label: String,
     ) -> Result<(), JsError> {
         let records = self.stored_records_snapshot();
-        let parsed_auth_id = nook_core::AuthKeyId::parse(&auth_id)?;
-        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
+        let parsed_auth_id = AuthKeyId::parse(&auth_id)?;
+        let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let member_records =
             nook_core::rename_vault_member(&records, &members_key, &parsed_auth_id, &label)?;
         apply_member_records(&mut self.vault.meta, &member_records);
@@ -404,9 +405,9 @@ impl NookVaultManager {
             .find(|member| member.auth_id == parsed_auth_id)
             .map(|member| member.device_id.to_string())
             .unwrap_or_default();
-        self.persist_vault_change(vec![nook_core::VaultOperation::MemberRenamed {
-            device_id: nook_core::DeviceId::parse(&device_id)?,
-            label: nook_core::MemberLabel::from_trusted(label),
+        self.persist_vault_change(vec![VaultOperation::MemberRenamed {
+            device_id: DeviceId::parse(&device_id)?,
+            label: MemberLabel::from_trusted(label),
         }])
         .await?;
         Ok(())
@@ -416,14 +417,14 @@ impl NookVaultManager {
         &mut self,
         auth_id: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelRevocationUnsupported.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelRevocationUnsupported.into());
         }
         let identity = self.device_identity()?;
-        let parsed_auth_id = nook_core::AuthKeyId::parse(&auth_id)?;
+        let parsed_auth_id = AuthKeyId::parse(&auth_id)?;
         let is_self = parsed_auth_id == identity.auth_id();
         let records = self.stored_records_snapshot();
-        let members_key = nook_core::SymmetricKey::parse(&self.vault.members_key)?;
+        let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let device_id = nook_core::resolve_member_roster(&records, &members_key)
             .ok()
             .and_then(|roster| {
@@ -434,13 +435,13 @@ impl NookVaultManager {
             })
             .unwrap_or_default();
         let revoked_device_id = (!is_self)
-            .then(|| nook_core::DeviceId::parse(&device_id))
+            .then(|| DeviceId::parse(&device_id))
             .transpose()?;
         let updated = nook_core::revoke_vault_member(&records, &members_key, &parsed_auth_id)?;
-        let staged_meta = nook_core::VaultMetaState::from_stored_records(&updated);
+        let staged_meta = VaultMetaState::from_stored_records(&updated);
 
         if is_self {
-            let live_meta = std::mem::replace(&mut self.vault.meta, staged_meta);
+            let live_meta = mem::replace(&mut self.vault.meta, staged_meta);
             if let Err(error) = self.persist_vault_change(Vec::new()).await {
                 self.vault.meta = live_meta;
                 return Err(error.into());
@@ -452,24 +453,24 @@ impl NookVaultManager {
         }
 
         let revoked_device_id = revoked_device_id.ok_or_else(|| {
-            nook_core::MultiDeviceError::InvalidDeviceIdentity(
+            MultiDeviceError::InvalidDeviceIdentity(
                 "Revoked vault member has no device id.".to_owned(),
             )
         })?;
         self.ensure_event_log_ready().await?;
-        let live_meta = std::mem::replace(&mut self.vault.meta, staged_meta);
+        let live_meta = mem::replace(&mut self.vault.meta, staged_meta);
         if let Err(failure) = self
-            .rotate_security_epoch_classified(nook_core::VaultOperation::DeviceRevoked {
+            .rotate_security_epoch_classified(VaultOperation::DeviceRevoked {
                 device_id: revoked_device_id,
             })
             .await
         {
             let error = match failure {
-                super::event_log::SecurityEpochRotationFailure::BeforeCommit(error) => {
+                SecurityEpochRotationFailure::BeforeCommit(error) => {
                     self.vault.meta = live_meta;
                     error
                 }
-                super::event_log::SecurityEpochRotationFailure::AfterCommit(error) => error,
+                SecurityEpochRotationFailure::AfterCommit(error) => error,
             };
             return Err(error.into());
         }
@@ -483,12 +484,12 @@ impl NookVaultManager {
         secrets_key: String,
         members_key: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelCeremonyRequired.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
         let identity = self.device_identity()?;
-        let parsed_secrets = nook_core::SymmetricKey::parse(&secrets_key)?;
-        let parsed_members = nook_core::SymmetricKey::parse(&members_key)?;
+        let parsed_secrets = SymmetricKey::parse(&secrets_key)?;
+        let parsed_members = SymmetricKey::parse(&members_key)?;
         let (auth, members) = nook_core::enroll_device_with_keys(
             &parsed_secrets,
             &parsed_members,

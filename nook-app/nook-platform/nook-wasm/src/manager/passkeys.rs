@@ -3,6 +3,11 @@
 use super::NookVaultManager;
 use crate::storage::event_db::load_local_event_store;
 use crate::{NookError, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration};
+use js_sys::Object;
+use nook_core::{
+    DeviceId, DevicePublicKey, DeviceSigningPublicKey, PasskeyAuthenticatorError, SecretType,
+    SecretValue, StoreId, SymmetricKey, VaultApplication, VaultOperation, VaultType,
+};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
 
@@ -24,22 +29,16 @@ fn passkey_error(error: &nook_core::PasskeyAuthenticatorError) -> JsError {
 
 fn passkey_error_code(error: &nook_core::PasskeyAuthenticatorError) -> &'static str {
     match error {
-        nook_core::PasskeyAuthenticatorError::InvalidRequest(_) => "passkey-invalid-request",
-        nook_core::PasskeyAuthenticatorError::RpOriginMismatch => "passkey-rp-origin-mismatch",
-        nook_core::PasskeyAuthenticatorError::UnsupportedAlgorithm => {
-            "passkey-unsupported-algorithm"
-        }
-        nook_core::PasskeyAuthenticatorError::CredentialExcluded => "passkey-credential-excluded",
-        nook_core::PasskeyAuthenticatorError::CredentialNotFound => "passkey-not-found",
-        nook_core::PasskeyAuthenticatorError::AmbiguousCredential => "passkey-selection-required",
-        nook_core::PasskeyAuthenticatorError::InvalidKeyMaterial => "passkey-invalid-key-material",
-        nook_core::PasskeyAuthenticatorError::SignatureCounterExhausted => {
-            "passkey-counter-exhausted"
-        }
-        nook_core::PasskeyAuthenticatorError::RandomnessUnavailable => {
-            "passkey-randomness-unavailable"
-        }
-        nook_core::PasskeyAuthenticatorError::Serialization => "passkey-serialization-failed",
+        PasskeyAuthenticatorError::InvalidRequest(_) => "passkey-invalid-request",
+        PasskeyAuthenticatorError::RpOriginMismatch => "passkey-rp-origin-mismatch",
+        PasskeyAuthenticatorError::UnsupportedAlgorithm => "passkey-unsupported-algorithm",
+        PasskeyAuthenticatorError::CredentialExcluded => "passkey-credential-excluded",
+        PasskeyAuthenticatorError::CredentialNotFound => "passkey-not-found",
+        PasskeyAuthenticatorError::AmbiguousCredential => "passkey-selection-required",
+        PasskeyAuthenticatorError::InvalidKeyMaterial => "passkey-invalid-key-material",
+        PasskeyAuthenticatorError::SignatureCounterExhausted => "passkey-counter-exhausted",
+        PasskeyAuthenticatorError::RandomnessUnavailable => "passkey-randomness-unavailable",
+        PasskeyAuthenticatorError::Serialization => "passkey-serialization-failed",
     }
 }
 
@@ -50,14 +49,14 @@ mod tests {
     #[test]
     fn randomness_failure_has_a_distinct_browser_error_code() {
         assert_eq!(
-            passkey_error_code(&nook_core::PasskeyAuthenticatorError::RandomnessUnavailable),
+            passkey_error_code(&PasskeyAuthenticatorError::RandomnessUnavailable),
             "passkey-randomness-unavailable"
         );
     }
 }
 
 fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
-    let receiver = js_sys::Object::new();
+    let receiver = Object::new();
     let active = ceremony_active
         .call0(&receiver)
         .map_err(|_| JsError::new("passkey-ceremony-expired"))?;
@@ -77,11 +76,11 @@ impl NookVaultManager {
         expected_device_signing_public_key: &str,
     ) -> Result<(), NookError> {
         self.ensure_passkey_extension_capability()?;
-        let store_id = nook_core::StoreId::parse(expected_store_id)?;
-        let expected_device_id = nook_core::DeviceId::parse(expected_device_id)?;
-        let expected_public_key = nook_core::DevicePublicKey::parse(expected_device_public_key)?;
+        let store_id = StoreId::parse(expected_store_id)?;
+        let expected_device_id = DeviceId::parse(expected_device_id)?;
+        let expected_public_key = DevicePublicKey::parse(expected_device_public_key)?;
         let expected_signing_key =
-            nook_core::DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
+            DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
         let identity = self.device_identity()?;
         let signing = self.ensure_signing_identity().await?;
         if identity.device_id() != &expected_device_id
@@ -112,8 +111,8 @@ impl NookVaultManager {
     }
 
     pub(super) fn ensure_passkey_extension_capability(&self) -> Result<(), NookError> {
-        if self.application != nook_core::VaultApplication::Extension
-            && self.application != nook_core::VaultApplication::UnifiedDevelopment
+        if self.application != VaultApplication::Extension
+            && self.application != VaultApplication::UnifiedDevelopment
         {
             return Err(NookError::Database(
                 "Website passkeys require the extension application capability.".to_owned(),
@@ -121,7 +120,7 @@ impl NookVaultManager {
         }
         self.application
             .validate_session_access(self.vault.architecture.vault_type)?;
-        if self.vault.architecture.vault_type != nook_core::VaultType::Simple {
+        if self.vault.architecture.vault_type != VaultType::Simple {
             return Err(NookError::Database(
                 "Website passkeys are available only for Simple Vault.".to_owned(),
             ));
@@ -138,12 +137,12 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let mut passkeys = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
-            if *secret_type != nook_core::SecretType::Passkey {
+            if *secret_type != SecretType::Passkey {
                 continue;
             }
             let mut record =
                 nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)?;
-            if let nook_core::SecretValue::Passkey(passkey) = &record.data {
+            if let SecretValue::Passkey(passkey) = &record.data {
                 passkeys.push((id.clone(), passkey.clone()));
             }
             record.zeroize_plaintext();
@@ -156,8 +155,8 @@ impl NookVaultManager {
         id: &nook_core::SecretId,
         passkey: &nook_core::PasskeySecret,
     ) -> Result<nook_core::EncryptedSecretPayload, NookError> {
-        let mut value = nook_core::SecretValue::Passkey(passkey.clone());
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let mut value = SecretValue::Passkey(passkey.clone());
+        let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, &secrets_key)?;
         let fingerprint = nook_core::secret_fingerprint(&value, &secrets_key)?;
         let mut yaml = value.to_yaml()?;
@@ -166,7 +165,7 @@ impl NookVaultManager {
         value.zeroize_plaintext();
         Ok(nook_core::encrypted_secret_from_armored(
             id,
-            nook_core::SecretType::Passkey,
+            SecretType::Passkey,
             ciphertext.as_str(),
             identity_fingerprint,
             fingerprint,
@@ -244,10 +243,8 @@ impl NookVaultManager {
         );
         result.credential.zeroize_plaintext();
         ensure_ceremony_active(ceremony_active)?;
-        self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
-            secret: encrypted,
-        }])
-        .await?;
+        self.append_vault_operations(vec![VaultOperation::SecretCreated { secret: encrypted }])
+            .await?;
         Ok(response)
     }
 
@@ -295,14 +292,14 @@ impl NookVaultManager {
             result.signature,
             result.user_handle,
         );
-        let mut operations = vec![nook_core::VaultOperation::SecretReplaced {
+        let mut operations = vec![VaultOperation::SecretReplaced {
             old_id,
             new_secret: encrypted,
         }];
         operations.extend(
             duplicate_ids
                 .into_iter()
-                .map(|secret_id| nook_core::VaultOperation::SecretDeleted { secret_id }),
+                .map(|secret_id| VaultOperation::SecretDeleted { secret_id }),
         );
         ensure_ceremony_active(ceremony_active)?;
         self.append_vault_operations(operations).await?;

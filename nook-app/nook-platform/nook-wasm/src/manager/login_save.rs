@@ -3,6 +3,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan};
+use nook_core::{SecretFormFields, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -20,12 +21,12 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let mut owned_logins = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
-            if *secret_type != nook_core::SecretType::Login {
+            if *secret_type != SecretType::Login {
                 continue;
             }
             let mut record =
                 nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)?;
-            if let nook_core::SecretValue::Login(login) = &record.data
+            if let SecretValue::Login(login) = &record.data
                 && nook_core::login_host_matches_origin(&login.website_url, origin)
             {
                 owned_logins.push((id.clone(), login.clone()));
@@ -103,7 +104,7 @@ impl NookVaultManager {
             }
         }
 
-        let yaml = nook_core::build_secret_yaml_from_form(&nook_core::SecretFormFields::Login(
+        let yaml = nook_core::build_secret_yaml_from_form(&SecretFormFields::Login(
             nook_core::LoginSecretForm {
                 website_url: origin.to_owned(),
                 username: username.clone(),
@@ -115,7 +116,7 @@ impl NookVaultManager {
         username.zeroize();
         password.zeroize();
         let data = yaml.as_str().to_owned();
-        let secret_type = nook_core::SecretType::Login;
+        let secret_type = SecretType::Login;
 
         if decision == NookWebsiteLoginSaveDecision::Update {
             let old_id = replace_secret_id.unwrap_or_default().to_owned();

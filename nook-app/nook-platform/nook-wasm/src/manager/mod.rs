@@ -17,6 +17,16 @@
 //! `ensure_event_log_ready`, device-identity helpers, vault-key application) stays
 //! in this file because every submodule depends on it.
 
+#![deny(clippy::absolute_paths)]
+
+use crate::logger;
+use crate::storage::{auth_providers, indexed_db, local_folder};
+use nook_core::{
+    DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudEventTarget, MultiDeviceError,
+    SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
+    VaultStoreIdentityRef, VaultType, VaultUnlock, VaultVersionWrite, i18n_keys,
+};
+use std::mem;
 mod authenticator_enrollment;
 mod authenticator_fill;
 mod connect;
@@ -68,7 +78,7 @@ use zeroize::Zeroize;
 impl NookVaultManager {
     #[wasm_bindgen]
     pub fn take_event_log_sync_issue(&mut self) -> NookEventLogSyncIssueResult {
-        NookEventLogSyncIssueResult(std::mem::replace(
+        NookEventLogSyncIssueResult(mem::replace(
             &mut self.event_log_sync_issue,
             EventLogSyncIssueState::Clear,
         ))
@@ -197,9 +207,9 @@ impl NookVaultManager {
         if self.device.identity_private_key.is_empty() {
             return String::new();
         }
-        nook_core::DeviceIdentitySecret::parse(&self.device.identity_private_key)
+        DeviceIdentitySecret::parse(&self.device.identity_private_key)
             .ok()
-            .and_then(|secret| nook_core::DeviceIdentity::from_secret_str(&secret).ok())
+            .and_then(|secret| DeviceIdentity::from_secret_str(&secret).ok())
             .map(|identity| identity.public_key().as_str().to_owned())
             .unwrap_or_default()
     }
@@ -219,7 +229,7 @@ impl NookVaultManager {
         self.storage.use_local_cache_for_connect = false;
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
-        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
+        self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();
@@ -251,16 +261,16 @@ impl NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
 
         let mut errors = Vec::new();
-        if let Err(error) = crate::logger::clear_logs_db().await {
+        if let Err(error) = logger::clear_logs_db().await {
             errors.push(error.to_string());
         }
-        if let Err(error) = crate::storage::local_folder::clear_local_folder_db().await {
+        if let Err(error) = local_folder::clear_local_folder_db().await {
             errors.push(error.to_string());
         }
-        if let Err(error) = crate::storage::auth_providers::clear_auth_providers_db().await {
+        if let Err(error) = auth_providers::clear_auth_providers_db().await {
             errors.push(error.to_string());
         }
-        if let Err(error) = crate::storage::indexed_db::clear_vault_db().await {
+        if let Err(error) = indexed_db::clear_vault_db().await {
             errors.push(error.to_string());
         }
         if errors.is_empty() {
@@ -354,12 +364,12 @@ impl NookVaultManager {
                 &records,
                 &self.vault.unlock,
                 &self.vault.password_entries,
-                nook_core::VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
+                VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
                 match &self.vault.vault_name {
-                    VaultNameState::Unnamed => nook_core::VaultNameRef::Unnamed,
-                    VaultNameState::Named(name) => nook_core::VaultNameRef::Named(name),
+                    VaultNameState::Unnamed => VaultNameRef::Unnamed,
+                    VaultNameState::Named(name) => VaultNameRef::Named(name),
                 },
-                nook_core::VaultVersionWrite::Initial,
+                VaultVersionWrite::Initial,
                 &self.vault.architecture,
             )?
             .into_inner(),
@@ -375,8 +385,8 @@ impl NookVaultManager {
     }
 
     pub(crate) fn device_identity(&self) -> Result<nook_core::DeviceIdentity, NookError> {
-        Ok(nook_core::DeviceIdentity::from_secret_str(
-            &nook_core::DeviceIdentitySecret::parse(&self.device.identity_private_key)?,
+        Ok(DeviceIdentity::from_secret_str(
+            &DeviceIdentitySecret::parse(&self.device.identity_private_key)?,
         )?)
     }
 
@@ -413,9 +423,8 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         self.vault.secrets_key = secrets_key.to_owned();
         self.vault.members_key = members_key.to_owned();
-        let parsed_secrets = nook_core::SymmetricKey::parse(secrets_key)?;
-        self.vault.crypto =
-            VaultCryptoState::Unlocked(nook_core::VaultCrypto::new(&parsed_secrets)?);
+        let parsed_secrets = SymmetricKey::parse(secrets_key)?;
+        self.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&parsed_secrets)?);
         Ok(())
     }
 
@@ -433,8 +442,8 @@ impl NookVaultManager {
         if self.vault.crypto.is_unlocked() {
             return Ok(());
         }
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelCeremonyRequired.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
         let identity = self.ensure_device_identity()?;
         if !self.vault.last_synced_content.trim().is_empty() {
@@ -465,13 +474,11 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
         let members_key = self.vault.members_key.clone();
-        if let nook_core::SelfRosterSync::Updated(member_records) =
-            nook_core::ensure_self_in_roster(
-                &records,
-                identity,
-                &nook_core::SymmetricKey::parse(&members_key)?,
-            )?
-        {
+        if let SelfRosterSync::Updated(member_records) = nook_core::ensure_self_in_roster(
+            &records,
+            identity,
+            &SymmetricKey::parse(&members_key)?,
+        )? {
             nook_core::apply_member_records(&mut self.vault.meta, &member_records);
         }
         Ok(())
@@ -516,18 +523,18 @@ impl NookVaultManager {
         // Parse the incoming tag once at the boundary so the rest of the
         // method pattern-matches on `StorageMode` instead of comparing
         // strings.
-        let mode = nook_core::StorageMode::parse(storage_mode)?;
+        let mode = StorageMode::parse(storage_mode)?;
         let previous_mode = self.storage.mode;
         let previous_remote_ref = self.storage.remote_ref.clone();
         self.storage.mode = mode;
 
         match mode {
-            nook_core::StorageMode::Local => {
+            StorageMode::Local => {
                 self.storage.access_token = String::new();
-                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
-                self.storage.icloud_event_target = nook_core::ICloudEventTarget::Private;
+                self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
+                self.storage.icloud_event_target = ICloudEventTarget::Private;
             }
-            nook_core::StorageMode::Github => {
+            StorageMode::Github => {
                 self.storage.access_token = nook_core::validate_github_pat(github_pat)?.to_string();
                 let repo_name = nook_core::validate_github_repo_name(github_repo_name)?;
                 let _ = self.status.tx.send("GITHUB_USER_FETCH".to_owned());
@@ -538,53 +545,52 @@ impl NookVaultManager {
                 }
                 self.storage.remote_ref = new_repo;
                 self.storage.remote_path.clear();
-                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
-                self.storage.icloud_event_target = nook_core::ICloudEventTarget::Private;
+                self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
+                self.storage.icloud_event_target = ICloudEventTarget::Private;
                 let _ = self.status.tx.send("GITHUB_REPO_ENSURE".to_owned());
                 ensure_github_repo_exists(&self.storage.access_token, &self.storage.remote_ref)
                     .await?;
             }
-            nook_core::StorageMode::GoogleDrive => {
+            StorageMode::GoogleDrive => {
                 self.storage.access_token =
                     nook_core::validate_oauth_access_token(github_pat)?.to_string();
                 let (known_file_id, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
-                self.storage.drive_event_parent =
-                    nook_core::DriveEventParent::from_storage_id(&known_file_id);
+                self.storage.drive_event_parent = DriveEventParent::from_storage_id(&known_file_id);
                 self.storage.remote_path = file_name.to_string();
                 let _ = self.status.tx.send("DRIVE_VERIFY".to_owned());
                 verify_drive_access(&self.storage.access_token).await?;
                 // Personal: optional vault yaml file id. Shared: folder id for events.
                 self.storage.remote_ref = match &self.storage.drive_event_parent {
-                    nook_core::DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
-                    nook_core::DriveEventParent::AppDataFolder => known_file_id,
+                    DriveEventParent::SharedFolder { folder_id } => folder_id.clone(),
+                    DriveEventParent::AppDataFolder => known_file_id,
                 };
-                self.storage.icloud_event_target = nook_core::ICloudEventTarget::Private;
+                self.storage.icloud_event_target = ICloudEventTarget::Private;
             }
-            nook_core::StorageMode::ICloud => {
+            StorageMode::ICloud => {
                 self.storage.access_token =
                     nook_core::validate_oauth_access_token(github_pat)?.to_string();
                 let (known_target, file_name) =
                     nook_core::parse_drive_storage_ref(github_repo_name)?;
                 self.storage.remote_path = file_name.to_string();
                 self.storage.icloud_event_target =
-                    nook_core::ICloudEventTarget::from_storage_id(&known_target)?;
+                    ICloudEventTarget::from_storage_id(&known_target)?;
                 self.storage.remote_ref = if known_target.is_empty() {
                     file_name.to_string()
                 } else {
                     known_target
                 };
-                self.storage.drive_event_parent = nook_core::DriveEventParent::AppDataFolder;
+                self.storage.drive_event_parent = DriveEventParent::AppDataFolder;
             }
         }
 
         if previous_mode != self.storage.mode || previous_remote_ref != self.storage.remote_ref {
             self.vault.password_entries.clear();
-            self.vault.unlock = nook_core::VaultUnlock::Keys;
+            self.vault.unlock = VaultUnlock::Keys;
             self.vault.vault_name = VaultNameState::Unnamed;
         }
 
-        if mode != nook_core::StorageMode::Local {
+        if mode != StorageMode::Local {
             self.sync_outbox.provider_id = self.local_cache_ref();
             self.sync_outbox.storage_mode = mode;
             self.sync_outbox.access_token = self.storage.access_token.clone();
@@ -616,7 +622,7 @@ impl NookVaultManager {
     ) -> Result<nook_core::DeviceIdentity, NookError> {
         if self.device.identity_private_key.is_empty() {
             return Err(NookError::Decryption(
-                nook_core::i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
+                i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
             ));
         }
         self.device_identity()
@@ -627,15 +633,13 @@ impl NookVaultManager {
         remote_content_missing: &mut bool,
     ) -> Result<String, NookError> {
         let content = match self.storage.mode {
-            nook_core::StorageMode::Local => {
+            StorageMode::Local => {
                 let _ = self.status.tx.send("IDB_LOAD_START".to_owned());
                 let stored = load_from_indexed_db().await?;
                 let _ = self.status.tx.send("IDB_LOAD_SUCCESS".to_owned());
                 stored.unwrap_or_default()
             }
-            nook_core::StorageMode::Github
-            | nook_core::StorageMode::GoogleDrive
-            | nook_core::StorageMode::ICloud => {
+            StorageMode::Github | StorageMode::GoogleDrive | StorageMode::ICloud => {
                 *remote_content_missing = true;
                 String::new()
             }

@@ -1,8 +1,11 @@
 //! Authenticator metadata and one-time-code generation for the unlocked extension session.
 
-use super::NookVaultManager;
+use super::{NookVaultManager, VaultCryptoState};
 use crate::NookError;
 use crate::types::{NookAuthenticatorAccount, NookTotpCode};
+use nook_core::{
+    AuthenticatorSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto,
+};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 impl NookVaultManager {
@@ -13,13 +16,13 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let mut accounts = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
-            if *secret_type != nook_core::SecretType::Authenticator {
+            if *secret_type != SecretType::Authenticator {
                 continue;
             }
             let mut record =
                 nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)?;
             if record.matches_search(query)
-                && let nook_core::SecretValue::Authenticator(authenticator) = &record.data
+                && let SecretValue::Authenticator(authenticator) = &record.data
             {
                 accounts.push(NookAuthenticatorAccount::from_authenticator(
                     id,
@@ -36,12 +39,12 @@ impl NookVaultManager {
         secret_id: &str,
         unix_seconds: u32,
     ) -> Result<NookTotpCode, NookError> {
-        let id = nook_core::SecretId::parse(secret_id)?;
+        let id = SecretId::parse(secret_id)?;
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         let result = match &record.data {
-            nook_core::SecretValue::Authenticator(authenticator) => authenticator
+            SecretValue::Authenticator(authenticator) => authenticator
                 .current_code(u64::from(unix_seconds))
                 .map(|code| NookTotpCode::from_core(code, u64::from(unix_seconds)))
                 .map_err(NookError::from),
@@ -66,17 +69,17 @@ mod wasm_tests {
         value: nook_core::SecretValue,
     ) -> anyhow::Result<()> {
         let secret_type = match &value {
-            nook_core::SecretValue::Authenticator(_) => nook_core::SecretType::Authenticator,
-            nook_core::SecretValue::SecureNote(_) => nook_core::SecretType::SecureNote,
+            SecretValue::Authenticator(_) => SecretType::Authenticator,
+            SecretValue::SecureNote(_) => SecretType::SecureNote,
             _ => anyhow::bail!("unsupported test secret"),
         };
         let yaml = value.to_yaml()?;
         let ciphertext = crypto.encrypt_value(yaml.as_str())?;
         manager.vault.meta.secrets.insert(
-            nook_core::SecretId::from_vault_record(id),
+            SecretId::from_vault_record(id),
             (
                 secret_type,
-                nook_core::StoredRecordPayload::from_age_armored(ciphertext),
+                StoredRecordPayload::from_age_armored(ciphertext),
             ),
         );
         Ok(())
@@ -85,38 +88,34 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn authenticator_listing_filters_by_type_and_non_secret_metadata() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
-        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         insert_secret(
             &mut manager,
             &crypto,
             "secret_alpha_authenticator",
-            nook_core::SecretValue::Authenticator(
-                nook_core::AuthenticatorSecret::from_otpauth_uri(
-                    "otpauth://totp/Alpha:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Alpha",
-                )?,
-            ),
+            SecretValue::Authenticator(AuthenticatorSecret::from_otpauth_uri(
+                "otpauth://totp/Alpha:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Alpha",
+            )?),
         )?;
         insert_secret(
             &mut manager,
             &crypto,
             "secret_beta_authenticator",
-            nook_core::SecretValue::Authenticator(
-                nook_core::AuthenticatorSecret::from_otpauth_uri(
-                    "otpauth://totp/Beta:bob@example.com?secret=KRSXG5DSNFXGOIDB&issuer=Beta",
-                )?,
-            ),
+            SecretValue::Authenticator(AuthenticatorSecret::from_otpauth_uri(
+                "otpauth://totp/Beta:bob@example.com?secret=KRSXG5DSNFXGOIDB&issuer=Beta",
+            )?),
         )?;
         insert_secret(
             &mut manager,
             &crypto,
             "secret_alpha_note",
-            nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
                 title: "Alpha recovery".to_owned(),
                 note: "not an authenticator".to_owned(),
             }),
         )?;
-        manager.vault.crypto = crate::manager::VaultCryptoState::Unlocked(crypto);
+        manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
 
         let all = manager.list_authenticator_accounts("")?;
         assert_eq!(all.len(), 2);

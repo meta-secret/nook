@@ -1,14 +1,18 @@
 use super::{
     NookError, NookVaultManager, SearchCatalogRestore, SearchCatalogState, Zeroize, wasm_bindgen,
 };
+use crate::storage::indexed_db;
+use nook_core::{
+    AgeArmoredCiphertext, SearchCatalogBucketPayload, SecretSearchCatalog, SymmetricKey,
+};
 
 fn restore_secret_search_catalog(
     buckets: Vec<(u8, String)>,
     crypto: &nook_core::VaultCrypto,
 ) -> SearchCatalogRestore {
-    let mut catalog = nook_core::SecretSearchCatalog::default();
+    let mut catalog = SecretSearchCatalog::default();
     for (bucket, ciphertext) in buckets {
-        let result = nook_core::AgeArmoredCiphertext::parse(&ciphertext)
+        let result = AgeArmoredCiphertext::parse(&ciphertext)
             .map_err(NookError::from)
             .and_then(|ciphertext| {
                 let mut plaintext = crypto.decrypt_value(&ciphertext)?;
@@ -33,7 +37,7 @@ async fn load_encrypted_secret_search_catalog(
     store_id: &str,
     crypto: &nook_core::VaultCrypto,
 ) -> SearchCatalogRestore {
-    match crate::storage::indexed_db::load_secret_search_catalog_buckets(store_id).await {
+    match indexed_db::load_secret_search_catalog_buckets(store_id).await {
         Ok(buckets) => restore_secret_search_catalog(buckets, crypto),
         Err(error) => {
             tracing::warn!(
@@ -58,12 +62,12 @@ fn encrypt_secret_search_catalog_buckets(
             continue;
         }
         let ciphertext = match catalog.bucket_json(bucket)? {
-            nook_core::SearchCatalogBucketPayload::Json(mut json) => {
+            SearchCatalogBucketPayload::Json(mut json) => {
                 let ciphertext = crypto.encrypt_value(&json)?;
                 json.zeroize();
                 Some(ciphertext.as_str().to_owned())
             }
-            nook_core::SearchCatalogBucketPayload::Empty => None,
+            SearchCatalogBucketPayload::Empty => None,
         };
         writes.push((bucket, ciphertext));
     }
@@ -78,7 +82,7 @@ impl NookVaultManager {
         if self.vault.store_id.is_empty() {
             return Ok(());
         }
-        crate::storage::indexed_db::delete_legacy_secret_search_catalog(&self.vault.store_id).await
+        indexed_db::delete_legacy_secret_search_catalog(&self.vault.store_id).await
     }
 
     pub(crate) async fn prepare_secret_search_catalog(&mut self) -> Result<(), NookError> {
@@ -94,7 +98,7 @@ impl NookVaultManager {
             self.vault.search_catalog = match restored {
                 SearchCatalogRestore::Restored(catalog) => SearchCatalogState::Ready(catalog),
                 SearchCatalogRestore::Rebuild => {
-                    SearchCatalogState::Ready(nook_core::SecretSearchCatalog::default())
+                    SearchCatalogState::Ready(SecretSearchCatalog::default())
                 }
             };
             self.vault.search_catalog_store_id.clone_from(&store_id);
@@ -103,7 +107,7 @@ impl NookVaultManager {
 
         if self.vault.search_catalog_dirty {
             let crypto = self.vault.crypto.get()?;
-            let integrity_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+            let integrity_key = SymmetricKey::parse(&self.vault.secrets_key)?;
             let outcome = self.vault.search_catalog.get_mut()?.reconcile(
                 &self.vault.meta.secrets,
                 crypto,
@@ -130,8 +134,7 @@ impl NookVaultManager {
             let catalog = self.vault.search_catalog.get()?;
             let writes = encrypt_secret_search_catalog_buckets(catalog, crypto, pending_mask)?;
             if let Err(error) =
-                crate::storage::indexed_db::save_secret_search_catalog_buckets(&store_id, &writes)
-                    .await
+                indexed_db::save_secret_search_catalog_buckets(&store_id, &writes).await
             {
                 tracing::warn!(
                     scope = "wasm-search",

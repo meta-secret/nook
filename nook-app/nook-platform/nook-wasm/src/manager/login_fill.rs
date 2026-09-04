@@ -3,6 +3,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookLoginAccount, NookLoginFillCredential};
+use nook_core::{SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 impl NookVaultManager {
@@ -18,12 +19,12 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let mut accounts = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
-            if *secret_type != nook_core::SecretType::Login {
+            if *secret_type != SecretType::Login {
                 continue;
             }
             let mut record =
                 nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)?;
-            if let nook_core::SecretValue::Login(login) = &record.data
+            if let SecretValue::Login(login) = &record.data
                 && nook_core::login_host_matches_origin(&login.website_url, origin)
             {
                 accounts.push(NookLoginAccount::from_login(id, login));
@@ -38,12 +39,12 @@ impl NookVaultManager {
         secret_id: &str,
         origin: &str,
     ) -> Result<NookLoginFillCredential, NookError> {
-        let id = nook_core::SecretId::parse(secret_id)?;
+        let id = SecretId::parse(secret_id)?;
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         let credential = match &record.data {
-            nook_core::SecretValue::Login(login)
+            SecretValue::Login(login)
                 if nook_core::login_host_matches_origin(&login.website_url, origin) =>
             {
                 Ok(NookLoginFillCredential::new(
@@ -51,7 +52,7 @@ impl NookVaultManager {
                     login.password.clone(),
                 ))
             }
-            nook_core::SecretValue::Login(_) => Err(NookError::Decryption(
+            SecretValue::Login(_) => Err(NookError::Decryption(
                 "Login does not match the requesting website origin.".to_owned(),
             )),
             _ => Err(NookError::Decryption(

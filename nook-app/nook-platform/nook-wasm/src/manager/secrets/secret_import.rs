@@ -1,8 +1,10 @@
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
+use nook_core::{AgeArmoredCiphertext, DeviceIdentity, SecretValue, SymmetricKey, VaultOperation};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
+use zeroize::Zeroizing;
 
 type ImportVersions = HashMap<
     nook_core::SecretFingerprint,
@@ -76,9 +78,9 @@ fn reconcile_import_item(
         let secret_type = record.secret_type.ok_or_else(|| {
             NookError::Database(format!("Secret {} is missing its type.", record.key))
         })?;
-        let ciphertext = nook_core::AgeArmoredCiphertext::parse(record.value.as_str())?;
+        let ciphertext = AgeArmoredCiphertext::parse(record.value.as_str())?;
         let mut plaintext = crypto.decrypt_value(&ciphertext)?;
-        let mut existing = nook_core::SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
+        let mut existing = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
         plaintext.zeroize_plaintext();
         let mut enriched = nook_core::enrich_secret(&existing, &value);
         let outcome = if enriched == existing {
@@ -88,7 +90,7 @@ fn reconcile_import_item(
             let ciphertext = crypto.encrypt_value(yaml.as_str())?;
             yaml.zeroize_plaintext();
             let new_id = nook_core::generate_secret_id()?;
-            ImportItemOutcome::Operation(nook_core::VaultOperation::SecretReplaced {
+            ImportItemOutcome::Operation(VaultOperation::SecretReplaced {
                 old_id: record.key.clone(),
                 new_secret: nook_core::encrypted_secret_from_armored(
                     &new_id,
@@ -115,7 +117,7 @@ fn reconcile_import_item(
     value.zeroize_plaintext();
     let id = nook_core::generate_secret_id()?;
     Ok(ImportItemOutcome::Operation(
-        nook_core::VaultOperation::SecretCreated {
+        VaultOperation::SecretCreated {
             secret: nook_core::encrypted_secret_from_armored(
                 &id,
                 secret_type,
@@ -208,7 +210,7 @@ impl NookVaultManager {
             .into());
         }
 
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
+        let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let (items, within_batch_duplicates) = coalesce_import_items(items, &secrets_key)?;
         let dedup_state = self.live_secret_dedup_state().await?;
         let crypto = self.vault.crypto.get()?;
@@ -239,8 +241,7 @@ impl NookVaultManager {
             .filter(|operation| {
                 matches!(
                     operation,
-                    nook_core::VaultOperation::SecretCreated { .. }
-                        | nook_core::VaultOperation::SecretReplaced { .. }
+                    VaultOperation::SecretCreated { .. } | VaultOperation::SecretReplaced { .. }
                 )
             })
             .count();
@@ -276,8 +277,8 @@ impl NookVaultManager {
         json: String,
         password: String,
     ) -> Result<NookImportResult, JsError> {
-        let json = zeroize::Zeroizing::new(json);
-        let password = zeroize::Zeroizing::new(password);
+        let json = Zeroizing::new(json);
+        let password = Zeroizing::new(password);
         let plan = nook_core::plan_bitwarden_import_with_password(
             json.as_str(),
             (!password.is_empty()).then_some(password.as_str()),
@@ -297,7 +298,7 @@ impl NookVaultManager {
     /// event. The CSV is parsed in memory and never persisted.
     #[wasm_bindgen]
     pub async fn import_keepassxc_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
-        let csv = zeroize::Zeroizing::new(csv);
+        let csv = Zeroizing::new(csv);
         let plan = nook_core::plan_keepassxc_import(csv.as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
@@ -314,7 +315,7 @@ impl NookVaultManager {
     /// persisted.
     #[wasm_bindgen]
     pub async fn import_lastpass_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
-        let csv = zeroize::Zeroizing::new(csv);
+        let csv = Zeroizing::new(csv);
         let plan = nook_core::plan_lastpass_import(csv.as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
@@ -330,7 +331,7 @@ impl NookVaultManager {
     /// signed event. The CSV is parsed in memory and never persisted.
     #[wasm_bindgen]
     pub async fn import_keeper_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
-        let csv = zeroize::Zeroizing::new(csv);
+        let csv = Zeroizing::new(csv);
         let plan = nook_core::plan_keeper_import(csv.as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
@@ -356,7 +357,7 @@ impl NookVaultManager {
         &mut self,
         archive: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
-        let archive = zeroize::Zeroizing::new(archive);
+        let archive = Zeroizing::new(archive);
         let plan = nook_core::plan_onepassword_import(archive.as_slice())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(archive);
@@ -383,7 +384,7 @@ impl NookVaultManager {
         &mut self,
         export: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
-        let export = zeroize::Zeroizing::new(export);
+        let export = Zeroizing::new(export);
         let plan = nook_core::plan_apple_passwords_export(export.as_slice())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(export);
@@ -402,7 +403,7 @@ impl NookVaultManager {
         &mut self,
         csv: String,
     ) -> Result<NookImportResult, JsError> {
-        let csv = zeroize::Zeroizing::new(csv);
+        let csv = Zeroizing::new(csv);
         let plan = nook_core::plan_chrome_passwords_import(csv.as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
@@ -428,7 +429,7 @@ impl NookVaultManager {
         &mut self,
         export: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
-        let export = zeroize::Zeroizing::new(export);
+        let export = Zeroizing::new(export);
         let plan = nook_core::plan_dashlane_import(export.as_slice())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(export);
@@ -447,7 +448,7 @@ impl NookVaultManager {
         &mut self,
         migration_uris: Vec<String>,
     ) -> Result<NookImportResult, JsError> {
-        let migration_uris = zeroize::Zeroizing::new(migration_uris);
+        let migration_uris = Zeroizing::new(migration_uris);
         let plan = nook_core::plan_google_authenticator_import(migration_uris.as_slice())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(migration_uris);
@@ -474,7 +475,7 @@ impl NookVaultManager {
         &mut self,
         export: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
-        let export = zeroize::Zeroizing::new(export);
+        let export = Zeroizing::new(export);
         let plan = nook_core::plan_proton_pass_import(export.as_slice())
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(export);
@@ -493,17 +494,17 @@ mod import_tests {
     use super::*;
 
     fn key() -> anyhow::Result<nook_core::SymmetricKey> {
-        Ok(nook_core::SymmetricKey::parse(&"ab".repeat(32))?)
+        Ok(SymmetricKey::parse(&"ab".repeat(32))?)
     }
 
     #[test]
     fn same_batch_provider_notes_are_coalesced_without_losing_metadata() -> anyhow::Result<()> {
         let items = vec![
-            nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: "same note\n\n## LastPass\n- group: Personal".to_owned(),
             }),
-            nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: "same note\n\n## Proton Pass\n- vault: Personal".to_owned(),
             }),
@@ -512,7 +513,7 @@ mod import_tests {
         let (items, duplicates) = coalesce_import_items(items, &key()?)?;
         assert_eq!(duplicates, 1);
         assert_eq!(items.len(), 1);
-        let nook_core::SecretValue::SecureNote(note) = &items[0] else {
+        let SecretValue::SecureNote(note) = &items[0] else {
             return Err(anyhow::anyhow!(
                 "coalesced import item must be a secure note"
             ));
@@ -532,7 +533,7 @@ mod prepared_page_tests {
 
     #[wasm_bindgen_test]
     async fn default_page_restores_crypto_from_the_cached_projection() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.initialize_genesis_vault(&identity)?;

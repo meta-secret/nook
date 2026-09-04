@@ -4,6 +4,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::{NookSecretPage, NookSecretRecord, NookSecretTypeFilter, NookTotpCode};
+use nook_core::{AgeArmoredCiphertext, Sha256Hex, StorageMode, StoredRecordPayload, SymmetricKey};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -45,9 +46,8 @@ impl NookVaultManager {
             )
             .into());
         }
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let mut typed_value =
-            nook_core::SecretValue::from_yaml_str(input.secret_type, &input.data)?;
+        let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
+        let mut typed_value = SecretValue::from_yaml_str(input.secret_type, &input.data)?;
         let identity_fingerprint =
             nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
         let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
@@ -90,7 +90,7 @@ impl NookVaultManager {
             .get(&validated_new)
             .map(|(_, payload)| payload.as_str().to_owned())
             .unwrap_or_default();
-        self.append_vault_operations(vec![nook_core::VaultOperation::SecretReplaced {
+        self.append_vault_operations(vec![VaultOperation::SecretReplaced {
             old_id: validated_old,
             new_secret: nook_core::encrypted_secret_from_armored(
                 &validated_new,
@@ -175,7 +175,7 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub fn decrypt_secret_js(&self, id: &str) -> Result<NookSecretRecord, JsError> {
         let crypto = self.vault.crypto.get()?;
-        let id = nook_core::SecretId::from_vault_record(id);
+        let id = SecretId::from_vault_record(id);
         let record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         tracing::info!(
             scope = "wasm-secrets",
@@ -200,10 +200,10 @@ impl NookVaultManager {
         unix_seconds: u32,
     ) -> Result<NookTotpCode, JsError> {
         let crypto = self.vault.crypto.get()?;
-        let id = nook_core::SecretId::from_vault_record(id);
+        let id = SecretId::from_vault_record(id);
         let mut record =
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
-        let code = if let nook_core::SecretValue::Authenticator(value) = &record.data {
+        let code = if let SecretValue::Authenticator(value) = &record.data {
             value.current_code(u64::from(unix_seconds))?
         } else {
             record.zeroize_plaintext();
@@ -273,8 +273,8 @@ impl NookVaultManager {
         }
         let id = nook_core::validate_secret_id(&id)?;
         nook_core::validate_secret_data(&data)?;
-        let secrets_key = nook_core::SymmetricKey::parse(&self.vault.secrets_key)?;
-        let mut typed_value = nook_core::SecretValue::from_yaml_str(secret_type, &data)?;
+        let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
+        let mut typed_value = SecretValue::from_yaml_str(secret_type, &data)?;
         let identity_fingerprint =
             nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
         let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
@@ -286,12 +286,12 @@ impl NookVaultManager {
             id.clone(),
             (
                 secret_type,
-                nook_core::StoredRecordPayload::from_trusted(ciphertext.clone()),
+                StoredRecordPayload::from_trusted(ciphertext.clone()),
             ),
         );
         self.vault.mark_search_catalog_dirty();
 
-        self.append_vault_operations(vec![nook_core::VaultOperation::SecretCreated {
+        self.append_vault_operations(vec![VaultOperation::SecretCreated {
             secret: nook_core::encrypted_secret_from_armored(
                 &id,
                 secret_type,
@@ -339,7 +339,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<Vec<crate::NookJoinRequest>, JsError> {
-        let restore_local = self.storage.mode == nook_core::StorageMode::Local;
+        let restore_local = self.storage.mode == StorageMode::Local;
         self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.sync_events_from_current_provider().await?;
@@ -357,7 +357,7 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<(), JsError> {
-        let restore_local = self.storage.mode == nook_core::StorageMode::Local;
+        let restore_local = self.storage.mode == StorageMode::Local;
         self.prepare_storage_preserving_vault_metadata(&storage_mode, &github_pat, &github_repo)
             .await?;
         self.flush_event_outbox().await?;
@@ -399,7 +399,7 @@ impl NookVaultManager {
         let id = nook_core::validate_secret_id(&id)?;
         self.vault.meta.secrets.remove(&id);
         self.vault.mark_search_catalog_dirty();
-        self.append_vault_operations(vec![nook_core::VaultOperation::SecretDeleted {
+        self.append_vault_operations(vec![VaultOperation::SecretDeleted {
             secret_id: id.clone(),
         }])
         .await?;
@@ -446,7 +446,7 @@ impl NookVaultManager {
             .filter(|secret_id| *secret_id != &chosen_id)
             .cloned()
             .collect();
-        self.append_vault_operations(vec![nook_core::VaultOperation::SecretConflictResolved {
+        self.append_vault_operations(vec![VaultOperation::SecretConflictResolved {
             old_id,
             chosen_secret_id: chosen_id,
             rejected_secret_ids,
@@ -519,7 +519,7 @@ mod wasm_tests {
         );
         device_a.append_operations(
             vec![VaultOperation::VaultImported {
-                source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }],
@@ -595,9 +595,8 @@ mod wasm_tests {
 
         let mut passwords = BTreeSet::new();
         for record in live.values() {
-            let plaintext = crypto.decrypt_value(&nook_core::AgeArmoredCiphertext::parse(
-                record.value.as_str(),
-            )?)?;
+            let plaintext =
+                crypto.decrypt_value(&AgeArmoredCiphertext::parse(record.value.as_str())?)?;
             let value = SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str())?;
             let SecretValue::Login(login) = value else {
                 panic!("expected login");
