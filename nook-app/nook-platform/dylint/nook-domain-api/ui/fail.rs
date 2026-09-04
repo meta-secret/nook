@@ -1,5 +1,10 @@
+// aux-build: external_api.rs
+
+#![feature(associated_type_defaults)]
 #![allow(dead_code)]
 #![allow(private_interfaces)]
+
+extern crate external_api;
 
 pub type RawAlias = u128;
 pub type RawSink = dyn Fn(u64) -> RawAlias;
@@ -91,5 +96,48 @@ pub async fn async_raw_output() -> Option<RawAlias> {
 pub struct ProjectedField {
     pub values: Box<RawSink>,
 }
+
+pub struct Defaulted<T = RawAlias>(pub UserId, std::marker::PhantomData<T>);
+
+pub trait LocalRaw: Iterator<Item = RawAlias> {}
+
+pub fn named_bound<T: LocalRaw>() {}
+
+pub fn external_named_bound<T: external_api::RawBound>() {}
+
+pub fn inline_projection<T: Iterator<Item = RawAlias>>() {}
+
+pub fn where_projection<T>()
+where
+    T: Iterator<Item = RawAlias>,
+{
+}
+
+pub trait AssociatedBound {
+    type Values: Iterator<Item = RawAlias>;
+}
+
+pub trait AssociatedDefault {
+    type Value = RawAlias;
+}
+
+pub trait EnclosingTrait<T>
+where
+    T: Iterator<Item = RawAlias>,
+{
+    fn clean(&self);
+}
+
+impl<T> Wrapper<T>
+where
+    T: Iterator<Item = RawAlias>,
+{
+    pub fn clean(&self) {}
+}
+
+pub use external_api::RawRecord;
+pub use external_api::raw_module::*;
+
+impl external_api::RawDefault for UserId {}
 
 fn main() {}
