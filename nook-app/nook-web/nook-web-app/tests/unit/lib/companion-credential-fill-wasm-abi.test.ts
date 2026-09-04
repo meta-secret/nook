@@ -3,16 +3,16 @@ import { describe, expect, test } from 'vitest'
 import { plan_companion_credential_fill } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 describe('companion credential-fill WASM ABI', () => {
-  test('accepts generated string contracts and returns typed assignments', () => {
+  test('preserves exact Rust source names across the generated contract', () => {
     expect(
       plan_companion_credential_fill([
-        { fieldIndex: 4, role: 'username', editability: 'writable' },
-        { fieldIndex: 7, role: 'generic-password', editability: 'writable' },
+        { field_index: 4, role: 'Username', editability: 'Writable' },
+        { field_index: 7, role: 'GenericPassword', editability: 'Writable' },
       ]),
     ).toEqual({
       assignments: [
-        { fieldIndex: 4, credential: 'username' },
-        { fieldIndex: 7, credential: 'current-password' },
+        { field_index: 4, credential: 'Username' },
+        { field_index: 7, credential: 'CurrentPassword' },
       ],
     })
   })
@@ -20,18 +20,18 @@ describe('companion credential-fill WASM ABI', () => {
   test('fails closed for unsafe and malformed field roles', () => {
     expect(() =>
       plan_companion_credential_fill([
-        { fieldIndex: 0, role: 'username', editability: 'writable' },
-        { fieldIndex: 1, role: 'new-password', editability: 'writable' },
+        { field_index: 0, role: 'Username', editability: 'Writable' },
+        { field_index: 1, role: 'NewPassword', editability: 'Writable' },
       ]),
     ).toThrow('the observed scope contains a new-password field')
 
     expect(() =>
       plan_companion_credential_fill([
         {
-          fieldIndex: 2,
+          field_index: 2,
           // @ts-expect-error exercise the runtime boundary used by raw JavaScript callers
-          role: 'password',
-          editability: 'writable',
+          role: 'Password',
+          editability: 'Writable',
         },
       ]),
     ).toThrow()
