@@ -4,10 +4,14 @@ import {
   extensionPairingGrantPolicyReady,
   extensionSessionGrantIdentity,
 } from '../src/background/pairing-grants'
-import {
+
+Object.assign(globalThis, {
+  __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+})
+const {
   importLocalEventLogUpdateWithDependencies,
   LocalEventLogUpdateFailure,
-} from '../src/background/service-worker/pairing-import'
+} = await import('../src/background/service-worker/pairing-import')
 
 describe('extension pairing grant transport', () => {
   test.each(['absent', 'malformed', 'policy-unavailable'] as const)(

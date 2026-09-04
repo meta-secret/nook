@@ -28,16 +28,16 @@ function classifyRenderedScenario(): CompanionAuthenticationWorkflowMatchKind {
 }
 
 test.each([
-  ['plain login', PlainLogin],
-  ['TOTP login', TotpLogin],
-  ['detected login', DetectionLogin],
-  ['OTP verification', DetectionOtp],
-  ['signup', DetectionSignup],
-  ['password change', DetectionPasswordChange],
+  ['plain login', () => render(PlainLogin)],
+  ['TOTP login', () => render(TotpLogin)],
+  ['detected login', () => render(DetectionLogin)],
+  ['OTP verification', () => render(DetectionOtp)],
+  ['signup', () => render(DetectionSignup)],
+  ['password change', () => render(DetectionPasswordChange)],
 ] as const)(
   'real mock %s markup satisfies the WASM workflow contract',
-  (_, component) => {
-    render(component)
+  (_, renderScenario) => {
+    renderScenario()
     expect(classifyRenderedScenario()).toBe(
       CompanionAuthenticationWorkflowMatchKind.Matched,
     )
@@ -45,18 +45,23 @@ test.each([
 )
 
 test.each([
-  ['get', '/auth/login'],
-  ['post', '/plain/login'],
-  ['post', 'https://external-provider.example/auth/login'],
-])('rejects unsafe mock submission %s %s', (method, action) => {
-  const { container } = render(PlainLogin)
-  const form = container.querySelector('form')
-  if (!(form instanceof HTMLFormElement)) {
-    throw new Error('plain login fixture must render its form')
-  }
-  form.setAttribute('method', method)
-  form.setAttribute('action', action)
-  expect(classifyRenderedScenario()).toBe(
-    CompanionAuthenticationWorkflowMatchKind.NoMatch,
-  )
-})
+  ['get', '/auth/login', CompanionAuthenticationWorkflowMatchKind.NoMatch],
+  ['post', '/plain/login', CompanionAuthenticationWorkflowMatchKind.NoMatch],
+  [
+    'post',
+    'https://external-provider.example/auth/login',
+    CompanionAuthenticationWorkflowMatchKind.Rejected,
+  ],
+] as const)(
+  'rejects unsafe mock submission %s %s',
+  (method, action, expected) => {
+    const { container } = render(PlainLogin)
+    const form = container.querySelector('form')
+    if (!(form instanceof HTMLFormElement)) {
+      throw new Error('plain login fixture must render its form')
+    }
+    form.setAttribute('method', method)
+    form.setAttribute('action', action)
+    expect(classifyRenderedScenario()).toBe(expected)
+  },
+)
