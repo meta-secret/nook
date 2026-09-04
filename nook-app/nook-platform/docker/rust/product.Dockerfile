@@ -255,14 +255,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     cargo llvm-cov nextest --no-report --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core --no-tests=pass \
     && nook-sccache-report native-coverage-dependencies
 
-# wasm-bindgen coverage needs a pinned nightly compiler. Keep this install on a
-# manifest-only branch so source edits do not redownload the toolchain.
 FROM builder-wasm-deps AS wasm-coverage-toolchain
-
 ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
 RUN rustup toolchain install "${WASM_COVERAGE_NIGHTLY}" --component llvm-tools-preview \
     && rustup target add --toolchain "${WASM_COVERAGE_NIGHTLY}" wasm32-unknown-unknown
-
 # Source overlay for bulk native leaves. Keep this after cook so builder-*-deps stay
 # manifest-stable; platform tree edits invalidate only this stage and its consumers.
 FROM builder-core-deps AS rust-platform
@@ -722,11 +718,8 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report wasm-build
 
 FROM builder-wasm-source AS builder-wasm-tests
-
 ARG WASM_COVERAGE_NIGHTLY=nightly-2026-04-16
-
 COPY --from=wasm-coverage-toolchain /usr/local/rustup /usr/local/rustup
-
 # Match both wasm-pack test compile steps: `cargo build --tests` uses CARGO_BUILD_TARGET, while the
 # later `cargo test` invocation passes `--target`. Warm both so the Node-test join stays Fresh.
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -735,7 +728,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo test --release --target wasm32-unknown-unknown --no-run -p nook-wasm -p nook-companion-wasm \
     && nook-sccache-report wasm-release-tests
 
-FROM builder-wasm-tests AS builder-wasm
+FROM builder-wasm-tests AS builder-wasm-handoff
 
 ARG BUN_VERSION=1.3.14
 ARG PLAYWRIGHT_VERSION=1.55.0
@@ -764,6 +757,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-report \
     && nook-sccache-report wasm-node-test-and-coverage
 
+FROM builder-wasm-handoff AS builder-wasm
 RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}" \
     && bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium \
     && mkdir -p "$PLAYWRIGHT_BROWSERS_PATH" \
@@ -783,7 +777,8 @@ RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}" \
     && companion_floor="$(jq -r '.package_lines_percent["nook-companion-wasm"]' nook-core/coverage-floor.json)" \
     && nook_wasm_floor="$(jq -r '.package_lines_percent["nook-wasm"]' nook-core/coverage-floor.json)" \
     && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-companion-wasm --fail-under-lines "$companion_floor" \
-    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor"
+    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --fail-under-lines "$nook_wasm_floor" \
+    && touch /opt/nook/wasm-coverage-passed
 
 FROM scratch AS wasm-export
 
@@ -814,8 +809,9 @@ RUN cargo fmt --all -- --check
 # context. The web solve never consumes or materializes the multi-GB builder-wasm snapshot.
 FROM scratch AS web-artifacts
 
-COPY --from=builder-wasm /opt/nook/wasm-handoff /nook-wasm
+COPY --from=builder-wasm-handoff /opt/nook/wasm-handoff /nook-wasm
 COPY --from=builder-debug /opt/nook/coverage /coverage
+COPY --from=builder-wasm /opt/nook/wasm-coverage-passed /coverage/wasm-coverage-passed
 
 # On-demand sealed Rust image for explicit `task rust:*`, `task wasm:*`, and Rust formatting
 # commands. Normal setup/CI does not load this multi-GB image into Docker's runtime image store.

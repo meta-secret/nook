@@ -105,7 +105,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains(".package_lines_percent[\"nook-wasm\"]"));
     assert!(product.contains("--fail-under-lines \"$nook_wasm_floor\""));
     let wasm_coverage_stage = product
-        .split_once("FROM builder-wasm-tests AS builder-wasm")
+        .split_once("FROM builder-wasm-tests AS builder-wasm-handoff")
         .and_then(|(_, remainder)| {
             remainder
                 .split_once("FROM scratch AS wasm-export")
@@ -118,11 +118,13 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_coverage_stage.contains(
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
-    let browser_execution = wasm_coverage_stage
-        .split_once("\nRUN curl -fsSL https://bun.sh/install")
-        .context("secret-free browser install and execution RUN")?
-        .1;
-    assert!(!browser_execution.contains("--mount=type=secret"));
+    let (handoff, browser) = wasm_coverage_stage
+        .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
+        .context("sealed handoff and secret-free browser validation stages")?;
+    assert!(!handoff.contains("bun.sh/install"));
+    assert!(browser.contains("https://bun.sh/install") && !browser.contains("--mount=type=secret"));
+    assert!(product.contains("--from=builder-wasm-handoff /opt/nook/wasm-handoff"));
+    assert!(product.contains("--from=builder-wasm /opt/nook/wasm-coverage-passed"));
     assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
     assert!(hive_tasks.contains(".package_lines_percent.lace | numbers"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));
