@@ -368,7 +368,7 @@ mod wasm_tests {
     };
     use nook_core::{
         AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, CreditCardSecret,
-        SecretId, SecretValue,
+        OauthFilePreset, SecretId, SecretValue, StorageProviderType,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
