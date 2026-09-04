@@ -1,15 +1,19 @@
 use regex::RegexSet;
 use std::{
+    cmp::Ord,
     collections::BTreeSet,
+    env,
     ffi::OsStr,
     fs,
+    os::unix::fs as unix_fs,
     path::{Path, PathBuf},
     process::Command,
+    str,
     sync::OnceLock,
 };
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
@@ -28,7 +32,7 @@ fn repository_paths(root: &Path, source_context: bool) -> anyhow::Result<Vec<Pat
         .parents(false)
         .require_git(false)
         .filter_entry(|entry| entry.file_name() != OsStr::new(".git"))
-        .sort_by_file_path(std::cmp::Ord::cmp);
+        .sort_by_file_path(Ord::cmp);
 
     for entry in builder.build() {
         let entry = entry?;
@@ -53,7 +57,7 @@ fn repository_paths(root: &Path, source_context: bool) -> anyhow::Result<Vec<Pat
             if bytes.is_empty() {
                 continue;
             }
-            let path = root.join(std::str::from_utf8(bytes)?);
+            let path = root.join(str::from_utf8(bytes)?);
             let kind = fs::symlink_metadata(&path)?.file_type();
             if kind.is_file() || kind.is_symlink() {
                 paths.insert(path);
@@ -200,7 +204,7 @@ fn repository_language_violations(
             continue;
         }
         let bytes = fs::read(&path)?;
-        let source = std::str::from_utf8(&bytes).map_err(|_| {
+        let source = str::from_utf8(&bytes).map_err(|_| {
             anyhow::anyhow!(
                 "{}: automation source is not valid UTF-8",
                 relative.display()
@@ -221,7 +225,7 @@ fn repository_automation_uses_only_typescript_rust_and_taskfiles() -> anyhow::Re
     let root = repository_root();
     let violations = repository_language_violations(
         &root,
-        std::env::var_os("NOOK_REPOSITORY_SOURCE_CONTEXT").is_some(),
+        env::var_os("NOOK_REPOSITORY_SOURCE_CONTEXT").is_some(),
     )?;
     assert!(
         violations.is_empty(),
@@ -360,7 +364,7 @@ fn content_scan_covers_nested_scripts_rust_and_yaml_vectors() -> anyhow::Result<
 fn automation_symlinks_fail_closed() -> anyhow::Result<()> {
     let fixture = tempfile::tempdir()?;
     fs::write(fixture.path().join("target"), "#!/usr/bin/env bash\n")?;
-    std::os::unix::fs::symlink("target", fixture.path().join("linked-script"))?;
+    unix_fs::symlink("target", fixture.path().join("linked-script"))?;
     let violations = repository_language_violations(fixture.path(), false)?;
     assert_eq!(violations.len(), 1);
     assert!(violations[0].contains("symlinks are prohibited"));

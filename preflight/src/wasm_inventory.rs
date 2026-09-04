@@ -1,5 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
+use super::rust_wasm_attributes;
+use syn::token::RArrow;
 use syn::{Attribute, ImplItem, Item};
 
 #[derive(Default)]
@@ -11,13 +13,13 @@ pub(super) struct WasmTypeInventory {
 
 fn has_wasm_bindgen(attributes: &[Attribute], aliases: &HashSet<String>) -> bool {
     attributes.iter().any(|attribute| {
-        super::rust_wasm_attributes::attribute_has_wasm_bindgen_with_aliases(attribute, aliases)
+        rust_wasm_attributes::attribute_has_wasm_bindgen_with_aliases(attribute, aliases)
     })
 }
 
 fn is_wasm_accessor(attributes: &[Attribute], aliases: &HashSet<String>) -> bool {
     attributes.iter().any(|attribute| {
-        super::rust_wasm_attributes::attribute_is_wasm_accessor_with_aliases(attribute, aliases)
+        rust_wasm_attributes::attribute_is_wasm_accessor_with_aliases(attribute, aliases)
     })
 }
 
@@ -30,7 +32,7 @@ pub(super) fn collect_wasm_inventory(
     types: &mut WasmTypeInventory,
 ) {
     let mut aliases = inherited_aliases.clone();
-    aliases.extend(super::rust_wasm_attributes::collect_wasm_bindgen_attribute_aliases(items));
+    aliases.extend(rust_wasm_attributes::collect_wasm_bindgen_attribute_aliases(items));
     for item in items {
         match item {
             Item::Fn(function) => {
@@ -108,7 +110,7 @@ fn wasm_return_type(output: &syn::ReturnType) -> Option<String> {
     {
         return arguments.args.iter().find_map(|argument| match argument {
             syn::GenericArgument::Type(ty) => wasm_return_type(&syn::ReturnType::Type(
-                syn::token::RArrow::default(),
+                RArrow::default(),
                 Box::new(ty.clone()),
             )),
             _ => None,

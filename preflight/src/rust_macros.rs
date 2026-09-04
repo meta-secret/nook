@@ -1,9 +1,10 @@
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
 
 use syn::spanned::Spanned;
-use syn::visit::Visit;
+use syn::visit::{self, Visit};
 use syn::{Attribute, ItemFn, Macro};
 
 use crate::Violation;
@@ -65,7 +66,7 @@ fn collect_rust_files(directory: &Path, files: &mut Vec<PathBuf>) -> io::Result<
         if file_type.is_dir() {
             if !path
                 .file_name()
-                .and_then(std::ffi::OsStr::to_str)
+                .and_then(OsStr::to_str)
                 .is_some_and(|name| EXCLUDED_DIRECTORIES.contains(&name))
             {
                 collect_rust_files(&path, files)?;
@@ -97,14 +98,14 @@ impl<'ast> Visit<'ast> for MacroDefinitionVisitor {
         if value.path.is_ident("macro_rules") {
             self.lines.push(value.path.span().start().line);
         }
-        syn::visit::visit_macro(self, value);
+        visit::visit_macro(self, value);
     }
 
     fn visit_item_fn(&mut self, item: &'ast ItemFn) {
         if Self::is_procedural_macro(&item.attrs) {
             self.lines.push(item.span().start().line);
         }
-        syn::visit::visit_item_fn(self, item);
+        visit::visit_item_fn(self, item);
     }
 }
 
@@ -116,6 +117,8 @@ mod tests {
     use std::path::PathBuf;
     #[cfg(unix)]
     use std::time::{SystemTime, UNIX_EPOCH};
+    #[cfg(unix)]
+    use std::{env, process};
 
     use super::MacroDefinitionVisitor;
     #[cfg(unix)]
@@ -195,9 +198,9 @@ mod tests {
     #[cfg(unix)]
     fn temporary_directory(label: &str) -> anyhow::Result<PathBuf> {
         let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let path = std::env::temp_dir().join(format!(
+        let path = env::temp_dir().join(format!(
             "nook-rust-macros-{label}-{}-{unique}",
-            std::process::id()
+            process::id()
         ));
         fs::create_dir(&path)?;
         Ok(path)

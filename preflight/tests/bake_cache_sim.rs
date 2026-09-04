@@ -1,8 +1,8 @@
-use std::fs;
 use std::path::PathBuf;
+use std::{env, fs};
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
