@@ -788,6 +788,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
            $package_args || coverage_status=1; \
        done \
     && test "$coverage_status" -eq 0 \
+    && nook-sccache-report wasm-node-test-and-coverage \
     && echo "nook-wasm coverage floor pending this hosted measurement" >&2 \
     && false
 
