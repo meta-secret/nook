@@ -6,6 +6,10 @@ export function reportExtensionBrowserErrors(context: BrowserContext): void {
     console.error('[extension e2e browser error]', event.error())
   })
   context.on('console', (message) => {
+    if (message.text().startsWith('[nook-auth-boundary]')) {
+      console.info(message.text())
+      return
+    }
     if (message.type() === 'error') {
       console.error('[extension e2e console error]', message.text())
     }

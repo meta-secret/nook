@@ -332,6 +332,7 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
     const { workflow: verdict, loginMatches } = runtimeResponse
     if ('snapshot' in verdict) {
       if (!isAuthenticationPageObservationView(selectedFacts)) {
+        console.debug('[nook-auth-boundary] selected-facts-rejected')
         return unavailable()
       }
       return {
@@ -344,6 +345,7 @@ export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
       response: { verdict, loginMatches },
     }
   } catch {
+    console.debug('[nook-auth-boundary] response-decode-failed')
     return unavailable()
   }
 }

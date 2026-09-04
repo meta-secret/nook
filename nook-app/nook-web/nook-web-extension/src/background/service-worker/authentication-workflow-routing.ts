@@ -131,6 +131,7 @@ export async function authenticationWorkflowMessageResponse({
       observations,
     }
     const result = await authenticationWorkflowSnapshot(snapshotRequest)
+    console.debug('[nook-auth-boundary] background-verdict', result.kind)
     if ('snapshot' in result) {
       const selectedFacts = observations[result.snapshot.observationIndex]
       if (!selectedFacts) {
@@ -170,6 +171,7 @@ export async function authenticationWorkflowMessageResponse({
       loginMatches: { kind: 'unavailable' },
     }
   } catch {
+    console.debug('[nook-auth-boundary] background-snapshot-failed')
     return {
       workflow: { ok: false, reason: 'workflow-snapshot-failed' },
       loginMatches: { kind: 'unavailable' },
