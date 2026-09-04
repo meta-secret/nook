@@ -3,7 +3,6 @@
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn plan_companion_credential_fill(
     fields: Vec<nook_companion_core::AuthenticationFillFieldObservation>,
@@ -13,7 +12,6 @@ pub fn plan_companion_credential_fill(
 }
 
 #[wasm_bindgen]
-#[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn simulate_companion_credential_fill(
     fields: Vec<nook_companion_core::AuthenticationFillFieldObservation>,
@@ -70,12 +68,14 @@ mod tests {
     #[test]
     fn credential_fill_simulation_wasm_export_matches_core_policy() {
         let credentials = simulated_authentication_credential_fixture();
+        let expected_username = credentials.username.clone();
+        let expected_password = credentials.password.clone();
         let simulated = simulate_companion_credential_fill(
             vec![username_field(0), password_field(1)],
             credentials,
         )
         .unwrap_or_else(|error| panic!("simulation failed: {error:?}"));
-        assert_eq!(simulated.assignments[0].filled_with, credentials.username);
-        assert_eq!(simulated.assignments[1].filled_with, credentials.password);
+        assert_eq!(simulated.assignments[0].filled_with, expected_username);
+        assert_eq!(simulated.assignments[1].filled_with, expected_password);
     }
 }
