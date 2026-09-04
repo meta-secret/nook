@@ -6,13 +6,21 @@ describe('companion credential-fill WASM ABI', () => {
   test('preserves exact Rust source names across the generated contract', () => {
     expect(
       plan_companion_credential_fill([
-        { field_index: 4, role: 'Username', editability: 'Writable' },
-        { field_index: 7, role: 'GenericPassword', editability: 'Writable' },
+        {
+          field_index: { value: 4 },
+          role: 'Username',
+          editability: 'Writable',
+        },
+        {
+          field_index: { value: 7 },
+          role: 'GenericPassword',
+          editability: 'Writable',
+        },
       ]),
     ).toEqual({
       assignments: [
-        { field_index: 4, credential: 'Username' },
-        { field_index: 7, credential: 'CurrentPassword' },
+        { field_index: { value: 4 }, credential: 'Username' },
+        { field_index: { value: 7 }, credential: 'CurrentPassword' },
       ],
     })
   })
@@ -20,15 +28,23 @@ describe('companion credential-fill WASM ABI', () => {
   test('fails closed for unsafe and malformed field roles', () => {
     expect(() =>
       plan_companion_credential_fill([
-        { field_index: 0, role: 'Username', editability: 'Writable' },
-        { field_index: 1, role: 'NewPassword', editability: 'Writable' },
+        {
+          field_index: { value: 0 },
+          role: 'Username',
+          editability: 'Writable',
+        },
+        {
+          field_index: { value: 1 },
+          role: 'NewPassword',
+          editability: 'Writable',
+        },
       ]),
     ).toThrow('the observed scope contains a new-password field')
 
     expect(() =>
       plan_companion_credential_fill([
         {
-          field_index: 2,
+          field_index: { value: 2 },
           // @ts-expect-error exercise the runtime boundary used by raw JavaScript callers
           role: 'Password',
           editability: 'Writable',
