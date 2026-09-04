@@ -217,7 +217,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     mkdir -p /opt/nook/hive-tests \
     && eval "$(cargo llvm-cov show-env --export-prefix)" \
-    && cargo test --locked --workspace --no-run --message-format=json \
+    && CARGO_TARGET_DIR=target/llvm-cov-target cargo test --locked --workspace --no-run --message-format=json \
       > /tmp/hive-test-artifacts.jsonl \
     && jq -r \
       'select(.reason == "compiler-artifact" and .profile.test == true and .executable != null) | .executable' \
