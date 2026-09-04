@@ -1,7 +1,6 @@
 [workspace]
 members = [
     "hive",
-    "lace",
 ]
 exclude = ["vendor/arrayref"]
 resolver = "3"
