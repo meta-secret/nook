@@ -564,7 +564,45 @@ impl ObserverStore for Neo4jTaskStore {
 
 #[cfg(test)]
 mod tests {
-    use super::ObserverRequest;
+    use async_trait::async_trait;
+    use axum::extract::{Path, Query, State};
+    use axum::http::StatusCode;
+    use axum::response::IntoResponse;
+    use serde_json::{Value, json};
+
+    use super::{
+        LocaleQuery, ObserverRequest, ObserverState, ObserverStore, health, overview, task_detail,
+    };
+
+    #[derive(Clone)]
+    enum FixtureStore {
+        Ready,
+        Failed,
+    }
+
+    #[async_trait]
+    impl ObserverStore for FixtureStore {
+        async fn observer_snapshot_value(&self, locale: &str) -> crate::HiveResult<Value> {
+            match self {
+                Self::Ready => Ok(json!({"locale": locale, "tasks": 2})),
+                Self::Failed => Err(crate::HiveError::message("database unavailable")),
+            }
+        }
+
+        async fn observer_task_value(
+            &self,
+            task_id: &str,
+            locale: &str,
+        ) -> crate::HiveResult<Option<Value>> {
+            match self {
+                Self::Ready if task_id == "task-1" => {
+                    Ok(Some(json!({"id": task_id, "locale": locale})))
+                }
+                Self::Ready => Ok(None),
+                Self::Failed => Err(crate::HiveError::message("database unavailable")),
+            }
+        }
+    }
 
     #[test]
     fn observer_protocol_exposes_only_bounded_read_operations() -> crate::HiveResult<()> {
@@ -582,6 +620,66 @@ mod tests {
             assert!(!payload.contains("enqueue"));
             assert!(!payload.contains("activity"));
         }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn observer_handlers_preserve_success_not_found_and_unavailable_statuses()
+    -> crate::HiveResult<()> {
+        assert_eq!(health().await, StatusCode::NO_CONTENT);
+        let state = ObserverState {
+            store: FixtureStore::Ready,
+        };
+        let snapshot = match overview(
+            State(state.clone()),
+            Query(LocaleQuery {
+                locale: "ru".into(),
+            }),
+        )
+        .await
+        {
+            Ok(snapshot) => snapshot.0,
+            Err(_) => return Err(crate::HiveError::message("ready overview failed")),
+        };
+        assert_eq!(snapshot, json!({"locale": "ru", "tasks": 2}));
+        let task = match task_detail(
+            State(state.clone()),
+            Path("task-1".into()),
+            Query(LocaleQuery {
+                locale: "en".into(),
+            }),
+        )
+        .await
+        {
+            Ok(task) => task.0,
+            Err(_) => return Err(crate::HiveError::message("known task was not returned")),
+        };
+        assert_eq!(task, json!({"id": "task-1", "locale": "en"}));
+
+        let missing = task_detail(
+            State(state),
+            Path("missing".into()),
+            Query(LocaleQuery {
+                locale: "en".into(),
+            }),
+        )
+        .await
+        .expect_err("missing task must return an observer error")
+        .into_response();
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+
+        let unavailable = overview(
+            State(ObserverState {
+                store: FixtureStore::Failed,
+            }),
+            Query(LocaleQuery {
+                locale: "en".into(),
+            }),
+        )
+        .await
+        .expect_err("store failure must be hidden behind stable observer error")
+        .into_response();
+        assert_eq!(unavailable.status(), StatusCode::SERVICE_UNAVAILABLE);
         Ok(())
     }
 }

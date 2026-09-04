@@ -277,3 +277,74 @@ impl ObserverStore for ObserverCoordinatorStore {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        ObserverCoordinatorStore, ObserverRequest, ObserverResponse, ObserverStore, default_locale,
+    };
+    use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+    use tokio::net::UnixListener;
+
+    #[tokio::test]
+    async fn observer_client_round_trips_values_and_rejects_protocol_mismatches()
+    -> crate::HiveResult<()> {
+        let root = tempfile::tempdir()?;
+        let socket = root.path().join("observer.sock");
+        let listener = UnixListener::bind(&socket)?;
+        let server = tokio::spawn(async move {
+            let (stream, _) = listener.accept().await?;
+            let (reader, mut writer) = stream.into_split();
+            let mut requests = BufReader::new(reader).lines();
+            let responses = [
+                ObserverResponse::Snapshot(serde_json::json!({"ready": 2})),
+                ObserverResponse::Task(Some(serde_json::json!({"id": "task-7"}))),
+                ObserverResponse::Task(None),
+                ObserverResponse::Error("coordinator unavailable".into()),
+            ];
+            for response in responses {
+                let request = requests
+                    .next_line()
+                    .await?
+                    .expect("request must be present");
+                serde_json::from_str::<ObserverRequest>(&request)?;
+                writer.write_all(&serde_json::to_vec(&response)?).await?;
+                writer.write_all(b"\n").await?;
+                writer.flush().await?;
+            }
+            Ok::<(), crate::HiveError>(())
+        });
+        let client = ObserverCoordinatorStore::connect(&socket).await?;
+
+        assert_eq!(default_locale(), "en");
+        assert_eq!(
+            client.observer_snapshot_value("en").await?,
+            serde_json::json!({"ready": 2})
+        );
+        assert_eq!(
+            client.observer_task_value("task-7", "ru").await?,
+            Some(serde_json::json!({"id": "task-7"}))
+        );
+        let mismatch = client
+            .observer_snapshot_value("en")
+            .await
+            .expect_err("task response must not satisfy a snapshot request");
+        assert!(
+            mismatch
+                .to_string()
+                .contains("unexpected observer coordinator response")
+        );
+        let remote_error = client
+            .observer_task_value("task-8", "en")
+            .await
+            .expect_err("remote error must cross the private channel");
+        assert!(remote_error.to_string().contains("coordinator unavailable"));
+        let closed = client
+            .observer_snapshot_value("en")
+            .await
+            .expect_err("closed channel must not return empty state");
+        assert!(closed.to_string().contains("closed its private channel"));
+        server.await??;
+        Ok(())
+    }
+}

@@ -283,3 +283,66 @@ impl<T> HiveContext<T> for Option<T> {
         self.ok_or_else(|| HiveError::message(context()))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{HiveContext, HiveError};
+
+    #[tokio::test]
+    async fn context_preserves_typed_sources_and_accumulates_operations() {
+        let cases = [
+            HiveError::from(std::io::Error::other("disk unavailable")),
+            HiveError::from(
+                serde_json::from_str::<serde_json::Value>("{")
+                    .expect_err("fixture must be invalid JSON"),
+            ),
+            HiveError::from(crate::model::TaskId::new("").expect_err("id must be rejected")),
+            HiveError::from(crate::codex::CodexError::Run("turn failed".into())),
+            HiveError::from(String::from_utf8(vec![0xff]).expect_err("byte must be invalid UTF-8")),
+            HiveError::from(u8::try_from(300).expect_err("value must exceed u8")),
+            HiveError::from("invalid".parse::<u64>().expect_err("value must not parse")),
+            HiveError::from(
+                std::env::var("NOOK_TEST_VARIABLE_THAT_MUST_NOT_EXIST")
+                    .expect_err("fixture variable must be absent"),
+            ),
+        ];
+        for error in cases {
+            let contextual = error
+                .at_operation("inner operation".into())
+                .at_operation("outer operation".into());
+            let rendered = contextual.to_string();
+            assert!(rendered.starts_with("outer operation: inner operation:"));
+        }
+
+        let (sender, mut receiver) = tokio::sync::watch::channel(false);
+        drop(sender);
+        let watch = receiver
+            .changed()
+            .await
+            .expect_err("closed watch must fail");
+        assert!(
+            HiveError::from(watch)
+                .at_operation("watch".into())
+                .to_string()
+                .starts_with("watch:")
+        );
+        let joined = tokio::spawn(async { panic!("expected test panic") })
+            .await
+            .expect_err("panicking task must return JoinError");
+        assert!(
+            HiveError::from(joined)
+                .at_operation("join".into())
+                .to_string()
+                .starts_with("join:")
+        );
+
+        let missing: Option<()> = None;
+        assert_eq!(
+            missing
+                .hive_context("required state")
+                .expect_err("none must fail")
+                .to_string(),
+            "required state"
+        );
+    }
+}

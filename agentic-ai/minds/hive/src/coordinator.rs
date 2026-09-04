@@ -448,10 +448,13 @@ async fn remove_socket_if_present(path: &Path) -> crate::HiveResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::Request;
+    use super::{CoordinatorTaskStore, Request, run_coordinator};
     use crate::model::{
-        ActivityKind, ActivityLease, AgentId, AttemptId, LeaseToken, TaskActivity, TaskId,
+        ActivityKind, ActivityLease, AgentId, AttemptId, CompletionArtifact, LeaseToken,
+        TaskActivity, TaskId,
     };
+    use crate::store::TaskStore;
+    use crate::store::tests::{MemoryStore, task};
 
     #[test]
     fn worker_protocol_has_no_enqueue_or_raw_query_operation() -> crate::HiveResult<()> {
@@ -480,6 +483,87 @@ mod tests {
         assert!(!serialized.contains("prompt"));
         assert!(!serialized.contains("dependency"));
         assert!(!serialized.contains("source_commit"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn private_coordinator_round_trips_every_worker_operation() -> crate::HiveResult<()> {
+        let root = tempfile::tempdir()?;
+        let socket = root.path().join("coordinator.sock");
+        let backing = MemoryStore::default();
+        backing.enqueue(&task("complete-me", Vec::new())?).await?;
+        let server_store = backing.clone();
+        let server_socket = socket.clone();
+        let server =
+            tokio::spawn(async move { run_coordinator(server_socket, server_store).await });
+        let client = CoordinatorTaskStore::connect(&socket).await?;
+        let agent = AgentId::new("worker-1")?;
+
+        client.migrate().await?;
+        client.register_agent(&agent, "worker-pod").await?;
+        let claimed = client.claim(&agent, 300).await?.into_claimed()?;
+        assert_eq!(claimed.id.as_str(), "complete-me");
+        assert!(
+            client
+                .heartbeat(&claimed.id, &agent, &claimed.lease_token, 300)
+                .await?
+        );
+        assert!(
+            client
+                .record_activity(
+                    &ActivityLease::from(&claimed),
+                    &agent,
+                    &TaskActivity {
+                        kind: ActivityKind::Action,
+                        message: "activity.command_running".into(),
+                        detail: "focused verification".into(),
+                    },
+                )
+                .await?
+        );
+        assert!(!client.acknowledge_cancellation(&claimed, &agent).await?);
+        assert!(client.release(&claimed, &agent).await?);
+        let resumed = client.claim(&agent, 300).await?.into_claimed()?;
+        assert!(
+            client
+                .complete(
+                    &resumed,
+                    &agent,
+                    false,
+                    "completed through coordinator",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+
+        backing.enqueue(&task("fail-me", Vec::new())?).await?;
+        let failed = client.claim(&agent, 300).await?.into_claimed()?;
+        assert!(client.fail(&failed, &agent, "expected failure").await?);
+
+        backing.enqueue(&task("block-me", Vec::new())?).await?;
+        let blocked = client.claim(&agent, 300).await?.into_claimed()?;
+        let mut blocker = task("prerequisite", Vec::new())?;
+        blocker.kind = "blocker".into();
+        assert!(
+            client
+                .block(&blocked, &agent, &blocker, "requires prerequisite")
+                .await?
+        );
+
+        for denied in [
+            client.enqueue(&task("denied", Vec::new())?).await,
+            client
+                .active_delivery("head", "main-repair")
+                .await
+                .map(drop),
+            client.cancel(&blocked.id, "denied").await.map(drop),
+            client.cancellation_targets(&blocked.id).await.map(drop),
+            client.finalize_cancellation(&blocked.id).await.map(drop),
+        ] {
+            assert!(denied.is_err());
+        }
+        drop(client);
+        server.await??;
         Ok(())
     }
 }

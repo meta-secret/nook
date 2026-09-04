@@ -64,3 +64,41 @@ pub(super) async fn run_git_status(
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{git_output, run_git_status};
+
+    #[tokio::test]
+    async fn git_helpers_preserve_output_and_reject_failed_commands() -> crate::HiveResult<()> {
+        let repository = tempfile::tempdir()?;
+        run_git_status(
+            repository.path(),
+            &["init", "--quiet"],
+            "initialize fixture",
+        )
+        .await?;
+        let inside = git_output(repository.path(), &["rev-parse", "--is-inside-work-tree"]).await?;
+        assert_eq!(inside, "true");
+
+        let failure = git_output(repository.path(), &["rev-parse", "--verify", "missing-ref"])
+            .await
+            .expect_err("missing revision must fail");
+        assert!(failure.to_string().contains("git"));
+        assert!(failure.to_string().contains("failed with status"));
+
+        let failure = run_git_status(
+            repository.path(),
+            &["checkout", "--detach", "missing-ref"],
+            "detach missing revision",
+        )
+        .await
+        .expect_err("status helper must reject a failed command");
+        assert!(
+            failure
+                .to_string()
+                .contains("detach missing revision failed")
+        );
+        Ok(())
+    }
+}

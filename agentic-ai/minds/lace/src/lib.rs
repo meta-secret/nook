@@ -66,3 +66,104 @@ impl Agent {
 pub struct Prompt {
     pub text: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use std::cell::{Cell, RefCell};
+
+    use super::{Prompt, RetriableTask, Task, TaskError, TaskResult};
+    use crate::graph::{
+        architecture::ArchitectureTask, backend::BackendTask, unit_test::UnitTestTask,
+    };
+
+    struct ScriptedTask {
+        attempts: Cell<usize>,
+        prompts: RefCell<Vec<String>>,
+        failures: usize,
+        max_attempts: usize,
+    }
+
+    impl Task for ScriptedTask {
+        type Output = usize;
+
+        fn execute(&self, prompt: &Prompt) -> TaskResult<Self::Output> {
+            self.prompts.borrow_mut().push(prompt.text.clone());
+            let attempt = self.attempts.get() + 1;
+            self.attempts.set(attempt);
+            if attempt <= self.failures {
+                return Err(TaskError {
+                    message: format!("attempt {attempt} failed"),
+                    log: format!("diagnostic {attempt}"),
+                });
+            }
+            Ok(attempt)
+        }
+    }
+
+    impl RetriableTask for ScriptedTask {
+        fn max_retries(&self) -> usize {
+            self.max_attempts
+        }
+    }
+
+    #[test]
+    fn retries_propagate_latest_feedback_and_stop_after_success() {
+        let task = ScriptedTask {
+            attempts: Cell::new(0),
+            prompts: RefCell::new(Vec::new()),
+            failures: 1,
+            max_attempts: 3,
+        };
+
+        assert_eq!(
+            task.execute_with_retries(&Prompt {
+                text: "build it".into(),
+            })
+            .expect("second attempt should succeed"),
+            2
+        );
+        assert_eq!(task.attempts.get(), 2);
+        assert_eq!(
+            task.prompts.borrow().as_slice(),
+            [
+                "build it",
+                "build it\n\n[Retry Feedback Attempt 1]:\ndiagnostic 1"
+            ]
+        );
+    }
+
+    #[test]
+    fn retries_return_the_last_diagnostic_after_exhaustion() {
+        let task = ScriptedTask {
+            attempts: Cell::new(0),
+            prompts: RefCell::new(Vec::new()),
+            failures: 3,
+            max_attempts: 2,
+        };
+
+        let error = task
+            .execute_with_retries(&Prompt {
+                text: "test".into(),
+            })
+            .expect_err("both attempts should fail");
+        assert_eq!(error.message, "Task failed after 2 attempts");
+        assert_eq!(error.log, "diagnostic 2");
+        assert_eq!(task.attempts.get(), 2);
+    }
+
+    #[test]
+    fn generated_graph_executes_dependencies_and_declared_retry_policy() {
+        let prompt = Prompt {
+            text: "deliver the graph".into(),
+        };
+
+        assert!(ArchitectureTask.execute(&prompt).is_ok());
+        assert!(BackendTask::default().execute(&prompt).is_ok());
+        let output = UnitTestTask::default()
+            .execute_with_retries(&prompt)
+            .expect("generated task graph should execute");
+        assert!(!output.passed);
+        assert!(output.test_logs.is_empty());
+        assert_eq!(UnitTestTask::default().max_retries(), 3);
+    }
+}

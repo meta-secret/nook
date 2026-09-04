@@ -725,4 +725,84 @@ mod tests {
         assert!(!output.contains("credential-value"));
         Ok(())
     }
+
+    #[test]
+    fn progress_helpers_bound_untrusted_text_and_classify_validation() {
+        assert_eq!(compact_task_id("short-task"), "short-task");
+        let compact = compact_task_id("a-very-long-task-identifier-that-must-be-bounded");
+        assert_eq!(compact.chars().count(), 30);
+        assert!(compact.ends_with('…'));
+        assert_eq!(
+            compact_text("  several   spaced words  ", 40),
+            "several spaced words"
+        );
+        assert_eq!(compact_text("sensitive detail", 1), "…");
+        assert!(is_verification_command(&["cargo".into(), "clippy".into()]));
+        assert!(is_verification_command(&[
+            "bun".into(),
+            "run".into(),
+            "test".into()
+        ]));
+        assert!(!is_verification_command(&["git".into(), "status".into()]));
+        assert!(matches!(agent_color("worker-a"), "36" | "35" | "34" | "33"));
+
+        let files = inspection_file_hints("sed -n 1,20p src/lib.rs README.md config.toml");
+        assert_eq!(
+            files.as_deref(),
+            Some("src/lib.rs · README.md · config.toml")
+        );
+        assert!(inspection_file_hints("git status").is_none());
+    }
+
+    #[test]
+    fn progress_rendering_closes_reasoning_and_supports_plain_and_decorated_output()
+    -> crate::HiveResult<()> {
+        let mut progress = ProgressReporter::new(Vec::new(), false);
+        progress.reasoning_delta("unfinished")?;
+        progress.phase("✓", "Complete", Some("all checks passed"))?;
+        progress.note("first\n\n second ")?;
+        progress.alert("!", "Warning", "bounded detail", "33")?;
+        let output = String::from_utf8(progress.writer)?;
+        assert!(output.contains("unfinished\n  ✓  Complete"));
+        assert!(output.contains("↳ first\n  ↳ second"));
+        assert!(output.contains("!  Warning"));
+
+        let decorated = TaskProgressReporter::new(Vec::new(), true, "worker".into());
+        assert_eq!(
+            decorated.paint("31", "failure"),
+            "\u{1b}[31mfailure\u{1b}[0m"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn local_execution_records_only_sanitized_validation_metadata() -> crate::HiveResult<()> {
+        let root = tempfile::tempdir()?;
+        let log = root.path().join("events.jsonl");
+        record_local_execution(
+            &log,
+            &["/bin/sh".into(), "-c".into(), "cargo test -p hive".into()],
+            1,
+            std::time::Duration::from_secs(3),
+        )
+        .await?;
+        let line = tokio::fs::read_to_string(&log).await?;
+        let record: serde_json::Value = serde_json::from_str(line.trim())?;
+        assert_eq!(record["command"], "cargo test");
+        assert_eq!(record["category"], "test");
+        assert_eq!(record["duration_seconds"], 3);
+        assert_eq!(record["outcome"], "failed");
+        assert_eq!(record["reason"], "embedded_codex_validation");
+
+        let absent = root.path().join("absent.jsonl");
+        record_local_execution(
+            &absent,
+            &["git".into(), "status".into()],
+            0,
+            std::time::Duration::ZERO,
+        )
+        .await?;
+        assert!(!absent.exists());
+        Ok(())
+    }
 }
