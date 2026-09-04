@@ -204,7 +204,10 @@ export function localOwnedLoginObservationRoot({
   let container = passwordField.parentElement;
   while (container && container !== owner) {
     if (container.contains(usernameField)) {
-      if (containerIsDocumentShell(container) || !owner.contains(container))
+      if (
+        containerIsOwnedLoginDocumentShell(container) ||
+        !owner.contains(container)
+      )
         return owner.ownerDocument;
       if (
         ownedFormHasManualCheckpoint(owner) &&
@@ -730,11 +733,15 @@ function labeledTypeButtonActivationControls(container: Element): Element[] {
   );
 }
 
-function containerIsDocumentShell(container: Element): boolean {
+function containerIsOwnedLoginDocumentShell(container: Element): boolean {
   return (
     container === container.ownerDocument.documentElement ||
     container === container.ownerDocument.body
   );
+}
+
+function containerIsDocumentShell(container: Element): boolean {
+  return container === container.ownerDocument.documentElement;
 }
 
 function unownedCredentialFields(root: ParentNode): HTMLInputElement[] {

@@ -20,9 +20,7 @@ afterEach(() => {
 
 describe('popular-site login shells', () => {
   test('isolates and fills a local login inside a polluted page-wide form', () => {
-    document.body.innerHTML = `<form id="aspnetForm" method="post">
-      <header><input name="header-user" autocomplete="username" hidden /><input name="header-password" type="password" autocomplete="current-password" hidden /><input name="search" type="search" value="account help" /><button type="submit">Search</button></header>
-      <main class="login-panel"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /><button id="login-submit" type="submit">Sign in</button></main>
+    document.body.innerHTML = `<form id="aspnetForm" method="post"><header><input name="header-user" autocomplete="username" hidden /><input name="header-password" type="password" autocomplete="current-password" hidden /><input name="search" type="search" value="account help" /><button type="submit">Search</button></header><main class="login-panel"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /><button id="login-submit" type="submit">Sign in</button></main>
       <footer><input name="newsletter-email" type="email" value="reader@example.test" /><button type="submit">Subscribe</button></footer></form>`
 
     const observations = summarizeAuthenticationWorkflowForms()
