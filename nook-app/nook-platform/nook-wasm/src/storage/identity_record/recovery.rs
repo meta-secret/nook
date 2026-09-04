@@ -440,8 +440,10 @@ mod tests {
     async fn destructive_recovery_forgets_stale_identity_ownership() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         let inaccessible_key = AppKey::generate().map_err(map_domain_error)?;
-        let wrapped =
-            nook_core::wrap_device_identity_with_pin(&inaccessible_key.secret_string(), "pin")?;
+        let wrapped = nook_core::wrap_device_identity_with_pin(
+            &inaccessible_key.secret_string(),
+            "test-pin",
+        )?;
         identity_record::save_protected_local_identity(&inaccessible_key, &wrapped, "Personal")
             .await?;
         let pending = begin_or_resume_simple_genesis(&inaccessible_key, "Personal").await?;
