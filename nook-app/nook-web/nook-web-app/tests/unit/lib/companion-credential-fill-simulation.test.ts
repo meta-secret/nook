@@ -1,21 +1,19 @@
 import { describe, expect, test } from 'vitest'
 
-import {
-  CredentialFillEditability,
-  CredentialFillFieldIndex,
-  CredentialFillFieldRole,
-  CredentialFillRejection,
-} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { CredentialFillRejection } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   CredentialFillJourneyOutcomeKind,
-  SimulatedCredentialField,
+  SimulatedCredentialFieldEditability,
+  SimulatedCredentialFieldIdentity,
   SimulatedCredentialFieldKind,
+  SimulatedCredentialFieldRole,
+  SimulatedLoginJourneyValidationError,
+  SimulatedLoginJourneyValidationFailure,
   simulateLoginJourney,
   type CredentialFillJourneyOutcome,
   type CredentialFillJourneyRequest,
   type FakeLoginCredentials,
-  type SimulatedCredentialFieldDefinition,
-  type SimulatedCredentialForm,
+  type SimulatedCredentialFieldDefinitions,
   type SimulatedCredentialFormSnapshot,
 } from './companion-credential-fill-simulation'
 
@@ -23,6 +21,15 @@ const FAKE_CREDENTIALS: FakeLoginCredentials = {
   username: 'zero-vault-user@example.test',
   password: 'fake-login-password',
 }
+
+const USERNAME = new SimulatedCredentialFieldIdentity('username')
+const PASSWORD = new SimulatedCredentialFieldIdentity('password')
+const SECOND_PASSWORD = new SimulatedCredentialFieldIdentity('second-password')
+const SECOND_USERNAME = new SimulatedCredentialFieldIdentity('second-username')
+const UNRELATED = new SimulatedCredentialFieldIdentity('unrelated')
+const UNSAFE = new SimulatedCredentialFieldIdentity('unsafe')
+const ONE_TIME_CODE = new SimulatedCredentialFieldIdentity('one-time-code')
+const UNOBSERVED = new SimulatedCredentialFieldIdentity('unobserved')
 
 const USERNAME_FILLED_SNAPSHOT: SimulatedCredentialFormSnapshot = [
   { name: 'username', value: FAKE_CREDENTIALS.username },
@@ -33,255 +40,37 @@ const LOGIN_FILLED_SNAPSHOT: SimulatedCredentialFormSnapshot = [
   { name: 'password', value: FAKE_CREDENTIALS.password },
 ]
 
-function createCombinedUsernamePasswordJourney(): CredentialFillJourneyRequest {
-  const usernameDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'username',
-    field_index: new CredentialFillFieldIndex(3),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: '',
-  }
-  const passwordDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'password',
-    field_index: new CredentialFillFieldIndex(19),
-    role: CredentialFillFieldRole.generic_password(),
-    editability: CredentialFillEditability.writable(),
-    value: '',
-  }
-  const username = new SimulatedCredentialField(usernameDefinition)
-  const password = new SimulatedCredentialField(passwordDefinition)
-  const form: SimulatedCredentialForm = [username, password]
-  return {
-    form,
-    steps: [{ observedFields: form }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createSequentialUsernamePasswordJourney(): CredentialFillJourneyRequest {
-  const usernameDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'username',
-    field_index: new CredentialFillFieldIndex(5),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: '',
-  }
-  const passwordDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'password',
-    field_index: new CredentialFillFieldIndex(12),
-    role: CredentialFillFieldRole.current_password(),
-    editability: CredentialFillEditability.writable(),
-    value: '',
-  }
-  const username = new SimulatedCredentialField(usernameDefinition)
-  const password = new SimulatedCredentialField(passwordDefinition)
-  const form: SimulatedCredentialForm = [username, password]
-  return {
-    form,
-    steps: [{ observedFields: [username] }, { observedFields: [password] }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createReadonlyPasswordJourney(): CredentialFillJourneyRequest {
-  const passwordDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'password',
-    field_index: new CredentialFillFieldIndex(8),
-    role: CredentialFillFieldRole.current_password(),
-    editability: CredentialFillEditability.readonly(),
-    value: 'readonly-value',
-  }
-  const password = new SimulatedCredentialField(passwordDefinition)
-  const form: SimulatedCredentialForm = [password]
-  return {
-    form,
-    steps: [{ observedFields: form }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createJourneyWithUnrelatedField(): CredentialFillJourneyRequest {
-  const usernameDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'username',
-    field_index: new CredentialFillFieldIndex(2),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: '',
-  }
-  const unrelatedDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'unrelated-password',
-    field_index: new CredentialFillFieldIndex(41),
-    role: CredentialFillFieldRole.current_password(),
-    editability: CredentialFillEditability.writable(),
-    value: 'leave-this-value-untouched',
-  }
-  const username = new SimulatedCredentialField(usernameDefinition)
-  const unrelated = new SimulatedCredentialField(unrelatedDefinition)
-  const form: SimulatedCredentialForm = [username, unrelated]
-  return {
-    form,
-    steps: [{ observedFields: [username] }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createDuplicateFieldIndexJourney(): CredentialFillJourneyRequest {
-  const usernameDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'username',
-    field_index: new CredentialFillFieldIndex(7),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: 'original-username',
-  }
-  const passwordDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'password',
-    field_index: new CredentialFillFieldIndex(7),
-    role: CredentialFillFieldRole.current_password(),
-    editability: CredentialFillEditability.writable(),
-    value: 'original-password',
-  }
-  const username = new SimulatedCredentialField(usernameDefinition)
-  const password = new SimulatedCredentialField(passwordDefinition)
-  const form: SimulatedCredentialForm = [username, password]
-  return {
-    form,
-    steps: [{ observedFields: form }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createNewPasswordJourney(): CredentialFillJourneyRequest {
-  const newPasswordDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.NewPassword,
-    name: 'new-password',
-    field_index: new CredentialFillFieldIndex(13),
-    value: 'new-password-value',
-  }
-  const usernameDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'later-username',
-    field_index: new CredentialFillFieldIndex(21),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: 'original-later-username',
-  }
-  const newPassword = new SimulatedCredentialField(newPasswordDefinition)
-  const username = new SimulatedCredentialField(usernameDefinition)
-  const form: SimulatedCredentialForm = [newPassword, username]
-  return {
-    form,
-    steps: [{ observedFields: [newPassword] }, { observedFields: [username] }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createOneTimeCodeJourney(): CredentialFillJourneyRequest {
-  const definition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.OneTimeCode,
-    name: 'one-time-code',
-    field_index: new CredentialFillFieldIndex(14),
-    value: '123456',
-  }
-  const field = new SimulatedCredentialField(definition)
-  const form: SimulatedCredentialForm = [field]
-  return {
-    form,
-    steps: [{ observedFields: form }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createNoCredentialFieldJourney(): CredentialFillJourneyRequest {
-  const definition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'unobserved-username',
-    field_index: new CredentialFillFieldIndex(15),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: 'preserved-username',
-  }
-  const field = new SimulatedCredentialField(definition)
-  const form: SimulatedCredentialForm = [field]
-  return {
-    form,
-    steps: [{ observedFields: [] }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createAmbiguousPasswordJourney(): CredentialFillJourneyRequest {
-  const currentDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'current-password',
-    field_index: new CredentialFillFieldIndex(16),
-    role: CredentialFillFieldRole.current_password(),
-    editability: CredentialFillEditability.writable(),
-    value: 'current-value',
-  }
-  const genericDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'generic-password',
-    field_index: new CredentialFillFieldIndex(17),
-    role: CredentialFillFieldRole.generic_password(),
-    editability: CredentialFillEditability.writable(),
-    value: 'generic-value',
-  }
-  const current = new SimulatedCredentialField(currentDefinition)
-  const generic = new SimulatedCredentialField(genericDefinition)
-  const form: SimulatedCredentialForm = [current, generic]
-  return {
-    form,
-    steps: [{ observedFields: form }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
-function createAmbiguousUsernameJourney(): CredentialFillJourneyRequest {
-  const firstDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'first-username',
-    field_index: new CredentialFillFieldIndex(18),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: 'first-value',
-  }
-  const secondDefinition: SimulatedCredentialFieldDefinition = {
-    kind: SimulatedCredentialFieldKind.Credential,
-    name: 'second-username',
-    field_index: new CredentialFillFieldIndex(20),
-    role: CredentialFillFieldRole.username(),
-    editability: CredentialFillEditability.writable(),
-    value: 'second-value',
-  }
-  const first = new SimulatedCredentialField(firstDefinition)
-  const second = new SimulatedCredentialField(secondDefinition)
-  const form: SimulatedCredentialForm = [first, second]
-  return {
-    form,
-    steps: [{ observedFields: form }],
-    credentials: FAKE_CREDENTIALS,
-  }
-}
-
 type LoginJourneyScenario = {
   readonly name: string
-  readonly createJourney: () => CredentialFillJourneyRequest
+  readonly journey: CredentialFillJourneyRequest
   readonly expected: CredentialFillJourneyOutcome[]
 }
 
 const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   {
     name: 'fills a combined username and generic-password form',
-    createJourney: createCombinedUsernamePasswordJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: USERNAME,
+          name: 'username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: '',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: PASSWORD,
+          name: 'password',
+          role: SimulatedCredentialFieldRole.GenericPassword,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: '',
+        },
+      ],
+      steps: [{ observed_field_identities: [USERNAME, PASSWORD] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Filled,
@@ -291,7 +80,31 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'fills username then password across sequential steps',
-    createJourney: createSequentialUsernamePasswordJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: USERNAME,
+          name: 'username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: '',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: PASSWORD,
+          name: 'password',
+          role: SimulatedCredentialFieldRole.CurrentPassword,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: '',
+        },
+      ],
+      steps: [
+        { observed_field_identities: [USERNAME] },
+        { observed_field_identities: [PASSWORD] },
+      ],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Filled,
@@ -305,7 +118,20 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'rejects readonly password planning without mutation',
-    createJourney: createReadonlyPasswordJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: PASSWORD,
+          name: 'password',
+          role: SimulatedCredentialFieldRole.CurrentPassword,
+          editability: SimulatedCredentialFieldEditability.Readonly,
+          value: 'readonly-value',
+        },
+      ],
+      steps: [{ observed_field_identities: [PASSWORD] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
@@ -316,7 +142,28 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'leaves fields outside the observed step untouched',
-    createJourney: createJourneyWithUnrelatedField,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: USERNAME,
+          name: 'username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: '',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: UNRELATED,
+          name: 'unrelated-password',
+          role: SimulatedCredentialFieldRole.CurrentPassword,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'leave-this-value-untouched',
+        },
+      ],
+      steps: [{ observed_field_identities: [USERNAME] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Filled,
@@ -332,7 +179,28 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'rejects duplicate field indices without mutation',
-    createJourney: createDuplicateFieldIndexJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: USERNAME,
+          name: 'username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'original-username',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: PASSWORD,
+          name: 'password',
+          role: SimulatedCredentialFieldRole.CurrentPassword,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'original-password',
+        },
+      ],
+      steps: [{ observed_field_identities: [USERNAME, USERNAME, PASSWORD] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
@@ -346,7 +214,29 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'stops before a later username step after new-password rejection',
-    createJourney: createNewPasswordJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.NewPassword,
+          field_identity: UNSAFE,
+          name: 'new-password',
+          value: 'new-password-value',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: USERNAME,
+          name: 'later-username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'original-later-username',
+        },
+      ],
+      steps: [
+        { observed_field_identities: [UNSAFE] },
+        { observed_field_identities: [USERNAME] },
+      ],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
@@ -360,7 +250,18 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'rejects one-time-code observations without mutation',
-    createJourney: createOneTimeCodeJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.OneTimeCode,
+          field_identity: ONE_TIME_CODE,
+          name: 'one-time-code',
+          value: '123456',
+        },
+      ],
+      steps: [{ observed_field_identities: [ONE_TIME_CODE] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
@@ -371,7 +272,20 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'rejects an empty observed step without mutating the form',
-    createJourney: createNoCredentialFieldJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: UNOBSERVED,
+          name: 'unobserved-username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'preserved-username',
+        },
+      ],
+      steps: [{ observed_field_identities: [] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
@@ -384,7 +298,28 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'rejects ambiguous password fields without mutation',
-    createJourney: createAmbiguousPasswordJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: PASSWORD,
+          name: 'current-password',
+          role: SimulatedCredentialFieldRole.CurrentPassword,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'current-value',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: SECOND_PASSWORD,
+          name: 'generic-password',
+          role: SimulatedCredentialFieldRole.GenericPassword,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'generic-value',
+        },
+      ],
+      steps: [{ observed_field_identities: [PASSWORD, SECOND_PASSWORD] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
@@ -398,7 +333,28 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
   {
     name: 'rejects ambiguous username fields without mutation',
-    createJourney: createAmbiguousUsernameJourney,
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: USERNAME,
+          name: 'first-username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'first-value',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: SECOND_USERNAME,
+          name: 'second-username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'second-value',
+        },
+      ],
+      steps: [{ observed_field_identities: [USERNAME, SECOND_USERNAME] }],
+    },
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
@@ -412,11 +368,107 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   },
 ]
 
+type InvalidLoginJourneyScenario = {
+  readonly name: string
+  readonly journey: CredentialFillJourneyRequest
+  readonly expectedFailure: SimulatedLoginJourneyValidationFailure
+  readonly expectedSnapshot: SimulatedCredentialFormSnapshot
+}
+
+const DUPLICATE = new SimulatedCredentialFieldIdentity('duplicate')
+const UNKNOWN = new SimulatedCredentialFieldIdentity('unknown')
+
+const INVALID_LOGIN_JOURNEYS: InvalidLoginJourneyScenario[] = [
+  {
+    name: 'rejects duplicate owned field identities before materialization',
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: DUPLICATE,
+          name: 'first-duplicate',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'first-original',
+        },
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: new SimulatedCredentialFieldIdentity('duplicate'),
+          name: 'second-duplicate',
+          role: SimulatedCredentialFieldRole.CurrentPassword,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'second-original',
+        },
+      ],
+      steps: [{ observed_field_identities: [DUPLICATE] }],
+    },
+    expectedFailure:
+      SimulatedLoginJourneyValidationFailure.DuplicateFieldIdentity,
+    expectedSnapshot: [
+      { name: 'first-duplicate', value: 'first-original' },
+      { name: 'second-duplicate', value: 'second-original' },
+    ],
+  },
+  {
+    name: 'rejects unknown step field identities before materialization',
+    journey: {
+      credentials: FAKE_CREDENTIALS,
+      fields: [
+        {
+          kind: SimulatedCredentialFieldKind.Credential,
+          field_identity: USERNAME,
+          name: 'known-username',
+          role: SimulatedCredentialFieldRole.Username,
+          editability: SimulatedCredentialFieldEditability.Writable,
+          value: 'known-original',
+        },
+      ],
+      steps: [{ observed_field_identities: [UNKNOWN] }],
+    },
+    expectedFailure:
+      SimulatedLoginJourneyValidationFailure.UnknownStepFieldReference,
+    expectedSnapshot: [{ name: 'known-username', value: 'known-original' }],
+  },
+]
+
+function snapshotDefinitions(
+  fields: SimulatedCredentialFieldDefinitions,
+): SimulatedCredentialFormSnapshot {
+  return fields.map((field) => ({ name: field.name, value: field.value }))
+}
+
+function captureValidationFailure(
+  journey: CredentialFillJourneyRequest,
+): SimulatedLoginJourneyValidationFailure {
+  try {
+    simulateLoginJourney(journey)
+    throw new Error('expected simulated journey validation to fail')
+  } catch (error) {
+    if (!(error instanceof SimulatedLoginJourneyValidationError)) throw error
+    return error.failure
+  }
+}
+
 describe('deterministic zero-vault login journeys', () => {
   test.each(LOGIN_JOURNEY_SCENARIOS)('$name', (scenario) => {
-    const journey = scenario.createJourney()
-    const result = simulateLoginJourney(journey)
+    const journey = scenario.journey
+    const firstResult = simulateLoginJourney(journey)
+    const secondResult = simulateLoginJourney(journey)
     const expected = scenario.expected
-    expect(result).toEqual(expected)
+    expect(firstResult).toEqual(expected)
+    expect(secondResult).toEqual(expected)
+  })
+
+  test.each(INVALID_LOGIN_JOURNEYS)('$name', (scenario) => {
+    const journey = scenario.journey
+    const fields = journey.fields
+    const before = snapshotDefinitions(fields)
+    const failure = captureValidationFailure(journey)
+    const after = snapshotDefinitions(fields)
+    const expectedSnapshot = scenario.expectedSnapshot
+    expect(failure).toBe(scenario.expectedFailure)
+    expect(before).toEqual(expectedSnapshot)
+    expect(after).toEqual(before)
   })
 })

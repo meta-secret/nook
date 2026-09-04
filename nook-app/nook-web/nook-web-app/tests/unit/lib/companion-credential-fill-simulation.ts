@@ -17,15 +17,34 @@ export type FakeLoginCredentials = {
   readonly password: string
 }
 
+export class SimulatedCredentialFieldIdentity {
+  readonly value: string
+
+  constructor(value: string) {
+    this.value = value
+  }
+}
+
 export enum SimulatedCredentialFieldKind {
-  Credential = 'credential',
-  NewPassword = 'newPassword',
-  OneTimeCode = 'oneTimeCode',
+  Credential = 'Credential',
+  NewPassword = 'NewPassword',
+  OneTimeCode = 'OneTimeCode',
+}
+
+export enum SimulatedCredentialFieldRole {
+  Username = 'Username',
+  CurrentPassword = 'CurrentPassword',
+  GenericPassword = 'GenericPassword',
+}
+
+export enum SimulatedCredentialFieldEditability {
+  Writable = 'Writable',
+  Readonly = 'Readonly',
 }
 
 type SimulatedCredentialFieldBase = {
+  readonly field_identity: SimulatedCredentialFieldIdentity
   readonly name: string
-  readonly field_index: CredentialFillFieldIndex
   readonly value: string
 }
 
@@ -33,81 +52,20 @@ export type SimulatedCredentialFieldDefinition = SimulatedCredentialFieldBase &
   (
     | {
         readonly kind: SimulatedCredentialFieldKind.Credential
-        readonly role: CredentialFillFieldRole
-        readonly editability: CredentialFillEditability
+        readonly role: SimulatedCredentialFieldRole
+        readonly editability: SimulatedCredentialFieldEditability
       }
     | { readonly kind: SimulatedCredentialFieldKind.NewPassword }
     | { readonly kind: SimulatedCredentialFieldKind.OneTimeCode }
   )
 
-type SimulatedCredentialFieldOwnership =
-  | {
-      readonly kind: SimulatedCredentialFieldKind.Credential
-      readonly role: CredentialFillFieldRole
-      readonly editability: CredentialFillEditability
-    }
-  | { readonly kind: SimulatedCredentialFieldKind.NewPassword }
-  | { readonly kind: SimulatedCredentialFieldKind.OneTimeCode }
+export type SimulatedCredentialFieldDefinitions =
+  readonly SimulatedCredentialFieldDefinition[]
 
-export class SimulatedCredentialField {
-  readonly name: string
-  readonly field_index: CredentialFillFieldIndex
-  readonly observation: CredentialFillObservation
-  value: string
-
-  private readonly ownership: SimulatedCredentialFieldOwnership
-
-  constructor(definition: SimulatedCredentialFieldDefinition) {
-    this.name = definition.name
-    this.field_index = definition.field_index
-    this.value = definition.value
-    switch (definition.kind) {
-      case SimulatedCredentialFieldKind.Credential:
-        this.observation = CredentialFillObservation.credential(
-          definition.field_index,
-          definition.role,
-          definition.editability,
-        )
-        this.ownership = {
-          kind: SimulatedCredentialFieldKind.Credential,
-          role: definition.role,
-          editability: definition.editability,
-        }
-        break
-      case SimulatedCredentialFieldKind.NewPassword:
-        this.observation = CredentialFillObservation.new_password(
-          definition.field_index,
-        )
-        this.ownership = { kind: SimulatedCredentialFieldKind.NewPassword }
-        break
-      case SimulatedCredentialFieldKind.OneTimeCode:
-        this.observation = CredentialFillObservation.one_time_code(
-          definition.field_index,
-        )
-        this.ownership = { kind: SimulatedCredentialFieldKind.OneTimeCode }
-        break
-    }
-  }
-
-  free(): void {
-    this.observation.free()
-    switch (this.ownership.kind) {
-      case SimulatedCredentialFieldKind.Credential:
-        this.ownership.editability.free()
-        this.ownership.role.free()
-        break
-      case SimulatedCredentialFieldKind.NewPassword:
-      case SimulatedCredentialFieldKind.OneTimeCode:
-        break
-    }
-    this.field_index.free()
-  }
-}
-
-export type SimulatedCredentialForm = SimulatedCredentialField[]
 export type CredentialFillJourneyStep = {
-  readonly observedFields: SimulatedCredentialField[]
+  readonly observed_field_identities: readonly SimulatedCredentialFieldIdentity[]
 }
+
 export enum CredentialFillJourneyOutcomeKind {
   Filled = 'filled',
   Rejected = 'rejected',
@@ -129,10 +87,279 @@ export type CredentialFillJourneyOutcome =
       readonly snapshot: SimulatedCredentialFormSnapshot
     }
 
+export enum SimulatedLoginJourneyValidationFailure {
+  DuplicateFieldIdentity = 'duplicateFieldIdentity',
+  UnknownStepFieldReference = 'unknownStepFieldReference',
+}
+
+export class SimulatedLoginJourneyValidationError extends Error {
+  readonly failure: SimulatedLoginJourneyValidationFailure
+
+  constructor(failure: SimulatedLoginJourneyValidationFailure) {
+    super('invalid simulated login journey')
+    this.failure = failure
+  }
+}
+
 export type CredentialFillJourneyRequest = {
-  readonly form: SimulatedCredentialForm
-  readonly steps: CredentialFillJourneyStep[]
+  readonly fields: SimulatedCredentialFieldDefinitions
+  readonly steps: readonly CredentialFillJourneyStep[]
   readonly credentials: FakeLoginCredentials
+}
+
+type CredentialFieldOwnership = {
+  readonly kind: SimulatedCredentialFieldKind.Credential
+  readonly role: CredentialFillFieldRole
+  readonly editability: CredentialFillEditability
+}
+
+type SimulatedCredentialFieldOwnership =
+  | CredentialFieldOwnership
+  | { readonly kind: SimulatedCredentialFieldKind.NewPassword }
+  | { readonly kind: SimulatedCredentialFieldKind.OneTimeCode }
+
+type MaterializedCredentialFieldDefinition = {
+  readonly field_identity: SimulatedCredentialFieldIdentity
+  readonly name: string
+  readonly field_index: CredentialFillFieldIndex
+  readonly observation: CredentialFillObservation
+  readonly ownership: SimulatedCredentialFieldOwnership
+  readonly value: string
+}
+
+class SimulatedCredentialField {
+  readonly field_identity: SimulatedCredentialFieldIdentity
+  readonly name: string
+  readonly field_index: CredentialFillFieldIndex
+  readonly observation: CredentialFillObservation
+  value: string
+
+  private readonly ownership: SimulatedCredentialFieldOwnership
+
+  constructor(definition: MaterializedCredentialFieldDefinition) {
+    this.field_identity = definition.field_identity
+    this.name = definition.name
+    this.field_index = definition.field_index
+    this.observation = definition.observation
+    this.ownership = definition.ownership
+    this.value = definition.value
+  }
+
+  free(): void {
+    this.observation.free()
+    switch (this.ownership.kind) {
+      case SimulatedCredentialFieldKind.Credential:
+        this.ownership.editability.free()
+        this.ownership.role.free()
+        break
+      case SimulatedCredentialFieldKind.NewPassword:
+      case SimulatedCredentialFieldKind.OneTimeCode:
+        break
+    }
+    this.field_index.free()
+  }
+}
+
+type SimulatedCredentialForm = SimulatedCredentialField[]
+
+type MaterializeCredentialFieldRequest = {
+  readonly definition: SimulatedCredentialFieldDefinition
+  readonly field_index: CredentialFillFieldIndex
+}
+
+type MaterializeCredentialObservationRequest = {
+  readonly definition: Extract<
+    SimulatedCredentialFieldDefinition,
+    { readonly kind: SimulatedCredentialFieldKind.Credential }
+  >
+  readonly field_index: CredentialFillFieldIndex
+}
+
+type MaterializedCredentialObservation = {
+  readonly observation: CredentialFillObservation
+  readonly ownership: CredentialFieldOwnership
+}
+
+function materializeCredentialFieldRole(
+  role: SimulatedCredentialFieldRole,
+): CredentialFillFieldRole {
+  switch (role) {
+    case SimulatedCredentialFieldRole.Username:
+      return CredentialFillFieldRole.username()
+    case SimulatedCredentialFieldRole.CurrentPassword:
+      return CredentialFillFieldRole.current_password()
+    case SimulatedCredentialFieldRole.GenericPassword:
+      return CredentialFillFieldRole.generic_password()
+  }
+  throw new Error('unsupported simulated credential field role')
+}
+
+function materializeCredentialFieldEditability(
+  editability: SimulatedCredentialFieldEditability,
+): CredentialFillEditability {
+  switch (editability) {
+    case SimulatedCredentialFieldEditability.Writable:
+      return CredentialFillEditability.writable()
+    case SimulatedCredentialFieldEditability.Readonly:
+      return CredentialFillEditability.readonly()
+  }
+  throw new Error('unsupported simulated credential field editability')
+}
+
+function validateLoginJourney(request: CredentialFillJourneyRequest): void {
+  const acceptedIdentities: SimulatedCredentialFieldIdentity[] = []
+  for (const field of request.fields) {
+    if (
+      acceptedIdentities.some(
+        (identity) => identity.value === field.field_identity.value,
+      )
+    ) {
+      throw new SimulatedLoginJourneyValidationError(
+        SimulatedLoginJourneyValidationFailure.DuplicateFieldIdentity,
+      )
+    }
+    acceptedIdentities.push(field.field_identity)
+  }
+  for (const step of request.steps) {
+    for (const fieldIdentity of step.observed_field_identities) {
+      if (
+        !acceptedIdentities.some(
+          (identity) => identity.value === fieldIdentity.value,
+        )
+      ) {
+        throw new SimulatedLoginJourneyValidationError(
+          SimulatedLoginJourneyValidationFailure.UnknownStepFieldReference,
+        )
+      }
+    }
+  }
+}
+
+function materializeCredentialObservation({
+  definition,
+  field_index,
+}: MaterializeCredentialObservationRequest): MaterializedCredentialObservation {
+  const role = materializeCredentialFieldRole(definition.role)
+  try {
+    const editability = materializeCredentialFieldEditability(
+      definition.editability,
+    )
+    try {
+      const observation = CredentialFillObservation.credential(
+        field_index,
+        role,
+        editability,
+      )
+      return {
+        observation,
+        ownership: {
+          kind: SimulatedCredentialFieldKind.Credential,
+          role,
+          editability,
+        },
+      }
+    } catch (error) {
+      editability.free()
+      throw error
+    }
+  } catch (error) {
+    role.free()
+    throw error
+  }
+}
+
+function materializeCredentialField({
+  definition,
+  field_index,
+}: MaterializeCredentialFieldRequest): SimulatedCredentialField {
+  try {
+    switch (definition.kind) {
+      case SimulatedCredentialFieldKind.Credential: {
+        const request: MaterializeCredentialObservationRequest = {
+          definition,
+          field_index,
+        }
+        const materialized = materializeCredentialObservation(request)
+        const field: MaterializedCredentialFieldDefinition = {
+          field_identity: definition.field_identity,
+          name: definition.name,
+          field_index,
+          observation: materialized.observation,
+          ownership: materialized.ownership,
+          value: definition.value,
+        }
+        return new SimulatedCredentialField(field)
+      }
+      case SimulatedCredentialFieldKind.NewPassword: {
+        const observation = CredentialFillObservation.new_password(field_index)
+        const field: MaterializedCredentialFieldDefinition = {
+          field_identity: definition.field_identity,
+          name: definition.name,
+          field_index,
+          observation,
+          ownership: { kind: SimulatedCredentialFieldKind.NewPassword },
+          value: definition.value,
+        }
+        return new SimulatedCredentialField(field)
+      }
+      case SimulatedCredentialFieldKind.OneTimeCode: {
+        const observation = CredentialFillObservation.one_time_code(field_index)
+        const field: MaterializedCredentialFieldDefinition = {
+          field_identity: definition.field_identity,
+          name: definition.name,
+          field_index,
+          observation,
+          ownership: { kind: SimulatedCredentialFieldKind.OneTimeCode },
+          value: definition.value,
+        }
+        return new SimulatedCredentialField(field)
+      }
+    }
+    throw new Error('unsupported simulated credential field kind')
+  } catch (error) {
+    field_index.free()
+    throw error
+  }
+}
+
+function materializeCredentialForm(
+  definitions: SimulatedCredentialFieldDefinitions,
+): SimulatedCredentialForm {
+  const form: SimulatedCredentialForm = []
+  let fieldIndexValue = 3
+  try {
+    for (const definition of definitions) {
+      const field_index = new CredentialFillFieldIndex(fieldIndexValue)
+      const request: MaterializeCredentialFieldRequest = {
+        definition,
+        field_index,
+      }
+      const field = materializeCredentialField(request)
+      form.push(field)
+      fieldIndexValue += 8
+    }
+    return form
+  } catch (error) {
+    for (const field of form) field.free()
+    throw error
+  }
+}
+
+type ResolveSimulatedCredentialFieldRequest = {
+  readonly field_identity: SimulatedCredentialFieldIdentity
+  readonly form: SimulatedCredentialForm
+}
+
+function resolveSimulatedCredentialField({
+  field_identity,
+  form,
+}: ResolveSimulatedCredentialFieldRequest): SimulatedCredentialField {
+  for (const field of form) {
+    if (field.field_identity.value === field_identity.value) return field
+  }
+  throw new SimulatedLoginJourneyValidationError(
+    SimulatedLoginJourneyValidationFailure.UnknownStepFieldReference,
+  )
 }
 
 type CredentialFillPlanning =
@@ -145,24 +372,23 @@ type CredentialFillPlanning =
       readonly rejection: CredentialFillRejection
     }
 
-type ApplyCredentialPlanRequest = {
-  readonly plan: CredentialFillPlan
+type PlanCredentialFillStepRequest = {
+  readonly step: CredentialFillJourneyStep
   readonly form: SimulatedCredentialForm
-  readonly credentials: FakeLoginCredentials
 }
 
-type ApplyCredentialAssignmentRequest = {
-  readonly assignment: CredentialFillAssignment
-  readonly form: SimulatedCredentialForm
-  readonly credentialValues: Record<CredentialKind, string>
-}
-
-function planCredentialFillStep(
-  step: CredentialFillJourneyStep,
-): CredentialFillPlanning {
+function planCredentialFillStep({
+  step,
+  form,
+}: PlanCredentialFillStepRequest): CredentialFillPlanning {
   const observations = new CredentialFillObservations()
   try {
-    for (const field of step.observedFields) {
+    for (const field_identity of step.observed_field_identities) {
+      const request: ResolveSimulatedCredentialFieldRequest = {
+        field_identity,
+        form,
+      }
+      const field = resolveSimulatedCredentialField(request)
       observations.add(field.observation)
     }
     const result = plan_companion_credential_fill(observations)
@@ -173,13 +399,11 @@ function planCredentialFillStep(
             kind: CredentialFillPlanningOutcome.Planned,
             plan: result.plan(),
           }
-        case CredentialFillPlanningOutcome.Rejected: {
-          const rejection = result.rejection()
+        case CredentialFillPlanningOutcome.Rejected:
           return {
             kind: CredentialFillPlanningOutcome.Rejected,
-            rejection,
+            rejection: result.rejection(),
           }
-        }
       }
       throw new Error('credential fill result has an unsupported outcome')
     } finally {
@@ -190,17 +414,56 @@ function planCredentialFillStep(
   }
 }
 
-function applyCredentialAssignment({
+type ResolveCredentialValueRequest = {
+  readonly credential: CredentialKind
+  readonly credentials: FakeLoginCredentials
+}
+
+function resolveCredentialValue({
+  credential,
+  credentials,
+}: ResolveCredentialValueRequest): string {
+  switch (credential) {
+    case CredentialKind.Username:
+      return credentials.username
+    case CredentialKind.CurrentPassword:
+      return credentials.password
+  }
+  throw new Error(
+    'credential fill plan contains an unsupported credential kind',
+  )
+}
+
+type ResolvedCredentialAssignment = {
+  readonly field: SimulatedCredentialField
+  readonly value: string
+}
+
+type ResolveCredentialAssignmentRequest = {
+  readonly assignment: CredentialFillAssignment
+  readonly form: SimulatedCredentialForm
+  readonly credentials: FakeLoginCredentials
+  readonly resolved: readonly ResolvedCredentialAssignment[]
+}
+
+function resolveCredentialAssignment({
   assignment,
   form,
-  credentialValues,
-}: ApplyCredentialAssignmentRequest): void {
+  credentials,
+  resolved,
+}: ResolveCredentialAssignmentRequest): ResolvedCredentialAssignment {
   const assignedFieldIndex = assignment.field_index
   try {
     for (const field of form) {
       if (field.field_index.value === assignedFieldIndex.value) {
-        field.value = credentialValues[assignment.credential]
-        return
+        if (resolved.some((candidate) => candidate.field === field)) {
+          throw new Error('credential fill plan contains a duplicate target')
+        }
+        const valueRequest: ResolveCredentialValueRequest = {
+          credential: assignment.credential,
+          credentials,
+        }
+        return { field, value: resolveCredentialValue(valueRequest) }
       }
     }
     throw new Error('credential fill plan referenced an unknown fake field')
@@ -209,25 +472,31 @@ function applyCredentialAssignment({
   }
 }
 
+type ApplyCredentialPlanRequest = {
+  readonly plan: CredentialFillPlan
+  readonly form: SimulatedCredentialForm
+  readonly credentials: FakeLoginCredentials
+}
+
 function applyCredentialPlan({
   plan,
   form,
   credentials,
 }: ApplyCredentialPlanRequest): void {
-  const credentialValues = {
-    [CredentialKind.Username]: credentials.username,
-    [CredentialKind.CurrentPassword]: credentials.password,
-  } satisfies Record<CredentialKind, string>
   const assignments = plan.take_assignments()
+  const resolved: ResolvedCredentialAssignment[] = []
   try {
     for (const assignment of assignments) {
-      const assignmentRequest: ApplyCredentialAssignmentRequest = {
+      const request: ResolveCredentialAssignmentRequest = {
         assignment,
         form,
-        credentialValues,
+        credentials,
+        resolved,
       }
-      applyCredentialAssignment(assignmentRequest)
+      const resolvedAssignment = resolveCredentialAssignment(request)
+      resolved.push(resolvedAssignment)
     }
+    for (const assignment of resolved) assignment.field.value = assignment.value
   } finally {
     for (const assignment of assignments) assignment.free()
   }
@@ -239,22 +508,24 @@ function snapshotForm(
   return form.map((field) => ({ name: field.name, value: field.value }))
 }
 
-export function simulateLoginJourney({
-  form,
-  steps,
-  credentials,
-}: CredentialFillJourneyRequest): CredentialFillJourneyOutcome[] {
+export function simulateLoginJourney(
+  request: CredentialFillJourneyRequest,
+): CredentialFillJourneyOutcome[] {
+  validateLoginJourney(request)
+  const definitions = request.fields
+  const form = materializeCredentialForm(definitions)
   const outcomes: CredentialFillJourneyOutcome[] = []
   try {
-    for (const step of steps) {
-      const planning = planCredentialFillStep(step)
+    for (const step of request.steps) {
+      const planningRequest: PlanCredentialFillStepRequest = { step, form }
+      const planning = planCredentialFillStep(planningRequest)
       switch (planning.kind) {
         case CredentialFillPlanningOutcome.Planned: {
           try {
             const applyRequest: ApplyCredentialPlanRequest = {
               plan: planning.plan,
               form,
-              credentials,
+              credentials: request.credentials,
             }
             applyCredentialPlan(applyRequest)
             const outcome: CredentialFillJourneyOutcome = {
