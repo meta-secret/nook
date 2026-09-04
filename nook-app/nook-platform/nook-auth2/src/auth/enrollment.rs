@@ -1,5 +1,6 @@
 //! Enrollment-code payloads for one-step QR-based device joins.
 
+use crate::EnrollmentKeyDerivationIterations;
 use serde::{Deserialize, Serialize};
 use std::{fmt, marker::PhantomData};
 
@@ -292,7 +293,7 @@ pub struct EnrollmentCodeEnvelope {
     pub entry_label: EnrollmentEntryLabel,
     pub issued_at: String,
     pub kdf: String,
-    pub iterations: u32,
+    pub iterations: EnrollmentKeyDerivationIterations,
     pub salt: String,
     pub cipher: String,
     pub iv: String,

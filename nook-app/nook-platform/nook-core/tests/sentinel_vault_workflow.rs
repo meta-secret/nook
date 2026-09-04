@@ -20,8 +20,11 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
     let first = DeviceIdentity::generate()?;
     let second = DeviceIdentity::generate()?;
     let third = DeviceIdentity::generate()?;
-    let shares =
-        create_sentinel_share_records(&keys, &[first.clone(), second.clone(), third.clone()], 2)?;
+    let shares = create_sentinel_share_records(
+        &keys,
+        &[first.clone(), second.clone(), third.clone()],
+        2.into(),
+    )?;
 
     let architecture = VaultArchitecture::sentinel_personal(
         DeviceMode::Standard,

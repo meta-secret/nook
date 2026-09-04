@@ -257,9 +257,9 @@ fn apply_sentinel_shares(state: &mut VaultMetaState, shares: &[crate::SentinelSh
             share.device_id.clone(),
             SentinelShareEnvelope {
                 version: share.version,
-                threshold: share.threshold,
-                required_participants: share.required_participants,
-                share_index: share.share_index,
+                threshold: share.threshold.into(),
+                required_participants: share.required_participants.into(),
+                share_index: share.share_index.into(),
                 ciphertext: share.ciphertext.clone(),
             },
         );
@@ -536,7 +536,7 @@ mod tests {
                 envelope: crate::PasswordEnvelope {
                     version: 2,
                     kdf: "scrypt".to_owned(),
-                    work_factor: 10,
+                    work_factor: 10.into(),
                     recipient: "recipient".to_owned(),
                     wrapped_keys: "wrapped".to_owned(),
                     ciphertext: "ciphertext".to_owned(),

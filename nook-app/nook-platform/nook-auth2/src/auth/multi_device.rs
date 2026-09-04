@@ -498,7 +498,7 @@ mod tests {
         let sentinel_record = create_sentinel_share_records(
             &keys,
             &[genesis.clone(), sentinel_participant.clone()],
-            2,
+            2.into(),
         )?
         .pop()
         .ok_or_else(|| io::Error::other("sentinel share record must exist"))?;

@@ -481,7 +481,7 @@ mod tests {
         PasswordEnvelope {
             version: 1,
             kdf: "scrypt".to_owned(),
-            work_factor: 15,
+            work_factor: 15.into(),
             recipient: String::new(),
             wrapped_keys: String::new(),
             ciphertext: "age encrypted vault keys".to_owned(),

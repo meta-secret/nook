@@ -60,6 +60,11 @@ pub use auth::mock_passkey::{
     MockPasskeyError, MockPasskeyRegistration, MockPasskeyRegistrationRequest, MockPasskeyResult,
     MockPasskeyUserAuthorization, StoredMockPasskey,
 };
+pub use auth::{
+    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, MockPasskeyCredentialCount,
+    PasswordWorkFactor, SentinelParticipantCount, SentinelRecordCount, SentinelShareCount,
+    SentinelShareIndex, SentinelThreshold,
+};
 pub use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 pub mod multi_device_api {
     pub use crate::auth::multi_device::{
