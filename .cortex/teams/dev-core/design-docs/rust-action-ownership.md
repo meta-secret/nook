@@ -90,6 +90,8 @@ Ordinary answer DTOs remain ordinary data aggregates. The
 [newtype construction rules](typed-newtypes.md#aggregate-construction) still
 apply to those aggregates.
 
+### Existing generic precedent
+
 The existing
 [enrollment typestates](auth-providers.md#shared-provider-onboarding)
 illustrate sealed generic contracts. They are a precedent for that specific
@@ -140,6 +142,8 @@ Framework callbacks that must remain free functions require a per-function
 `framework boundary:` reason naming the exact required edge.
 Use a checked expectation when automatic boundary identification is unavailable.
 Move portable behavior into an owning type and delegate from that edge.
+
+### Boundary evidence
 
 Compiler fixtures must distinguish required boundaries from lookalike helpers.
 Suppression fixtures must reject missing reasons and blanket exceptions.
