@@ -8,7 +8,7 @@ use crate::{EventError, EventResult};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use nook_auth2::Sha256Hex;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 use std::fmt;
@@ -116,7 +116,7 @@ impl Serialize for EventId {
 impl<'de> Deserialize<'de> for EventId {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 
@@ -168,7 +168,7 @@ impl Serialize for Ed25519Signature {
 impl<'de> Deserialize<'de> for Ed25519Signature {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(serde::de::Error::custom)
+        Self::parse(&raw).map_err(D::Error::custom)
     }
 }
 

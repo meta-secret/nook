@@ -1,5 +1,7 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
+use std::str;
+
 use crate::canonical::{
     Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
     sign_body, verify_body_signature,
@@ -13,7 +15,7 @@ use nook_auth2::{
     IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SecretId, SecretType, Sha256Hex,
     StoreId, StoredRecordPayload, StoredSecretRecord,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, ser::Error as _};
 use serde_json::{Value, json};
 
 /// Supported `schema_version` values on the event wire.
@@ -109,7 +111,7 @@ where
 {
     match state {
         EpochMetadataState::Replace(records) => records.serialize(serializer),
-        EpochMetadataState::LegacyRetain => Err(serde::ser::Error::custom(
+        EpochMetadataState::LegacyRetain => Err(S::Error::custom(
             "legacy checkpoint metadata state must be omitted",
         )),
     }
@@ -137,7 +139,7 @@ where
 {
     match state {
         EpochPasswordState::Replace(entries) => entries.serialize(serializer),
-        EpochPasswordState::LegacyRetain => Err(serde::ser::Error::custom(
+        EpochPasswordState::LegacyRetain => Err(S::Error::custom(
             "legacy checkpoint password state must be omitted",
         )),
     }
@@ -390,7 +392,7 @@ pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<Vec<u8>> 
 
 /// Parse a stored event from YAML bytes.
 pub fn parse_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
-    let text = std::str::from_utf8(bytes).map_err(|e| {
+    let text = str::from_utf8(bytes).map_err(|e| {
         EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
     })?;
     serde_yaml::from_str(text)
@@ -450,15 +452,15 @@ pub fn build_genesis_import_event(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::test_support::{actor, public_key, signing_key as test_signing_key};
+    use crate::test_support::{actor, epoch, public_key, signing_key as test_signing_key, store};
     use anyhow::Context;
     use ed25519_dalek::SigningKey;
 
     fn empty_genesis_event(signing_key: &SigningKey) -> EventResult<VaultEvent> {
         build_genesis_import_event(
-            &crate::test_support::store()?,
+            &store()?,
             &actor(signing_key)?,
-            &crate::test_support::epoch()?,
+            &epoch()?,
             GenesisImportPayload {
                 source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),

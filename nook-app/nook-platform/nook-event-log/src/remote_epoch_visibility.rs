@@ -1,6 +1,6 @@
 //! Provider visibility rules for two-event security epoch transitions.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     EventId, EventResult, LocalEventStore, VaultEvent, VaultOperation, parse_event_storage_bytes,
@@ -121,7 +121,7 @@ fn publish_priority(event: &VaultEvent) -> u8 {
 /// An observer may temporarily see an orphan checkpoint, which is quarantined;
 /// it never sees an appendable epoch trigger without its checkpoint.
 pub fn order_remote_events_for_visibility(events: &mut [(EventId, Vec<u8>)]) -> EventResult<()> {
-    let mut priorities = std::collections::BTreeMap::new();
+    let mut priorities = BTreeMap::new();
     for (event_id, bytes) in events.iter() {
         let event = parse_event_storage_bytes(bytes)?;
         priorities.insert(event_id.clone(), publish_priority(&event));
@@ -137,7 +137,10 @@ pub fn order_remote_events_for_visibility(events: &mut [(EventId, Vec<u8>)]) -> 
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::*;
+    use crate::test_support;
     use crate::{
         DeviceSigningPublicKey, GenesisImportPayload, IsoTimestamp, PasswordEntryId, Sha256Hex,
         SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion,
@@ -174,7 +177,7 @@ mod tests {
     }
 
     fn epoch_pair() -> EventResult<(LocalEventStore, RemoteEvent, RemoteEvent)> {
-        let signing_key = crate::test_support::signing_key();
+        let signing_key = test_support::signing_key();
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE)?,
             &SigningIdentity::actor_id_for_verifying_key(&signing_key.verifying_key())?,
@@ -223,8 +226,7 @@ mod tests {
         let (local, trigger, checkpoint) = epoch_pair()?;
 
         assert!(
-            visibility_gated_remote_events(&local, std::slice::from_ref(&trigger), STORE)?
-                .is_empty()
+            visibility_gated_remote_events(&local, slice::from_ref(&trigger), STORE)?.is_empty()
         );
         assert_eq!(
             visibility_gated_remote_events(&local, &[trigger, checkpoint], STORE)?.len(),
@@ -274,7 +276,7 @@ mod tests {
     #[test]
     fn hides_a_remote_trigger_and_every_remote_descendant_until_checkpoint() -> EventResult<()> {
         let (local, trigger, _) = epoch_pair()?;
-        let signing_key = crate::test_support::signing_key();
+        let signing_key = test_support::signing_key();
         let descendant = signed_event(
             &signing_key,
             vec![trigger.0.clone()],
@@ -294,7 +296,7 @@ mod tests {
     fn quarantines_a_legacy_local_trigger_and_its_remote_descendant() -> EventResult<()> {
         let (mut local, trigger, _) = epoch_pair()?;
         local.put_event(trigger.0.clone(), trigger.1.clone());
-        let signing_key = crate::test_support::signing_key();
+        let signing_key = test_support::signing_key();
         let descendant = signed_event(
             &signing_key,
             vec![trigger.0.clone()],
