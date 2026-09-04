@@ -25,6 +25,7 @@ pub enum AuthenticationCredentialKind {
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
+#[allow(clippy::struct_excessive_bools)] // Typed WASM policy boundary mirrors the browser field facts.
 pub struct AuthenticationFillFieldObservation {
     /// Zero-based field index inside the observed scope, assigned by the host.
     pub field_index: u32,
@@ -81,7 +82,6 @@ impl AuthenticationFillFieldObservation {
 /// Mirrors the host's fill contract: fill the first username field, then the
 /// first current-password field; a scope with only a username field still
 /// plans a username fill; every other shape fails closed.
-#[must_use]
 pub fn plan_authentication_credential_fill(
     fields: &[AuthenticationFillFieldObservation],
 ) -> Result<AuthenticationCredentialFillPlan, AuthenticationCredentialFillError> {
@@ -181,7 +181,6 @@ impl SimulatedAuthenticationCredentials {
 /// Returns the assignment values in plan order. The caller supplies its own
 /// credentials in production; the simulation path exists so fill behavior can
 /// be verified with hardcoded fake values and no vault.
-#[must_use]
 pub fn simulate_authentication_credential_fill(
     fields: &[AuthenticationFillFieldObservation],
     credentials: &SimulatedAuthenticationCredentials,
