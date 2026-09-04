@@ -117,7 +117,8 @@ pub use backup_code_candidates::{
 pub use credential_fill::{
     AuthenticationCredentialFillAssignment, AuthenticationCredentialFillError,
     AuthenticationCredentialFillPlan, AuthenticationCredentialKind,
-    AuthenticationFillFieldObservation, SimulatedAuthenticationCredentials,
+    AuthenticationFillFieldEditability, AuthenticationFillFieldObservation,
+    AuthenticationFillFieldRole, SimulatedAuthenticationCredentials,
     SimulatedAuthenticationFieldState, SimulatedAuthenticationFill,
     plan_authentication_credential_fill, simulate_authentication_credential_fill,
 };
