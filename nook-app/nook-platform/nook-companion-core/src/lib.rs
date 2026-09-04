@@ -20,6 +20,7 @@ mod authenticator_options_response;
 mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
+pub mod credential_fill;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
