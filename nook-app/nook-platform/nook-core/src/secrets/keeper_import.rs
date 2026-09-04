@@ -1,5 +1,7 @@
 //! Keeper Password Manager CSV conversion into Nook's typed plaintext model.
 
+use std::{collections, iter};
+
 use csv::StringRecord;
 use thiserror::Error;
 
@@ -60,7 +62,7 @@ fn required_column(
     name: &'static str,
     aliases: &[&str],
 ) -> Result<usize, KeeperImportError> {
-    std::iter::once(name)
+    iter::once(name)
         .chain(aliases.iter().copied())
         .find_map(|candidate| {
             let expected = normalized_csv_header(candidate);
@@ -122,9 +124,9 @@ fn columns(headers: &StringRecord) -> Result<KeeperColumns, KeeperImportError> {
     ]
     .into_iter()
     .flatten()
-    .collect::<std::collections::HashSet<_>>();
+    .collect::<collections::HashSet<_>>();
 
-    let mut paired = std::collections::BTreeMap::<usize, (Option<usize>, Option<usize>)>::new();
+    let mut paired = collections::BTreeMap::<usize, (Option<usize>, Option<usize>)>::new();
     let mut named = Vec::new();
     let mut blob = None;
     let mut trailing = Vec::new();

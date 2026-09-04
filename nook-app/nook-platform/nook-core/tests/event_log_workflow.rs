@@ -1,5 +1,11 @@
 //! Event-sourcing integration scenarios using the in-memory harness.
 
+#![deny(clippy::absolute_paths)]
+
+use nook_core::{DeviceId, LocalEventStore, VaultCrypto};
+
+use std::slice;
+
 #[path = "event_log_harness.rs"]
 mod harness;
 
@@ -144,15 +150,9 @@ fn two_device_genesis_append_and_union() -> VaultResult<()> {
 fn file_provider_style_backups_replicate_secure_note_events() -> VaultResult<()> {
     let mut device1 = EventLogDevice::genesis("device 1")?;
     let mut providers: ProviderBuckets = HashMap::from([
-        ("common-vault".to_owned(), nook_core::LocalEventStore::new()),
-        (
-            "common-vault-backup".to_owned(),
-            nook_core::LocalEventStore::new(),
-        ),
-        (
-            "vault2-backup".to_owned(),
-            nook_core::LocalEventStore::new(),
-        ),
+        ("common-vault".to_owned(), LocalEventStore::new()),
+        ("common-vault-backup".to_owned(), LocalEventStore::new()),
+        ("vault2-backup".to_owned(), LocalEventStore::new()),
     ]);
 
     // Device 1 creates the primary file-sync target and its local-file backup.
@@ -394,7 +394,7 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
     let (genesis_head, genesis_bytes, child_id, child_bytes) =
         child_event_with_genesis(&device, "secret_outoforder1", "cipher-child")?;
 
-    let mut store = nook_core::LocalEventStore::new();
+    let mut store = LocalEventStore::new();
     store.put_event(child_id.clone(), child_bytes);
     let graph = store.load_graph(device.store_id())?;
     assert!(!graph.pending_events().is_empty());
@@ -486,9 +486,9 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
         .collect();
 
     let trigger = VaultOperation::DeviceRevoked {
-        device_id: nook_core::DeviceId::parse("abcd1234ef567890")?,
+        device_id: DeviceId::parse("abcd1234ef567890")?,
     };
-    let old_secrets = nook_core::SymmetricKey::parse(&device.secrets_key)?;
+    let old_secrets = SymmetricKey::parse(&device.secrets_key)?;
     let new_keys = nook_core::generate_vault_keys()?;
     let before_events = device.session.store.event_ids();
     let before_outbox = device.session.store.pending_outbox("github");
@@ -527,7 +527,7 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
             })?;
     assert_ne!(new_secrets, device.secrets_key);
     device.secrets_key = new_secrets.clone();
-    device.crypto = nook_core::VaultCrypto::new(&nook_core::SymmetricKey::parse(&new_secrets)?)?;
+    device.crypto = VaultCrypto::new(&SymmetricKey::parse(&new_secrets)?)?;
     device.crypto.encrypt_value("post-epoch")?;
     Ok(())
 }
@@ -536,7 +536,7 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
 fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
     let mut a = EventLogDevice::genesis("a")?;
     let mut providers: ProviderBuckets =
-        HashMap::from([("github".to_owned(), nook_core::LocalEventStore::new())]);
+        HashMap::from([("github".to_owned(), LocalEventStore::new())]);
 
     for (id, bytes) in a.remote_events() {
         providers
@@ -563,7 +563,7 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
     let mut local = EventLogDevice::replica_of(&root)?;
     let mut remote_device = EventLogDevice::replica_of(&root)?;
     let mut providers: ProviderBuckets =
-        HashMap::from([("github".to_owned(), nook_core::LocalEventStore::new())]);
+        HashMap::from([("github".to_owned(), LocalEventStore::new())]);
 
     for (id, bytes) in root.remote_events() {
         providers
@@ -679,7 +679,7 @@ fn union_order_does_not_change_projection() -> VaultResult<()> {
 
     forward.session.union_remote(&events)?;
     for event in events.iter().rev() {
-        reverse.session.union_remote(std::slice::from_ref(event))?;
+        reverse.session.union_remote(slice::from_ref(event))?;
     }
 
     let graph_f = forward.session.store.load_graph(forward.store_id())?;

@@ -1,5 +1,10 @@
 //! Enrollment payload selection for persisted sync-provider rows.
 
+use crate::{
+    OAuthAccessTokenRef, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
+    OAuthTokenExpiry,
+};
+
 use super::{StorageProviderData, validate_provider_row_replication};
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
@@ -26,7 +31,7 @@ pub fn shared_grant_provider_id(
         if oauth.preset != preset
             || !matches!(
                 oauth.usable_access_token(),
-                crate::OAuthAccessTokenRef::Available(_)
+                OAuthAccessTokenRef::Available(_)
             )
         {
             return None;
@@ -153,29 +158,29 @@ fn personal_enrollment_provider(
                     .as_str()
                     .to_owned(),
                 match oauth.refresh_token.as_deref() {
-                    Some(value) => crate::OAuthRefreshCredential::Token(value.to_owned()),
-                    None => crate::OAuthRefreshCredential::NotIssued,
+                    Some(value) => OAuthRefreshCredential::Token(value.to_owned()),
+                    None => OAuthRefreshCredential::NotIssued,
                 },
                 match oauth.expires_at.as_deref() {
-                    Some(value) => crate::OAuthTokenExpiry::ExpiresAt(value.to_owned()),
-                    None => crate::OAuthTokenExpiry::Unknown,
+                    Some(value) => OAuthTokenExpiry::ExpiresAt(value.to_owned()),
+                    None => OAuthTokenExpiry::Unknown,
                 },
                 match (oauth.file_id.as_deref(), oauth.file_name.as_deref()) {
-                    (Some(file_id), Some(file_name)) => crate::OAuthRemoteFile::Identified {
+                    (Some(file_id), Some(file_name)) => OAuthRemoteFile::Identified {
                         file_id: file_id.to_owned(),
                         file_name: file_name.to_owned(),
                     },
-                    (Some(file_id), None) => crate::OAuthRemoteFile::FileId {
+                    (Some(file_id), None) => OAuthRemoteFile::FileId {
                         file_id: file_id.to_owned(),
                     },
-                    (None, Some(file_name)) => crate::OAuthRemoteFile::FileName {
+                    (None, Some(file_name)) => OAuthRemoteFile::FileName {
                         file_name: file_name.to_owned(),
                     },
-                    (None, None) => crate::OAuthRemoteFile::Unresolved,
+                    (None, None) => OAuthRemoteFile::Unresolved,
                 },
                 match oauth.account_email.as_deref() {
-                    Some(value) => crate::OAuthAccountIdentity::Email(value.to_owned()),
-                    None => crate::OAuthAccountIdentity::Unknown,
+                    Some(value) => OAuthAccountIdentity::Email(value.to_owned()),
+                    None => OAuthAccountIdentity::Unknown,
                 },
             ))
         }
@@ -222,6 +227,14 @@ fn shared_enrollment_provider(
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        ProviderVaultScope, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
+        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+    };
+
+    use std::io;
+
     use super::*;
     use crate::{
         EnrollmentProviderDataRef, OAuthFileConfigData, ProviderSyncCheckpoint,
@@ -233,11 +246,11 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::Github,
             label: "GitHub".to_owned(),
-            github_pat: crate::StoredGithubPat::Token(pat.to_owned()),
-            github_repo: crate::StoredGithubRepository::Repository(repo.to_owned()),
-            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-            store_id: crate::ProviderVaultScope::Unscoped,
+            github_pat: StoredGithubPat::Token(pat.to_owned()),
+            github_repo: StoredGithubRepository::Repository(repo.to_owned()),
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -253,17 +266,17 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::OauthFile,
             label: "Google Drive".to_owned(),
-            github_pat: crate::StoredGithubPat::Missing,
-            github_repo: crate::StoredGithubRepository::DefaultRepository,
-            oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
+            github_pat: StoredGithubPat::Missing,
+            github_repo: StoredGithubRepository::DefaultRepository,
+            oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                 preset,
-                access_token: crate::StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-                file_id: crate::StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
-                file_name: crate::StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
+                access_token: StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
+                file_id: StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
+                file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                 ..OAuthFileConfigData::default()
             }),
-            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-            store_id: crate::ProviderVaultScope::Unscoped,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -312,10 +325,9 @@ mod tests {
         let oauth = shared_drive
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("OAuth config must exist"))?;
+            .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.drive_mode = GoogleDriveMode::Shared;
-        oauth.folder_id =
-            crate::StoredGoogleDriveFolder::FolderId("persisted-shared-folder".to_owned());
+        oauth.folder_id = StoredGoogleDriveFolder::FolderId("persisted-shared-folder".to_owned());
         assert_eq!(
             provider_onboarding_type(&shared_drive, &VaultArchitecture::default()),
             Ok(OnboardingType::SharedProviderGrant)
@@ -378,8 +390,8 @@ mod tests {
         other
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("configured provider required"))?
-            .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-other".to_owned());
+            .ok_or_else(|| io::Error::other("configured provider required"))?
+            .folder_id = StoredGoogleDriveFolder::FolderId("folder-other".to_owned());
         let mut matching = oauth_provider(
             "matching",
             OauthFilePreset::GoogleDrive,
@@ -389,8 +401,8 @@ mod tests {
         matching
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("configured provider required"))?
-            .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-required".to_owned());
+            .ok_or_else(|| io::Error::other("configured provider required"))?
+            .folder_id = StoredGoogleDriveFolder::FolderId("folder-required".to_owned());
         let providers = vec![private, other, matching];
 
         assert_eq!(

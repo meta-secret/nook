@@ -1,6 +1,8 @@
 //! Connect-time vault assessment and session hydration from stored YAML.
 
-use crate::errors::VaultResult;
+use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultStoreIdentity};
+
+use crate::errors::{self, VaultResult};
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
     VaultCrypto, VaultMetaState, VaultType, VaultUnlock, assess_connect_access, deserialize_stored,
@@ -123,7 +125,7 @@ pub fn unlock_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultRes
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
     if architecture.vault_type == VaultType::Sentinel {
-        return Err(crate::MultiDeviceError::SentinelCeremonyRequired.into());
+        return Err(MultiDeviceError::SentinelCeremonyRequired.into());
     }
     let stored_records = deserialize_stored(content, format)?;
     validate_user_secret_types(&stored_records)?;
@@ -140,11 +142,11 @@ fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()>
     for record in records {
         if record.secret_type.is_none()
             && matches!(
-                crate::VaultMetaRecord::classify(record),
-                crate::VaultMetaRecord::Secret(..)
+                VaultMetaRecord::classify(record),
+                VaultMetaRecord::Secret(..)
             )
         {
-            return Err(crate::DatabaseError::MissingSecretType {
+            return Err(DatabaseError::MissingSecretType {
                 key: record.key.clone(),
             }
             .into());
@@ -166,7 +168,7 @@ pub fn load_sentinel_vault(
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
     if architecture.vault_type != VaultType::Sentinel {
-        return Err(crate::MultiDeviceError::InvalidSentinelThreshold.into());
+        return Err(MultiDeviceError::InvalidSentinelThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
     validate_user_secret_types(&stored_records)?;
@@ -187,7 +189,7 @@ pub fn load_sentinel_vault_from_opened(
     let format = detect_stored_format(content)?;
     let architecture = crate::read_vault_architecture(content)?;
     if architecture.vault_type != VaultType::Sentinel {
-        return Err(crate::MultiDeviceError::InvalidSentinelThreshold.into());
+        return Err(MultiDeviceError::InvalidSentinelThreshold.into());
     }
     let stored_records = deserialize_stored(content, format)?;
     validate_user_secret_types(&stored_records)?;
@@ -216,9 +218,7 @@ fn hydrate_loaded_vault(unlocked: UnlockedVault) -> VaultResult<LoadedVault> {
 pub fn apply_member_records(state: &mut VaultMetaState, member_records: &[StoredSecretRecord]) {
     state.members.clear();
     for record in member_records {
-        if let crate::VaultMetaRecord::Member(auth_id, payload) =
-            crate::VaultMetaRecord::classify(record)
-        {
+        if let VaultMetaRecord::Member(auth_id, payload) = VaultMetaRecord::classify(record) {
             state.members.insert(auth_id, payload);
         }
     }
@@ -229,14 +229,14 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
     let unlock = crate::read_vault_unlock(content).unwrap_or(VaultUnlock::Keys);
     let password_entries = crate::read_vault_password_entries(content).unwrap_or_default();
     let store_id = match crate::read_vault_store_id(content)? {
-        crate::VaultStoreIdentity::Assigned(store_id) => store_id,
-        crate::VaultStoreIdentity::Unassigned => {
-            return Err(crate::errors::VaultFormatError::YamlMissingSections.into());
+        VaultStoreIdentity::Assigned(store_id) => store_id,
+        VaultStoreIdentity::Unassigned => {
+            return Err(errors::VaultFormatError::YamlMissingSections.into());
         }
     };
     let vault_name = match crate::read_vault_name(content)? {
-        crate::VaultName::Named(name) => name,
-        crate::VaultName::Unnamed => crate::default_vault_name_for_store_id(&store_id),
+        VaultName::Named(name) => name,
+        VaultName::Unnamed => crate::default_vault_name_for_store_id(&store_id),
     };
     let version = crate::read_vault_version(content).unwrap_or(0);
     let architecture = crate::read_vault_architecture(content)?;
@@ -252,7 +252,13 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        DatabaseError, SecretId, SentinelConfiguration, StoredRecordPayload, ValidationError,
+        VaultError, VaultFormatError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
+    };
+
     use super::*;
+    use crate::test_support;
 
     #[test]
     fn vault_access_status_labels_are_stable_across_host_bindings() {
@@ -278,9 +284,9 @@ mod tests {
     #[test]
     fn encrypted_unlock_rejects_user_rows_without_a_secret_type() -> anyhow::Result<()> {
         let record = StoredSecretRecord {
-            key: crate::SecretId::from_vault_record("secret_missing_type"),
+            key: SecretId::from_vault_record("secret_missing_type"),
             secret_type: None,
-            value: crate::StoredRecordPayload::from_trusted(
+            value: StoredRecordPayload::from_trusted(
                 "-----BEGIN AGE ENCRYPTED FILE-----\ninvalid".to_owned(),
             ),
         };
@@ -291,7 +297,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            crate::VaultError::Database(crate::DatabaseError::MissingSecretType { .. })
+            VaultError::Database(DatabaseError::MissingSecretType { .. })
         ));
         Ok(())
     }
@@ -305,7 +311,7 @@ mod tests {
 
     #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
-        let (keys, identity, yaml) = crate::test_support::simple_genesis_projection()?;
+        let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
         assert!(!content_requires_genesis(yaml.as_str(), false)?);
         assert_eq!(
             access_status_for_vault_content(yaml.as_str(), &identity)?,
@@ -331,7 +337,7 @@ mod tests {
             device_mode: DeviceMode::Standard,
             vault_type: VaultType::Sentinel,
             replication_type: ReplicationType::Personal,
-            sentinel: crate::SentinelConfiguration::Enabled(SentinelPolicy {
+            sentinel: SentinelConfiguration::Enabled(SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
                 ready_participants: 2,
@@ -342,9 +348,9 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultNameRef::Unnamed,
-            crate::VaultVersionWrite::Initial,
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
             &architecture,
         )
         .err()
@@ -352,9 +358,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            crate::VaultFormatError::Validation(
-                crate::ValidationError::SentinelVaultHasFullKeyEnvelopes
-            )
+            VaultFormatError::Validation(ValidationError::SentinelVaultHasFullKeyEnvelopes)
         ));
         assert!(
             load_stored_vault(
@@ -391,9 +395,9 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultNameRef::Unnamed,
-            crate::VaultVersionWrite::Initial,
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
             &architecture,
         )?;
 

@@ -1,5 +1,11 @@
 //! Sentinel vault key-share lifecycle integration tests.
 
+#![deny(clippy::absolute_paths)]
+
+use nook_core::{VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
+
+use std::slice;
+
 use nook_core::{
     DeviceIdentity, DeviceMode, MultiDeviceError, SentinelPolicy, VaultArchitecture, VaultType,
     VaultUnlock, create_sentinel_share_records, generate_store_id, generate_vault_keys,
@@ -34,19 +40,19 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
         &shares,
         &VaultUnlock::Keys,
         &[],
-        nook_core::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-        nook_core::VaultNameRef::Unnamed,
-        nook_core::VaultVersionWrite::Initial,
+        VaultStoreIdentityRef::Assigned(store_id.as_str()),
+        VaultNameRef::Unnamed,
+        VaultVersionWrite::Initial,
         &architecture,
     )?;
 
     assert!(matches!(
         load_stored_vault(yaml.as_str(), &first),
-        Err(nook_core::VaultError::MultiDevice(
+        Err(VaultError::MultiDevice(
             MultiDeviceError::SentinelCeremonyRequired
         ))
     ));
-    assert!(load_sentinel_vault(yaml.as_str(), std::slice::from_ref(&first)).is_err());
+    assert!(load_sentinel_vault(yaml.as_str(), slice::from_ref(&first)).is_err());
 
     let loaded = load_sentinel_vault(yaml.as_str(), &[first.clone(), second.clone()])?;
     assert_eq!(loaded.secrets_key, keys.secrets_key);

@@ -9,6 +9,7 @@ use crate::CreditCardSecret;
 use crate::SecretId;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
+use crate::{bip39, passkey_authenticator};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -81,7 +82,7 @@ impl PasskeyPrivateKeyPkcs8 {
 
     fn validate(&self) -> SecretPayloadResult<()> {
         validate_base64url_field("ES256 private key", &self.0, 1, PASSKEY_PRIVATE_KEY_MAX_LEN)?;
-        crate::passkey_authenticator::validate_es256_credential_key(self, None).map_err(|error| {
+        passkey_authenticator::validate_es256_credential_key(self, None).map_err(|error| {
             SecretPayloadError::InvalidPasskey {
                 reason: error.to_string(),
             }
@@ -163,7 +164,7 @@ impl PasskeyCredentialKey {
             } => {
                 private_key_pkcs8.validate()?;
                 public_key_cose.validate()?;
-                crate::passkey_authenticator::validate_es256_credential_key(
+                passkey_authenticator::validate_es256_credential_key(
                     private_key_pkcs8,
                     Some(public_key_cose),
                 )
@@ -377,7 +378,7 @@ impl SecretValue {
             SecretType::SeedPhrase => {
                 let secret: SeedPhraseSecret =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidSeedPhrase)?;
-                crate::bip39::validate_bip39_mnemonic(&secret.seed)?;
+                bip39::validate_bip39_mnemonic(&secret.seed)?;
                 Ok(Self::SeedPhrase(secret))
             }
             SecretType::SecureNote => serde_yaml::from_str(yaml)

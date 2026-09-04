@@ -1,5 +1,7 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
+use crate::{EpochMetadataState, EpochPasswordState, VaultEpochError};
+
 use crate::errors::VaultResult;
 use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
@@ -119,7 +121,7 @@ impl VaultEventSession {
         let roster = resolve_member_roster(records, members_key)?;
         let member_records = build_members_records(&roster, members_key)?;
         let json = serde_json::to_string(&member_records)
-            .map_err(crate::VaultEpochError::MemberRecordsSerialize)?;
+            .map_err(VaultEpochError::MemberRecordsSerialize)?;
         Ok(sha256_hex(json.as_bytes()))
     }
 
@@ -160,8 +162,8 @@ impl VaultEventSession {
         let checkpoint = VaultOperation::EpochCheckpoint {
             secrets,
             members_checkpoint_hash,
-            rotated_meta_records: crate::EpochMetadataState::Replace(rotated_meta_records),
-            password_entries: crate::EpochPasswordState::Replace(rewrapped_password_entries),
+            rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
+            password_entries: EpochPasswordState::Replace(rewrapped_password_entries),
         };
         let mut staged = self.clone();
         let trigger_id = staged.append_operations(vec![trigger], created_at, provider_id)?;

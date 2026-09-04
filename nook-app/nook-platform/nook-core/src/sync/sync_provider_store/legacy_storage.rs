@@ -129,19 +129,21 @@ pub fn auth_snapshot_legacy_storage_value(
 
 #[cfg(test)]
 mod tests {
+    use crate::{ActiveVaultScope, StorageProviderData};
+
     use super::auth_snapshot_legacy_storage_value;
 
     #[test]
     fn semantic_states_project_to_the_rollback_safe_wire_shape() -> anyhow::Result<()> {
         let snapshot = crate::AuthProvidersSnapshotData {
-            providers: vec![crate::StorageProviderData::github(
+            providers: vec![StorageProviderData::github(
                 "github",
                 "GitHub",
                 "sealed-token",
                 "owner/repo",
                 "2026-07-29T00:00:00.000Z",
             )],
-            active_vault_store_id: crate::ActiveVaultScope::StoreId("store-1".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
         };
 
         let value = auth_snapshot_legacy_storage_value(&snapshot)?;

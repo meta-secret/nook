@@ -106,6 +106,11 @@ pub fn providers_visible_while_device_locked(
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        ActiveVaultScope, ProviderSyncCheckpoint, ProviderVaultScope, StoredGithubPat,
+        StoredGithubRepository, StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+    };
+
     use crate::StorageProviderType;
 
     use super::{
@@ -120,12 +125,12 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::Github,
             label: "GitHub".to_owned(),
-            github_pat: crate::StoredGithubPat::Token(pat.to_owned()),
-            github_repo: crate::StoredGithubRepository::Repository(repo.to_owned()),
-            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-            store_id: crate::ProviderVaultScope::Unscoped,
-            sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
+            github_pat: StoredGithubPat::Token(pat.to_owned()),
+            github_repo: StoredGithubRepository::Repository(repo.to_owned()),
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
+            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
     }
@@ -134,11 +139,11 @@ mod tests {
     fn active_vault_provider_scope_and_roles_are_core_owned() -> anyhow::Result<()> {
         let mut local_a = github_provider("local-a", "ignored", "ignored");
         local_a.provider_type = StorageProviderType::Local;
-        local_a.store_id = crate::ProviderVaultScope::StoreId("store-a".to_owned());
+        local_a.store_id = ProviderVaultScope::StoreId("store-a".to_owned());
         let mut github_a = github_provider("github-a", "owner/a", "pat-a");
-        github_a.store_id = crate::ProviderVaultScope::StoreId("store-a".to_owned());
+        github_a.store_id = ProviderVaultScope::StoreId("store-a".to_owned());
         let mut github_b = github_provider("github-b", "owner/b", "pat-b");
-        github_b.store_id = crate::ProviderVaultScope::StoreId("store-b".to_owned());
+        github_b.store_id = ProviderVaultScope::StoreId("store-b".to_owned());
         let unscoped = github_provider("unscoped", "owner/unscoped", "pat-unscoped");
         let providers = vec![local_a.clone(), github_a.clone(), github_b, unscoped];
 
@@ -166,18 +171,18 @@ mod tests {
     #[test]
     fn incoming_pairing_replaces_only_that_vaults_provider_grants() {
         let mut removed_a = github_provider("removed-a", "owner/old", "pat-old");
-        removed_a.store_id = crate::ProviderVaultScope::StoreId("store-a".to_owned());
+        removed_a.store_id = ProviderVaultScope::StoreId("store-a".to_owned());
         let mut retained_b = github_provider("retained-b", "owner/b", "pat-b");
-        retained_b.store_id = crate::ProviderVaultScope::StoreId("store-b".to_owned());
+        retained_b.store_id = ProviderVaultScope::StoreId("store-b".to_owned());
         let mut replacement_a = github_provider("replacement-a", "owner/new", "pat-new");
-        replacement_a.store_id = crate::ProviderVaultScope::Unscoped;
+        replacement_a.store_id = ProviderVaultScope::Unscoped;
         let existing = AuthProvidersSnapshotData {
             providers: vec![removed_a, retained_b.clone()],
-            active_vault_store_id: crate::ActiveVaultScope::StoreId("store-a".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId("store-a".to_owned()),
         };
         let incoming = AuthProvidersSnapshotData {
             providers: vec![replacement_a],
-            active_vault_store_id: crate::ActiveVaultScope::StoreId("store-a".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId("store-a".to_owned()),
         };
 
         let replaced = replace_active_vault_provider_grants(&existing, &incoming);
@@ -205,11 +210,11 @@ mod tests {
         let unscoped = github_provider("unscoped-a", "owner/a", "pat-a");
         let existing = AuthProvidersSnapshotData {
             providers: vec![unscoped],
-            active_vault_store_id: crate::ActiveVaultScope::StoreId("store-a".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId("store-a".to_owned()),
         };
         let incoming = AuthProvidersSnapshotData {
             providers: Vec::new(),
-            active_vault_store_id: crate::ActiveVaultScope::StoreId("store-b".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId("store-b".to_owned()),
         };
 
         let replaced = replace_active_vault_provider_grants(&existing, &incoming);
@@ -220,16 +225,16 @@ mod tests {
     #[test]
     fn empty_incoming_pairing_removes_every_provider_for_that_vault() {
         let mut removed_a = github_provider("removed-a", "owner/a", "pat-a");
-        removed_a.store_id = crate::ProviderVaultScope::StoreId("store-a".to_owned());
+        removed_a.store_id = ProviderVaultScope::StoreId("store-a".to_owned());
         let mut retained_b = github_provider("retained-b", "owner/b", "pat-b");
-        retained_b.store_id = crate::ProviderVaultScope::StoreId("store-b".to_owned());
+        retained_b.store_id = ProviderVaultScope::StoreId("store-b".to_owned());
         let existing = AuthProvidersSnapshotData {
             providers: vec![removed_a, retained_b.clone()],
-            active_vault_store_id: crate::ActiveVaultScope::StoreId("store-a".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId("store-a".to_owned()),
         };
         let incoming = AuthProvidersSnapshotData {
             providers: Vec::new(),
-            active_vault_store_id: crate::ActiveVaultScope::StoreId("store-a".to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId("store-a".to_owned()),
         };
 
         let replaced = replace_active_vault_provider_grants(&existing, &incoming);

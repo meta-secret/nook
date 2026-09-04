@@ -4,6 +4,8 @@
 //! one package per participant: the already signed/encrypted Sentinel share and
 //! a provider snapshot encrypted to that participant's device public key.
 
+use crate::ActiveVaultScope;
+
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use flate2::{Compression, read::DeflateDecoder, write::DeflateEncoder};
 use serde::{Deserialize, Serialize};
@@ -73,7 +75,7 @@ pub fn accept_sentinel_onboarding_package(
     let mut provider_snapshot = normalize_auth_snapshot(&provider_storage).snapshot;
     validate_provider_snapshot(&provider_snapshot, package.delivery.store_id.as_str())?;
     provider_snapshot.active_vault_store_id =
-        crate::ActiveVaultScope::StoreId(package.delivery.store_id.to_string());
+        ActiveVaultScope::StoreId(package.delivery.store_id.to_string());
     Ok(AcceptedSentinelOnboarding {
         share_record,
         provider_snapshot,
@@ -151,6 +153,14 @@ fn validate_provider_snapshot(
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        ActiveVaultScope, ProviderSyncCheckpoint, ProviderVaultScope, StoredGithubPat,
+        StoredGithubRepository, StoredLocalFolderConfiguration, StoredOAuthAccessCredential,
+        StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+    };
+
+    use std::io;
+
     use super::*;
     use crate::{
         DeviceIdentity, OAuthFileConfigData, OauthFilePreset, SigningIdentity, StorageProviderData,
@@ -163,22 +173,22 @@ mod tests {
                 id: "drive-1".to_owned(),
                 provider_type: StorageProviderType::OauthFile,
                 label: "Google Drive".to_owned(),
-                github_pat: crate::StoredGithubPat::Missing,
-                github_repo: crate::StoredGithubRepository::DefaultRepository,
-                oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
+                github_pat: StoredGithubPat::Missing,
+                github_repo: StoredGithubRepository::DefaultRepository,
+                oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     preset: OauthFilePreset::GoogleDrive,
-                    access_token: crate::StoredOAuthAccessCredential::AccessToken(
+                    access_token: StoredOAuthAccessCredential::AccessToken(
                         "member-secret-token".to_owned(),
                     ),
-                    file_name: crate::StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
+                    file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
                     ..OAuthFileConfigData::default()
                 }),
-                local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-                store_id: crate::ProviderVaultScope::StoreId(store_id.to_owned()),
-                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
+                local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                store_id: ProviderVaultScope::StoreId(store_id.to_owned()),
+                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-07-12T00:00:00.000Z".to_owned(),
             }],
-            active_vault_store_id: crate::ActiveVaultScope::StoreId(store_id.to_owned()),
+            active_vault_store_id: ActiveVaultScope::StoreId(store_id.to_owned()),
         }
     }
 
@@ -212,7 +222,7 @@ mod tests {
             .deliveries
             .into_iter()
             .find(|delivery| delivery.device_id == *member.device_id())
-            .ok_or_else(|| std::io::Error::other("member delivery must exist"))?;
+            .ok_or_else(|| io::Error::other("member delivery must exist"))?;
         let package = create_sentinel_onboarding_package(
             request,
             delivery,
@@ -241,9 +251,9 @@ mod tests {
             accepted.provider_snapshot.providers[0]
                 .oauth_file
                 .as_ref()
-                .ok_or_else(|| std::io::Error::other("provider OAuth fixture must exist"))?
+                .ok_or_else(|| io::Error::other("provider OAuth fixture must exist"))?
                 .access_token,
-            crate::StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
+            StoredOAuthAccessCredential::AccessToken("member-secret-token".to_owned())
         );
         Ok(())
     }

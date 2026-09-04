@@ -5,6 +5,8 @@
 //! equal version with different content is a conflict that requires explicit
 //! user choice (never auto-merged).
 
+use crate::VaultStoreIdentity;
+
 use crate::errors::VaultSyncError;
 use crate::read_vault_store_id;
 
@@ -69,8 +71,8 @@ pub fn read_vault_revision(stored: &str) -> VaultSyncResult<VaultRevision> {
         });
     }
     let store_id = match read_vault_store_id(trimmed)? {
-        crate::VaultStoreIdentity::Assigned(store_id) => store_id,
-        crate::VaultStoreIdentity::Unassigned => return Err(VaultSyncError::MissingStoreId),
+        VaultStoreIdentity::Assigned(store_id) => store_id,
+        VaultStoreIdentity::Unassigned => return Err(VaultSyncError::MissingStoreId),
     };
     Ok(VaultRevision {
         version: crate::read_vault_version(trimmed)?,

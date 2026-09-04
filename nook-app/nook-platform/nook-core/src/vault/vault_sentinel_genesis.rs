@@ -1,5 +1,8 @@
 //! Atomic core integration for provider-independent Sentinel genesis.
 
+use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation};
+
+use crate::i18n_keys;
 use crate::{
     DeviceIdentity, DeviceMode, ReplicationType, SentinelGenesisSession,
     SentinelGenesisShareDelivery, SentinelPolicy, SigningIdentity, StoredSecretRecord,
@@ -46,17 +49,13 @@ impl SentinelGenesisPhase {
     #[must_use]
     pub const fn translation_key(self) -> &'static str {
         match self {
-            Self::Inactive => crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_INACTIVE,
+            Self::Inactive => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_INACTIVE,
             Self::CollectingParticipants => {
-                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
+                i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
             }
-            Self::ReadyToFinalize => {
-                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_READY_TO_FINALIZE
-            }
-            Self::DeliveringShares => {
-                crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_DELIVERING_SHARES
-            }
-            Self::Complete => crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COMPLETE,
+            Self::ReadyToFinalize => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_READY_TO_FINALIZE,
+            Self::DeliveringShares => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_DELIVERING_SHARES,
+            Self::Complete => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COMPLETE,
         }
     }
 
@@ -89,16 +88,14 @@ pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate:
     let mut operations = output
         .participants
         .iter()
-        .map(
-            |participant| crate::VaultOperation::SentinelParticipantEnrolled {
-                device_id: participant.device_id.clone(),
-                encryption_public_key: participant.encryption_public_key.clone(),
-                signing_public_key: participant.signing_public_key.clone(),
-                label: crate::MemberLabel::from_trusted(participant.label.clone()),
-            },
-        )
+        .map(|participant| VaultOperation::SentinelParticipantEnrolled {
+            device_id: participant.device_id.clone(),
+            encryption_public_key: participant.encryption_public_key.clone(),
+            signing_public_key: participant.signing_public_key.clone(),
+            label: MemberLabel::from_trusted(participant.label.clone()),
+        })
         .collect::<Vec<_>>();
-    operations.push(crate::VaultOperation::SentinelSharesIssued {
+    operations.push(VaultOperation::SentinelSharesIssued {
         shares: output
             .participant_deliveries
             .iter()
@@ -163,7 +160,7 @@ pub fn finalize_sentinel_genesis(
         .deliveries
         .first()
         .map(|delivery| delivery.policy)
-        .ok_or(crate::MultiDeviceError::InvalidSentinelGenesisPayload)?;
+        .ok_or(MultiDeviceError::InvalidSentinelGenesisPayload)?;
     let stored_records = issued.records;
     let architecture = VaultArchitecture {
         device_mode: DeviceMode::Standard,
@@ -171,7 +168,7 @@ pub fn finalize_sentinel_genesis(
         // Compatibility-only persisted field; it does not affect Sentinel
         // genesis, readiness, quorum, or later provider configuration.
         replication_type: ReplicationType::Personal,
-        sentinel: crate::SentinelConfiguration::Enabled(SentinelPolicy {
+        sentinel: SentinelConfiguration::Enabled(SentinelPolicy {
             threshold: policy.threshold,
             required_participants: policy.participant_count,
             ready_participants: policy.participant_count,
@@ -189,6 +186,8 @@ pub fn finalize_sentinel_genesis(
 
 #[cfg(test)]
 mod tests {
+    use crate::VaultMetaState;
+
     use super::*;
     use crate::{
         SentinelGenesisParticipantResponse, VaultMetaRecord, add_sentinel_genesis_response,
@@ -198,7 +197,7 @@ mod tests {
     fn core_finalization_has_no_full_key_envelope() -> crate::VaultResult<()> {
         assert_eq!(
             SentinelGenesisPhase::CollectingParticipants.translation_key(),
-            crate::i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
+            i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS
         );
         assert_eq!(
             SentinelGenesisPhase::DeliveringShares.complete_delivery(),
@@ -240,7 +239,7 @@ mod tests {
         assert_eq!(output.participant_deliveries.len(), 2);
         let operations = sentinel_genesis_operations(&output);
         assert_eq!(operations.len(), 3);
-        let mut materialized = crate::VaultMetaState::default();
+        let mut materialized = VaultMetaState::default();
         for operation in &operations {
             crate::apply_vault_meta_operation(
                 &mut materialized,

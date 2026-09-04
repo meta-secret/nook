@@ -1,3 +1,5 @@
+use crate::StoredICloudShareTarget;
+
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -201,8 +203,8 @@ fn merge_active_oauth(
         drive_mode: active.drive_mode,
         icloud_mode: active.icloud_mode,
         icloud_share_target: match active.icloud_share_target {
-            crate::StoredICloudShareTarget::SharedTarget(_) => active.icloud_share_target.clone(),
-            crate::StoredICloudShareTarget::Personal => persisted.icloud_share_target.clone(),
+            StoredICloudShareTarget::SharedTarget(_) => active.icloud_share_target.clone(),
+            StoredICloudShareTarget::Personal => persisted.icloud_share_target.clone(),
         },
         file_name: if persisted.file_name.as_deref().and_then(non_empty).is_some() {
             persisted.file_name.clone()

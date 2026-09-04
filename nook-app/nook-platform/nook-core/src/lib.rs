@@ -3,6 +3,7 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
+#![deny(clippy::absolute_paths)]
 
 mod auth;
 mod crypto;
@@ -436,6 +437,8 @@ pub use vault_wire::{
 
 #[cfg(test)]
 mod test_support {
+    use crate::{VaultStoreIdentityRef, VaultVersionWrite};
+
     use crate::{
         DeviceIdentity, SecretId, StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultResult,
         VaultUnlock, generate_store_id, genesis_auth_record, genesis_members_records,
@@ -457,8 +460,8 @@ mod test_support {
             }],
             &VaultUnlock::Keys,
             &[],
-            crate::VaultStoreIdentityRef::Assigned(store_id),
-            crate::VaultVersionWrite::Version(version),
+            VaultStoreIdentityRef::Assigned(store_id),
+            VaultVersionWrite::Version(version),
         )?
         .into_inner())
     }
@@ -482,8 +485,8 @@ mod test_support {
             &records,
             &VaultUnlock::Keys,
             &[],
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultVersionWrite::Initial,
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultVersionWrite::Initial,
         )?;
         Ok((keys, identity, yaml))
     }

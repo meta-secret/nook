@@ -5,6 +5,8 @@
 //! labels a person needs to choose a recovery path. It never exposes an
 //! envelope, credential id, private key, or decrypted vault value.
 
+use crate::EventError;
+
 use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultResult, project_vault};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -78,7 +80,7 @@ pub fn vault_recovery_options(
     for event_id in graph.topological_order()? {
         let event = graph
             .get(&event_id)
-            .ok_or_else(|| crate::EventError::MissingEvent {
+            .ok_or_else(|| EventError::MissingEvent {
                 event_id: event_id.as_str().to_owned(),
             })?;
         for operation in &event.body.operations {
@@ -152,6 +154,8 @@ pub fn recovery_device_id_hint(device_id: &DeviceId) -> String {
 
 #[cfg(test)]
 mod tests {
+    use crate::AgeArmoredCiphertext;
+
     use super::*;
     use crate::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, GenesisImportPayload, IsoTimestamp,
@@ -227,10 +231,10 @@ mod tests {
                 encryption_public_key: first.public_key(),
                 signing_public_key: DeviceSigningPublicKey::default(),
                 label: MemberLabel::from_trusted("Old laptop".to_owned()),
-                secrets_key_ciphertext: crate::AgeArmoredCiphertext::from_trusted_armored(
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted_armored(
                     "ciphertext-one".to_owned(),
                 ),
-                members_key_ciphertext: crate::AgeArmoredCiphertext::from_trusted_armored(
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted_armored(
                     "ciphertext-two".to_owned(),
                 ),
             }],
@@ -245,10 +249,10 @@ mod tests {
                 encryption_public_key: second.public_key(),
                 signing_public_key: DeviceSigningPublicKey::default(),
                 label: MemberLabel::from_trusted("Phone".to_owned()),
-                secrets_key_ciphertext: crate::AgeArmoredCiphertext::from_trusted_armored(
+                secrets_key_ciphertext: AgeArmoredCiphertext::from_trusted_armored(
                     "ciphertext-three".to_owned(),
                 ),
-                members_key_ciphertext: crate::AgeArmoredCiphertext::from_trusted_armored(
+                members_key_ciphertext: AgeArmoredCiphertext::from_trusted_armored(
                     "ciphertext-four".to_owned(),
                 ),
             }],

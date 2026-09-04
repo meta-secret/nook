@@ -18,7 +18,7 @@ pub use sync_policy::{
     VaultSyncTimerStartDecision, VaultSyncTimerTickDecision,
 };
 
-use crate::translate_from_catalog;
+use crate::{i18n_keys, translate_from_catalog};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -120,12 +120,10 @@ impl VaultEditDecision {
     pub const fn translation_key(self) -> Option<&'static str> {
         match self {
             Self::Allowed => None,
-            Self::BlockedSecurityConflict => {
-                Some(crate::i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
-            }
-            Self::BlockedSyncConflict => Some(crate::i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS),
+            Self::BlockedSecurityConflict => Some(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS),
+            Self::BlockedSyncConflict => Some(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS),
             Self::BlockedByArchitecture => {
-                Some(crate::i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
+                Some(i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
             }
         }
     }
@@ -274,15 +272,15 @@ mod tests {
         );
         assert_eq!(
             VaultEditDecision::BlockedSecurityConflict.translation_key(),
-            Some(crate::i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
+            Some(i18n_keys::AUTH_STORAGE_SECURITY_CONFLICT_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedSyncConflict.translation_key(),
-            Some(crate::i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
+            Some(i18n_keys::AUTH_STORAGE_SYNC_BLOCKED_EDITS)
         );
         assert_eq!(
             VaultEditDecision::BlockedByArchitecture.translation_key(),
-            Some(crate::i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
+            Some(i18n_keys::ARCHITECTURE_MODES_SENTINEL_SECRET_CREATION_BLOCKED)
         );
         assert_eq!(VaultEditDecision::Allowed.translation_key(), None);
         assert!(VaultClientPolicy::edits_blocked(1, false, true));

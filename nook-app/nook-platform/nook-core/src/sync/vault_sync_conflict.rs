@@ -1,5 +1,7 @@
 //! Typed whole-vault sync conflicts.
 
+use crate::{IdentityVaultAppGrantKind, VaultOperation};
+
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -98,7 +100,7 @@ pub fn classify_current_vault_replaceability(
         return CurrentVaultReplaceability::Unknown;
     };
     let [
-        crate::VaultOperation::VaultImported {
+        VaultOperation::VaultImported {
             secrets,
             password_entries,
             ..
@@ -130,7 +132,7 @@ pub fn project_provider_vault_decision(
             eligibility: if !identity.linked_to_provider_vault {
                 ProviderVaultIdentityEligibility::NotLinked
             } else if identity.protected_local_app_available
-                && identity.app_grant == crate::IdentityVaultAppGrantKind::Granted
+                && identity.app_grant == IdentityVaultAppGrantKind::Granted
             {
                 ProviderVaultIdentityEligibility::LinkedAndPrepared
             } else {
@@ -215,6 +217,8 @@ impl VaultSyncConflict {
 
 #[cfg(test)]
 mod tests {
+    use crate::{IdentityVaultAppGrantKind, VaultEvent, VaultEventSchemaVersion, VaultOperation};
+
     use super::*;
     use crate::{
         EncryptedSecretPayload, EventGraph, EventId, GenesisImportPayload, IsoTimestamp,
@@ -273,9 +277,9 @@ mod tests {
         parent: EventId,
         operation: crate::VaultOperation,
     ) -> anyhow::Result<EventId> {
-        let event = crate::VaultEvent::sign(
+        let event = VaultEvent::sign(
             crate::VaultEventBody {
-                schema_version: crate::VaultEventSchemaVersion::CURRENT,
+                schema_version: VaultEventSchemaVersion::CURRENT,
                 store_id: StoreId::parse(TEST_STORE_ID)?,
                 actor_id: signing.actor_id()?,
                 actor_signing_public_key: signing.public_key(),
@@ -334,9 +338,9 @@ mod tests {
             protected_local_app_available,
             is_current_app: identity_id == "personal",
             app_grant: if protected_local_app_available {
-                crate::IdentityVaultAppGrantKind::Granted
+                IdentityVaultAppGrantKind::Granted
             } else {
-                crate::IdentityVaultAppGrantKind::NotGranted
+                IdentityVaultAppGrantKind::NotGranted
             },
         }
     }
@@ -422,15 +426,11 @@ mod tests {
     fn linked_identity_requires_a_protected_app_and_both_dek_envelopes() {
         let mut observations = Vec::new();
         for (identity_id, protected, grant) in [
-            (
-                "missing-app",
-                false,
-                crate::IdentityVaultAppGrantKind::Granted,
-            ),
+            ("missing-app", false, IdentityVaultAppGrantKind::Granted),
             (
                 "missing-envelope",
                 true,
-                crate::IdentityVaultAppGrantKind::NotGranted,
+                IdentityVaultAppGrantKind::NotGranted,
             ),
         ] {
             let mut observation = identity(identity_id, true, protected);
@@ -486,7 +486,7 @@ mod tests {
             &mut graph,
             &signing,
             missing_parent,
-            crate::VaultOperation::VaultCleared,
+            VaultOperation::VaultCleared,
         )?;
 
         assert!(!graph.is_empty());
@@ -501,12 +501,7 @@ mod tests {
     #[test]
     fn accepted_post_genesis_nonsecret_mutation_requires_preservation() -> anyhow::Result<()> {
         let (mut graph, signing, genesis) = accepted_graph_fixture(false)?;
-        append_operation(
-            &mut graph,
-            &signing,
-            genesis,
-            crate::VaultOperation::VaultCleared,
-        )?;
+        append_operation(&mut graph, &signing, genesis, VaultOperation::VaultCleared)?;
 
         assert_eq!(
             classify_current_vault_replaceability(&graph, TEST_STORE_ID),
@@ -523,7 +518,7 @@ mod tests {
             &mut graph,
             &signing,
             genesis,
-            crate::VaultOperation::SecretCreated {
+            VaultOperation::SecretCreated {
                 secret: encrypted_secret(secret_id.as_str())?,
             },
         )?;
@@ -531,7 +526,7 @@ mod tests {
             &mut graph,
             &signing,
             created,
-            crate::VaultOperation::SecretDeleted { secret_id },
+            VaultOperation::SecretDeleted { secret_id },
         )?;
 
         assert_eq!(

@@ -1,10 +1,12 @@
 //! Chromium-family password CSV conversion into Nook's typed plaintext model.
 
+use std::iter;
+
 use csv::StringRecord;
 use thiserror::Error;
 
 use super::import_support::{
-    MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
+    self, MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
     normalized_csv_header, optional_csv_field,
 };
 use crate::{LoginSecret, SecretValue};
@@ -42,7 +44,7 @@ fn required_column(
     name: &'static str,
     aliases: &[&str],
 ) -> Result<usize, ChromePasswordsImportError> {
-    std::iter::once(name)
+    iter::once(name)
         .chain(aliases.iter().copied())
         .find_map(|candidate| {
             let expected = normalized_csv_header(candidate);
@@ -73,8 +75,8 @@ fn columns(headers: &StringRecord) -> Result<ChromePasswordColumns, ChromePasswo
 }
 
 fn append_name_metadata(notes: &mut String, name: &str, website_url: &str) {
-    if let Some(entry) = super::import_support::source_label_metadata("name", name, website_url) {
-        super::import_support::append_import_metadata(notes, "Browser password manager", [entry]);
+    if let Some(entry) = import_support::source_label_metadata("name", name, website_url) {
+        import_support::append_import_metadata(notes, "Browser password manager", [entry]);
     }
 }
 

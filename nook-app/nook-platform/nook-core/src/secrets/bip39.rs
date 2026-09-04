@@ -79,6 +79,8 @@ pub fn infer_bip39_mnemonic_length(text: &str) -> Option<u32> {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
+
     use super::*;
     use bip39::Mnemonic;
 
@@ -165,13 +167,13 @@ mod tests {
         let twelve_word_length = infer_bip39_mnemonic_length(
             "abandon ability able about above absent absorb abstract absurd abuse access accident",
         )
-        .ok_or_else(|| std::io::Error::other("12-word mnemonic length must be recognized"))?;
+        .ok_or_else(|| io::Error::other("12-word mnemonic length must be recognized"))?;
         assert_eq!(twelve_word_length, 12);
         let twenty_four_word_length = infer_bip39_mnemonic_length(
             "abandon ability able about above absent absorb abstract absurd abuse access accident \
              account accuse achieve acid acoustic acquire across act action actor actress actual",
         )
-        .ok_or_else(|| std::io::Error::other("24-word mnemonic length must be recognized"))?;
+        .ok_or_else(|| io::Error::other("24-word mnemonic length must be recognized"))?;
         assert_eq!(twenty_four_word_length, 24);
         assert_eq!(infer_bip39_mnemonic_length("abandon ability"), None);
         Ok(())

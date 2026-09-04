@@ -1,5 +1,11 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
+#![deny(clippy::absolute_paths)]
+
+use nook_core::AgeArmoredCiphertext;
+
+use std::io;
+
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
@@ -129,7 +135,7 @@ fn passkey_round_trips_through_encrypted_vault_storage() -> anyhow::Result<()> {
             .list()
             .iter()
             .find(|record| record.id == sid("passkey-example"))
-            .ok_or_else(|| std::io::Error::other("passkey record must exist"))?
+            .ok_or_else(|| io::Error::other("passkey record must exist"))?
             .data,
         expected
     );
@@ -158,7 +164,7 @@ fn incremental_add_secret_matches_full_reencrypt() -> anyhow::Result<()> {
             .list()
             .iter()
             .find(|r| r.id == label)
-            .ok_or_else(|| std::io::Error::other("added record must exist"))?
+            .ok_or_else(|| io::Error::other("added record must exist"))?
             .data,
         api_key("generated-secret")
     );
@@ -224,16 +230,15 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() -> anyhow::Re
         Some(SecretType::ApiKey)
     );
 
-    let decrypted =
-        crypto.decrypt_value(&nook_core::AgeArmoredCiphertext::from_trusted_armored(
-            state
-                .secrets
-                .get(&new_secret_id)
-                .ok_or_else(|| std::io::Error::other("replacement secret must exist"))?
-                .1
-                .as_str()
-                .to_owned(),
-        ))?;
+    let decrypted = crypto.decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
+        state
+            .secrets
+            .get(&new_secret_id)
+            .ok_or_else(|| io::Error::other("replacement secret must exist"))?
+            .1
+            .as_str()
+            .to_owned(),
+    ))?;
     assert_eq!(decrypted.as_str(), new_yaml);
     Ok(())
 }
@@ -321,7 +326,7 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
     let mut armored = armored_cache_from_db(&sample_db(), &crypto)?;
     let old = armored
         .get(&sid("github.com"))
-        .ok_or_else(|| std::io::Error::other("GitHub fixture must exist"))?
+        .ok_or_else(|| io::Error::other("GitHub fixture must exist"))?
         .clone();
 
     armored.insert(
@@ -331,7 +336,7 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
     assert_ne!(
         armored
             .get(&sid("github.com"))
-            .ok_or_else(|| std::io::Error::other("updated armor must exist"))?,
+            .ok_or_else(|| io::Error::other("updated armor must exist"))?,
         &old
     );
 
@@ -342,7 +347,7 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
             .list()
             .iter()
             .find(|r| r.id == sid("github.com"))
-            .ok_or_else(|| std::io::Error::other("updated record must exist"))?
+            .ok_or_else(|| io::Error::other("updated record must exist"))?
             .data,
         api_key("new-password")
     );
@@ -375,7 +380,7 @@ fn connect_validation_matches_ui_rules() -> anyhow::Result<()> {
     assert_eq!(validate_connect("local", "ignored")?, None);
     assert_eq!(
         validate_connect("github", "  ghp_abc  ")?
-            .ok_or_else(|| std::io::Error::other("GitHub credential must be returned"))?
+            .ok_or_else(|| io::Error::other("GitHub credential must be returned"))?
             .as_str(),
         "ghp_abc"
     );

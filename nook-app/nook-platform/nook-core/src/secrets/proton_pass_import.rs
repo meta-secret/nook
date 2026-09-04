@@ -1,12 +1,18 @@
 //! Proton Pass export conversion into Nook's typed plaintext secret model.
 
-use std::collections::BTreeMap;
-use std::io::{Cursor, Read};
+use super::import_support;
+
+use std::{
+    collections::BTreeMap,
+    fmt,
+    io::{Cursor, Read},
+    str,
+};
 
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
-use zip::ZipArchive;
+use zip::{ZipArchive, result};
 
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 
@@ -123,7 +129,7 @@ struct ProtonPassField {
     data: Value,
 }
 
-fn invalid_export(error: impl std::fmt::Display) -> ProtonPassImportError {
+fn invalid_export(error: impl fmt::Display) -> ProtonPassImportError {
     ProtonPassImportError::InvalidExport(error.to_string())
 }
 
@@ -139,10 +145,10 @@ fn read_zip_data(bytes: &[u8]) -> Result<String, ProtonPassImportError> {
 
     let file = match archive.by_name(DATA_FILE) {
         Ok(file) => file,
-        Err(zip::result::ZipError::FileNotFound) if encrypted_data_found => {
+        Err(result::ZipError::FileNotFound) if encrypted_data_found => {
             return Err(ProtonPassImportError::EncryptedExport);
         }
-        Err(zip::result::ZipError::FileNotFound) => {
+        Err(result::ZipError::FileNotFound) => {
             return Err(ProtonPassImportError::MissingDataFile);
         }
         Err(error) => return Err(invalid_export(error)),
@@ -178,7 +184,7 @@ fn append_proton_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    super::import_support::append_import_metadata(notes, "Proton Pass", metadata);
+    import_support::append_import_metadata(notes, "Proton Pass", metadata);
 }
 
 fn item_metadata(
@@ -262,7 +268,7 @@ fn convert_login(item: &ProtonPassItem, vault_name: &str) -> SecretValue {
     .map_or("", str::trim);
     let mut notes = item.data.metadata.note.clone();
     let mut metadata = item_metadata(item, vault_name, website_url.as_str(), username);
-    if let Some(name) = super::import_support::source_label_metadata(
+    if let Some(name) = import_support::source_label_metadata(
         "name",
         &item.data.metadata.name,
         website_url.as_str(),
@@ -366,7 +372,7 @@ pub fn plan_proton_pass_import(
         let json = read_zip_data(export_bytes)?;
         return plan_json(&json);
     }
-    let json = std::str::from_utf8(export_bytes).map_err(invalid_export)?;
+    let json = str::from_utf8(export_bytes).map_err(invalid_export)?;
     plan_json(json)
 }
 

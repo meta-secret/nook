@@ -3,6 +3,10 @@
 //! Two (or more) [`MemoryVaultStore`] values stand in for local `IndexedDB` and
 //! sync providers — no browser or network required.
 
+#![deny(clippy::absolute_paths)]
+
+use nook_core::{VaultStoreIdentity, VaultStoreIdentityRef, VaultVersionWrite};
+
 use nook_core::{
     MemoryVaultStore, RevisionGuardedWrite, SecretId, StoreRevision, StoreRevisionRef,
     StoredRecordPayload, StoredSecretRecord, VaultSyncAction, VaultSyncError, VaultUnlock,
@@ -25,8 +29,8 @@ fn sample_yaml(version: u64, armor_line: &str) -> anyhow::Result<String> {
         }],
         &VaultUnlock::Keys,
         &[],
-        nook_core::VaultStoreIdentityRef::Assigned(STORE_ID),
-        nook_core::VaultVersionWrite::Version(version),
+        VaultStoreIdentityRef::Assigned(STORE_ID),
+        VaultVersionWrite::Version(version),
     )?
     .into_inner())
 }
@@ -204,7 +208,7 @@ fn sequential_fan_out_stops_updating_local_when_remote_is_newer() -> anyhow::Res
     assert_eq!(read_vault_version(remotes["stale"].blob())?, 5);
     assert_eq!(
         read_vault_store_id(local.blob())?,
-        nook_core::VaultStoreIdentity::Assigned(store_id.to_owned())
+        VaultStoreIdentity::Assigned(store_id.to_owned())
     );
     Ok(())
 }

@@ -3,14 +3,18 @@
 //! Accepts either a single Dashlane category CSV (`credentials`, secure notes,
 //! or payments) or the unencrypted ZIP export that contains those files.
 
-use std::io::{Cursor, Read};
+use std::{
+    fmt,
+    io::{Cursor, Read},
+    str,
+};
 
 use csv::StringRecord;
 use thiserror::Error;
 use zip::ZipArchive;
 
 use super::import_support::{
-    MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
+    self, MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
     normalized_csv_header, optional_csv_field,
 };
 use crate::{AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
@@ -86,7 +90,7 @@ fn is_zip_export(bytes: &[u8]) -> bool {
         || bytes.starts_with(b"PK\x07\x08")
 }
 
-fn invalid_archive(error: impl std::fmt::Display) -> DashlaneImportError {
+fn invalid_archive(error: impl fmt::Display) -> DashlaneImportError {
     DashlaneImportError::InvalidArchive(error.to_string())
 }
 
@@ -212,7 +216,7 @@ fn append_dashlane_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    super::import_support::append_import_metadata(notes, "Dashlane", metadata);
+    import_support::append_import_metadata(notes, "Dashlane", metadata);
 }
 
 fn convert_credential_record(
@@ -244,8 +248,7 @@ fn convert_credential_record(
     let website_url = if url.is_empty() { title.clone() } else { url };
 
     let mut metadata = Vec::new();
-    if let Some(entry) = super::import_support::source_label_metadata("title", &title, &website_url)
-    {
+    if let Some(entry) = import_support::source_label_metadata("title", &title, &website_url) {
         metadata.push(entry);
     }
     if !category.trim().is_empty() {
@@ -482,7 +485,7 @@ pub fn plan_dashlane_import(
     if is_zip_export(export_bytes) {
         return plan_zip_import(export_bytes);
     }
-    let csv_text = std::str::from_utf8(export_bytes).map_err(|_| {
+    let csv_text = str::from_utf8(export_bytes).map_err(|_| {
         DashlaneImportError::InvalidArchive(
             "expected UTF-8 CSV or a Dashlane CSV ZIP archive".to_owned(),
         )

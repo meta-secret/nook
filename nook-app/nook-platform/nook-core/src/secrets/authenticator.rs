@@ -1,12 +1,14 @@
 //! RFC 6238 TOTP parsing, validation, and code generation.
 
+use std::{borrow::Cow, collections::HashMap, mem};
+
 use crate::ValidationError;
+use crate::secrets::authenticator_issuer_hosts;
 use hmac::{Hmac, KeyInit, Mac};
 use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
-use std::collections::HashMap;
 use zeroize::{Zeroize, Zeroizing};
 
 mod backup_codes;
@@ -52,7 +54,7 @@ impl TotpSecret {
         if decoded.len() < MIN_SECRET_BYTES {
             return Err(ValidationError::AuthenticatorSecretInvalid);
         }
-        Ok(Self(std::mem::take(&mut *normalized)))
+        Ok(Self(mem::take(&mut *normalized)))
     }
 
     #[must_use]
@@ -127,10 +129,7 @@ impl AuthenticatorSecret {
             return;
         }
         if let Some(host) =
-            crate::secrets::authenticator_issuer_hosts::resolve_authenticator_website_host(
-                "",
-                &self.issuer,
-            )
+            authenticator_issuer_hosts::resolve_authenticator_website_host("", &self.issuer)
         {
             self.website_url = format!("https://{host}");
         }
@@ -368,14 +367,14 @@ fn decode_base32(value: &str) -> Result<Vec<u8>, ValidationError> {
 fn decode_uri_path_component(value: &str) -> Result<String, ValidationError> {
     percent_decode_str(value)
         .decode_utf8()
-        .map(std::borrow::Cow::into_owned)
+        .map(Cow::into_owned)
         .map_err(|_| ValidationError::AuthenticatorUriInvalid)
 }
 
 fn decode_uri_query_component(value: &str) -> Result<String, ValidationError> {
     percent_decode_str(&value.replace('+', " "))
         .decode_utf8()
-        .map(std::borrow::Cow::into_owned)
+        .map(Cow::into_owned)
         .map_err(|_| ValidationError::AuthenticatorUriInvalid)
 }
 

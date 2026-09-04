@@ -142,6 +142,16 @@ pub fn provider_credentials_are_presealed(snapshot: &AuthProvidersSnapshotData) 
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        ActiveVaultScope, GoogleDriveMode, ProviderSyncCheckpoint, ProviderVaultScope,
+        StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
+        StoredLocalFolderConfiguration, StoredOAuthAccessCredential, StoredOAuthAccountIdentity,
+        StoredOAuthFileConfiguration, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
+        StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+    };
+
+    use std::io;
+
     use super::*;
     use crate::{
         DeviceIdentity, ICloudMode, OAuthFileConfigData, OauthFilePreset, StorageProviderData,
@@ -157,7 +167,7 @@ mod tests {
                 "nook",
                 "2026-06-24T00:00:00.000Z",
             )],
-            active_vault_store_id: crate::ActiveVaultScope::Unselected,
+            active_vault_store_id: ActiveVaultScope::Unselected,
         }
     }
 
@@ -167,33 +177,29 @@ mod tests {
                 id: "gd-1".to_owned(),
                 provider_type: StorageProviderType::OauthFile,
                 label: "Google Drive".to_owned(),
-                github_pat: crate::StoredGithubPat::Missing,
-                github_repo: crate::StoredGithubRepository::DefaultRepository,
-                oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
+                github_pat: StoredGithubPat::Missing,
+                github_repo: StoredGithubRepository::DefaultRepository,
+                oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                     preset: OauthFilePreset::GoogleDrive,
-                    access_token: crate::StoredOAuthAccessCredential::AccessToken(
-                        access.to_owned(),
-                    ),
-                    refresh_token: crate::StoredOAuthRefreshCredential::from_option(
+                    access_token: StoredOAuthAccessCredential::AccessToken(access.to_owned()),
+                    refresh_token: StoredOAuthRefreshCredential::from_option(
                         refresh.map(str::to_owned),
                     ),
-                    expires_at: crate::StoredOAuthTokenExpiry::Unknown,
-                    file_id: crate::StoredOAuthRemoteFileId::Unresolved,
-                    folder_id: crate::StoredGoogleDriveFolder::Root,
-                    drive_mode: crate::GoogleDriveMode::Private,
+                    expires_at: StoredOAuthTokenExpiry::Unknown,
+                    file_id: StoredOAuthRemoteFileId::Unresolved,
+                    folder_id: StoredGoogleDriveFolder::Root,
+                    drive_mode: GoogleDriveMode::Private,
                     icloud_mode: ICloudMode::Private,
-                    icloud_share_target: crate::StoredICloudShareTarget::Personal,
-                    file_name: crate::StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
-                    account_email: crate::StoredOAuthAccountIdentity::Email(
-                        "me@example.com".to_owned(),
-                    ),
+                    icloud_share_target: StoredICloudShareTarget::Personal,
+                    file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
+                    account_email: StoredOAuthAccountIdentity::Email("me@example.com".to_owned()),
                 }),
-                local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-                store_id: crate::ProviderVaultScope::Unscoped,
-                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
+                local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                store_id: ProviderVaultScope::Unscoped,
+                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }],
-            active_vault_store_id: crate::ActiveVaultScope::Unselected,
+            active_vault_store_id: ActiveVaultScope::Unselected,
         }
     }
 
@@ -204,7 +210,7 @@ mod tests {
         let mut snapshot = github_snapshot(pat);
         seal_provider_credentials(&identity, &mut snapshot)?;
         let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
-            return Err(std::io::Error::other("sealed GitHub PAT must be present").into());
+            return Err(io::Error::other("sealed GitHub PAT must be present").into());
         };
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
@@ -228,12 +234,12 @@ mod tests {
         let oauth = snapshot.providers[0]
             .oauth_file
             .as_ref()
-            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
+            .ok_or_else(|| io::Error::other("test as_ref value must exist"))?;
         let StoredOAuthAccessCredential::AccessToken(stored_access) = &oauth.access_token else {
-            return Err(std::io::Error::other("sealed access token must be present").into());
+            return Err(io::Error::other("sealed access token must be present").into());
         };
         let StoredOAuthRefreshCredential::Token(stored_refresh) = &oauth.refresh_token else {
-            return Err(std::io::Error::other("sealed refresh token must be present").into());
+            return Err(io::Error::other("sealed refresh token must be present").into());
         };
         assert!(is_sealed_credential(stored_access));
         assert!(is_sealed_credential(stored_refresh));
@@ -245,7 +251,7 @@ mod tests {
         let opened_oauth = opened.providers[0]
             .oauth_file
             .as_ref()
-            .ok_or_else(|| std::io::Error::other("test as_ref value must exist"))?;
+            .ok_or_else(|| io::Error::other("test as_ref value must exist"))?;
         assert_eq!(
             opened_oauth.access_token,
             StoredOAuthAccessCredential::AccessToken(access.to_owned())
@@ -299,9 +305,9 @@ mod tests {
         let oauth = snapshot.providers[0]
             .oauth_file
             .as_mut()
-            .ok_or_else(|| std::io::Error::other("test as_mut value must exist"))?;
+            .ok_or_else(|| io::Error::other("test as_mut value must exist"))?;
         let StoredOAuthAccessCredential::AccessToken(access_token) = &mut oauth.access_token else {
-            return Err(std::io::Error::other("plaintext access token must be present").into());
+            return Err(io::Error::other("plaintext access token must be present").into());
         };
         seal_credential(&identity, access_token)?;
         let sealed = snapshot.clone();
@@ -321,7 +327,7 @@ mod tests {
         let mut snapshot = github_snapshot(pat);
         seal_provider_credentials_for_public_key(&extension.public_key(), &mut snapshot)?;
         let StoredGithubPat::Token(stored) = &snapshot.providers[0].github_pat else {
-            return Err(std::io::Error::other("sealed GitHub PAT must be present").into());
+            return Err(io::Error::other("sealed GitHub PAT must be present").into());
         };
         assert!(is_sealed_credential(stored));
         assert!(!stored.contains(pat));
@@ -345,7 +351,7 @@ mod tests {
         assert!(provider_credentials_are_presealed(
             &AuthProvidersSnapshotData {
                 providers: Vec::new(),
-                active_vault_store_id: crate::ActiveVaultScope::StoreId("store-1".to_owned()),
+                active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
             }
         ));
         Ok(())

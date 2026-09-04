@@ -1,3 +1,5 @@
+use crate::ProviderVaultScope;
+
 use super::{
     ManagerStoreScopeRef, ProviderSyncCheckpoint, ProviderSyncRevision, ProviderSyncRevisionRef,
     ProviderSyncedVaultVersion, StorageProviderData,
@@ -54,8 +56,7 @@ pub fn update_provider_sync_metadata(
                 if let ManagerStoreScopeRef::Store(store_id) = manager_store_id
                     && !store_id.trim().is_empty()
                 {
-                    provider.store_id =
-                        crate::ProviderVaultScope::StoreId(store_id.trim().to_owned());
+                    provider.store_id = ProviderVaultScope::StoreId(store_id.trim().to_owned());
                 }
             }
             provider
@@ -65,6 +66,11 @@ pub fn update_provider_sync_metadata(
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        ProviderVaultScope, StoredGithubPat, StoredGithubRepository,
+        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+    };
+
     use crate::{
         ManagerStoreScopeRef, ProviderSyncCheckpoint, ProviderSyncRevision,
         ProviderSyncRevisionRef, ProviderSyncedVaultVersion, StorageProviderData,
@@ -78,11 +84,11 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::Github,
             label: "GitHub".to_owned(),
-            github_pat: crate::StoredGithubPat::Token(pat.to_owned()),
-            github_repo: crate::StoredGithubRepository::Repository(repo.to_owned()),
-            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-            store_id: crate::ProviderVaultScope::Unscoped,
+            github_pat: StoredGithubPat::Token(pat.to_owned()),
+            github_repo: StoredGithubRepository::Repository(repo.to_owned()),
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }

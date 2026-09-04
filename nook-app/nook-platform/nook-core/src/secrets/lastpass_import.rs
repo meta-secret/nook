@@ -1,5 +1,7 @@
 //! `LastPass` CSV conversion into Nook's typed plaintext secret model.
 
+use super::import_support;
+
 use std::collections::HashMap;
 
 use csv::{ReaderBuilder, StringRecord, Trim};
@@ -84,9 +86,7 @@ fn append_lastpass_metadata(
     totp: &str,
 ) {
     let mut metadata = Vec::new();
-    if let Some((key, value)) =
-        super::import_support::source_label_metadata("name", name, website_url)
-    {
+    if let Some((key, value)) = import_support::source_label_metadata("name", name, website_url) {
         metadata.push((key, value));
     }
     if !grouping.trim().is_empty() {
@@ -101,7 +101,7 @@ fn append_lastpass_metadata(
     if !totp.trim().is_empty() {
         metadata.push(("totp".to_owned(), totp.trim().to_owned()));
     }
-    super::import_support::append_import_metadata(notes, "LastPass", metadata);
+    import_support::append_import_metadata(notes, "LastPass", metadata);
 }
 
 fn is_secure_note_url(url: &str) -> bool {

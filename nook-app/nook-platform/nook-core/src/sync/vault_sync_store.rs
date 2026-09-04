@@ -217,6 +217,7 @@ fn next_revision(current: StoreRevisionRef<'_>) -> String {
 mod tests {
     use super::*;
     use crate::test_support::sample_vault_yaml as sample_yaml;
+    use crate::vault_sync;
 
     #[test]
     fn reconcile_push_local_copies_blob_and_bumps_revision() -> anyhow::Result<()> {
@@ -267,7 +268,7 @@ mod tests {
         let base_blob = sample_yaml(2, store_id, "base")?;
         let local_blob = sample_yaml(4, store_id, "local")?;
         let remote_blob = sample_yaml(3, store_id, "remote")?;
-        let base_hash = crate::vault_sync::vault_content_hash(&base_blob);
+        let base_hash = vault_sync::vault_content_hash(&base_blob);
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 

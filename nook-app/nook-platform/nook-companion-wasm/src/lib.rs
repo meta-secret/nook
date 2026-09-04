@@ -11,6 +11,7 @@
     clippy::must_use_candidate,
     clippy::uninlined_format_args
 )]
+#![deny(clippy::absolute_paths)]
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -648,6 +649,8 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
+    use std::fmt;
+
     use nook_companion_core::{
         AuthenticationBackupCodesObservation, ExtensionPersistenceArea,
         ExtensionPersistenceObservation,
@@ -726,7 +729,7 @@ mod wasm_tests {
         kind: String,
     }
 
-    fn js_error(error: impl std::fmt::Display) -> wasm_bindgen::JsError {
+    fn js_error(error: impl fmt::Display) -> wasm_bindgen::JsError {
         wasm_bindgen::JsError::new(&error.to_string())
     }
 

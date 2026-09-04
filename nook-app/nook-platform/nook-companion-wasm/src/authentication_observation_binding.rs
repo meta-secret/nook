@@ -23,6 +23,8 @@ pub fn authentication_page_observation_facts_match_binding(
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
+    use std::fmt;
+
     use nook_companion_core::{
         AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
         AuthenticationFieldObservationFacts, AuthenticationPageObservationFacts,
@@ -31,7 +33,7 @@ mod tests {
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    fn js_error(error: impl std::fmt::Display) -> wasm_bindgen::JsError {
+    fn js_error(error: impl fmt::Display) -> wasm_bindgen::JsError {
         wasm_bindgen::JsError::new(&error.to_string())
     }
 

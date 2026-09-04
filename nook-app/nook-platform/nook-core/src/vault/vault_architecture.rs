@@ -5,6 +5,8 @@
 //! capability as separate concerns. UI and WASM callers should ask this module
 //! for decisions instead of re-encoding the matrix in TypeScript.
 
+use crate::VaultMetaRecord;
+
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{StoredSecretRecord, is_sentinel_share_stored_record};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
@@ -303,18 +305,18 @@ impl VaultArchitecture {
         let mut has_auth = false;
 
         for record in records {
-            let classified = crate::VaultMetaRecord::classify(record);
+            let classified = VaultMetaRecord::classify(record);
             if record
                 .key
                 .as_str()
                 .starts_with(crate::SENTINEL_SHARE_RECORD_PREFIX)
-                && !matches!(&classified, crate::VaultMetaRecord::SentinelShare(..))
+                && !matches!(&classified, VaultMetaRecord::SentinelShare(..))
             {
                 return Err(ValidationError::InvalidSentinelShareSet);
             }
             match classified {
-                crate::VaultMetaRecord::Auth(..) => has_auth = true,
-                crate::VaultMetaRecord::SentinelShare(device_id, share) => {
+                VaultMetaRecord::Auth(..) => has_auth = true,
+                VaultMetaRecord::SentinelShare(device_id, share) => {
                     if !share_devices.insert(device_id) || !share_indexes.insert(share.share_index)
                     {
                         return Err(ValidationError::InvalidSentinelShareSet);
@@ -398,6 +400,10 @@ impl VaultArchitecture {
 
 #[cfg(test)]
 mod tests {
+    use crate::{DeviceIdentity, SecretId, StoredRecordPayload};
+
+    use std::slice;
+
     use super::*;
 
     #[test]
@@ -534,8 +540,8 @@ mod tests {
     #[test]
     fn sentinel_secret_creation_requires_actual_share_records() -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
-        let first = crate::DeviceIdentity::generate()?;
-        let second = crate::DeviceIdentity::generate()?;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
         let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
@@ -557,8 +563,8 @@ mod tests {
     fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets()
     -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
-        let first = crate::DeviceIdentity::generate()?;
-        let second = crate::DeviceIdentity::generate()?;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -604,7 +610,7 @@ mod tests {
             crate::parse_sentinel_share_envelope(duplicate_index[1].value.as_str())?;
         second_envelope.share_index = first_envelope.share_index;
         duplicate_index[1].value =
-            crate::StoredRecordPayload::from_trusted(serde_json::to_string(&second_envelope)?);
+            StoredRecordPayload::from_trusted(serde_json::to_string(&second_envelope)?);
         assert_eq!(
             architecture.validate_records(&duplicate_index),
             Err(ValidationError::InvalidSentinelShareSet)
@@ -615,8 +621,8 @@ mod tests {
     #[test]
     fn simple_record_validation_rejects_sentinel_shares() -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
-        let first = crate::DeviceIdentity::generate()?;
-        let second = crate::DeviceIdentity::generate()?;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
         let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         assert_eq!(
             VaultArchitecture::default().validate_records(&shares),
@@ -628,9 +634,9 @@ mod tests {
     #[test]
     fn malformed_sentinel_share_prefix_fails_closed_for_every_vault_type() {
         let malformed = StoredSecretRecord {
-            key: crate::SecretId::from_vault_record("sentinel_share:0123456789abcdef"),
+            key: SecretId::from_vault_record("sentinel_share:0123456789abcdef"),
             secret_type: None,
-            value: crate::StoredRecordPayload::from_trusted("not-a-share-envelope".to_owned()),
+            value: StoredRecordPayload::from_trusted("not-a-share-envelope".to_owned()),
         };
         let sentinel = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
@@ -642,7 +648,7 @@ mod tests {
         );
 
         assert_eq!(
-            sentinel.validate_records(std::slice::from_ref(&malformed)),
+            sentinel.validate_records(slice::from_ref(&malformed)),
             Err(ValidationError::InvalidSentinelShareSet)
         );
         assert_eq!(

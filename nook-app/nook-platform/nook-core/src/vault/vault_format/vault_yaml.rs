@@ -163,6 +163,10 @@ pub(super) fn vault_architecture_is_default(architecture: &VaultArchitecture) ->
 
 #[cfg(test)]
 mod tests {
+    use crate::{DeviceIdentity, DeviceMode, DeviceSigningPublicKey, SecretType};
+
+    use std::slice;
+
     use super::super::{
         VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite, deserialize_stored_yaml,
         serialize_stored_yaml, serialize_stored_yaml_with_unlock_name_architecture,
@@ -183,14 +187,14 @@ mod tests {
         let join_request = JoinRequest {
             device_id: joiner.device_id().clone(),
             public_key: joiner.public_key(),
-            signing_public_key: crate::DeviceSigningPublicKey::default(),
+            signing_public_key: DeviceSigningPublicKey::default(),
             requested_at: "2026-01-01T00:00:00Z".to_owned(),
         };
         let join_id = join_request.device_id.as_str();
         let records = vec![
             StoredSecretRecord {
                 key: sid("github.com"),
-                secret_type: Some(crate::SecretType::Login),
+                secret_type: Some(SecretType::Login),
                 value: StoredRecordPayload::from_trusted("encrypted-user-secret".to_owned()),
             },
             auth_to_stored_record(AuthYamlRecord {
@@ -267,7 +271,7 @@ mod tests {
             value: StoredRecordPayload::from_trusted(local_record),
         }];
         let architecture = VaultArchitecture {
-            device_mode: crate::DeviceMode::AntiHacker,
+            device_mode: DeviceMode::AntiHacker,
             ..VaultArchitecture::default()
         };
 
@@ -293,11 +297,11 @@ mod tests {
     #[test]
     fn sentinel_records_use_dedicated_yaml_section() -> anyhow::Result<()> {
         let keys = crate::generate_vault_keys()?;
-        let first = crate::DeviceIdentity::generate()?;
-        let second = crate::DeviceIdentity::generate()?;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
         let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2)?;
         let architecture = VaultArchitecture::sentinel_personal(
-            crate::DeviceMode::Standard,
+            DeviceMode::Standard,
             crate::SentinelPolicy {
                 threshold: 2,
                 required_participants: 2,
@@ -335,7 +339,7 @@ mod tests {
                 .to_owned(),
         })?;
 
-        let yaml = serialize_stored_yaml(std::slice::from_ref(&record))?;
+        let yaml = serialize_stored_yaml(slice::from_ref(&record))?;
         assert!(yaml.as_str().contains("secrets_key:"));
         assert!(yaml.as_str().contains("members_key:"));
         assert!(!yaml.as_str().contains("dek:"));

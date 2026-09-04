@@ -1,5 +1,7 @@
 //! Google Authenticator migration QR conversion into Nook authenticator items.
 
+use std::mem;
+
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use percent_encoding::percent_decode_str;
 use prost::Message;
@@ -240,9 +242,9 @@ fn account_and_issuer(name: &str, issuer: &str) -> (String, String) {
 }
 
 fn convert_parameter(mut parameter: OtpParameters) -> Result<SecretValue, ()> {
-    let secret_bytes = Zeroizing::new(std::mem::take(&mut parameter.secret));
-    let name = Zeroizing::new(std::mem::take(&mut parameter.name));
-    let issuer = Zeroizing::new(std::mem::take(&mut parameter.issuer));
+    let secret_bytes = Zeroizing::new(mem::take(&mut parameter.secret));
+    let name = Zeroizing::new(mem::take(&mut parameter.name));
+    let issuer = Zeroizing::new(mem::take(&mut parameter.issuer));
     if MigrationOtpType::try_from(parameter.otp_type).ok() != Some(MigrationOtpType::Totp) {
         return Err(());
     }
@@ -319,6 +321,8 @@ pub fn plan_google_authenticator_import(
 
 #[cfg(test)]
 mod tests {
+    use std::slice;
+
     use super::*;
 
     fn parameter(
@@ -453,7 +457,7 @@ mod tests {
         let first = uri(&payload(Vec::new(), 2, 0, 10));
         let other = uri(&payload(Vec::new(), 2, 1, 11));
         assert_eq!(
-            plan_google_authenticator_import(std::slice::from_ref(&first)),
+            plan_google_authenticator_import(slice::from_ref(&first)),
             Err(GoogleAuthenticatorImportError::IncompleteBatch(2))
         );
         assert_eq!(

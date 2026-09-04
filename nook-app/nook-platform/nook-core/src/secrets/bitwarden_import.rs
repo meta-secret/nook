@@ -1,5 +1,8 @@
 //! Bitwarden vault-item conversion into Nook's typed plaintext secret model.
 
+use super::import_support;
+use serde_json::Value;
+
 use aes::cipher::{BlockModeDecrypt, KeyIvInit, block_padding::Pkcs7};
 use argon2::{Algorithm, Argon2, Params, Version};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -295,7 +298,7 @@ fn append_bitwarden_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    super::import_support::append_import_metadata(notes, "Bitwarden", metadata);
+    import_support::append_import_metadata(notes, "Bitwarden", metadata);
 }
 
 fn custom_field_metadata(fields: Vec<BitwardenField>) -> Vec<(String, String)> {
@@ -327,9 +330,7 @@ fn convert_login(item: BitwardenItem) -> Option<SecretValue> {
         .cloned()
         .unwrap_or_else(|| item.name.trim().to_owned());
     let mut metadata = Vec::new();
-    if let Some(name) =
-        super::import_support::source_label_metadata("name", &item.name, &website_url)
-    {
+    if let Some(name) = import_support::source_label_metadata("name", &item.name, &website_url) {
         metadata.push(name);
     }
     metadata.push(("totp".to_owned(), login.totp));
@@ -416,17 +417,13 @@ pub fn plan_bitwarden_import_with_password(
     let value: serde_json::Value = serde_json::from_str(json)?;
     if !value
         .get("encrypted")
-        .and_then(serde_json::Value::as_bool)
+        .and_then(Value::as_bool)
         .unwrap_or(false)
     {
         return plan_plaintext(&value);
     }
 
-    if value
-        .get("passwordProtected")
-        .and_then(serde_json::Value::as_bool)
-        == Some(false)
-    {
+    if value.get("passwordProtected").and_then(Value::as_bool) == Some(false) {
         return Err(BitwardenImportError::AccountRestrictedExport);
     }
 

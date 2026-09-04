@@ -1,5 +1,9 @@
 //! Regression tests for vault crypto restore after session state is dropped (bf04223).
 
+#![deny(clippy::absolute_paths)]
+
+use nook_core::{SymmetricKey, VaultError, VaultStoreIdentityRef, VaultVersionWrite};
+
 use nook_core::{
     DeviceIdentity, VaultCrypto, VaultKeys, VaultResult, VaultUnlock, generate_store_id,
     generate_vault_keys, genesis_auth_record, genesis_members_records,
@@ -22,10 +26,10 @@ fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> Vault
         &records,
         &VaultUnlock::Keys,
         &[],
-        nook_core::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-        nook_core::VaultVersionWrite::Initial,
+        VaultStoreIdentityRef::Assigned(store_id.as_str()),
+        VaultVersionWrite::Initial,
     )
-    .map_err(nook_core::VaultError::from)?
+    .map_err(VaultError::from)?
     .into_inner())
 }
 
@@ -50,7 +54,7 @@ fn session_survives_provider_switch_simulation() -> VaultResult<()> {
     assert_eq!(restored_secrets.as_str(), keys.secrets_key.as_str());
     assert_eq!(restored_members.as_str(), keys.members_key.as_str());
 
-    let restored_crypto = VaultCrypto::new(&nook_core::SymmetricKey::parse(&restored_secrets)?)?;
+    let restored_crypto = VaultCrypto::new(&SymmetricKey::parse(&restored_secrets)?)?;
     restored_crypto.encrypt_value("after-sync")?;
     Ok(())
 }

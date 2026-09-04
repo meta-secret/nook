@@ -90,7 +90,10 @@ pub fn reconcile_yaml_sync(
 
 #[cfg(test)]
 mod tests {
+    use crate::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
+
     use super::*;
+    use crate::errors;
     use crate::{
         PasswordEnvelope, PasswordUnlockEntry, VaultKeys, VaultResult, generate_store_id,
         generate_vault_keys, genesis_auth_record, genesis_members_records,
@@ -116,8 +119,8 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultVersionWrite::Initial,
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultVersionWrite::Initial,
         )
         .map_err(Into::into)
     }
@@ -179,9 +182,9 @@ mod tests {
                 entries: password_entries.clone(),
             },
             &password_entries,
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultNameRef::Named("Team Vault"),
-            crate::VaultVersionWrite::Version(42),
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultNameRef::Named("Team Vault"),
+            VaultVersionWrite::Version(42),
         )?;
         let mut state = VaultMetaState::default();
         let outcome = reconcile_yaml_sync(
@@ -203,7 +206,7 @@ mod tests {
                 assert_eq!(reloaded.version, 42);
             }
             other => {
-                return Err(crate::errors::VaultSyncError::UnexpectedYamlSyncOutcome {
+                return Err(errors::VaultSyncError::UnexpectedYamlSyncOutcome {
                     outcome: format!("{other:?}"),
                 }
                 .into());

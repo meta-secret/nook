@@ -1,11 +1,17 @@
 //! 1Password 1PUX conversion into Nook's typed plaintext secret model.
 
-use std::io::{Cursor, Read};
+use super::import_support;
+
+use std::{
+    fmt,
+    io::{Cursor, Read},
+    iter,
+};
 
 use serde::Deserialize;
 use serde_json::Value;
 use thiserror::Error;
-use zip::ZipArchive;
+use zip::{ZipArchive, result};
 
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 
@@ -166,7 +172,7 @@ struct OnePasswordUrl {
     url: String,
 }
 
-fn archive_error(error: impl std::fmt::Display) -> OnePasswordImportError {
+fn archive_error(error: impl fmt::Display) -> OnePasswordImportError {
     OnePasswordImportError::InvalidArchive(error.to_string())
 }
 
@@ -176,7 +182,7 @@ fn read_zip_text(
     max_bytes: u64,
 ) -> Result<String, OnePasswordImportError> {
     let file = archive.by_name(name).map_err(|error| match error {
-        zip::result::ZipError::FileNotFound => OnePasswordImportError::MissingEntry(name),
+        result::ZipError::FileNotFound => OnePasswordImportError::MissingEntry(name),
         other => archive_error(other),
     })?;
     if file.size() > max_bytes {
@@ -238,10 +244,10 @@ fn append_onepassword_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    super::import_support::append_import_metadata(
+    import_support::append_import_metadata(
         notes,
         "1Password",
-        std::iter::once(("format".to_owned(), "1PUX".to_owned())).chain(metadata),
+        iter::once(("format".to_owned(), "1PUX".to_owned())).chain(metadata),
     );
 }
 
@@ -405,11 +411,9 @@ fn convert_login(item: &OnePasswordItem, vault_name: &str) -> SecretValue {
     };
     let mut notes = item.details.notes_plain.clone();
     let mut metadata = item_metadata(item, vault_name, website_url.as_str(), true);
-    if let Some(title) = super::import_support::source_label_metadata(
-        "title",
-        &item.overview.title,
-        website_url.as_str(),
-    ) {
+    if let Some(title) =
+        import_support::source_label_metadata("title", &item.overview.title, website_url.as_str())
+    {
         metadata.insert(0, title);
     }
     append_onepassword_metadata(&mut notes, metadata);
