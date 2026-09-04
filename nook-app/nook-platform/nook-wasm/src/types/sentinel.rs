@@ -24,13 +24,17 @@ impl NookSentinelUnlockSessionStatus {
         }
     }
 
-    pub(crate) fn from_status(status: nook_core::SentinelUnlockStatus) -> Self {
-        Self {
+    pub(crate) fn from_status(status: nook_core::SentinelUnlockStatus) -> Result<Self, JsError> {
+        Ok(Self {
             active: true,
-            collected: u8::try_from(usize::from(status.collected)).unwrap_or(u8::MAX),
+            collected: u8::try_from(usize::from(status.collected)).map_err(|_| {
+                JsError::new(
+                    "Sentinel unlock contribution count exceeds the JavaScript bridge limit.",
+                )
+            })?,
             threshold: status.threshold.into(),
             ready: status.ready,
-        }
+        })
     }
 
     #[wasm_bindgen(getter)]

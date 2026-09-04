@@ -308,7 +308,7 @@ impl NookVaultManager {
             nook_core::add_sentinel_unlock_response(&mut session, own_response)?;
         }
         self.sentinel_unlock = CeremonyState::Active(session);
-        Ok(self.sentinel_unlock_session_status())
+        self.sentinel_unlock_session_status()
     }
 
     #[wasm_bindgen]
@@ -392,16 +392,18 @@ impl NookVaultManager {
             .sentinel_unlock
             .get_mut("No Sentinel unlock ceremony is active.")?;
         nook_core::add_sentinel_unlock_response(session, response)?;
-        Ok(self.sentinel_unlock_session_status())
+        self.sentinel_unlock_session_status()
     }
 
     #[wasm_bindgen]
-    pub fn sentinel_unlock_session_status(&self) -> NookSentinelUnlockSessionStatus {
+    pub fn sentinel_unlock_session_status(
+        &self,
+    ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
         match &self.sentinel_unlock {
             CeremonyState::Active(session) => NookSentinelUnlockSessionStatus::from_status(
                 nook_core::sentinel_unlock_status(session),
             ),
-            CeremonyState::Inactive => NookSentinelUnlockSessionStatus::inactive(),
+            CeremonyState::Inactive => Ok(NookSentinelUnlockSessionStatus::inactive()),
         }
     }
 
