@@ -195,23 +195,18 @@ fn strip_prefix_ignore_ascii_case<'a>(value: &'a str, prefix: &str) -> Option<&'
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::i18n_keys;
 
     #[test]
     fn test_lookup_existing_keys() {
-        assert_eq!(translate("en", crate::i18n_keys::COMMON_BACK), "Back");
-        assert_eq!(translate("ru", crate::i18n_keys::COMMON_BACK), "Назад");
+        assert_eq!(translate("en", i18n_keys::COMMON_BACK), "Back");
+        assert_eq!(translate("ru", i18n_keys::COMMON_BACK), "Назад");
         assert_eq!(
-            translate(
-                "en",
-                crate::i18n_keys::ONBOARD_DEVICE_SENTINEL_READINESS_COUNT
-            ),
+            translate("en", i18n_keys::ONBOARD_DEVICE_SENTINEL_READINESS_COUNT),
             "{ready} of {required} participants ready"
         );
         assert_eq!(
-            translate(
-                "ru",
-                crate::i18n_keys::ONBOARD_DEVICE_SENTINEL_READINESS_LABEL
-            ),
+            translate("ru", i18n_keys::ONBOARD_DEVICE_SENTINEL_READINESS_LABEL),
             "Готовность участников"
         );
     }
@@ -228,11 +223,11 @@ mod tests {
     #[test]
     fn test_secret_count_labels() {
         assert_eq!(
-            translate("en", crate::i18n_keys::VAULT_SECRET_COUNT),
+            translate("en", i18n_keys::VAULT_SECRET_COUNT),
             "Secrets: {count}"
         );
         assert_eq!(
-            translate("ru", crate::i18n_keys::VAULT_SECRET_COUNT),
+            translate("ru", i18n_keys::VAULT_SECRET_COUNT),
             "секретов: {count}"
         );
     }
@@ -250,7 +245,7 @@ mod tests {
         assert_eq!(
             lookup_translation(
                 get_translation_catalog("en"),
-                crate::i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
+                i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
             )
             .as_deref(),
             Some("Google Drive")
@@ -261,20 +256,12 @@ mod tests {
     fn test_translate_from_catalog_falls_back_to_english() {
         let stale_ru = r#"{"provider_picker":{"github":"GitHub"}}"#;
         assert_eq!(
-            translate_from_catalog(
-                stale_ru,
-                "ru",
-                crate::i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
-            ),
+            translate_from_catalog(stale_ru, "ru", i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE),
             "Google Drive"
         );
         assert_eq!(
-            translate_from_catalog(
-                stale_ru,
-                "en",
-                crate::i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
-            ),
-            crate::i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
+            translate_from_catalog(stale_ru, "en", i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE),
+            i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE
         );
     }
 
@@ -284,7 +271,7 @@ mod tests {
             translate_with_replacements(
                 get_translation_catalog("en"),
                 "en",
-                crate::i18n_keys::VAULT_SECRET_COUNT,
+                i18n_keys::VAULT_SECRET_COUNT,
                 &[("count".to_owned(), "3".to_owned())],
             ),
             "Secrets: 3"
@@ -319,15 +306,15 @@ mod tests {
             r#"{"provider_picker":{"github":"GitHub updated","google_drive":"Google Drive"}}"#;
         let merged = merge_translation_catalogs(base, overlay)?;
         assert_eq!(
-            lookup_translation(&merged, crate::i18n_keys::PROVIDER_PICKER_THIS_DEVICE).as_deref(),
+            lookup_translation(&merged, i18n_keys::PROVIDER_PICKER_THIS_DEVICE).as_deref(),
             Some("Это устройство")
         );
         assert_eq!(
-            lookup_translation(&merged, crate::i18n_keys::PROVIDER_PICKER_GITHUB).as_deref(),
+            lookup_translation(&merged, i18n_keys::PROVIDER_PICKER_GITHUB).as_deref(),
             Some("GitHub updated")
         );
         assert_eq!(
-            lookup_translation(&merged, crate::i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE).as_deref(),
+            lookup_translation(&merged, i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE).as_deref(),
             Some("Google Drive")
         );
         Ok(())
@@ -338,12 +325,11 @@ mod tests {
         let stale_ru = r#"{"provider_picker":{"this_device":"Это устройство","github":"GitHub"}}"#;
         let resolved = resolve_translation_catalog("ru", Some(stale_ru));
         assert_eq!(
-            lookup_translation(&resolved, crate::i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE)
-                .as_deref(),
+            lookup_translation(&resolved, i18n_keys::PROVIDER_PICKER_GOOGLE_DRIVE).as_deref(),
             Some("Google Drive")
         );
         assert_eq!(
-            lookup_translation(&resolved, crate::i18n_keys::PROVIDER_PICKER_THIS_DEVICE).as_deref(),
+            lookup_translation(&resolved, i18n_keys::PROVIDER_PICKER_THIS_DEVICE).as_deref(),
             Some("Это устройство")
         );
     }
@@ -351,15 +337,15 @@ mod tests {
     #[test]
     fn test_extension_catalog_keys_and_english_fallback() {
         assert_eq!(
-            translate("en", crate::i18n_keys::EXTENSION_POPUP_PASSWORD_FIELDS),
+            translate("en", i18n_keys::EXTENSION_POPUP_PASSWORD_FIELDS),
             "Password fields"
         );
         assert_eq!(
-            translate("ru", crate::i18n_keys::EXTENSION_POPUP_PASSWORD_FIELDS),
+            translate("ru", i18n_keys::EXTENSION_POPUP_PASSWORD_FIELDS),
             "Поля пароля"
         );
         assert_eq!(
-            translate("ru", crate::i18n_keys::EXTENSION_SETUP_PROFILE_TITLE),
+            translate("ru", i18n_keys::EXTENSION_SETUP_PROFILE_TITLE),
             "Расширение Nook - этот профиль браузера"
         );
 
@@ -368,7 +354,7 @@ mod tests {
             translate_from_catalog(
                 stale_ru,
                 "ru",
-                crate::i18n_keys::EXTENSION_POPUP_SUGGESTED_PASSWORD
+                i18n_keys::EXTENSION_POPUP_SUGGESTED_PASSWORD
             ),
             "Suggested password"
         );
@@ -378,24 +364,24 @@ mod tests {
     fn test_import_source_labels_do_not_repeat_the_import_action() {
         let sources = [
             (
-                crate::i18n_keys::APPLE_PASSWORDS_IMPORT_SOURCE,
+                i18n_keys::APPLE_PASSWORDS_IMPORT_SOURCE,
                 "Safari / Apple Passwords",
             ),
             (
-                crate::i18n_keys::CHROME_PASSWORDS_IMPORT_SOURCE,
+                i18n_keys::CHROME_PASSWORDS_IMPORT_SOURCE,
                 "Chrome or another browser",
             ),
-            (crate::i18n_keys::DASHLANE_IMPORT_SOURCE, "Dashlane"),
+            (i18n_keys::DASHLANE_IMPORT_SOURCE, "Dashlane"),
             (
-                crate::i18n_keys::GOOGLE_AUTHENTICATOR_IMPORT_SOURCE,
+                i18n_keys::GOOGLE_AUTHENTICATOR_IMPORT_SOURCE,
                 "Google Authenticator",
             ),
-            (crate::i18n_keys::BITWARDEN_IMPORT_SOURCE, "Bitwarden"),
-            (crate::i18n_keys::KEEPASSXC_IMPORT_SOURCE, "KeePassXC"),
-            (crate::i18n_keys::LASTPASS_IMPORT_SOURCE, "LastPass"),
-            (crate::i18n_keys::ONEPASSWORD_IMPORT_SOURCE, "1Password"),
-            (crate::i18n_keys::PROTON_PASS_IMPORT_SOURCE, "Proton Pass"),
-            (crate::i18n_keys::KEEPER_IMPORT_SOURCE, "Keeper"),
+            (i18n_keys::BITWARDEN_IMPORT_SOURCE, "Bitwarden"),
+            (i18n_keys::KEEPASSXC_IMPORT_SOURCE, "KeePassXC"),
+            (i18n_keys::LASTPASS_IMPORT_SOURCE, "LastPass"),
+            (i18n_keys::ONEPASSWORD_IMPORT_SOURCE, "1Password"),
+            (i18n_keys::PROTON_PASS_IMPORT_SOURCE, "Proton Pass"),
+            (i18n_keys::KEEPER_IMPORT_SOURCE, "Keeper"),
         ];
 
         for (key, expected) in sources {
