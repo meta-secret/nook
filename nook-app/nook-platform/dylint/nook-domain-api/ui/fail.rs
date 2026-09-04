@@ -183,4 +183,15 @@ impl FromLike<u64> for UserId {
     }
 }
 
+pub struct PredicateCount(usize);
+
+impl From<usize> for PredicateCount
+where
+    usize: Copy,
+{
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
 fn main() {}

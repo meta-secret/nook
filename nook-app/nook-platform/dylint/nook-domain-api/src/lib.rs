@@ -167,7 +167,6 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         if let ItemKind::Impl(Impl { of_trait, .. }) = item.kind
             && local_type_is_reachable(cx, cx.tcx.type_of(item.owner_id).instantiate_identity())
             && impl_exposes_reachable_surface(cx, item.owner_id.def_id, of_trait)
-            && !is_canonical_numeric_newtype_from_impl(cx, item.owner_id.def_id.to_def_id())
         {
             let impl_id = item.owner_id.def_id.to_def_id();
             if definition_surface_contains_raw(cx, impl_id, &mut Vec::new()) {
