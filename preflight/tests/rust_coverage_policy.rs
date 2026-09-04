@@ -137,6 +137,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(hive.contains("sha256sum -c -"));
     assert!(hive.contains("cargo llvm-cov show-env --export-prefix"));
     assert!(hive.contains("COPY --from=hive-coverage-profiles"));
+    assert!(hive.contains("mkdir -p target/llvm-cov-target"));
     assert!(hive_tasks.contains("hive-coverage-profiles=$profiles"));
     assert!(hive_tasks.contains("LLVM_PROFILE_FILE=/profiles/%m-%p.profraw"));
     assert!(hive_arc.contains("LLVM_PROFILE_FILE=%q exec %q"));

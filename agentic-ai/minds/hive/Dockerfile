@@ -237,6 +237,7 @@ ARG HIVE_RUST_COVERAGE_FLOOR=60
 ARG LACE_RUST_COVERAGE_FLOOR=75
 COPY --from=hive-coverage-profiles / /tmp/hive-coverage-profiles
 RUN test -n "$(find /tmp/hive-coverage-profiles -name '*.profraw' -print -quit)" \
+    && mkdir -p target/llvm-cov-target \
     && find /tmp/hive-coverage-profiles -name '*.profraw' -exec cp {} target/llvm-cov-target/ \; \
     && { coverage_status=0; \
       cargo llvm-cov report -p hive \
