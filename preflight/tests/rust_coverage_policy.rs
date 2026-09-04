@@ -33,8 +33,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     );
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
-            "nook-wasm" if floor.is_null() => continue,
-            "nook-wasm" => panic!("nook-wasm coverage floor must remain pending"),
+            "nook-wasm" => 51.0,
             "nook-companion-wasm" => 18.0,
             "nook-authenticator-domain" => 87.0,
             "hive" => 60.0,
@@ -103,8 +102,8 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains(
         "llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm"
     ));
-    assert!(product.contains("nook-wasm coverage floor pending this hosted measurement"));
-    assert!(product.contains("&& false"));
+    assert!(product.contains(".package_lines_percent[\"nook-wasm\"]"));
+    assert!(product.contains("--fail-under-lines \"$nook_wasm_floor\""));
     let wasm_coverage_stage = product
         .split_once("FROM builder-wasm-tests AS builder-wasm")
         .and_then(|(_, remainder)| {

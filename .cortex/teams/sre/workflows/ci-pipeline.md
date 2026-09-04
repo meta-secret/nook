@@ -834,7 +834,7 @@ task web:test:e2e:github            # → sync-live
 registry. Every testable first-party package has an independent hosted failure
 decision; fuzz harnesses and vendored sources require an explicit exclusion.
 PR #1319 stages companion WASM at 18, authenticator-domain at 87, Hive at 60,
-and Lace at 75 percent; `nook-wasm` stays non-mergeable until hosted measurement.
+Lace at 75, and `nook-wasm` at 51 percent.
 
 **Image build:**
 
