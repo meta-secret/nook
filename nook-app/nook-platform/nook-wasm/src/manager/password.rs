@@ -10,13 +10,13 @@ use crate::NookPasswordEntrySummary;
 use crate::NookSecretPage;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::event_db::load_local_event_store;
+use crate::storage::identity_record;
 use crate::storage::indexed_db::{get_active_vault_id, load_vault_local_cache, save_to_indexed_db};
-use crate::storage::{identity_record, indexed_db};
 use crate::types::password_entries_to_vec;
 use nook_core::{
-    Database, DeviceIdentity, DeviceSigningPublicKey, IsoTimestamp, MemberLabel, MultiDeviceError,
-    PasswordEntryId, SecretTypeFilter, StorageMode, StoreId, SymmetricKey, VaultMetaState,
-    VaultOperation, VaultType, VaultUnlock, VaultVersionWrite,
+    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, MultiDeviceError, PasswordEntryId,
+    SecretTypeFilter, StorageMode, StoreId, SymmetricKey, VaultMetaState, VaultOperation,
+    VaultType, VaultUnlock,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -513,6 +513,7 @@ mod metadata_tests {
     use crate::manager::VaultNameState;
     use nook_core::{
         SecretId, SecretValue, VaultCrypto, VaultName, VaultNameRef, VaultStoreIdentityRef,
+        VaultVersionWrite,
     };
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -577,7 +578,9 @@ mod metadata_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
+    use crate::storage::indexed_db;
     use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
+    use nook_core::{Database, DeviceIdentity, VaultVersionWrite};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);

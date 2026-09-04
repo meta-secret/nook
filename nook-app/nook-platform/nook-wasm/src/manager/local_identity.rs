@@ -1,7 +1,7 @@
 //! Local identity creation, selection, and session adoption.
 
-use crate::storage::{auth_providers, device_access, event_db, identity_record, indexed_db};
-use nook_core::{AppId, IdentityId, LocalIdentityKeyringEntry, i18n_keys};
+use crate::storage::{auth_providers, device_access, identity_record, indexed_db};
+use nook_core::{AppId, IdentityId, i18n_keys};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -172,6 +172,8 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::storage::event_db;
+    use nook_core::LocalIdentityKeyringEntry;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);

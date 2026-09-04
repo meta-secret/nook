@@ -5,7 +5,6 @@ use super::secrets::{SecretProjectionVerification, SecretReplacementInput};
 use crate::NookError;
 use nook_core::{
     AuthenticatorSecret, BackupCodeAttachMode, SecretId, SecretType, SecretValue, ValidationError,
-    VaultApplication,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
@@ -113,6 +112,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
+    use nook_core::VaultApplication;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);

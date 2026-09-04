@@ -3,7 +3,6 @@ use super::super::event_log::{
 };
 use super::NookVaultManager;
 use crate::types;
-use js_sys::{JsString, Reflect};
 use serde::Serialize;
 use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::{JsCast, JsError, prelude::wasm_bindgen};
@@ -136,6 +135,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
+    use js_sys::{JsString, Reflect};
     use wasm_bindgen_test::*;
 
     #[derive(Serialize)]

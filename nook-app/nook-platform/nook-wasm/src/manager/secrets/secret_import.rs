@@ -1,6 +1,6 @@
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
-use nook_core::{AgeArmoredCiphertext, DeviceIdentity, SecretValue, SymmetricKey, VaultOperation};
+use nook_core::{AgeArmoredCiphertext, SecretValue, SymmetricKey, VaultOperation};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -529,6 +529,7 @@ mod prepared_page_tests {
     use super::*;
     use crate::NookSecretTypeFilter;
     use crate::manager::VaultCryptoState;
+    use nook_core::DeviceIdentity;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]

@@ -1,11 +1,9 @@
 //! Authenticator metadata and one-time-code generation for the unlocked extension session.
 
-use super::{NookVaultManager, VaultCryptoState};
+use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookAuthenticatorAccount, NookTotpCode};
-use nook_core::{
-    AuthenticatorSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto,
-};
+use nook_core::{SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 impl NookVaultManager {
@@ -60,6 +58,8 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
+    use crate::manager::VaultCryptoState;
+    use nook_core::{AuthenticatorSecret, StoredRecordPayload, VaultCrypto};
     use wasm_bindgen_test::*;
 
     fn insert_secret(

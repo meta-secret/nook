@@ -5,9 +5,8 @@
 //! session-bound and encrypted to the requester.
 
 use nook_core::{
-    AgeArmoredCiphertext, DeviceMode, MultiDeviceError, SentinelConfiguration,
-    SentinelGenesisPhase, SentinelVaultUnlockState, StoreId, SymmetricKey, VaultArchitecture,
-    VaultMetaState, VaultType,
+    DeviceMode, MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase,
+    SentinelVaultUnlockState, StoreId, SymmetricKey, VaultArchitecture, VaultMetaState, VaultType,
 };
 use std::collections::BTreeSet;
 mod genesis_finalization;
@@ -611,7 +610,7 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{DeviceId, DeviceIdentity, SigningIdentity};
+    use nook_core::{AgeArmoredCiphertext, DeviceId, DeviceIdentity, SigningIdentity};
 
     #[test]
     fn genesis_status_exposes_public_roster_without_persisting_a_vault() -> anyhow::Result<()> {
