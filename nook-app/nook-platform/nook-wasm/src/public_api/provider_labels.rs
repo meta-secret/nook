@@ -1,4 +1,5 @@
 use super::wasm_bindgen;
+use nook_core::StorageProviderType;
 
 #[wasm_bindgen]
 #[must_use]
@@ -76,7 +77,7 @@ pub fn staged_local_provider_label(
 #[wasm_bindgen]
 pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::sync_provider_default_label(
-        nook_core::StorageProviderType::Github,
+        StorageProviderType::Github,
         Some(github_repo),
         None,
     ))
@@ -88,7 +89,7 @@ pub fn staged_configured_oauth_provider_label(
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::sync_provider_default_label(
-        nook_core::StorageProviderType::OauthFile,
+        StorageProviderType::OauthFile,
         Some(oauth_file_name),
         Some(oauth_preset),
     ))
@@ -97,7 +98,7 @@ pub fn staged_configured_oauth_provider_label(
 #[wasm_bindgen]
 pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen::JsError> {
     Ok(nook_core::sync_provider_default_label(
-        nook_core::StorageProviderType::OauthFile,
+        StorageProviderType::OauthFile,
         None,
         None,
     ))

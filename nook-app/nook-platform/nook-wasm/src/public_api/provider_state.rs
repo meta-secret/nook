@@ -1,4 +1,10 @@
 use super::{NookStorageConnectArgs, wasm_bindgen};
+use nook_core::{
+    ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
+    OAuthAccessTokenRef, StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
+    StoredOAuthFileConfiguration,
+};
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -14,10 +20,10 @@ pub fn active_provider_credentials_projection_state(
     projection: nook_core::ActiveProviderCredentialsProjection,
 ) -> NookActiveProviderCredentialsProjectionState {
     match projection {
-        nook_core::ActiveProviderCredentialsProjection::Unchanged => {
+        ActiveProviderCredentialsProjection::Unchanged => {
             NookActiveProviderCredentialsProjectionState::Unchanged
         }
-        nook_core::ActiveProviderCredentialsProjection::Apply(_) => {
+        ActiveProviderCredentialsProjection::Apply(_) => {
             NookActiveProviderCredentialsProjectionState::Apply
         }
     }
@@ -29,10 +35,10 @@ pub fn active_provider_credentials_projection_draft(
     projection: nook_core::ActiveProviderCredentialsProjection,
 ) -> Result<nook_core::ActiveProviderCredentialDraft, wasm_bindgen::JsError> {
     match projection {
-        nook_core::ActiveProviderCredentialsProjection::Unchanged => Err(
-            wasm_bindgen::JsError::new("active provider credentials projection is unchanged"),
-        ),
-        nook_core::ActiveProviderCredentialsProjection::Apply(draft) => Ok(*draft),
+        ActiveProviderCredentialsProjection::Unchanged => Err(JsError::new(
+            "active provider credentials projection is unchanged",
+        )),
+        ActiveProviderCredentialsProjection::Apply(draft) => Ok(*draft),
     }
 }
 
@@ -50,10 +56,10 @@ pub fn stored_oauth_file_configuration_state(
     configuration: nook_core::StoredOAuthFileConfiguration,
 ) -> NookStoredOAuthFileConfigurationState {
     match configuration {
-        nook_core::StoredOAuthFileConfiguration::NotApplicable => {
+        StoredOAuthFileConfiguration::NotApplicable => {
             NookStoredOAuthFileConfigurationState::NotApplicable
         }
-        nook_core::StoredOAuthFileConfiguration::Configured(_) => {
+        StoredOAuthFileConfiguration::Configured(_) => {
             NookStoredOAuthFileConfigurationState::Configured
         }
     }
@@ -73,10 +79,10 @@ pub fn stored_local_folder_configuration_state(
     configuration: nook_core::StoredLocalFolderConfiguration,
 ) -> NookStoredLocalFolderConfigurationState {
     match configuration {
-        nook_core::StoredLocalFolderConfiguration::NotApplicable => {
+        StoredLocalFolderConfiguration::NotApplicable => {
             NookStoredLocalFolderConfigurationState::NotApplicable
         }
-        nook_core::StoredLocalFolderConfiguration::Configured(_) => {
+        StoredLocalFolderConfiguration::Configured(_) => {
             NookStoredLocalFolderConfigurationState::Configured
         }
     }
@@ -93,11 +99,9 @@ pub enum NookExistingVaultProviderReadiness {
 impl From<nook_core::ExistingVaultProviderReadiness> for NookExistingVaultProviderReadiness {
     fn from(value: nook_core::ExistingVaultProviderReadiness) -> Self {
         match value {
-            nook_core::ExistingVaultProviderReadiness::Ready => Self::Ready,
-            nook_core::ExistingVaultProviderReadiness::MissingOauthFile => Self::MissingOauthFile,
-            nook_core::ExistingVaultProviderReadiness::MissingLocalFolder => {
-                Self::MissingLocalFolder
-            }
+            ExistingVaultProviderReadiness::Ready => Self::Ready,
+            ExistingVaultProviderReadiness::MissingOauthFile => Self::MissingOauthFile,
+            ExistingVaultProviderReadiness::MissingLocalFolder => Self::MissingLocalFolder,
         }
     }
 }
@@ -147,7 +151,7 @@ impl NookOAuthAccessToken {
     pub fn token(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
             NookOAuthAccessTokenValue::Missing => {
-                Err(wasm_bindgen::JsError::new("OAuth access token is missing"))
+                Err(JsError::new("OAuth access token is missing"))
             }
             NookOAuthAccessTokenValue::Available(token) => Ok(token.clone()),
         }
@@ -159,10 +163,8 @@ impl NookOAuthAccessToken {
 #[must_use]
 pub fn oauth_access_token(config: nook_core::OAuthFileConfigData) -> NookOAuthAccessToken {
     match config.usable_access_token() {
-        nook_core::OAuthAccessTokenRef::Missing => {
-            NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing)
-        }
-        nook_core::OAuthAccessTokenRef::Available(token) => {
+        OAuthAccessTokenRef::Missing => NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing),
+        OAuthAccessTokenRef::Available(token) => {
             NookOAuthAccessToken(NookOAuthAccessTokenValue::Available(token.to_owned()))
         }
     }
@@ -200,7 +202,7 @@ impl NookProviderSelection {
     pub fn provider_id(&self) -> Result<String, wasm_bindgen::JsError> {
         self.0
             .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("provider selection is missing"))
+            .ok_or_else(|| JsError::new("provider selection is missing"))
     }
 }
 
@@ -230,7 +232,7 @@ impl NookOAuthRemoteStorageReference {
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
         self.0
             .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("OAuth remote storage is unresolved"))
+            .ok_or_else(|| JsError::new("OAuth remote storage is unresolved"))
     }
 }
 
@@ -266,7 +268,7 @@ impl NookOAuthRemoteConfigurationUpdate {
     pub fn config(&self) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
         self.0
             .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("OAuth remote reference was rejected"))
+            .ok_or_else(|| JsError::new("OAuth remote reference was rejected"))
     }
 }
 
@@ -303,7 +305,7 @@ impl NookStagedStorageArgs {
         self.0
             .clone()
             .map(Into::into)
-            .ok_or_else(|| wasm_bindgen::JsError::new("staged storage is incomplete"))
+            .ok_or_else(|| JsError::new("staged storage is incomplete"))
     }
 }
 
@@ -339,7 +341,7 @@ impl NookGithubPatHint {
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
         self.0
             .clone()
-            .ok_or_else(|| wasm_bindgen::JsError::new("GitHub PAT hint is unavailable"))
+            .ok_or_else(|| JsError::new("GitHub PAT hint is unavailable"))
     }
 }
 
@@ -352,7 +354,7 @@ impl NookGithubPatHint {
 #[wasm_bindgen]
 #[must_use]
 pub fn local_vault_storage_args() -> NookStorageConnectArgs {
-    nook_core::StorageConnectArgs::local().into()
+    StorageConnectArgs::local().into()
 }
 
 #[wasm_bindgen]
@@ -367,7 +369,7 @@ pub fn authenticated_vault_storage_args(
 #[must_use]
 pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
     nook_core::draft_storage_args(
-        nook_core::StorageProviderType::Github,
+        StorageProviderType::Github,
         Some(github_pat),
         Some(github_repo),
         None,
@@ -384,7 +386,7 @@ pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookSto
 pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
     let remote_ref = nook_core::oauth_remote_storage_ref(&config);
     nook_core::draft_storage_args(
-        nook_core::StorageProviderType::OauthFile,
+        StorageProviderType::OauthFile,
         None,
         None,
         Some(config.preset),
@@ -399,7 +401,7 @@ pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookS
 #[must_use]
 pub fn draft_local_storage_args() -> NookStorageConnectArgs {
     nook_core::draft_storage_args(
-        nook_core::StorageProviderType::Local,
+        StorageProviderType::Local,
         None,
         None,
         None,
@@ -417,8 +419,8 @@ pub fn draft_local_storage_args() -> NookStorageConnectArgs {
 pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
     NookGithubPatHint::new(
         match nook_core::mask_github_pat(pat.as_deref().unwrap_or_default()) {
-            nook_core::GithubPatMask::NoToken => None,
-            nook_core::GithubPatMask::Hint(hint) => Some(hint),
+            GithubPatMask::NoToken => None,
+            GithubPatMask::Hint(hint) => Some(hint),
         },
     )
 }

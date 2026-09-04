@@ -1,4 +1,8 @@
 use super::{NookVaultArchitecture, wasm_bindgen};
+use crate::NookError;
+use nook_core::{MultiDeviceError, RemoteEventLogClassification, SentinelGenesisPhase};
+use std::mem;
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 pub struct NookSentinelUnlockSessionStatus {
@@ -176,7 +180,7 @@ impl NookSentinelGenesisStatus {
                 .iter()
                 .map(NookSentinelGenesisParticipantStatus::from_core)
                 .collect(),
-            phase: nook_core::SentinelGenesisPhase::from_session(session),
+            phase: SentinelGenesisPhase::from_session(session),
         }
     }
 
@@ -187,7 +191,7 @@ impl NookSentinelGenesisStatus {
 
     #[wasm_bindgen(getter)]
     pub fn participants(&mut self) -> Vec<NookSentinelGenesisParticipantStatus> {
-        std::mem::take(&mut self.participants)
+        mem::take(&mut self.participants)
     }
 }
 
@@ -208,7 +212,7 @@ impl NookSentinelGenesisDelivery {
             device_id: delivery.device_id.as_str().to_owned(),
             fingerprint,
             payload: serde_json::to_string(delivery)
-                .map_err(|error| crate::NookError::Serialization(error.to_string()))?,
+                .map_err(|error| NookError::Serialization(error.to_string()))?,
         })
     }
 
@@ -262,7 +266,7 @@ impl NookEventLogSyncIssue {
     pub fn is_store_mismatch(&self) -> bool {
         matches!(
             self.classification,
-            nook_core::RemoteEventLogClassification::DifferentStore { .. }
+            RemoteEventLogClassification::DifferentStore { .. }
         )
     }
 
@@ -270,40 +274,34 @@ impl NookEventLogSyncIssue {
     pub fn is_multiple_stores(&self) -> bool {
         matches!(
             self.classification,
-            nook_core::RemoteEventLogClassification::MultipleStores { .. }
+            RemoteEventLogClassification::MultipleStores { .. }
         )
     }
 
     #[wasm_bindgen(getter, js_name = localStoreId)]
     pub fn local_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.classification {
-            nook_core::RemoteEventLogClassification::DifferentStore { local_store_id, .. } => {
+            RemoteEventLogClassification::DifferentStore { local_store_id, .. } => {
                 Ok(local_store_id.clone())
             }
-            _ => Err(wasm_bindgen::JsError::new(
-                "event-log issue is not a store mismatch",
-            )),
+            _ => Err(JsError::new("event-log issue is not a store mismatch")),
         }
     }
 
     #[wasm_bindgen(getter, js_name = remoteStoreId)]
     pub fn remote_store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.classification {
-            nook_core::RemoteEventLogClassification::DifferentStore {
+            RemoteEventLogClassification::DifferentStore {
                 remote_store_id, ..
             } => Ok(remote_store_id.clone()),
-            _ => Err(wasm_bindgen::JsError::new(
-                "event-log issue is not a store mismatch",
-            )),
+            _ => Err(JsError::new("event-log issue is not a store mismatch")),
         }
     }
 
     #[wasm_bindgen(getter, js_name = storeIds)]
     pub fn store_ids(&self) -> Vec<String> {
         match &self.classification {
-            nook_core::RemoteEventLogClassification::MultipleStores { store_ids } => {
-                store_ids.clone()
-            }
+            RemoteEventLogClassification::MultipleStores { store_ids } => store_ids.clone(),
             _ => Vec::new(),
         }
     }
@@ -324,7 +322,7 @@ impl NookSentinelGenesisFinalizeResult {
                     .iter()
                     .find(|participant| participant.device_id == delivery.device_id)
                     .map(|participant| participant.fingerprint.clone())
-                    .ok_or(nook_core::MultiDeviceError::InvalidSentinelGenesisPayload)?;
+                    .ok_or(MultiDeviceError::InvalidSentinelGenesisPayload)?;
                 NookSentinelGenesisDelivery::from_core(delivery, fingerprint)
             })
             .collect::<Result<Vec<_>, _>>()?;
@@ -342,7 +340,7 @@ impl NookSentinelGenesisFinalizeResult {
 
     #[wasm_bindgen(getter)]
     pub fn phase(&self) -> nook_core::SentinelGenesisPhase {
-        nook_core::SentinelGenesisPhase::DeliveringShares
+        SentinelGenesisPhase::DeliveringShares
     }
 
     #[wasm_bindgen(getter)]
@@ -352,6 +350,6 @@ impl NookSentinelGenesisFinalizeResult {
 
     #[wasm_bindgen(getter, js_name = participantDeliveries)]
     pub fn participant_deliveries(&mut self) -> Vec<NookSentinelGenesisDelivery> {
-        std::mem::take(&mut self.deliveries)
+        mem::take(&mut self.deliveries)
     }
 }

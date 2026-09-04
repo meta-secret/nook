@@ -16,6 +16,9 @@ pub fn decode_storage_providers(
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
+    use js_sys::JSON;
+    use nook_core::ProviderSyncCheckpoint;
+    use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     const LEGACY_PROVIDER_SNAPSHOT: &str = r#"{
@@ -51,12 +54,10 @@ mod wasm_tests {
     fn decode_snapshot_json(
         input: &str,
     ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
-        let value = js_sys::JSON::parse(input)
-            .map_err(|_| wasm_bindgen::JsError::new("provider fixture must parse"))?;
+        let value = JSON::parse(input).map_err(|_| JsError::new("provider fixture must parse"))?;
         // Tsify's generated `from_wasm_abi` implementation delegates to this
         // exact serde-wasm conversion for `AuthProvidersSnapshotData`.
-        serde_wasm_bindgen::from_value(value)
-            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+        serde_wasm_bindgen::from_value(value).map_err(|error| JsError::new(&error.to_string()))
     }
 
     #[wasm_bindgen_test]
@@ -67,7 +68,7 @@ mod wasm_tests {
 
         assert_eq!(
             decoded.providers[0].sync_checkpoint,
-            nook_core::ProviderSyncCheckpoint::NeverSynced
+            ProviderSyncCheckpoint::NeverSynced
         );
         Ok(())
     }

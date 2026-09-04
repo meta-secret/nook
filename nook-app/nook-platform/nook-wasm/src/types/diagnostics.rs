@@ -1,4 +1,6 @@
 use super::{NookError, wasm_bindgen};
+use nook_core::DiagnosticEpoch;
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy)]
@@ -286,8 +288,8 @@ impl NookVaultAccessReport {
 
 fn diagnostic_epoch_state(epoch: &nook_core::DiagnosticEpoch) -> NookDiagnosticEpochState {
     match epoch {
-        nook_core::DiagnosticEpoch::Unknown => NookDiagnosticEpochState::Unknown,
-        nook_core::DiagnosticEpoch::Known(_) => NookDiagnosticEpochState::Known,
+        DiagnosticEpoch::Unknown => NookDiagnosticEpochState::Unknown,
+        DiagnosticEpoch::Known(_) => NookDiagnosticEpochState::Known,
     }
 }
 
@@ -295,9 +297,7 @@ fn diagnostic_epoch_id(
     epoch: &nook_core::DiagnosticEpoch,
 ) -> Result<String, wasm_bindgen::JsError> {
     match epoch {
-        nook_core::DiagnosticEpoch::Unknown => {
-            Err(wasm_bindgen::JsError::new("diagnostic epoch is unknown"))
-        }
-        nook_core::DiagnosticEpoch::Known(epoch_id) => Ok(epoch_id.clone()),
+        DiagnosticEpoch::Unknown => Err(JsError::new("diagnostic epoch is unknown")),
+        DiagnosticEpoch::Known(epoch_id) => Ok(epoch_id.clone()),
     }
 }

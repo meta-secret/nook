@@ -1,4 +1,9 @@
 use super::wasm_bindgen;
+use nook_core::{
+    ManagerStoreScopeRef, ProviderJoinerIdentity, ProviderOauthPreset, ProviderSyncRevision,
+    ProviderSyncRevisionRef, SentinelConfiguration, TotpDigits, VaultArchitecture, VaultType,
+};
+use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -16,31 +21,29 @@ impl NookProviderSyncRevision {
     #[wasm_bindgen]
     #[must_use]
     pub fn untracked() -> Self {
-        Self(nook_core::ProviderSyncRevision::Unknown)
+        Self(ProviderSyncRevision::Unknown)
     }
 
     #[wasm_bindgen]
     #[must_use]
     pub fn tracked(revision: String) -> Self {
-        Self(nook_core::ProviderSyncRevision::Revision(revision))
+        Self(ProviderSyncRevision::Revision(revision))
     }
 
     #[wasm_bindgen(getter)]
     #[must_use]
     pub fn state(&self) -> NookProviderSyncRevisionState {
         match &self.0 {
-            nook_core::ProviderSyncRevision::Unknown => NookProviderSyncRevisionState::Untracked,
-            nook_core::ProviderSyncRevision::Revision(_) => NookProviderSyncRevisionState::Tracked,
+            ProviderSyncRevision::Unknown => NookProviderSyncRevisionState::Untracked,
+            ProviderSyncRevision::Revision(_) => NookProviderSyncRevisionState::Tracked,
         }
     }
 
     #[wasm_bindgen(getter)]
     pub fn value(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            nook_core::ProviderSyncRevision::Unknown => {
-                Err(wasm_bindgen::JsError::new("provider revision is untracked"))
-            }
-            nook_core::ProviderSyncRevision::Revision(revision) => Ok(revision.clone()),
+            ProviderSyncRevision::Unknown => Err(JsError::new("provider revision is untracked")),
+            ProviderSyncRevision::Revision(revision) => Ok(revision.clone()),
         }
     }
 }
@@ -48,12 +51,8 @@ impl NookProviderSyncRevision {
 impl NookProviderSyncRevision {
     pub(crate) fn as_core(&self) -> nook_core::ProviderSyncRevisionRef<'_> {
         match &self.0 {
-            nook_core::ProviderSyncRevision::Unknown => {
-                nook_core::ProviderSyncRevisionRef::Unreported
-            }
-            nook_core::ProviderSyncRevision::Revision(revision) => {
-                nook_core::ProviderSyncRevisionRef::Revision(revision)
-            }
+            ProviderSyncRevision::Unknown => ProviderSyncRevisionRef::Unreported,
+            ProviderSyncRevision::Revision(revision) => ProviderSyncRevisionRef::Revision(revision),
         }
     }
 }
@@ -101,9 +100,7 @@ impl NookManagerStoreScope {
     #[wasm_bindgen(getter, js_name = storeId)]
     pub fn store_id(&self) -> Result<String, wasm_bindgen::JsError> {
         match &self.0 {
-            ManagerStoreScope::Unscoped => Err(wasm_bindgen::JsError::new(
-                "manager store scope is unscoped",
-            )),
+            ManagerStoreScope::Unscoped => Err(JsError::new("manager store scope is unscoped")),
             ManagerStoreScope::Scoped(store_id) => Ok(store_id.clone()),
         }
     }
@@ -112,8 +109,8 @@ impl NookManagerStoreScope {
 impl NookManagerStoreScope {
     pub(crate) fn as_core(&self) -> nook_core::ManagerStoreScopeRef<'_> {
         match &self.0 {
-            ManagerStoreScope::Unscoped => nook_core::ManagerStoreScopeRef::Unscoped,
-            ManagerStoreScope::Scoped(store_id) => nook_core::ManagerStoreScopeRef::Store(store_id),
+            ManagerStoreScope::Unscoped => ManagerStoreScopeRef::Unscoped,
+            ManagerStoreScope::Scoped(store_id) => ManagerStoreScopeRef::Store(store_id),
         }
     }
 }
@@ -130,7 +127,7 @@ impl NookVaultArchitecture {
         vault_type: nook_core::VaultType,
         replication_type: nook_core::ReplicationType,
     ) -> Result<Self, wasm_bindgen::JsError> {
-        Ok(Self(nook_core::VaultArchitecture::draft(
+        Ok(Self(VaultArchitecture::draft(
             device_mode,
             vault_type,
             replication_type,
@@ -145,9 +142,9 @@ impl NookVaultArchitecture {
     ) -> Result<Self, wasm_bindgen::JsError> {
         let architecture = nook_core::VaultArchitecture {
             device_mode,
-            vault_type: nook_core::VaultType::Simple,
+            vault_type: VaultType::Simple,
             replication_type,
-            sentinel: nook_core::SentinelConfiguration::Disabled,
+            sentinel: SentinelConfiguration::Disabled,
         };
         architecture.validate()?;
         Ok(Self(architecture))
@@ -171,9 +168,9 @@ impl NookVaultArchitecture {
     ) -> Result<Self, wasm_bindgen::JsError> {
         let architecture = nook_core::VaultArchitecture {
             device_mode,
-            vault_type: nook_core::VaultType::Sentinel,
+            vault_type: VaultType::Sentinel,
             replication_type,
-            sentinel: nook_core::SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
+            sentinel: SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
                 threshold,
                 required_participants,
                 ready_participants,
@@ -276,20 +273,18 @@ impl NookProviderReplicationCapability {
     #[wasm_bindgen(getter, js_name = oauthPresetState)]
     pub fn oauth_preset_state(&self) -> NookProviderOAuthPresetState {
         match self.0.oauth_preset {
-            nook_core::ProviderOauthPreset::NotApplicable => {
-                NookProviderOAuthPresetState::NotApplicable
-            }
-            nook_core::ProviderOauthPreset::Preset(_) => NookProviderOAuthPresetState::Preset,
+            ProviderOauthPreset::NotApplicable => NookProviderOAuthPresetState::NotApplicable,
+            ProviderOauthPreset::Preset(_) => NookProviderOAuthPresetState::Preset,
         }
     }
 
     #[wasm_bindgen(getter, js_name = oauthPreset)]
     pub fn oauth_preset(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.oauth_preset {
-            nook_core::ProviderOauthPreset::NotApplicable => {
-                Err(wasm_bindgen::JsError::new("OAuth preset is not applicable"))
+            ProviderOauthPreset::NotApplicable => {
+                Err(JsError::new("OAuth preset is not applicable"))
             }
-            nook_core::ProviderOauthPreset::Preset(preset) => Ok(preset.as_str().to_owned()),
+            ProviderOauthPreset::Preset(preset) => Ok(preset.as_str().to_owned()),
         }
     }
 
@@ -306,22 +301,18 @@ impl NookProviderReplicationCapability {
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentityState)]
     pub fn shared_joiner_identity_state(&self) -> NookProviderJoinerIdentityState {
         match self.0.shared_joiner_identity {
-            nook_core::ProviderJoinerIdentity::NotRequired => {
-                NookProviderJoinerIdentityState::NotRequired
-            }
-            nook_core::ProviderJoinerIdentity::Required(_) => {
-                NookProviderJoinerIdentityState::Required
-            }
+            ProviderJoinerIdentity::NotRequired => NookProviderJoinerIdentityState::NotRequired,
+            ProviderJoinerIdentity::Required(_) => NookProviderJoinerIdentityState::Required,
         }
     }
 
     #[wasm_bindgen(getter, js_name = sharedJoinerIdentity)]
     pub fn shared_joiner_identity(&self) -> Result<String, wasm_bindgen::JsError> {
         match self.0.shared_joiner_identity {
-            nook_core::ProviderJoinerIdentity::NotRequired => Err(wasm_bindgen::JsError::new(
-                "shared joiner identity is not required",
-            )),
-            nook_core::ProviderJoinerIdentity::Required(kind) => Ok(kind.as_str().to_owned()),
+            ProviderJoinerIdentity::NotRequired => {
+                Err(JsError::new("shared joiner identity is not required"))
+            }
+            ProviderJoinerIdentity::Required(kind) => Ok(kind.as_str().to_owned()),
         }
     }
 }
@@ -355,9 +346,9 @@ impl NookOtpauthPreview {
             website_url: preview.website_url,
             algorithm: preview.algorithm.as_str().to_owned(),
             digits: match preview.digits {
-                nook_core::TotpDigits::Six => 6,
-                nook_core::TotpDigits::Seven => 7,
-                nook_core::TotpDigits::Eight => 8,
+                TotpDigits::Six => 6,
+                TotpDigits::Seven => 7,
+                TotpDigits::Eight => 8,
             },
             period: u32::try_from(preview.period.serialized_value()).unwrap_or(u32::MAX),
         }

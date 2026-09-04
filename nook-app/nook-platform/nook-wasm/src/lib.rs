@@ -18,6 +18,9 @@
     clippy::unnecessary_wraps,
     clippy::items_after_statements
 )]
+#![deny(clippy::absolute_paths)]
+
+use nook_companion_core::ExtensionConnectScope;
 
 mod application;
 mod conversion;
@@ -74,31 +77,31 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[wasm_bindgen]
 #[must_use]
 pub fn extension_vault_access_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::VaultAccess
+    ExtensionConnectScope::VaultAccess
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn extension_password_filling_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::PasswordFilling
+    ExtensionConnectScope::PasswordFilling
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn extension_passkey_management_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::PasskeyManagement
+    ExtensionConnectScope::PasskeyManagement
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::ExtensionConnectScope {
-    nook_companion_core::ExtensionConnectScope::SyncProviderCredentials
+    ExtensionConnectScope::SyncProviderCredentials
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn is_extension_connect_scope(value: &str) -> bool {
-    nook_companion_core::ExtensionConnectScope::parse(value).is_some()
+    ExtensionConnectScope::parse(value).is_some()
 }
 
 #[wasm_bindgen]
