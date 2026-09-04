@@ -1,5 +1,7 @@
 //! Event-sourcing integration scenarios using the in-memory harness.
 
+#![deny(clippy::absolute_paths)]
+
 use nook_core::{DeviceId, LocalEventStore, VaultCrypto};
 
 use std::slice;

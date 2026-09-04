@@ -1,5 +1,7 @@
 //! Sentinel vault key-share lifecycle integration tests.
 
+#![deny(clippy::absolute_paths)]
+
 use nook_core::{VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
 
 use std::slice;

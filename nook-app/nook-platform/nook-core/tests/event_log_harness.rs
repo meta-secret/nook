@@ -2,6 +2,7 @@
 
 #![allow(dead_code)]
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
+#![deny(clippy::absolute_paths)]
 
 use nook_core::{
     AgeArmoredCiphertext, SecretFingerprint, Sha256Hex, SymmetricKey, VaultError, VaultFormat,

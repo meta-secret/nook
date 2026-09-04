@@ -1,5 +1,7 @@
 //! Regression tests for vault crypto restore after session state is dropped (bf04223).
 
+#![deny(clippy::absolute_paths)]
+
 use nook_core::{SymmetricKey, VaultError, VaultStoreIdentityRef, VaultVersionWrite};
 
 use nook_core::{

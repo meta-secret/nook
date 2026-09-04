@@ -1,5 +1,7 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
+#![deny(clippy::absolute_paths)]
+
 use nook_core::AgeArmoredCiphertext;
 
 use std::io;

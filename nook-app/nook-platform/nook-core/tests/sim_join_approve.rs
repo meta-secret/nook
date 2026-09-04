@@ -6,6 +6,8 @@
 //! microseconds, with 100% reproducibility, across every push/pull delivery order
 //! instead of a single wall-clock-timed run under Docker CPU contention.
 
+#![deny(clippy::absolute_paths)]
+
 #[path = "sim_support.rs"]
 mod sim;
 

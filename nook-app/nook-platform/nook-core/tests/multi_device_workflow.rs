@@ -1,5 +1,7 @@
 //! Multi-device vault keys workflow integration tests.
 
+#![deny(clippy::absolute_paths)]
+
 use std::io;
 
 use nook_core::{

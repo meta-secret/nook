@@ -3,6 +3,8 @@
 //! Two (or more) [`MemoryVaultStore`] values stand in for local `IndexedDB` and
 //! sync providers — no browser or network required.
 
+#![deny(clippy::absolute_paths)]
+
 use nook_core::{VaultStoreIdentity, VaultStoreIdentityRef, VaultVersionWrite};
 
 use nook_core::{

@@ -2,6 +2,8 @@
 //!
 //! Run: `cargo run --example generate_vault_fixtures -p nook-core`
 
+#![deny(clippy::absolute_paths)]
+
 use std::{fs, io, path::PathBuf};
 
 use nook_core::{ApiKeySecret, Database, SecretId, SecretValue};
