@@ -280,7 +280,11 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn digits(&self) -> u32 {
         match &self.record.data {
-            nook_core::SecretValue::Authenticator(value) => value.digits.get(),
+            nook_core::SecretValue::Authenticator(value) => match value.digits {
+                nook_core::TotpDigits::Six => 6,
+                nook_core::TotpDigits::Seven => 7,
+                nook_core::TotpDigits::Eight => 8,
+            },
             _ => 0,
         }
     }
@@ -289,7 +293,7 @@ impl NookSecretRecord {
     pub fn period(&self) -> u32 {
         match &self.record.data {
             nook_core::SecretValue::Authenticator(value) => {
-                u32::try_from(value.period.get()).unwrap_or(u32::MAX)
+                u32::try_from(value.period.serialized_value()).unwrap_or(u32::MAX)
             }
             _ => 0,
         }

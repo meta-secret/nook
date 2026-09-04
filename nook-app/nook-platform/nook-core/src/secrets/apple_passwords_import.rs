@@ -276,7 +276,7 @@ pub fn plan_apple_passwords_import(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::SecretValue;
+    use crate::{SecretValue, TotpDigits};
 
     #[test]
     fn imports_login_notes_title_and_authenticator() -> anyhow::Result<()> {
@@ -309,8 +309,8 @@ mod tests {
         assert_eq!(authenticator.issuer, "Example");
         assert_eq!(authenticator.account, "alice@example.com");
         assert_eq!(authenticator.algorithm.as_str(), "SHA256");
-        assert_eq!(authenticator.digits.get(), 8);
-        assert_eq!(authenticator.period.get(), 45);
+        assert_eq!(authenticator.digits, TotpDigits::Eight);
+        assert_eq!(authenticator.period.duration().as_secs(), 45);
         Ok(())
     }
 

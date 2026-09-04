@@ -386,8 +386,8 @@ mod tests {
         assert_eq!(item.issuer, "Example");
         assert_eq!(item.account, "alice@example.com");
         assert_eq!(item.algorithm, TotpAlgorithm::Sha256);
-        assert_eq!(item.digits.get(), 8);
-        assert_eq!(item.period.get(), 30);
+        assert_eq!(item.digits, TotpDigits::Eight);
+        assert_eq!(item.period.duration().as_secs(), 30);
         assert_eq!(item.secret.as_str(), "IFAUCQKBIFAUCQKBIFAUCQKBIFAUCQKB");
         Ok(())
     }

@@ -1,8 +1,13 @@
 //! Portable domain values for TOTP authenticators and recovery-code updates.
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use std::{fmt, time::Duration};
 
-const DEFAULT_DIGITS: u32 = 6;
 const DEFAULT_PERIOD: u64 = 30;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -91,9 +96,26 @@ impl TotpAlgorithm {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct TotpDigits(u32);
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TotpDigits {
+    #[default]
+    Six,
+    Seven,
+    Eight,
+}
+
+impl Serialize for TotpDigits {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_u32(match self {
+            Self::Six => 6,
+            Self::Seven => 7,
+            Self::Eight => 8,
+        })
+    }
+}
 
 impl<'de> Deserialize<'de> for TotpDigits {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
@@ -104,26 +126,33 @@ impl<'de> Deserialize<'de> for TotpDigits {
     }
 }
 
-impl Default for TotpDigits {
-    fn default() -> Self {
-        Self(DEFAULT_DIGITS)
+impl fmt::Display for TotpDigits {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str(match self {
+            Self::Six => "6",
+            Self::Seven => "7",
+            Self::Eight => "8",
+        })
     }
 }
 
 impl TotpDigits {
     /// # Errors
     /// Returns an error when the digit count is outside the supported range.
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: validates a numeric digit count decoded from authenticator data"
+        )
+    )]
     pub fn parse(value: u32) -> Result<Self, AuthenticatorDomainError> {
-        if (6..=8).contains(&value) {
-            Ok(Self(value))
-        } else {
-            Err(AuthenticatorDomainError::DigitsInvalid)
+        match value {
+            6 => Ok(Self::Six),
+            7 => Ok(Self::Seven),
+            8 => Ok(Self::Eight),
+            _ => Err(AuthenticatorDomainError::DigitsInvalid),
         }
-    }
-
-    #[must_use]
-    pub const fn get(self) -> u32 {
-        self.0
     }
 }
 
@@ -146,9 +175,22 @@ impl Default for TotpPeriod {
     }
 }
 
+impl fmt::Display for TotpPeriod {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 impl TotpPeriod {
     /// # Errors
     /// Returns an error when the period is outside the supported range.
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: validates a numeric period decoded from authenticator data"
+        )
+    )]
     pub fn parse(value: u64) -> Result<Self, AuthenticatorDomainError> {
         if (15..=300).contains(&value) {
             Ok(Self(value))
@@ -158,8 +200,20 @@ impl TotpPeriod {
     }
 
     #[must_use]
-    pub const fn get(self) -> u64 {
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: exposes the validated period only to companion and WASM wire adapters"
+        )
+    )]
+    pub const fn serialized_value(self) -> u64 {
         self.0
+    }
+
+    #[must_use]
+    pub const fn duration(self) -> Duration {
+        Duration::from_secs(self.0)
     }
 }
 
@@ -186,14 +240,17 @@ mod tests {
 
     #[test]
     fn bounds_authenticator_numbers() {
-        for digits in 6..=8 {
-            assert_eq!(TotpDigits::parse(digits).map(TotpDigits::get), Ok(digits));
-        }
+        assert_eq!(TotpDigits::parse(6), Ok(TotpDigits::Six));
+        assert_eq!(TotpDigits::parse(7), Ok(TotpDigits::Seven));
+        assert_eq!(TotpDigits::parse(8), Ok(TotpDigits::Eight));
         for digits in [0, 5, 9, u32::MAX] {
             assert!(TotpDigits::parse(digits).is_err());
         }
         for period in [15, 30, 300] {
-            assert_eq!(TotpPeriod::parse(period).map(TotpPeriod::get), Ok(period));
+            assert_eq!(
+                TotpPeriod::parse(period).map(TotpPeriod::duration),
+                Ok(Duration::from_secs(period))
+            );
         }
         for period in [0, 14, 301, u64::MAX] {
             assert!(TotpPeriod::parse(period).is_err());
@@ -203,12 +260,20 @@ mod tests {
     #[test]
     fn deserialization_enforces_authenticator_number_bounds() {
         assert!(matches!(
+            serde_json::to_string(&TotpDigits::Six),
+            Ok(value) if value == "6"
+        ));
+        assert!(matches!(
+            serde_json::to_string(&TotpPeriod::default()),
+            Ok(value) if value == "30"
+        ));
+        assert!(matches!(
             serde_json::from_str::<TotpDigits>("6"),
-            Ok(value) if value.get() == 6
+            Ok(TotpDigits::Six)
         ));
         assert!(matches!(
             serde_json::from_str::<TotpPeriod>("300"),
-            Ok(value) if value.get() == 300
+            Ok(value) if value.duration() == Duration::from_mins(5)
         ));
         assert!(serde_json::from_str::<TotpDigits>("9").is_err());
         assert!(serde_json::from_str::<TotpPeriod>("301").is_err());

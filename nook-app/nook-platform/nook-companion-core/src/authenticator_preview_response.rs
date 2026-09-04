@@ -62,8 +62,10 @@ pub struct AuthenticatorEnrollmentPreview {
     pub website_url: String,
     #[tsify(type = "'SHA1' | 'SHA256' | 'SHA512'")]
     pub algorithm: TotpAlgorithm,
-    pub digits: u32,
-    pub period: u64,
+    #[tsify(type = "number")]
+    pub digits: TotpDigits,
+    #[tsify(type = "number")]
+    pub period: TotpPeriod,
 }
 
 #[wasm_bindgen]
@@ -125,8 +127,8 @@ pub fn decode_authenticator_preview_response(
                     account: preview.account,
                     website_url: preview.website_url,
                     algorithm: preview.algorithm,
-                    digits: preview.digits.get(),
-                    period: preview.period.get(),
+                    digits: preview.digits,
+                    period: preview.period,
                 },
                 vault_store_id,
             })
@@ -189,8 +191,8 @@ mod tests {
                     account: "alice".to_owned(),
                     website_url: "https://example.com".to_owned(),
                     algorithm: TotpAlgorithm::Sha256,
-                    digits: 6,
-                    period: 30,
+                    digits: TotpDigits::Six,
+                    period: TotpPeriod::default(),
                 },
                 vault_store_id: "vault".to_owned(),
             })

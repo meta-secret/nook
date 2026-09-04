@@ -132,7 +132,7 @@ pub fn verify_totp_code(
     if trimmed.len() < 6 || trimmed.len() > 8 || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
         return Ok(false);
     }
-    let period = authenticator.period.get();
+    let period = authenticator.period.duration().as_secs();
     for step_offset in [-1_i64, 0, 1] {
         let Some(shifted) =
             unix_seconds.checked_add_signed(step_offset * i64::try_from(period).unwrap_or(30))
