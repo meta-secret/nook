@@ -281,6 +281,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo install cargo-dylint dylint-link",
         "COPY nook-app/nook-platform/ nook-app/nook-platform/",
         "cargo fuzz run",
+        "cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check",
         "RUSTC_WRAPPER= RUSTFLAGS= cargo test",
         "cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings",
         "cargo dylint --all",
@@ -501,6 +502,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         dylint_manifest.contains("[lints.clippy]")
             && dylint_manifest.contains("all = { level = \"warn\", priority = -1 }")
             && dylint_manifest.contains("pedantic = { level = \"warn\", priority = -1 }")
+            && dylint_manifest.contains("expect_used = \"deny\"")
+            && dylint_manifest.contains("unwrap_used = \"deny\"")
     );
     assert!(
         workspace.contains("[workspace.metadata.dylint]")

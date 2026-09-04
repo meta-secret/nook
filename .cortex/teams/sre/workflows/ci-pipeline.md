@@ -224,7 +224,8 @@ See [issues](../../../gizmo/workflows/issues.md),
 **`rust-dependency-updates.yml`**
 
 - Audits every direct dependency in each Rust root.
-- The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
+- The roots include `nook-app/nook-platform/`, `nook-app/nook-platform/dylint/nook-domain-api/`, and its fuzz workspace.
+- They also include `agentic-ai/minds/` and `preflight/`.
 - When an update exists, an AI agent updates all outdated Rust dependencies.
 - Runs the full deterministic suite and opens a PR for explicit review.
 
@@ -631,6 +632,7 @@ runs weekly and can be started manually. It installs the pinned
 --root-deps-only` in every Rust root. Those roots are:
 
 - `nook-app/nook-platform/`;
+- `nook-app/nook-platform/dylint/nook-domain-api/`;
 - `nook-app/nook-platform/fuzz/`;
 - `agentic-ai/minds/`;
 - `preflight/`.

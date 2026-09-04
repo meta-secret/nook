@@ -37,7 +37,8 @@ ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    RUSTC_WRAPPER= RUSTFLAGS= cargo test \
+    cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check \
+    && RUSTC_WRAPPER= RUSTFLAGS= cargo test \
       --manifest-path dylint/nook-domain-api/Cargo.toml --locked \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
     && cargo dylint --all -- --all-targets \

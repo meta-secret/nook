@@ -450,7 +450,8 @@ Use this workflow for quality, CI, and deployment changes.
     #### Manual and scheduled jobs
     - Credentialed `sync-live` validation is manual through `e2e-pr.yml`.
     - Weekly: `rust-dependency-updates.yml` audits every direct dependency in each Rust root.
-    - The roots are `nook-app/nook-platform/`, its fuzz workspace, `agentic-ai/minds/`, and `preflight/`.
+    - The roots include `nook-app/nook-platform/`, `nook-app/nook-platform/dylint/nook-domain-api/`, and its fuzz workspace.
+    - They also include `agentic-ai/minds/` and `preflight/`.
     - A finding starts an isolated AI agent.
     - The agent updates all outdated Rust dependencies.
     - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000`.
