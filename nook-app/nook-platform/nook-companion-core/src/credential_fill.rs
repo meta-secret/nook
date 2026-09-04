@@ -387,7 +387,10 @@ mod tests {
     #[test]
     fn simulation_propagates_planner_failures() {
         assert_eq!(
-            simulate_authentication_credential_fill(&[], &SimulatedAuthenticationCredentials::fixture()),
+            simulate_authentication_credential_fill(
+                &[],
+                &SimulatedAuthenticationCredentials::fixture()
+            ),
             Err(AuthenticationCredentialFillError::NoCredentialField)
         );
     }
