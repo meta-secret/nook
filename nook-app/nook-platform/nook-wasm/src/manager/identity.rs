@@ -1,5 +1,8 @@
 //! Identity-directory commands that require the unlocked local app key.
 
+use crate::identity_record;
+use crate::storage::event_db;
+use nook_core::{CurrentVaultReplaceability, StoreId};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 use super::NookVaultManager;
@@ -12,23 +15,23 @@ impl NookVaultManager {
         &self,
         provider_store_id: String,
     ) -> Result<NookProviderVaultDecisionProjection, JsError> {
-        let provider_store_id = nook_core::StoreId::parse(&provider_store_id)
-            .map_err(|error| JsError::new(&error.to_string()))?;
+        let provider_store_id =
+            StoreId::parse(&provider_store_id).map_err(|error| JsError::new(&error.to_string()))?;
         let current_store_id = self.vault.store_id.trim();
         let current_vault = if current_store_id.is_empty() {
-            nook_core::CurrentVaultReplaceability::Unknown
+            CurrentVaultReplaceability::Unknown
         } else {
-            let store = crate::storage::event_db::load_local_event_store_strict(current_store_id)
+            let store = event_db::load_local_event_store_strict(current_store_id)
                 .await
                 .map_err(|error| JsError::new(&error.to_string()))?;
             match store.load_graph(current_store_id) {
                 Ok(graph) => {
                     nook_core::classify_current_vault_replaceability(&graph, current_store_id)
                 }
-                Err(_) => nook_core::CurrentVaultReplaceability::Unknown,
+                Err(_) => CurrentVaultReplaceability::Unknown,
             }
         };
-        let identities = crate::identity_record::provider_vault_identity_observations(
+        let identities = identity_record::provider_vault_identity_observations(
             &self.device.public_app_id(),
             &provider_store_id,
         )
@@ -57,8 +60,8 @@ impl NookVaultManager {
         &self,
         store_id: &str,
     ) -> Result<NookIdentityDirectorySnapshotRequest, JsError> {
-        let store_id = nook_core::StoreId::parse(store_id)
-            .map_err(|error| JsError::new(&error.to_string()))?;
+        let store_id =
+            StoreId::parse(store_id).map_err(|error| JsError::new(&error.to_string()))?;
         let session_app_id = self.device.public_app_id();
         let session_unlocked = !self.device.identity_private_key.is_empty();
         Ok(NookIdentityDirectorySnapshotRequest::for_selected_vault(
@@ -71,9 +74,11 @@ impl NookVaultManager {
 
 #[cfg(test)]
 mod tests {
+    use crate::manager::session::DeviceSessionState;
+
     #[test]
     fn locked_session_keeps_its_public_app_id() {
-        let device = super::super::session::DeviceSessionState {
+        let device = DeviceSessionState {
             id: "app_companion_session".to_owned(),
             identity_private_key: String::new(),
             ..Default::default()

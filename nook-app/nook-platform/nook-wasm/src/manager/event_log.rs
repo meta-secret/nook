@@ -1,5 +1,10 @@
 //! Event-log persistence and provider fan-out.
 
+use crate::storage::identity_record;
+use nook_core::{
+    EventError, IsoTimestamp, StoreId, VaultError, VaultNameRef, VaultProjection,
+    VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
+};
 mod extension_import;
 mod import_as_local;
 mod provider_io;
@@ -83,12 +88,10 @@ impl NookVaultManager {
     ) -> Result<(), nook_core::VaultError> {
         let canonical_id = event.id()?;
         if canonical_id != *expected_event_id {
-            return Err(nook_core::VaultError::Event(
-                nook_core::EventError::EventStoreIdMismatch {
-                    expected: canonical_id.as_str().to_owned(),
-                    actual: expected_event_id.as_str().to_owned(),
-                },
-            ));
+            return Err(VaultError::Event(EventError::EventStoreIdMismatch {
+                expected: canonical_id.as_str().to_owned(),
+                actual: expected_event_id.as_str().to_owned(),
+            }));
         }
         Ok(())
     }
@@ -166,13 +169,12 @@ impl NookVaultManager {
             )?);
         }
         let app_key = self.device_identity()?;
-        if crate::storage::identity_record::load_entry_for_app_id(app_key.app_id())
+        if identity_record::load_entry_for_app_id(app_key.app_id())
             .await?
             .is_some()
         {
             self.event_log.signing_seed =
-                crate::storage::identity_record::load_or_create_signing_seed_for_app_key(&app_key)
-                    .await?;
+                identity_record::load_or_create_signing_seed_for_app_key(&app_key).await?;
             return Ok(SigningIdentity::from_seed_hex_stored(
                 &self.event_log.signing_seed,
             )?);
@@ -249,7 +251,7 @@ impl NookVaultManager {
             self.event_log.key_epoch = epoch;
             return Ok(self.event_log.key_epoch.clone());
         }
-        let epoch = nook_core::EventId::from_sha256_hex(
+        let epoch = EventId::from_sha256_hex(
             nook_core::sha256_hex(self.vault.store_id.as_bytes()).as_str(),
         )?
         .into_inner();
@@ -278,7 +280,7 @@ impl NookVaultManager {
         self.activate_event_log_mode().await?;
         let parents = self.load_event_heads().await?;
         let key_epoch = self.ensure_key_epoch().await?;
-        let key_epoch = nook_core::EventId::parse(&key_epoch)?;
+        let key_epoch = EventId::parse(&key_epoch)?;
         let parents: Vec<EventId> = parents
             .iter()
             .map(|parent| EventId::parse(parent).map_err(NookError::from))
@@ -309,8 +311,8 @@ impl NookVaultManager {
     ) -> Result<BuiltVaultEvent, NookError> {
         let signing = self.ensure_signing_identity().await?;
         let actor_id = signing.actor_id()?;
-        let store_id = nook_core::StoreId::parse(&self.vault.store_id)?;
-        let created_at = nook_core::IsoTimestamp::parse(&iso_timestamp())?;
+        let store_id = StoreId::parse(&self.vault.store_id)?;
+        let created_at = IsoTimestamp::parse(&iso_timestamp())?;
         let (event, bytes) = build_signed_event(AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
@@ -362,7 +364,7 @@ impl NookVaultManager {
         let live = projection.live_secrets(&graph);
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
         self.vault.password_entries = projection.password_entries;
-        self.vault.unlock = nook_core::VaultUnlock::Keys;
+        self.vault.unlock = VaultUnlock::Keys;
         apply_user_records_to_encrypted_session(user_records, &mut self.vault.meta);
         self.vault.mark_search_catalog_dirty();
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
@@ -414,12 +416,12 @@ impl NookVaultManager {
             &records,
             &self.vault.unlock,
             &self.vault.password_entries,
-            nook_core::VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
+            VaultStoreIdentityRef::Assigned(self.vault.store_id.as_str()),
             match &self.vault.vault_name {
-                VaultNameState::Unnamed => nook_core::VaultNameRef::Unnamed,
-                VaultNameState::Named(name) => nook_core::VaultNameRef::Named(name),
+                VaultNameState::Unnamed => VaultNameRef::Unnamed,
+                VaultNameState::Named(name) => VaultNameRef::Named(name),
             },
-            nook_core::VaultVersionWrite::Initial,
+            VaultVersionWrite::Initial,
             &self.vault.architecture,
         )?;
         save_to_indexed_db(yaml.as_str()).await?;
@@ -431,7 +433,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<nook_core::VaultProjection, NookError> {
         if self.vault.store_id.is_empty() {
-            return Ok(nook_core::VaultProjection::default());
+            return Ok(VaultProjection::default());
         }
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;

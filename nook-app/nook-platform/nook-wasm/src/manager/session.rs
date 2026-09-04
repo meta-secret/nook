@@ -1,7 +1,13 @@
+use nook_core::{
+    DriveEventParent, ICloudEventTarget, SentinelGenesisPhase, StorageMode, VaultArchitecture,
+    VaultMetaState, VaultUnlock,
+};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
-use crate::NookError;
+use super::device_protection::PendingExtensionIdentityHandoff;
+use crate::application;
+use crate::{NookError, NookEventLogSyncIssue};
 
 pub(in crate::manager) struct StorageSession {
     pub(in crate::manager) mode: nook_core::StorageMode,
@@ -17,12 +23,12 @@ pub(in crate::manager) struct StorageSession {
 impl Default for StorageSession {
     fn default() -> Self {
         Self {
-            mode: nook_core::StorageMode::Local,
+            mode: StorageMode::Local,
             access_token: String::new(),
             remote_ref: String::new(),
             remote_path: String::new(),
-            drive_event_parent: nook_core::DriveEventParent::AppDataFolder,
-            icloud_event_target: nook_core::ICloudEventTarget::Private,
+            drive_event_parent: DriveEventParent::AppDataFolder,
+            icloud_event_target: ICloudEventTarget::Private,
             github_root_empty: false,
             use_local_cache_for_connect: false,
         }
@@ -111,7 +117,7 @@ impl NookEventLogSyncIssueResult {
             EventLogSyncIssueState::Pending {
                 provider_label,
                 classification,
-            } => Ok(crate::NookEventLogSyncIssue::new(
+            } => Ok(NookEventLogSyncIssue::new(
                 provider_label.clone(),
                 classification.clone(),
             )),
@@ -186,14 +192,14 @@ impl Default for VaultSessionState {
             secrets_key: String::new(),
             members_key: String::new(),
             crypto: VaultCryptoState::Locked,
-            meta: nook_core::VaultMetaState::default(),
+            meta: VaultMetaState::default(),
             last_synced_content: String::new(),
-            unlock: nook_core::VaultUnlock::Keys,
+            unlock: VaultUnlock::Keys,
             password_entries: Vec::new(),
             store_id: String::new(),
             vault_name: VaultNameState::Unnamed,
             vault_version: 0,
-            architecture: nook_core::VaultArchitecture::default(),
+            architecture: VaultArchitecture::default(),
             search_catalog: SearchCatalogState::Unavailable,
             search_catalog_store_id: String::new(),
             search_catalog_dirty: true,
@@ -208,9 +214,9 @@ impl VaultSessionState {
         self.secrets_key.zeroize();
         self.members_key.zeroize();
         self.crypto = VaultCryptoState::Locked;
-        self.meta = nook_core::VaultMetaState::default();
+        self.meta = VaultMetaState::default();
         self.last_synced_content.clear();
-        self.unlock = nook_core::VaultUnlock::Keys;
+        self.unlock = VaultUnlock::Keys;
         self.password_entries.clear();
         self.store_id.clear();
         self.vault_name = VaultNameState::Unnamed;
@@ -232,8 +238,7 @@ pub(in crate::manager) struct DeviceSessionState {
     pub(in crate::manager) id: String,
     pub(in crate::manager) identity_private_key: String,
     pub(in crate::manager) extension_handoff_private_key: String,
-    pub(in crate::manager) pending_extension_handoff:
-        Option<super::device_protection::PendingExtensionIdentityHandoff>,
+    pub(in crate::manager) pending_extension_handoff: Option<PendingExtensionIdentityHandoff>,
     pub(in crate::manager) pending_local_identity_label: Option<String>,
 }
 
@@ -283,7 +288,7 @@ impl Default for SyncOutboxState {
     fn default() -> Self {
         Self {
             provider_id: String::new(),
-            storage_mode: nook_core::StorageMode::Local,
+            storage_mode: StorageMode::Local,
             access_token: String::new(),
             repo_arg: String::new(),
         }
@@ -293,7 +298,7 @@ impl Default for SyncOutboxState {
 impl SyncOutboxState {
     pub(in crate::manager) fn reset(&mut self) {
         self.provider_id.clear();
-        self.storage_mode = nook_core::StorageMode::Local;
+        self.storage_mode = StorageMode::Local;
         self.access_token.zeroize();
         self.repo_arg.clear();
     }
@@ -324,7 +329,7 @@ impl Drop for NookVaultManager {
         self.device.extension_handoff_private_key.zeroize();
         self.event_log.reset();
         self.sentinel_genesis = CeremonyState::Inactive;
-        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::Inactive;
+        self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         self.sentinel_unlock = CeremonyState::Inactive;
         self.sync_outbox.reset();
@@ -337,14 +342,14 @@ impl NookVaultManager {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         Self {
-            application: crate::application::configured_vault_application(),
+            application: application::configured_vault_application(),
             storage: StorageSession::default(),
             vault: VaultSessionState::default(),
             device: DeviceSessionState::default(),
             status: StatusChannel::new(),
             event_log: EventLogSessionState::default(),
             sentinel_genesis: CeremonyState::Inactive,
-            sentinel_genesis_phase: nook_core::SentinelGenesisPhase::Inactive,
+            sentinel_genesis_phase: SentinelGenesisPhase::Inactive,
             pending_sentinel_genesis_request: CeremonyState::Inactive,
             sentinel_unlock: CeremonyState::Inactive,
             sync_outbox: SyncOutboxState::default(),

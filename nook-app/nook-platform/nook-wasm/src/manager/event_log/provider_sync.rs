@@ -1,3 +1,5 @@
+use crate::storage::event_db;
+use nook_core::{MultiDeviceError, ProjectionEpoch, StorageMode, VaultCrypto, VaultType};
 use std::collections::BTreeSet;
 
 use super::{
@@ -17,8 +19,7 @@ impl NookVaultManager {
         &mut self,
         projection: &nook_core::VaultProjection,
     ) -> Result<(), NookError> {
-        let nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch
-        else {
+        let ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch else {
             return Ok(());
         };
         let next_epoch = key_epoch.as_str().to_owned();
@@ -46,15 +47,14 @@ impl NookVaultManager {
         &mut self,
         projection: &nook_core::VaultProjection,
     ) -> Result<(), NookError> {
-        let nook_core::ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch
-        else {
+        let ProjectionEpoch::Current(nook_core::KeyEpoch(key_epoch)) = &projection.epoch else {
             return Ok(());
         };
         if self.event_log.key_epoch == key_epoch.as_str() && self.vault.crypto.is_unlocked() {
             return Ok(());
         }
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            let error = NookError::from(nook_core::MultiDeviceError::SentinelCeremonyRequired);
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            let error = NookError::from(MultiDeviceError::SentinelCeremonyRequired);
             self.clear_vault_keys();
             return Err(error);
         }
@@ -68,7 +68,7 @@ impl NookVaultManager {
                 return Err(error);
             }
         };
-        let crypto = match nook_core::VaultCrypto::new(&keys.secrets_key) {
+        let crypto = match VaultCrypto::new(&keys.secrets_key) {
             Ok(crypto) => crypto,
             Err(error) => {
                 self.clear_vault_keys();
@@ -92,7 +92,7 @@ impl NookVaultManager {
         event_id: &EventId,
         bytes: &[u8],
     ) -> Result<(), NookError> {
-        let provider_id = if self.storage.mode == nook_core::StorageMode::Local {
+        let provider_id = if self.storage.mode == StorageMode::Local {
             if self.sync_outbox.provider_id.is_empty() {
                 return Ok(());
             }
@@ -203,7 +203,7 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) async fn flush_sync_event_outbox(&mut self) -> Result<(), NookError> {
-        if self.storage.mode != nook_core::StorageMode::Local {
+        if self.storage.mode != StorageMode::Local {
             return self.flush_event_outbox().await;
         }
         if self.sync_outbox.provider_id.is_empty() {
@@ -225,7 +225,7 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) async fn flush_event_outbox(&mut self) -> Result<(), NookError> {
-        if self.storage.mode == nook_core::StorageMode::Local {
+        if self.storage.mode == StorageMode::Local {
             return Ok(());
         }
         let provider_id = self.local_cache_ref();
@@ -377,11 +377,8 @@ impl NookVaultManager {
         remote_events: &[(EventId, Vec<u8>)],
         persist_locked_projection: bool,
     ) -> Result<(), NookError> {
-        let (heads, persisted) = crate::storage::event_db::save_verified_remote_events(
-            &self.vault.store_id,
-            remote_events,
-        )
-        .await?;
+        let (heads, persisted) =
+            event_db::save_verified_remote_events(&self.vault.store_id, remote_events).await?;
         *local = persisted;
         self.event_log.heads = heads.clone();
         let graph = local.load_graph(&self.vault.store_id)?;
@@ -539,14 +536,15 @@ impl NookVaultManager {
 #[allow(clippy::items_after_test_module)]
 mod tests {
     use super::*;
+    use nook_core::{DeviceIdentity, VaultMetaState};
     use wasm_bindgen::JsError;
 
     #[test]
     fn projected_epoch_keys_use_the_current_auth_envelopes() -> anyhow::Result<()> {
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let keys = nook_core::generate_vault_keys()?;
         let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
-        let meta = nook_core::VaultMetaState::from_stored_records(&[auth]);
+        let meta = VaultMetaState::from_stored_records(&[auth]);
 
         let resolved = NookVaultManager::projected_epoch_keys(&meta, &identity)?;
 

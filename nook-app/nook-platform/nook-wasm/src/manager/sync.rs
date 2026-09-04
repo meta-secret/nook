@@ -11,6 +11,7 @@ use crate::conversion::{
 };
 use crate::storage::event_db::is_event_log_mode;
 use crate::{NookError, NookVaultSyncResult};
+use nook_core::{StorageMode, VaultAccessStatus};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -27,7 +28,7 @@ impl NookVaultManager {
             storage = %storage_mode,
             "sync_vault_from_storage started"
         );
-        let restore_local = self.storage.mode == nook_core::StorageMode::Local;
+        let restore_local = self.storage.mode == StorageMode::Local;
         // `prepare_storage` clears `password_entries`/`unlock` on a mode/ref
         // switch (it assumes a *different* vault). A same-vault sync only
         // toggles the local-cache/remote tag, so preserve the backup-password
@@ -78,7 +79,7 @@ impl NookVaultManager {
 
         if content.trim().is_empty() {
             self.vault.last_synced_content = content.clone();
-            return sync_result_access_status(nook_core::VaultAccessStatus::NewVault);
+            return sync_result_access_status(VaultAccessStatus::NewVault);
         }
 
         if self.vault.members_key.is_empty() {

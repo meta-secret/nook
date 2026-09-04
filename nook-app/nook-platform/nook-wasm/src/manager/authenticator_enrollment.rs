@@ -3,6 +3,9 @@
 use super::NookVaultManager;
 use super::secrets::{SecretProjectionVerification, SecretReplacementInput};
 use crate::NookError;
+use nook_core::{
+    AuthenticatorSecret, BackupCodeAttachMode, SecretId, SecretType, SecretValue, ValidationError,
+};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
@@ -41,7 +44,7 @@ impl NookVaultManager {
         let yaml = Zeroizing::new(yaml);
         self.add_secret(
             id.clone(),
-            nook_core::SecretType::Authenticator,
+            SecretType::Authenticator,
             yaml.as_str().to_owned(),
         )
         .await?;
@@ -54,17 +57,16 @@ impl NookVaultManager {
         codes: Vec<String>,
         mode: &str,
     ) -> Result<NookAuthenticatorBackupAttachResult, JsError> {
-        let mode = nook_core::BackupCodeAttachMode::parse(mode).map_err(|_| {
-            NookError::from(nook_core::ValidationError::AuthenticatorBackupCodesInvalid)
-        })?;
+        let mode = BackupCodeAttachMode::parse(mode)
+            .map_err(|_| NookError::from(ValidationError::AuthenticatorBackupCodesInvalid))?;
         let reviewed_codes =
             Zeroizing::new(nook_core::normalize_backup_codes(&codes).map_err(NookError::from)?);
-        let id = nook_core::SecretId::parse(secret_id).map_err(NookError::from)?;
+        let id = SecretId::parse(secret_id).map_err(NookError::from)?;
         let crypto = self.vault.crypto.get()?;
         let mut record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)
             .map_err(NookError::from)?;
         let result = match &mut record.data {
-            nook_core::SecretValue::Authenticator(authenticator) => {
+            SecretValue::Authenticator(authenticator) => {
                 let attached =
                     nook_core::apply_backup_codes(&authenticator.backup_codes, &codes, mode)
                         .map_err(NookError::from)?;
@@ -72,7 +74,7 @@ impl NookVaultManager {
                 authenticator.backup_codes = attached;
                 authenticator.normalize().map_err(NookError::from)?;
                 let expected_codes = Zeroizing::new(authenticator.backup_codes.clone());
-                let yaml = nook_core::SecretValue::Authenticator(authenticator.clone())
+                let yaml = SecretValue::Authenticator(authenticator.clone())
                     .to_yaml()
                     .map_err(NookError::from)?;
                 Ok((yaml.as_str().to_owned(), expected_codes))
@@ -90,7 +92,7 @@ impl NookVaultManager {
         self.replace_secret_with_projection_verification(SecretReplacementInput {
             old_id: secret_id.to_owned(),
             new_id: new_id.clone(),
-            secret_type: nook_core::SecretType::Authenticator,
+            secret_type: SecretType::Authenticator,
             data: yaml.as_str().to_owned(),
             verification: SecretProjectionVerification::AuthenticatorBackupCodes {
                 intended: expected_codes,
@@ -110,6 +112,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
+    use nook_core::VaultApplication;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -118,7 +121,7 @@ mod wasm_tests {
     async fn reviewed_backup_attach_rejects_invalid_input_and_commits_verified_projection()
     -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.application = nook_core::VaultApplication::Extension;
+        manager.application = VaultApplication::Extension;
         manager
             .delete_local_browser_data()
             .await
@@ -132,10 +135,10 @@ mod wasm_tests {
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
         manager.bootstrap_event_log_genesis().await?;
 
-        let authenticator = nook_core::AuthenticatorSecret::from_otpauth_uri(
+        let authenticator = AuthenticatorSecret::from_otpauth_uri(
             "otpauth://totp/Nook:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Nook",
         )?;
-        let authenticator_yaml = nook_core::SecretValue::Authenticator(authenticator).to_yaml()?;
+        let authenticator_yaml = SecretValue::Authenticator(authenticator).to_yaml()?;
         let original_id = nook_core::generate_secret_id()?.to_string();
         manager
             .persist_authenticator_yaml(original_id.clone(), authenticator_yaml.into_inner())
@@ -163,7 +166,7 @@ mod wasm_tests {
                 .vault
                 .meta
                 .secrets
-                .contains_key(&nook_core::SecretId::parse(&original_id)?)
+                .contains_key(&SecretId::parse(&original_id)?)
         );
 
         let reviewed_codes = vec!["  alpha-code  ".to_owned(), "beta-code".to_owned()];
@@ -182,13 +185,13 @@ mod wasm_tests {
             event_count_before_rejection + 1
         );
 
-        let replacement_id = nook_core::SecretId::parse(&proof.secret_id())?;
+        let replacement_id = SecretId::parse(&proof.secret_id())?;
         assert!(
             !manager
                 .vault
                 .meta
                 .secrets
-                .contains_key(&nook_core::SecretId::parse(&original_id)?)
+                .contains_key(&SecretId::parse(&original_id)?)
         );
         let crypto = manager.vault.crypto.get()?;
         let mut projected = nook_core::decrypt_encrypted_secret(
@@ -197,9 +200,7 @@ mod wasm_tests {
             &replacement_id,
         )?;
         let persisted_codes = match &projected.data {
-            nook_core::SecretValue::Authenticator(authenticator) => {
-                authenticator.backup_codes.clone()
-            }
+            SecretValue::Authenticator(authenticator) => authenticator.backup_codes.clone(),
             _ => anyhow::bail!("replacement projection is not an authenticator"),
         };
         projected.zeroize_plaintext();
@@ -220,14 +221,14 @@ impl NookVaultManager {
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         let mut authenticator =
-            nook_core::AuthenticatorSecret::from_otpauth_uri(uri).map_err(NookError::from)?;
+            AuthenticatorSecret::from_otpauth_uri(uri).map_err(NookError::from)?;
         let origin = page_origin.trim();
         if !origin.is_empty() {
             authenticator.website_url = origin.to_owned();
         }
         authenticator.normalize().map_err(NookError::from)?;
         let yaml = Zeroizing::new(
-            nook_core::SecretValue::Authenticator(authenticator)
+            SecretValue::Authenticator(authenticator)
                 .to_yaml()
                 .map_err(NookError::from)?
                 .as_str()

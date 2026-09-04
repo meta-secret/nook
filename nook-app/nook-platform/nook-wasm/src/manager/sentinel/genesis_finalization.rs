@@ -6,6 +6,10 @@ use crate::storage::indexed_db::{
     save_to_indexed_db,
 };
 use crate::{NookError, NookSentinelGenesisFinalizeResult};
+use nook_core::{
+    SentinelGenesisPhase, VaultMetaState, VaultNameRef, VaultStoreIdentityRef, VaultUnlock,
+    VaultVersionWrite,
+};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -68,14 +72,14 @@ impl NookVaultManager {
         let vault_name = self.vault.vault_name.clone();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
             &output.stored_records,
-            &nook_core::VaultUnlock::Keys,
+            &VaultUnlock::Keys,
             &[],
-            nook_core::VaultStoreIdentityRef::Assigned(&store_id),
+            VaultStoreIdentityRef::Assigned(&store_id),
             match &vault_name {
-                VaultNameState::Unnamed => nook_core::VaultNameRef::Unnamed,
-                VaultNameState::Named(name) => nook_core::VaultNameRef::Named(name),
+                VaultNameState::Unnamed => VaultNameRef::Unnamed,
+                VaultNameState::Named(name) => VaultNameRef::Named(name),
             },
-            nook_core::VaultVersionWrite::Initial,
+            VaultVersionWrite::Initial,
             &output.architecture,
         )?;
         let pending = PendingSentinelGenesisFinalization {
@@ -111,7 +115,7 @@ impl NookVaultManager {
         self.vault.store_id.clone_from(&pending.store_id);
         self.vault.vault_name.clone_from(&pending.vault_name);
         self.vault.architecture = pending.architecture.clone();
-        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
+        self.vault.meta = VaultMetaState::from_stored_records(&records);
         self.vault.last_synced_content.clone_from(&pending.yaml);
         self.event_log.reset();
         self.ensure_sentinel_genesis_event(&pending.participants, &pending.deliveries)
@@ -143,7 +147,7 @@ impl NookVaultManager {
         .await?;
         clear_sentinel_genesis_finalization_pending().await?;
         self.sentinel_genesis = CeremonyState::Inactive;
-        self.sentinel_genesis_phase = nook_core::SentinelGenesisPhase::DeliveringShares;
+        self.sentinel_genesis_phase = SentinelGenesisPhase::DeliveringShares;
 
         Ok(NookSentinelGenesisFinalizeResult::from_core(
             pending.store_id,

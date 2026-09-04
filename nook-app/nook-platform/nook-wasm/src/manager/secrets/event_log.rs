@@ -1,18 +1,23 @@
+use super::super::event_log::{
+    EventLogStorageRecord, ExtensionEventLogImportStatus, ExternalEventLogRecord,
+};
 use super::NookVaultManager;
+use crate::types;
 use serde::Serialize;
+use serde_wasm_bindgen::Serializer;
 use wasm_bindgen::{JsCast, JsError, prelude::wasm_bindgen};
 
 fn serialize_js_array<T: Serialize>(value: &T) -> Result<js_sys::Array, serde_wasm_bindgen::Error> {
     Ok(value
-        .serialize(&serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true))?
+        .serialize(&Serializer::new().serialize_maps_as_objects(true))?
         .unchecked_into())
 }
 
 #[wasm_bindgen]
-pub struct NookEventLogStorageRecord(super::super::event_log::EventLogStorageRecord);
+pub struct NookEventLogStorageRecord(EventLogStorageRecord);
 
 #[wasm_bindgen]
-pub struct NookEventLogRecords(Vec<super::super::event_log::EventLogStorageRecord>);
+pub struct NookEventLogRecords(Vec<EventLogStorageRecord>);
 
 #[wasm_bindgen]
 impl NookEventLogRecords {
@@ -23,7 +28,7 @@ impl NookEventLogRecords {
 }
 
 #[wasm_bindgen]
-pub struct NookExternalEventLogRecords(Vec<super::super::event_log::ExternalEventLogRecord>);
+pub struct NookExternalEventLogRecords(Vec<ExternalEventLogRecord>);
 
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
@@ -38,9 +43,7 @@ impl NookExternalEventLogRecords {
 }
 
 #[wasm_bindgen]
-pub struct NookExtensionEventLogImportStatus(
-    super::super::event_log::ExtensionEventLogImportStatus,
-);
+pub struct NookExtensionEventLogImportStatus(ExtensionEventLogImportStatus);
 
 #[wasm_bindgen]
 impl NookExtensionEventLogImportStatus {
@@ -117,8 +120,7 @@ impl NookVaultManager {
         &self,
     ) -> Result<Vec<crate::NookReplacementConflict>, JsError> {
         let projection = self.load_projection_conflicts().await?;
-        crate::types::replacement_conflicts_to_vec(projection.replacement_conflicts)
-            .map_err(Into::into)
+        types::replacement_conflicts_to_vec(projection.replacement_conflicts).map_err(Into::into)
     }
 
     #[wasm_bindgen]
@@ -126,13 +128,14 @@ impl NookVaultManager {
         &self,
     ) -> Result<Vec<crate::NookSecurityConflict>, JsError> {
         let projection = self.load_projection_conflicts().await?;
-        crate::types::security_conflicts_to_vec(projection.security_conflicts).map_err(Into::into)
+        types::security_conflicts_to_vec(projection.security_conflicts).map_err(Into::into)
     }
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
+    use js_sys::{JsString, Reflect};
     use wasm_bindgen_test::*;
 
     #[derive(Serialize)]
@@ -154,23 +157,23 @@ mod wasm_tests {
     }
 
     fn get(target: &js_sys::Object, field: &str) -> Result<js_sys::Object, wasm_bindgen::JsError> {
-        Ok(js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected field"))?
+        Ok(Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new("failed to read reflected field"))?
             .unchecked_into())
     }
 
     fn get_number(target: &js_sys::Object, field: &str) -> Result<f64, wasm_bindgen::JsError> {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected numeric field"))?
+        Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new("failed to read reflected numeric field"))?
             .as_f64()
-            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a number"))
+            .ok_or_else(|| JsError::new("field is not a number"))
     }
 
     fn get_string(target: &js_sys::Object, field: &str) -> Result<String, wasm_bindgen::JsError> {
-        js_sys::Reflect::get(target, &js_sys::JsString::from(field))
-            .map_err(|_| wasm_bindgen::JsError::new("failed to read reflected string field"))?
+        Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new("failed to read reflected string field"))?
             .as_string()
-            .ok_or_else(|| wasm_bindgen::JsError::new("field is not a string"))
+            .ok_or_else(|| JsError::new("field is not a string"))
     }
 
     #[wasm_bindgen_test]
@@ -183,7 +186,7 @@ mod wasm_tests {
                 signature: "ed25519:test-signature".to_owned(),
             },
         }])
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        .map_err(|error| JsError::new(&error.to_string()))?;
         let record: js_sys::Object = value.get(0).unchecked_into();
         let event = get(&record, "event")?;
 

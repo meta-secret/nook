@@ -10,8 +10,14 @@ use crate::NookPasswordEntrySummary;
 use crate::NookSecretPage;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::event_db::load_local_event_store;
+use crate::storage::identity_record;
 use crate::storage::indexed_db::{get_active_vault_id, load_vault_local_cache, save_to_indexed_db};
 use crate::types::password_entries_to_vec;
+use nook_core::{
+    DeviceSigningPublicKey, IsoTimestamp, MemberLabel, MultiDeviceError, PasswordEntryId,
+    SecretTypeFilter, StorageMode, StoreId, SymmetricKey, VaultMetaState, VaultOperation,
+    VaultType, VaultUnlock,
+};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -110,8 +116,8 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
         if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
@@ -121,8 +127,8 @@ impl NookVaultManager {
             .into());
         }
         let keys = nook_core::VaultKeys {
-            secrets_key: nook_core::SymmetricKey::parse(&self.vault.secrets_key)?,
-            members_key: nook_core::SymmetricKey::parse(&self.vault.members_key)?,
+            secrets_key: SymmetricKey::parse(&self.vault.secrets_key)?,
+            members_key: SymmetricKey::parse(&self.vault.members_key)?,
         };
         let entry = nook_core::create_password_entry_with_work_factor(
             &keys,
@@ -134,11 +140,11 @@ impl NookVaultManager {
         )?;
 
         self.vault.password_entries.push(entry.clone());
-        self.vault.unlock = nook_core::VaultUnlock::Keys;
-        self.persist_vault_change(vec![nook_core::VaultOperation::PasswordAdded {
-            entry_id: nook_core::PasswordEntryId::parse(&entry.id)?,
+        self.vault.unlock = VaultUnlock::Keys;
+        self.persist_vault_change(vec![VaultOperation::PasswordAdded {
+            entry_id: PasswordEntryId::parse(&entry.id)?,
             label: entry.label,
-            created_at: nook_core::IsoTimestamp::parse(&entry.created_at)?,
+            created_at: IsoTimestamp::parse(&entry.created_at)?,
             envelope: entry.envelope,
         }])
         .await?;
@@ -185,8 +191,8 @@ impl NookVaultManager {
         password: String,
         work_factor: u8,
     ) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         self.ensure_vault_crypto_from_cache().await?;
         if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
@@ -204,16 +210,16 @@ impl NookVaultManager {
             .clone();
         if !nook_core::password_envelope_supports_key_rewrap(&target_entry.envelope) {
             let keys = nook_core::VaultKeys {
-                secrets_key: nook_core::SymmetricKey::parse(&self.vault.secrets_key)?,
-                members_key: nook_core::SymmetricKey::parse(&self.vault.members_key)?,
+                secrets_key: SymmetricKey::parse(&self.vault.secrets_key)?,
+                members_key: SymmetricKey::parse(&self.vault.members_key)?,
             };
             let envelope = nook_core::attach_password_envelope_with_work_factor(
                 &keys,
                 &password,
                 work_factor,
             )?;
-            self.persist_vault_change(vec![nook_core::VaultOperation::PasswordEnvelopeUpgraded {
-                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+            self.persist_vault_change(vec![VaultOperation::PasswordEnvelopeUpgraded {
+                entry_id: PasswordEntryId::parse(&entry_id)?,
                 envelope,
             }])
             .await?;
@@ -231,7 +237,7 @@ impl NookVaultManager {
         }
         let envelope = self
             .rotate_password_security_epoch(
-                nook_core::PasswordEntryId::parse(&entry_id)?,
+                PasswordEntryId::parse(&entry_id)?,
                 &password,
                 work_factor,
             )
@@ -249,8 +255,8 @@ impl NookVaultManager {
 
     #[wasm_bindgen]
     pub async fn remove_vault_password_entry(&mut self, entry_id: String) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         let remaining_entries = self
             .vault
@@ -261,8 +267,8 @@ impl NookVaultManager {
             .collect();
         self.ensure_event_log_ready().await?;
         self.rotate_security_epoch_with_password_entries(
-            nook_core::VaultOperation::PasswordRemoved {
-                entry_id: nook_core::PasswordEntryId::parse(&entry_id)?,
+            VaultOperation::PasswordRemoved {
+                entry_id: PasswordEntryId::parse(&entry_id)?,
             },
             remaining_entries,
         )
@@ -272,8 +278,8 @@ impl NookVaultManager {
 
     #[wasm_bindgen]
     pub async fn remove_vault_password(&mut self) -> Result<(), JsError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         let entry_ids: Vec<String> = self
             .vault
@@ -284,8 +290,8 @@ impl NookVaultManager {
         self.ensure_event_log_ready().await?;
         if let Some(first_id) = entry_ids.first() {
             self.rotate_security_epoch_with_password_entries(
-                nook_core::VaultOperation::PasswordRemoved {
-                    entry_id: nook_core::PasswordEntryId::parse(first_id)?,
+                VaultOperation::PasswordRemoved {
+                    entry_id: PasswordEntryId::parse(first_id)?,
                 },
                 Vec::new(),
             )
@@ -331,8 +337,8 @@ impl NookVaultManager {
             .load_password_unlock_records(&content, vault_missing)
             .await?;
 
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
 
         if records.is_empty() {
@@ -360,16 +366,14 @@ impl NookVaultManager {
         let keys = nook_core::resolve_keys_from_entry(&entry, &password)?;
 
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.vault.unlock = nook_core::VaultUnlock::Keys;
-        self.vault.meta = nook_core::VaultMetaState::from_stored_records(&records);
+        self.vault.unlock = VaultUnlock::Keys;
+        self.vault.meta = VaultMetaState::from_stored_records(&records);
         self.ensure_event_log_ready().await?;
         if let Some(identity) = identity.as_ref() {
-            let store_id = nook_core::StoreId::parse(&self.vault.store_id)
+            let store_id = StoreId::parse(&self.vault.store_id)
                 .map_err(|error| NookError::Database(error.to_string()))?;
-            if let Err(error) = crate::storage::identity_record::validate_vault_identity_enrollment(
-                identity, &store_id,
-            )
-            .await
+            if let Err(error) =
+                identity_record::validate_vault_identity_enrollment(identity, &store_id).await
             {
                 self.reset_vault_session();
                 return Err(error.into());
@@ -390,7 +394,7 @@ impl NookVaultManager {
         let _ = self.status.tx.send("READY".to_owned());
         NookSecretPage::from_core(self.query_secret_page(
             "",
-            nook_core::SecretTypeFilter::All,
+            SecretTypeFilter::All,
             0,
             page_limit,
         )?)
@@ -402,8 +406,8 @@ impl NookVaultManager {
         content: &str,
         vault_missing: bool,
     ) -> Result<(bool, Vec<nook_core::StoredSecretRecord>), NookError> {
-        let event_log_remote = self.storage.mode != nook_core::StorageMode::Local
-            && (vault_missing || content.trim().is_empty());
+        let event_log_remote =
+            self.storage.mode != StorageMode::Local && (vault_missing || content.trim().is_empty());
         if event_log_remote {
             self.sync_events_from_current_provider().await?;
             if self.vault.store_id.is_empty() || !self.event_log_has_events().await? {
@@ -418,7 +422,7 @@ impl NookVaultManager {
             self.vault.password_entries = projection.password_entries.clone();
             let user_records: Vec<nook_core::StoredSecretRecord> =
                 projection.live_secrets(&graph).into_values().collect();
-            let mut meta = nook_core::VaultMetaState::from_stored_records(&user_records);
+            let mut meta = VaultMetaState::from_stored_records(&user_records);
             nook_core::materialize_vault_meta_from_graph(&graph, &mut meta)?;
             self.vault.meta = meta;
             return Ok((true, self.vault.meta.to_stored_records()));
@@ -443,8 +447,8 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
         keys: &nook_core::VaultKeys,
     ) -> Result<(), NookError> {
-        if self.vault.architecture.vault_type == nook_core::VaultType::Sentinel {
-            return Err(nook_core::MultiDeviceError::SentinelPasswordUnlockForbidden.into());
+        if self.vault.architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelPasswordUnlockForbidden.into());
         }
         if !self.event_log_has_events().await? {
             return Err(NookError::Database(
@@ -465,9 +469,8 @@ impl NookVaultManager {
         keys: &nook_core::VaultKeys,
     ) -> Result<(), NookError> {
         let signing = self.ensure_signing_identity().await?;
-        let signing_pk = nook_core::DeviceSigningPublicKey::from_trusted(hex::encode(
-            signing.verifying_key().as_bytes(),
-        ));
+        let signing_pk =
+            DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
         let existing_roster =
             nook_core::resolve_member_roster(records, &keys.members_key).unwrap_or_default();
         let updated_roster = nook_core::roster_add_member(
@@ -480,21 +483,21 @@ impl NookVaultManager {
         }
 
         let operations = match self.vault.architecture.vault_type {
-            nook_core::VaultType::Simple => {
+            VaultType::Simple => {
                 let auth_record =
                     nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
                 let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
                 self.vault.meta.apply_record(&auth_record);
-                vec![nook_core::VaultOperation::JoinApproved {
+                vec![VaultOperation::JoinApproved {
                     device_id: identity.device_id().clone(),
                     encryption_public_key: identity.public_key().clone(),
                     signing_public_key: signing_pk,
-                    label: nook_core::MemberLabel::from_trusted(String::new()),
+                    label: MemberLabel::from_trusted(String::new()),
                     secrets_key_ciphertext: envelopes.secrets_key,
                     members_key_ciphertext: envelopes.members_key,
                 }]
             }
-            nook_core::VaultType::Sentinel => {
+            VaultType::Sentinel => {
                 unreachable!("sentinel password membership forbidden")
             }
         };
@@ -507,6 +510,8 @@ impl NookVaultManager {
 #[cfg(test)]
 mod metadata_tests {
     use super::*;
+    use crate::manager::VaultNameState;
+    use nook_core::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -521,8 +526,8 @@ mod metadata_tests {
             E2E_PASSWORD_SCRYPT_LOG_N,
         )?;
         let mut manager = NookVaultManager::new();
-        manager.vault.vault_name = super::super::VaultNameState::Named("Personal".to_owned());
-        manager.vault.unlock = nook_core::VaultUnlock::Passwords {
+        manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
+        manager.vault.unlock = VaultUnlock::Passwords {
             entries: vec![entry.clone()],
         };
         manager.vault.password_entries = vec![entry.clone()];
@@ -532,9 +537,9 @@ mod metadata_tests {
                 &manager.vault.meta.to_stored_records(),
                 &manager.vault.unlock,
                 &manager.vault.password_entries,
-                nook_core::VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
-                nook_core::VaultNameRef::Named("Personal"),
-                nook_core::VaultVersionWrite::Initial,
+                VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
+                VaultNameRef::Named("Personal"),
+                VaultVersionWrite::Initial,
                 &manager.vault.architecture,
             )?
             .into_inner();
@@ -552,12 +557,12 @@ mod metadata_tests {
 
         assert!(matches!(
             &manager.vault.vault_name,
-            super::super::VaultNameState::Named(name) if name == "Personal"
+            VaultNameState::Named(name) if name == "Personal"
         ));
         assert_eq!(manager.vault.password_entries, vec![entry.clone()]);
         assert_eq!(
             manager.vault.unlock,
-            nook_core::VaultUnlock::Passwords {
+            VaultUnlock::Passwords {
                 entries: vec![entry]
             }
         );
@@ -569,7 +574,13 @@ mod metadata_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_tests {
     use super::*;
+    use crate::storage::indexed_db;
     use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
+    use nook_core::{
+        Database, DeviceIdentity, SecretId, SecretValue, VaultCrypto, VaultName, VaultNameRef,
+        VaultStoreIdentityRef, VaultVersionWrite,
+    };
+    use std::slice;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -598,7 +609,7 @@ mod wasm_tests {
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
         manager.vault.password_entries.clone_from(&entries);
         manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;
 
@@ -637,10 +648,7 @@ mod wasm_tests {
             .events()
             .flat_map(|(_, event)| event.body.operations.iter())
             .filter(|operation| {
-                matches!(
-                    operation,
-                    nook_core::VaultOperation::PasswordEnvelopeUpgraded { .. }
-                )
+                matches!(operation, VaultOperation::PasswordEnvelopeUpgraded { .. })
             })
             .count();
         assert_eq!(upgrades, 2);
@@ -651,26 +659,26 @@ mod wasm_tests {
     async fn failed_sync_flush_restores_local_projection_and_storage() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
         let mut manager = NookVaultManager::new();
-        manager.vault.vault_name = super::super::VaultNameState::Named("Personal".to_owned());
+        manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
         manager.vault.last_synced_content =
             nook_core::serialize_stored_yaml_with_unlock_name_architecture(
                 &manager.vault.meta.to_stored_records(),
                 &manager.vault.unlock,
                 &manager.vault.password_entries,
-                nook_core::VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
-                nook_core::VaultNameRef::Named("Personal"),
-                nook_core::VaultVersionWrite::Initial,
+                VaultStoreIdentityRef::Assigned(&manager.vault.store_id),
+                VaultNameRef::Named("Personal"),
+                VaultVersionWrite::Initial,
                 &manager.vault.architecture,
             )?
             .into_inner();
         manager.vault.secrets_key = keys.secrets_key.to_string();
         manager.vault.members_key = keys.members_key.to_string();
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.bootstrap_event_log_genesis().await?;
         manager.sync_outbox.provider_id = "configured-provider".to_owned();
-        manager.sync_outbox.storage_mode = nook_core::StorageMode::Github;
+        manager.sync_outbox.storage_mode = StorageMode::Github;
         manager.sync_outbox.access_token = "invalid-token".to_owned();
         manager.sync_outbox.repo_arg = "invalid-repository".to_owned();
 
@@ -681,38 +689,37 @@ mod wasm_tests {
         );
         assert!(matches!(
             &manager.vault.vault_name,
-            super::super::VaultNameState::Named(name) if name == "Personal"
+            VaultNameState::Named(name) if name == "Personal"
         ));
         assert_eq!(
             nook_core::read_vault_name(&manager.vault.last_synced_content)?,
-            nook_core::VaultName::Named("Personal".to_owned())
+            VaultName::Named("Personal".to_owned())
         );
-        let persisted_projection = crate::storage::indexed_db::load_from_indexed_db()
+        let persisted_projection = indexed_db::load_from_indexed_db()
             .await?
             .ok_or_else(|| anyhow::anyhow!("persisted rolled-back projection is missing"))?;
         assert_eq!(
             nook_core::read_vault_name(&persisted_projection)?,
-            nook_core::VaultName::Named("Personal".to_owned())
+            VaultName::Named("Personal".to_owned())
         );
-        assert_eq!(manager.storage.mode, nook_core::StorageMode::Local);
+        assert_eq!(manager.storage.mode, StorageMode::Local);
         Ok(())
     }
 
     #[wasm_bindgen_test]
     async fn password_unlock_requires_event_log() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
-        let mut database = nook_core::Database::new();
-        let secret_id = nook_core::SecretId::from_vault_record(
-            format!("secret_{}", nook_core::generate_id()?).as_str(),
-        );
+        let mut database = Database::new();
+        let secret_id =
+            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
         database.insert(
             secret_id,
-            nook_core::SecretValue::SecureNote(nook_core::SecureNoteSecret {
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
                 title: "projection note".to_owned(),
                 note: "event log required".to_owned(),
             }),
         );
-        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let records = database.to_stored_records_with_crypto(&crypto)?;
         let password_entry = nook_core::create_password_entry_with_work_factor(
             &keys,
@@ -725,11 +732,11 @@ mod wasm_tests {
         let store_id = nook_core::generate_store_id()?.to_string();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
             &records,
-            &nook_core::VaultUnlock::Keys,
-            std::slice::from_ref(&password_entry),
-            nook_core::VaultStoreIdentityRef::Assigned(&store_id),
-            nook_core::VaultNameRef::Named("Projection rejection test"),
-            nook_core::VaultVersionWrite::Initial,
+            &VaultUnlock::Keys,
+            slice::from_ref(&password_entry),
+            VaultStoreIdentityRef::Assigned(&store_id),
+            VaultNameRef::Named("Projection rejection test"),
+            VaultVersionWrite::Initial,
         )?;
         import_vault_blob(yaml.as_str(), Some("Projection rejection test")).await?;
         switch_active_vault(&store_id).await?;
@@ -753,7 +760,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn password_unlock_succeeds_after_app_key_is_deleted() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let password_entry = nook_core::create_password_entry_with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
@@ -797,7 +804,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn password_entries_list_after_app_key_is_deleted() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let password_entry = nook_core::create_password_entry_with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),

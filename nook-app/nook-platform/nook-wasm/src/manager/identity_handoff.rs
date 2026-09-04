@@ -1,7 +1,8 @@
 //! Verified-connect finalization for extension identity handoffs.
 
-use super::{NookVaultManager, PendingExtensionIdentityEnrollment};
+use super::{NookVaultManager, PendingExtensionIdentityEnrollment, VaultNameState};
 use crate::NookError;
+use crate::storage::identity_record;
 
 pub(in crate::manager) struct PendingVaultCreationHandoff {
     pub(in crate::manager) authorizer: Option<nook_core::AppKey>,
@@ -79,7 +80,7 @@ impl NookVaultManager {
             ));
         }
         let label = match &self.vault.vault_name {
-            super::VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
+            VaultNameState::Named(name) if !name.trim().is_empty() => name.clone(),
             _ => "Personal".to_owned(),
         };
         let pending = self
@@ -87,8 +88,8 @@ impl NookVaultManager {
             .pending_extension_handoff
             .as_ref()
             .ok_or_else(|| NookError::Database("Identity handoff disappeared.".to_owned()))?;
-        let committed = crate::storage::identity_record::commit_authenticated_identity_handoff(
-            crate::storage::identity_record::IdentityHandoffCommit {
+        let committed = identity_record::commit_authenticated_identity_handoff(
+            identity_record::IdentityHandoffCommit {
                 app_key: &identity,
                 signing_public_key: &pending.signing_public_key,
                 authorizer_signing: None,
@@ -96,7 +97,7 @@ impl NookVaultManager {
                 signing_seed: pending
                     .persist_signing_seed
                     .then_some(self.event_log.signing_seed.as_str()),
-                existing_vault: Some(crate::storage::identity_record::ExistingVaultImportCommit {
+                existing_vault: Some(identity_record::ExistingVaultImportCommit {
                     device_id: identity.device_id().clone(),
                     label,
                 }),
@@ -141,8 +142,8 @@ impl NookVaultManager {
         let signing_seed = pending
             .persist_signing_seed
             .then_some(self.event_log.signing_seed.as_str());
-        crate::storage::identity_record::commit_authenticated_identity_handoff(
-            crate::storage::identity_record::IdentityHandoffCommit {
+        identity_record::commit_authenticated_identity_handoff(
+            identity_record::IdentityHandoffCommit {
                 app_key: &identity,
                 signing_public_key: &pending.signing_public_key,
                 authorizer_signing: pending.authorizer_signing.as_ref(),
