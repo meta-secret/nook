@@ -1,4 +1,3 @@
-import { stringify as stringifyYaml } from 'yaml';
 import {
   DelegationVisualizationContractKind,
   DELEGATION_VISUALIZATION_RESULT_BYTE_LIMIT,
@@ -69,18 +68,32 @@ type VerifyDelegationVisualizationResultRequest = {
 export function verifyDelegationVisualizationResult(
   input: VerifyDelegationVisualizationResultRequest,
 ): DelegationVisualizationResult {
-  const expectedDocument = {
-    gizmo: {
-      tasks: input.request.tasks.map((task) => ({
-        id: task.id,
-        team: task.team,
-        description: task.description,
-        depends_on: task.dependencies,
-      })),
-    },
-  };
-  if (input.result.yaml !== stringifyYaml(expectedDocument)) {
+  const expectedLines = ['gizmo:', '  tasks:'];
+  for (const task of input.request.tasks) {
+    expectedLines.push(`    - id: ${quoteYamlScalar(task.id)}`);
+    expectedLines.push(`      team: ${quoteYamlScalar(task.team)}`);
+    expectedLines.push(
+      `      description: ${quoteYamlScalar(task.description)}`,
+    );
+    if (task.dependencies.length === 0) {
+      expectedLines.push('      depends_on: []');
+      continue;
+    }
+    expectedLines.push('      depends_on:');
+    for (const dependency of task.dependencies) {
+      expectedLines.push(`        - ${quoteYamlScalar(dependency)}`);
+    }
+  }
+  if (input.result.yaml !== `${expectedLines.join('\n')}\n`) {
     throw new DelegationVisualizationResultVerificationError();
   }
   return input.result;
+}
+
+function quoteYamlScalar(value: string): string {
+  const serialized = JSON.stringify(value);
+  if (typeof serialized !== 'string') {
+    throw new DelegationVisualizationResultVerificationError();
+  }
+  return serialized;
 }

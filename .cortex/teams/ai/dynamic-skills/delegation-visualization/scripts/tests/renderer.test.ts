@@ -40,20 +40,20 @@ describe('delegation visualization renderer', () => {
       [
         'gizmo:',
         '  tasks:',
-        '    - id: update-cortex',
-        '      team: ai',
-        '      description: update Cortex',
+        '    - id: "update-cortex"',
+        '      team: "ai"',
+        '      description: "update Cortex"',
         '      depends_on: []',
-        '    - id: security-key',
-        '      team: web-development',
-        '      description: create security key component',
+        '    - id: "security-key"',
+        '      team: "web-development"',
+        '      description: "create security key component"',
         '      depends_on:',
-        '        - update-cortex',
-        '    - id: auth-module',
-        '      team: development-core',
-        '      description: implement auth module',
+        '        - "update-cortex"',
+        '    - id: "auth-module"',
+        '      team: "development-core"',
+        '      description: "implement auth module"',
         '      depends_on:',
-        '        - security-key',
+        '        - "security-key"',
         '',
       ].join('\n'),
     );
@@ -78,8 +78,37 @@ describe('delegation visualization renderer', () => {
       ],
     };
     expect(
-      renderDelegationVisualization(request).match(/team: ai/gu),
+      renderDelegationVisualization(request).match(/team: "ai"/gu),
     ).toHaveLength(2);
+  });
+
+  test('quotes special characters without changing YAML structure', () => {
+    const description = 'audit: "quoted" # literal \\ path [exact]';
+    const request: RenderDelegationVisualizationRequest = {
+      kind: DelegationVisualizationContractKind.Request,
+      tasks: [
+        {
+          id: 'special-description',
+          team: DelegationVisualizationTeam.Security,
+          description,
+          dependencies: [],
+        },
+      ],
+    };
+    const rendered = renderDelegationVisualization(request);
+    expect(rendered).toContain(JSON.stringify(description));
+    expect(Bun.YAML.parse(rendered)).toEqual({
+      gizmo: {
+        tasks: [
+          {
+            id: 'special-description',
+            team: 'security',
+            description,
+            depends_on: [],
+          },
+        ],
+      },
+    });
   });
 
   test('round-trips and verifies the admitted request against the YAML', () => {
