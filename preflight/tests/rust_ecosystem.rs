@@ -283,7 +283,7 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
         "cargo fuzz run",
         "cargo fmt --manifest-path dylint/nook-domain-api/Cargo.toml -- --check",
         "rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs",
-        "RUSTC_WRAPPER= RUSTFLAGS= cargo test",
+        "RUSTC_WRAPPER= RUSTFLAGS= cargo llvm-cov test -p nook_domain_api",
         "cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings",
         "cargo dylint --all",
         "--manifest-path dylint/nook-domain-api/Cargo.toml",
