@@ -160,6 +160,12 @@ impl AuthenticationFillFieldObservations {
     }
 }
 
+impl Default for AuthenticationFillFieldObservations {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 pub struct AuthenticationCredentialFillAssignment {
     inner: nook_companion_core::AuthenticationCredentialFillAssignment,
