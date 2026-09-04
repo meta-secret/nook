@@ -36,16 +36,19 @@ pub struct AuthenticationFillFieldObservation {
 }
 
 /// Why a fill plan cannot be produced for the observed fields.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationCredentialFillError {
     /// No field in the observed scope can receive credentials.
+    #[error("no field in the observed scope can receive credentials")]
     NoCredentialField,
     /// Every password field is read-only, so credential disclosure is blocked.
+    #[error("every password field is read-only, so credential disclosure is blocked")]
     PasswordFieldsReadonly,
     /// The scope contains multiple password fields that cannot be resolved
     /// into one current-password target.
+    #[error("the observed scope has multiple current-password fields")]
     AmbiguousPasswordField,
 }
 
@@ -165,10 +168,10 @@ impl SimulatedAuthenticationCredentials {
         }
     }
 
-    fn value_for(self, credential: AuthenticationCredentialKind) -> String {
+    fn value_for(&self, credential: AuthenticationCredentialKind) -> &str {
         match credential {
-            AuthenticationCredentialKind::Username => self.username,
-            AuthenticationCredentialKind::CurrentPassword => self.password,
+            AuthenticationCredentialKind::Username => &self.username,
+            AuthenticationCredentialKind::CurrentPassword => &self.password,
         }
     }
 }
@@ -189,7 +192,7 @@ pub fn simulate_authentication_credential_fill(
         .iter()
         .map(|assignment| SimulatedAuthenticationFieldState {
             field_index: assignment.field_index,
-            filled_with: credentials.value_for(assignment.credential),
+            filled_with: credentials.value_for(assignment.credential).to_owned(),
         })
         .collect();
     Ok(SimulatedAuthenticationFill { assignments })
