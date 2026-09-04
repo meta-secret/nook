@@ -642,11 +642,10 @@ mod tests {
             directory.open_or_generate_vault_dek(&extension_key, crate::generate_store_id()?)?;
         let enrollment =
             directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal");
-        assert!(matches!(
-            enrollment,
-            Err(MultiDeviceError::IdentityEnrollmentRequired)
-        ));
-        Ok(())
+        match enrollment {
+            Err(MultiDeviceError::IdentityEnrollmentRequired) => Ok(()),
+            result => Err(anyhow::anyhow!("unexpected enrollment result: {result:?}")),
+        }
     }
 
     #[test]

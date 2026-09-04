@@ -141,11 +141,6 @@ impl From<SentinelRecordCount> for usize {
         value.0
     }
 }
-impl Display for SentinelRecordCount {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(formatter)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
