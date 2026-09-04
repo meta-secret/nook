@@ -109,6 +109,7 @@ tasks:
     desc: Run portable Rust crate tests via cargo-nextest (ci profile, no coverage gate).
     cmds:
       - cd "{{.PLATFORM_ROOT}}" && cargo nextest run -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-companion-wasm -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --profile ci
+      - cd "{{.PLATFORM_ROOT}}" && cargo test --locked -p nook-companion-core --doc
 
   _rust:coverage:
     desc: Print portable Rust crate line coverage summary (no floor enforcement).

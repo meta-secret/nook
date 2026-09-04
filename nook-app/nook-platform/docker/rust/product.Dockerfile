@@ -328,6 +328,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo llvm-cov nextest --no-clean --profile ci -p nook-companion-core \
+    && cargo test --locked -p nook-companion-core --doc \
     && nook-sccache-report native-companion-core-coverage
 
 COPY nook-app/nook-platform/nook-core nook-core
