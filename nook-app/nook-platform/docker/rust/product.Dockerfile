@@ -355,10 +355,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     FLOOR="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
     && mkdir -p /opt/nook/coverage/nook-core \
     && cargo llvm-cov nextest --no-clean --profile ci -p nook-core --summary-only > /tmp/nook-core-coverage-summary.txt \
+    && coverage_status=0 \
     && for package in nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core; do \
-         cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$FLOOR" \
-           > "/tmp/${package}-coverage-summary.txt"; \
+         cargo llvm-cov report -p "$package" --summary-only --fail-under-lines "$FLOOR" || coverage_status=1; \
        done \
+    && test "$coverage_status" -eq 0 \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --summary-only > /opt/nook/coverage/nook-core/summary.txt \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --json --summary-only > /opt/nook/coverage/nook-core/summary.json \
     && cargo llvm-cov report -p nook-core -p nook-app-common -p nook-authenticator-domain -p nook-auth2 -p nook-replication -p nook-event-log -p nook-companion-core --lcov --output-path /opt/nook/coverage/nook-core/lcov.info \
@@ -759,13 +760,15 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && runner="$(find /root/.cache/.wasm-pack -type f -name wasm-bindgen-test-runner -print -quit)" \
     && test -x "$runner" \
     && floor="$(jq -r '.lines_percent' nook-core/coverage-floor.json)" \
+    && coverage_status=0 \
     && for package in nook-companion-wasm nook-wasm; do \
          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER="$runner" \
          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Cinstrument-coverage -Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" \
          RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test \
            --target wasm32-unknown-unknown --release -p "$package" \
-           --fail-under-lines "$floor"; \
+           --fail-under-lines "$floor" || coverage_status=1; \
        done \
+    && test "$coverage_status" -eq 0 \
     && nook-sccache-report wasm-node-test-and-coverage
 
 FROM scratch AS wasm-export

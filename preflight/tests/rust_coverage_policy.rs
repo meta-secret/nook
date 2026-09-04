@@ -26,7 +26,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     assert!(
         policy["lines_percent"]
             .as_f64()
-            .is_some_and(|floor| (floor - 90.0).abs() < f64::EPSILON)
+            .is_some_and(|floor| floor >= 90.0)
     );
     let package_floors = policy["package_lines_percent"]
         .as_object()
@@ -42,11 +42,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
             "lace" => 75.0,
             _ => 90.0,
         };
-        assert_eq!(
-            floor.as_f64(),
-            Some(expected),
-            "unexpected line floor for {package}"
-        );
+        assert!(floor.as_f64().is_some_and(|floor| floor >= expected));
     }
     assert_eq!(
         excluded.get("nook-fuzz").map(String::as_str),
@@ -69,9 +65,25 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     let product = read(&root.join("nook-app/nook-platform/docker/rust/product.Dockerfile"))?;
     let platform_tasks = read(&root.join("nook-app/nook-platform/Taskfile.yml"))?;
     let hive = read(&root.join("agentic-ai/minds/hive/Dockerfile"))?;
+    let hive_tasks = read(&root.join("agentic-ai/minds/hive/Taskfile.yml"))?;
+    let hive_arc = read(&root.join("agentic-ai/minds/hive/run-arc-tests.sh"))?;
     let preflight = read(&root.join("preflight/Dockerfile"))?;
     let minds_manifest = read(&root.join("agentic-ai/minds/Cargo.toml"))?;
     let fuzz_manifest = read(&root.join("nook-app/nook-platform/fuzz/Cargo.toml"))?;
+    let policy = read_json(&root.join("nook-app/nook-platform/nook-core/coverage-floor.json"))?;
+    let enforced = string_set(&policy, "enforced_packages")?;
+
+    for package in &enforced {
+        assert!(
+            [&product, &platform_tasks, &hive, &preflight]
+                .iter()
+                .flat_map(|source| source.lines())
+                .filter(|line| line.contains("llvm-cov") || line.contains("for package in"))
+                .flat_map(|line| line.split(|c: char| c.is_whitespace() || c == ';' || c == '"'))
+                .any(|word| word == package),
+            "{package} has no hosted coverage command"
+        );
+    }
 
     let portable = "nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core";
     assert!(product.contains(&format!("for package in {portable}; do")));
@@ -82,11 +94,18 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(platform_tasks.contains(
         "cargo llvm-cov report -p \"$package\" --summary-only --fail-under-lines {{.FLOOR}}"
     ));
+    assert!(platform_tasks.contains("set -e"));
+    assert!(platform_tasks.contains("|| coverage_status=1"));
 
     assert!(product.contains("for package in nook-companion-wasm nook-wasm; do"));
     assert!(product.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
     assert!(product.contains("--target wasm32-unknown-unknown --release -p \"$package\""));
     assert!(product.contains("--fail-under-lines \"$floor\""));
+    assert_eq!(product.matches("|| coverage_status=1;").count(), 2);
+    assert_eq!(
+        product.matches("test \"$coverage_status\" -eq 0").count(),
+        2
+    );
     assert!(product.contains("wasm-pack test --node --release nook-wasm"));
     assert!(product.contains("wasm-pack test --node --release nook-companion-wasm"));
     let wasm_coverage_stage = product
@@ -104,14 +123,23 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
 
     assert!(hive.contains("ARG HIVE_RUST_COVERAGE_FLOOR=60"));
     assert!(hive.contains("ARG LACE_RUST_COVERAGE_FLOOR=75"));
-    assert!(hive.contains("cargo llvm-cov test --locked -p hive"));
+    assert!(hive.contains("cargo llvm-cov report -p hive"));
     assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
-    assert!(hive.contains("cargo llvm-cov test --locked -p lace"));
+    assert!(hive.contains("cargo llvm-cov report -p lace"));
     assert!(hive.contains("--fail-under-lines \"${LACE_RUST_COVERAGE_FLOOR}\""));
     assert!(hive.contains("coverage_status=0;"));
     assert_eq!(hive.matches("|| coverage_status=1;").count(), 2);
     assert!(hive.contains("test \"$coverage_status\" -eq 0"));
     assert!(!hive.contains("ARG RUST_COVERAGE_FLOOR="));
+    assert!(hive.contains(
+        "ARG LLVM_COV_SHA256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168"
+    ));
+    assert!(hive.contains("sha256sum -c -"));
+    assert!(hive.contains("cargo llvm-cov show-env --export-prefix"));
+    assert!(hive.contains("COPY --from=hive-coverage-profiles"));
+    assert!(hive_tasks.contains("hive-coverage-profiles=$profiles"));
+    assert!(hive_tasks.contains("LLVM_PROFILE_FILE=/profiles/%m-%p.profraw"));
+    assert!(hive_arc.contains("LLVM_PROFILE_FILE=%q exec %q"));
     assert!(
         preflight.contains(
             "cargo llvm-cov test --locked -p nook-preflight --fail-under-lines \"$floor\""

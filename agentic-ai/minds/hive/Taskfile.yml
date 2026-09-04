@@ -141,17 +141,17 @@ tasks:
         . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
         prepare_nook_sccache_helpers_context
         verified="$(mktemp -d)"
+        profiles="$(mktemp -d)"
+        coverage="$(mktemp -d)"
         cleanup() {
-          rm -rf "$verified"
+          rm -rf "$verified" "$profiles" "$coverage"
           cleanup_nook_sccache_helpers_context
         }
         trap cleanup EXIT
         command=(docker buildx build
           --platform linux/amd64
-          --target verify-export
           --build-arg "SCCACHE_ENDPOINT=${SCCACHE_ENDPOINT:-https://sccache.dev.nokey.sh}"
-          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}"
-          --output "type=local,dest=$verified")
+          --build-arg "SCCACHE_BUCKET=${SCCACHE_BUCKET:-nook-sccache}")
         if [ -n "${HIVE_CACHE_FROM:-}" ]; then
           command+=(--cache-from "$HIVE_CACHE_FROM")
         fi
@@ -172,11 +172,9 @@ tasks:
         command+=(
           --build-context "nook-sccache-helpers=$NOOK_SCCACHE_HELPERS_CONTEXT"
           --build-context "nook-formatter={{.NOOK_FORMATTER_CONTEXT}}"
-          --file hive/Dockerfile
-          .)
-        "${command[@]}"
+          --file hive/Dockerfile)
+        "${command[@]}" --target verify-export --output "type=local,dest=$verified" .
         test -f "$verified/hive-check-passed"
-        test -f "$verified/hive-coverage-passed"
         test -f "$verified/hive-sandbox-package-passed"
         test -f "$verified/hive-login-shell-toolchain-passed"
         test -n "$(find "$verified/hive-tests" -type f -print -quit)"
@@ -194,16 +192,23 @@ tasks:
             -e "HIVE_NEO4J_TEST_PASSWORD")
         fi
         if [ "${NOOK_ARC_HIVE:-}" = "1" ]; then
-          "$HIVE_TASK_DIR/run-arc-tests.sh" "$verified/hive-tests"
+          "$HIVE_TASK_DIR/run-arc-tests.sh" "$verified/hive-tests" "$profiles"
         else
           docker run --rm \
             --platform linux/amd64 \
             --network host \
             --mount "type=bind,src=$verified/hive-tests,dst=/tests,readonly" \
+            --mount "type=bind,src=$profiles,dst=/profiles" \
+            -e 'LLVM_PROFILE_FILE=/profiles/%m-%p.profraw' \
             "${test_environment[@]}" \
             "$HIVE_TEST_RUNTIME_IMAGE" \
             bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'
         fi
+        test -n "$(find "$profiles" -name '*.profraw' -print -quit)"
+        "${command[@]}" --target coverage-export \
+          --build-context "hive-coverage-profiles=$profiles" \
+          --output "type=local,dest=$coverage" .
+        test -f "$coverage/hive-coverage-passed"
         BASH
 
   build:
@@ -243,8 +248,9 @@ tasks:
         . "$HIVE_TASK_DIR/prepare-sccache-context.sh"
         prepare_nook_sccache_helpers_context
         compiled="$(mktemp -d)"
+        profiles="$(mktemp -d)"
         cleanup() {
-          rm -rf "$compiled"
+          rm -rf "$compiled" "$profiles"
           cleanup_nook_sccache_helpers_context
         }
         trap cleanup EXIT
@@ -292,12 +298,14 @@ tasks:
             -e "HIVE_NEO4J_TEST_PASSWORD")
         fi
         if [ "${NOOK_ARC_HIVE:-}" = "1" ]; then
-          "$HIVE_TASK_DIR/run-arc-tests.sh" "$compiled/hive-tests"
+          "$HIVE_TASK_DIR/run-arc-tests.sh" "$compiled/hive-tests" "$profiles"
         else
           docker run --rm \
             --platform linux/amd64 \
             --network host \
             --mount "type=bind,src=$compiled/hive-tests,dst=/tests,readonly" \
+            --mount "type=bind,src=$profiles,dst=/profiles" \
+            -e 'LLVM_PROFILE_FILE=/profiles/%m-%p.profraw' \
             "${test_environment[@]}" \
             "$HIVE_TEST_RUNTIME_IMAGE" \
             bash -ec 'for test_binary in /tests/*; do "$test_binary"; done'

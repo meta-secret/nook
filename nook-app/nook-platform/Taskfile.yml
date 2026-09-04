@@ -58,7 +58,7 @@ tasks:
         vars: { TASK: _rust:coverage:check }
 
   rust:coverage:update:
-    desc: Rewrite coverage-floor.json to measured % (user approval only).
+    desc: Print aggregate portable coverage diagnostics; policy updates require complete hosted package results.
     deps:
       - setup:rust
     cmds:
@@ -122,21 +122,23 @@ tasks:
         sh: jq -r '.lines_percent' {{.APP_ROOT}}/nook-platform/nook-core/coverage-floor.json
     cmds:
       - |-
+        set -e
         cd "{{.PLATFORM_ROOT}}"
         packages="nook-app-common nook-authenticator-domain nook-auth2 nook-replication nook-event-log nook-companion-core nook-core"
         cargo llvm-cov nextest --no-clean --profile ci \
           -p nook-app-common -p nook-authenticator-domain -p nook-auth2 \
           -p nook-replication -p nook-event-log -p nook-companion-core -p nook-core \
           --summary-only
+        coverage_status=0
         for package in $packages; do
-          cargo llvm-cov report -p "$package" --summary-only --fail-under-lines {{.FLOOR}}
+          cargo llvm-cov report -p "$package" --summary-only --fail-under-lines {{.FLOOR}} || coverage_status=1
         done
+        test "$coverage_status" -eq 0
 
   _rust:coverage:update:
-    desc: Print measured portable Rust crate line coverage as JSON so the floor can be bumped (apply on host).
+    desc: Print aggregate portable Rust coverage JSON for diagnostics, not a complete policy update.
     cmds:
-      # Emit the combined machine-readable summary for an explicitly authorized floor update.
-      # Normal verification uses _rust:coverage:check and enforces every package independently.
+      # Policy updates require independent hosted results for every registry package.
       - cd "{{.PLATFORM_ROOT}}" && cargo llvm-cov nextest --no-clean --profile ci -p nook-app-common -p nook-authenticator-domain -p nook-companion-core -p nook-core -p nook-auth2 -p nook-replication -p nook-event-log --json --summary-only
 
   _rust:format:

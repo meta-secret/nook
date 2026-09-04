@@ -828,12 +828,13 @@ task web:test:e2e:sync-live
 task web:test:e2e:github            # → sync-live
 ```
 
-## Portable Rust crate coverage export
+## Rust package coverage
 
-The portable Rust coverage gate runs during the `builder-debug` stage in
-`nook-app/nook-platform/docker/rust/product.Dockerfile`. It covers
-`nook-app-common`, `nook-authenticator-domain`, `nook-auth2`,
-`nook-replication`, `nook-event-log`, `nook-companion-core`, and `nook-core`.
+`nook-app/nook-platform/nook-core/coverage-floor.json` is the exhaustive package
+registry. Every testable first-party package has an independent hosted failure
+decision; fuzz harnesses and vendored sources require an explicit exclusion.
+Platform, WASM, and preflight packages enforce 90 percent. PR #1319 stages Hive
+at 60 percent and Lace at 75 percent; the successor raises both to 90 percent.
 
 **Image build:**
 
@@ -843,9 +844,15 @@ The portable Rust coverage gate runs during the `builder-debug` stage in
   `nook-replication`, `nook-event-log`, and `nook-companion-core`. Each is
   linted and coverage-tested before `nook-core`.
 - The `nook-core` coverage run uses `--no-clean`.
-- The final report across all seven portable crates enforces the committed
-  floor. It writes reusable artifacts to `/opt/nook/coverage/nook-core` in the
-  image.
+- A report for each portable package enforces its registry floor; the combined
+  report is artifact-only and cannot mask a package failure. Artifacts are
+  written to `/opt/nook/coverage/nook-core` in the image.
+- The WASM lane independently covers `nook-companion-wasm` and `nook-wasm`.
+- Hive verification runs instrumented Hive and Lace binaries in the existing
+  Neo4j-enabled runtime, then imports their profiles for separate reports.
+- Preflight enforces its own floor from the canonical repository source root.
+- Coverage-floor updates require complete independent hosted package results;
+  the portable aggregate diagnostic is not an update authority.
 
 **PR CI split:**
 
