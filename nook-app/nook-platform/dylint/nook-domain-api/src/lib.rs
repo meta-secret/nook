@@ -222,7 +222,7 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
                 .types()
                 .any(|argument| contains_raw_numeric(cx, argument))
                 || matches!(alias.kind, ty::AliasTyKind::Opaque { def_id } if
-                    cx.tcx.explicit_item_bounds(def_id).instantiate(cx.tcx, alias.args).iter()
+                    cx.tcx.explicit_item_bounds(def_id).iter_instantiated_copied(cx.tcx, alias.args)
                         .filter_map(|(clause, _)| clause.as_projection_clause())
                         .any(|projection| projection.skip_binder().term.as_type()
                             .is_some_and(|term| contains_raw_numeric(cx, term))))
