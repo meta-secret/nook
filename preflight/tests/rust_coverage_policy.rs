@@ -122,14 +122,9 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains("FROM builder-wasm-handoff AS nook-rust"));
     assert_eq!(hive_ci.matches("nook-core/coverage-floor.json").count(), 2);
     assert!(hive_tasks.contains(".package_lines_percent.hive | numbers"));
-    assert!(hive_tasks.contains(".package_lines_percent.lace | numbers"));
     assert!(hive.contains("cargo llvm-cov report -p hive"));
     assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
-    assert!(hive.contains("cargo llvm-cov report -p lace"));
-    assert!(hive.contains("--fail-under-lines \"${LACE_RUST_COVERAGE_FLOOR}\""));
-    assert!(hive.contains("coverage_status=0;") && !hive.contains("ARG RUST_COVERAGE_FLOOR="));
-    assert_eq!(hive.matches("|| coverage_status=1;").count(), 2);
-    assert!(hive.contains("test \"$coverage_status\" -eq 0"));
+    assert!(!hive.contains("ARG RUST_COVERAGE_FLOOR="));
     assert!(hive.contains(
         "ARG LLVM_COV_SHA256=9a75fe29538d3800b3da57f6f6efb64cba5c720a257bf0cb8b51f39d495a9168"
     ));

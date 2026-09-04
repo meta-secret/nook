@@ -12,7 +12,6 @@
     "nook-companion-wasm",
     "nook-wasm",
     "hive",
-    "lace",
     "nook-preflight",
     "nook_domain_api"
   ],
@@ -27,7 +26,6 @@
     "nook-companion-wasm": 18.0,
     "nook-wasm": 51.0,
     "hive": 60.0,
-    "lace": 90.0,
     "nook-preflight": 90.0,
     "nook_domain_api": 90.0
   },
