@@ -16,7 +16,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
         .union(&excluded_names)
         .cloned()
         .collect::<BTreeSet<_>>();
-
     assert_eq!(
         discovered.keys().cloned().collect::<BTreeSet<_>>(),
         classified,

@@ -830,8 +830,6 @@ mod tests {
             "Personal",
         )
         .await?;
-        let pending = begin_or_resume_simple_genesis(&first_key, "Personal").await?;
-        assert_eq!(pending.identity_id, first.identity.identity_id);
         identity_record::save_new_protected_local_identity(
             &second_key,
             &second_wrapped,
@@ -839,6 +837,8 @@ mod tests {
             "Work",
         )
         .await?;
+        let pending = begin_or_resume_simple_genesis(&first_key, "Personal").await?;
+        assert_eq!(pending.identity_id, first.identity.identity_id);
 
         let recovery =
             delete_identity_directory_for_recovery(Some(second_key.app_id().clone())).await?;

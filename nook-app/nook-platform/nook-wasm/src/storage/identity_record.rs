@@ -664,11 +664,7 @@ pub(crate) async fn validate_vault_identity_enrollment(
 
 #[cfg(test)]
 pub(crate) async fn clear_identity_directory_for_test() -> Result<(), NookError> {
-    idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
-    idb_delete_key(LEGACY_IDENTITY_RECORD_KEY).await?;
-    idb_delete_key(RETIRED_APP_IDS_KEY).await?;
-    idb_delete_key(recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY).await?;
-    simple_genesis::clear_pending_simple_genesis_for_test().await
+    crate::storage::indexed_db::clear_vault_db().await
 }
 
 #[cfg(test)]
