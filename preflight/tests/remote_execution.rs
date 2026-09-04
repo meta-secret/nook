@@ -1,11 +1,16 @@
 use std::{
-    collections::BTreeSet, fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command,
+    collections::BTreeSet,
+    env, fs, io,
+    os::unix::fs::PermissionsExt,
+    path::PathBuf,
+    process::{self, Command},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::{Context, Result};
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
@@ -35,7 +40,7 @@ fn docker_stage<'a>(dockerfile: &'a str, stage: &str) -> &'a str {
         .map_or(remainder, |(body, _)| body)
 }
 
-fn remote_batch_command(args: &[&str]) -> std::io::Result<std::process::Output> {
+fn remote_batch_command(args: &[&str]) -> io::Result<process::Output> {
     Command::new("bash")
         .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(args)
@@ -300,12 +305,10 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
 
 #[test]
 fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
-    let fixture_nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let fixture = std::env::temp_dir().join(format!(
+    let fixture_nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let fixture = env::temp_dir().join(format!(
         "nook-remote-task-batch-test-{}-{fixture_nonce}",
-        std::process::id(),
+        process::id(),
     ));
     fs::create_dir_all(&fixture)?;
 
@@ -326,7 +329,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
 
     let task_log = fixture.join("task.log");
     let summary = fixture.join("summary.md");
-    let system_path = std::env::var("PATH")?;
+    let system_path = env::var("PATH")?;
     let output = Command::new("bash")
         .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
         .args(["--run", "preflight,rust:ci,hive:verify"])
@@ -362,12 +365,10 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
 #[test]
 fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues() -> Result<()> {
     for timeout_status in [124, 137] {
-        let fixture_nonce = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)?
-            .as_nanos();
-        let fixture = std::env::temp_dir().join(format!(
+        let fixture_nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        let fixture = env::temp_dir().join(format!(
             "nook-remote-timeout-test-{}-{timeout_status}-{fixture_nonce}",
-            std::process::id(),
+            process::id(),
         ));
         fs::create_dir_all(&fixture)?;
 
@@ -402,7 +403,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
         let task_log = fixture.join("task.log");
         let cleanup_log = fixture.join("cleanup.log");
         let timeout_marker = fixture.join("timeout.marker");
-        let system_path = std::env::var("PATH")?;
+        let system_path = env::var("PATH")?;
         let output = Command::new("bash")
             .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
             .args(["--run", "preflight,rust:ci"])

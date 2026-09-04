@@ -3,8 +3,9 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+use std::{iter, mem, slice};
 use syn::spanned::Spanned;
-use syn::visit::Visit;
+use syn::visit::{self, Visit};
 use syn::{Attribute, Expr, ExprIndex, ExprMethodCall, ItemFn, ItemMod, Local, Macro, Pat, Type};
 
 /// Finds raw JSON field-value assertions in authored Rust tests.
@@ -84,7 +85,7 @@ impl TypedJsonAssertionVisitor {
 
     fn test_attribute(attributes: &[Attribute]) -> bool {
         attributes.iter().any(|attribute| {
-            attribute.path().is_ident("test") || Self::cfg_test(std::slice::from_ref(attribute))
+            attribute.path().is_ident("test") || Self::cfg_test(slice::from_ref(attribute))
         })
     }
 
@@ -160,7 +161,7 @@ impl TypedJsonAssertionVisitor {
         self.json_value_bindings
             .iter()
             .map(String::as_str)
-            .chain(std::iter::once("json"))
+            .chain(iter::once("json"))
             .any(|binding| {
                 let mut remaining = tokens.as_str();
                 let index_prefix = format!("{binding} [");
@@ -179,9 +180,9 @@ impl TypedJsonAssertionVisitor {
 impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
     fn visit_item_fn(&mut self, function: &'ast ItemFn) {
         let was_in_test = self.in_test;
-        let previous_bindings = std::mem::take(&mut self.json_value_bindings);
+        let previous_bindings = mem::take(&mut self.json_value_bindings);
         self.in_test |= Self::test_attribute(&function.attrs);
-        syn::visit::visit_item_fn(self, function);
+        visit::visit_item_fn(self, function);
         self.json_value_bindings = previous_bindings;
         self.in_test = was_in_test;
     }
@@ -189,7 +190,7 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
     fn visit_item_mod(&mut self, module: &'ast ItemMod) {
         let was_in_test = self.in_test;
         self.in_test |= Self::cfg_test(&module.attrs);
-        syn::visit::visit_item_mod(self, module);
+        visit::visit_item_mod(self, module);
         self.in_test = was_in_test;
     }
 
@@ -197,7 +198,7 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
         if self.in_test && call.method == "is_null" && self.receiver_is_json_value(&call.receiver) {
             self.lines.push(call.method.span().start().line);
         }
-        syn::visit::visit_expr_method_call(self, call);
+        visit::visit_expr_method_call(self, call);
     }
 
     fn visit_expr_index(&mut self, index: &'ast ExprIndex) {
@@ -205,7 +206,7 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
             self.lines
                 .push(index.bracket_token.span.open().start().line);
         }
-        syn::visit::visit_expr_index(self, index);
+        visit::visit_expr_index(self, index);
     }
 
     fn visit_local(&mut self, local: &'ast Local) {
@@ -219,14 +220,14 @@ impl<'ast> Visit<'ast> for TypedJsonAssertionVisitor {
         {
             self.json_value_bindings.insert(identifier.to_string());
         }
-        syn::visit::visit_local(self, local);
+        visit::visit_local(self, local);
     }
 
     fn visit_macro(&mut self, value: &'ast Macro) {
         if self.in_test && self.macro_contains_untyped_json_assertion(value) {
             self.lines.push(value.path.span().start().line);
         }
-        syn::visit::visit_macro(self, value);
+        visit::visit_macro(self, value);
     }
 }
 

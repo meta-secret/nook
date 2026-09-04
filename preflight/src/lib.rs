@@ -26,6 +26,9 @@ pub use dockerfile_cache::dockerfile_cache_mounts;
 use dockerfile_cache::is_generated_directory;
 pub use typescript_domain_boundary::*;
 
+use std::ffi::OsStr;
+use syn::visit;
+
 pub use rust_macros::authored_rust_macro_definitions;
 pub use rust_tsify_state::rust_tsify_implicit_absence_overrides;
 pub use rust_typed_json::rust_test_untyped_json_assertions;
@@ -223,7 +226,7 @@ impl<'ast> Visit<'ast> for JsValueVisitor {
         {
             self.lines.push(path.span().start().line);
         }
-        syn::visit::visit_path(self, path);
+        visit::visit_path(self, path);
     }
 
     fn visit_use_tree(&mut self, tree: &'ast syn::UseTree) {
@@ -234,7 +237,7 @@ impl<'ast> Visit<'ast> for JsValueVisitor {
             syn::UseTree::Rename(rename) if rename.ident == "JsValue" => {
                 self.lines.push(rename.span().start().line);
             }
-            _ => syn::visit::visit_use_tree(self, tree),
+            _ => visit::visit_use_tree(self, tree),
         }
     }
 }
@@ -287,8 +290,7 @@ fn collect_files_with_extension(
             if !is_generated_directory(&path) {
                 collect_files_with_extension(&path, extension, files)?;
             }
-        } else if file_type.is_file()
-            && path.extension().and_then(std::ffi::OsStr::to_str) == Some(extension)
+        } else if file_type.is_file() && path.extension().and_then(OsStr::to_str) == Some(extension)
         {
             files.push(path);
         }
@@ -300,6 +302,7 @@ fn collect_files_with_extension(
 mod tests {
     use super::*;
     use std::{
+        env, process,
         sync::atomic::{AtomicU64, Ordering},
         time::{SystemTime, UNIX_EPOCH},
     };
@@ -687,10 +690,9 @@ export function configuredCapability(): NookProviderReplicationCapability {
 
     fn temporary_directory() -> anyhow::Result<PathBuf> {
         let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let process_id = std::process::id();
+        let process_id = process::id();
         let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("nook-preflight-{process_id}-{unique}-{sequence}"));
+        let path = env::temp_dir().join(format!("nook-preflight-{process_id}-{unique}-{sequence}"));
         fs::create_dir(&path)?;
         Ok(path)
     }

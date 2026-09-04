@@ -1,13 +1,14 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use nook_preflight::coverage::{
-    classify_coverage_inputs, coverage_report, validate_coverage_artifact,
+    CoverageArtifactValidation, classify_coverage_inputs, coverage_report,
+    validate_coverage_artifact,
 };
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+use std::{env, fs, io, process};
 
 static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -56,7 +57,7 @@ fn validates_commit_keyed_coverage_artifacts() -> anyhow::Result<()> {
 
     assert_eq!(
         validate_coverage_artifact(&root, "abc123"),
-        nook_preflight::coverage::CoverageArtifactValidation {
+        CoverageArtifactValidation {
             valid: true,
             reason: None,
         }
@@ -119,7 +120,7 @@ fn rejects_human_summary_text_in_place_of_llvm_cov_json() -> anyhow::Result<()> 
         .err()
         .ok_or_else(|| anyhow::anyhow!("coverage reporting test should reject invalid input"))?;
 
-    assert_eq!(error.kind(), std::io::ErrorKind::InvalidData);
+    assert_eq!(error.kind(), io::ErrorKind::InvalidData);
     assert!(error.to_string().contains("summary.json"));
     fs::remove_dir_all(root)?;
     Ok(())
@@ -198,8 +199,8 @@ fn write_coverage_directory(directory: &Path, percent: f64, floor: f64) -> anyho
 fn temporary_directory() -> anyhow::Result<PathBuf> {
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
     let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-    let process_id = std::process::id();
-    let path = std::env::temp_dir().join(format!(
+    let process_id = process::id();
+    let path = env::temp_dir().join(format!(
         "nook-preflight-coverage-{process_id}-{unique}-{sequence}"
     ));
     fs::create_dir(&path)?;

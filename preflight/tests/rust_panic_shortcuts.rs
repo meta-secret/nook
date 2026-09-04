@@ -1,13 +1,13 @@
-use std::fs;
 use std::path::{Path, PathBuf};
+use std::{env, fs};
 
 use anyhow::{Context, Result, bail};
 use syn::spanned::Spanned;
-use syn::visit::Visit;
+use syn::visit::{self, Visit};
 use syn::{Attribute, ItemFn, ItemMod, ItemUse, Macro, UseTree};
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || {
             PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .parent()
@@ -223,14 +223,14 @@ impl<'ast> Visit<'ast> for RustPolicyVisitor {
     fn visit_item_fn(&mut self, function: &'ast ItemFn) {
         let was_in_test = self.in_test;
         self.in_test |= Self::cfg_test(&function.attrs);
-        syn::visit::visit_item_fn(self, function);
+        visit::visit_item_fn(self, function);
         self.in_test = was_in_test;
     }
 
     fn visit_item_mod(&mut self, module: &'ast ItemMod) {
         let was_in_test = self.in_test;
         self.in_test |= Self::cfg_test(&module.attrs);
-        syn::visit::visit_item_mod(self, module);
+        visit::visit_item_mod(self, module);
         self.in_test = was_in_test;
     }
 
@@ -238,7 +238,7 @@ impl<'ast> Visit<'ast> for RustPolicyVisitor {
         if !self.in_test {
             self.inspect_use_tree(&item.tree);
         }
-        syn::visit::visit_item_use(self, item);
+        visit::visit_item_use(self, item);
     }
 
     fn visit_macro(&mut self, value: &'ast Macro) {
@@ -251,7 +251,7 @@ impl<'ast> Visit<'ast> for RustPolicyVisitor {
         {
             self.production_anyhow.push(value.path.span().start().line);
         }
-        syn::visit::visit_macro(self, value);
+        visit::visit_macro(self, value);
     }
 
     fn visit_path(&mut self, path: &'ast syn::Path) {
@@ -263,6 +263,6 @@ impl<'ast> Visit<'ast> for RustPolicyVisitor {
         {
             self.production_anyhow.push(path.span().start().line);
         }
-        syn::visit::visit_path(self, path);
+        visit::visit_path(self, path);
     }
 }

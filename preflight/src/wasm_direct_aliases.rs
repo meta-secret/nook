@@ -5,6 +5,7 @@ use crate::javascript_literals::{semantic_javascript_name, static_javascript_str
 use crate::wasm_dynamic_aliases::{
     collect_namespace_import_bindings, collect_wasm_type_import_bindings,
 };
+use crate::wasm_module_sources;
 use crate::wasm_module_sources::{is_wasm_callable_export, is_wasm_callable_source};
 
 #[allow(clippy::too_many_arguments)]
@@ -112,7 +113,7 @@ fn collect_default_callable_import(
     bindings: &mut HashSet<String>,
     lines: &mut Vec<usize>,
 ) {
-    let Some(authored_name) = crate::wasm_module_sources::wasm_callable_export_name(
+    let Some(authored_name) = wasm_module_sources::wasm_callable_export_name(
         module,
         "default",
         source_path,

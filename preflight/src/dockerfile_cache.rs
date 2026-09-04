@@ -1,4 +1,5 @@
 use super::{Violation, marker_violations};
+use std::ffi::OsStr;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -68,7 +69,7 @@ pub(super) fn is_generated_directory(path: &Path) -> bool {
         || path.ends_with(Path::new("nook-web-shared/src/vault-app/lib/nook-wasm"))
 }
 
-fn is_dockerfile(name: &std::ffi::OsStr) -> bool {
+fn is_dockerfile(name: &OsStr) -> bool {
     name.to_str()
         .is_some_and(|name| name == "Dockerfile" || name.ends_with(".Dockerfile"))
 }
@@ -78,6 +79,7 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::{SystemTime, UNIX_EPOCH};
+    use std::{env, process};
 
     static TEMPORARY_DIRECTORY_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
@@ -139,9 +141,9 @@ mod tests {
 
     fn temporary_directory() -> anyhow::Result<PathBuf> {
         let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-        let process_id = std::process::id();
+        let process_id = process::id();
         let sequence = TEMPORARY_DIRECTORY_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
+        let path = env::temp_dir().join(format!(
             "nook-preflight-dockerfile-cache-{process_id}-{unique}-{sequence}"
         ));
         fs::create_dir(&path)?;
