@@ -8,7 +8,6 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
-#![deny(clippy::absolute_paths)]
 
 //! Portable, provider-neutral replication mechanics for Nook.
 //!
