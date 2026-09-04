@@ -204,11 +204,11 @@ export function localOwnedLoginObservationRoot({
   let container = passwordField.parentElement;
   while (container && container !== owner) {
     if (container.contains(usernameField)) {
-      if (
-        containerIsOwnedLoginDocumentShell(container) ||
-        !owner.contains(container)
-      )
-        return owner.ownerDocument;
+      if (!owner.contains(container)) return owner.ownerDocument;
+      if (!containerLooksLikeExplicitAuthSurface(container)) {
+        container = container.parentElement;
+        continue;
+      }
       if (
         ownedFormHasManualCheckpoint(owner) &&
         !pageHasManualCheckpoint(container)
@@ -730,13 +730,6 @@ function labeledTypeButtonActivationControls(container: Element): Element[] {
     looks_like_login_advance_control_label(
       localActivationControlLabel(control),
     ),
-  );
-}
-
-function containerIsOwnedLoginDocumentShell(container: Element): boolean {
-  return (
-    container === container.ownerDocument.documentElement ||
-    container === container.ownerDocument.body
   );
 }
 

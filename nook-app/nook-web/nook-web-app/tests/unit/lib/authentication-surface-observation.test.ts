@@ -26,9 +26,12 @@ function attributeMutation(target: Node): MutationRecord {
   return { type: 'attributes', target } as MutationRecord
 }
 
-function observation(form: HTMLFormElement): PasswordFormObservation {
+function observation(
+  form: HTMLFormElement,
+  root: ParentNode = document,
+): PasswordFormObservation {
   return {
-    root: document,
+    root,
     formScope: { kind: 'owned', owner: form },
     summary: {
       passwordFieldCount: 1,
@@ -95,6 +98,32 @@ describe('authentication surface mutation filtering', () => {
         workflow: observation(form),
       }
     expect(mutationTouchesAuthenticationWorkflow(request)).toBe(true)
+  })
+
+  test('bounds invalidation while retaining explicit owner and label dependencies', () => {
+    document.body.innerHTML = `<form id="login" action="/login"><header><input id="search" /><span id="username-label">Account</span></header>
+      <main class="login-panel"><input aria-labelledby="username-label" autocomplete="username" /><input type="password" /></main>
+      <footer><button type="submit">Subscribe</button></footer></form>`
+    const form = document.querySelector<HTMLFormElement>('#login')
+    const root = document.querySelector<HTMLElement>('.login-panel')
+    const search = document.querySelector<HTMLInputElement>('#search')
+    const label = document.querySelector<HTMLElement>('#username-label')
+    if (!form || !root || !search || !label) {
+      throw new Error('expected bounded mutation fixture')
+    }
+    const renderedWorkflow = observation(form, root)
+    const insertedSearch = document.createElement('input')
+    const impact = (record: MutationRecord) =>
+      authenticationMutationImpact({
+        records: [record],
+        mountedHost: false,
+        renderedWorkflow,
+      }).shouldRemountRenderedWorkflow
+
+    expect(impact(attributeMutation(search))).toBe(false)
+    expect(impact(childListMutation(form, [insertedSearch]))).toBe(false)
+    expect(impact(attributeMutation(form))).toBe(true)
+    expect(impact(attributeMutation(label))).toBe(true)
   })
 
   test('observes submit destination changes', () => {

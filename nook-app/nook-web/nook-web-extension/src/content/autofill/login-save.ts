@@ -307,7 +307,23 @@ async function stageSaveOfferForCredentials({
 
 export function captureSubmittedLogin(event: Event): void {
   const target = event.target
-  if (!(target instanceof HTMLFormElement) || widgetState.busy) return
+  if (
+    !(event instanceof SubmitEvent) ||
+    !(target instanceof HTMLFormElement) ||
+    widgetState.busy
+  ) {
+    return
+  }
+  const { submitter } = event
+  if (
+    !(
+      submitter instanceof HTMLButtonElement ||
+      submitter instanceof HTMLInputElement
+    ) ||
+    submitter.form !== target
+  ) {
+    return
+  }
   const observations = summarizeAuthenticationWorkflowForms()
   const workflow = observations.find(
     (candidate) =>
@@ -315,6 +331,7 @@ export function captureSubmittedLogin(event: Event): void {
       candidate.formScope.owner === target,
   )
   if (!workflow || workflow.summary.passwordFieldCount === 0) return
+  if (!workflow.root.contains(submitter)) return
   const nookTypedArgs0_1: Parameters<typeof readLoginCredentials>[0] = {
     kind: PasswordFormQueryKind.Scoped,
     root: workflow.root,
