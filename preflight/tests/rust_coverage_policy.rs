@@ -98,7 +98,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains("llvm-cov clean --workspace"));
     assert!(product
         .split_once("llvm-cov test --release -p nook-wasm --no-report")
-        .and_then(|(_, later)| later.split_once("llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-report"))
+        .and_then(|(_, later)| later.split_once("llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \\\n    && nook-sccache-report wasm-node-test-and-coverage"))
         .is_some_and(|(_, later)| later.contains("--features browser-wasm-tests --fail-under-lines \"$nook_wasm_floor\"")));
     assert!(product.contains("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true"));
     assert_eq!(product.matches("--features browser-wasm-tests").count(), 2);

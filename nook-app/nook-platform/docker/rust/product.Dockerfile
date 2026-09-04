@@ -754,7 +754,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov clean --workspace \
     && RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --release -p nook-wasm --no-report \
-    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-report \
+    && CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" RUSTC_WRAPPER= cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \
     && nook-sccache-report wasm-node-test-and-coverage
 
 FROM builder-wasm-handoff AS builder-wasm
