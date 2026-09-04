@@ -11,6 +11,10 @@ import {
   type AuditCortexArticleStructureRequest,
 } from '../../../cortex-article-structure/scripts/src/domain.ts';
 import {
+  DelegationVisualizationContractKind,
+  DelegationVisualizationTeam,
+} from '../../../delegation-visualization/scripts/src/domain.ts';
+import {
   dispatchSkillYamlText,
   finalizeSkillCliResponse,
   runSkillCli,
@@ -30,6 +34,7 @@ import {
 import {
   SKILL_YAML_DEPTH_LIMIT,
   parseSkillYamlText,
+  stringifySkillYaml,
   type UntrustedSkillYamlNode,
 } from '../src/skill-yaml-codec.ts';
 import {
@@ -53,7 +58,16 @@ type CliResponse = {
       readonly line: number;
       readonly message: string;
     }[];
-    readonly yaml?: string;
+    readonly document?: {
+      readonly gizmo: {
+        readonly tasks: readonly {
+          readonly id: string;
+          readonly team: string;
+          readonly description: string;
+          readonly depends_on: readonly string[];
+        }[];
+      };
+    };
     readonly actions?: readonly {
       readonly description: string;
       readonly exampleRequest: string;
@@ -224,22 +238,81 @@ describe('provider-neutral executable skill YAML host', () => {
     expect(outcome.exitCode).toBe(0);
     expect(response.family).toBe(SkillRequestFamily.DelegationVisualization);
     expect(response.operation).toBe('render');
-    expect(response.result?.yaml).toBe(
-      [
-        'gizmo:',
-        '  tasks:',
-        '    - id: "update-cortex"',
-        '      team: "ai"',
-        '      description: "update Cortex"',
-        '      depends_on: []',
-        '    - id: "create-security-key"',
-        '      team: "web-development"',
-        '      description: "create security key component"',
-        '      depends_on:',
-        '        - "update-cortex"',
-        '',
-      ].join('\n'),
+    expect(response.result?.document).toEqual({
+      gizmo: {
+        tasks: [
+          {
+            id: 'update-cortex',
+            team: 'ai',
+            description: 'update Cortex',
+            depends_on: [],
+          },
+          {
+            id: 'create-security-key',
+            team: 'web-development',
+            description: 'create security key component',
+            depends_on: ['update-cortex'],
+          },
+        ],
+      },
+    });
+
+    const specialDescription = 'audit: "quoted" # literal \\ path [exact]';
+    const specialRequest = {
+      delegationVisualization: {
+        render: {
+          kind: DelegationVisualizationContractKind.Request,
+          tasks: [
+            {
+              id: 'special-description',
+              team: DelegationVisualizationTeam.Security,
+              description: specialDescription,
+              dependencies: [],
+            },
+          ],
+        },
+      },
+    };
+    const specialOutcome = dispatchSkillYamlText(
+      stringifySkillYaml(specialRequest as UntrustedSkillYamlNode),
     );
+    expect(specialOutcome.exitCode).toBe(0);
+    expect(
+      parseResponse(specialOutcome.yaml).result?.document?.gizmo.tasks[0]
+        ?.description,
+    ).toBe(specialDescription);
+  });
+  test('keeps structured delegation within the trusted host response bound', () => {
+    const ids: string[] = [];
+    for (let index = 0; index < 64; index += 1) {
+      ids.push(`${String(index).padStart(2, '0')}${'a'.repeat(6)}`);
+    }
+    const tasks = [];
+    for (const [index, id] of ids.entries()) {
+      tasks.push({
+        id,
+        team: DelegationVisualizationTeam.Ai,
+        description: '\\'.repeat(256),
+        dependencies: ids.slice(0, index),
+      });
+    }
+    const request = {
+      delegationVisualization: {
+        render: {
+          kind: DelegationVisualizationContractKind.Request,
+          tasks,
+        },
+      },
+    };
+    const outcome = dispatchSkillYamlText(
+      stringifySkillYaml(request as UntrustedSkillYamlNode),
+    );
+    const response = parseResponse(outcome.yaml);
+    expect(outcome.exitCode).toBe(0);
+    expect(response.result?.document?.gizmo.tasks).toHaveLength(64);
+    expect(
+      new TextEncoder().encode(outcome.yaml).byteLength,
+    ).toBeLessThanOrEqual(SKILL_HOST_RESPONSE_BYTE_LIMIT);
   });
   test('aligns discovered and provider UTF-16 string limits', () => {
     const action = listDiscoverableSkillActions().actions.at(1);

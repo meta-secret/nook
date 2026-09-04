@@ -256,14 +256,14 @@ and do not rename, reorder, or remove its time, PR, actor, or action fields.
   activity currently serves, for example `(1263)`.
 - Use `(pending)` before that pull request exists.
 - Use `(none)` when the assigned work intentionally has no pull request.
-- Emit the current PR token on every activity line. Refresh it immediately
+- Emit the current PR token on every metadata line. Refresh it immediately
   after pull-request creation.
 - Use `SKILL` when loading or applying a skill is the reported action.
-- Start every activity line with the current local time in 24-hour `HH:mm`
+- Start every metadata line with the current local time in 24-hour `HH:mm`
   form.
-- Identify the executor on every activity line with one compact canonical actor
+- Identify the executor on every metadata line with one compact canonical actor
   token from this closed mapping:
-  - `GIZMO` for Gizmo Prime;
+  - `Gizmo Prime` for Gizmo Prime;
   - `AI` for the AI team;
   - `DEV-CORE` for Development core;
   - `SECURITY` for Security;
@@ -290,7 +290,6 @@ and do not rename, reorder, or remove its time, PR, actor, or action fields.
   - `WAIT` identifies a bounded wait and its elapsed time.
   - `STATE` summarizes the current result, blocker, or next action.
 - Place no spaces around the colons between time, PR, actor, and action type.
-- Place exactly one space before and after `->`.
 - State what changed, why it was done, or what current state was observed.
 - Show a command before waiting for it to finish.
   - Prefer the task entrypoint, such as `task loom:verify`.
@@ -302,7 +301,7 @@ and do not rename, reorder, or remove its time, PR, actor, or action fields.
   every five minutes.
 - When there is no meaningful new evidence, limit the description to the exact
   operation identifier, elapsed time, and `in progress`.
-- Identify the exact operation in every `WAIT` line.
+- Identify the exact operation in every `WAIT` update.
   - For local Task execution, name the exact `task <task-name>` command.
   - For hosted execution, name the GitHub run or job ID and include its
     clickable URL.
@@ -310,7 +309,8 @@ and do not rename, reorder, or remove its time, PR, actor, or action fields.
 - Give every bounded wait a start update and a completion or timeout update.
 - Apply the format to progress updates, questions, handoffs, and final
   responses.
-- Give each separate activity its own timestamped plain-text line.
+- Give each separate activity its own fenced metadata block and ordinary
+  Markdown description.
 - Do not add the activity format to code, logs, repository content, or commit
   messages.
 - A strict machine-readable protocol response is exempt from the entire

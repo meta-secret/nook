@@ -1,63 +1,48 @@
 import {
   DelegationVisualizationContractKind,
-  DELEGATION_VISUALIZATION_RESULT_BYTE_LIMIT,
+  DelegationVisualizationDocument,
+  DelegationVisualizationDocumentTask,
+  DelegationVisualizationGizmoDocument,
   type DelegationVisualizationResult,
   type RenderDelegationVisualizationRequest,
 } from './domain.ts';
 
 enum DelegationVisualizationResultField {
   Kind = 'kind',
-  Yaml = 'yaml',
+  Document = 'document',
 }
 
-type DelegationVisualizationResultTransport = {
-  readonly kind: string | false;
-  readonly yaml: string | false;
-};
+enum DelegationVisualizationDocumentField {
+  Gizmo = 'gizmo',
+}
 
-const UTF8_ENCODER = new TextEncoder();
+enum DelegationVisualizationGizmoField {
+  Tasks = 'tasks',
+}
+
+enum DelegationVisualizationDocumentTaskField {
+  Id = 'id',
+  Team = 'team',
+  Description = 'description',
+  DependsOn = 'depends_on',
+}
+
+type DelegationVisualizationResultValue =
+  | DelegationVisualizationDocument
+  | DelegationVisualizationDocumentTask
+  | DelegationVisualizationGizmoDocument
+  | DelegationVisualizationResult;
+
+type ExactKeysInput = {
+  readonly value: DelegationVisualizationResultValue;
+  readonly expected: readonly string[];
+};
 
 export class DelegationVisualizationResultVerificationError extends Error {
   constructor() {
     super('Invalid delegation visualization result.');
     this.name = 'DelegationVisualizationResultVerificationError';
   }
-}
-
-export function decodeDelegationVisualizationResult(
-  serialized: string,
-): DelegationVisualizationResult {
-  if (
-    UTF8_ENCODER.encode(serialized).byteLength >
-    DELEGATION_VISUALIZATION_RESULT_BYTE_LIMIT
-  ) {
-    throw new DelegationVisualizationResultVerificationError();
-  }
-  let transport: DelegationVisualizationResultTransport;
-  try {
-    transport = JSON.parse(
-      serialized,
-    ) as DelegationVisualizationResultTransport;
-  } catch {
-    throw new DelegationVisualizationResultVerificationError();
-  }
-  const expected = Object.values(DelegationVisualizationResultField);
-  const keys = transport ? Object.keys(transport) : [];
-  if (
-    !transport ||
-    keys.length !== expected.length ||
-    !keys.every((key) =>
-      expected.includes(key as DelegationVisualizationResultField),
-    ) ||
-    transport.kind !== DelegationVisualizationContractKind.Result ||
-    typeof transport.yaml !== 'string'
-  ) {
-    throw new DelegationVisualizationResultVerificationError();
-  }
-  return {
-    kind: DelegationVisualizationContractKind.Result,
-    yaml: transport.yaml,
-  };
 }
 
 type VerifyDelegationVisualizationResultRequest = {
@@ -68,32 +53,73 @@ type VerifyDelegationVisualizationResultRequest = {
 export function verifyDelegationVisualizationResult(
   input: VerifyDelegationVisualizationResultRequest,
 ): DelegationVisualizationResult {
-  const expectedLines = ['gizmo:', '  tasks:'];
-  for (const task of input.request.tasks) {
-    expectedLines.push(`    - id: ${quoteYamlScalar(task.id)}`);
-    expectedLines.push(`      team: ${quoteYamlScalar(task.team)}`);
-    expectedLines.push(
-      `      description: ${quoteYamlScalar(task.description)}`,
-    );
-    if (task.dependencies.length === 0) {
-      expectedLines.push('      depends_on: []');
-      continue;
-    }
-    expectedLines.push('      depends_on:');
-    for (const dependency of task.dependencies) {
-      expectedLines.push(`        - ${quoteYamlScalar(dependency)}`);
-    }
-  }
-  if (input.result.yaml !== `${expectedLines.join('\n')}\n`) {
+  if (
+    input.result.kind !== DelegationVisualizationContractKind.Result ||
+    !hasExactKeys({
+      value: input.result,
+      expected: Object.values(DelegationVisualizationResultField),
+    }) ||
+    !(input.result.document instanceof DelegationVisualizationDocument) ||
+    !hasExactKeys({
+      value: input.result.document,
+      expected: Object.values(DelegationVisualizationDocumentField),
+    }) ||
+    !(
+      input.result.document.gizmo instanceof
+      DelegationVisualizationGizmoDocument
+    ) ||
+    !hasExactKeys({
+      value: input.result.document.gizmo,
+      expected: Object.values(DelegationVisualizationGizmoField),
+    })
+  ) {
     throw new DelegationVisualizationResultVerificationError();
+  }
+  const actualTasks = input.result.document.gizmo.tasks;
+  if (actualTasks.length !== input.request.tasks.length) {
+    throw new DelegationVisualizationResultVerificationError();
+  }
+  const actualTaskIterator = actualTasks.values();
+  for (const expected of input.request.tasks) {
+    const actual = actualTaskIterator.next().value;
+    if (
+      !(actual instanceof DelegationVisualizationDocumentTask) ||
+      !hasExactKeys({
+        value: actual,
+        expected: Object.values(DelegationVisualizationDocumentTaskField),
+      }) ||
+      actual.id !== expected.id ||
+      actual.team !== expected.team ||
+      actual.description !== expected.description ||
+      !sameDependencies({
+        actual: actual.depends_on,
+        expected: expected.dependencies,
+      })
+    ) {
+      throw new DelegationVisualizationResultVerificationError();
+    }
   }
   return input.result;
 }
 
-function quoteYamlScalar(value: string): string {
-  const serialized = JSON.stringify(value);
-  if (typeof serialized !== 'string') {
-    throw new DelegationVisualizationResultVerificationError();
+type SameDependenciesInput = {
+  readonly actual: readonly string[];
+  readonly expected: readonly string[];
+};
+
+function sameDependencies(input: SameDependenciesInput): boolean {
+  if (input.actual.length !== input.expected.length) return false;
+  const actualDependencyIterator = input.actual.values();
+  for (const dependency of input.expected) {
+    if (actualDependencyIterator.next().value !== dependency) return false;
   }
-  return serialized;
+  return true;
+}
+
+function hasExactKeys(input: ExactKeysInput): boolean {
+  const keys = Object.keys(input.value);
+  return (
+    keys.length === input.expected.length &&
+    keys.every((key) => input.expected.includes(key))
+  );
 }

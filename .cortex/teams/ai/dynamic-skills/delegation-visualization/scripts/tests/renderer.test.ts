@@ -1,15 +1,14 @@
 import { describe, expect, test } from 'bun:test';
 import {
   DelegationVisualizationContractKind,
+  DelegationVisualizationDocument,
+  DelegationVisualizationDocumentTask,
   DelegationVisualizationTeam,
   type RenderDelegationVisualizationRequest,
 } from '../src/domain.ts';
 import { renderDelegationVisualization } from '../src/renderer.ts';
 import { executeDelegationVisualizationApplication } from '../src/application.ts';
-import {
-  decodeDelegationVisualizationResult,
-  verifyDelegationVisualizationResult,
-} from '../src/result-codec.ts';
+import { verifyDelegationVisualizationResult } from '../src/result-codec.ts';
 
 describe('delegation visualization renderer', () => {
   test('renders independent Team Agents as ordered Gizmo siblings', () => {
@@ -36,27 +35,30 @@ describe('delegation visualization renderer', () => {
         },
       ],
     };
-    expect(renderDelegationVisualization(request)).toBe(
-      [
-        'gizmo:',
-        '  tasks:',
-        '    - id: "update-cortex"',
-        '      team: "ai"',
-        '      description: "update Cortex"',
-        '      depends_on: []',
-        '    - id: "security-key"',
-        '      team: "web-development"',
-        '      description: "create security key component"',
-        '      depends_on:',
-        '        - "update-cortex"',
-        '    - id: "auth-module"',
-        '      team: "development-core"',
-        '      description: "implement auth module"',
-        '      depends_on:',
-        '        - "security-key"',
-        '',
-      ].join('\n'),
-    );
+    expect(renderDelegationVisualization(request)).toEqual({
+      gizmo: {
+        tasks: [
+          {
+            id: 'update-cortex',
+            team: DelegationVisualizationTeam.Ai,
+            description: 'update Cortex',
+            depends_on: [],
+          },
+          {
+            id: 'security-key',
+            team: DelegationVisualizationTeam.WebDevelopment,
+            description: 'create security key component',
+            depends_on: ['update-cortex'],
+          },
+          {
+            id: 'auth-module',
+            team: DelegationVisualizationTeam.DevelopmentCore,
+            description: 'implement auth module',
+            depends_on: ['security-key'],
+          },
+        ],
+      },
+    });
   });
 
   test('keeps repeated teams as separate Team Agent entries', () => {
@@ -78,11 +80,13 @@ describe('delegation visualization renderer', () => {
       ],
     };
     expect(
-      renderDelegationVisualization(request).match(/team: "ai"/gu),
+      renderDelegationVisualization(request).gizmo.tasks.filter(
+        (task) => task.team === DelegationVisualizationTeam.Ai,
+      ),
     ).toHaveLength(2);
   });
 
-  test('quotes special characters without changing YAML structure', () => {
+  test('preserves special characters as typed description data', () => {
     const description = 'audit: "quoted" # literal \\ path [exact]';
     const request: RenderDelegationVisualizationRequest = {
       kind: DelegationVisualizationContractKind.Request,
@@ -96,22 +100,14 @@ describe('delegation visualization renderer', () => {
       ],
     };
     const rendered = renderDelegationVisualization(request);
-    expect(rendered).toContain(JSON.stringify(description));
-    expect(Bun.YAML.parse(rendered)).toEqual({
-      gizmo: {
-        tasks: [
-          {
-            id: 'special-description',
-            team: 'security',
-            description,
-            depends_on: [],
-          },
-        ],
-      },
-    });
+    expect(rendered.gizmo.tasks[0]?.description).toBe(description);
+    expect(
+      executeDelegationVisualizationApplication(request).document.gizmo.tasks[0]
+        ?.description,
+    ).toBe(description);
   });
 
-  test('round-trips and verifies the admitted request against the YAML', () => {
+  test('constructs typed classes and verifies the admitted request', () => {
     const request: RenderDelegationVisualizationRequest = {
       kind: DelegationVisualizationContractKind.Request,
       tasks: [
@@ -124,22 +120,36 @@ describe('delegation visualization renderer', () => {
       ],
     };
     const result = executeDelegationVisualizationApplication(request);
+    expect(result.document).toBeInstanceOf(DelegationVisualizationDocument);
+    expect(result.document.gizmo.tasks[0]).toBeInstanceOf(
+      DelegationVisualizationDocumentTask,
+    );
     expect(
       verifyDelegationVisualizationResult({
         request,
-        result: decodeDelegationVisualizationResult(JSON.stringify(result)),
+        result,
       }),
     ).toEqual(result);
     expect(() =>
       verifyDelegationVisualizationResult({
         request,
-        result: { ...result, yaml: 'gizmo:\n' },
+        result: {
+          ...result,
+          document: {
+            gizmo: {
+              tasks: result.document.gizmo.tasks.map((task) => ({
+                ...task,
+                description: 'tampered',
+              })),
+            },
+          },
+        },
       }),
     ).toThrow();
+    const extraResult = { ...result };
+    Object.assign(extraResult, { unverified: true });
     expect(() =>
-      decodeDelegationVisualizationResult(
-        JSON.stringify({ ...result, unverified: true }),
-      ),
+      verifyDelegationVisualizationResult({ request, result: extraResult }),
     ).toThrow();
   });
 });
