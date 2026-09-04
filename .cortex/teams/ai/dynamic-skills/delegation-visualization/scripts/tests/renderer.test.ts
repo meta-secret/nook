@@ -130,26 +130,90 @@ describe('delegation visualization renderer', () => {
         result,
       }),
     ).toEqual(result);
-    expect(() =>
-      verifyDelegationVisualizationResult({
-        request,
-        result: {
-          ...result,
-          document: {
-            gizmo: {
-              tasks: result.document.gizmo.tasks.map((task) => ({
-                ...task,
-                description: 'tampered',
-              })),
-            },
-          },
-        },
-      }),
-    ).toThrow();
     const extraResult = { ...result };
     Object.assign(extraResult, { unverified: true });
     expect(() =>
       verifyDelegationVisualizationResult({ request, result: extraResult }),
     ).toThrow();
+  });
+
+  test('rejects every tampered typed field and ordering invariant', () => {
+    const request: RenderDelegationVisualizationRequest = {
+      kind: DelegationVisualizationContractKind.Request,
+      tasks: [
+        {
+          id: 'first',
+          team: DelegationVisualizationTeam.Ai,
+          description: 'first task',
+          dependencies: [],
+        },
+        {
+          id: 'second',
+          team: DelegationVisualizationTeam.Security,
+          description: 'second task',
+          dependencies: [],
+        },
+        {
+          id: 'third',
+          team: DelegationVisualizationTeam.WebDevelopment,
+          description: 'third task',
+          dependencies: ['first', 'second'],
+        },
+      ],
+    };
+    const result = executeDelegationVisualizationApplication(request);
+    const [first, second, third] = result.document.gizmo.tasks;
+    if (!first || !second || !third) throw new Error('Missing test task.');
+    const tamperedDocuments = [
+      new DelegationVisualizationDocument([
+        new DelegationVisualizationDocumentTask({
+          id: 'changed-id',
+          team: first.team,
+          description: first.description,
+          dependsOn: first.depends_on,
+        }),
+        second,
+        third,
+      ]),
+      new DelegationVisualizationDocument([
+        new DelegationVisualizationDocumentTask({
+          id: first.id,
+          team: DelegationVisualizationTeam.Sre,
+          description: first.description,
+          dependsOn: first.depends_on,
+        }),
+        second,
+        third,
+      ]),
+      new DelegationVisualizationDocument([
+        new DelegationVisualizationDocumentTask({
+          id: first.id,
+          team: first.team,
+          description: 'changed description',
+          dependsOn: first.depends_on,
+        }),
+        second,
+        third,
+      ]),
+      new DelegationVisualizationDocument([second, first, third]),
+      new DelegationVisualizationDocument([
+        first,
+        second,
+        new DelegationVisualizationDocumentTask({
+          id: third.id,
+          team: third.team,
+          description: third.description,
+          dependsOn: ['second', 'first'],
+        }),
+      ]),
+    ];
+    for (const document of tamperedDocuments) {
+      expect(() =>
+        verifyDelegationVisualizationResult({
+          request,
+          result: { ...result, document },
+        }),
+      ).toThrow();
+    }
   });
 });
