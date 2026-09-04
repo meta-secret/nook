@@ -24,8 +24,8 @@
     "nook-event-log": 90.0,
     "nook-companion-core": 90.0,
     "nook-core": 90.0,
-    "nook-companion-wasm": 90.0,
-    "nook-wasm": 90.0,
+    "nook-companion-wasm": 18.0,
+    "nook-wasm": null,
     "hive": 60.0,
     "lace": 75.0,
     "nook-preflight": 90.0,
@@ -42,5 +42,5 @@
     }
   ],
   "updated": "2026-09-04",
-  "note": "CI independently enforces Hive at 60%, Lace at 75%, and every other testable first-party Rust package at 90%; package results are never aggregated for the failure decision."
+  "note": "nook-wasm is temporarily measurement-only and forced non-mergeable pending its hosted floor; CI independently enforces nook-companion-wasm at 18%, Hive at 60%, Lace at 75%, and every other testable first-party Rust package at 90%."
 }

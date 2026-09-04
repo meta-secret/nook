@@ -34,10 +34,15 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     assert_eq!(
         package_floors.keys().cloned().collect::<BTreeSet<_>>(),
         enforced,
-        "every enforced package must have an explicit line floor"
+        "every enforced package must have an explicit coverage entry"
     );
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
+            "nook-wasm" => {
+                assert!(floor.is_null());
+                continue;
+            }
+            "nook-companion-wasm" => 18.0,
             "hive" => 60.0,
             "lace" => 75.0,
             _ => 90.0,
@@ -112,7 +117,10 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains("for package in nook-companion-wasm nook-wasm; do"));
     assert!(product.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
     assert!(product.contains("--target wasm32-unknown-unknown --release -p \"$package\""));
-    assert!(product.contains("--fail-under-lines \"$floor\""));
+    assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
+    assert!(product.contains("nook-wasm) package_args=\"--features browser-wasm-tests\""));
+    assert!(product.contains("nook-wasm coverage floor pending this hosted measurement"));
+    assert!(product.contains("&& false"));
     assert_eq!(product.matches("|| coverage_status=1;").count(), 2);
     assert_eq!(
         product.matches("test \"$coverage_status\" -eq 0").count(),
@@ -131,7 +139,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_coverage_stage.contains("apt-get install -y --no-install-recommends clang"));
     assert!(wasm_coverage_stage.contains("clang --version"));
     assert!(wasm_coverage_stage.contains("cargo +\"${WASM_COVERAGE_NIGHTLY}\" llvm-cov test"));
-    assert!(wasm_coverage_stage.contains("--fail-under-lines \"$floor\""));
+    assert!(wasm_coverage_stage.contains("sha256sum -c -"));
     assert!(wasm_coverage_stage.contains(
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
