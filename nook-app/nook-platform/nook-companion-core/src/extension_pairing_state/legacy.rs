@@ -198,7 +198,7 @@ mod tests {
         let migrated = ExtensionPairingState::migrate_legacy_json(&serialized)?;
 
         assert_eq!(migrated.ordered_grants().len(), 2);
-        assert_eq!(migrated.Fixture::grant("store-team"), Some(&team));
+        assert_eq!(migrated.grant("store-team"), Some(&team));
         assert_eq!(
             migrated
                 .ready_setup()
@@ -228,7 +228,7 @@ mod tests {
         let migrated = ExtensionPairingState::migrate_legacy_json(&serialized)?;
 
         assert_eq!(migrated.ordered_grants().len(), 1);
-        assert_eq!(migrated.Fixture::grant("store-team"), None);
+        assert_eq!(migrated.grant("store-team"), None);
         assert_eq!(
             migrated
                 .ready_setup()

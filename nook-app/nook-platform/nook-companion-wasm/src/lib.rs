@@ -262,14 +262,16 @@ pub fn extension_setup_after_pairing_grant_removal(
 
 #[wasm_bindgen]
 #[must_use]
+// Existing browser boolean projection; this outer boundary remains to be migrated.
 pub fn is_stored_extension_pairing_grant_json(value: &str) -> bool {
-    StoredExtensionPairingGrant::is_valid_json(value)
+    StoredExtensionPairingGrant::validate_json(value).is_ok()
 }
 
 #[wasm_bindgen]
 #[must_use]
+// Existing browser boolean projection; this outer boundary remains to be migrated.
 pub fn is_extension_ready_setup_json(value: &str) -> bool {
-    ExtensionReadySetup::is_valid_json(value)
+    ExtensionReadySetup::validate_json(value).is_ok()
 }
 
 #[wasm_bindgen]

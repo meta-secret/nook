@@ -124,6 +124,7 @@ pub struct RefreshExtensionPairingGrantInput {
     pub grant: StoredExtensionPairingGrant,
     pub imported: ImportedExtensionEventLog,
     pub observed_at: String,
+    // Existing browser wire field; convert at admission until its boundary migration.
     pub select: bool,
 }
 
@@ -352,6 +353,11 @@ impl ExtensionPairingState {
     }
 }
 
+enum PairingSelection {
+    Select,
+    KeepCurrent,
+}
+
 impl StoredExtensionPairingGrant {
     #[must_use]
     pub fn storage_key_for(vault_store_id: &str) -> String {
@@ -386,15 +392,11 @@ impl StoredExtensionPairingGrant {
         })
     }
 
-    #[must_use]
-    pub fn is_valid_json(value: &str) -> bool {
-        let Ok(grant) = serde_json::from_str::<StoredExtensionPairingGrant>(value) else {
-            return false;
-        };
+    pub fn validate_json(value: &str) -> Result<(), ExtensionPairingStateError> {
+        let grant = serde_json::from_str::<StoredExtensionPairingGrant>(value)
+            .map_err(|_| ExtensionPairingStateError::InvalidGrant)?;
         let key = StoredExtensionPairingGrant::storage_key_for(&grant.vault_store_id);
-        ExtensionPairingRecord::Grant(grant)
-            .validate_for_key(&key)
-            .is_ok()
+        ExtensionPairingRecord::Grant(grant).validate_for_key(&key)
     }
 }
 
@@ -407,7 +409,10 @@ impl ExtensionPairingState {
             input.imported,
             input.observed_at,
         )?;
-        Ok(ExtensionPairingState::for_grant(&grant, true))
+        Ok(ExtensionPairingState::for_grant(
+            &grant,
+            PairingSelection::Select,
+        ))
     }
 
     pub fn refresh_grant(
@@ -427,15 +432,23 @@ impl ExtensionPairingState {
         };
         let grant =
             StoredExtensionPairingGrant::from_import(approval, input.imported, input.observed_at)?;
-        Ok(ExtensionPairingState::for_grant(&grant, input.select))
+        let selection = if input.select {
+            PairingSelection::Select
+        } else {
+            PairingSelection::KeepCurrent
+        };
+        Ok(ExtensionPairingState::for_grant(&grant, selection))
     }
 
-    fn for_grant(grant: &StoredExtensionPairingGrant, select: bool) -> ExtensionPairingState {
+    fn for_grant(
+        grant: &StoredExtensionPairingGrant,
+        selection: PairingSelection,
+    ) -> ExtensionPairingState {
         let mut entries = vec![ExtensionPairingEntry {
             key: StoredExtensionPairingGrant::storage_key_for(&grant.vault_store_id),
             record: ExtensionPairingRecord::Grant(grant.clone()),
         }];
-        if select {
+        if matches!(selection, PairingSelection::Select) {
             entries.push(ExtensionPairingEntry {
                 key: EXTENSION_SETUP_KEY.to_owned(),
                 record: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(grant)),
@@ -460,14 +473,10 @@ impl ExtensionReadySetup {
         }
     }
 
-    #[must_use]
-    pub fn is_valid_json(value: &str) -> bool {
-        let Ok(setup) = serde_json::from_str::<ExtensionReadySetup>(value) else {
-            return false;
-        };
-        ExtensionPairingRecord::Setup(setup)
-            .validate_for_key(EXTENSION_SETUP_KEY)
-            .is_ok()
+    pub fn validate_json(value: &str) -> Result<(), ExtensionPairingStateError> {
+        let setup = serde_json::from_str::<ExtensionReadySetup>(value)
+            .map_err(|_| ExtensionPairingStateError::InvalidSetup)?;
+        ExtensionPairingRecord::Setup(setup).validate_for_key(EXTENSION_SETUP_KEY)
     }
 }
 
@@ -573,7 +582,8 @@ mod tests {
 
     #[test]
     fn selected_pairing_grant_refresh_rebuilds_grant_and_setup_metadata() -> anyhow::Result<()> {
-        let state = ExtensionPairingState::refresh_grant(Fixture::refresh_input(true))?;
+        let state =
+            ExtensionPairingState::refresh_grant(Fixture::refresh_input(PairingSelection::Select))?;
         let refreshed = state
             .selected_grant()
             .ok_or_else(|| anyhow::anyhow!("selected refresh must include setup state"))?;
@@ -588,7 +598,9 @@ mod tests {
 
     #[test]
     fn non_selected_pairing_grant_refresh_updates_only_the_grant() -> anyhow::Result<()> {
-        let state = ExtensionPairingState::refresh_grant(Fixture::refresh_input(false))?;
+        let state = ExtensionPairingState::refresh_grant(Fixture::refresh_input(
+            PairingSelection::KeepCurrent,
+        ))?;
         let refreshed = state
             .first_grant()
             .ok_or_else(|| anyhow::anyhow!("refresh must include the updated grant"))?;
@@ -673,10 +685,46 @@ mod tests {
     #[test]
     fn removal_reports_no_setup_when_the_final_grant_is_removed() {
         let selected = Fixture::grant();
-        let state = ExtensionPairingState::for_grant(&selected, true);
+        let state = ExtensionPairingState::for_grant(&selected, PairingSelection::Select);
 
         assert_eq!(state.setup_after_removal("store-test"), None);
     }
+    #[test]
+    fn grant_json_validation_reports_invalid_input() -> anyhow::Result<()> {
+        let mut grant = Fixture::grant();
+        StoredExtensionPairingGrant::validate_json(&serde_json::to_string(&grant)?)?;
+        for malformed in ["{", "{}"] {
+            assert_eq!(
+                StoredExtensionPairingGrant::validate_json(malformed),
+                Err(ExtensionPairingStateError::InvalidGrant)
+            );
+        }
+        grant.device_id = "  ".to_owned();
+        assert_eq!(
+            StoredExtensionPairingGrant::validate_json(&serde_json::to_string(&grant)?),
+            Err(ExtensionPairingStateError::InvalidGrant)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn setup_json_validation_reports_invalid_input() -> anyhow::Result<()> {
+        let mut setup = ExtensionReadySetup::from_grant(&Fixture::grant());
+        ExtensionReadySetup::validate_json(&serde_json::to_string(&setup)?)?;
+        for malformed in ["{", "{}"] {
+            assert_eq!(
+                ExtensionReadySetup::validate_json(malformed),
+                Err(ExtensionPairingStateError::InvalidSetup)
+            );
+        }
+        setup.event_count = 0;
+        assert_eq!(
+            ExtensionReadySetup::validate_json(&serde_json::to_string(&setup)?),
+            Err(ExtensionPairingStateError::InvalidSetup)
+        );
+        Ok(())
+    }
+
     struct Fixture;
 
     impl Fixture {
@@ -698,7 +746,7 @@ mod tests {
             }
         }
 
-        fn refresh_input(select: bool) -> RefreshExtensionPairingGrantInput {
+        fn refresh_input(selection: PairingSelection) -> RefreshExtensionPairingGrantInput {
             let mut existing = Self::grant();
             existing.event_count = 2;
             existing.event_log_heads = vec!["event-2".to_owned()];
@@ -712,7 +760,7 @@ mod tests {
                     access_granted: true,
                 },
                 observed_at: "2026-07-25T00:00:04.000Z".to_owned(),
-                select,
+                select: matches!(selection, PairingSelection::Select),
             }
         }
     }
