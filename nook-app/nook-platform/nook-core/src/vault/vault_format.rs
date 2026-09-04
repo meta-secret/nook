@@ -530,8 +530,11 @@ mod tests {
             secrets_key: SymmetricKey::parse(&"d".repeat(64))?,
             members_key: SymmetricKey::parse(&"e".repeat(64))?,
         };
-        let envelope =
-            attach_password_envelope_with_work_factor(&keys, "correct horse battery staple", 10)?;
+        let envelope = attach_password_envelope_with_work_factor(
+            &keys,
+            "correct horse battery staple",
+            10.into(),
+        )?;
         let entry = PasswordUnlockEntry {
             id: "pw-1".to_owned(),
             label: "test password".to_owned(),

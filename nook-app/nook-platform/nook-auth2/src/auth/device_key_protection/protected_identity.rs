@@ -11,6 +11,7 @@ use super::{
     PasskeyDeviceProtectionMode, Payload, Pbkdf2Sha256, Serialize, Sha256, URL_SAFE_NO_PAD,
     USER_HANDLE_MAX_LEN, Zeroize, Zeroizing, fill, pbkdf2_hmac,
 };
+use crate::DeviceKeyDerivationIterations;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(untagged)]
@@ -53,7 +54,7 @@ pub struct PinWrappedDeviceIdentity {
     pub version: u32,
     pub protection: String,
     pub kdf: String,
-    pub iterations: u32,
+    pub iterations: DeviceKeyDerivationIterations,
     pub salt: String,
     pub cipher: String,
     pub nonce: String,
@@ -198,7 +199,7 @@ pub fn wrap_device_identity_with_pin(
         version: PIN_DEVICE_KEY_PROTECTION_VERSION,
         protection: "pin".to_owned(),
         kdf: PIN_KDF_NAME.to_owned(),
-        iterations: PIN_PBKDF2_ITERATIONS,
+        iterations: PIN_PBKDF2_ITERATIONS.into(),
         salt: encode(&salt),
         cipher: CIPHER_NAME.to_owned(),
         nonce: encode(&nonce),
@@ -220,15 +221,15 @@ pub fn unwrap_device_identity_with_pin(
     if record.protection != "pin" || record.kdf != PIN_KDF_NAME || record.cipher != CIPHER_NAME {
         return Err(DeviceKeyProtectionError::UnsupportedParameters);
     }
-    if record.iterations == 0 {
+    if u32::from(record.iterations) == 0 {
         return Err(DeviceKeyProtectionError::UnsupportedParameters);
     }
 
     let salt = decode_fixed::<PIN_SALT_LEN>("salt", &record.salt)?;
     let nonce = decode_fixed::<AES_GCM_NONCE_LEN>("nonce", &record.nonce)?;
     let ciphertext = decode_field("ciphertext", &record.ciphertext)?;
-    let key = derive_pin_wrapping_key(pin, &salt, record.iterations)?;
-    let aad = build_pin_aad(&salt, &nonce, record.iterations);
+    let key = derive_pin_wrapping_key(pin, &salt, record.iterations.into())?;
+    let aad = build_pin_aad(&salt, &nonce, record.iterations.into());
     decrypt_device_identity(&key, nonce, &ciphertext, &aad)
 }
 
@@ -628,7 +629,7 @@ mod tests {
         let WrappedDeviceIdentity::Pin(pin) = &mut metadata_tampered else {
             return Err(anyhow::anyhow!("expected pin record"));
         };
-        pin.iterations += 1;
+        pin.iterations = DeviceKeyDerivationIterations::from(u32::from(pin.iterations) + 1);
         assert!(matches!(
             unwrap_device_identity_with_pin(&metadata_tampered, "123456"),
             Err(DeviceKeyProtectionError::Decrypt)

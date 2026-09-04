@@ -380,7 +380,7 @@ mod tests {
         let records = crate::create_sentinel_share_records(
             &keys,
             &[first.clone(), second.clone(), third],
-            2,
+            2.into(),
         )?;
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,

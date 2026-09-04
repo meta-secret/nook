@@ -177,7 +177,8 @@ mod tests {
     fn request_link_round_trips_as_canonical_validated_json() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;
+        let session =
+            start_sentinel_genesis(&owner, &owner_signing, 3.into(), 2.into(), "Owner".into())?;
         let request_json = serde_json::to_string(&session.request)?;
 
         let link = build_sentinel_genesis_request_link(&request_json, "https://nook.example/app/")?;
@@ -185,7 +186,7 @@ mod tests {
         assert!(!link.contains(&session.request.session_id.to_string()));
         assert_eq!(normalize_sentinel_genesis_request(&link)?, request_json);
         let mut tampered = session.request.clone();
-        tampered.policy.threshold = 3;
+        tampered.policy.threshold = 3.into();
         assert!(normalize_sentinel_genesis_request(&serde_json::to_string(&tampered)?).is_err());
         assert!(normalize_sentinel_genesis_request("not-a-request").is_err());
         Ok(())
@@ -195,7 +196,8 @@ mod tests {
     fn request_link_preserves_a_canonical_route_without_a_trailing_slash() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let session = start_sentinel_genesis(&owner, &owner_signing, 3, 2, "Owner".into())?;
+        let session =
+            start_sentinel_genesis(&owner, &owner_signing, 3.into(), 2.into(), "Owner".into())?;
         let request_json = serde_json::to_string(&session.request)?;
 
         let link =
@@ -210,7 +212,8 @@ mod tests {
     fn participant_response_link_round_trips_and_remains_session_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let mut session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let mut session =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let response = participant(&session.request, "Peer")?;
         let response_json = serde_json::to_string(&response)?;
 
@@ -233,7 +236,8 @@ mod tests {
     -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
-        let session = start_sentinel_genesis(&owner, &owner_signing, 2, 2, "Owner".into())?;
+        let session =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
         let response = participant(&session.request, "Peer")?;
         let response_json = serde_json::to_string(&response)?;
 
