@@ -643,6 +643,7 @@ describe('classified login activation', () => {
         <form method="post" id="signup-${index}">
           <input autocomplete="username" />
           <input type="password" autocomplete="new-password" />
+          <button type="submit">Create account</button>
         </form>`,
     ).join('')
     document.body.insertAdjacentHTML(
@@ -650,10 +651,15 @@ describe('classified login activation', () => {
       `<form method="post" id="login">
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
+        <button type="submit">Sign in</button>
       </form>`,
     )
 
     const observations = summarizeAuthenticationWorkflowForms()
+    expect(observations[0]?.summary).toMatchObject({
+      currentPasswordFieldCount: 1,
+      newPasswordFieldCount: 0,
+    })
     const firstScope = observations[0]?.formScope
     expect(firstScope?.kind).toBe('owned')
     expect(firstScope?.kind === 'owned' ? firstScope.owner.id : '').toBe(
