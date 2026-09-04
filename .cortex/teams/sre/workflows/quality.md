@@ -72,7 +72,7 @@ Use this workflow for quality, CI, and deployment changes.
      `nook-event-log`, `nook-companion-core`, and `nook-core`. WASM lint covers
      `nook-companion-wasm` and `nook-wasm` for `wasm32-unknown-unknown`.
      The standalone `preflight` Clippy pass is also enforced with `-D warnings`.
-   - Rust coverage uses independent hosted native, WASM, Dylint, Hive/Lace, and preflight gates.
+   - Rust coverage uses independent hosted native, WASM, Dylint, Hive, and preflight gates.
    - `svelte-check`
    - `eslint` — the web-family lint command uses a dedicated project that
      includes every linted TypeScript and Svelte source, enables
@@ -454,7 +454,7 @@ Use this workflow for quality, CI, and deployment changes.
     - It must run `WASM_BUILD_MODE=prod task ci:pr:e2e VITE_BASE=/ VITE_VAULT_SYNC_INTERVAL_MS=1000`.
     - It must run `task docker:ecosystem:fuzz FUZZ_SECONDS=20`.
     - It must run `task hive:verify`.
-    - `task hive:verify` must compile, lint, and test both Hive and Lace.
+    - `task hive:verify` must compile, lint, and test Hive.
     - The harness opens its PR only after those validations succeed.
     - ARC runner Pods rely on Kubelet and persistent BuildKit garbage
       collection; no registered-host cleanup workflow is allowed.
@@ -525,9 +525,9 @@ Use this workflow for quality, CI, and deployment changes.
     - The workflow uploads both reports as `nook-core-coverage` and posts a sticky PR comment.
     - Human-readable coverage tables must not be scraped with shell.
     - `nook-app/nook-platform/nook-core/coverage-floor.json` exhaustively classifies every Cargo package.
-    - PR #1319 stages companion WASM at 18%, authenticator-domain at 87%, Hive at 60%, Lace at 75%, and `nook-wasm` at 51%; every other enforced package remains at 90%.
+    - PR #1319 stages companion WASM at 18%, authenticator-domain at 87%, Hive at 60%, and `nook-wasm` at 51%; every other enforced package remains at 90%.
     - A required successor raises every testable first-party package to at least 90%. Only the explicit non-testable `nook-fuzz` harness and vendored `arrayref` exclusions remain.
-    - Package-specific hosted native, WASM, Dylint, Hive/Lace, and preflight lanes are the coverage enforcement points; reporting never substitutes for those gates.
+    - Package-specific hosted native, WASM, Dylint, Hive, and preflight lanes are the coverage enforcement points; reporting never substitutes for those gates.
 20. **Coverage cache preservation:** Warm the full portable coverage graph with
     one `cargo llvm-cov nextest --no-report` Docker invocation. The graph
     includes `nook-app-common`, `nook-authenticator-domain`, `nook-auth2`,
