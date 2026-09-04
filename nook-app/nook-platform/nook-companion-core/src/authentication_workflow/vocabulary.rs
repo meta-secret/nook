@@ -1,7 +1,5 @@
 //! Stable browser-companion vocabulary for authentication workflows.
 
-use std::fmt;
-
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -189,6 +187,8 @@ impl<'de> Deserialize<'de> for AuthenticationWorkflowAction {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt;
+
     use super::*;
 
     fn assert_numeric_roundtrip<T>(values: &[T]) -> anyhow::Result<()>

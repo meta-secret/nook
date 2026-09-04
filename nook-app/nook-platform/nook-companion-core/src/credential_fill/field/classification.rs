@@ -1,6 +1,7 @@
 use super::{
     Credential, CredentialRole, Editability, Index, NewPassword, Observation, OneTimeCode, Password,
 };
+use crate::page_field_classification;
 use serde::{Deserialize, Serialize};
 
 /// Owned observation produced for one classified page input.
@@ -56,11 +57,11 @@ pub fn classify(field_index: Index, field: &crate::PageInputFieldObservation) ->
     if field.disabled {
         return Classification::Ignored(field_index.into());
     }
-    match crate::page_field_classification::classify_authentication_input_role(field) {
-        crate::page_field_classification::AuthenticationInputRole::OneTimeCode(_) => {
+    match page_field_classification::classify_authentication_input_role(field) {
+        page_field_classification::AuthenticationInputRole::OneTimeCode(_) => {
             Observation::from(OneTimeCode::from(field_index)).into()
         }
-        crate::page_field_classification::AuthenticationInputRole::Username(_) => {
+        page_field_classification::AuthenticationInputRole::Username(_) => {
             let editability = if field.read_only {
                 Editability::Readonly
             } else {
@@ -73,20 +74,20 @@ pub fn classify(field_index: Index, field: &crate::PageInputFieldObservation) ->
             })
             .into()
         }
-        crate::page_field_classification::AuthenticationInputRole::NonAuthentication(_) => {
+        page_field_classification::AuthenticationInputRole::NonAuthentication(_) => {
             Classification::Ignored(field_index.into())
         }
-        crate::page_field_classification::AuthenticationInputRole::Unrelated(_) => {
+        page_field_classification::AuthenticationInputRole::Unrelated(_) => {
             if field.input_type != crate::PageInputType::Password {
                 return Classification::Ignored(field_index.into());
             }
-            if crate::page_field_classification::has_autocomplete_token(
+            if page_field_classification::has_autocomplete_token(
                 &field.autocomplete_tokens,
                 "new-password",
             ) {
                 return Observation::from(NewPassword::from(field_index)).into();
             }
-            let password = if crate::page_field_classification::has_autocomplete_token(
+            let password = if page_field_classification::has_autocomplete_token(
                 &field.autocomplete_tokens,
                 "current-password",
             ) {
