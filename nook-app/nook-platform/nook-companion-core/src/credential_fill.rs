@@ -7,13 +7,14 @@
 //!
 //! Deterministic zero-vault tests apply fake credentials to this plan entirely
 //! inside the test harness, so production Rust and WASM remain credential-free.
+//! Serialized and generated contract names remain identical to their Rust
+//! source names.
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 /// Credential kind assigned to one field in a fill plan.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationCredentialKind {
     Username,
@@ -22,7 +23,6 @@ pub enum AuthenticationCredentialKind {
 
 /// Exactly one semantic role observed for a candidate field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationFillFieldRole {
     Username,
@@ -34,7 +34,6 @@ pub enum AuthenticationFillFieldRole {
 
 /// Whether the host observed a candidate field as writable.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationFillFieldEditability {
     Writable,
@@ -43,7 +42,6 @@ pub enum AuthenticationFillFieldEditability {
 
 /// Host-observed identity for one candidate fill field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationFillFieldObservation {
     /// Zero-based field index inside the observed scope, assigned by the host.
@@ -54,7 +52,6 @@ pub struct AuthenticationFillFieldObservation {
 
 /// Why a fill plan cannot be produced for the observed fields.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationCredentialFillError {
     /// The host supplied more field observations than the portable boundary permits.
@@ -86,7 +83,6 @@ pub enum AuthenticationCredentialFillError {
 
 /// Rust-owned decision for which field receives which credential kind.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationCredentialFillAssignment {
     pub field_index: u32,
@@ -95,7 +91,6 @@ pub struct AuthenticationCredentialFillAssignment {
 
 /// A complete, host-executable fill plan.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationCredentialFillPlan {
     pub assignments: Vec<AuthenticationCredentialFillAssignment>,
@@ -484,9 +479,91 @@ mod tests {
     }
 
     #[test]
-    fn plan_roundtrips_through_serialization() -> anyhow::Result<()> {
+    fn contract_serialization_preserves_rust_source_names() -> anyhow::Result<()> {
+        for (value, expected) in [
+            (AuthenticationCredentialKind::Username, r#""Username""#),
+            (
+                AuthenticationCredentialKind::CurrentPassword,
+                r#""CurrentPassword""#,
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&value)?, expected);
+        }
+        for (value, expected) in [
+            (AuthenticationFillFieldRole::Username, r#""Username""#),
+            (
+                AuthenticationFillFieldRole::CurrentPassword,
+                r#""CurrentPassword""#,
+            ),
+            (
+                AuthenticationFillFieldRole::GenericPassword,
+                r#""GenericPassword""#,
+            ),
+            (AuthenticationFillFieldRole::NewPassword, r#""NewPassword""#),
+            (AuthenticationFillFieldRole::OneTimeCode, r#""OneTimeCode""#),
+        ] {
+            assert_eq!(serde_json::to_string(&value)?, expected);
+        }
+        for (value, expected) in [
+            (
+                AuthenticationFillFieldEditability::Writable,
+                r#""Writable""#,
+            ),
+            (
+                AuthenticationFillFieldEditability::Readonly,
+                r#""Readonly""#,
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&value)?, expected);
+        }
+        for (value, expected) in [
+            (
+                AuthenticationCredentialFillError::TooManyObservedFields,
+                r#""TooManyObservedFields""#,
+            ),
+            (
+                AuthenticationCredentialFillError::DuplicateFieldIndex,
+                r#""DuplicateFieldIndex""#,
+            ),
+            (
+                AuthenticationCredentialFillError::NewPasswordFieldPresent,
+                r#""NewPasswordFieldPresent""#,
+            ),
+            (
+                AuthenticationCredentialFillError::OneTimeCodeFieldPresent,
+                r#""OneTimeCodeFieldPresent""#,
+            ),
+            (
+                AuthenticationCredentialFillError::NoCredentialField,
+                r#""NoCredentialField""#,
+            ),
+            (
+                AuthenticationCredentialFillError::PasswordFieldsReadonly,
+                r#""PasswordFieldsReadonly""#,
+            ),
+            (
+                AuthenticationCredentialFillError::AmbiguousPasswordField,
+                r#""AmbiguousPasswordField""#,
+            ),
+            (
+                AuthenticationCredentialFillError::AmbiguousUsernameField,
+                r#""AmbiguousUsernameField""#,
+            ),
+        ] {
+            assert_eq!(serde_json::to_string(&value)?, expected);
+        }
+
+        let observation = field(0, AuthenticationFillFieldRole::Username);
+        assert_eq!(
+            serde_json::to_string(&observation)?,
+            r#"{"field_index":0,"role":"Username","editability":"Writable"}"#
+        );
         let plan = plan_authentication_credential_fill(&login_form())?;
         let serialized = serde_json::to_string(&plan)?;
+        assert_eq!(
+            serialized,
+            r#"{"assignments":[{"field_index":0,"credential":"Username"},{"field_index":1,"credential":"CurrentPassword"}]}"#
+        );
         let roundtrip: AuthenticationCredentialFillPlan = serde_json::from_str(&serialized)?;
         assert_eq!(roundtrip, plan);
         Ok(())
