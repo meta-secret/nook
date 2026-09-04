@@ -10,6 +10,8 @@
 
 extern crate external_api;
 
+use std::marker;
+
 pub struct UserId(u64);
 pub struct AccountBalance(u64);
 pub struct DynamicCount(usize);
@@ -33,7 +35,7 @@ pub fn user<const N: usize>(id: [UserId; N]) -> Option<AccountBalance> {
     None
 }
 
-pub struct DefaultedDomain<T = DomainAlias>(pub UserId, std::marker::PhantomData<T>);
+pub struct DefaultedDomain<T = DomainAlias>(pub UserId, marker::PhantomData<T>);
 pub struct ConstDefault<const N: usize = 4>(pub [UserId; N]);
 
 pub trait DomainBound: Iterator<Item = DomainAlias> {}
