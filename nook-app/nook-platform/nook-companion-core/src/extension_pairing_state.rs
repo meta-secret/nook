@@ -1,8 +1,13 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 //! Typed extension pairing records shared by browser storage and policy.
 
 mod legacy;
 
-pub use legacy::migrate_legacy_pairing_state_json;
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
@@ -210,32 +215,41 @@ impl ExtensionPairingRecord {
                     return Err(ExtensionPairingStateError::UnsupportedKey);
                 };
                 if vault_store_id != grant.vault_store_id
-                    || !non_empty(&grant.device_id)
-                    || !non_empty(&grant.device_public_key)
-                    || !non_empty(&grant.device_signing_public_key)
-                    || !non_empty(&grant.device_label)
-                    || !non_empty(&grant.vault_name)
-                    || !non_empty(&grant.approved_at)
+                    || grant.device_id.trim().is_empty()
+                    || grant.device_public_key.trim().is_empty()
+                    || grant.device_signing_public_key.trim().is_empty()
+                    || grant.device_label.trim().is_empty()
+                    || grant.vault_name.trim().is_empty()
+                    || grant.approved_at.trim().is_empty()
                     || grant.scopes.is_empty()
                     || grant.event_count == 0
                     || grant.event_log_heads.is_empty()
-                    || grant.event_log_heads.iter().any(|head| !non_empty(head))
-                    || !non_empty(&grant.last_local_sync_at)
+                    || grant
+                        .event_log_heads
+                        .iter()
+                        .any(|head| head.trim().is_empty())
+                    || grant.last_local_sync_at.trim().is_empty()
                 {
                     return Err(ExtensionPairingStateError::InvalidGrant);
                 }
             }
             Self::Setup(setup) => {
                 if key != EXTENSION_SETUP_KEY
-                    || !non_empty(&setup.device_label)
+                    || setup.device_label.trim().is_empty()
                     || setup.paired_vaults.is_empty()
-                    || setup.paired_vaults.iter().any(|vault| !non_empty(vault))
-                    || !non_empty(&setup.selected_vault_store_id)
-                    || !non_empty(&setup.selected_vault_name)
+                    || setup
+                        .paired_vaults
+                        .iter()
+                        .any(|vault| vault.trim().is_empty())
+                    || setup.selected_vault_store_id.trim().is_empty()
+                    || setup.selected_vault_name.trim().is_empty()
                     || setup.event_count == 0
                     || setup.event_log_heads.is_empty()
-                    || setup.event_log_heads.iter().any(|head| !non_empty(head))
-                    || !non_empty(&setup.last_local_sync_at)
+                    || setup
+                        .event_log_heads
+                        .iter()
+                        .any(|head| head.trim().is_empty())
+                    || setup.last_local_sync_at.trim().is_empty()
                 {
                     return Err(ExtensionPairingStateError::InvalidSetup);
                 }
@@ -319,7 +333,7 @@ impl ExtensionPairingState {
         self.ordered_grants()
             .into_iter()
             .find(|grant| grant.vault_store_id != removed_vault_store_id)
-            .map(|grant| setup_from_grant(&grant))
+            .map(|grant| ExtensionReadySetup::from_grant(&grant))
     }
 
     fn ready_setup(&self) -> Option<&ExtensionReadySetup> {
@@ -330,7 +344,7 @@ impl ExtensionPairingState {
     }
 
     fn grant(&self, vault_store_id: &str) -> Option<&StoredExtensionPairingGrant> {
-        let key = grant_storage_key(vault_store_id);
+        let key = StoredExtensionPairingGrant::storage_key_for(vault_store_id);
         self.entries.iter().find_map(|entry| match &entry.record {
             ExtensionPairingRecord::Grant(grant) if entry.key == key => Some(grant),
             ExtensionPairingRecord::Grant(_) | ExtensionPairingRecord::Setup(_) => None,
@@ -338,116 +352,123 @@ impl ExtensionPairingState {
     }
 }
 
-#[must_use]
-pub fn grant_storage_key(vault_store_id: &str) -> String {
-    format!("{EXTENSION_GRANT_KEY_PREFIX}{vault_store_id}")
-}
-
-pub fn create_pairing_state(
-    input: CreateExtensionPairingStateInput,
-) -> Result<ExtensionPairingState, ExtensionPairingStateError> {
-    let grant = stored_grant(input.grant, input.imported, input.observed_at)?;
-    Ok(state_for_grant(&grant, true))
-}
-
-pub fn refresh_pairing_grant(
-    input: RefreshExtensionPairingGrantInput,
-) -> Result<ExtensionPairingState, ExtensionPairingStateError> {
-    let approval = ExtensionPairingGrantApproval {
-        vault_type: input.grant.vault_type,
-        device_id: input.grant.device_id,
-        device_public_key: input.grant.device_public_key,
-        device_signing_public_key: input.grant.device_signing_public_key,
-        device_label: input.grant.device_label,
-        vault_store_id: input.grant.vault_store_id,
-        vault_name: input.grant.vault_name,
-        approved_at: input.grant.approved_at,
-        scopes: input.grant.scopes,
-        sync_provider_count: input.grant.sync_provider_count,
-    };
-    let grant = stored_grant(approval, input.imported, input.observed_at)?;
-    Ok(state_for_grant(&grant, input.select))
-}
-
-fn stored_grant(
-    grant: ExtensionPairingGrantApproval,
-    imported: ImportedExtensionEventLog,
-    observed_at: String,
-) -> Result<StoredExtensionPairingGrant, ExtensionPairingStateError> {
-    if imported.vault_store_id != grant.vault_store_id {
-        return Err(ExtensionPairingStateError::ImportedVaultMismatch);
+impl StoredExtensionPairingGrant {
+    #[must_use]
+    pub fn storage_key_for(vault_store_id: &str) -> String {
+        format!("{EXTENSION_GRANT_KEY_PREFIX}{vault_store_id}")
     }
-    if !imported.access_granted {
-        return Err(ExtensionPairingStateError::ImportedAccessDenied);
-    }
-    Ok(StoredExtensionPairingGrant {
-        vault_type: grant.vault_type,
-        device_id: grant.device_id,
-        device_public_key: grant.device_public_key,
-        device_signing_public_key: grant.device_signing_public_key,
-        device_label: grant.device_label,
-        vault_store_id: grant.vault_store_id,
-        vault_name: grant.vault_name,
-        approved_at: grant.approved_at,
-        scopes: grant.scopes,
-        sync_provider_count: grant.sync_provider_count,
-        event_count: imported.event_count,
-        event_log_heads: imported.heads,
-        last_local_sync_at: observed_at,
-    })
-}
 
-fn state_for_grant(grant: &StoredExtensionPairingGrant, select: bool) -> ExtensionPairingState {
-    let mut entries = vec![ExtensionPairingEntry {
-        key: grant_storage_key(&grant.vault_store_id),
-        record: ExtensionPairingRecord::Grant(grant.clone()),
-    }];
-    if select {
-        entries.push(ExtensionPairingEntry {
-            key: EXTENSION_SETUP_KEY.to_owned(),
-            record: ExtensionPairingRecord::Setup(setup_from_grant(grant)),
-        });
+    fn from_import(
+        grant: ExtensionPairingGrantApproval,
+        imported: ImportedExtensionEventLog,
+        observed_at: String,
+    ) -> Result<StoredExtensionPairingGrant, ExtensionPairingStateError> {
+        if imported.vault_store_id != grant.vault_store_id {
+            return Err(ExtensionPairingStateError::ImportedVaultMismatch);
+        }
+        if !imported.access_granted {
+            return Err(ExtensionPairingStateError::ImportedAccessDenied);
+        }
+        Ok(StoredExtensionPairingGrant {
+            vault_type: grant.vault_type,
+            device_id: grant.device_id,
+            device_public_key: grant.device_public_key,
+            device_signing_public_key: grant.device_signing_public_key,
+            device_label: grant.device_label,
+            vault_store_id: grant.vault_store_id,
+            vault_name: grant.vault_name,
+            approved_at: grant.approved_at,
+            scopes: grant.scopes,
+            sync_provider_count: grant.sync_provider_count,
+            event_count: imported.event_count,
+            event_log_heads: imported.heads,
+            last_local_sync_at: observed_at,
+        })
     }
-    ExtensionPairingState { entries }
-}
 
-fn setup_from_grant(grant: &StoredExtensionPairingGrant) -> ExtensionReadySetup {
-    ExtensionReadySetup {
-        status: ExtensionReadySetupStatus::Ready,
-        device_label: grant.device_label.clone(),
-        paired_vaults: vec![grant.vault_name.clone()],
-        selected_vault_store_id: grant.vault_store_id.clone(),
-        selected_vault_name: grant.vault_name.clone(),
-        sync_provider_count: grant.sync_provider_count,
-        event_count: grant.event_count,
-        event_log_heads: grant.event_log_heads.clone(),
-        last_local_sync_at: grant.last_local_sync_at.clone(),
+    #[must_use]
+    pub fn is_valid_json(value: &str) -> bool {
+        let Ok(grant) = serde_json::from_str::<StoredExtensionPairingGrant>(value) else {
+            return false;
+        };
+        let key = StoredExtensionPairingGrant::storage_key_for(&grant.vault_store_id);
+        ExtensionPairingRecord::Grant(grant)
+            .validate_for_key(&key)
+            .is_ok()
     }
 }
 
-fn non_empty(value: &str) -> bool {
-    !value.trim().is_empty()
+impl ExtensionPairingState {
+    pub fn create(
+        input: CreateExtensionPairingStateInput,
+    ) -> Result<ExtensionPairingState, ExtensionPairingStateError> {
+        let grant = StoredExtensionPairingGrant::from_import(
+            input.grant,
+            input.imported,
+            input.observed_at,
+        )?;
+        Ok(ExtensionPairingState::for_grant(&grant, true))
+    }
+
+    pub fn refresh_grant(
+        input: RefreshExtensionPairingGrantInput,
+    ) -> Result<ExtensionPairingState, ExtensionPairingStateError> {
+        let approval = ExtensionPairingGrantApproval {
+            vault_type: input.grant.vault_type,
+            device_id: input.grant.device_id,
+            device_public_key: input.grant.device_public_key,
+            device_signing_public_key: input.grant.device_signing_public_key,
+            device_label: input.grant.device_label,
+            vault_store_id: input.grant.vault_store_id,
+            vault_name: input.grant.vault_name,
+            approved_at: input.grant.approved_at,
+            scopes: input.grant.scopes,
+            sync_provider_count: input.grant.sync_provider_count,
+        };
+        let grant =
+            StoredExtensionPairingGrant::from_import(approval, input.imported, input.observed_at)?;
+        Ok(ExtensionPairingState::for_grant(&grant, input.select))
+    }
+
+    fn for_grant(grant: &StoredExtensionPairingGrant, select: bool) -> ExtensionPairingState {
+        let mut entries = vec![ExtensionPairingEntry {
+            key: StoredExtensionPairingGrant::storage_key_for(&grant.vault_store_id),
+            record: ExtensionPairingRecord::Grant(grant.clone()),
+        }];
+        if select {
+            entries.push(ExtensionPairingEntry {
+                key: EXTENSION_SETUP_KEY.to_owned(),
+                record: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(grant)),
+            });
+        }
+        ExtensionPairingState { entries }
+    }
 }
 
-#[must_use]
-pub fn is_stored_pairing_grant_json(value: &str) -> bool {
-    let Ok(grant) = serde_json::from_str::<StoredExtensionPairingGrant>(value) else {
-        return false;
-    };
-    let key = grant_storage_key(&grant.vault_store_id);
-    ExtensionPairingRecord::Grant(grant)
-        .validate_for_key(&key)
-        .is_ok()
-}
+impl ExtensionReadySetup {
+    fn from_grant(grant: &StoredExtensionPairingGrant) -> ExtensionReadySetup {
+        ExtensionReadySetup {
+            status: ExtensionReadySetupStatus::Ready,
+            device_label: grant.device_label.clone(),
+            paired_vaults: vec![grant.vault_name.clone()],
+            selected_vault_store_id: grant.vault_store_id.clone(),
+            selected_vault_name: grant.vault_name.clone(),
+            sync_provider_count: grant.sync_provider_count,
+            event_count: grant.event_count,
+            event_log_heads: grant.event_log_heads.clone(),
+            last_local_sync_at: grant.last_local_sync_at.clone(),
+        }
+    }
 
-#[must_use]
-pub fn is_ready_pairing_setup_json(value: &str) -> bool {
-    let Ok(setup) = serde_json::from_str::<ExtensionReadySetup>(value) else {
-        return false;
-    };
-    ExtensionPairingRecord::Setup(setup)
-        .validate_for_key(EXTENSION_SETUP_KEY)
-        .is_ok()
+    #[must_use]
+    pub fn is_valid_json(value: &str) -> bool {
+        let Ok(setup) = serde_json::from_str::<ExtensionReadySetup>(value) else {
+            return false;
+        };
+        ExtensionPairingRecord::Setup(setup)
+            .validate_for_key(EXTENSION_SETUP_KEY)
+            .is_ok()
+    }
 }
 
 #[cfg(test)]
@@ -469,48 +490,12 @@ mod tests {
         assert_eq!(ExtensionConnectScope::parse("external-value"), None);
     }
 
-    fn grant() -> StoredExtensionPairingGrant {
-        StoredExtensionPairingGrant {
-            vault_type: ExtensionPairingVaultType::Simple,
-            device_id: "device-test".to_owned(),
-            device_public_key: "age1test".to_owned(),
-            device_signing_public_key: "signing-test".to_owned(),
-            device_label: "Nook Extension".to_owned(),
-            vault_store_id: "store-test".to_owned(),
-            vault_name: "Personal".to_owned(),
-            approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
-            scopes: vec![ExtensionConnectScope::PasswordFilling],
-            sync_provider_count: 1,
-            event_count: 2,
-            event_log_heads: vec!["event-2".to_owned()],
-            last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
-        }
-    }
-
-    fn refresh_input(select: bool) -> RefreshExtensionPairingGrantInput {
-        let mut existing = grant();
-        existing.event_count = 2;
-        existing.event_log_heads = vec!["event-2".to_owned()];
-        existing.last_local_sync_at = "2026-07-25T00:00:01.000Z".to_owned();
-        RefreshExtensionPairingGrantInput {
-            grant: existing,
-            imported: ImportedExtensionEventLog {
-                vault_store_id: "store-test".to_owned(),
-                event_count: 4,
-                heads: vec!["event-4".to_owned()],
-                access_granted: true,
-            },
-            observed_at: "2026-07-25T00:00:04.000Z".to_owned(),
-            select,
-        }
-    }
-
     #[test]
     fn validates_grant_against_its_domain_key() -> anyhow::Result<()> {
         let mut entries = HashMap::new();
         entries.insert(
             "nook:extension-pairing-grant:store-test".to_owned(),
-            ExtensionPairingRecord::Grant(grant()),
+            ExtensionPairingRecord::Grant(Fixture::grant()),
         );
         ExtensionPairingState::from_entries(entries).validate()?;
         Ok(())
@@ -518,7 +503,7 @@ mod tests {
 
     #[test]
     fn rejects_grant_under_an_unrelated_key() {
-        let record = ExtensionPairingRecord::Grant(grant());
+        let record = ExtensionPairingRecord::Grant(Fixture::grant());
         assert_eq!(
             record.validate_for_key("other"),
             Err(ExtensionPairingStateError::UnsupportedKey)
@@ -549,7 +534,7 @@ mod tests {
             observed_at: "2026-07-25T00:00:01.000Z".to_owned(),
         };
 
-        let state = create_pairing_state(input)?;
+        let state = ExtensionPairingState::create(input)?;
         state.validate()?;
         assert_eq!(state.selected_grant(), state.first_grant());
         assert_eq!(state.ordered_grants().len(), 1);
@@ -581,14 +566,14 @@ mod tests {
         };
 
         assert_eq!(
-            create_pairing_state(input),
+            ExtensionPairingState::create(input),
             Err(ExtensionPairingStateError::ImportedVaultMismatch)
         );
     }
 
     #[test]
     fn selected_pairing_grant_refresh_rebuilds_grant_and_setup_metadata() -> anyhow::Result<()> {
-        let state = refresh_pairing_grant(refresh_input(true))?;
+        let state = ExtensionPairingState::refresh_grant(Fixture::refresh_input(true))?;
         let refreshed = state
             .selected_grant()
             .ok_or_else(|| anyhow::anyhow!("selected refresh must include setup state"))?;
@@ -603,7 +588,7 @@ mod tests {
 
     #[test]
     fn non_selected_pairing_grant_refresh_updates_only_the_grant() -> anyhow::Result<()> {
-        let state = refresh_pairing_grant(refresh_input(false))?;
+        let state = ExtensionPairingState::refresh_grant(Fixture::refresh_input(false))?;
         let refreshed = state
             .first_grant()
             .ok_or_else(|| anyhow::anyhow!("refresh must include the updated grant"))?;
@@ -619,12 +604,12 @@ mod tests {
 
     #[test]
     fn removal_preserves_setup_when_a_non_selected_vault_is_removed() {
-        let selected = grant();
-        let mut removed = grant();
+        let selected = Fixture::grant();
+        let mut removed = Fixture::grant();
         removed.vault_store_id = "store-removed".to_owned();
         removed.vault_name = "Removed".to_owned();
         removed.approved_at = "2026-07-26T00:00:00.000Z".to_owned();
-        let expected = setup_from_grant(&selected);
+        let expected = ExtensionReadySetup::from_grant(&selected);
         let state = ExtensionPairingState {
             entries: vec![
                 ExtensionPairingEntry {
@@ -632,11 +617,11 @@ mod tests {
                     record: ExtensionPairingRecord::Setup(expected.clone()),
                 },
                 ExtensionPairingEntry {
-                    key: grant_storage_key(&selected.vault_store_id),
+                    key: StoredExtensionPairingGrant::storage_key_for(&selected.vault_store_id),
                     record: ExtensionPairingRecord::Grant(selected),
                 },
                 ExtensionPairingEntry {
-                    key: grant_storage_key(&removed.vault_store_id),
+                    key: StoredExtensionPairingGrant::storage_key_for(&removed.vault_store_id),
                     record: ExtensionPairingRecord::Grant(removed),
                 },
             ],
@@ -647,12 +632,12 @@ mod tests {
 
     #[test]
     fn removal_selects_the_newest_remaining_grant_when_selected_vault_is_removed() {
-        let selected = grant();
-        let mut older = grant();
+        let selected = Fixture::grant();
+        let mut older = Fixture::grant();
         older.vault_store_id = "store-older".to_owned();
         older.vault_name = "Older".to_owned();
         older.approved_at = "2026-07-23T00:00:00.000Z".to_owned();
-        let mut newer = grant();
+        let mut newer = Fixture::grant();
         newer.vault_store_id = "store-newer".to_owned();
         newer.vault_name = "Newer".to_owned();
         newer.approved_at = "2026-07-27T00:00:00.000Z".to_owned();
@@ -660,18 +645,20 @@ mod tests {
             entries: vec![
                 ExtensionPairingEntry {
                     key: EXTENSION_SETUP_KEY.to_owned(),
-                    record: ExtensionPairingRecord::Setup(setup_from_grant(&selected)),
+                    record: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(
+                        &selected,
+                    )),
                 },
                 ExtensionPairingEntry {
-                    key: grant_storage_key(&selected.vault_store_id),
+                    key: StoredExtensionPairingGrant::storage_key_for(&selected.vault_store_id),
                     record: ExtensionPairingRecord::Grant(selected),
                 },
                 ExtensionPairingEntry {
-                    key: grant_storage_key(&older.vault_store_id),
+                    key: StoredExtensionPairingGrant::storage_key_for(&older.vault_store_id),
                     record: ExtensionPairingRecord::Grant(older),
                 },
                 ExtensionPairingEntry {
-                    key: grant_storage_key(&newer.vault_store_id),
+                    key: StoredExtensionPairingGrant::storage_key_for(&newer.vault_store_id),
                     record: ExtensionPairingRecord::Grant(newer.clone()),
                 },
             ],
@@ -679,15 +666,54 @@ mod tests {
 
         assert_eq!(
             state.setup_after_removal("store-test"),
-            Some(setup_from_grant(&newer))
+            Some(ExtensionReadySetup::from_grant(&newer))
         );
     }
 
     #[test]
     fn removal_reports_no_setup_when_the_final_grant_is_removed() {
-        let selected = grant();
-        let state = state_for_grant(&selected, true);
+        let selected = Fixture::grant();
+        let state = ExtensionPairingState::for_grant(&selected, true);
 
         assert_eq!(state.setup_after_removal("store-test"), None);
+    }
+    struct Fixture;
+
+    impl Fixture {
+        fn grant() -> StoredExtensionPairingGrant {
+            StoredExtensionPairingGrant {
+                vault_type: ExtensionPairingVaultType::Simple,
+                device_id: "device-test".to_owned(),
+                device_public_key: "age1test".to_owned(),
+                device_signing_public_key: "signing-test".to_owned(),
+                device_label: "Nook Extension".to_owned(),
+                vault_store_id: "store-test".to_owned(),
+                vault_name: "Personal".to_owned(),
+                approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
+                scopes: vec![ExtensionConnectScope::PasswordFilling],
+                sync_provider_count: 1,
+                event_count: 2,
+                event_log_heads: vec!["event-2".to_owned()],
+                last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
+            }
+        }
+
+        fn refresh_input(select: bool) -> RefreshExtensionPairingGrantInput {
+            let mut existing = Self::grant();
+            existing.event_count = 2;
+            existing.event_log_heads = vec!["event-2".to_owned()];
+            existing.last_local_sync_at = "2026-07-25T00:00:01.000Z".to_owned();
+            RefreshExtensionPairingGrantInput {
+                grant: existing,
+                imported: ImportedExtensionEventLog {
+                    vault_store_id: "store-test".to_owned(),
+                    event_count: 4,
+                    heads: vec!["event-4".to_owned()],
+                    access_granted: true,
+                },
+                observed_at: "2026-07-25T00:00:04.000Z".to_owned(),
+                select,
+            }
+        }
     }
 }
