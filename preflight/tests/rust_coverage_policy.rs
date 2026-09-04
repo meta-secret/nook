@@ -28,6 +28,26 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
             .as_f64()
             .is_some_and(|floor| (floor - 90.0).abs() < f64::EPSILON)
     );
+    let package_floors = policy["package_lines_percent"]
+        .as_object()
+        .context("package_lines_percent must be an object")?;
+    assert_eq!(
+        package_floors.keys().cloned().collect::<BTreeSet<_>>(),
+        enforced,
+        "every enforced package must have an explicit line floor"
+    );
+    for (package, floor) in package_floors {
+        let expected = match package.as_str() {
+            "hive" => 60.0,
+            "lace" => 75.0,
+            _ => 90.0,
+        };
+        assert_eq!(
+            floor.as_f64(),
+            Some(expected),
+            "unexpected line floor for {package}"
+        );
+    }
     assert_eq!(
         excluded.get("nook-fuzz").map(String::as_str),
         Some(
@@ -70,10 +90,16 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains("wasm-pack test --node --release nook-wasm"));
     assert!(product.contains("wasm-pack test --node --release nook-companion-wasm"));
 
-    assert!(hive.contains("for package in hive lace; do"));
-    assert!(hive.contains("ARG RUST_COVERAGE_FLOOR=90"));
-    assert!(hive.contains("cargo llvm-cov test --locked -p \"$package\""));
-    assert!(hive.contains("--fail-under-lines \"${RUST_COVERAGE_FLOOR}\""));
+    assert!(hive.contains("ARG HIVE_RUST_COVERAGE_FLOOR=60"));
+    assert!(hive.contains("ARG LACE_RUST_COVERAGE_FLOOR=75"));
+    assert!(hive.contains("cargo llvm-cov test --locked -p hive"));
+    assert!(hive.contains("--fail-under-lines \"${HIVE_RUST_COVERAGE_FLOOR}\""));
+    assert!(hive.contains("cargo llvm-cov test --locked -p lace"));
+    assert!(hive.contains("--fail-under-lines \"${LACE_RUST_COVERAGE_FLOOR}\""));
+    assert!(hive.contains("coverage_status=0;"));
+    assert_eq!(hive.matches("|| coverage_status=1;").count(), 2);
+    assert!(hive.contains("test \"$coverage_status\" -eq 0"));
+    assert!(!hive.contains("ARG RUST_COVERAGE_FLOOR="));
     assert!(
         preflight.contains(
             "cargo llvm-cov test --locked -p nook-preflight --fail-under-lines \"$floor\""

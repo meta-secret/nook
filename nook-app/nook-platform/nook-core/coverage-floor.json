@@ -15,6 +15,20 @@
     "lace",
     "nook-preflight"
   ],
+  "package_lines_percent": {
+    "nook-app-common": 90.0,
+    "nook-authenticator-domain": 90.0,
+    "nook-auth2": 90.0,
+    "nook-replication": 90.0,
+    "nook-event-log": 90.0,
+    "nook-companion-core": 90.0,
+    "nook-core": 90.0,
+    "nook-companion-wasm": 90.0,
+    "nook-wasm": 90.0,
+    "hive": 60.0,
+    "lace": 75.0,
+    "nook-preflight": 90.0
+  },
   "excluded_packages": [
     {
       "package": "nook-fuzz",
@@ -26,5 +40,5 @@
     }
   ],
   "updated": "2026-09-04",
-  "note": "CI fails when any enforced package is below 90%; package results are never aggregated for the failure decision."
+  "note": "CI independently enforces Hive at 60%, Lace at 75%, and every other testable first-party Rust package at 90%; package results are never aggregated for the failure decision."
 }

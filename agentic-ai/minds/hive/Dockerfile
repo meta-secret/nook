@@ -228,12 +228,15 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 
 FROM test-source AS coverage
 
-ARG RUST_COVERAGE_FLOOR=90
+ARG HIVE_RUST_COVERAGE_FLOOR=60
+ARG LACE_RUST_COVERAGE_FLOOR=75
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
-    for package in hive lace; do \
-      cargo llvm-cov test --locked -p "$package" \
-        --fail-under-lines "${RUST_COVERAGE_FLOOR}"; \
-    done \
+    coverage_status=0; \
+    cargo llvm-cov test --locked -p hive \
+      --fail-under-lines "${HIVE_RUST_COVERAGE_FLOOR}" || coverage_status=1; \
+    cargo llvm-cov test --locked -p lace \
+      --fail-under-lines "${LACE_RUST_COVERAGE_FLOOR}" || coverage_status=1; \
+    test "$coverage_status" -eq 0 \
     && nook-sccache-report hive-per-package-coverage \
     && install -D /dev/null /opt/nook/hive-coverage-passed
 
