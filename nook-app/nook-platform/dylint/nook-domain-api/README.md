@@ -47,7 +47,3 @@ timestamps, offsets, or domain counts. Introduce a named domain type instead.
 `expect` is required so the compiler reports the annotation when the raw
 boundary disappears. Enabling levels (`warn`, `deny`, and `forbid`) are policy
 configuration rather than suppression and are intentionally accepted.
-
-Macro-expanded APIs and suppression attributes are ignored consistently. The
-lint reports authored API surfaces and does not attribute generated items or
-attributes back to a macro invocation.

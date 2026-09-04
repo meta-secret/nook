@@ -120,10 +120,10 @@ LL |     pub nested: Wrapper<Option<[i8; 4]>>,
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:75:24
+  --> $DIR/fail.rs:75:28
    |
 LL | pub struct PublicTuple(pub isize, u32);
-   |                        ^^^^^^^^^
+   |                            ^^^^^
    |
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 

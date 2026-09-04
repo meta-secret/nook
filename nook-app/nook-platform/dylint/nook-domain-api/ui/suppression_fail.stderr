@@ -39,4 +39,13 @@ LL | #[allow(
    |
    = help: use `expect`, not `allow`, for a reviewed boundary exception
 
-warning: 5 warnings emitted
+warning: this lint expectation is unfulfilled
+  --> $DIR/suppression_fail.rs:10:5
+   |
+LL |     raw_numeric_public_api,
+   |     ^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: database boundary: module-wide escape hatch
+   = note: `#[warn(unfulfilled_lint_expectations)]` on by default
+
+warning: 6 warnings emitted

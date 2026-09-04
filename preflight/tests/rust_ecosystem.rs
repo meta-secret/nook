@@ -295,6 +295,8 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-dylint")
             && nightly_dockerfile.contains("FROM rust-ecosystem-nightly AS rust-fuzz-smoke")
             && nightly_dockerfile
+                .contains("--manifest-path dylint/nook-domain-api/Cargo.toml --locked")
+            && nightly_dockerfile
                 .matches("COPY nook-app/nook-platform/ nook-app/nook-platform/")
                 .count()
                 == 2,
