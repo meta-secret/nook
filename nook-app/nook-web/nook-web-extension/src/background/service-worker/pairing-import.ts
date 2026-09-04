@@ -284,18 +284,25 @@ export async function importLocalEventLogUpdateWithDependencies({
   LocalEventLogUpdateDependencies): Promise<LocalEventLogUpdateResult> {
   try {
     const pairingPolicy = await pairingPolicyReady
-    const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
     const stored = await loadPairingStorage()
-    if (!Object.hasOwn(stored, key)) {
-      return { ok: false, reason: LocalEventLogUpdateFailure.VaultNotPaired }
+    const authorityRequest: Parameters<
+      typeof pairingPolicy.classifyGrantAuthority
+    >[0] = {
+      stored,
+      vaultStoreId,
     }
-    const grant = stored[key]
-    if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
-      return {
-        ok: false,
-        reason: LocalEventLogUpdateFailure.EventLogImportFailed,
-      }
+    const authority = pairingPolicy.classifyGrantAuthority(authorityRequest)
+    switch (authority.kind) {
+      case 'NoMatchingAuthority':
+        return { ok: false, reason: LocalEventLogUpdateFailure.VaultNotPaired }
+      case 'InvalidStoredAuthority':
+        return {
+          ok: false,
+          reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+        }
     }
+    const grant = authority.grant
+    const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
     const nookTypedArgs0_3: Parameters<typeof importExtensionEventLog>[0] = {
       grant,
       records: eventLogRecords,

@@ -310,28 +310,27 @@ describe('service worker routing', () => {
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
-    const sendResponse = mock(() => {})
-
-    routeExtensionLifecycleMessage({
-      dependencies,
-      message: {
-        type: 'nook:extension-local-event-log-updated',
-        payload: {
-          vaultStoreId: 'vault-1',
-          eventLogRecords: [
-            {
-              eventId: 'event-1',
-              path: 'events/1',
-              event: { schema_version: 1 },
-            },
-          ],
+    const completedResponse = new Promise<unknown>((sendResponse) => {
+      routeExtensionLifecycleMessage({
+        dependencies,
+        message: {
+          type: 'nook:extension-local-event-log-updated',
+          payload: {
+            vaultStoreId: 'vault-1',
+            eventLogRecords: [
+              {
+                eventId: 'event-1',
+                path: 'events/1',
+                event: { schema_version: 1 },
+              },
+            ],
+          },
         },
-      },
-      sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
-      sendResponse,
+        sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
+        sendResponse,
+      })
     })
-    await flushResponses()
-    await flushResponses()
+    const response = await completedResponse
 
     expect(events.slice(0, 2)).toEqual([
       'authorization-invalidated',
@@ -340,7 +339,7 @@ describe('service worker routing', () => {
     expect(events.indexOf('session-closed')).toBeLessThan(
       events.indexOf('pickers-cleared'),
     )
-    expect(sendResponse).toHaveBeenCalledWith({
+    expect(response).toEqual({
       ok: false,
       reason:
         reason instanceof Error
@@ -382,35 +381,34 @@ describe('service worker routing', () => {
     }
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
-    const sendResponse = mock(() => {})
-
-    routeExtensionLifecycleMessage({
-      dependencies,
-      message: {
-        type: 'nook:extension-local-event-log-updated',
-        payload: {
-          vaultStoreId: 'vault-1',
-          eventLogRecords: [
-            {
-              eventId: 'event-1',
-              path: 'events/1',
-              event: { schema_version: 1 },
-            },
-          ],
+    const completedResponse = new Promise<unknown>((sendResponse) => {
+      routeExtensionLifecycleMessage({
+        dependencies,
+        message: {
+          type: 'nook:extension-local-event-log-updated',
+          payload: {
+            vaultStoreId: 'vault-1',
+            eventLogRecords: [
+              {
+                eventId: 'event-1',
+                path: 'events/1',
+                event: { schema_version: 1 },
+              },
+            ],
+          },
         },
-      },
-      sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
-      sendResponse,
+        sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
+        sendResponse,
+      })
     })
-    await flushResponses()
-    await flushResponses()
+    const actualResponse = await completedResponse
 
     expect(events).toEqual([
       'enrollments-rebound-epoch-15',
       'authorization-restored-epoch-15',
       ...(response.ok ? ['authentication-surfaces-refreshed'] : []),
     ])
-    expect(sendResponse).toHaveBeenCalledWith(response)
+    expect(actualResponse).toEqual(response)
     expect(closeSession).not.toHaveBeenCalled()
     expect(clearPickers).not.toHaveBeenCalled()
     expect(clearEnrollments).not.toHaveBeenCalled()

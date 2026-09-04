@@ -13,7 +13,42 @@ const {
   LocalEventLogUpdateFailure,
 } = await import('../src/background/service-worker/pairing-import')
 
+const storedGrant: StoredExtensionPairingGrant = {
+  vaultType: 'simple',
+  vaultStoreId: 'vault',
+  deviceId: 'device',
+  devicePublicKey: 'public',
+  deviceSigningPublicKey: 'signing',
+  vaultName: 'Private vault',
+  deviceLabel: 'Laptop',
+  approvedAt: '2026-08-10T00:00:00Z',
+  scopes: ['password-filling'],
+  syncProviderCount: 0,
+  eventCount: 1,
+  eventLogHeads: ['event-1'],
+  lastLocalSyncAt: '2026-08-10T00:00:00Z',
+}
+
 describe('extension pairing grant transport', () => {
+  test('transports every Rust authority variant and the authorized grant', async () => {
+    const policy = await extensionPairingGrantPolicyReady
+    const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
+    expect(
+      policy.classifyGrantAuthority({ stored: {}, vaultStoreId: 'vault' }),
+    ).toEqual({ kind: 'NoMatchingAuthority' })
+    expect(
+      policy.classifyGrantAuthority({
+        stored: { [key]: { ...storedGrant, vaultStoreId: 'other-vault' } },
+        vaultStoreId: 'vault',
+      }),
+    ).toEqual({ kind: 'InvalidStoredAuthority' })
+    expect(
+      policy.classifyGrantAuthority({
+        stored: { [key]: storedGrant },
+        vaultStoreId: 'vault',
+      }),
+    ).toEqual({ kind: 'Authorized', grant: storedGrant })
+  })
   test.each(['absent', 'malformed', 'policy-unavailable'] as const)(
     'rejects %s before importing or updating a session',
     async (scenario) => {
@@ -62,16 +97,6 @@ describe('extension pairing grant transport', () => {
   })
 
   test('projects only session identity fields from stored grants', () => {
-    const storedGrant = {
-      vaultStoreId: 'vault',
-      deviceId: 'device',
-      devicePublicKey: 'public',
-      deviceSigningPublicKey: 'signing',
-      vaultName: 'Private vault',
-      deviceLabel: 'Laptop',
-      approvedAt: '2026-08-10T00:00:00Z',
-    } as StoredExtensionPairingGrant
-
     expect(extensionSessionGrantIdentity(storedGrant)).toEqual({
       vaultStoreId: 'vault',
       deviceId: 'device',
