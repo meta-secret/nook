@@ -44,6 +44,17 @@ pub async fn run_observer<S: ObserverStore>(
     address: SocketAddr,
     dashboard: PathBuf,
 ) -> crate::HiveResult<()> {
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .with_hive_context(|| format!("bind Hive observer to {address}"))?;
+    run_observer_on_listener(store, listener, dashboard).await
+}
+
+async fn run_observer_on_listener<S: ObserverStore>(
+    store: S,
+    listener: tokio::net::TcpListener,
+    dashboard: PathBuf,
+) -> crate::HiveResult<()> {
     let index = dashboard.join("index.html");
     let assets = ServeDir::new(dashboard).fallback(ServeFile::new(index));
     let app = Router::new()
@@ -52,9 +63,6 @@ pub async fn run_observer<S: ObserverStore>(
         .route("/api/tasks/{task_id}", get(task_detail))
         .fallback_service(assets)
         .with_state(ObserverState { store });
-    let listener = tokio::net::TcpListener::bind(address)
-        .await
-        .with_hive_context(|| format!("bind Hive observer to {address}"))?;
     axum::serve(listener, app)
         .await
         .hive_context("serve Hive observer")
@@ -723,10 +731,13 @@ mod tests {
         let dashboard = root.path().join("dashboard");
         tokio::fs::create_dir(&dashboard).await?;
         tokio::fs::write(dashboard.join("index.html"), "Hive dashboard fixture").await?;
-        let reserved = std::net::TcpListener::bind("127.0.0.1:0")?;
-        let address = reserved.local_addr()?;
-        drop(reserved);
-        let server = tokio::spawn(super::run_observer(FixtureStore::Ready, address, dashboard));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let address = listener.local_addr()?;
+        let server = tokio::spawn(super::run_observer_on_listener(
+            FixtureStore::Ready,
+            listener,
+            dashboard,
+        ));
 
         let health = http_get(address, "/healthz").await?;
         assert!(health.starts_with("HTTP/1.1 204 No Content"));
