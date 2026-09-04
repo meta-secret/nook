@@ -7,6 +7,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   CredentialFillJourneyOutcomeKind,
+  CredentialFillPlannerRejection,
   SimulatedCredentialField,
   simulateLoginJourney,
   type CredentialFillJourneyOutcome,
@@ -123,14 +124,56 @@ function createJourneyWithUnrelatedField(): CredentialFillJourneyRequest {
   }
 }
 
-type LoginJourneyScenario = {
+function createDuplicateFieldIndexJourney(): CredentialFillJourneyRequest {
+  const usernameDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'username',
+    field_index: new CredentialFillFieldIndex(7),
+    role: CredentialFillFieldRole.username(),
+    editability: CredentialFillEditability.writable(),
+    value: '',
+  }
+  const passwordDefinition: SimulatedCredentialFieldDefinition = {
+    name: 'password',
+    field_index: new CredentialFillFieldIndex(7),
+    role: CredentialFillFieldRole.current_password(),
+    editability: CredentialFillEditability.writable(),
+    value: '',
+  }
+  const username = new SimulatedCredentialField(usernameDefinition)
+  const password = new SimulatedCredentialField(passwordDefinition)
+  const form: SimulatedCredentialForm = [username, password]
+  return {
+    form,
+    steps: [{ observedFields: form }],
+    credentials: FAKE_CREDENTIALS,
+  }
+}
+
+enum LoginJourneyScenarioKind {
+  Completes = 'completes',
+  Throws = 'throws',
+}
+
+type LoginJourneyScenarioBase = {
   readonly name: string
   readonly createJourney: () => CredentialFillJourneyRequest
-  readonly expected: CredentialFillJourneyOutcome[]
 }
+
+type LoginJourneyScenario = LoginJourneyScenarioBase &
+  (
+    | {
+        readonly kind: LoginJourneyScenarioKind.Completes
+        readonly expected: CredentialFillJourneyOutcome[]
+      }
+    | {
+        readonly kind: LoginJourneyScenarioKind.Throws
+        readonly expectedMessage: string
+      }
+  )
 
 const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
   {
+    kind: LoginJourneyScenarioKind.Completes,
     name: 'fills a combined username and generic-password form',
     createJourney: createCombinedUsernamePasswordJourney,
     expected: [
@@ -141,6 +184,7 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
     ],
   },
   {
+    kind: LoginJourneyScenarioKind.Completes,
     name: 'fills username then password across sequential steps',
     createJourney: createSequentialUsernamePasswordJourney,
     expected: [
@@ -155,18 +199,19 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
     ],
   },
   {
+    kind: LoginJourneyScenarioKind.Completes,
     name: 'rejects readonly password planning without mutation',
     createJourney: createReadonlyPasswordJourney,
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
-        message:
-          'every password field is read-only, so credential disclosure is blocked',
+        message: CredentialFillPlannerRejection.PasswordFieldsReadonly,
         snapshot: [{ name: 'password', value: '' }],
       },
     ],
   },
   {
+    kind: LoginJourneyScenarioKind.Completes,
     name: 'leaves fields outside the observed step untouched',
     createJourney: createJourneyWithUnrelatedField,
     expected: [
@@ -182,13 +227,30 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
       },
     ],
   },
+  {
+    kind: LoginJourneyScenarioKind.Throws,
+    name: 'propagates a non-modeled duplicate-index planner failure',
+    createJourney: createDuplicateFieldIndexJourney,
+    expectedMessage: 'the observed scope contains a duplicate field index',
+  },
 ]
 
 describe('deterministic zero-vault login journeys', () => {
   test.each(LOGIN_JOURNEY_SCENARIOS)('$name', (scenario) => {
     const journey = scenario.createJourney()
-    const result = simulateLoginJourney(journey)
-    const expected = scenario.expected
-    expect(result).toEqual(expected)
+    switch (scenario.kind) {
+      case LoginJourneyScenarioKind.Completes: {
+        const result = simulateLoginJourney(journey)
+        const expected = scenario.expected
+        expect(result).toEqual(expected)
+        break
+      }
+      case LoginJourneyScenarioKind.Throws: {
+        const runJourney = (): CredentialFillJourneyOutcome[] =>
+          simulateLoginJourney(journey)
+        expect(runJourney).toThrow(scenario.expectedMessage)
+        break
+      }
+    }
   })
 })

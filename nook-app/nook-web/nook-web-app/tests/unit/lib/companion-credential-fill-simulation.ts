@@ -68,6 +68,10 @@ export enum CredentialFillJourneyOutcomeKind {
   Rejected = 'rejected',
 }
 
+export enum CredentialFillPlannerRejection {
+  PasswordFieldsReadonly = 'every password field is read-only, so credential disclosure is blocked',
+}
+
 export type SimulatedCredentialFormSnapshot = {
   readonly name: string
   readonly value: string
@@ -80,7 +84,7 @@ export type CredentialFillJourneyOutcome =
     }
   | {
       readonly kind: CredentialFillJourneyOutcomeKind.Rejected
-      readonly message: string
+      readonly message: CredentialFillPlannerRejection
       readonly snapshot: SimulatedCredentialFormSnapshot
     }
 
@@ -102,7 +106,7 @@ type CredentialFillPlanning =
     }
   | {
       readonly kind: CredentialFillPlanningKind.Rejected
-      readonly message: string
+      readonly message: CredentialFillPlannerRejection
     }
 
 type ApplyCredentialPlanRequest = {
@@ -129,8 +133,18 @@ function planCredentialFillStep(
       const plan = plan_companion_credential_fill(observations)
       return { kind: CredentialFillPlanningKind.Planned, plan }
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      return { kind: CredentialFillPlanningKind.Rejected, message }
+      if (
+        error === CredentialFillPlannerRejection.PasswordFieldsReadonly ||
+        (error instanceof Error &&
+          error.message ===
+            CredentialFillPlannerRejection.PasswordFieldsReadonly)
+      ) {
+        return {
+          kind: CredentialFillPlanningKind.Rejected,
+          message: CredentialFillPlannerRejection.PasswordFieldsReadonly,
+        }
+      }
+      throw error
     }
   } finally {
     observations.free()
