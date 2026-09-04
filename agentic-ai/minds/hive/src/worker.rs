@@ -559,12 +559,15 @@ fn bullet_list(values: &[String]) -> String {
 mod tests {
     use super::{
         MAX_PERSISTED_RESULT_BYTES, TaskDisposition, blocked_disposition, bounded,
-        completion_is_obsolete, obsolete_owner_delivery_targets, persistable_patch, task_prompt,
+        completion_is_obsolete, obsolete_owner_delivery_targets, persist_activity,
+        persistable_patch, task_prompt,
     };
     use crate::model::{
-        AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact, LeaseToken, TaskId,
-        TerminalResult,
+        ActivityKind, AgentId, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact,
+        LeaseToken, TaskActivity, TaskId, TerminalResult,
     };
+    use crate::store::TaskStore;
+    use crate::store::tests::{MemoryStore, task};
 
     #[test]
     fn persisted_results_are_utf8_safe_and_bounded() {
@@ -810,6 +813,73 @@ mod tests {
         assert!(matches!(
             persistable_patch(repository.path(), baseline.trim(), &task, &result, true).await?,
             CompletionArtifact::NotProduced
+        ));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn activity_persistence_accepts_current_leases_and_rejects_stale_ones()
+    -> crate::HiveResult<()> {
+        let store = MemoryStore::default();
+        store.enqueue(&task("activity-task", Vec::new())?).await?;
+        let agent = AgentId::new("activity-agent")?;
+        let claimed = store.claim(&agent, 300).await?.into_claimed()?;
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        assert!(
+            sender
+                .send(TaskActivity {
+                    kind: ActivityKind::Action,
+                    message: "activity.command_running".into(),
+                    detail: "focused test".into(),
+                })
+                .is_ok()
+        );
+        assert!(
+            sender
+                .send(TaskActivity {
+                    kind: ActivityKind::Result,
+                    message: "activity.command_completed".into(),
+                    detail: "cargo test".into(),
+                })
+                .is_ok()
+        );
+        drop(sender);
+        persist_activity(store.clone(), agent.clone(), claimed.clone(), receiver).await?;
+        assert!(
+            store
+                .heartbeat(&claimed.id, &agent, &claimed.lease_token, 300)
+                .await?
+        );
+
+        assert!(
+            store
+                .complete(
+                    &claimed,
+                    &agent,
+                    false,
+                    "activity captured",
+                    &CompletionArtifact::NotProduced,
+                )
+                .await?
+        );
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        assert!(
+            sender
+                .send(TaskActivity {
+                    kind: ActivityKind::Warning,
+                    message: "activity.warning".into(),
+                    detail: "stale writer".into(),
+                })
+                .is_ok()
+        );
+        drop(sender);
+        let error = persist_activity(store, agent, claimed, receiver)
+            .await
+            .err()
+            .ok_or_else(|| crate::HiveError::message("stale activity writer was accepted"))?;
+        assert!(matches!(
+            error,
+            crate::HiveError::WorkerCancellationRequested
         ));
         Ok(())
     }
