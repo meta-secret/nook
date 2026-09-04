@@ -337,7 +337,14 @@ mod tests {
                 .to_string()
                 .starts_with("watch:")
         );
-        let Err(joined) = tokio::spawn(async { panic!("expected test panic") }).await else {
+        let Err(joined) = tokio::spawn(async {
+            assert!(
+                !std::hint::black_box(true),
+                "expected test panic for JoinError conversion"
+            );
+        })
+        .await
+        else {
             return Err(HiveError::message("panicking task joined successfully"));
         };
         assert!(

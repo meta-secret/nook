@@ -267,4 +267,68 @@ mod tests {
         assert!(super::progress_path(&health).exists());
         Ok(())
     }
+
+    #[tokio::test]
+    async fn dispatcher_health_and_progress_writes_are_atomic_and_immediately_valid()
+    -> crate::HiveResult<()> {
+        let root = tempfile::tempdir()?;
+        let health = root.path().join("dispatcher-health");
+        super::record_dispatcher_health(&health).await?;
+        assert!(health.exists());
+        assert!(!super::next_path(&health).exists());
+        super::check_workbench_dispatcher_health(&health, Duration::from_secs(5))?;
+
+        let result = super::while_recording_dispatcher_progress(&health, async {
+            Ok::<_, crate::HiveError>("finished")
+        })
+        .await?;
+        assert_eq!(result, "finished");
+        assert!(super::progress_path(&health).exists());
+        super::check_workbench_dispatcher_progress(&health, Duration::from_secs(5))?;
+
+        super::sleep_while_recording_dispatcher_progress(&health, Duration::ZERO).await?;
+        assert!(super::progress_path(&health).exists());
+        Ok(())
+    }
+
+    #[test]
+    fn dispatcher_health_rejects_malformed_future_and_pre_epoch_timestamps() -> crate::HiveResult<()>
+    {
+        let root = tempfile::tempdir()?;
+        let health = root.path().join("health");
+        let processes = root.path().join("proc");
+        std::fs::create_dir(&processes)?;
+
+        std::fs::write(&health, "not-a-timestamp\n")?;
+        assert!(
+            super::check_workbench_dispatcher_health_at(
+                &health,
+                Duration::from_secs(10),
+                UNIX_EPOCH + Duration::from_secs(100),
+                &processes,
+            )
+            .is_err()
+        );
+        std::fs::write(&health, "101\n")?;
+        let future = super::check_workbench_dispatcher_health_at(
+            &health,
+            Duration::from_secs(10),
+            UNIX_EPOCH + Duration::from_secs(100),
+            &processes,
+        )
+        .err()
+        .ok_or_else(|| crate::HiveError::message("future heartbeat was accepted"))?;
+        assert!(
+            future
+                .to_string()
+                .contains("later than the current system time")
+        );
+        assert!(super::unix_timestamp_seconds(UNIX_EPOCH - Duration::from_secs(1)).is_err());
+        assert!(super::zombie_process_count(&root.path().join("missing-proc")).is_err());
+
+        std::fs::create_dir(processes.join("not-a-process"))?;
+        std::fs::create_dir(processes.join("42"))?;
+        assert_eq!(super::zombie_process_count(&processes)?, 0);
+        Ok(())
+    }
 }

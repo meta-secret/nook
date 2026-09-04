@@ -569,6 +569,7 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
     use serde_json::{Value, json};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     use super::{
         LocaleQuery, ObserverRequest, ObserverState, ObserverStore, health, overview, task_detail,
@@ -602,6 +603,31 @@ mod tests {
                 Self::Failed => Err(crate::HiveError::message("database unavailable")),
             }
         }
+    }
+
+    async fn http_get(address: std::net::SocketAddr, path: &str) -> crate::HiveResult<String> {
+        let mut attempts = 0;
+        let mut stream = loop {
+            attempts += 1;
+            match tokio::net::TcpStream::connect(address).await {
+                Ok(stream) => break stream,
+                Err(error)
+                    if error.kind() == std::io::ErrorKind::ConnectionRefused && attempts < 100 =>
+                {
+                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                }
+                Err(error) => return Err(error.into()),
+            }
+        };
+        stream
+            .write_all(
+                format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await?;
+        let mut response = Vec::new();
+        stream.read_to_end(&mut response).await?;
+        Ok(String::from_utf8(response)?)
     }
 
     #[test]
@@ -688,6 +714,40 @@ mod tests {
         };
         let unavailable = unavailable.into_response();
         assert_eq!(unavailable.status(), StatusCode::SERVICE_UNAVAILABLE);
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn observer_server_routes_health_api_and_dashboard_requests() -> crate::HiveResult<()> {
+        let root = tempfile::tempdir()?;
+        let dashboard = root.path().join("dashboard");
+        tokio::fs::create_dir(&dashboard).await?;
+        tokio::fs::write(dashboard.join("index.html"), "Hive dashboard fixture").await?;
+        let reserved = std::net::TcpListener::bind("127.0.0.1:0")?;
+        let address = reserved.local_addr()?;
+        drop(reserved);
+        let server = tokio::spawn(super::run_observer(FixtureStore::Ready, address, dashboard));
+
+        let health = http_get(address, "/healthz").await?;
+        assert!(health.starts_with("HTTP/1.1 204 No Content"));
+        let overview = http_get(address, "/api/overview?locale=ru").await?;
+        assert!(overview.starts_with("HTTP/1.1 200 OK"));
+        assert!(overview.contains(r#"{"locale":"ru","tasks":2}"#));
+        let task = http_get(address, "/api/tasks/task-1?locale=en").await?;
+        assert!(task.starts_with("HTTP/1.1 200 OK"));
+        assert!(task.contains(r#"{"id":"task-1","locale":"en"}"#));
+        let missing = http_get(address, "/api/tasks/missing?locale=en").await?;
+        assert!(missing.starts_with("HTTP/1.1 404 Not Found"));
+        let dashboard = http_get(address, "/").await?;
+        assert!(dashboard.contains("Hive dashboard fixture"));
+
+        server.abort();
+        let Err(cancelled) = server.await else {
+            return Err(crate::HiveError::message(
+                "observer server stopped without cancellation",
+            ));
+        };
+        assert!(cancelled.is_cancelled());
         Ok(())
     }
 }

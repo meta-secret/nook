@@ -770,4 +770,94 @@ mod tests {
         }
         Ok(())
     }
+
+    #[test]
+    fn terminal_results_expose_typed_content_and_reject_remaining_invalid_states()
+    -> crate::HiveResult<()> {
+        let blocked: TerminalResult = serde_json::from_value(serde_json::json!({
+            "status": "blocked",
+            "summary": "Waiting for prerequisite",
+            "changed_files": ["src/worker.rs"],
+            "tests": ["cargo test -p hive"],
+            "obsolete": false,
+            "blocker": {
+                "present": true,
+                "id": "repair-cache",
+                "title": "Repair cache",
+                "prompt": "Restore the cache invariant"
+            }
+        }))?;
+        assert_eq!(blocked.summary(), "Waiting for prerequisite");
+        assert_eq!(blocked.changed_files(), ["src/worker.rs"]);
+        assert_eq!(blocked.tests(), ["cargo test -p hive"]);
+        assert!(!blocked.is_obsolete());
+
+        let completed: TerminalResult = serde_json::from_value(serde_json::json!({
+            "status": "completed",
+            "summary": "Retired obsolete task",
+            "changed_files": [],
+            "tests": ["delivery state inspected"],
+            "obsolete": true,
+            "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+        }))?;
+        assert!(completed.is_obsolete());
+
+        let invalid = [
+            (
+                serde_json::json!({
+                    "status": "failed", "summary": "failed", "changed_files": [], "tests": [],
+                    "obsolete": true,
+                    "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+                }),
+                "cannot retire",
+            ),
+            (
+                serde_json::json!({
+                    "status": "failed", "summary": "failed", "changed_files": [], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": true, "id": "repair", "title": "Repair", "prompt": "Do it" }
+                }),
+                "must not report a blocker",
+            ),
+            (
+                serde_json::json!({
+                    "status": "blocked", "summary": "blocked", "changed_files": [], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": true, "id": "repair", "title": "", "prompt": "Do it" }
+                }),
+                "must include a title",
+            ),
+            (
+                serde_json::json!({
+                    "status": "blocked", "summary": "blocked", "changed_files": [], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": true, "id": "repair", "title": "Repair", "prompt": "" }
+                }),
+                "must include a prompt",
+            ),
+            (
+                serde_json::json!({
+                    "status": "completed", "summary": "done", "changed_files": [""], "tests": [],
+                    "obsolete": false,
+                    "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+                }),
+                "changed_files entries must not be empty",
+            ),
+            (
+                serde_json::json!({
+                    "status": "completed", "summary": "done", "changed_files": [], "tests": [""],
+                    "obsolete": false,
+                    "blocker": { "present": false, "id": "", "title": "", "prompt": "" }
+                }),
+                "tests entries must not be empty",
+            ),
+        ];
+        for (value, expected) in invalid {
+            let error = serde_json::from_value::<TerminalResult>(value)
+                .err()
+                .ok_or_else(|| crate::HiveError::message("invalid terminal result was accepted"))?;
+            assert!(error.to_string().contains(expected));
+        }
+        Ok(())
+    }
 }
