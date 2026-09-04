@@ -3,6 +3,9 @@
 //! This companion record is deliberately separate from `device_identity_wrapped`.
 //! Corrupt or future descriptive metadata must never block device-key unlock.
 
+use js_sys::Date;
+use nook_core::IsoTimestamp;
+
 pub(crate) use nook_core::{
     DeviceAccessProfile, DeviceAccessProfileDecodeResult, PasskeyAccessProfile,
     PasskeyBrowserObservation, PasskeyCreatedAtEvidence, PasskeyCreationCeremony,
@@ -192,36 +195,45 @@ pub(crate) async fn delete_device_access_profile() -> Result<(), NookError> {
 }
 
 fn browser_timestamp() -> nook_core::IsoTimestamp {
-    nook_core::IsoTimestamp::from_trusted(js_sys::Date::new_0().to_iso_string().into())
+    IsoTimestamp::from_trusted(Date::new_0().to_iso_string().into())
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::storage::identity_record;
+    use futures_util::future;
+    use nook_core::{
+        AppKey, DeviceId, DeviceIdentity, DeviceKeyProtectionSetup, IsoTimestamp,
+        PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyObservedBrowser,
+        PasskeyObservedPlatform, PasskeyTransport, StoreId,
+    };
+    use rexie::Rexie;
+
     use super::*;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     fn timestamp(value: &str) -> nook_core::IsoTimestamp {
-        nook_core::IsoTimestamp::from_trusted(value.to_owned())
+        IsoTimestamp::from_trusted(value.to_owned())
     }
 
     fn device_id(value: &str) -> Result<nook_core::DeviceId, NookError> {
-        nook_core::DeviceId::parse(value).map_err(|error| NookError::Database(error.to_string()))
+        DeviceId::parse(value).map_err(|error| NookError::Database(error.to_string()))
     }
 
     fn store_id(value: &str) -> Result<nook_core::StoreId, NookError> {
-        nook_core::StoreId::parse(value).map_err(|error| NookError::Database(error.to_string()))
+        StoreId::parse(value).map_err(|error| NookError::Database(error.to_string()))
     }
 
     fn observation() -> PasskeyBrowserObservation {
         PasskeyBrowserObservation {
-            attachment: nook_core::PasskeyAuthenticatorAttachment::Platform,
-            transports: vec![nook_core::PasskeyTransport::Internal],
-            backup_state: nook_core::PasskeyBackupState::Eligible,
+            attachment: PasskeyAuthenticatorAttachment::Platform,
+            transports: vec![PasskeyTransport::Internal],
+            backup_state: PasskeyBackupState::Eligible,
             aaguid: Some("aaguid-one".to_owned()),
-            browser: nook_core::PasskeyObservedBrowser::Safari,
-            platform: nook_core::PasskeyObservedPlatform::MacOs,
+            browser: PasskeyObservedBrowser::Safari,
+            platform: PasskeyObservedPlatform::MacOs,
             legacy_client_environment: None,
         }
     }
@@ -274,7 +286,7 @@ mod tests {
 
         let mut replacement = observation();
         replacement.aaguid = Some("aaguid-two".to_owned());
-        replacement.transports = vec![nook_core::PasskeyTransport::Hybrid];
+        replacement.transports = vec![PasskeyTransport::Hybrid];
         profile.record_passkey_created(
             "passkey:replacement",
             "Replacement credential",
@@ -297,12 +309,12 @@ mod tests {
         );
 
         let usage = PasskeyBrowserObservation {
-            attachment: nook_core::PasskeyAuthenticatorAttachment::Unknown,
+            attachment: PasskeyAuthenticatorAttachment::Unknown,
             transports: Vec::new(),
-            backup_state: nook_core::PasskeyBackupState::BackedUp,
+            backup_state: PasskeyBackupState::BackedUp,
             aaguid: None,
-            browser: nook_core::PasskeyObservedBrowser::Firefox,
-            platform: nook_core::PasskeyObservedPlatform::Linux,
+            browser: PasskeyObservedBrowser::Firefox,
+            platform: PasskeyObservedPlatform::Linux,
             legacy_client_environment: None,
         };
         profile.record_passkey_used(
@@ -314,23 +326,14 @@ mod tests {
             .passkey
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("used passkey profile is missing"))?;
-        assert_eq!(
-            passkey.observation.transports,
-            [nook_core::PasskeyTransport::Hybrid]
-        );
+        assert_eq!(passkey.observation.transports, [PasskeyTransport::Hybrid]);
         assert_eq!(passkey.observation.aaguid.as_deref(), Some("aaguid-two"));
         assert_eq!(
             passkey.observation.backup_state,
-            nook_core::PasskeyBackupState::BackedUp
+            PasskeyBackupState::BackedUp
         );
-        assert_eq!(
-            passkey.observation.browser,
-            nook_core::PasskeyObservedBrowser::Firefox
-        );
-        assert_eq!(
-            passkey.observation.platform,
-            nook_core::PasskeyObservedPlatform::Linux
-        );
+        assert_eq!(passkey.observation.browser, PasskeyObservedBrowser::Firefox);
+        assert_eq!(passkey.observation.platform, PasskeyObservedPlatform::Linux);
         Ok(())
     }
 
@@ -352,12 +355,12 @@ mod tests {
             .provider_label = "Old provider".to_owned();
 
         let recovered_observation = PasskeyBrowserObservation {
-            attachment: nook_core::PasskeyAuthenticatorAttachment::Unknown,
+            attachment: PasskeyAuthenticatorAttachment::Unknown,
             transports: Vec::new(),
-            backup_state: nook_core::PasskeyBackupState::BackedUp,
+            backup_state: PasskeyBackupState::BackedUp,
             aaguid: None,
-            browser: nook_core::PasskeyObservedBrowser::Firefox,
-            platform: nook_core::PasskeyObservedPlatform::Linux,
+            browser: PasskeyObservedBrowser::Firefox,
+            platform: PasskeyObservedPlatform::Linux,
             legacy_client_environment: None,
         };
         profile.record_passkey_used(
@@ -519,11 +522,11 @@ mod tests {
     #[wasm_bindgen_test]
     async fn provider_label_recovers_missing_metadata_only_for_the_wrapped_passkey()
     -> Result<(), NookError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
+        let _ = Rexie::delete("nook_db").await;
+        let setup = DeviceKeyProtectionSetup::generate()?;
         let secret =
             nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])?;
-        let identity = nook_core::DeviceIdentity::from_secret_str(&secret)?;
+        let identity = DeviceIdentity::from_secret_str(&secret)?;
         let credential_id = [7u8; 32];
         let wrapped = nook_core::passkey_derived_device_identity_record(
             &credential_id,
@@ -547,16 +550,16 @@ mod tests {
         })?;
         assert_eq!(passkey.credential_fingerprint, credential_fingerprint);
         assert_eq!(passkey.provider_label, "Bitwarden");
-        let _ = rexie::Rexie::delete("nook_db").await;
+        let _ = Rexie::delete("nook_db").await;
         Ok(())
     }
 
     #[wasm_bindgen_test]
     async fn stale_passkey_ceremony_cannot_overwrite_replaced_identity_metadata()
     -> Result<(), NookError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let setup = nook_core::DeviceKeyProtectionSetup::generate()?;
-        let identity = nook_core::DeviceIdentity::generate()?;
+        let _ = Rexie::delete("nook_db").await;
+        let setup = DeviceKeyProtectionSetup::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let current_credential = [8u8; 32];
         let current_fingerprint = nook_core::passkey_credential_identifier(&current_credential);
         let current_wrapped = nook_core::passkey_derived_device_identity_record(
@@ -587,7 +590,7 @@ mod tests {
             .ok_or_else(|| NookError::Database("Passkey profile is missing".to_owned()))?;
         assert_eq!(passkey.credential_fingerprint, current_fingerprint);
         assert_eq!(passkey.nook_name, "Current credential");
-        let _ = rexie::Rexie::delete("nook_db").await;
+        let _ = Rexie::delete("nook_db").await;
         Ok(())
     }
 
@@ -595,10 +598,10 @@ mod tests {
     #[wasm_bindgen_test]
     async fn app_scoped_passkey_update_ignores_another_tabs_shared_selection()
     -> Result<(), NookError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let first_key = nook_core::AppKey::generate()
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        let first_setup = nook_core::DeviceKeyProtectionSetup::generate()?;
+        let _ = Rexie::delete("nook_db").await;
+        let first_key =
+            AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
+        let first_setup = DeviceKeyProtectionSetup::generate()?;
         let first_credential = [31u8; 32];
         let first_wrapped = nook_core::passkey_wrapped_device_identity_record(
             &first_credential,
@@ -607,15 +610,15 @@ mod tests {
             &[41u8; 32],
             &first_key.secret_string(),
         )?;
-        crate::storage::identity_record::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        let companion_key = nook_core::AppKey::generate()
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let companion_key =
+            AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let companion_id = device_id(companion_key.app_id().as_str())?;
         let companion_store = nook_core::generate_store_id()
             .map_err(|error| NookError::Database(error.to_string()))?;
@@ -628,11 +631,11 @@ mod tests {
                 .iter()
                 .any(|access| access.device_id == companion_id)
         );
-        let second_key = nook_core::AppKey::generate()
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let second_key =
+            AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        crate::storage::identity_record::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &second_key,
             &second_wrapped,
             None,
@@ -663,22 +666,19 @@ mod tests {
             load_device_access_profile_for_app_id(second_key.app_id().as_str()).await?,
             DeviceAccessProfile::default()
         );
-        let _ = rexie::Rexie::delete("nook_db").await;
+        let _ = Rexie::delete("nook_db").await;
         Ok(())
     }
 
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     #[wasm_bindgen_test]
     async fn concurrent_profile_migration_preserves_scoped_update() -> Result<(), NookError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
-        let app_key = nook_core::AppKey::generate()
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        let _ = Rexie::delete("nook_db").await;
+        let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "first-secret")?;
-        crate::storage::identity_record::save_new_protected_local_identity(
-            &app_key, &wrapped, None, "Personal",
-        )
-        .await?;
+        identity_record::save_new_protected_local_identity(&app_key, &wrapped, None, "Personal")
+            .await?;
         let app_device_id = device_id(app_key.app_id().as_str())?;
         let first_store = nook_core::generate_store_id()
             .map_err(|error| NookError::Database(error.to_string()))?;
@@ -692,7 +692,7 @@ mod tests {
         );
         save_device_access_profile(&legacy).await?;
 
-        let (migration_result, update_result) = futures_util::future::join(
+        let (migration_result, update_result) = future::join(
             migrate_legacy_device_access_profile_for_selected_identity(),
             record_verified_vault_access(&app_device_id, &second_store),
         )
@@ -714,7 +714,7 @@ mod tests {
                 .any(|entry| entry.store_id == second_store)
         );
         assert!(idb_get_string(DEVICE_ACCESS_PROFILE_KEY).await?.is_none());
-        let _ = rexie::Rexie::delete("nook_db").await;
+        let _ = Rexie::delete("nook_db").await;
         Ok(())
     }
 
@@ -748,7 +748,7 @@ mod tests {
         let device_b = device_id("fedcba9876543210")?;
         let store_a = store_id("store_testtoken11")?;
         let store_b = store_id("store_testtoken12")?;
-        let (first, second) = futures_util::future::join(
+        let (first, second) = future::join(
             record_verified_vault_access(&device_a, &store_a),
             record_verified_vault_access(&device_b, &store_b),
         )

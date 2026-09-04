@@ -1,5 +1,9 @@
 //! Atomic publication and cleanup for completed Simple-vault genesis.
 
+use crate::storage::event_db;
+use nook_core::IdentityDirectory;
+use rexie::TransactionMode;
+
 use super::{
     IDENTITY_DIRECTORY_KEY, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis,
     SimpleGenesisCompletion, decode_directory_value, map_domain_error, migrate_directory,
@@ -27,7 +31,7 @@ async fn publish_staged_identity(
             decode_directory_value(&raw)
         })
         .transpose()?
-        .unwrap_or_else(nook_core::IdentityDirectory::empty);
+        .unwrap_or_else(IdentityDirectory::empty);
     let migrate_staged = current.has_legacy_duplicate_app_key_ownership()
         || pending.staged_identity().is_some_and(|staged| {
             staged
@@ -68,7 +72,7 @@ async fn publish_staged_identity(
     let signing_seed = completion.staged_signing_seed().ok_or_else(|| {
         NookError::IndexedDb("Staged genesis completion is missing its signing seed.".to_owned())
     })?;
-    let seed_key = serde_wasm_bindgen::to_value(crate::storage::event_db::SIGNING_SEED_KEY)
+    let seed_key = serde_wasm_bindgen::to_value(event_db::SIGNING_SEED_KEY)
         .map_err(|error| NookError::IndexedDb(format!("Genesis signing key error: {error:?}")))?;
     let seed_value = serde_wasm_bindgen::to_value(signing_seed)
         .map_err(|error| NookError::IndexedDb(format!("Genesis signing value error: {error:?}")))?;
@@ -85,7 +89,7 @@ pub(crate) async fn clear_pending_simple_genesis(
     let completed = completion.pending();
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|error| NookError::IndexedDb(format!("Genesis cleanup error: {error:?}")))?;
     let store = transaction
         .store("vault")

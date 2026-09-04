@@ -1,5 +1,8 @@
 //! Ownership and migration policy for the singleton provider rollback projection.
 
+use crate::storage::identity_record;
+use rexie::TransactionMode;
+
 use nook_core::{
     DeviceIdentity, open_provider_credentials, provider_credentials_are_presealed,
     seal_provider_credentials,
@@ -13,7 +16,7 @@ use super::{
 pub(super) async fn may_migrate_legacy_snapshot(
     app_id: &nook_core::AppId,
 ) -> Result<bool, NookError> {
-    let keyring = crate::storage::identity_record::load_keyring().await?;
+    let keyring = identity_record::load_keyring().await?;
     Ok(keyring.entries().is_empty()
         || (keyring.entries().len() == 1
             && keyring
@@ -25,7 +28,7 @@ pub(super) async fn may_migrate_legacy_snapshot(
 pub(super) async fn should_refresh_legacy_projection(
     app_id: &nook_core::AppId,
 ) -> Result<bool, NookError> {
-    let keyring = crate::storage::identity_record::load_keyring().await?;
+    let keyring = identity_record::load_keyring().await?;
     Ok(keyring.entries().len() == 1
         && keyring
             .entries()
@@ -77,7 +80,7 @@ pub(super) async fn migrate_legacy_auth_providers_for_identity(
     let schema_key = schema_key_for_app_id(identity.app_id());
     let rexie = open_auth_db().await?;
     let transaction = rexie
-        .transaction(&[STORE], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE], TransactionMode::ReadWrite)
         .map_err(|e| idb_err("nook_auth migration transaction error", e))?;
     let store = transaction
         .store(STORE)
@@ -100,7 +103,7 @@ pub(super) async fn migrate_legacy_auth_providers_for_identity(
 }
 
 pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity() -> Result<(), NookError> {
-    let Some(entry) = crate::storage::identity_record::load_selected_entry().await? else {
+    let Some(entry) = identity_record::load_selected_entry().await? else {
         return Ok(());
     };
     if !may_migrate_legacy_snapshot(entry.app_id()).await? {
@@ -110,7 +113,7 @@ pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity() -> Res
     let schema_key = schema_key_for_app_id(entry.app_id());
     let rexie = open_auth_db().await?;
     let transaction = rexie
-        .transaction(&[STORE], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE], TransactionMode::ReadWrite)
         .map_err(|e| idb_err("nook_auth locked migration transaction error", e))?;
     let store = transaction
         .store(STORE)

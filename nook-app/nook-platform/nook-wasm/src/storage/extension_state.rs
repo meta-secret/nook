@@ -4,6 +4,9 @@
 //! `IndexedDB` alongside its other local-first state. Browser-vendor storage is
 //! intentionally not part of the vault persistence boundary.
 
+use rexie::{ObjectStore, Rexie, TransactionMode};
+use std::fmt;
+
 use std::collections::HashMap;
 
 use crate::NookError;
@@ -19,14 +22,14 @@ pub(crate) fn validate_entries(
         .map_err(|error| NookError::Database(error.to_string()))
 }
 
-fn idb_err(context: &str, error: impl std::fmt::Debug) -> NookError {
+fn idb_err(context: &str, error: impl fmt::Debug) -> NookError {
     NookError::IndexedDb(format!("{context}: {error:?}"))
 }
 
 async fn open_db() -> Result<rexie::Rexie, NookError> {
-    rexie::Rexie::builder(DB_NAME)
+    Rexie::builder(DB_NAME)
         .version(1)
-        .add_object_store(rexie::ObjectStore::new(STORE))
+        .add_object_store(ObjectStore::new(STORE))
         .build()
         .await
         .map_err(|error| idb_err("nook_extension build error", error))
@@ -35,7 +38,7 @@ async fn open_db() -> Result<rexie::Rexie, NookError> {
 pub(crate) async fn read_all() -> Result<ExtensionPairingState, NookError> {
     let rexie = open_db().await?;
     let transaction = rexie
-        .transaction(&[STORE], rexie::TransactionMode::ReadOnly)
+        .transaction(&[STORE], TransactionMode::ReadOnly)
         .map_err(|error| idb_err("nook_extension transaction error", error))?;
     let store = transaction
         .store(STORE)
@@ -77,7 +80,7 @@ pub(crate) async fn reconcile(
     validate_entries(&entries)?;
     let rexie = open_db().await?;
     let transaction = rexie
-        .transaction(&[STORE], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE], TransactionMode::ReadWrite)
         .map_err(|error| idb_err("nook_extension transaction error", error))?;
     let store = transaction
         .store(STORE)
@@ -110,7 +113,7 @@ pub(crate) async fn reconcile(
 pub(crate) async fn remove(keys: &[String]) -> Result<(), NookError> {
     let rexie = open_db().await?;
     let transaction = rexie
-        .transaction(&[STORE], rexie::TransactionMode::ReadWrite)
+        .transaction(&[STORE], TransactionMode::ReadWrite)
         .map_err(|error| idb_err("nook_extension transaction error", error))?;
     let store = transaction
         .store(STORE)
@@ -132,6 +135,9 @@ pub(crate) async fn remove(keys: &[String]) -> Result<(), NookError> {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod wasm_idb_tests {
+    use js_sys::Date;
+    use std::slice;
+
     use super::*;
     use nook_companion_core::{
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
@@ -143,7 +149,7 @@ mod wasm_idb_tests {
 
     #[wasm_bindgen_test]
     async fn writes_reads_and_removes_extension_pairing_state() -> anyhow::Result<()> {
-        let vault_store_id = format!("store-test-{}", js_sys::Date::now());
+        let vault_store_id = format!("store-test-{}", Date::now());
         let key = format!("{GRANT_KEY_PREFIX}{vault_store_id}");
         let mut entries = HashMap::new();
         entries.insert(
@@ -166,7 +172,7 @@ mod wasm_idb_tests {
         );
         write_all(&ExtensionPairingState::from_entries(entries.clone())).await?;
         assert_eq!(read_all().await?.to_entries().get(&key), entries.get(&key));
-        remove(std::slice::from_ref(&key)).await?;
+        remove(slice::from_ref(&key)).await?;
         assert!(!read_all().await?.to_entries().contains_key(&key));
         Ok(())
     }

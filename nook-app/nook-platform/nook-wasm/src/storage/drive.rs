@@ -1,5 +1,7 @@
 //! Google Drive account verification for event-log sync.
 
+use reqwest::{Client, StatusCode};
+
 use crate::NookError;
 use serde::Deserialize;
 
@@ -36,7 +38,7 @@ fn drive_error(status: reqwest::StatusCode, body: &str) -> NookError {
 
 pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookError> {
     let token = nook_core::validate_oauth_access_token(access_token)?;
-    let client = reqwest::Client::new();
+    let client = Client::new();
     let mut request = client
         .get("https://www.googleapis.com/drive/v3/about")
         .query(&[("fields", "user")]);
@@ -44,7 +46,7 @@ pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookEr
         request = request.header(name, value);
     }
     let response = request.send().await?;
-    if response.status() == reqwest::StatusCode::UNAUTHORIZED {
+    if response.status() == StatusCode::UNAUTHORIZED {
         return Err(NookError::Drive(
             "Google Drive rejected the access token (401). Sign in again.".to_owned(),
         ));

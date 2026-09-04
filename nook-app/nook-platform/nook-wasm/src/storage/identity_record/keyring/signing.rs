@@ -1,5 +1,10 @@
 //! Signing material owned by independently protected local identity entries.
 
+use crate::storage;
+use crate::storage::event_db;
+use nook_core::{DeviceSigningPublicKey, IdentitySelection, SigningIdentity, i18n_keys};
+use rexie::TransactionMode;
+
 use crate::NookError;
 
 use super::{
@@ -11,9 +16,7 @@ fn ensure_signing_public_key_matches(
     established: &nook_core::DeviceSigningPublicKey,
     derived: &nook_core::DeviceSigningPublicKey,
 ) -> Result<(), NookError> {
-    if !matches!(established, nook_core::DeviceSigningPublicKey::Unavailable)
-        && established != derived
-    {
+    if !matches!(established, DeviceSigningPublicKey::Unavailable) && established != derived {
         return Err(NookError::Database(
             "Legacy signing seed does not match the established signing public key".to_owned(),
         ));
@@ -34,44 +37,40 @@ pub(super) async fn signing_material(
             .open_signing_seed(app_key)
             .map_err(|error| NookError::Database(error.to_string()))?
             .ok_or_else(|| NookError::Database("Protected signing seed is missing".to_owned()))?,
-        Some(_) | None if migrate_legacy_seed => match read_string(
-            store,
-            crate::storage::event_db::SIGNING_SEED_KEY,
-            "Legacy signing seed",
-        )
-        .await?
-        {
-            Some(seed) => seed,
-            None if matches!(
-                legacy_signing_public_key,
-                nook_core::DeviceSigningPublicKey::Unavailable
-            ) && !identity_has_vaults =>
-            {
-                nook_core::SigningIdentity::generate()
-                    .map_err(|error| NookError::Database(error.to_string()))?
-                    .1
-                    .as_str()
-                    .to_owned()
-            }
-            None => {
-                return Err(NookError::Database(
+        Some(_) | None if migrate_legacy_seed => {
+            match read_string(store, event_db::SIGNING_SEED_KEY, "Legacy signing seed").await? {
+                Some(seed) => seed,
+                None if matches!(
+                    legacy_signing_public_key,
+                    DeviceSigningPublicKey::Unavailable
+                ) && !identity_has_vaults =>
+                {
+                    SigningIdentity::generate()
+                        .map_err(|error| NookError::Database(error.to_string()))?
+                        .1
+                        .as_str()
+                        .to_owned()
+                }
+                None => {
+                    return Err(NookError::Database(
                     "Legacy protected identity with signing or vault evidence is missing its established signing seed"
                         .to_owned(),
                 ));
+                }
             }
-        },
+        }
         Some(_) => {
             return Err(NookError::Database(
                 "Existing protected identity cannot mint replacement signing material".to_owned(),
             ));
         }
-        None => nook_core::SigningIdentity::generate()
+        None => SigningIdentity::generate()
             .map_err(|error| NookError::Database(error.to_string()))?
             .1
             .as_str()
             .to_owned(),
     };
-    let signing = nook_core::SigningIdentity::from_seed_hex_stored(&seed)
+    let signing = SigningIdentity::from_seed_hex_stored(&seed)
         .map_err(|error| NookError::Database(error.to_string()))?;
     let signing_public_key = signing.public_key();
     ensure_signing_public_key_matches(legacy_signing_public_key, &signing_public_key)?;
@@ -115,16 +114,11 @@ pub(super) async fn protect_selected_legacy_signing_seed(
     keyring: &mut nook_core::LocalIdentityKeyring,
     prior_app_key: Option<&nook_core::AppKey>,
 ) -> Result<(), NookError> {
-    let Some(seed) = read_string(
-        store,
-        crate::storage::event_db::SIGNING_SEED_KEY,
-        "Legacy signing seed",
-    )
-    .await?
+    let Some(seed) = read_string(store, event_db::SIGNING_SEED_KEY, "Legacy signing seed").await?
     else {
         return Ok(());
     };
-    let nook_core::IdentitySelection::Selected(identity_id) = directory.selection() else {
+    let IdentitySelection::Selected(identity_id) = directory.selection() else {
         return Err(NookError::Database(
             "Legacy signing seed has no selected identity owner".to_owned(),
         ));
@@ -137,13 +131,11 @@ pub(super) async fn protect_selected_legacy_signing_seed(
         return Ok(());
     }
     let prior_app_key = prior_app_key.ok_or_else(|| {
-        NookError::Decryption(
-            nook_core::i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned(),
-        )
+        NookError::Decryption(i18n_keys::ERRORS_DEVICE_PROTECTION_AUTHORIZATION_REQUIRED.to_owned())
     })?;
     let established_signing_public_key =
         member_signing_public_key(directory, &identity_id, prior_app_key.app_id())?;
-    let signing_public_key = nook_core::SigningIdentity::from_seed_hex_stored(&seed)
+    let signing_public_key = SigningIdentity::from_seed_hex_stored(&seed)
         .map_err(|error| NookError::Database(error.to_string()))?
         .public_key();
     ensure_signing_public_key_matches(&established_signing_public_key, &signing_public_key)?;
@@ -167,9 +159,9 @@ pub(super) async fn protect_selected_legacy_signing_seed(
 pub(crate) async fn load_or_create_signing_seed_for_app_key(
     app_key: &nook_core::AppKey,
 ) -> Result<String, NookError> {
-    let rexie = crate::storage::open_nook_database().await?;
+    let rexie = storage::open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|error| {
             NookError::IndexedDb(format!("Identity signing key load error: {error:?}"))
         })?;
@@ -213,12 +205,7 @@ pub(crate) async fn load_or_create_signing_seed_for_app_key(
         write_keyring(&store, &keyring).await?;
         write_identity_directory(&store, &directory).await?;
     }
-    delete_key(
-        &store,
-        crate::storage::event_db::SIGNING_SEED_KEY,
-        "Legacy signing seed",
-    )
-    .await?;
+    delete_key(&store, event_db::SIGNING_SEED_KEY, "Legacy signing seed").await?;
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Identity signing key completion error: {error:?}"))
     })?;
@@ -227,6 +214,11 @@ pub(crate) async fn load_or_create_signing_seed_for_app_key(
 
 #[cfg(test)]
 mod tests {
+    use crate::storage;
+    use crate::storage::{event_db, indexed_db};
+    use nook_core::{AppKey, DeviceSigningPublicKey, IdentityRecord, LocalIdentityKeyringEntry};
+    use rexie::TransactionMode;
+
     use super::*;
     use wasm_bindgen_test::*;
 
@@ -235,24 +227,22 @@ mod tests {
     #[wasm_bindgen_test]
     async fn signed_vault_identity_without_seed_cannot_mint_a_replacement_signer()
     -> Result<(), NookError> {
-        crate::storage::indexed_db::idb_delete_key(crate::storage::event_db::SIGNING_SEED_KEY)
-            .await?;
-        let app_key = nook_core::AppKey::generate()
-            .map_err(|error| NookError::Database(error.to_string()))?;
+        indexed_db::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
+        let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped = nook_core::wrap_device_identity_with_pin(
             &app_key.secret_string(),
             "legacy identity pin",
         )?;
-        let identity = nook_core::IdentityRecord::create_with_app_key("Legacy", &app_key, None)
+        let identity = IdentityRecord::create_with_app_key("Legacy", &app_key, None)
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let entry = nook_core::LocalIdentityKeyringEntry::legacy(
+        let entry = LocalIdentityKeyringEntry::legacy(
             identity.identity_id,
             app_key.app_id().clone(),
             wrapped,
         );
-        let rexie = crate::storage::open_nook_database().await?;
+        let rexie = storage::open_nook_database().await?;
         let transaction = rexie
-            .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+            .transaction(&["vault"], TransactionMode::ReadWrite)
             .map_err(|error| NookError::IndexedDb(format!("Signer test error: {error:?}")))?;
         let store = transaction
             .store("vault")
@@ -263,7 +253,7 @@ mod tests {
             Some(&entry),
             &app_key,
             true,
-            &nook_core::DeviceSigningPublicKey::Unavailable,
+            &DeviceSigningPublicKey::Unavailable,
             true,
         )
         .await;

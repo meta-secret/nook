@@ -1,5 +1,9 @@
 //! Destructive identity and device recovery persistence.
 
+use crate::storage::{device_access, event_db, indexed_db};
+use nook_core::{AppId, IdentityDirectory, IdentitySelection, LocalIdentityKeyring};
+use rexie::TransactionMode;
+
 use super::{
     IDENTITY_DIRECTORY_KEY, LEGACY_IDENTITY_RECORD_KEY, RETIRED_APP_IDS_KEY, decode_directory,
     is_identity_reconciliation_key, keyring, load_identity_directory, load_retired_app_ids,
@@ -61,12 +65,12 @@ async fn recovery_directory(store: &rexie::Store) -> Result<RecoveryDirectory, N
                 .and_then(|raw| decode_directory(&raw).ok())
             {
                 Some(directory) => (directory, true),
-                None => (nook_core::IdentityDirectory::empty(), false),
+                None => (IdentityDirectory::empty(), false),
             },
             // A missing directory cannot prove which identity owns a surviving
             // keyring entry. Route recovery through the same safe full-reset
             // path as corrupt or future-incompatible directory metadata.
-            None => (nook_core::IdentityDirectory::empty(), false),
+            None => (IdentityDirectory::empty(), false),
         };
     for app_id in load_retired_app_ids(store).await.unwrap_or_default() {
         directory.retire_app_id(app_id);
@@ -78,23 +82,20 @@ async fn recovery_directory(store: &rexie::Store) -> Result<RecoveryDirectory, N
 }
 
 async fn persisted_legacy_app_id(store: &rexie::Store) -> Option<nook_core::AppId> {
-    crate::storage::indexed_db::read_string_preferring(
+    indexed_db::read_string_preferring(
         store,
-        crate::storage::indexed_db::APP_ID_KEY,
-        crate::storage::indexed_db::DEVICE_ID_KEY,
+        indexed_db::APP_ID_KEY,
+        indexed_db::DEVICE_ID_KEY,
         "Identity reset app id",
     )
     .await
     .ok()
     .flatten()
-    .and_then(|raw| nook_core::AppId::parse(&raw).ok())
+    .and_then(|raw| AppId::parse(&raw).ok())
 }
 
 fn access_profile_key(app_id: &nook_core::AppId) -> String {
-    format!(
-        "{}:{app_id}",
-        crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY
-    )
+    format!("{}:{app_id}", device_access::DEVICE_ACCESS_PROFILE_KEY)
 }
 
 async fn build_full_recovery_state(
@@ -132,7 +133,7 @@ async fn build_full_recovery_state(
         .map_err(|error| NookError::Database(error.to_string()))?;
     Ok(RecoveryState {
         directory,
-        keyring: nook_core::LocalIdentityKeyring::empty(),
+        keyring: LocalIdentityKeyring::empty(),
         retired_identity_id: None,
         retired_app_id: expected_app_id.cloned().or(persisted_app_id),
         access_profile_keys,
@@ -186,12 +187,10 @@ async fn build_recovery_state(
             .retire_local_identity_key(entry.identity_id(), entry.app_id())
             .map_err(|error| NookError::Database(error.to_string()))?;
         let surviving_selection = match prior_selection {
-            nook_core::IdentitySelection::Selected(identity_id)
-                if keyring.entry(&identity_id).is_some() =>
-            {
+            IdentitySelection::Selected(identity_id) if keyring.entry(&identity_id).is_some() => {
                 Some(identity_id)
             }
-            nook_core::IdentitySelection::Empty | nook_core::IdentitySelection::Selected(_) => None,
+            IdentitySelection::Empty | IdentitySelection::Selected(_) => None,
         };
         if let Some(identity_id) = surviving_selection {
             directory
@@ -219,7 +218,7 @@ async fn build_recovery_state(
             ));
         }
         directory.reset_for_device_recovery(persisted_app_id.clone());
-        keyring = nook_core::LocalIdentityKeyring::empty();
+        keyring = LocalIdentityKeyring::empty();
         (None, persisted_app_id, Vec::new())
     };
     directory
@@ -290,7 +289,7 @@ async fn recovery_marker_policy(
     };
     let sentinel_pending = recovery_key_exists(
         store,
-        crate::storage::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY,
+        indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY,
         "Pending Sentinel genesis",
     )
     .await?;
@@ -334,20 +333,20 @@ async fn delete_recovery_keys(
     let mut keys = reconciliation_keys;
     keys.extend([
         LEGACY_IDENTITY_RECORD_KEY.to_owned(),
-        crate::storage::indexed_db::APP_KEY_WRAPPED_KEY.to_owned(),
-        crate::storage::indexed_db::APP_ID_KEY.to_owned(),
-        crate::storage::indexed_db::WRAPPED_DEVICE_IDENTITY_KEY.to_owned(),
-        crate::storage::indexed_db::DEVICE_ID_KEY.to_owned(),
-        crate::storage::event_db::SIGNING_SEED_KEY.to_owned(),
+        indexed_db::APP_KEY_WRAPPED_KEY.to_owned(),
+        indexed_db::APP_ID_KEY.to_owned(),
+        indexed_db::WRAPPED_DEVICE_IDENTITY_KEY.to_owned(),
+        indexed_db::DEVICE_ID_KEY.to_owned(),
+        event_db::SIGNING_SEED_KEY.to_owned(),
     ]);
     if clear_compatibility_profile {
-        keys.push(crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY.to_owned());
+        keys.push(device_access::DEVICE_ACCESS_PROFILE_KEY.to_owned());
     }
     if marker_policy.clear_simple_genesis {
         keys.push(simple_genesis::PENDING_SIMPLE_GENESIS_KEY.to_owned());
     }
     if marker_policy.clear_sentinel_genesis {
-        keys.push(crate::storage::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY.to_owned());
+        keys.push(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY.to_owned());
     }
     keys.extend(access_profile_keys);
     for key in keys {
@@ -372,7 +371,7 @@ async fn reset_identity_and_device_for_recovery(
     let _ = load_identity_directory().await;
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|error| NookError::IndexedDb(format!("Identity reset error: {error:?}")))?;
     let store = transaction
         .store("vault")
@@ -421,6 +420,10 @@ pub(crate) async fn delete_identity_directory_for_recovery(
 
 #[cfg(test)]
 mod tests {
+    use crate::storage::identity_record;
+    use crate::storage::{device_access, event_db, indexed_db};
+    use nook_core::{AppKey, DeviceSigningPublicKey, IdentitySelection};
+
     use super::*;
     use crate::storage::identity_record::{
         begin_or_resume_simple_genesis, clear_identity_directory_for_test,
@@ -436,7 +439,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn destructive_recovery_forgets_stale_identity_ownership() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
-        let inaccessible_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let inaccessible_key = AppKey::generate().map_err(map_domain_error)?;
         let pending = begin_or_resume_simple_genesis(&inaccessible_key, "Personal").await?;
         let store_id = pending.store_id.clone();
         let _ = generate_vault_dek_for_identity(
@@ -449,11 +452,7 @@ mod tests {
         let marker_v1 = format!("pending_identity_reconciliation_v1:{store_id}");
         idb_put_string(&marker_v2, "stale-v2").await?;
         idb_put_string(&marker_v1, "stale-v1").await?;
-        idb_put_string(
-            crate::storage::indexed_db::APP_ID_KEY,
-            inaccessible_key.app_id().as_str(),
-        )
-        .await?;
+        idb_put_string(indexed_db::APP_ID_KEY, inaccessible_key.app_id().as_str()).await?;
 
         let recovery =
             delete_identity_directory_for_recovery(Some(inaccessible_key.app_id().clone())).await?;
@@ -467,7 +466,7 @@ mod tests {
             Err(NookError::Database(message)) if message.contains("retired")
         ));
 
-        let replacement_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let replacement_key = AppKey::generate().map_err(map_domain_error)?;
         let replacement = ensure_local_identity_for_app_key(&replacement_key, "Recovered").await?;
         assert_ne!(replacement.identity_id, pending.identity_id);
         validate_vault_identity_enrollment(&replacement_key, &store_id).await?;
@@ -484,8 +483,8 @@ mod tests {
     async fn destructive_recovery_bypasses_a_corrupt_identity_directory() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
-        let stale_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let earlier_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let stale_key = AppKey::generate().map_err(map_domain_error)?;
+        let earlier_key = AppKey::generate().map_err(map_domain_error)?;
         idb_put_string(
             RETIRED_APP_IDS_KEY,
             &serde_json::to_string(&vec![earlier_key.app_id()])
@@ -500,22 +499,14 @@ mod tests {
         let marker = format!("pending_identity_reconciliation_v2:{store_id}");
         idb_put_string(&marker, "inaccessible-plan").await?;
         idb_put_string(IDENTITY_DIRECTORY_KEY, "{future-or-corrupt").await?;
-        idb_put_string(
-            crate::storage::indexed_db::APP_ID_KEY,
-            stale_key.app_id().as_str(),
-        )
-        .await?;
-        idb_put_string(
-            crate::storage::indexed_db::APP_KEY_WRAPPED_KEY,
-            "inaccessible",
-        )
-        .await?;
+        idb_put_string(indexed_db::APP_ID_KEY, stale_key.app_id().as_str()).await?;
+        idb_put_string(indexed_db::APP_KEY_WRAPPED_KEY, "inaccessible").await?;
 
         let recovery =
             delete_identity_directory_for_recovery(Some(stale_key.app_id().clone())).await?;
 
         assert!(
-            idb_get_string(crate::storage::indexed_db::APP_KEY_WRAPPED_KEY)
+            idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
                 .await?
                 .is_none()
         );
@@ -546,23 +537,15 @@ mod tests {
         idb_put_string("vault_registry", "{corrupt").await?;
         idb_put_string(RETIRED_APP_IDS_KEY, "{corrupt").await?;
         idb_put_string(&marker, "inaccessible-plan").await?;
-        idb_put_string(
-            crate::storage::indexed_db::APP_KEY_WRAPPED_KEY,
-            "inaccessible",
-        )
-        .await?;
-        idb_put_string(crate::storage::event_db::SIGNING_SEED_KEY, &"11".repeat(32)).await?;
+        idb_put_string(indexed_db::APP_KEY_WRAPPED_KEY, "inaccessible").await?;
+        idb_put_string(event_db::SIGNING_SEED_KEY, &"11".repeat(32)).await?;
         let recovery = delete_identity_directory_for_recovery(None).await?;
         assert!(
-            idb_get_string(crate::storage::indexed_db::APP_KEY_WRAPPED_KEY)
+            idb_get_string(indexed_db::APP_KEY_WRAPPED_KEY)
                 .await?
                 .is_none()
         );
-        assert!(
-            idb_get_string(crate::storage::event_db::SIGNING_SEED_KEY)
-                .await?
-                .is_none()
-        );
+        assert!(idb_get_string(event_db::SIGNING_SEED_KEY).await?.is_none());
         assert!(idb_get_string(&marker).await?.is_none());
         let recovered = load_identity_directory().await?;
         assert!(recovered.retired_app_ids().is_empty());
@@ -576,20 +559,20 @@ mod tests {
     -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first_key = AppKey::generate().map_err(map_domain_error)?;
+        let second_key = AppKey::generate().map_err(map_domain_error)?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        let first = super::super::save_new_protected_local_identity(
+        let first = identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        let second = super::super::save_new_protected_local_identity(
+        let second = identity_record::save_new_protected_local_identity(
             &second_key,
             &second_wrapped,
             None,
@@ -600,13 +583,13 @@ mod tests {
         let unrelated_marker = format!("pending_identity_reconciliation_v2:{unrelated_store_id}");
         idb_put_string(&unrelated_marker, "remaining-identity-plan").await?;
         idb_put_string(
-            crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY,
+            device_access::DEVICE_ACCESS_PROFILE_KEY,
             "companion-access-evidence",
         )
         .await?;
         assert_eq!(
             load_identity_directory().await?.selection(),
-            &nook_core::IdentitySelection::Selected(second.identity.identity_id.clone())
+            &IdentitySelection::Selected(second.identity.identity_id.clone())
         );
 
         let recovery =
@@ -635,13 +618,13 @@ mod tests {
             Some("remaining-identity-plan".to_owned())
         );
         assert_eq!(
-            idb_get_string(crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY).await?,
+            idb_get_string(device_access::DEVICE_ACCESS_PROFILE_KEY).await?,
             Some("companion-access-evidence".to_owned())
         );
 
         complete_identity_recovery_cleanup(&recovery).await?;
         idb_delete_key(&unrelated_marker).await?;
-        idb_delete_key(crate::storage::device_access::DEVICE_ACCESS_PROFILE_KEY).await?;
+        idb_delete_key(device_access::DEVICE_ACCESS_PROFILE_KEY).await?;
         keyring::clear_keyring_for_test().await?;
         clear_identity_directory_for_test().await
     }
@@ -650,25 +633,30 @@ mod tests {
     async fn scoped_recovery_preserves_a_different_surviving_selection() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let third_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first_key = AppKey::generate().map_err(map_domain_error)?;
+        let second_key = AppKey::generate().map_err(map_domain_error)?;
+        let third_key = AppKey::generate().map_err(map_domain_error)?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
         let third_wrapped =
             nook_core::wrap_device_identity_with_pin(&third_key.secret_string(), "third-secret")?;
-        let first = super::super::save_new_protected_local_identity(
+        let first = identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        super::super::save_new_protected_local_identity(&second_key, &second_wrapped, None, "Work")
-            .await?;
-        let third = super::super::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
+            &second_key,
+            &second_wrapped,
+            None,
+            "Work",
+        )
+        .await?;
+        let third = identity_record::save_new_protected_local_identity(
             &third_key,
             &third_wrapped,
             None,
@@ -683,7 +671,7 @@ mod tests {
         assert_eq!(directory.identities().len(), 2);
         assert_eq!(
             directory.selection(),
-            &nook_core::IdentitySelection::Selected(third.identity.identity_id)
+            &IdentitySelection::Selected(third.identity.identity_id)
         );
         assert!(directory.retired_app_ids().contains(first_key.app_id()));
         assert_ne!(
@@ -699,21 +687,26 @@ mod tests {
     async fn corrupt_directory_with_valid_keyring_uses_safe_full_reset() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first_key = AppKey::generate().map_err(map_domain_error)?;
+        let second_key = AppKey::generate().map_err(map_domain_error)?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        super::super::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        super::super::save_new_protected_local_identity(&second_key, &second_wrapped, None, "Work")
-            .await?;
+        identity_record::save_new_protected_local_identity(
+            &second_key,
+            &second_wrapped,
+            None,
+            "Work",
+        )
+        .await?;
         idb_put_string(IDENTITY_DIRECTORY_KEY, "{future-or-corrupt").await?;
 
         let recovery =
@@ -734,21 +727,26 @@ mod tests {
     async fn missing_directory_with_valid_keyring_uses_safe_full_reset() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first_key = AppKey::generate().map_err(map_domain_error)?;
+        let second_key = AppKey::generate().map_err(map_domain_error)?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        super::super::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        super::super::save_new_protected_local_identity(&second_key, &second_wrapped, None, "Work")
-            .await?;
+        identity_record::save_new_protected_local_identity(
+            &second_key,
+            &second_wrapped,
+            None,
+            "Work",
+        )
+        .await?;
         idb_delete_key(IDENTITY_DIRECTORY_KEY).await?;
 
         let recovery =
@@ -770,21 +768,26 @@ mod tests {
     -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first_key = AppKey::generate().map_err(map_domain_error)?;
+        let second_key = AppKey::generate().map_err(map_domain_error)?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        super::super::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        super::super::save_new_protected_local_identity(&second_key, &second_wrapped, None, "Work")
-            .await?;
+        identity_record::save_new_protected_local_identity(
+            &second_key,
+            &second_wrapped,
+            None,
+            "Work",
+        )
+        .await?;
         let directory_before = idb_get_string(IDENTITY_DIRECTORY_KEY)
             .await?
             .ok_or_else(|| NookError::IndexedDb("Identity directory is missing".to_owned()))?;
@@ -814,13 +817,13 @@ mod tests {
     -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first_key = AppKey::generate().map_err(map_domain_error)?;
+        let second_key = AppKey::generate().map_err(map_domain_error)?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        let first = super::super::save_new_protected_local_identity(
+        let first = identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
@@ -829,8 +832,13 @@ mod tests {
         .await?;
         let pending = begin_or_resume_simple_genesis(&first_key, "Personal").await?;
         assert_eq!(pending.identity_id, first.identity.identity_id);
-        super::super::save_new_protected_local_identity(&second_key, &second_wrapped, None, "Work")
-            .await?;
+        identity_record::save_new_protected_local_identity(
+            &second_key,
+            &second_wrapped,
+            None,
+            "Work",
+        )
+        .await?;
 
         let recovery =
             delete_identity_directory_for_recovery(Some(second_key.app_id().clone())).await?;
@@ -849,13 +857,14 @@ mod tests {
     -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let local_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let local_key = AppKey::generate().map_err(map_domain_error)?;
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&local_key.secret_string(), "local-secret")?;
-        let saved =
-            super::super::save_new_protected_local_identity(&local_key, &wrapped, None, "Personal")
-                .await?;
-        let peer_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let saved = identity_record::save_new_protected_local_identity(
+            &local_key, &wrapped, None, "Personal",
+        )
+        .await?;
+        let peer_key = AppKey::generate().map_err(map_domain_error)?;
         let identity_id = saved.identity.identity_id.clone();
         update_identity_directory(move |directory| {
             directory
@@ -865,7 +874,7 @@ mod tests {
                     app_id: peer_key.app_id().clone(),
                     auth_id: peer_key.auth_id(),
                     public_key: peer_key.public_key(),
-                    signing_public_key: nook_core::DeviceSigningPublicKey::Unavailable,
+                    signing_public_key: DeviceSigningPublicKey::Unavailable,
                     label: None,
                 })
                 .map_err(map_domain_error)
@@ -876,19 +885,16 @@ mod tests {
             delete_identity_directory_for_recovery(Some(local_key.app_id().clone())).await?;
 
         let recovered_directory = load_identity_directory().await?;
-        assert_eq!(
-            recovered_directory.selection(),
-            &nook_core::IdentitySelection::Empty
-        );
+        assert_eq!(recovered_directory.selection(), &IdentitySelection::Empty);
         assert_eq!(recovered_directory.identities().len(), 1);
         assert_eq!(recovered_directory.identities()[0].identity_id, identity_id);
         complete_identity_recovery_cleanup(&recovery).await?;
-        let replacement_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let replacement_key = AppKey::generate().map_err(map_domain_error)?;
         let replacement_wrapped = nook_core::wrap_device_identity_with_pin(
             &replacement_key.secret_string(),
             "replacement-secret",
         )?;
-        let replacement = super::super::save_protected_local_identity(
+        let replacement = identity_record::save_protected_local_identity(
             &replacement_key,
             &replacement_wrapped,
             "Recovered",
@@ -903,26 +909,27 @@ mod tests {
     async fn scoped_recovery_rejects_an_unattributed_sentinel_marker() -> Result<(), NookError> {
         clear_identity_directory_for_test().await?;
         keyring::clear_keyring_for_test().await?;
-        let first_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
-        let second_key = nook_core::AppKey::generate().map_err(map_domain_error)?;
+        let first_key = AppKey::generate().map_err(map_domain_error)?;
+        let second_key = AppKey::generate().map_err(map_domain_error)?;
         let first_wrapped =
             nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
         let second_wrapped =
             nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
-        super::super::save_new_protected_local_identity(
+        identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
             None,
             "Personal",
         )
         .await?;
-        super::super::save_new_protected_local_identity(&second_key, &second_wrapped, None, "Work")
-            .await?;
-        idb_put_string(
-            crate::storage::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY,
-            "{}",
+        identity_record::save_new_protected_local_identity(
+            &second_key,
+            &second_wrapped,
+            None,
+            "Work",
         )
         .await?;
+        idb_put_string(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, "{}").await?;
 
         let result =
             delete_identity_directory_for_recovery(Some(second_key.app_id().clone())).await;
@@ -933,12 +940,10 @@ mod tests {
         ));
         assert_eq!(keyring::load_keyring().await?.entries().len(), 2);
         assert_eq!(
-            idb_get_string(crate::storage::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY)
-                .await?,
+            idb_get_string(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await?,
             Some("{}".to_owned())
         );
-        idb_delete_key(crate::storage::indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY)
-            .await?;
+        idb_delete_key(indexed_db::SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await?;
         keyring::clear_keyring_for_test().await?;
         clear_identity_directory_for_test().await
     }

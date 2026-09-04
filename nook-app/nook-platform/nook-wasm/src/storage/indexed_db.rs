@@ -28,6 +28,11 @@
 //!   not contain plaintext key material.
 mod device_identity;
 
+use crate::storage::identity_record;
+use js_sys::Date;
+use nook_core::{AppId, IsoTimestamp, VaultName, VaultStoreIdentity};
+use rexie::TransactionMode;
+
 pub use device_identity::DeviceProtectionDeviceModeState;
 #[cfg(test)]
 pub(crate) use device_identity::save_wrapped_device_identity;
@@ -121,7 +126,7 @@ pub(crate) async fn clear_vault_db() -> Result<(), NookError> {
 
 async fn clear_vault_store(rexie: &rexie::Rexie, store_name: &str) -> Result<(), NookError> {
     let transaction = rexie
-        .transaction(&[store_name], rexie::TransactionMode::ReadWrite)
+        .transaction(&[store_name], TransactionMode::ReadWrite)
         .map_err(|e| {
             NookError::IndexedDb(format!(
                 "nook_db {store_name} clear transaction error: {e:?}"
@@ -164,7 +169,7 @@ async fn read_optional_string_from_store(
 pub(crate) async fn idb_get_string(key: &str) -> Result<Option<String>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .transaction(&["vault"], TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store("vault")
@@ -193,7 +198,7 @@ pub(crate) async fn idb_get_string(key: &str) -> Result<Option<String>, NookErro
 pub(crate) async fn idb_put_string(key: &str, value: &str) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store("vault")
@@ -243,17 +248,14 @@ async fn guarded_keyring_entry(
 ) -> Result<(Option<nook_core::LocalIdentityKeyringEntry>, bool), NookError> {
     match guard {
         StringUpdateGuard::WrappedCredentialFingerprint(_) => Ok((
-            crate::storage::identity_record::selected_local_keyring_entry_for_store(store).await?,
+            identity_record::selected_local_keyring_entry_for_store(store).await?,
             true,
         )),
         StringUpdateGuard::AppWrappedCredentialFingerprint { app_id, .. } => {
-            let app_id = nook_core::AppId::parse(app_id)
-                .map_err(|error| NookError::Database(error.to_string()))?;
+            let app_id =
+                AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
             Ok((
-                crate::storage::identity_record::local_keyring_entry_for_app_id_from_store(
-                    store, &app_id,
-                )
-                .await?,
+                identity_record::local_keyring_entry_for_app_id_from_store(store, &app_id).await?,
                 false,
             ))
         }
@@ -277,7 +279,7 @@ where
     // store. Keeping both operations in this transaction prevents two tabs
     // from reading the same profile and later overwriting each other's update.
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|error| {
             NookError::IndexedDb(format!("Atomic string update transaction error: {error:?}"))
         })?;
@@ -372,7 +374,7 @@ where
     // read-write transaction. IndexedDB therefore serializes this migration
     // with profile updates from every tab that touches the vault store.
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|error| {
             NookError::IndexedDb(format!(
                 "Atomic string migration transaction error: {error:?}"
@@ -463,7 +465,7 @@ pub(crate) async fn idb_delete_key(key: &str) -> Result<(), NookError> {
 async fn idb_delete_keys(keys: &[&str]) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store("vault")
@@ -485,8 +487,8 @@ async fn idb_delete_keys(keys: &[&str]) -> Result<(), NookError> {
 
 fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
     match nook_core::read_vault_store_id(content).map_err(|e| NookError::Database(e.to_string()))? {
-        nook_core::VaultStoreIdentity::Assigned(store_id) => Ok(store_id),
-        nook_core::VaultStoreIdentity::Unassigned => Err(NookError::Database(
+        VaultStoreIdentity::Assigned(store_id) => Ok(store_id),
+        VaultStoreIdentity::Unassigned => Err(NookError::Database(
             "Vault YAML is missing store_id.".to_owned(),
         )),
     }
@@ -494,8 +496,8 @@ fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
 
 fn label_from_yaml(content: &str) -> Option<String> {
     match nook_core::read_vault_name(content) {
-        Ok(nook_core::VaultName::Named(name)) => Some(name),
-        Ok(nook_core::VaultName::Unnamed) | Err(_) => None,
+        Ok(VaultName::Named(name)) => Some(name),
+        Ok(VaultName::Unnamed) | Err(_) => None,
     }
 }
 
@@ -580,7 +582,7 @@ fn upsert_registry_entry(
 }
 
 fn chrono_lite_now() -> nook_core::IsoTimestamp {
-    nook_core::IsoTimestamp::from_trusted(js_sys::Date::new_0().to_iso_string().into())
+    IsoTimestamp::from_trusted(Date::new_0().to_iso_string().into())
 }
 
 pub(crate) async fn list_vault_registry_entries() -> Result<Vec<VaultRegistryEntry>, NookError> {
@@ -609,7 +611,7 @@ pub(crate) async fn load_secret_search_catalog_buckets(
 ) -> Result<Vec<(u8, String)>, NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+        .transaction(&["vault"], TransactionMode::ReadOnly)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store("vault")
@@ -642,7 +644,7 @@ pub(crate) async fn save_secret_search_catalog_buckets(
 ) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store("vault")
@@ -702,6 +704,8 @@ pub(crate) async fn read_string_preferring(
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod sentinel_genesis_storage_tests {
+    use rexie::Rexie;
+
     use super::*;
     use wasm_bindgen_test::*;
 
@@ -760,7 +764,7 @@ mod sentinel_genesis_storage_tests {
     #[wasm_bindgen_test]
     async fn verified_sentinel_genesis_share_delivery_round_trips()
     -> Result<(), wasm_bindgen::JsError> {
-        let _ = rexie::Rexie::delete("nook_db").await;
+        let _ = Rexie::delete("nook_db").await;
         let store_id = "store_testsentinel11";
         let device_id = "0123456789abcdef";
         let payload = r#"{"version":1,"ciphertext":"verified"}"#;
@@ -819,7 +823,7 @@ pub(crate) async fn save_sentinel_genesis_share_delivery(
     }
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
     let store = transaction
         .store("vault")

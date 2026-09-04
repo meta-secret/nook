@@ -1,5 +1,8 @@
 //! Crash-resumable cleanup journal for destructive local identity recovery.
 
+use crate::storage::indexed_db;
+use rexie::TransactionMode;
+
 use crate::{NookError, storage::open_nook_database};
 use serde::{Deserialize, Serialize};
 
@@ -35,7 +38,7 @@ pub(super) async fn load_pending_recovery_cleanup(
 
 pub(crate) async fn has_pending_identity_recovery_cleanup() -> Result<bool, NookError> {
     Ok(
-        crate::storage::indexed_db::idb_get_string(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
+        indexed_db::idb_get_string(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
             .await?
             .is_some(),
     )
@@ -63,7 +66,7 @@ pub(crate) async fn complete_identity_recovery_cleanup(
 ) -> Result<(), NookError> {
     let rexie = open_nook_database().await?;
     let transaction = rexie
-        .transaction(&["vault"], rexie::TransactionMode::ReadWrite)
+        .transaction(&["vault"], TransactionMode::ReadWrite)
         .map_err(|error| {
             NookError::IndexedDb(format!("Recovery cleanup completion error: {error:?}"))
         })?;

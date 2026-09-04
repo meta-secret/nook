@@ -1,5 +1,8 @@
 //! Identity-scoped persistence and legacy migration for device-access profiles.
 
+use crate::storage::identity_record;
+use nook_core::AppId;
+
 use crate::NookError;
 
 use super::{
@@ -34,8 +37,8 @@ pub(super) struct DeviceAccessProfileKey {
 }
 
 async fn selected_device_access_profile_key() -> Result<DeviceAccessProfileKey, NookError> {
-    let keyring = crate::storage::identity_record::load_keyring().await?;
-    let entry = crate::storage::identity_record::load_selected_entry().await?;
+    let keyring = identity_record::load_keyring().await?;
+    let entry = identity_record::load_selected_entry().await?;
     let Some(entry) = entry else {
         return Ok(DeviceAccessProfileKey {
             value: DEVICE_ACCESS_PROFILE_KEY.to_owned(),
@@ -51,9 +54,8 @@ async fn selected_device_access_profile_key() -> Result<DeviceAccessProfileKey, 
 async fn device_access_profile_key_for_app_id(
     app_id: &str,
 ) -> Result<DeviceAccessProfileKey, NookError> {
-    let app_id =
-        nook_core::AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
-    let keyring = crate::storage::identity_record::load_keyring().await?;
+    let app_id = AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
+    let keyring = identity_record::load_keyring().await?;
     let Some(entry) = keyring
         .entries()
         .iter()
@@ -72,9 +74,8 @@ async fn device_access_profile_key_for_app_id(
 pub(super) async fn device_access_profile_key_for_verified_app_id(
     app_id: &str,
 ) -> Result<DeviceAccessProfileKey, NookError> {
-    let app_id =
-        nook_core::AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
-    let keyring = crate::storage::identity_record::load_keyring().await?;
+    let app_id = AppId::parse(app_id).map_err(|error| NookError::Database(error.to_string()))?;
+    let keyring = identity_record::load_keyring().await?;
     if let Some(entry) = keyring
         .entries()
         .iter()
@@ -286,6 +287,9 @@ where
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
+    use crate::storage::indexed_db;
+    use nook_core::{AppKey, DeviceId, IdentityId, IsoTimestamp, LocalIdentityKeyringEntry};
+
     use super::*;
     use crate::storage::indexed_db::{idb_delete_keys, idb_put_string};
     use wasm_bindgen_test::*;
@@ -296,24 +300,24 @@ mod browser_tests {
     async fn atomic_update_rechecks_legacy_profile_ownership() -> anyhow::Result<()> {
         const SOURCE_KEY: &str = "test-device-access-legacy-owner";
         const TARGET_KEY: &str = "test-device-access-scoped-owner";
-        let selected = nook_core::AppKey::generate()?;
-        let companion = nook_core::AppKey::generate()?;
+        let selected = AppKey::generate()?;
+        let companion = AppKey::generate()?;
         let wrapped =
             nook_core::wrap_device_identity_with_pin(&selected.secret_string(), "selected-pin")?;
-        let owner = nook_core::LocalIdentityKeyringEntry::legacy(
-            nook_core::IdentityId::generate()?,
+        let owner = LocalIdentityKeyringEntry::legacy(
+            IdentityId::generate()?,
             selected.app_id().clone(),
             wrapped,
         );
         let mut companion_profile = DeviceAccessProfile::default();
         companion_profile.record_verified_vault_access(
-            &nook_core::DeviceId::parse(companion.app_id().as_str())?,
+            &DeviceId::parse(companion.app_id().as_str())?,
             &nook_core::generate_store_id()?,
-            nook_core::IsoTimestamp::from_trusted("2026-08-25T01:00:00.000Z".to_owned()),
+            IsoTimestamp::from_trusted("2026-08-25T01:00:00.000Z".to_owned()),
         );
         let companion_raw = serde_json::to_string(&companion_profile)?;
         idb_put_string(SOURCE_KEY, &companion_raw).await?;
-        crate::storage::indexed_db::idb_delete_key(TARGET_KEY).await?;
+        indexed_db::idb_delete_key(TARGET_KEY).await?;
 
         let result = idb_update_string_with_fallback(
             TARGET_KEY,

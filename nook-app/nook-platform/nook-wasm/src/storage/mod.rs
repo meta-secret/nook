@@ -4,6 +4,10 @@
 //! `nook_core::StorageMode`. New backends (S3, IPFS, …) become new
 //! submodules with the same async function shape.
 
+#![deny(clippy::absolute_paths)]
+
+use rexie::{ObjectStore, Rexie, TransactionMode};
+
 use crate::NookError;
 use nook_core::{EventId, VaultEvent, parse_remote_event_storage_bytes};
 use std::{cell::RefCell, rc::Rc};
@@ -36,20 +40,20 @@ pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> 
     if let Some(connection) =
         NOOK_DATABASE_CONNECTIONS.with(|connections| connections.borrow().first().cloned())
         && connection
-            .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+            .transaction(&["vault"], TransactionMode::ReadOnly)
             .is_ok()
     {
         return Ok(connection);
     }
 
     let connection = Rc::new(
-        rexie::Rexie::builder("nook_db")
+        Rexie::builder("nook_db")
             .version(2)
-            .add_object_store(rexie::ObjectStore::new("vault"))
-            .add_object_store(rexie::ObjectStore::new("events"))
-            .add_object_store(rexie::ObjectStore::new("projections"))
-            .add_object_store(rexie::ObjectStore::new("provider_receipts"))
-            .add_object_store(rexie::ObjectStore::new("outbox"))
+            .add_object_store(ObjectStore::new("vault"))
+            .add_object_store(ObjectStore::new("events"))
+            .add_object_store(ObjectStore::new("projections"))
+            .add_object_store(ObjectStore::new("provider_receipts"))
+            .add_object_store(ObjectStore::new("outbox"))
             .build()
             .await
             .map_err(|error| NookError::IndexedDb(format!("IndexedDB build error: {error:?}")))?,
@@ -58,7 +62,7 @@ pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> 
         let mut connections = connections.borrow_mut();
         connections.retain(|existing| {
             existing
-                .transaction(&["vault"], rexie::TransactionMode::ReadOnly)
+                .transaction(&["vault"], TransactionMode::ReadOnly)
                 .is_ok()
         });
         if let Some(existing) = connections.first().cloned() {
