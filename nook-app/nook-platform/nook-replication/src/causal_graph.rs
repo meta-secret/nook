@@ -13,6 +13,18 @@ impl CausalGraphEventCount {
     pub const SINGLE_EVENT: Self = Self(1);
 }
 
+impl From<usize> for CausalGraphEventCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<CausalGraphEventCount> for usize {
+    fn from(value: CausalGraphEventCount) -> Self {
+        value.0
+    }
+}
+
 /// Result of indexing an immutable event and its parent set.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CausalInsertStatus<Id> {
@@ -416,6 +428,18 @@ mod tests {
         graph.insert(id("root"), Vec::new());
 
         assert_eq!(graph.len(), CausalGraphEventCount::SINGLE_EVENT);
+    }
+
+    #[test]
+    fn event_count_round_trips_dynamic_values_above_one() {
+        let mut graph = CausalGraph::new();
+        for event_id in ["first", "second", "third"] {
+            graph.insert(id(event_id), Vec::new());
+        }
+        let count = CausalGraphEventCount::from(3);
+
+        assert_eq!(graph.len(), count);
+        assert_eq!(usize::from(count), 3);
     }
 
     #[test]
