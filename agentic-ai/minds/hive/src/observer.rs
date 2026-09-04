@@ -656,7 +656,7 @@ mod tests {
         };
         assert_eq!(task, json!({"id": "task-1", "locale": "en"}));
 
-        let missing = task_detail(
+        let Err(missing) = task_detail(
             State(state),
             Path("missing".into()),
             Query(LocaleQuery {
@@ -664,11 +664,15 @@ mod tests {
             }),
         )
         .await
-        .expect_err("missing task must return an observer error")
-        .into_response();
+        else {
+            return Err(crate::HiveError::message(
+                "missing observer task was returned",
+            ));
+        };
+        let missing = missing.into_response();
         assert_eq!(missing.status(), StatusCode::NOT_FOUND);
 
-        let unavailable = overview(
+        let Err(unavailable) = overview(
             State(ObserverState {
                 store: FixtureStore::Failed,
             }),
@@ -677,8 +681,12 @@ mod tests {
             }),
         )
         .await
-        .expect_err("store failure must be hidden behind stable observer error")
-        .into_response();
+        else {
+            return Err(crate::HiveError::message(
+                "failed observer store returned an overview",
+            ));
+        };
+        let unavailable = unavailable.into_response();
         assert_eq!(unavailable.status(), StatusCode::SERVICE_UNAVAILABLE);
         Ok(())
     }

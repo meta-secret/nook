@@ -107,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn retries_propagate_latest_feedback_and_stop_after_success() {
+    fn retries_propagate_latest_feedback_and_stop_after_success() -> TaskResult<()> {
         let task = ScriptedTask {
             attempts: Cell::new(0),
             prompts: RefCell::new(Vec::new()),
@@ -115,13 +115,10 @@ mod tests {
             max_attempts: 3,
         };
 
-        assert_eq!(
-            task.execute_with_retries(&Prompt {
-                text: "build it".into(),
-            })
-            .expect("second attempt should succeed"),
-            2
-        );
+        let output = task.execute_with_retries(&Prompt {
+            text: "build it".into(),
+        })?;
+        assert_eq!(output, 2);
         assert_eq!(task.attempts.get(), 2);
         assert_eq!(
             task.prompts.borrow().as_slice(),
@@ -130,10 +127,11 @@ mod tests {
                 "build it\n\n[Retry Feedback Attempt 1]:\ndiagnostic 1"
             ]
         );
+        Ok(())
     }
 
     #[test]
-    fn retries_return_the_last_diagnostic_after_exhaustion() {
+    fn retries_return_the_last_diagnostic_after_exhaustion() -> TaskResult<()> {
         let task = ScriptedTask {
             attempts: Cell::new(0),
             prompts: RefCell::new(Vec::new()),
@@ -141,29 +139,32 @@ mod tests {
             max_attempts: 2,
         };
 
-        let error = task
-            .execute_with_retries(&Prompt {
-                text: "test".into(),
-            })
-            .expect_err("both attempts should fail");
+        let Err(error) = task.execute_with_retries(&Prompt {
+            text: "test".into(),
+        }) else {
+            return Err(TaskError {
+                message: "both scripted attempts unexpectedly succeeded".into(),
+                log: String::new(),
+            });
+        };
         assert_eq!(error.message, "Task failed after 2 attempts");
         assert_eq!(error.log, "diagnostic 2");
         assert_eq!(task.attempts.get(), 2);
+        Ok(())
     }
 
     #[test]
-    fn generated_graph_executes_dependencies_and_declared_retry_policy() {
+    fn generated_graph_executes_dependencies_and_declared_retry_policy() -> TaskResult<()> {
         let prompt = Prompt {
             text: "deliver the graph".into(),
         };
 
         assert!(ArchitectureTask.execute(&prompt).is_ok());
         assert!(BackendTask::default().execute(&prompt).is_ok());
-        let output = UnitTestTask::default()
-            .execute_with_retries(&prompt)
-            .expect("generated task graph should execute");
+        let output = UnitTestTask::default().execute_with_retries(&prompt)?;
         assert!(!output.passed);
         assert!(output.test_logs.is_empty());
         assert_eq!(UnitTestTask::default().max_retries(), 3);
+        Ok(())
     }
 }

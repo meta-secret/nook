@@ -81,19 +81,27 @@ mod tests {
         let inside = git_output(repository.path(), &["rev-parse", "--is-inside-work-tree"]).await?;
         assert_eq!(inside, "true");
 
-        let failure = git_output(repository.path(), &["rev-parse", "--verify", "missing-ref"])
-            .await
-            .expect_err("missing revision must fail");
+        let Err(failure) =
+            git_output(repository.path(), &["rev-parse", "--verify", "missing-ref"]).await
+        else {
+            return Err(crate::HiveError::message(
+                "missing revision unexpectedly resolved",
+            ));
+        };
         assert!(failure.to_string().contains("git"));
         assert!(failure.to_string().contains("failed with status"));
 
-        let failure = run_git_status(
+        let Err(failure) = run_git_status(
             repository.path(),
             &["checkout", "--detach", "missing-ref"],
             "detach missing revision",
         )
         .await
-        .expect_err("status helper must reject a failed command");
+        else {
+            return Err(crate::HiveError::message(
+                "failed git status unexpectedly succeeded",
+            ));
+        };
         assert!(
             failure
                 .to_string()

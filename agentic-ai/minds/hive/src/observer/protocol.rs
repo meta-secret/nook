@@ -303,15 +303,22 @@ mod tests {
                 ObserverResponse::Error("coordinator unavailable".into()),
             ];
             for response in responses {
-                let request = requests
-                    .next_line()
-                    .await?
-                    .expect("request must be present");
+                let Some(request) = requests.next_line().await? else {
+                    return Err(crate::HiveError::message(
+                        "observer client closed before sending its request",
+                    ));
+                };
                 serde_json::from_str::<ObserverRequest>(&request)?;
                 writer.write_all(&serde_json::to_vec(&response)?).await?;
                 writer.write_all(b"\n").await?;
                 writer.flush().await?;
             }
+            let Some(final_request) = requests.next_line().await? else {
+                return Err(crate::HiveError::message(
+                    "observer client closed before the final request",
+                ));
+            };
+            serde_json::from_str::<ObserverRequest>(&final_request)?;
             Ok::<(), crate::HiveError>(())
         });
         let client = ObserverCoordinatorStore::connect(&socket).await?;
@@ -325,25 +332,36 @@ mod tests {
             client.observer_task_value("task-7", "ru").await?,
             Some(serde_json::json!({"id": "task-7"}))
         );
-        let mismatch = client
-            .observer_snapshot_value("en")
-            .await
-            .expect_err("task response must not satisfy a snapshot request");
+        let Err(mismatch) = client.observer_snapshot_value("en").await else {
+            return Err(crate::HiveError::message(
+                "task response satisfied a snapshot request",
+            ));
+        };
         assert!(
             mismatch
                 .to_string()
                 .contains("unexpected observer coordinator response")
         );
-        let remote_error = client
-            .observer_task_value("task-8", "en")
-            .await
-            .expect_err("remote error must cross the private channel");
+        let Err(remote_error) = client.observer_task_value("task-8", "en").await else {
+            return Err(crate::HiveError::message(
+                "remote observer error did not cross the private channel",
+            ));
+        };
         assert!(remote_error.to_string().contains("coordinator unavailable"));
-        let closed = client
-            .observer_snapshot_value("en")
-            .await
-            .expect_err("closed channel must not return empty state");
-        assert!(closed.to_string().contains("closed its private channel"));
+        let Err(closed) = client.observer_snapshot_value("en").await else {
+            return Err(crate::HiveError::message(
+                "closed observer channel returned state",
+            ));
+        };
+        let crate::HiveError::Message { message } = closed else {
+            return Err(crate::HiveError::message(
+                "observer channel closure lost its typed protocol error",
+            ));
+        };
+        assert_eq!(
+            message,
+            "Hive observer coordinator closed its private channel"
+        );
         server.await??;
         Ok(())
     }

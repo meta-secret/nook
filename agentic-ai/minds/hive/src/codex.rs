@@ -470,6 +470,17 @@ mod tests {
     use super::*;
     use crate::HiveContext;
 
+    #[derive(serde::Deserialize)]
+    struct RecordedExecution {
+        command: String,
+        category: String,
+        started_at: String,
+        finished_at: String,
+        duration_seconds: u64,
+        outcome: String,
+        reason: String,
+    }
+
     #[tokio::test]
     async fn configures_an_ephemeral_read_only_core_thread() -> crate::HiveResult<()> {
         let repository = tempfile::tempdir()?;
@@ -787,12 +798,14 @@ mod tests {
         )
         .await?;
         let line = tokio::fs::read_to_string(&log).await?;
-        let record: serde_json::Value = serde_json::from_str(line.trim())?;
-        assert_eq!(record["command"], "cargo test");
-        assert_eq!(record["category"], "test");
-        assert_eq!(record["duration_seconds"], 3);
-        assert_eq!(record["outcome"], "failed");
-        assert_eq!(record["reason"], "embedded_codex_validation");
+        let record: RecordedExecution = serde_json::from_str(line.trim())?;
+        assert_eq!(record.command, "cargo test");
+        assert_eq!(record.category, "test");
+        assert!(!record.started_at.is_empty());
+        assert!(!record.finished_at.is_empty());
+        assert_eq!(record.duration_seconds, 3);
+        assert_eq!(record.outcome, "failed");
+        assert_eq!(record.reason, "embedded_codex_validation");
 
         let absent = root.path().join("absent.jsonl");
         record_local_execution(
