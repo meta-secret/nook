@@ -31,13 +31,19 @@ declare_lint_pass! {
 impl FunctionOwnership {
     fn requires_owner(cx: &LateContext<'_>, item: &Item<'_>) -> bool {
         let def_id = item.owner_id.def_id;
-        matches!(item.kind, ItemKind::Fn { .. })
-            && !item.span.in_external_macro(cx.tcx.sess.source_map())
-            && !cx.tcx.entry_fn(()).is_some_and(|(entry, _)| entry == def_id.to_def_id())
-            // Clippy finds compiler-generated test descriptors by name. A nested
-            // helper can shadow that name, but is not itself a registered test.
-            && !(cx.tcx.def_kind(cx.tcx.parent(def_id.to_def_id())) == DefKind::Mod
-                && is_test_function(cx.tcx, def_id))
+        if !matches!(item.kind, ItemKind::Fn { .. })
+            || item.span.in_external_macro(cx.tcx.sess.source_map())
+            || cx
+                .tcx
+                .entry_fn(())
+                .is_some_and(|(entry, _)| entry == def_id.to_def_id())
+        {
+            return false;
+        }
+        // Clippy finds compiler-generated test descriptors by name. A nested
+        // helper can shadow that name, but is not itself a registered test.
+        !(cx.tcx.def_kind(cx.tcx.parent(def_id.to_def_id())) == DefKind::Mod
+            && is_test_function(cx.tcx, def_id))
     }
 
     fn mentions_lint(attribute: &Attribute) -> bool {
