@@ -1,21 +1,27 @@
 import { expect, test } from 'bun:test';
 
-const activityFixture = '01:02:(1263):GIZMO:FIX -> message';
-const actorPattern = '(?:GIZMO|AI|DEV-CORE|SECURITY|SRE|WEB-DEV|SKILL)';
-const activityPattern = new RegExp(
-  `^\\d{2}:\\d{2}:\\((?:[1-9]\\d*|pending|none)\\):${actorPattern}:[A-Z][A-Z0-9/-]* -> .+$`,
+const activityFixture = `\`\`\`text
+01:02:(1263):Gizmo Prime:FIX
+\`\`\`
+Updated the **activity contract**.`;
+const actorPattern = '(?:Gizmo Prime|AI|DEV-CORE|SECURITY|SRE|WEB-DEV|SKILL)';
+const metadataPattern = new RegExp(
+  `^\\d{2}:\\d{2}:\\((?:[1-9]\\d*|pending|none)\\):${actorPattern}:[A-Z][A-Z0-9/-]*$`,
 );
 
-test('activity lines use a compact canonical actor token', () => {
-  const activity = activityFixture.split('\n').at(-1);
+test('activities fence metadata and follow it with ordinary Markdown', () => {
+  const [opening, metadata, closing, description] = activityFixture.split('\n');
 
-  expect(activity).toMatch(activityPattern);
-  expect(activity).not.toContain('Team Agent');
+  expect(opening).toBe('```text');
+  expect(metadata).toMatch(metadataPattern);
+  expect(metadata).not.toContain('->');
+  expect(closing).toBe('```');
+  expect(description).toBe('Updated the **activity contract**.');
 });
 
-test('activity lines cover every canonical routed team actor', () => {
+test('metadata covers every canonical routed team actor', () => {
   const actors = [
-    'GIZMO',
+    'Gizmo Prime',
     'AI',
     'DEV-CORE',
     'SECURITY',
@@ -25,13 +31,17 @@ test('activity lines cover every canonical routed team actor', () => {
   ];
 
   for (const actor of actors) {
-    expect(`01:02:(1263):${actor}:TEST -> ready`).toMatch(activityPattern);
+    expect(`01:02:(1263):${actor}:TEST`).toMatch(metadataPattern);
   }
-  expect('01:02:(1263):Sagan:TEST -> rejected').not.toMatch(activityPattern);
+  expect('01:02:(1263):GIZMO:TEST').not.toMatch(metadataPattern);
+  expect('01:02:(1263):Sagan:TEST').not.toMatch(metadataPattern);
 });
 
-test('activity lines carry both pre-PR states inline', () => {
-  expect('00:00:(pending):GIZMO:STATE -> preparing').toMatch(activityPattern);
-  expect('00:00:(none):SKILL:TEST -> verified').toMatch(activityPattern);
-  expect('00:00:(0):AI:TEST -> rejected').not.toMatch(activityPattern);
+test('metadata carries numbered and pre-PR states without descriptions', () => {
+  expect('00:00:(pending):Gizmo Prime:STATE').toMatch(metadataPattern);
+  expect('00:00:(none):SKILL:TEST').toMatch(metadataPattern);
+  expect('00:00:(0):AI:TEST').not.toMatch(metadataPattern);
+  expect('00:00:(pending):Gizmo Prime:STATE -> preparing').not.toMatch(
+    metadataPattern,
+  );
 });
