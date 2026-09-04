@@ -3,7 +3,6 @@ use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
-
 #[test]
 fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     let root = repository_root()?;
@@ -34,10 +33,8 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     );
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
-            "nook-wasm" => {
-                assert!(floor.is_null());
-                continue;
-            }
+            "nook-wasm" if floor.is_null() => continue,
+            "nook-wasm" => panic!("nook-wasm coverage floor must remain pending"),
             "nook-companion-wasm" => 18.0,
             "nook-authenticator-domain" => 87.0,
             "hive" => 60.0,
@@ -47,16 +44,12 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
         assert!(floor.as_f64().is_some_and(|floor| floor >= expected));
     }
     assert_eq!(
-        excluded.get("nook-fuzz").map(String::as_str),
-        Some(
-            "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
-        )
+        excluded["nook-fuzz"],
+        "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
     );
     assert_eq!(
-        excluded.get("arrayref").map(String::as_str),
-        Some(
-            "Vendored third-party patch; upstream source is outside Nook's authored coverage policy."
-        )
+        excluded["arrayref"],
+        "Vendored third-party patch; upstream source is outside Nook's authored coverage policy."
     );
     Ok(())
 }
