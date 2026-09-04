@@ -33,14 +33,7 @@ mod sync_io;
 mod types;
 
 #[doc(hidden)]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: reexports wasm-bindgen future conversion runtime support for projecting Rust futures into JavaScript Promises"
-    )
-)]
-pub use wasm_bindgen_futures as __wasm_bindgen_futures;
+pub(crate) use wasm_bindgen_futures as __wasm_bindgen_futures;
 
 pub use device_access::*;
 pub use identity_record::{
@@ -49,7 +42,7 @@ pub use identity_record::{
     NookIdentitySnapshotLoad, load_identity_directory_snapshot, load_identity_snapshot,
     select_identity,
 };
-pub use logger::NookLogEntries;
+pub use logger::{NookLogEntries, log_count, log_dump_page};
 pub use manager::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExtensionIdentityHandoffContext, NookExternalEventLogRecords, NookVaultManager,

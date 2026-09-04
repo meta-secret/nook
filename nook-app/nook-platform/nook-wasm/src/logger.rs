@@ -445,6 +445,13 @@ pub async fn log_dump() -> Result<NookLogEntries, wasm_bindgen::JsError> {
 }
 
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: accepts log pagination limits and offsets as JavaScript Number scalars"
+    )
+)]
 pub async fn log_dump_page(
     min_level: String,
     limit: u32,
@@ -456,6 +463,13 @@ pub async fn log_dump_page(
 
 /// Total number of persisted log entries (after flushing the queue).
 #[wasm_bindgen]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the persisted log count as a JavaScript Number scalar"
+    )
+)]
 pub async fn log_count() -> Result<u32, wasm_bindgen::JsError> {
     flush_pending().await?;
     let db = logs_db().await?;
