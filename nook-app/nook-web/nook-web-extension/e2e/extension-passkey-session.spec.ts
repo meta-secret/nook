@@ -25,6 +25,7 @@ import {
   type WebsitePasskeyAssertionBrowserFlow,
 } from './helpers/extension-smoke-runtime'
 import {
+  completeCompanionPopupUnlock,
   PairedVaultCompanionUnlockKind,
   unlockPairedVaultThroughCompanion,
   type PairedVaultCompanionUnlock,
@@ -291,6 +292,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await expect(pairingLauncher).toHaveURL(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
+    await completeCompanionPopupUnlock({ page: pairingLauncher })
     await expect(
       pairingLauncher.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
@@ -346,6 +348,7 @@ test('uses a passkey-backed extension to create, approve, lock, and unlock a Sim
     await connectedPopupPage.goto(
       `chrome-extension://${extensionId}/popup/index.html`,
     )
+    await completeCompanionPopupUnlock({ page: connectedPopupPage })
     await expect(
       connectedPopupPage.getByTestId('extension-toolbar-menu'),
     ).toBeVisible()
@@ -733,6 +736,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     await pairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
+    await completeCompanionPopupUnlock({ page: pairPopup })
     await expect(pairPopup.getByTestId('connect-simple-vault-btn')).toBeVisible(
       { timeout: EXTENSION_UNLOCK_TIMEOUT_MS },
     )
@@ -805,6 +809,7 @@ test('re-approves an existing local vault after reload without event-log-access-
     await repairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
+    await completeCompanionPopupUnlock({ page: repairPopup })
     await expect(
       repairPopup.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })

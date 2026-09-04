@@ -34,7 +34,7 @@ async function openOwnedCompanionPopup(
   return popupPage
 }
 
-async function completeCompanionPopupUnlock(
+export async function completeCompanionPopupUnlock(
   request: CompanionPopupUnlock,
 ): Promise<void> {
   const { page } = request
