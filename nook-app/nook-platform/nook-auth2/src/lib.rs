@@ -113,10 +113,9 @@ pub use auth::sentinel_genesis::{
     sentinel_genesis_request, start_sentinel_genesis,
 };
 pub use auth::sentinel_unlock::{
-    CheckedSentinelUnlockRequest, SentinelUnlockPolicy, SentinelUnlockRequest,
+    CheckedSentinelUnlockRequest, SentinelUnlockPolicy, SentinelUnlockQuorum,
+    SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
     SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus,
-    add_sentinel_unlock_response, finalize_sentinel_unlock, sentinel_unlock_request,
-    sentinel_unlock_status, start_sentinel_unlock,
 };
 pub use crypto::vault_crypto::VaultCrypto;
 pub use errors::{
