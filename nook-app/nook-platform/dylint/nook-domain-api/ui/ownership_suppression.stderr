@@ -4,7 +4,7 @@ warning: invalid suppression of `unowned_function`
 LL | #![expect(unowned_function, reason = "FFI boundary: blanket crate exception")]
    |    ^^^^^^
    |
-   = help: expectations must be on an authored free function requiring a boundary exception
+   = help: expectations must be on an authored free function req$DIRring a boundary exception
    = note: requested on the command line with `-W invalid-unowned-function-suppression`
 
 warning: invalid suppression of `unowned_function`
@@ -13,7 +13,7 @@ warning: invalid suppression of `unowned_function`
 LL | #[expect(
    |   ^^^^^^
    |
-   = help: expectations must be on an authored free function requiring a boundary exception
+   = help: expectations must be on an authored free function req$DIRring a boundary exception
 
 warning: invalid suppression of `unowned_function`
   --> $DIR/ownership_suppression.rs:12:3
@@ -21,7 +21,7 @@ warning: invalid suppression of `unowned_function`
 LL | #[expect(unowned_function, reason = "FFI boundary: a type is not a callback")]
    |   ^^^^^^
    |
-   = help: expectations must be on an authored free function requiring a boundary exception
+   = help: expectations must be on an authored free function req$DIRring a boundary exception
 
 warning: invalid suppression of `unowned_function`
   --> $DIR/ownership_suppression.rs:15:7
@@ -29,7 +29,7 @@ warning: invalid suppression of `unowned_function`
 LL |     #[expect(
    |       ^^^^^^
    |
-   = help: expectations must be on an authored free function requiring a boundary exception
+   = help: expectations must be on an authored free function req$DIRring a boundary exception
 
 warning: invalid suppression of `unowned_function`
   --> $DIR/ownership_suppression.rs:21:3
@@ -61,7 +61,7 @@ warning: invalid suppression of `unowned_function`
 LL | #[allow(unowned_function, reason = "FFI boundary: use a checked expectation")]
    |   ^^^^^
    |
-   = help: use `expect`, not `allow`, for a required standalone callback
+   = help: use `expect`, not `allow`, for a req$DIRred standalone callback
 
 warning: invalid suppression of `unowned_function`
   --> $DIR/ownership_suppression.rs:29:3
@@ -69,7 +69,7 @@ warning: invalid suppression of `unowned_function`
 LL | #[expect(
    |   ^^^^^^
    |
-   = help: expectations must be on an authored free function requiring a boundary exception
+   = help: expectations must be on an authored free function req$DIRring a boundary exception
 
 warning: 9 warnings emitted
 

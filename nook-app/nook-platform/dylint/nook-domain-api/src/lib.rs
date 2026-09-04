@@ -98,6 +98,13 @@ declare_lint_pass! {
     clippy::no_mangle_with_rust_abi,
     reason = "Dylint 6.0.1 requires this Rust ABI loader entry point"
 )]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        unowned_function,
+        reason = "framework boundary: Dylint loader requires register_lints entrypoint"
+    )
+)]
 #[unsafe(no_mangle)]
 pub fn register_lints(session: &Session, lint_store: &mut LintStore) {
     dylint_linting::init_config(session);
