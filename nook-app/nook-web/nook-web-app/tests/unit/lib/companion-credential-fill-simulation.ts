@@ -274,7 +274,7 @@ export function simulateLoginJourney({
             snapshot: snapshotForm(form),
           }
           outcomes.push(outcome)
-          break
+          return outcomes
         }
       }
     }

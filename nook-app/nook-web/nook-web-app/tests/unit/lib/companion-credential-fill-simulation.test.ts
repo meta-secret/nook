@@ -160,17 +160,26 @@ function createDuplicateFieldIndexJourney(): CredentialFillJourneyRequest {
 }
 
 function createNewPasswordJourney(): CredentialFillJourneyRequest {
-  const definition: SimulatedCredentialFieldDefinition = {
+  const newPasswordDefinition: SimulatedCredentialFieldDefinition = {
     kind: SimulatedCredentialFieldKind.NewPassword,
     name: 'new-password',
     field_index: new CredentialFillFieldIndex(13),
     value: 'new-password-value',
   }
-  const field = new SimulatedCredentialField(definition)
-  const form: SimulatedCredentialForm = [field]
+  const usernameDefinition: SimulatedCredentialFieldDefinition = {
+    kind: SimulatedCredentialFieldKind.Credential,
+    name: 'later-username',
+    field_index: new CredentialFillFieldIndex(21),
+    role: CredentialFillFieldRole.username(),
+    editability: CredentialFillEditability.writable(),
+    value: 'original-later-username',
+  }
+  const newPassword = new SimulatedCredentialField(newPasswordDefinition)
+  const username = new SimulatedCredentialField(usernameDefinition)
+  const form: SimulatedCredentialForm = [newPassword, username]
   return {
     form,
-    steps: [{ observedFields: form }],
+    steps: [{ observedFields: [newPassword] }, { observedFields: [username] }],
     credentials: FAKE_CREDENTIALS,
   }
 }
@@ -336,13 +345,16 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
     ],
   },
   {
-    name: 'rejects new-password observations without mutation',
+    name: 'stops before a later username step after new-password rejection',
     createJourney: createNewPasswordJourney,
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
         rejection: CredentialFillRejection.NewPasswordFieldPresent,
-        snapshot: [{ name: 'new-password', value: 'new-password-value' }],
+        snapshot: [
+          { name: 'new-password', value: 'new-password-value' },
+          { name: 'later-username', value: 'original-later-username' },
+        ],
       },
     ],
   },
