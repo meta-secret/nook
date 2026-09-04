@@ -4,11 +4,12 @@ import {
   CredentialFillEditability,
   CredentialFillFieldIndex,
   CredentialFillFieldRole,
+  CredentialFillRejection,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   CredentialFillJourneyOutcomeKind,
-  CredentialFillPlannerRejection,
   SimulatedCredentialField,
+  UnhandledCredentialFillRejectionError,
   simulateLoginJourney,
   type CredentialFillJourneyOutcome,
   type CredentialFillJourneyRequest,
@@ -167,7 +168,7 @@ type LoginJourneyScenario = LoginJourneyScenarioBase &
       }
     | {
         readonly kind: LoginJourneyScenarioKind.Throws
-        readonly expectedMessage: string
+        readonly expectedRejection: CredentialFillRejection
       }
   )
 
@@ -205,7 +206,7 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
     expected: [
       {
         kind: CredentialFillJourneyOutcomeKind.Rejected,
-        message: CredentialFillPlannerRejection.PasswordFieldsReadonly,
+        rejection: CredentialFillRejection.PasswordFieldsReadonly,
         snapshot: [{ name: 'password', value: '' }],
       },
     ],
@@ -231,7 +232,7 @@ const LOGIN_JOURNEY_SCENARIOS: LoginJourneyScenario[] = [
     kind: LoginJourneyScenarioKind.Throws,
     name: 'propagates a non-modeled duplicate-index planner failure',
     createJourney: createDuplicateFieldIndexJourney,
-    expectedMessage: 'the observed scope contains a duplicate field index',
+    expectedRejection: CredentialFillRejection.DuplicateFieldIndex,
   },
 ]
 
@@ -246,9 +247,17 @@ describe('deterministic zero-vault login journeys', () => {
         break
       }
       case LoginJourneyScenarioKind.Throws: {
-        const runJourney = (): CredentialFillJourneyOutcome[] =>
+        try {
           simulateLoginJourney(journey)
-        expect(runJourney).toThrow(scenario.expectedMessage)
+          throw new Error(
+            'expected the non-modeled planner rejection to escape',
+          )
+        } catch (error) {
+          if (!(error instanceof UnhandledCredentialFillRejectionError)) {
+            throw error
+          }
+          expect(error.rejection).toBe(scenario.expectedRejection)
+        }
         break
       }
     }

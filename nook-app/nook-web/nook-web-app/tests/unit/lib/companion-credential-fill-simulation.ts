@@ -4,6 +4,8 @@ import {
   CredentialFillFieldRole,
   CredentialFillObservation,
   CredentialFillObservations,
+  CredentialFillPlanningOutcome,
+  CredentialFillRejection,
   CredentialKind,
   plan_companion_credential_fill,
   type CredentialFillAssignment,
@@ -68,10 +70,6 @@ export enum CredentialFillJourneyOutcomeKind {
   Rejected = 'rejected',
 }
 
-export enum CredentialFillPlannerRejection {
-  PasswordFieldsReadonly = 'every password field is read-only, so credential disclosure is blocked',
-}
-
 export type SimulatedCredentialFormSnapshot = {
   readonly name: string
   readonly value: string
@@ -84,7 +82,7 @@ export type CredentialFillJourneyOutcome =
     }
   | {
       readonly kind: CredentialFillJourneyOutcomeKind.Rejected
-      readonly message: CredentialFillPlannerRejection
+      readonly rejection: CredentialFillRejection.PasswordFieldsReadonly
       readonly snapshot: SimulatedCredentialFormSnapshot
     }
 
@@ -94,20 +92,24 @@ export type CredentialFillJourneyRequest = {
   readonly credentials: FakeLoginCredentials
 }
 
-enum CredentialFillPlanningKind {
-  Planned = 'planned',
-  Rejected = 'rejected',
-}
-
 type CredentialFillPlanning =
   | {
-      readonly kind: CredentialFillPlanningKind.Planned
+      readonly kind: CredentialFillPlanningOutcome.Planned
       readonly plan: CredentialFillPlan
     }
   | {
-      readonly kind: CredentialFillPlanningKind.Rejected
-      readonly message: CredentialFillPlannerRejection
+      readonly kind: CredentialFillPlanningOutcome.Rejected
+      readonly rejection: CredentialFillRejection.PasswordFieldsReadonly
     }
+
+export class UnhandledCredentialFillRejectionError extends Error {
+  readonly rejection: CredentialFillRejection
+
+  constructor(rejection: CredentialFillRejection) {
+    super('credential fill planner returned an unhandled typed rejection')
+    this.rejection = rejection
+  }
+}
 
 type ApplyCredentialPlanRequest = {
   readonly plan: CredentialFillPlan
@@ -129,22 +131,28 @@ function planCredentialFillStep(
     for (const field of step.observedFields) {
       observations.add(field.observation)
     }
+    const result = plan_companion_credential_fill(observations)
     try {
-      const plan = plan_companion_credential_fill(observations)
-      return { kind: CredentialFillPlanningKind.Planned, plan }
-    } catch (error) {
-      if (
-        error === CredentialFillPlannerRejection.PasswordFieldsReadonly ||
-        (error instanceof Error &&
-          error.message ===
-            CredentialFillPlannerRejection.PasswordFieldsReadonly)
-      ) {
-        return {
-          kind: CredentialFillPlanningKind.Rejected,
-          message: CredentialFillPlannerRejection.PasswordFieldsReadonly,
+      switch (result.kind) {
+        case CredentialFillPlanningOutcome.Planned:
+          return {
+            kind: CredentialFillPlanningOutcome.Planned,
+            plan: result.plan(),
+          }
+        case CredentialFillPlanningOutcome.Rejected: {
+          const rejection = result.rejection()
+          if (rejection === CredentialFillRejection.PasswordFieldsReadonly) {
+            return {
+              kind: CredentialFillPlanningOutcome.Rejected,
+              rejection,
+            }
+          }
+          throw new UnhandledCredentialFillRejectionError(rejection)
         }
       }
-      throw error
+      throw new Error('credential fill result has an unsupported outcome')
+    } finally {
+      result.free()
     }
   } finally {
     observations.free()
@@ -210,7 +218,7 @@ export function simulateLoginJourney({
     for (const step of steps) {
       const planning = planCredentialFillStep(step)
       switch (planning.kind) {
-        case CredentialFillPlanningKind.Planned: {
+        case CredentialFillPlanningOutcome.Planned: {
           try {
             const applyRequest: ApplyCredentialPlanRequest = {
               plan: planning.plan,
@@ -228,10 +236,10 @@ export function simulateLoginJourney({
           }
           break
         }
-        case CredentialFillPlanningKind.Rejected: {
+        case CredentialFillPlanningOutcome.Rejected: {
           const outcome: CredentialFillJourneyOutcome = {
             kind: CredentialFillJourneyOutcomeKind.Rejected,
-            message: planning.message,
+            rejection: planning.rejection,
             snapshot: snapshotForm(form),
           }
           outcomes.push(outcome)
