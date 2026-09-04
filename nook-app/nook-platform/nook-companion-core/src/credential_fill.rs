@@ -268,11 +268,12 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
             let field::Observation::Credential(credential) = field else {
                 return None;
             };
-            if !matches!(credential.role, field::CredentialRole::Username)
-                || !matches!(credential.editability, field::Editability::Writable)
-            {
+            let field::CredentialRole::Username = credential.role else {
                 return None;
-            }
+            };
+            let field::Editability::Writable = credential.editability else {
+                return None;
+            };
             Some(credential.field_index)
         })
         .collect::<Vec<_>>();
@@ -282,9 +283,9 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
             let field::Observation::Credential(credential) = field else {
                 return None;
             };
-            if !matches!(credential.role, field::CredentialRole::Password(_)) {
+            let field::CredentialRole::Password(_) = credential.role else {
                 return None;
-            }
+            };
             Some((credential.field_index, credential.editability))
         })
         .collect::<Vec<_>>();
@@ -300,9 +301,7 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
         return Err(Error::AmbiguousPasswordField);
     }
     let password_field = password_fields.first().copied();
-    if password_field
-        .is_some_and(|(_, editability)| matches!(editability, field::Editability::Readonly))
-    {
+    if let Some((_, field::Editability::Readonly)) = password_field {
         return Err(Error::PasswordFieldsReadonly);
     }
 
