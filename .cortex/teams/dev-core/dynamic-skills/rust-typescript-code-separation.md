@@ -83,9 +83,12 @@ Put app/domain types in Rust first:
   performs a real boundary task such as constructing/freeing WASM values,
   applying UI defaults, or translating browser state. Removing a Svelte proxy
   alone is not a wrapper responsibility; snapshot directly at the call site.
-- Construct real generated WASM classes for typed boundary inputs.
-- Do not pass a structurally similar plain object in place of a WASM-owned
-  object.
+- When a generated ABI parameter is a `#[wasm_bindgen]` class, construct the
+  real generated class.
+- Do not pass a structurally similar plain object in place of that class.
+- When `Tsify` with `from_wasm_abi` defines a generated structural DTO
+  parameter, construct its generated structural object directly.
+- Do not wrap a generated structural DTO in an unnecessary WASM class.
 - Export a canonical fieldless core enum directly when `wasm_bindgen` supports
   it.
 - Do not mirror that enum in the bridge or translate its variants manually.
@@ -177,6 +180,7 @@ pub struct GithubEnrollmentProvider {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "lowercase")]
 pub enum EnrollmentProvider {
     Local,
     Github(GithubEnrollmentProvider),
@@ -351,8 +355,12 @@ Rules:
 - Keep independent dimensions as separate enums.
 - Use a nested enum only when one category refines another category.
 - Keep serialization/validation in `nook-core`; the wrapper only bridges to JS.
-- Construct the generated class in JavaScript.
-- Do not reconstruct the input as a plain object or raw discriminant.
+- When the declared ABI input is a `#[wasm_bindgen]` class, construct that
+  generated class in JavaScript.
+- Do not replace a declared `#[wasm_bindgen]` class input with a plain object or
+  raw discriminant.
+- When `Tsify` with `from_wasm_abi` declares a structural DTO input, construct
+  the generated structural object with its exact fields.
 
 ### `Option<T>` is almost always a missing enum
 

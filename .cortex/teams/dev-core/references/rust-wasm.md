@@ -119,9 +119,11 @@ rules and cost tiers.
 
 ## 4. Typed WASM boundary (`nook-app/nook-platform/nook-wasm/src/types.rs`)
 
-**Use typed `#[wasm_bindgen]` structs instead of raw JavaScript values for every
-application data shape.** Errors surface as `JsError`. Browser adapters use the
-narrowest typed `web-sys` / `js-sys` object supported by the external API.
+**Use Rust-derived ABI types instead of authored raw `JsValue` for application
+data shapes.** Use `#[wasm_bindgen]` classes for object-owned boundaries. Use
+`Tsify` with `from_wasm_abi` when the declared ABI is a structural DTO. Errors
+surface as `JsError`. Browser adapters use the narrowest typed `web-sys` /
+`js-sys` object supported by the external API.
 
 - Keep domain identifiers and counts wrapped at the WASM boundary.
 - Expose a primitive getter only for explicit edge unwrapping.
@@ -129,9 +131,13 @@ narrowest typed `web-sys` / `js-sys` object supported by the external API.
 - Do not create a mirrored bridge enum or translate variants manually.
 - Wrap data-carrying core enums in generated WASM objects when direct export is
   unavailable.
-- Make JavaScript construct those objects through generated constructors or
-  static factories.
-- Do not accept a plain object, string tag, or raw discriminant in its place.
+- When an ABI parameter is a `#[wasm_bindgen]` class, make JavaScript construct
+  it through generated constructors or static factories.
+- Do not accept a plain object, string tag, or raw discriminant in place of a
+  declared `#[wasm_bindgen]` class.
+- When `Tsify` with `from_wasm_abi` declares a structural DTO parameter, accept
+  the generated structural object with its exact fields.
+- Do not introduce a WASM class merely to replace a generated structural DTO.
 
 Syntax-aware repository preflight rejects authored `JsValue` paths before
 wasm-bindgen macro expansion. Clippy's built-in `disallowed_types` cannot
@@ -260,16 +266,24 @@ ends.
 ## 6. Testing
 
 - Test vault formats, crypto, validation, and passwords in `nook-core`.
-- Test generated-package ABI behavior from JavaScript or TypeScript.
-  - Import the generated package that production consumers use.
-  - Construct actual exported WASM classes through their generated API.
+- A product change that introduces or changes a generated-package ABI must test
+  that ABI from JavaScript or TypeScript.
+  - Place and wire the test into the relevant existing consumer test and CI
+    path.
+  - Import the generated package built for that consumer path.
+  - Construct actual exported WASM classes through their generated API when a
+    parameter is declared as a `#[wasm_bindgen]` class.
+  - Construct generated structural DTO objects when a parameter is declared
+    through `Tsify` with `from_wasm_abi`.
   - Call the exported planner or operation through the generated binding.
   - Do not substitute a Serde round trip followed by a direct Rust call.
   - Exercise ownership according to by-value or by-reference parameters.
   - Free every still-owned wrapper exactly once.
+- Do not assume or claim that a repository-wide generated-package test harness
+  exists. Use the relevant existing consumer test and CI path.
 - Keep domain policy failures authoritative in focused core tests.
-- Add generated-package boundary coverage when `JsError` behavior is part of
-  the public ABI.
+- When a product change introduces or changes public `JsError` behavior, cover
+  that behavior through the relevant generated-package consumer test path.
 - **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-app/nook-platform/nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
 - **Fast tests:** `task rust:test` (nextest only, no coverage instrumentation).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.
