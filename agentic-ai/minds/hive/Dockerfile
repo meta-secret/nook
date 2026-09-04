@@ -115,10 +115,9 @@ WORKDIR /build
 FROM toolchain AS chef-planner
 COPY Cargo.toml Cargo.lock ./
 COPY vendor vendor
-COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
-RUN mkdir -p lace/src hive/src \
-    && touch lace/src/lib.rs hive/src/main.rs
+RUN mkdir -p hive/src \
+    && touch hive/src/main.rs
 RUN cargo chef prepare --recipe-path recipe.json
 
 FROM bun AS console-builder
@@ -145,10 +144,9 @@ RUN bun run format
 FROM toolchain AS fetched-dependencies
 COPY Cargo.toml Cargo.lock ./
 COPY vendor vendor
-COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
-RUN --network=default mkdir -p lace/src hive/src \
-    && touch lace/src/lib.rs hive/src/lib.rs hive/src/main.rs \
+RUN --network=default mkdir -p hive/src \
+    && touch hive/src/lib.rs hive/src/main.rs \
     && cargo fetch --locked --config net.git-fetch-with-cli=false
 
 # Production image builds use a release-profile cargo-chef layer.
@@ -161,9 +159,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 # Verification needs Cargo's real test and Clippy fingerprints, not only the
 # cargo-chef package versions. Build the two manifest-only graphs independently
 # so BuildKit can materialize/link them in parallel. Main publishes both layers;
-# pull requests compile only Hive and Lace source on top of the matching graph.
 # Redis remains the compiler-object fallback while BuildKit preserves Cargo
-# metadata and linked dependencies.
+# metadata and linked dependencies. Pull requests compile only Hive source on
+# top of the matching graph.
 FROM fetched-dependencies AS test-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
     cargo test --locked --workspace --no-run \
@@ -178,11 +176,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
     && install -D /dev/null /opt/nook/hive-clippy-dependencies
 
 FROM clippy-dependencies AS check-source
-COPY graph.yaml graph.yaml
-COPY lace/src lace/src
 COPY hive/src hive/src
 COPY hive/tests hive/tests
-RUN find lace/src hive/src hive/tests -type f -exec touch {} +
+RUN find hive/src hive/tests -type f -exec touch {} +
 
 FROM check-source AS check
 RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_access_key,required=false --mount=type=secret,id=sccache_s3_secret_key,target=/run/secrets/sccache_s3_secret_key,required=false \
@@ -194,19 +190,15 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 FROM toolchain AS formatter
 COPY Cargo.toml Cargo.lock ./
 COPY vendor vendor
-COPY lace/Cargo.toml lace/Cargo.toml
 COPY hive/Cargo.toml hive/Cargo.toml
-COPY lace/src lace/src
 COPY hive/src hive/src
 COPY hive/tests hive/tests
 RUN cargo fmt --all
 
 FROM test-dependencies AS test-source
-COPY graph.yaml graph.yaml
-COPY lace/src lace/src
 COPY hive/src hive/src
 COPY hive/tests hive/tests
-RUN find lace/src hive/src hive/tests -type f -exec touch {} +
+RUN find hive/src hive/tests -type f -exec touch {} +
 
 FROM test-source AS test-compile
 
@@ -234,17 +226,12 @@ RUN --mount=type=secret,id=sccache_s3_access_key,target=/run/secrets/sccache_s3_
 FROM test-compile AS coverage
 
 ARG HIVE_RUST_COVERAGE_FLOOR
-ARG LACE_RUST_COVERAGE_FLOOR
 COPY --from=hive-coverage-profiles / /tmp/hive-coverage-profiles
 RUN test -n "$(find /tmp/hive-coverage-profiles -name '*.profraw' -print -quit)" \
     && mkdir -p target/llvm-cov-target \
     && find /tmp/hive-coverage-profiles -name '*.profraw' -exec cp {} target/llvm-cov-target/ \; \
-    && { coverage_status=0; \
-      cargo llvm-cov report -p hive \
-        --fail-under-lines "${HIVE_RUST_COVERAGE_FLOOR}" || coverage_status=1; \
-      cargo llvm-cov report -p lace \
-        --fail-under-lines "${LACE_RUST_COVERAGE_FLOOR}" || coverage_status=1; \
-      test "$coverage_status" -eq 0; } \
+    && cargo llvm-cov report -p hive \
+      --fail-under-lines "${HIVE_RUST_COVERAGE_FLOOR}" \
     && nook-sccache-report hive-per-package-coverage \
     && install -D /dev/null /opt/nook/hive-coverage-passed
 
@@ -283,9 +270,8 @@ COPY --from=sandbox-package-check /opt/nook/hive-sandbox-package-passed /hive-sa
 COPY --from=worker-runtime-toolchain /opt/nook/hive-login-shell-toolchain-passed /hive-login-shell-toolchain-passed
 
 FROM dependencies AS release-source
-COPY lace/src lace/src
 COPY hive/src hive/src
-RUN find lace/src hive/src -type f -exec touch {} +
+RUN find hive/src -type f -exec touch {} +
 
 FROM scratch AS cache-publish
 

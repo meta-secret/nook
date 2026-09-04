@@ -19,7 +19,6 @@ tasks:
         test "$code" = 200
         source_id="$(find \
           "$remote_dir/agentic-ai/minds/hive" \
-          "$remote_dir/agentic-ai/minds/lace" \
           "$remote_dir/.github/formatting" \
           -type f -print0 |
           sort -z |
