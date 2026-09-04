@@ -94,7 +94,7 @@ impl NookVaultManager {
         dylint_lib = "nook_domain_api",
         expect(
             raw_numeric_public_api,
-            reason = "FFI boundary: projects the `vault_version` version or epoch through a JavaScript Number scalar"
+            reason = "FFI boundary: projects the vault version to JavaScript as a bigint"
         )
     )]
     pub fn vault_version(&self) -> u64 {

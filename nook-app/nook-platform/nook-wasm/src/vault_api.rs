@@ -682,7 +682,7 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
     dylint_lib = "nook_domain_api",
     expect(
         raw_numeric_public_api,
-        reason = "FFI boundary: projects the `read_vault_version` version or epoch through a JavaScript Number scalar"
+        reason = "FFI boundary: projects the parsed vault version to JavaScript as a bigint"
     )
 )]
 pub fn read_vault_version(yaml: &str) -> u64 {

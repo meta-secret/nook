@@ -294,7 +294,7 @@ impl NookIdentitySnapshot {
         dylint_lib = "nook_domain_api",
         expect(
             raw_numeric_public_api,
-            reason = "FFI boundary: projects the `control_epoch` version or epoch through a JavaScript Number scalar"
+            reason = "FFI boundary: projects the identity control epoch to JavaScript as a bigint"
         )
     )]
     pub fn control_epoch(&self) -> u64 {

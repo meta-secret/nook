@@ -128,7 +128,7 @@ pub fn generate_password(
     dylint_lib = "nook_domain_api",
     expect(
         raw_numeric_public_api,
-        reason = "FFI boundary: projects the `generate_totp_code` timestamp or duration through a JavaScript Number scalar"
+        reason = "FFI boundary: accepts the TOTP Unix timestamp from JavaScript as a bigint"
     )
 )]
 pub fn generate_totp_code(
@@ -147,7 +147,7 @@ pub fn generate_totp_code(
     dylint_lib = "nook_domain_api",
     expect(
         raw_numeric_public_api,
-        reason = "FFI boundary: projects the `verify_totp_code` timestamp or duration through a JavaScript Number scalar"
+        reason = "FFI boundary: accepts the TOTP verification Unix timestamp from JavaScript as a bigint"
     )
 )]
 pub fn verify_totp_code(

@@ -1,6 +1,11 @@
 //! JavaScript projections for an identity-directory snapshot.
 
-use super::*;
+use super::{
+    NookIdentityDirectorySelection, NookIdentityDirectorySelectionKind,
+    NookIdentityDirectorySnapshot, NookIdentitySnapshot, NookSelectedVaultIdentityContextKind,
+    current_browser_identity, selected_vault_context_kind,
+};
+use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
 impl NookIdentityDirectorySnapshot {

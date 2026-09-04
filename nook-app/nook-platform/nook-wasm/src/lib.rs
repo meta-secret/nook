@@ -33,6 +33,13 @@ mod sync_io;
 mod types;
 
 #[doc(hidden)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: reexports wasm-bindgen future conversion runtime support for projecting Rust futures into JavaScript Promises"
+    )
+)]
 pub use wasm_bindgen_futures as __wasm_bindgen_futures;
 
 pub use device_access::*;
