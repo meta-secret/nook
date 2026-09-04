@@ -1,5 +1,7 @@
 //! Typed wire strings for vault storage plus compatibility exports for auth/key-access strings.
 
+use crate::{SecretValue, VaultFormat};
+
 use std::{fmt, mem};
 
 use crate::errors;
@@ -118,7 +120,7 @@ impl StoredVaultBlob {
     #[must_use]
     pub fn format(&self) -> crate::VaultFormat {
         match self {
-            Self::Yaml(_) => crate::VaultFormat::Yaml,
+            Self::Yaml(_) => VaultFormat::Yaml,
         }
     }
 
@@ -136,7 +138,7 @@ impl StoredVaultYaml {
 
 impl SecretPayloadYaml {
     pub fn parse(secret_type: crate::SecretType, raw: &str) -> errors::SecretPayloadResult<Self> {
-        crate::SecretValue::from_yaml_str(secret_type, raw)?;
+        SecretValue::from_yaml_str(secret_type, raw)?;
         Ok(Self::from_trusted(raw.to_owned()))
     }
 }

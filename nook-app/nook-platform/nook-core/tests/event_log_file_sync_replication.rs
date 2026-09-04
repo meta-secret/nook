@@ -8,6 +8,8 @@
 #[path = "event_log_harness.rs"]
 mod harness;
 
+use nook_core::{LocalEventStore, SecretFingerprint};
+
 use harness::{
     EventLogDevice, ProviderBuckets, approve_join, live_secret_ids, missing_provider_bucket,
     pull_provider_into_device, request_join, write_all_device_events_to_provider,
@@ -26,7 +28,7 @@ fn clear_provider(providers: &mut ProviderBuckets, provider: &str) -> VaultResul
     let bucket = providers
         .get_mut(provider)
         .ok_or_else(|| missing_provider_bucket(provider))?;
-    *bucket = nook_core::LocalEventStore::new();
+    *bucket = LocalEventStore::new();
     Ok(())
 }
 
@@ -43,11 +45,8 @@ fn enrolled_pair_with_file_providers()
 -> VaultResult<(EventLogDevice, EventLogDevice, ProviderBuckets)> {
     let mut device_a = EventLogDevice::genesis("device-a")?;
     let mut providers: ProviderBuckets = HashMap::from([
-        (VAULT_A.to_owned(), nook_core::LocalEventStore::new()),
-        (
-            VAULT_A_DEVICE_B.to_owned(),
-            nook_core::LocalEventStore::new(),
-        ),
+        (VAULT_A.to_owned(), LocalEventStore::new()),
+        (VAULT_A_DEVICE_B.to_owned(), LocalEventStore::new()),
     ]);
 
     write_all_device_events_to_provider(&device_a, &mut providers, VAULT_A)?;
@@ -311,12 +310,10 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
             id: SecretId::from_vault_record("secret_replaceaaaa"),
             secret_type: SecretType::Login,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-a".to_owned()),
-            identity_fingerprint: nook_core::SecretFingerprint::from_trusted(
+            identity_fingerprint: SecretFingerprint::from_trusted(
                 "test:replace-a-identity".to_owned(),
             ),
-            fingerprint: nook_core::SecretFingerprint::from_trusted(
-                "test:replace-a-version".to_owned(),
-            ),
+            fingerprint: SecretFingerprint::from_trusted("test:replace-a-version".to_owned()),
         },
     }])?;
     device_b.session.heads = vec![shared_head];
@@ -326,12 +323,10 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
             id: SecretId::from_vault_record("secret_replacebbbb"),
             secret_type: SecretType::Login,
             ciphertext: OpaqueCiphertext::from_trusted("cipher-replace-b".to_owned()),
-            identity_fingerprint: nook_core::SecretFingerprint::from_trusted(
+            identity_fingerprint: SecretFingerprint::from_trusted(
                 "test:replace-b-identity".to_owned(),
             ),
-            fingerprint: nook_core::SecretFingerprint::from_trusted(
-                "test:replace-b-version".to_owned(),
-            ),
+            fingerprint: SecretFingerprint::from_trusted("test:replace-b-version".to_owned()),
         },
     }])?;
 
@@ -355,10 +350,7 @@ fn concurrent_replace_of_shared_secret_surfaces_conflict_group_after_reconnect()
 #[test]
 fn three_way_file_provider_fanout_keeps_concurrent_logins() -> VaultResult<()> {
     let (mut device_a, mut device_b, mut providers) = enrolled_pair_with_file_providers()?;
-    providers.insert(
-        "vault-a-backup".to_owned(),
-        nook_core::LocalEventStore::new(),
-    );
+    providers.insert("vault-a-backup".to_owned(), LocalEventStore::new());
     write_all_device_events_to_provider(&device_a, &mut providers, "vault-a-backup")?;
 
     let mut device_c = EventLogDevice::replica_of(&device_a)?;

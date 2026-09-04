@@ -1,5 +1,7 @@
 //! Vault-keyed identity and secret-version fingerprints for import reconciliation.
 
+use crate::PasskeyCredentialKey;
+
 use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 
@@ -192,7 +194,7 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
         }
         SecretValue::Passkey(passkey) => {
             append_field(&mut bytes, passkey.user_handle.as_str());
-            let crate::PasskeyCredentialKey::Es256 {
+            let PasskeyCredentialKey::Es256 {
                 public_key_cose, ..
             } = &passkey.key;
             append_field(&mut bytes, public_key_cose.encoded());

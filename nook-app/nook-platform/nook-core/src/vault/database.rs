@@ -5,6 +5,8 @@
 //! YAML storage enters and leaves through this struct, so encryption boundaries
 //! stay localised.
 
+use crate::{AgeArmoredCiphertext, VaultFormat};
+
 use crate::SecretId;
 use crate::errors::{DatabaseError, DatabaseResult};
 use crate::multi_device;
@@ -53,8 +55,7 @@ impl Database {
 
     pub fn to_stored(&self, passphrase: &str) -> DatabaseResult<StoredVaultBlob> {
         let stored_records = self.to_stored_records(passphrase)?;
-        vault_format::serialize_stored(&stored_records, crate::VaultFormat::Yaml)
-            .map_err(Into::into)
+        vault_format::serialize_stored(&stored_records, VaultFormat::Yaml).map_err(Into::into)
     }
 
     pub fn to_stored_yaml(&self, passphrase: &str) -> DatabaseResult<StoredVaultYaml> {
@@ -125,8 +126,8 @@ impl Database {
             let secret_type = stored.secret_type.ok_or(DatabaseError::MissingSecretType {
                 key: stored.key.clone(),
             })?;
-            let decrypted = crypto
-                .decrypt_value(&crate::AgeArmoredCiphertext::parse(stored.value.as_str())?)?;
+            let decrypted =
+                crypto.decrypt_value(&AgeArmoredCiphertext::parse(stored.value.as_str())?)?;
             let value = SecretValue::from_yaml_str(secret_type, decrypted.as_str())?;
             records.insert(
                 stored.key.clone(),
@@ -186,6 +187,8 @@ impl Database {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::{SymmetricKey, VaultCrypto};
+
     use std::{fs, io, path};
 
     use super::Database;
@@ -201,7 +204,7 @@ mod tests {
         "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 
     fn test_key() -> anyhow::Result<crate::SymmetricKey> {
-        Ok(crate::SymmetricKey::parse(TEST_PASSPHRASE)?)
+        Ok(SymmetricKey::parse(TEST_PASSPHRASE)?)
     }
 
     fn api_key(value: &str) -> SecretValue {
@@ -512,8 +515,8 @@ mod tests {
 
     #[test]
     fn missing_or_mismatched_type_metadata_is_rejected() -> anyhow::Result<()> {
-        let crypto = crate::VaultCrypto::new(&test_key()?)?;
-        let login_yaml = crate::SecretValue::Login(crate::LoginSecret {
+        let crypto = VaultCrypto::new(&test_key()?)?;
+        let login_yaml = SecretValue::Login(crate::LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
             password: "secret".to_owned(),

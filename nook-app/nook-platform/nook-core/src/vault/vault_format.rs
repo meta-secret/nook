@@ -374,6 +374,10 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::{
+        DeviceMode, ReplicationType, SecretType, SentinelConfiguration, SymmetricKey, VaultType,
+    };
+
     use std::{error, io, slice};
 
     use super::*;
@@ -387,7 +391,7 @@ mod tests {
         vec![
             StoredSecretRecord {
                 key: sid("github.com"),
-                secret_type: Some(crate::SecretType::Login),
+                secret_type: Some(SecretType::Login),
                 value: StoredRecordPayload::from_trusted(
                     "-----BEGIN AGE ENCRYPTED FILE-----\nline1\nline2\n-----END AGE ENCRYPTED FILE-----"
                         .to_owned(),
@@ -395,7 +399,7 @@ mod tests {
             },
             StoredSecretRecord {
                 key: sid("work-vpn"),
-                secret_type: Some(crate::SecretType::ApiKey),
+                secret_type: Some(SecretType::ApiKey),
                 value: StoredRecordPayload::from_trusted(
                     "-----BEGIN AGE ENCRYPTED FILE-----\nsecret\n-----END AGE ENCRYPTED FILE-----"
                         .to_owned(),
@@ -523,8 +527,8 @@ mod tests {
         };
 
         let keys = VaultKeys {
-            secrets_key: crate::SymmetricKey::parse(&"d".repeat(64))?,
-            members_key: crate::SymmetricKey::parse(&"e".repeat(64))?,
+            secrets_key: SymmetricKey::parse(&"d".repeat(64))?,
+            members_key: SymmetricKey::parse(&"e".repeat(64))?,
         };
         let envelope =
             attach_password_envelope_with_work_factor(&keys, "correct horse battery staple", 10)?;
@@ -600,10 +604,10 @@ mod tests {
     #[test]
     fn architecture_roundtrips_when_explicit() -> anyhow::Result<()> {
         let architecture = VaultArchitecture {
-            device_mode: crate::DeviceMode::AntiHacker,
-            vault_type: crate::VaultType::Sentinel,
-            replication_type: crate::ReplicationType::Shared,
-            sentinel: crate::SentinelConfiguration::Enabled(crate::SentinelPolicy {
+            device_mode: DeviceMode::AntiHacker,
+            vault_type: VaultType::Sentinel,
+            replication_type: ReplicationType::Shared,
+            sentinel: SentinelConfiguration::Enabled(crate::SentinelPolicy {
                 threshold: 2,
                 required_participants: 3,
                 ready_participants: 0,

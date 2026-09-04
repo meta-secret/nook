@@ -4,6 +4,11 @@
 #![allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 
 use nook_core::{
+    AgeArmoredCiphertext, SecretFingerprint, Sha256Hex, SymmetricKey, VaultError, VaultFormat,
+    VaultStoreIdentityRef, VaultSyncError, VaultVersionWrite,
+};
+
+use nook_core::{
     AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EventId, JoinRequest,
     LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue, SigningIdentity,
     VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
@@ -44,7 +49,7 @@ impl EventLogDevice {
             crypto,
         };
         device.append_signed(vec![VaultOperation::VaultImported {
-            source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+            source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
             secrets: Vec::new(),
             password_entries: Vec::new(),
         }])?;
@@ -65,8 +70,7 @@ impl EventLogDevice {
             members_key: peer.members_key.clone(),
             projection_cache_yaml: peer.projection_cache_yaml.clone(),
             crypto: VaultCrypto::new(
-                &nook_core::SymmetricKey::parse(&peer.secrets_key)
-                    .map_err(nook_core::VaultError::Validation)?,
+                &SymmetricKey::parse(&peer.secrets_key).map_err(VaultError::Validation)?,
             )?,
         })
     }
@@ -86,8 +90,8 @@ impl EventLogDevice {
                 &SecretId::from_vault_record(secret_id),
                 SecretType::ApiKey,
                 ciphertext.as_str(),
-                nook_core::SecretFingerprint::from_trusted(format!("test-identity:{secret_id}")),
-                nook_core::SecretFingerprint::from_trusted(format!("test-version:{secret_id}")),
+                SecretFingerprint::from_trusted(format!("test-identity:{secret_id}")),
+                SecretFingerprint::from_trusted(format!("test-version:{secret_id}")),
             ),
         }])
     }
@@ -107,7 +111,7 @@ impl EventLogDevice {
             password: password.to_owned(),
             notes: notes.to_owned(),
         });
-        let secrets_key = nook_core::SymmetricKey::parse(&self.secrets_key)?;
+        let secrets_key = SymmetricKey::parse(&self.secrets_key)?;
         let identity = secret_identity_fingerprint(&value, &secrets_key)?;
         let version = secret_fingerprint(&value, &secrets_key)?;
         let ciphertext = self.crypto.encrypt_value(value.to_yaml()?.as_str())?;
@@ -132,9 +136,7 @@ impl EventLogDevice {
             }
             let plaintext = self
                 .crypto
-                .decrypt_value(&nook_core::AgeArmoredCiphertext::parse(
-                    record.value.as_str(),
-                )?)?;
+                .decrypt_value(&AgeArmoredCiphertext::parse(record.value.as_str())?)?;
             let value = SecretValue::from_yaml_str(SecretType::Login, plaintext.as_str())?;
             let SecretValue::Login(login) = value else {
                 continue;
@@ -215,10 +217,8 @@ impl EventLogDevice {
             hydrate_keys_from_projection_yaml(&self.projection_cache_yaml, &self.identity)?;
         self.secrets_key.clone_from(&secrets_key);
         self.members_key.clone_from(&members_key);
-        self.crypto = VaultCrypto::new(
-            &nook_core::SymmetricKey::parse(&secrets_key)
-                .map_err(nook_core::VaultError::Validation)?,
-        )?;
+        self.crypto =
+            VaultCrypto::new(&SymmetricKey::parse(&secrets_key).map_err(VaultError::Validation)?)?;
         Ok(())
     }
 }
@@ -238,8 +238,8 @@ fn genesis_yaml(
         &records,
         &VaultUnlock::Keys,
         &[],
-        nook_core::VaultStoreIdentityRef::Assigned(store_id),
-        nook_core::VaultVersionWrite::Initial,
+        VaultStoreIdentityRef::Assigned(store_id),
+        VaultVersionWrite::Initial,
     )
     .map_err(Into::into)
 }
@@ -248,7 +248,7 @@ fn genesis_yaml(
 pub type ProviderBuckets = HashMap<String, LocalEventStore>;
 
 pub fn missing_provider_bucket(provider_id: &str) -> nook_core::VaultSyncError {
-    nook_core::VaultSyncError::ProviderDisappeared {
+    VaultSyncError::ProviderDisappeared {
         provider_id: provider_id.to_owned(),
     }
 }
@@ -363,16 +363,14 @@ pub fn sample_stored_vault_yaml(crypto: &VaultCrypto) -> VaultResult<String> {
     let mut db = Database::new();
     db.insert(
         SecretId::from_vault_record("import-secret"),
-        nook_core::SecretValue::ApiKey(nook_core::ApiKeySecret {
+        SecretValue::ApiKey(nook_core::ApiKeySecret {
             website_url: "https://example.com".to_owned(),
             key: "import-value".to_owned(),
             expires_at: String::new(),
         }),
     );
     let records = db.to_stored_records_with_crypto(crypto)?;
-    Ok(
-        nook_core::serialize_stored(&records, nook_core::VaultFormat::Yaml)?
-            .as_str()
-            .to_owned(),
-    )
+    Ok(nook_core::serialize_stored(&records, VaultFormat::Yaml)?
+        .as_str()
+        .to_owned())
 }

@@ -1,5 +1,7 @@
 //! Display and search helpers for vault secrets — shared by WASM, mobile, and CLI.
 
+use crate::ValidationError;
+
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{
@@ -249,7 +251,7 @@ pub fn build_secret_yaml_from_form(
         }),
         SecretFormFields::SecureNote(fields) => {
             if fields.note.trim().is_empty() {
-                return Err(crate::ValidationError::SecretDataRequired.into());
+                return Err(ValidationError::SecretDataRequired.into());
             }
             serde_json::json!({
                 "title": fields.title,
@@ -308,6 +310,9 @@ pub fn build_secret_yaml_from_form(
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::ValidationError;
+    use base64::Engine as Base64Engine;
+
     use super::*;
     use crate::SecretId;
     use base64::engine::general_purpose;
@@ -355,7 +360,7 @@ mod tests {
         assert!(matches!(
             result,
             Err(SecretPayloadError::Validation(
-                crate::ValidationError::SecretDataRequired
+                ValidationError::SecretDataRequired
             ))
         ));
     }
@@ -454,7 +459,7 @@ mod tests {
     #[test]
     fn build_secret_yaml_round_trips_file_attachment_and_hides_content_in_list()
     -> anyhow::Result<()> {
-        let content = base64::Engine::encode(&general_purpose::STANDARD, b"secret-bytes");
+        let content = Base64Engine::encode(&general_purpose::STANDARD, b"secret-bytes");
         let fields = serde_json::json!({
             "title": "",
             "fileName": "notes.txt",

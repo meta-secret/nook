@@ -1,5 +1,7 @@
 //! End-to-end vault workflows mirroring the WASM session save path.
 
+use nook_core::AgeArmoredCiphertext;
+
 use std::io;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -226,16 +228,15 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() -> anyhow::Re
         Some(SecretType::ApiKey)
     );
 
-    let decrypted =
-        crypto.decrypt_value(&nook_core::AgeArmoredCiphertext::from_trusted_armored(
-            state
-                .secrets
-                .get(&new_secret_id)
-                .ok_or_else(|| io::Error::other("replacement secret must exist"))?
-                .1
-                .as_str()
-                .to_owned(),
-        ))?;
+    let decrypted = crypto.decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
+        state
+            .secrets
+            .get(&new_secret_id)
+            .ok_or_else(|| io::Error::other("replacement secret must exist"))?
+            .1
+            .as_str()
+            .to_owned(),
+    ))?;
     assert_eq!(decrypted.as_str(), new_yaml);
     Ok(())
 }

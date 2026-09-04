@@ -1,3 +1,5 @@
+use crate::{ProviderOauthPreset, ProviderSyncCheckpoint};
+
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
     ICloudSharedTarget, OAuthFileConfigData, OauthFilePreset, ProviderReplicationCapability,
@@ -127,8 +129,8 @@ pub fn provider_replication_capability_for_row(
     Ok(provider_replication_capability(
         provider_type,
         match oauth_preset {
-            Some(preset) => crate::ProviderOauthPreset::Preset(preset),
-            None => crate::ProviderOauthPreset::NotApplicable,
+            Some(preset) => ProviderOauthPreset::Preset(preset),
+            None => ProviderOauthPreset::NotApplicable,
         },
     ))
 }
@@ -142,8 +144,8 @@ pub fn validate_provider_row_replication(
     let capability = validate_provider_replication(
         provider_type,
         match oauth_preset {
-            Some(preset) => crate::ProviderOauthPreset::Preset(preset),
-            None => crate::ProviderOauthPreset::NotApplicable,
+            Some(preset) => ProviderOauthPreset::Preset(preset),
+            None => ProviderOauthPreset::NotApplicable,
         },
         replication_type,
     )?;
@@ -279,7 +281,7 @@ pub fn staged_remote_storage_args(
                 oauth_file: StoredOAuthFileConfiguration::Configured(oauth_file),
                 local_folder: StoredLocalFolderConfiguration::NotApplicable,
                 store_id: ProviderVaultScope::Unscoped,
-                sync_checkpoint: crate::ProviderSyncCheckpoint::NeverSynced,
+                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
                 created_at: String::new(),
             };
             storage_args_for_provider(&provider).map(Some)
@@ -320,6 +322,14 @@ pub fn vault_storage_args(
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::{
+        ICloudShareRole, ICloudSharedTarget, ProviderJoinerIdentity, ProviderVaultScope,
+        SharedJoinerIdentityKind, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
+        StoredICloudShareTarget, StoredLocalFolderConfiguration, StoredLocalFolderDirectory,
+        StoredLocalFolderHandle, StoredOAuthAccessCredential, StoredOAuthFileConfiguration,
+        StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
+    };
+
     use std::io;
 
     use super::*;
@@ -333,11 +343,11 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::Github,
             label: "GitHub".to_owned(),
-            github_pat: crate::StoredGithubPat::Token(pat.to_owned()),
-            github_repo: crate::StoredGithubRepository::Repository(repo.to_owned()),
-            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-            store_id: crate::ProviderVaultScope::Unscoped,
+            github_pat: StoredGithubPat::Token(pat.to_owned()),
+            github_repo: StoredGithubRepository::Repository(repo.to_owned()),
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -348,18 +358,14 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::LocalFolder,
             label: "Local backup".to_owned(),
-            github_pat: crate::StoredGithubPat::Missing,
-            github_repo: crate::StoredGithubRepository::DefaultRepository,
-            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: crate::StoredLocalFolderConfiguration::configured(
-                LocalFolderConfigData {
-                    directory_name: crate::StoredLocalFolderDirectory::DirectoryName(
-                        "Nook Backup".to_owned(),
-                    ),
-                    handle_id: crate::StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
-                },
-            ),
-            store_id: crate::ProviderVaultScope::Unscoped,
+            github_pat: StoredGithubPat::Missing,
+            github_repo: StoredGithubRepository::DefaultRepository,
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::configured(LocalFolderConfigData {
+                directory_name: StoredLocalFolderDirectory::DirectoryName("Nook Backup".to_owned()),
+                handle_id: StoredLocalFolderHandle::HandleId(handle_id.to_owned()),
+            }),
+            store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -375,17 +381,17 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::OauthFile,
             label: "Google Drive".to_owned(),
-            github_pat: crate::StoredGithubPat::Missing,
-            github_repo: crate::StoredGithubRepository::DefaultRepository,
-            oauth_file: crate::StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
+            github_pat: StoredGithubPat::Missing,
+            github_repo: StoredGithubRepository::DefaultRepository,
+            oauth_file: StoredOAuthFileConfiguration::configured(OAuthFileConfigData {
                 preset,
-                access_token: crate::StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-                file_id: crate::StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
-                file_name: crate::StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
+                access_token: StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
+                file_id: StoredOAuthRemoteFileId::from_option(file_id.map(str::to_owned)),
+                file_name: StoredOAuthRemoteFileName::FileName(file_name.to_owned()),
                 ..OAuthFileConfigData::default()
             }),
-            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-            store_id: crate::ProviderVaultScope::Unscoped,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -437,7 +443,7 @@ mod tests {
             .oauth_file
             .as_mut()
             .ok_or_else(|| io::Error::other("OAuth config must exist"))?
-            .folder_id = crate::StoredGoogleDriveFolder::FolderId("folder-1".to_owned());
+            .folder_id = StoredGoogleDriveFolder::FolderId("folder-1".to_owned());
         assert_eq!(
             storage_args_for_provider(&provider)?.repo,
             "shared:folder-1\tevents"
@@ -526,7 +532,7 @@ mod tests {
         assert!(capability.supports_shared);
         assert_eq!(
             capability.shared_joiner_identity,
-            crate::ProviderJoinerIdentity::Required(crate::SharedJoinerIdentityKind::Email)
+            ProviderJoinerIdentity::Required(SharedJoinerIdentityKind::Email)
         );
         Ok(())
     }
@@ -576,7 +582,7 @@ mod tests {
             .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Shared;
         oauth.icloud_share_target =
-            crate::StoredICloudShareTarget::SharedTarget("not-a-cloudkit-share-target".to_owned());
+            StoredICloudShareTarget::SharedTarget("not-a-cloudkit-share-target".to_owned());
         assert_eq!(
             validate_provider_row_replication(&icloud, ReplicationType::Shared),
             Err(ValidationError::SharedStorageTargetRequired)
@@ -586,21 +592,16 @@ mod tests {
 
     #[test]
     fn shared_icloud_onboarding_carries_target_without_owner_credentials() -> anyhow::Result<()> {
-        let target = crate::ICloudSharedTarget::new(
-            crate::ICloudShareRole::Owner,
-            "zone",
-            "owner",
-            "root",
-            "guid",
-        )?
-        .to_storage_id()?;
+        let target =
+            ICloudSharedTarget::new(ICloudShareRole::Owner, "zone", "owner", "root", "guid")?
+                .to_storage_id()?;
         let mut icloud = oauth_provider("icloud", OauthFilePreset::ICloud, None, "nook-events");
         let oauth = icloud
             .oauth_file
             .as_mut()
             .ok_or_else(|| io::Error::other("OAuth config must exist"))?;
         oauth.icloud_mode = ICloudMode::Shared;
-        oauth.icloud_share_target = crate::StoredICloudShareTarget::SharedTarget(target.clone());
+        oauth.icloud_share_target = StoredICloudShareTarget::SharedTarget(target.clone());
 
         assert_eq!(
             enrollment_provider_for_architecture(&icloud, &VaultArchitecture::default(), None)?,
@@ -637,9 +638,9 @@ mod tests {
 
         let mut oauth = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
-            access_token: crate::StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
-            file_id: crate::StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
-            file_name: crate::StoredOAuthRemoteFileName::FileName("stored-name".to_owned()),
+            access_token: StoredOAuthAccessCredential::AccessToken(" token ".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
+            file_name: StoredOAuthRemoteFileName::FileName("stored-name".to_owned()),
             ..OAuthFileConfigData::default()
         };
         assert_eq!(
@@ -654,7 +655,7 @@ mod tests {
             "file-id\tdraft-name"
         );
         oauth.drive_mode = GoogleDriveMode::Shared;
-        oauth.folder_id = crate::StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
+        oauth.folder_id = StoredGoogleDriveFolder::FolderId("shared-folder".to_owned());
         assert_eq!(
             staged_remote_storage_args(
                 StorageProviderType::OauthFile,

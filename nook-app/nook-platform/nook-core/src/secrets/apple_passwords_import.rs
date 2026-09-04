@@ -88,8 +88,8 @@ fn columns(headers: &StringRecord) -> Result<ApplePasswordColumns, ApplePassword
 }
 
 fn append_title_metadata(notes: &mut String, title: &str, website_url: &str) {
-    if let Some(entry) = super::import_support::source_label_metadata("title", title, website_url) {
-        super::import_support::append_import_metadata(notes, "Apple Passwords", [entry]);
+    if let Some(entry) = import_support::source_label_metadata("title", title, website_url) {
+        import_support::append_import_metadata(notes, "Apple Passwords", [entry]);
     }
 }
 

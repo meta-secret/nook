@@ -4,6 +4,9 @@
 //! module keeps `nook-core`'s existing public API stable and owns the small
 //! adapter that replays core event-log operations into auth metadata state.
 
+use crate::{EpochMetadataState, MemberLabel};
+use nook_auth2::MultiDeviceError;
+
 pub use nook_auth2::multi_device_api::*;
 
 use std::collections::BTreeMap;
@@ -36,7 +39,7 @@ pub fn simple_identity_genesis_operations(
         .iter()
         .all(|member| &member.app_id != current_app_id)
     {
-        return Err(nook_auth2::MultiDeviceError::IdentityEnrollmentRequired);
+        return Err(MultiDeviceError::IdentityEnrollmentRequired);
     }
     let records = crate::identity_vault_genesis_records(identity, keys, created_at)?;
     identity
@@ -47,7 +50,7 @@ pub fn simple_identity_genesis_operations(
                 .iter()
                 .find(|record| record.key.as_str() == member.auth_id.as_str())
                 .ok_or_else(|| {
-                    nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                    MultiDeviceError::InvalidDeviceIdentity(
                         "identity genesis is missing a member authorization envelope".to_owned(),
                     )
                 })?;
@@ -58,13 +61,13 @@ pub fn simple_identity_genesis_operations(
                 signing_public_key: if &member.app_id == current_app_id {
                     current_signing_public_key.clone()
                 } else if member.signing_public_key.is_empty() {
-                    return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                    return Err(MultiDeviceError::InvalidDeviceIdentity(
                         "identity member is missing its event signing public key".to_owned(),
                     ));
                 } else {
                     member.signing_public_key.clone()
                 },
-                label: crate::MemberLabel::from_trusted(
+                label: MemberLabel::from_trusted(
                     member
                         .label
                         .clone()
@@ -147,7 +150,7 @@ pub fn apply_vault_meta_operation(
             state.enrolled_devices.remove(device_id);
         }
         VaultOperation::EpochCheckpoint {
-            rotated_meta_records: crate::EpochMetadataState::Replace(rotated_meta_records),
+            rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
             ..
         } => {
             state.auth.clear();
@@ -168,7 +171,7 @@ pub fn apply_vault_meta_operation(
         | VaultOperation::PasswordRemoved { .. }
         | VaultOperation::VaultCleared
         | VaultOperation::EpochCheckpoint {
-            rotated_meta_records: crate::EpochMetadataState::LegacyRetain,
+            rotated_meta_records: EpochMetadataState::LegacyRetain,
             ..
         } => {}
     }
@@ -278,12 +281,10 @@ pub fn materialize_vault_meta_from_graph(
     };
     let order = graph
         .topological_order()
-        .map_err(|e| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
+        .map_err(|e| MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
     for event_id in order {
         let event = graph.get(&event_id).ok_or_else(|| {
-            nook_auth2::MultiDeviceError::InvalidDeviceIdentity(format!(
-                "Missing event {event_id} in graph."
-            ))
+            MultiDeviceError::InvalidDeviceIdentity(format!("Missing event {event_id} in graph."))
         })?;
         for operation in &event.body.operations {
             apply_vault_meta_operation(&mut rebuilt, operation, event.body.created_at.as_str())?;
@@ -321,7 +322,7 @@ pub fn event_graph_active_device_envelopes(
 ) -> nook_auth2::MultiDeviceResult<Option<AuthEnvelopes>> {
     let derived_device_id = nook_auth2::device_id_from_public_key(expected_public_key)?;
     if &derived_device_id != expected_device_id {
-        return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+        return Err(MultiDeviceError::InvalidDeviceIdentity(
             "Extension device_id does not match its encryption public key.".to_owned(),
         ));
     }
@@ -330,12 +331,10 @@ pub fn event_graph_active_device_envelopes(
     let mut active = None;
     let order = graph
         .topological_order()
-        .map_err(|error| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
+        .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
     for event_id in order {
         let event = graph.get(&event_id).ok_or_else(|| {
-            nook_auth2::MultiDeviceError::InvalidDeviceIdentity(format!(
-                "Missing event {event_id} in graph."
-            ))
+            MultiDeviceError::InvalidDeviceIdentity(format!("Missing event {event_id} in graph."))
         })?;
         for operation in &event.body.operations {
             match operation {
@@ -358,7 +357,7 @@ pub fn event_graph_active_device_envelopes(
                     active = None;
                 }
                 VaultOperation::EpochCheckpoint {
-                    rotated_meta_records: crate::EpochMetadataState::Replace(records),
+                    rotated_meta_records: EpochMetadataState::Replace(records),
                     ..
                 } if active.is_some() => {
                     let checkpoint_meta = VaultMetaState::from_stored_records(records);
@@ -379,12 +378,10 @@ pub fn event_graph_active_auth_ids(
     let mut active = BTreeMap::<crate::DeviceId, crate::AuthKeyId>::new();
     let order = graph
         .topological_order()
-        .map_err(|error| nook_auth2::MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
+        .map_err(|error| MultiDeviceError::InvalidDeviceIdentity(error.to_string()))?;
     for event_id in order {
         let event = graph.get(&event_id).ok_or_else(|| {
-            nook_auth2::MultiDeviceError::InvalidDeviceIdentity(format!(
-                "Missing event {event_id} in graph."
-            ))
+            MultiDeviceError::InvalidDeviceIdentity(format!("Missing event {event_id} in graph."))
         })?;
         for operation in &event.body.operations {
             match operation {
@@ -396,7 +393,7 @@ pub fn event_graph_active_auth_ids(
                     let derived_device_id =
                         nook_auth2::device_id_from_public_key(encryption_public_key)?;
                     if &derived_device_id != device_id {
-                        return Err(nook_auth2::MultiDeviceError::InvalidDeviceIdentity(
+                        return Err(MultiDeviceError::InvalidDeviceIdentity(
                             "Approved device id does not match its encryption public key."
                                 .to_owned(),
                         ));
@@ -446,6 +443,11 @@ pub fn sentinel_member_records_from_public_roster(
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        AppKey, EpochMetadataState, EpochPasswordState, IdentityRecord, PasswordEntryId,
+        SecretType, StoredRecordPayload,
+    };
+
     use std::io;
 
     use super::*;
@@ -530,7 +532,7 @@ mod tests {
             store_id,
             vec![parent],
             vec![VaultOperation::PasswordRotated {
-                entry_id: crate::PasswordEntryId::parse("pwdentry001")?,
+                entry_id: PasswordEntryId::parse("pwdentry001")?,
                 envelope: crate::PasswordEnvelope {
                     version: 2,
                     kdf: "scrypt".to_owned(),
@@ -556,10 +558,8 @@ mod tests {
                 operations: vec![VaultOperation::EpochCheckpoint {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
-                    rotated_meta_records: crate::EpochMetadataState::Replace(vec![
-                        replacement_record,
-                    ]),
-                    password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+                    rotated_meta_records: EpochMetadataState::Replace(vec![replacement_record]),
+                    password_entries: EpochPasswordState::Replace(Vec::new()),
                 }],
             },
             signing.signing_key(),
@@ -629,15 +629,12 @@ mod tests {
 
     #[test]
     fn simple_identity_genesis_retains_every_app_key_authorization() -> anyhow::Result<()> {
-        let current = crate::AppKey::generate()?;
-        let second = crate::AppKey::generate()?;
+        let current = AppKey::generate()?;
+        let second = AppKey::generate()?;
         let (current_signing, _) = SigningIdentity::generate()?;
         let (second_signing, _) = SigningIdentity::generate()?;
-        let mut identity = crate::IdentityRecord::create_with_app_key(
-            "Personal",
-            &current,
-            Some("Browser".to_owned()),
-        )?;
+        let mut identity =
+            IdentityRecord::create_with_app_key("Personal", &current, Some("Browser".to_owned()))?;
         identity.add_member(crate::IdentityMember {
             app_id: second.app_id().clone(),
             auth_id: second.auth_id(),
@@ -783,8 +780,8 @@ mod tests {
         meta.secrets.insert(
             secret_id.clone(),
             (
-                crate::SecretType::Login,
-                crate::StoredRecordPayload::from_trusted("ciphertext".to_owned()),
+                SecretType::Login,
+                StoredRecordPayload::from_trusted("ciphertext".to_owned()),
             ),
         );
         assert!(!meta.auth.is_empty());
@@ -823,8 +820,8 @@ mod tests {
             &VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
-                rotated_meta_records: crate::EpochMetadataState::Replace(Vec::new()),
-                password_entries: crate::EpochPasswordState::LegacyRetain,
+                rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
+                password_entries: EpochPasswordState::LegacyRetain,
             },
             "2026-08-15T00:00:00Z",
         )?;

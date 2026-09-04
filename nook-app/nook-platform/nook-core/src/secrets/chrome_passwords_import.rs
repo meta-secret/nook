@@ -75,8 +75,8 @@ fn columns(headers: &StringRecord) -> Result<ChromePasswordColumns, ChromePasswo
 }
 
 fn append_name_metadata(notes: &mut String, name: &str, website_url: &str) {
-    if let Some(entry) = super::import_support::source_label_metadata("name", name, website_url) {
-        super::import_support::append_import_metadata(notes, "Browser password manager", [entry]);
+    if let Some(entry) = import_support::source_label_metadata("name", name, website_url) {
+        import_support::append_import_metadata(notes, "Browser password manager", [entry]);
     }
 }
 

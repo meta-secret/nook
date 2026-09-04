@@ -1,5 +1,7 @@
 //! 1Password 1PUX conversion into Nook's typed plaintext secret model.
 
+use super::import_support;
+
 use std::{
     fmt,
     io::{Cursor, Read},
@@ -242,7 +244,7 @@ fn append_onepassword_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    super::import_support::append_import_metadata(
+    import_support::append_import_metadata(
         notes,
         "1Password",
         iter::once(("format".to_owned(), "1PUX".to_owned())).chain(metadata),
@@ -409,11 +411,9 @@ fn convert_login(item: &OnePasswordItem, vault_name: &str) -> SecretValue {
     };
     let mut notes = item.details.notes_plain.clone();
     let mut metadata = item_metadata(item, vault_name, website_url.as_str(), true);
-    if let Some(title) = super::import_support::source_label_metadata(
-        "title",
-        &item.overview.title,
-        website_url.as_str(),
-    ) {
+    if let Some(title) =
+        import_support::source_label_metadata("title", &item.overview.title, website_url.as_str())
+    {
         metadata.insert(0, title);
     }
     append_onepassword_metadata(&mut notes, metadata);

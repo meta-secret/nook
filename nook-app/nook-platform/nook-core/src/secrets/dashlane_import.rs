@@ -216,7 +216,7 @@ fn append_dashlane_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    super::import_support::append_import_metadata(notes, "Dashlane", metadata);
+    import_support::append_import_metadata(notes, "Dashlane", metadata);
 }
 
 fn convert_credential_record(
@@ -248,8 +248,7 @@ fn convert_credential_record(
     let website_url = if url.is_empty() { title.clone() } else { url };
 
     let mut metadata = Vec::new();
-    if let Some(entry) = super::import_support::source_label_metadata("title", &title, &website_url)
-    {
+    if let Some(entry) = import_support::source_label_metadata("title", &title, &website_url) {
         metadata.push(entry);
     }
     if !category.trim().is_empty() {

@@ -273,6 +273,12 @@ pub struct NormalizedAuthSnapshot {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::{
+        ProviderVaultScope, StoredGithubPat, StoredGithubRepository, StoredICloudShareTarget,
+        StoredLocalFolderConfiguration, StoredOAuthFileConfiguration,
+    };
+    use serde_json::Error;
+
     use std::io;
 
     use super::*;
@@ -282,11 +288,11 @@ mod tests {
             id: id.to_owned(),
             provider_type: StorageProviderType::Github,
             label: "GitHub".to_owned(),
-            github_pat: crate::StoredGithubPat::Token(pat.to_owned()),
-            github_repo: crate::StoredGithubRepository::Repository(repo.to_owned()),
-            oauth_file: crate::StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: crate::StoredLocalFolderConfiguration::NotApplicable,
-            store_id: crate::ProviderVaultScope::Unscoped,
+            github_pat: StoredGithubPat::Token(pat.to_owned()),
+            github_repo: StoredGithubRepository::Repository(repo.to_owned()),
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         }
@@ -321,17 +327,17 @@ mod tests {
         let mut legacy = serde_json::to_value(OAuthFileConfigData::default())?;
         let object = legacy
             .as_object_mut()
-            .ok_or_else(|| serde_json::Error::io(io::Error::other("expected object")))?;
+            .ok_or_else(|| Error::io(io::Error::other("expected object")))?;
         object.remove("iCloudShareTarget");
 
         let migrated: OAuthFileConfigData = serde_json::from_value(legacy)?;
         assert_eq!(
             migrated.icloud_share_target,
-            crate::StoredICloudShareTarget::Personal
+            StoredICloudShareTarget::Personal
         );
 
         let current: SerializedTarget = serde_json::from_value(serde_json::to_value(migrated)?)?;
-        assert_eq!(current.target, crate::StoredICloudShareTarget::Personal);
+        assert_eq!(current.target, StoredICloudShareTarget::Personal);
         Ok(())
     }
 }

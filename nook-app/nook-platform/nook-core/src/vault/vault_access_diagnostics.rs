@@ -5,6 +5,8 @@
 //! age ciphertext parser as normal unlock, but it never returns plaintext keys,
 //! private device material, or decrypted secret values.
 
+use crate::EpochPasswordState;
+
 use crate::EventId;
 use crate::ProjectionEpoch;
 use crate::errors::VaultResult;
@@ -241,8 +243,8 @@ fn encrypted_payload_count(operation: &VaultOperation) -> usize {
         } => {
             secrets.len()
                 + match password_entries {
-                    crate::EpochPasswordState::LegacyRetain => 0,
-                    crate::EpochPasswordState::Replace(entries) => entries.len(),
+                    EpochPasswordState::LegacyRetain => 0,
+                    EpochPasswordState::Replace(entries) => entries.len(),
                 }
         }
         VaultOperation::SecretCreated { .. }
@@ -439,6 +441,8 @@ pub fn diagnose_vault_access(
 
 #[cfg(test)]
 mod tests {
+    use crate::{OpaqueCiphertext, SecretFingerprint};
+
     use super::*;
     use crate::{
         ApiKeySecret, EncryptedSecretPayload, GenesisImportPayload, IsoTimestamp, KeyEpoch,
@@ -629,11 +633,11 @@ mod tests {
                 secrets: vec![EncryptedSecretPayload {
                     id: SecretId::from_vault_record("secret_eventdiag"),
                     secret_type: SecretType::ApiKey,
-                    ciphertext: crate::OpaqueCiphertext::from_trusted("cipher".to_owned()),
-                    identity_fingerprint: crate::SecretFingerprint::from_trusted(
+                    ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+                    identity_fingerprint: SecretFingerprint::from_trusted(
                         "test:diagnostic-identity".to_owned(),
                     ),
-                    fingerprint: crate::SecretFingerprint::from_trusted(
+                    fingerprint: SecretFingerprint::from_trusted(
                         "test:diagnostic-version".to_owned(),
                     ),
                 }],
@@ -669,11 +673,11 @@ mod tests {
         let secret = EncryptedSecretPayload {
             id: SecretId::from_vault_record("secret_payload01"),
             secret_type: SecretType::ApiKey,
-            ciphertext: crate::OpaqueCiphertext::from_trusted("cipher".to_owned()),
-            identity_fingerprint: crate::SecretFingerprint::from_trusted(
+            ciphertext: OpaqueCiphertext::from_trusted("cipher".to_owned()),
+            identity_fingerprint: SecretFingerprint::from_trusted(
                 "test:payload-identity".to_owned(),
             ),
-            fingerprint: crate::SecretFingerprint::from_trusted("test:payload-version".to_owned()),
+            fingerprint: SecretFingerprint::from_trusted("test:payload-version".to_owned()),
         };
 
         assert_eq!(

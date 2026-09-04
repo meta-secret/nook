@@ -196,6 +196,8 @@ pub fn prepare_shared_storage_grant(
 
 #[cfg(test)]
 mod tests {
+    use crate::OauthFilePreset;
+
     use super::*;
 
     #[test]
@@ -203,7 +205,7 @@ mod tests {
     {
         let request = SharedStorageGrantRequest {
             provider_type: StorageProviderType::OauthFile,
-            oauth_preset: ProviderOauthPreset::Preset(crate::OauthFilePreset::GoogleDrive),
+            oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
             joiner_identity_kind: SharedJoinerIdentityKind::Email,
             joiner_identity: "joiner@example.com".to_owned(),
             storage_target_hint: SharedStorageTargetHint::Unspecified,

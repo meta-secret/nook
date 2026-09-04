@@ -1,5 +1,7 @@
 //! Rust-owned `WebAuthn` software authenticator for Nook website passkeys.
 
+use p256::SecretKey;
+
 use crate::{
     PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose,
     PasskeySecret,
@@ -264,7 +266,7 @@ pub(crate) fn validate_es256_credential_key(
             .decode(private_key.encoded())
             .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?,
     );
-    let secret = p256::SecretKey::from_pkcs8_der(&private_bytes)
+    let secret = SecretKey::from_pkcs8_der(&private_bytes)
         .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
     if let Some(public_key) = public_key {
         let public_bytes = URL_SAFE_NO_PAD
@@ -368,8 +370,8 @@ pub fn create_website_passkey(
     let mut credential_id = [0_u8; 32];
     fill(&mut credential_id).map_err(|_| PasskeyAuthenticatorError::RandomnessUnavailable)?;
     let credential_id_encoded = URL_SAFE_NO_PAD.encode(credential_id);
-    let secret_key = p256::SecretKey::try_generate()
-        .map_err(|_| PasskeyAuthenticatorError::RandomnessUnavailable)?;
+    let secret_key =
+        SecretKey::try_generate().map_err(|_| PasskeyAuthenticatorError::RandomnessUnavailable)?;
     let pkcs8 = secret_key
         .to_pkcs8_der()
         .map_err(|_| PasskeyAuthenticatorError::Serialization)?;
@@ -473,7 +475,7 @@ pub fn assert_website_passkey(
             .decode(private_key_pkcs8.encoded())
             .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?,
     );
-    let secret = p256::SecretKey::from_pkcs8_der(&private_bytes)
+    let secret = SecretKey::from_pkcs8_der(&private_bytes)
         .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
     let signing_key = SigningKey::from(secret);
     let signature: Signature = signing_key.sign(&signed_bytes);

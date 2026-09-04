@@ -1,5 +1,7 @@
 //! Ciphertext-backed session access for projected or stored user records.
 
+use crate::AgeArmoredCiphertext;
+
 use crate::errors::{SessionError, VaultResult};
 use crate::{
     Database, SecretId, SecretListItem, SecretRecord, SecretType, SecretValue, StoredRecordPayload,
@@ -41,7 +43,7 @@ fn decrypt_secret_record(
     payload: &StoredRecordPayload,
     crypto: &VaultCrypto,
 ) -> VaultResult<SecretRecord> {
-    let ciphertext = crate::AgeArmoredCiphertext::parse(payload.as_str())?;
+    let ciphertext = AgeArmoredCiphertext::parse(payload.as_str())?;
     let mut plaintext = crypto.decrypt_value(&ciphertext)?;
     let data = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
     plaintext.zeroize_plaintext();
@@ -59,7 +61,7 @@ pub fn decrypt_encrypted_secret<S: BuildHasher>(
 ) -> VaultResult<SecretRecord> {
     let (secret_type, payload) = secrets
         .get(id)
-        .ok_or_else(|| crate::SessionError::SecretNotFound { id: id.clone() })?;
+        .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
     decrypt_secret_record(id, *secret_type, payload, crypto)
 }
 
@@ -180,6 +182,8 @@ pub fn apply_user_records_to_armored_session(
 
 #[cfg(test)]
 mod tests {
+    use crate::{DeviceIdentity, SecretType, SessionError, VaultError};
+
     use std::slice;
 
     use super::*;
@@ -191,7 +195,7 @@ mod tests {
     #[test]
     fn apply_user_records_preserves_meta_and_replaces_secrets() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
-        let identity = crate::DeviceIdentity::generate()?;
+        let identity = DeviceIdentity::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let auth = genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
         let ciphertext = crypto.encrypt_value(
@@ -208,7 +212,7 @@ mod tests {
         state.secrets.insert(
             old_id.clone(),
             (
-                crate::SecretType::ApiKey,
+                SecretType::ApiKey,
                 StoredRecordPayload::from_trusted("stale".to_owned()),
             ),
         );
@@ -216,7 +220,7 @@ mod tests {
         let new_id = SecretId::from_vault_record("secret_new0000001");
         let user_records = vec![StoredSecretRecord {
             key: new_id.clone(),
-            secret_type: Some(crate::SecretType::ApiKey),
+            secret_type: Some(SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(ciphertext),
         }];
 
@@ -247,7 +251,7 @@ mod tests {
         Ok((
             id,
             (
-                crate::SecretType::Login,
+                SecretType::Login,
                 StoredRecordPayload::from_age_armored(ciphertext),
             ),
         ))
@@ -267,7 +271,7 @@ mod tests {
         Ok((
             id,
             (
-                crate::SecretType::SecureNote,
+                SecretType::SecureNote,
                 StoredRecordPayload::from_age_armored(ciphertext),
             ),
         ))
@@ -327,7 +331,7 @@ mod tests {
             &secrets,
             &crypto,
             "",
-            SecretTypeFilter::Only(crate::SecretType::SecureNote),
+            SecretTypeFilter::Only(SecretType::SecureNote),
             1,
             1,
         )?;
@@ -335,7 +339,7 @@ mod tests {
         assert_eq!(page.total, 2);
         assert_eq!(page.records.len(), 1);
         assert_eq!(page.records[0].id.as_str(), "secret_c");
-        assert_eq!(page.records[0].secret_type(), crate::SecretType::SecureNote);
+        assert_eq!(page.records[0].secret_type(), SecretType::SecureNote);
         Ok(())
     }
 
@@ -353,7 +357,7 @@ mod tests {
             &secrets,
             &crypto,
             "recovery",
-            SecretTypeFilter::Only(crate::SecretType::SecureNote),
+            SecretTypeFilter::Only(SecretType::SecureNote),
             0,
             50,
         )?;
@@ -393,7 +397,7 @@ mod tests {
             (
                 invalid_id,
                 (
-                    crate::SecretType::Login,
+                    SecretType::Login,
                     StoredRecordPayload::from_trusted("not-age-ciphertext".to_owned()),
                 ),
             ),
@@ -420,7 +424,7 @@ mod tests {
 
         assert!(matches!(
             error,
-            crate::VaultError::Session(crate::SessionError::SecretNotFound { .. })
+            VaultError::Session(SessionError::SecretNotFound { .. })
         ));
         Ok(())
     }

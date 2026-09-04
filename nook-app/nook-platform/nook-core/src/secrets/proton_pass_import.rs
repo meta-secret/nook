@@ -1,5 +1,7 @@
 //! Proton Pass export conversion into Nook's typed plaintext secret model.
 
+use super::import_support;
+
 use std::{
     collections::BTreeMap,
     fmt,
@@ -182,7 +184,7 @@ fn append_proton_metadata(
     notes: &mut String,
     metadata: impl IntoIterator<Item = (String, String)>,
 ) {
-    super::import_support::append_import_metadata(notes, "Proton Pass", metadata);
+    import_support::append_import_metadata(notes, "Proton Pass", metadata);
 }
 
 fn item_metadata(
@@ -266,7 +268,7 @@ fn convert_login(item: &ProtonPassItem, vault_name: &str) -> SecretValue {
     .map_or("", str::trim);
     let mut notes = item.data.metadata.note.clone();
     let mut metadata = item_metadata(item, vault_name, website_url.as_str(), username);
-    if let Some(name) = super::import_support::source_label_metadata(
+    if let Some(name) = import_support::source_label_metadata(
         "name",
         &item.data.metadata.name,
         website_url.as_str(),

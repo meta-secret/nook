@@ -1,5 +1,7 @@
 //! Key-epoch rotation: fresh `secrets_key` / `members_key` for append-only security events.
 
+use crate::SecretValue;
+
 use crate::EncryptedSecretPayload;
 use crate::errors::{VaultEpochError, VaultEpochResult, VaultResult};
 use crate::multi_device::VaultKeys;
@@ -27,7 +29,7 @@ pub fn reencrypt_user_secrets_for_epoch(
             })?;
         let armored = AgeArmoredCiphertext::from_trusted_armored(record.value.as_str().to_owned());
         let mut plaintext = old_crypto.decrypt_value(&armored)?;
-        let mut value = crate::SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
+        let mut value = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
         let identity_fingerprint = crate::secret_identity_fingerprint(&value, new_secrets_key)?;
         let fingerprint = crate::secret_fingerprint(&value, new_secrets_key)?;
         let ciphertext = new_crypto.encrypt_value(&plaintext)?;
@@ -107,6 +109,8 @@ pub fn rewrap_vault_meta_for_epoch(
 
 #[cfg(test)]
 mod tests {
+    use crate::{EpochMetadataState, EpochPasswordState, SecretType, VaultMetaState};
+
     use std::io;
 
     use super::*;
@@ -124,7 +128,7 @@ mod tests {
         )?;
         let record = StoredSecretRecord {
             key: SecretId::from_vault_record("secret_testtoken1"),
-            secret_type: Some(crate::SecretType::ApiKey),
+            secret_type: Some(SecretType::ApiKey),
             value: StoredRecordPayload::from_age_armored(
                 VaultCrypto::new(&old_key)?.encrypt_value(
                     SecretValue::ApiKey(ApiKeySecret {
@@ -188,7 +192,7 @@ mod tests {
             &old_keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let mut state = crate::VaultMetaState::from_stored_records(&records);
+        let mut state = VaultMetaState::from_stored_records(&records);
         let old_auth_envelopes = state.auth.get(&identity.auth_id()).cloned();
 
         rewrap_vault_meta_for_epoch(&mut state, &records, &old_keys.members_key, &new_keys)?;
@@ -233,14 +237,14 @@ mod tests {
 
         let rotated_meta_records =
             rewrapped_vault_meta_records_for_epoch(&records, &old_keys.members_key, &new_keys)?;
-        let mut state = crate::VaultMetaState::from_stored_records(&records);
+        let mut state = VaultMetaState::from_stored_records(&records);
         crate::apply_vault_meta_operation(
             &mut state,
             &VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
                 members_checkpoint_hash: crate::sha256_hex(b"members"),
-                rotated_meta_records: crate::EpochMetadataState::Replace(rotated_meta_records),
-                password_entries: crate::EpochPasswordState::Replace(Vec::new()),
+                rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
+                password_entries: EpochPasswordState::Replace(Vec::new()),
             },
             "2026-06-28T00:02:00Z",
         )?;

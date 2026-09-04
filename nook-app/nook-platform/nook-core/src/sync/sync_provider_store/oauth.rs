@@ -147,6 +147,12 @@ fn non_empty(value: Option<&str>) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        StoredGoogleDriveFolder, StoredICloudShareTarget, StoredOAuthAccessCredential,
+        StoredOAuthAccountIdentity, StoredOAuthRefreshCredential, StoredOAuthRemoteFileId,
+        StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
+    };
+
     use std::io;
 
     use crate::{GoogleDriveMode, ICloudMode, OAuthFileConfigData, OauthFilePreset};
@@ -161,36 +167,31 @@ mod tests {
     fn google_drive_mode_switch_clears_scope_bound_credentials_and_targets() {
         let config = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
-            access_token: crate::StoredOAuthAccessCredential::AccessToken(
-                "appdata-token".to_owned(),
-            ),
-            refresh_token: crate::StoredOAuthRefreshCredential::Token("refresh".to_owned()),
-            expires_at: crate::StoredOAuthTokenExpiry::ExpiresAt("2026-07-14T00:00:00Z".to_owned()),
-            file_id: crate::StoredOAuthRemoteFileId::FileId("appdata-file".to_owned()),
-            file_name: crate::StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
-            account_email: crate::StoredOAuthAccountIdentity::Email("owner@example.com".to_owned()),
+            access_token: StoredOAuthAccessCredential::AccessToken("appdata-token".to_owned()),
+            refresh_token: StoredOAuthRefreshCredential::Token("refresh".to_owned()),
+            expires_at: StoredOAuthTokenExpiry::ExpiresAt("2026-07-14T00:00:00Z".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("appdata-file".to_owned()),
+            file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
+            account_email: StoredOAuthAccountIdentity::Email("owner@example.com".to_owned()),
             drive_mode: GoogleDriveMode::Private,
-            folder_id: crate::StoredGoogleDriveFolder::Root,
+            folder_id: StoredGoogleDriveFolder::Root,
             icloud_mode: ICloudMode::Private,
-            icloud_share_target: crate::StoredICloudShareTarget::Personal,
+            icloud_share_target: StoredICloudShareTarget::Personal,
         };
         let switched = set_google_drive_provider_mode(&config, GoogleDriveMode::Shared);
         assert_eq!(switched.drive_mode, GoogleDriveMode::Shared);
         assert_eq!(
             switched.access_token,
-            crate::StoredOAuthAccessCredential::SignedOut
+            StoredOAuthAccessCredential::SignedOut
         );
         assert_eq!(
             switched.refresh_token,
-            crate::StoredOAuthRefreshCredential::NotIssued
+            StoredOAuthRefreshCredential::NotIssued
         );
-        assert_eq!(switched.expires_at, crate::StoredOAuthTokenExpiry::Unknown);
-        assert_eq!(
-            switched.account_email,
-            crate::StoredOAuthAccountIdentity::Unknown
-        );
-        assert_eq!(switched.file_id, crate::StoredOAuthRemoteFileId::Unresolved);
-        assert_eq!(switched.folder_id, crate::StoredGoogleDriveFolder::Root);
+        assert_eq!(switched.expires_at, StoredOAuthTokenExpiry::Unknown);
+        assert_eq!(switched.account_email, StoredOAuthAccountIdentity::Unknown);
+        assert_eq!(switched.file_id, StoredOAuthRemoteFileId::Unresolved);
+        assert_eq!(switched.folder_id, StoredGoogleDriveFolder::Root);
         assert_eq!(switched.file_name.as_deref(), Some("nook-events"));
     }
 
@@ -198,14 +199,14 @@ mod tests {
     fn oauth_token_merges_preserve_only_same_provider_targets() {
         let google_existing = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
-            access_token: crate::StoredOAuthAccessCredential::AccessToken("old".to_owned()),
-            refresh_token: crate::StoredOAuthRefreshCredential::Token("refresh".to_owned()),
-            expires_at: crate::StoredOAuthTokenExpiry::ExpiresAt("old-expiry".to_owned()),
-            file_id: crate::StoredOAuthRemoteFileId::FileId("file".to_owned()),
-            file_name: crate::StoredOAuthRemoteFileName::FileName("events".to_owned()),
-            account_email: crate::StoredOAuthAccountIdentity::Email("alex@example.com".to_owned()),
+            access_token: StoredOAuthAccessCredential::AccessToken("old".to_owned()),
+            refresh_token: StoredOAuthRefreshCredential::Token("refresh".to_owned()),
+            expires_at: StoredOAuthTokenExpiry::ExpiresAt("old-expiry".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("file".to_owned()),
+            file_name: StoredOAuthRemoteFileName::FileName("events".to_owned()),
+            account_email: StoredOAuthAccountIdentity::Email("alex@example.com".to_owned()),
             drive_mode: GoogleDriveMode::Shared,
-            folder_id: crate::StoredGoogleDriveFolder::FolderId("folder".to_owned()),
+            folder_id: StoredGoogleDriveFolder::FolderId("folder".to_owned()),
             ..OAuthFileConfigData::default()
         };
         let google = google_oauth_tokens_to_config(
@@ -215,7 +216,7 @@ mod tests {
         );
         assert_eq!(
             google.access_token,
-            crate::StoredOAuthAccessCredential::AccessToken("new-google-token".to_owned())
+            StoredOAuthAccessCredential::AccessToken("new-google-token".to_owned())
         );
         assert_eq!(google.expires_at.as_deref(), Some("2026-07-20T00:00:00Z"));
         assert_eq!(google.drive_mode, GoogleDriveMode::Shared);
@@ -224,14 +225,14 @@ mod tests {
 
         let icloud_existing = OAuthFileConfigData {
             preset: OauthFilePreset::ICloud,
-            access_token: crate::StoredOAuthAccessCredential::AccessToken("old".to_owned()),
-            refresh_token: crate::StoredOAuthRefreshCredential::Token("refresh".to_owned()),
-            expires_at: crate::StoredOAuthTokenExpiry::ExpiresAt("unchanged-expiry".to_owned()),
-            file_id: crate::StoredOAuthRemoteFileId::FileId("record".to_owned()),
-            file_name: crate::StoredOAuthRemoteFileName::FileName("events".to_owned()),
-            account_email: crate::StoredOAuthAccountIdentity::Email("old@example.com".to_owned()),
+            access_token: StoredOAuthAccessCredential::AccessToken("old".to_owned()),
+            refresh_token: StoredOAuthRefreshCredential::Token("refresh".to_owned()),
+            expires_at: StoredOAuthTokenExpiry::ExpiresAt("unchanged-expiry".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("record".to_owned()),
+            file_name: StoredOAuthRemoteFileName::FileName("events".to_owned()),
+            account_email: StoredOAuthAccountIdentity::Email("old@example.com".to_owned()),
             icloud_mode: ICloudMode::Shared,
-            icloud_share_target: crate::StoredICloudShareTarget::SharedTarget(
+            icloud_share_target: StoredICloudShareTarget::SharedTarget(
                 "icloud-share-v1:{\"role\":\"owner\"}".to_owned(),
             ),
             ..OAuthFileConfigData::default()
@@ -243,7 +244,7 @@ mod tests {
         );
         assert_eq!(
             icloud.access_token,
-            crate::StoredOAuthAccessCredential::AccessToken("new-icloud-token".to_owned())
+            StoredOAuthAccessCredential::AccessToken("new-icloud-token".to_owned())
         );
         assert_eq!(icloud.account_email.as_deref(), Some("new@example.com"));
         assert_eq!(icloud.icloud_mode, ICloudMode::Shared);
@@ -252,19 +253,17 @@ mod tests {
             icloud_existing.icloud_share_target
         );
         assert_eq!(icloud.drive_mode, GoogleDriveMode::Private);
-        assert_eq!(icloud.folder_id, crate::StoredGoogleDriveFolder::Root);
+        assert_eq!(icloud.folder_id, StoredGoogleDriveFolder::Root);
     }
 
     #[test]
     fn shared_drive_binding_preserves_credentials_and_filename() -> anyhow::Result<()> {
         let config = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
-            access_token: crate::StoredOAuthAccessCredential::AccessToken(
-                "shared-token".to_owned(),
-            ),
-            refresh_token: crate::StoredOAuthRefreshCredential::Token("refresh".to_owned()),
-            file_id: crate::StoredOAuthRemoteFileId::FileId("stale-appdata-file".to_owned()),
-            file_name: crate::StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
+            access_token: StoredOAuthAccessCredential::AccessToken("shared-token".to_owned()),
+            refresh_token: StoredOAuthRefreshCredential::Token("refresh".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("stale-appdata-file".to_owned()),
+            file_name: StoredOAuthRemoteFileName::FileName("nook-events".to_owned()),
             ..OAuthFileConfigData::default()
         };
         let bound = bind_google_drive_shared_folder(
@@ -273,10 +272,10 @@ mod tests {
         )?;
         assert_eq!(bound.drive_mode, GoogleDriveMode::Shared);
         assert_eq!(bound.folder_id.as_deref(), Some("folder-team"));
-        assert_eq!(bound.file_id, crate::StoredOAuthRemoteFileId::Unresolved);
+        assert_eq!(bound.file_id, StoredOAuthRemoteFileId::Unresolved);
         assert_eq!(
             bound.access_token,
-            crate::StoredOAuthAccessCredential::AccessToken("shared-token".to_owned())
+            StoredOAuthAccessCredential::AccessToken("shared-token".to_owned())
         );
         assert_eq!(bound.refresh_token.as_deref(), Some("refresh"));
         assert_eq!(bound.file_name.as_deref(), Some("nook-events"));
@@ -287,14 +286,14 @@ mod tests {
     fn oauth_remote_reference_policy_is_core_owned() -> anyhow::Result<()> {
         let mut google = OAuthFileConfigData {
             preset: OauthFilePreset::GoogleDrive,
-            file_id: crate::StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
+            file_id: StoredOAuthRemoteFileId::FileId("file-id".to_owned()),
             ..OAuthFileConfigData::default()
         };
         assert_eq!(
             oauth_remote_storage_ref(&google).as_deref(),
             Some("file-id")
         );
-        google.folder_id = crate::StoredGoogleDriveFolder::FolderId(" shared-folder ".to_owned());
+        google.folder_id = StoredGoogleDriveFolder::FolderId(" shared-folder ".to_owned());
         assert_eq!(
             oauth_remote_storage_ref(&google).as_deref(),
             Some("shared:shared-folder")
@@ -308,10 +307,10 @@ mod tests {
 
         let icloud = OAuthFileConfigData {
             preset: OauthFilePreset::ICloud,
-            icloud_share_target: crate::StoredICloudShareTarget::SharedTarget(
+            icloud_share_target: StoredICloudShareTarget::SharedTarget(
                 "icloud-share-v1:{}".to_owned(),
             ),
-            folder_id: crate::StoredGoogleDriveFolder::FolderId("not-selected".to_owned()),
+            folder_id: StoredGoogleDriveFolder::FolderId("not-selected".to_owned()),
             ..OAuthFileConfigData::default()
         };
         assert_eq!(

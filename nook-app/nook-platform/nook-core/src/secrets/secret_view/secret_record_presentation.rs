@@ -191,6 +191,8 @@ impl SecretRecord {
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
+    use crate::{AuthenticatorSecret, CreditCardSecret};
+
     use super::*;
     use crate::{
         LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
@@ -259,7 +261,7 @@ mod tests {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_card"),
             secret_type: SecretType::CreditCard,
-            data: SecretValue::CreditCard(crate::CreditCardSecret::from_fields(
+            data: SecretValue::CreditCard(CreditCardSecret::from_fields(
                 "Personal Visa",
                 "Ada Lovelace",
                 "4111 1111 1111 1111",
@@ -331,7 +333,7 @@ mod tests {
 
     #[test]
     fn authenticator_list_item_hides_shared_secret_and_backup_codes() -> anyhow::Result<()> {
-        let value = crate::AuthenticatorSecret::from_form_fields(
+        let value = AuthenticatorSecret::from_form_fields(
             "Example",
             "alice@example.com",
             "JBSWY3DPEHPK3PXP",

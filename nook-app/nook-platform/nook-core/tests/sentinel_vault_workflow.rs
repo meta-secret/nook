@@ -1,5 +1,7 @@
 //! Sentinel vault key-share lifecycle integration tests.
 
+use nook_core::{VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
+
 use std::slice;
 
 use nook_core::{
@@ -36,15 +38,15 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
         &shares,
         &VaultUnlock::Keys,
         &[],
-        nook_core::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-        nook_core::VaultNameRef::Unnamed,
-        nook_core::VaultVersionWrite::Initial,
+        VaultStoreIdentityRef::Assigned(store_id.as_str()),
+        VaultNameRef::Unnamed,
+        VaultVersionWrite::Initial,
         &architecture,
     )?;
 
     assert!(matches!(
         load_stored_vault(yaml.as_str(), &first),
-        Err(nook_core::VaultError::MultiDevice(
+        Err(VaultError::MultiDevice(
             MultiDeviceError::SentinelCeremonyRequired
         ))
     ));

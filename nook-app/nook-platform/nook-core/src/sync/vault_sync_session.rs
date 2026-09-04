@@ -90,6 +90,8 @@ pub fn reconcile_yaml_sync(
 
 #[cfg(test)]
 mod tests {
+    use crate::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
+
     use super::*;
     use crate::errors;
     use crate::{
@@ -117,8 +119,8 @@ mod tests {
             &records,
             &VaultUnlock::Keys,
             &[],
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultVersionWrite::Initial,
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultVersionWrite::Initial,
         )
         .map_err(Into::into)
     }
@@ -180,9 +182,9 @@ mod tests {
                 entries: password_entries.clone(),
             },
             &password_entries,
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultNameRef::Named("Team Vault"),
-            crate::VaultVersionWrite::Version(42),
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultNameRef::Named("Team Vault"),
+            VaultVersionWrite::Version(42),
         )?;
         let mut state = VaultMetaState::default();
         let outcome = reconcile_yaml_sync(

@@ -20,6 +20,8 @@
 #[path = "event_log_harness.rs"]
 pub mod harness;
 
+use nook_core::{LocalEventStore, VaultError, VaultMetaState};
+
 use harness::{EventLogDevice, ProviderBuckets, push_device_outbox, union_device_from_providers};
 use nook_core::{
     DeviceIdentity, JoinRequest, MultiDeviceError, VaultResult, materialize_vault_meta_from_graph,
@@ -46,8 +48,8 @@ impl RosterView {
 /// its own local event log in topological order.
 pub fn roster_view(device: &EventLogDevice) -> VaultResult<RosterView> {
     let graph = device.session.store.load_graph(device.store_id())?;
-    let mut state = nook_core::VaultMetaState::default();
-    materialize_vault_meta_from_graph(&graph, &mut state).map_err(nook_core::VaultError::from)?;
+    let mut state = VaultMetaState::default();
+    materialize_vault_meta_from_graph(&graph, &mut state).map_err(VaultError::from)?;
     let mut pending_joins: Vec<String> = state
         .joins
         .keys()
@@ -74,7 +76,7 @@ impl SimWorld {
         }
         devices.insert(0, genesis);
         let mut providers = ProviderBuckets::new();
-        providers.insert("github".to_owned(), nook_core::LocalEventStore::new());
+        providers.insert("github".to_owned(), LocalEventStore::new());
         Ok(Self { devices, providers })
     }
 
@@ -177,11 +179,11 @@ impl JoinApproval<Pending> {
         let secrets_key_ciphertext = approver
             .crypto
             .encrypt_value(&approver.secrets_key)
-            .map_err(nook_core::VaultError::from)?;
+            .map_err(VaultError::from)?;
         let members_key_ciphertext = approver
             .crypto
             .encrypt_value(&approver.members_key)
-            .map_err(nook_core::VaultError::from)?;
+            .map_err(VaultError::from)?;
 
         world.devices[approver_index].append_signed(vec![VaultOperation::JoinApproved {
             device_id: self.join.device_id.clone(),
@@ -323,5 +325,5 @@ fn permutations(items: &[usize]) -> Vec<Vec<usize>> {
 
 /// Convenience: surface a `MultiDeviceError` as a `VaultError` in scenarios.
 pub fn into_vault_error(err: MultiDeviceError) -> nook_core::VaultError {
-    nook_core::VaultError::from(err)
+    VaultError::from(err)
 }

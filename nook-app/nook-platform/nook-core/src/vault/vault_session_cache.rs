@@ -1,5 +1,7 @@
 //! Restore vault encryption keys from the projection-cache YAML.
 
+use crate::SessionError;
+
 use crate::errors::{MultiDeviceError, VaultResult};
 use crate::{
     DeviceIdentity, VaultType, deserialize_stored, detect_stored_format, resolve_members_key,
@@ -15,7 +17,7 @@ pub fn hydrate_keys_from_projection_yaml(
     identity: &DeviceIdentity,
 ) -> VaultResult<(String, String)> {
     if yaml.trim().is_empty() {
-        return Err(crate::SessionError::EmptyProjectionCache.into());
+        return Err(SessionError::EmptyProjectionCache.into());
     }
     let architecture = crate::read_vault_architecture(yaml)?;
     if architecture.vault_type == VaultType::Sentinel {
@@ -30,6 +32,10 @@ pub fn hydrate_keys_from_projection_yaml(
 
 #[cfg(test)]
 mod tests {
+    use crate::{
+        MultiDeviceError, VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
+    };
+
     use super::*;
     use crate::test_support;
     use crate::{VaultResult, VaultUnlock};
@@ -78,9 +84,9 @@ mod tests {
             &shares,
             &VaultUnlock::Keys,
             &[],
-            crate::VaultStoreIdentityRef::Assigned(store_id.as_str()),
-            crate::VaultNameRef::Unnamed,
-            crate::VaultVersionWrite::Initial,
+            VaultStoreIdentityRef::Assigned(store_id.as_str()),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
             &architecture,
         )?;
 
@@ -92,7 +98,7 @@ mod tests {
         assert!(
             matches!(
                 err,
-                crate::VaultError::MultiDevice(crate::MultiDeviceError::SentinelCeremonyRequired)
+                VaultError::MultiDevice(MultiDeviceError::SentinelCeremonyRequired)
             ),
             "expected SentinelCeremonyRequired, got {err:?}"
         );

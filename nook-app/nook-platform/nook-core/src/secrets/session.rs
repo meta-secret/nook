@@ -1,5 +1,7 @@
 //! In-memory session mutations shared by WASM and integration tests.
 
+use crate::ValidationError;
+
 use crate::errors::{SessionError, SessionResult, VaultResult};
 use crate::{
     BackupCodeAttachMode, BackupCodePersistenceVerification, Database, SecretType, SecretValue,
@@ -129,7 +131,7 @@ pub fn replace_encrypted_authenticator_verified(
             .map_err(SessionError::from)
         }
         _ => Err(SessionError::Validation(
-            crate::ValidationError::AuthenticatorBackupCodesInvalid,
+            ValidationError::AuthenticatorBackupCodesInvalid,
         )),
     };
     projected.zeroize_plaintext();
@@ -146,6 +148,8 @@ pub fn replace_encrypted_authenticator_verified(
 
 #[cfg(test)]
 mod tests {
+    use crate::AuthenticatorSecret;
+
     use super::*;
     use crate::{SecretId, VaultResult, generate_vault_keys};
 
@@ -207,7 +211,7 @@ mod tests {
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let old_id = SecretId::from_vault_record("secret_AuThOld0001");
         let new_id = SecretId::from_vault_record("secret_AuThNew0001");
-        let mut authenticator = crate::AuthenticatorSecret::from_otpauth_uri(
+        let mut authenticator = AuthenticatorSecret::from_otpauth_uri(
             "otpauth://totp/Nook:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Nook",
         )?;
         authenticator.backup_codes = vec!["old-code".to_owned()];

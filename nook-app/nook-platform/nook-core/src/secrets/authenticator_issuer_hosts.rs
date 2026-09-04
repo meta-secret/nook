@@ -1,5 +1,7 @@
 //! Bundled issuer → website host mapping for authenticator clustering.
 
+use super::secret_view;
+
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use std::collections::HashMap;
@@ -94,7 +96,7 @@ pub fn mapped_host_for_issuer(issuer: &str) -> Option<&'static str> {
 /// Order: explicit `website_url`, domain-like issuer text, then bundled map.
 #[must_use]
 pub fn resolve_authenticator_website_host(website_url: &str, issuer: &str) -> Option<String> {
-    let from_url = super::secret_view::hostname_from_url(website_url);
+    let from_url = secret_view::hostname_from_url(website_url);
     if !from_url.is_empty() {
         return Some(from_url);
     }
@@ -104,7 +106,7 @@ pub fn resolve_authenticator_website_host(website_url: &str, issuer: &str) -> Op
         return None;
     }
     if issuer_looks_like_host(issuer) {
-        let host = super::secret_view::hostname_from_url(issuer);
+        let host = secret_view::hostname_from_url(issuer);
         if !host.is_empty() {
             return Some(host);
         }
