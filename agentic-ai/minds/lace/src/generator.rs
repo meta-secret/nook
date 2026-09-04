@@ -307,6 +307,67 @@ mod tests {
     use super::*;
 
     #[test]
+    fn nested_task_contract_generates_default_payloads_and_retry_policy() -> GeneratorResult<()> {
+        let code = generate_rust_code(
+            r#"
+graph:
+  review:
+    review_task:
+      task:
+        attrs:
+          description: "Review the dependency output."
+        retries: 2
+      output: review_output
+      error: review_error
+    review_output: {}
+    review_error: {}
+"#,
+        )?;
+
+        assert!(code.contains("pub mod review"));
+        assert!(code.contains("pub struct ReviewTask"));
+        assert!(code.contains("pub struct ReviewOutput"));
+        assert!(code.contains("pub struct ReviewError"));
+        assert_eq!(code.matches("pub payload: String").count(), 2);
+        assert!(code.contains("Review the dependency output."));
+        assert!(code.contains("2usize"));
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_graph_contracts_return_specific_generator_errors() -> GeneratorResult<()> {
+        assert!(matches!(
+            generate_rust_code("graph: ["),
+            Err(GeneratorError::InvalidYaml(_))
+        ));
+        assert!(matches!(
+            generate_rust_code("graph:\n  orphan:\n    payload: {}\n"),
+            Err(GeneratorError::MissingTaskDefinition { domain }) if domain == "orphan"
+        ));
+        assert!(matches!(
+            generate_rust_code(
+                "graph:\n  invalid:\n    invalid_task:\n      task: {}\n      output: []\n"
+            ),
+            Err(GeneratorError::InvalidTaskOutputReference)
+        ));
+        assert!(matches!(
+            generate_rust_code(
+                "graph:\n  invalid:\n    invalid_task:\n      task: {}\n      error: 9\n"
+            ),
+            Err(GeneratorError::InvalidTaskErrorReference)
+        ));
+
+        let missing = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/missing-lace-graph.yaml");
+        assert!(!missing.exists());
+        assert!(matches!(
+            generate_from_file(missing),
+            Err(GeneratorError::ReadGraph(error))
+                if error.kind() == std::io::ErrorKind::NotFound
+        ));
+        Ok(())
+    }
+
+    #[test]
     fn test_yaml_generator_with_quote() -> GeneratorResult<()> {
         let yaml = r#"
 graph:
