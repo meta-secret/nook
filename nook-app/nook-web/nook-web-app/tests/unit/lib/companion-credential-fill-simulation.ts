@@ -17,13 +17,37 @@ export type FakeLoginCredentials = {
   readonly password: string
 }
 
-export type SimulatedCredentialFieldDefinition = {
+export enum SimulatedCredentialFieldKind {
+  Credential = 'credential',
+  NewPassword = 'newPassword',
+  OneTimeCode = 'oneTimeCode',
+}
+
+type SimulatedCredentialFieldBase = {
   readonly name: string
   readonly field_index: CredentialFillFieldIndex
-  readonly role: CredentialFillFieldRole
-  readonly editability: CredentialFillEditability
   readonly value: string
 }
+
+export type SimulatedCredentialFieldDefinition = SimulatedCredentialFieldBase &
+  (
+    | {
+        readonly kind: SimulatedCredentialFieldKind.Credential
+        readonly role: CredentialFillFieldRole
+        readonly editability: CredentialFillEditability
+      }
+    | { readonly kind: SimulatedCredentialFieldKind.NewPassword }
+    | { readonly kind: SimulatedCredentialFieldKind.OneTimeCode }
+  )
+
+type SimulatedCredentialFieldOwnership =
+  | {
+      readonly kind: SimulatedCredentialFieldKind.Credential
+      readonly role: CredentialFillFieldRole
+      readonly editability: CredentialFillEditability
+    }
+  | { readonly kind: SimulatedCredentialFieldKind.NewPassword }
+  | { readonly kind: SimulatedCredentialFieldKind.OneTimeCode }
 
 export class SimulatedCredentialField {
   readonly name: string
@@ -31,32 +55,51 @@ export class SimulatedCredentialField {
   readonly observation: CredentialFillObservation
   value: string
 
-  private readonly role: CredentialFillFieldRole
-  private readonly editability: CredentialFillEditability
+  private readonly ownership: SimulatedCredentialFieldOwnership
 
-  constructor({
-    name,
-    field_index,
-    role,
-    editability,
-    value,
-  }: SimulatedCredentialFieldDefinition) {
-    this.name = name
-    this.field_index = field_index
-    this.role = role
-    this.editability = editability
-    this.value = value
-    this.observation = CredentialFillObservation.credential(
-      field_index,
-      role,
-      editability,
-    )
+  constructor(definition: SimulatedCredentialFieldDefinition) {
+    this.name = definition.name
+    this.field_index = definition.field_index
+    this.value = definition.value
+    switch (definition.kind) {
+      case SimulatedCredentialFieldKind.Credential:
+        this.observation = CredentialFillObservation.credential(
+          definition.field_index,
+          definition.role,
+          definition.editability,
+        )
+        this.ownership = {
+          kind: SimulatedCredentialFieldKind.Credential,
+          role: definition.role,
+          editability: definition.editability,
+        }
+        break
+      case SimulatedCredentialFieldKind.NewPassword:
+        this.observation = CredentialFillObservation.new_password(
+          definition.field_index,
+        )
+        this.ownership = { kind: SimulatedCredentialFieldKind.NewPassword }
+        break
+      case SimulatedCredentialFieldKind.OneTimeCode:
+        this.observation = CredentialFillObservation.one_time_code(
+          definition.field_index,
+        )
+        this.ownership = { kind: SimulatedCredentialFieldKind.OneTimeCode }
+        break
+    }
   }
 
   free(): void {
     this.observation.free()
-    this.editability.free()
-    this.role.free()
+    switch (this.ownership.kind) {
+      case SimulatedCredentialFieldKind.Credential:
+        this.ownership.editability.free()
+        this.ownership.role.free()
+        break
+      case SimulatedCredentialFieldKind.NewPassword:
+      case SimulatedCredentialFieldKind.OneTimeCode:
+        break
+    }
     this.field_index.free()
   }
 }
@@ -82,7 +125,7 @@ export type CredentialFillJourneyOutcome =
     }
   | {
       readonly kind: CredentialFillJourneyOutcomeKind.Rejected
-      readonly rejection: CredentialFillRejection.PasswordFieldsReadonly
+      readonly rejection: CredentialFillRejection
       readonly snapshot: SimulatedCredentialFormSnapshot
     }
 
@@ -99,17 +142,8 @@ type CredentialFillPlanning =
     }
   | {
       readonly kind: CredentialFillPlanningOutcome.Rejected
-      readonly rejection: CredentialFillRejection.PasswordFieldsReadonly
+      readonly rejection: CredentialFillRejection
     }
-
-export class UnhandledCredentialFillRejectionError extends Error {
-  readonly rejection: CredentialFillRejection
-
-  constructor(rejection: CredentialFillRejection) {
-    super('credential fill planner returned an unhandled typed rejection')
-    this.rejection = rejection
-  }
-}
 
 type ApplyCredentialPlanRequest = {
   readonly plan: CredentialFillPlan
@@ -141,13 +175,10 @@ function planCredentialFillStep(
           }
         case CredentialFillPlanningOutcome.Rejected: {
           const rejection = result.rejection()
-          if (rejection === CredentialFillRejection.PasswordFieldsReadonly) {
-            return {
-              kind: CredentialFillPlanningOutcome.Rejected,
-              rejection,
-            }
+          return {
+            kind: CredentialFillPlanningOutcome.Rejected,
+            rejection,
           }
-          throw new UnhandledCredentialFillRejectionError(rejection)
         }
       }
       throw new Error('credential fill result has an unsupported outcome')
@@ -243,7 +274,7 @@ export function simulateLoginJourney({
             snapshot: snapshotForm(form),
           }
           outcomes.push(outcome)
-          break
+          return outcomes
         }
       }
     }
