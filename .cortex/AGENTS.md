@@ -234,22 +234,36 @@ prohibited. This is a universal P1 rule.
 This format applies to Gizmo Prime, every real Team Agent or subagent, and
 every user-visible skill-driven action.
 
+Put only the existing metadata fields in a fenced `text` block:
+
 ```text
-HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
+HH:mm:(<PR>):<ACTOR>:<ACTION>
 ```
+
+For example:
+
+```text
+01:25:(pending):Gizmo Prime:CLARIFY
+```
+
+Clarified the user-visible communication format.
+
+Write the human-readable description as ordinary Markdown immediately after
+the fence. Do not add a PR prefix, arrow, or description to the metadata line,
+and do not rename, reorder, or remove its time, PR, actor, or action fields.
 
 - Use `(<number>)` with the exact positive pull-request number that the
   activity currently serves, for example `(1263)`.
 - Use `(pending)` before that pull request exists.
 - Use `(none)` when the assigned work intentionally has no pull request.
-- Emit the current PR token on every activity line. Refresh it immediately
+- Emit the current PR token on every metadata line. Refresh it immediately
   after pull-request creation.
 - Use `SKILL` when loading or applying a skill is the reported action.
-- Start every activity line with the current local time in 24-hour `HH:mm`
+- Start every metadata line with the current local time in 24-hour `HH:mm`
   form.
-- Identify the executor on every activity line with one compact canonical actor
+- Identify the executor on every metadata line with one compact canonical actor
   token from this closed mapping:
-  - `GIZMO` for Gizmo Prime;
+  - `Gizmo Prime` for Gizmo Prime;
   - `AI` for the AI team;
   - `DEV-CORE` for Development core;
   - `SECURITY` for Security;
@@ -276,7 +290,6 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
   - `WAIT` identifies a bounded wait and its elapsed time.
   - `STATE` summarizes the current result, blocker, or next action.
 - Place no spaces around the colons between time, PR, actor, and action type.
-- Place exactly one space before and after `->`.
 - State what changed, why it was done, or what current state was observed.
 - Show a command before waiting for it to finish.
   - Prefer the task entrypoint, such as `task loom:verify`.
@@ -288,7 +301,7 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
   every five minutes.
 - When there is no meaningful new evidence, limit the description to the exact
   operation identifier, elapsed time, and `in progress`.
-- Identify the exact operation in every `WAIT` line.
+- Identify the exact operation in every `WAIT` update.
   - For local Task execution, name the exact `task <task-name>` command.
   - For hosted execution, name the GitHub run or job ID and include its
     clickable URL.
@@ -296,7 +309,8 @@ HH:mm:(<PR>):<ACTOR>:<ACTION> -> <description>
 - Give every bounded wait a start update and a completion or timeout update.
 - Apply the format to progress updates, questions, handoffs, and final
   responses.
-- Give each separate activity its own timestamped plain-text line.
+- Give each separate activity its own fenced metadata block and ordinary
+  Markdown description.
 - Do not add the activity format to code, logs, repository content, or commit
   messages.
 - A strict machine-readable protocol response is exempt from the entire

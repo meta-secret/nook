@@ -133,7 +133,7 @@ function decodeTask(
     description.trim() !== description ||
     description.length < 1 ||
     description.length > DELEGATION_VISUALIZATION_DESCRIPTION_LIMIT ||
-    /[\r\n\u0000-\u001f\u007f]/u.test(description)
+    /[\r\n\u0000-\u001f\u007f-\u009f]/u.test(description)
   ) {
     throw new DelegationVisualizationRequestDecodeError(`${path}.description`);
   }
