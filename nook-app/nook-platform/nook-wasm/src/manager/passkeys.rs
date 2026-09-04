@@ -45,6 +45,7 @@ fn passkey_error_code(error: &nook_core::PasskeyAuthenticatorError) -> &'static 
 #[cfg(test)]
 mod tests {
     use super::passkey_error_code;
+    use nook_core::PasskeyAuthenticatorError;
 
     #[test]
     fn randomness_failure_has_a_distinct_browser_error_code() {
