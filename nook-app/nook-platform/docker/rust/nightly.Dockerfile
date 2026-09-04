@@ -33,6 +33,7 @@ WORKDIR /meta-secret/nook
 COPY nook-app/nook-platform/ nook-app/nook-platform/
 
 WORKDIR /meta-secret/nook/nook-app/nook-platform
+COPY nook-app/nook-platform/nook-core/coverage-floor.json nook-core/coverage-floor.json
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
