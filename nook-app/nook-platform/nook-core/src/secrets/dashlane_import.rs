@@ -14,7 +14,7 @@ use thiserror::Error;
 use zip::ZipArchive;
 
 use super::import_support::{
-    MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
+    self, MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
     normalized_csv_header, optional_csv_field,
 };
 use crate::{AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
