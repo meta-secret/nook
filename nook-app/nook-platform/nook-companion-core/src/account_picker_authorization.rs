@@ -6,33 +6,103 @@
 
 mod state;
 
-use state::{ActiveAuthorization, CleaningAuthorization, CleanupCompletion, CleanupEvidence};
+use serde::Serialize;
+use tsify::Tsify;
+
+use state::{ActiveAuthorization, CleaningAuthorization, CleanupCompletion};
+pub use state::{CleanupEvidence, CleanupTransitionError};
 
 enum AccountPickerAuthorizationPhase {
     Active(ActiveAuthorization),
     Cleaning(CleaningAuthorization),
 }
 
-/// Mutable host adapter over phase-specific authorization data.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
+#[serde(tag = "kind", content = "error", rename_all = "camelCase")]
+#[tsify(into_wasm_abi)]
+pub enum CleanupTransitionOutcome {
+    Started,
+    Pending,
+    Activated,
+    Released,
+    Rejected(CleanupTransitionError),
+}
+
+/// Owns the successor, including the unchanged state when a transition rejects.
+#[must_use]
+pub struct AccountPickerAuthorizationTransition {
+    lifecycle: AccountPickerAuthorizationLifecycle,
+    outcome: CleanupTransitionOutcome,
+}
+
+impl AccountPickerAuthorizationTransition {
+    fn new(phase: AccountPickerAuthorizationPhase, outcome: CleanupTransitionOutcome) -> Self {
+        Self {
+            lifecycle: AccountPickerAuthorizationLifecycle { phase },
+            outcome,
+        }
+    }
+
+    #[must_use]
+    pub const fn outcome(&self) -> CleanupTransitionOutcome {
+        self.outcome
+    }
+
+    #[must_use]
+    pub fn into_lifecycle(self) -> AccountPickerAuthorizationLifecycle {
+        self.lifecycle
+    }
+}
+
+/// Runtime phase adapter whose mutations transfer ownership to a successor.
 ///
-/// The adapter checks its current phase on every call. Internal phase operations
-/// have distinct owners; this façade retains its existing runtime API.
+/// A caller continues with the returned lifecycle, including after rejection.
 ///
-/// These examples compile the actual private phase implementation. The passing
-/// control verifies that the imports and operations used by rejection examples
-/// resolve independently of the intended compile failure.
+/// ```
+/// use nook_companion_core::{AccountPickerAuthorizationLifecycle, CleanupEvidence,
+///     CleanupTransitionOutcome};
+/// let active = AccountPickerAuthorizationLifecycle::new("opening".to_owned());
+/// let started = active.begin_cleanup("cleanup".to_owned());
+/// assert_eq!(started.outcome(), CleanupTransitionOutcome::Started);
+/// let cleaning = started.into_lifecycle();
+/// let completed = cleaning.complete_cleanup("cleanup", CleanupEvidence::Partial);
+/// assert_eq!(completed.outcome(), CleanupTransitionOutcome::Activated);
+/// assert!(completed.into_lifecycle().is_current("cleanup"));
+/// ```
+///
+/// The old lifecycle cannot authorize actions after cleanup starts.
+///
+/// ```compile_fail,E0382
+/// use nook_companion_core::AccountPickerAuthorizationLifecycle;
+/// let active = AccountPickerAuthorizationLifecycle::new("opening".to_owned());
+/// let started = active.begin_cleanup("cleanup".to_owned());
+/// active.is_current("opening");
+/// ```
+///
+/// These phase examples compile the actual implementation. The passing control
+/// checks the same imports and operation names as the rejection examples.
 ///
 /// ```
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
 /// let active = state::ActiveAuthorization::new("opening".to_owned());
-/// assert!(active.is_current("opening"));
-/// let mut cleaning = state::CleaningAuthorization::new("cleanup".to_owned());
-/// match cleaning.complete_cleanup("cleanup", state::CleanupEvidence::Partial) {
-///     state::CleanupCompletion::Activated(active) => assert!(active.is_current("cleanup")),
-///     state::CleanupCompletion::Pending => panic!("one completed cleanup should activate"),
-/// }
+/// let cleaning = active.begin_cleanup("cleanup".to_owned());
+/// let completed = cleaning.complete_cleanup("cleanup", state::CleanupEvidence::Partial);
+/// assert!(matches!(completed, Ok(state::CleanupCompletion::Activated(active))
+///     if active.is_current("cleanup")));
+/// ```
+///
+/// Completing cleanup consumes the cleaning capability.
+///
+/// ```compile_fail,E0382
+/// # mod state {
+/// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
+/// # }
+/// let cleaning = state::ActiveAuthorization::new("opening".to_owned())
+///     .begin_cleanup("cleanup".to_owned());
+/// let completed = cleaning.complete_cleanup("cleanup", state::CleanupEvidence::Partial);
+/// cleaning.complete_cleanup("cleanup", state::CleanupEvidence::Partial);
 /// ```
 ///
 /// An active phase cannot complete cleanup.
@@ -41,7 +111,7 @@ enum AccountPickerAuthorizationPhase {
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let mut active = state::ActiveAuthorization::new("opening".to_owned());
+/// let active = state::ActiveAuthorization::new("opening".to_owned());
 /// active.complete_cleanup("opening", state::CleanupEvidence::Partial);
 /// ```
 ///
@@ -51,17 +121,19 @@ enum AccountPickerAuthorizationPhase {
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let cleaning = state::CleaningAuthorization::new("cleanup".to_owned());
+/// let cleaning = state::ActiveAuthorization::new("opening".to_owned())
+///     .begin_cleanup("cleanup".to_owned());
 /// cleaning.is_current("cleanup");
 /// ```
 ///
-/// A caller cannot overwrite private phase data to forge another epoch.
+/// A caller cannot forge another epoch by overwriting private phase data.
 ///
 /// ```compile_fail,E0451
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let cleaning = state::CleaningAuthorization::new("cleanup".to_owned());
+/// let cleaning = state::ActiveAuthorization::new("opening".to_owned())
+///     .begin_cleanup("cleanup".to_owned());
 /// let forged = state::CleaningAuthorization {
 ///     epoch: "another-epoch".to_owned(),
 ///     ..cleaning
@@ -87,49 +159,84 @@ impl AccountPickerAuthorizationLifecycle {
         }
     }
 
-    pub fn begin_cleanup(&mut self, next_epoch: String) -> String {
-        match &mut self.phase {
-            AccountPickerAuthorizationPhase::Active(_) => {
-                self.phase = AccountPickerAuthorizationPhase::Cleaning(CleaningAuthorization::new(
-                    next_epoch,
-                ));
-            }
+    pub fn begin_cleanup(self, next_epoch: String) -> AccountPickerAuthorizationTransition {
+        let cleaning = match self.phase {
+            AccountPickerAuthorizationPhase::Active(active) => active.begin_cleanup(next_epoch),
             AccountPickerAuthorizationPhase::Cleaning(cleaning) => {
-                cleaning.begin_overlapping_cleanup();
+                cleaning.begin_overlapping_cleanup()
             }
-        }
-        self.snapshot()
+        };
+        AccountPickerAuthorizationTransition::new(
+            AccountPickerAuthorizationPhase::Cleaning(cleaning),
+            CleanupTransitionOutcome::Started,
+        )
     }
 
-    pub fn complete_cleanup(&mut self, candidate: &str, full_cleanup_completed: bool) -> bool {
-        let completion = match &mut self.phase {
+    pub fn complete_cleanup(
+        self,
+        candidate: &str,
+        evidence: CleanupEvidence,
+    ) -> AccountPickerAuthorizationTransition {
+        match self.phase {
             AccountPickerAuthorizationPhase::Cleaning(cleaning) => {
-                cleaning.complete_cleanup(candidate, Self::cleanup_evidence(full_cleanup_completed))
+                match cleaning.complete_cleanup(candidate, evidence) {
+                    Ok(CleanupCompletion::Pending(cleaning)) => {
+                        AccountPickerAuthorizationTransition::new(
+                            AccountPickerAuthorizationPhase::Cleaning(cleaning),
+                            CleanupTransitionOutcome::Pending,
+                        )
+                    }
+                    Ok(CleanupCompletion::Activated(active)) => {
+                        AccountPickerAuthorizationTransition::new(
+                            AccountPickerAuthorizationPhase::Active(active),
+                            CleanupTransitionOutcome::Activated,
+                        )
+                    }
+                    Err(rejected) => AccountPickerAuthorizationTransition::new(
+                        AccountPickerAuthorizationPhase::Cleaning(rejected.state),
+                        CleanupTransitionOutcome::Rejected(rejected.error),
+                    ),
+                }
             }
-            AccountPickerAuthorizationPhase::Active(_) => return false,
-        };
-        match completion {
-            CleanupCompletion::Pending => false,
-            CleanupCompletion::Activated(active) => {
-                self.phase = AccountPickerAuthorizationPhase::Active(active);
-                true
+            AccountPickerAuthorizationPhase::Active(active) => {
+                AccountPickerAuthorizationTransition::new(
+                    AccountPickerAuthorizationPhase::Active(active),
+                    CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning),
+                )
             }
         }
     }
 
     #[must_use]
-    pub fn is_final_cleanup(&self, candidate: &str, full_cleanup_completed: bool) -> bool {
+    pub fn is_final_cleanup(&self, candidate: &str, evidence: CleanupEvidence) -> bool {
         match &self.phase {
             AccountPickerAuthorizationPhase::Cleaning(cleaning) => {
-                cleaning.is_final_cleanup(candidate, Self::cleanup_evidence(full_cleanup_completed))
+                cleaning.is_final_cleanup(candidate, evidence)
             }
             AccountPickerAuthorizationPhase::Active(_) => false,
         }
     }
 
-    pub fn release_cleanup(&mut self, candidate: &str) {
-        if let AccountPickerAuthorizationPhase::Cleaning(cleaning) = &mut self.phase {
-            cleaning.release_cleanup(candidate);
+    pub fn release_cleanup(self, candidate: &str) -> AccountPickerAuthorizationTransition {
+        match self.phase {
+            AccountPickerAuthorizationPhase::Cleaning(cleaning) => {
+                match cleaning.release_cleanup(candidate) {
+                    Ok(cleaning) => AccountPickerAuthorizationTransition::new(
+                        AccountPickerAuthorizationPhase::Cleaning(cleaning),
+                        CleanupTransitionOutcome::Released,
+                    ),
+                    Err(rejected) => AccountPickerAuthorizationTransition::new(
+                        AccountPickerAuthorizationPhase::Cleaning(rejected.state),
+                        CleanupTransitionOutcome::Rejected(rejected.error),
+                    ),
+                }
+            }
+            AccountPickerAuthorizationPhase::Active(active) => {
+                AccountPickerAuthorizationTransition::new(
+                    AccountPickerAuthorizationPhase::Active(active),
+                    CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning),
+                )
+            }
         }
     }
 
@@ -140,104 +247,275 @@ impl AccountPickerAuthorizationLifecycle {
             AccountPickerAuthorizationPhase::Cleaning(_) => false,
         }
     }
-
-    const fn cleanup_evidence(full_cleanup_completed: bool) -> CleanupEvidence {
-        if full_cleanup_completed {
-            CleanupEvidence::Full
-        } else {
-            CleanupEvidence::Partial
-        }
-    }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::AccountPickerAuthorizationLifecycle;
+    use super::{
+        AccountPickerAuthorizationLifecycle, AccountPickerAuthorizationTransition, CleanupEvidence,
+        CleanupTransitionError, CleanupTransitionOutcome,
+    };
 
-    #[test]
-    fn overlapping_cleanup_stays_invalid_until_every_attempt_finishes() {
-        let mut state = AccountPickerAuthorizationLifecycle::new("opening".into());
-        let cleanup = state.begin_cleanup("lock-1".into());
-        assert_eq!(state.begin_cleanup("ignored".into()), cleanup);
-        assert!(!state.is_current("opening") && !state.complete_cleanup(&cleanup, false));
-        assert!(state.complete_cleanup(&cleanup, false) && state.is_current(&cleanup));
+    struct Fixture;
 
-        let retry = state.begin_cleanup("lock-2".into());
-        state.release_cleanup(&retry);
-        state.begin_cleanup("ignored".into());
-        assert!(!state.complete_cleanup(&retry, false));
-        state.begin_cleanup("ignored".into());
-        assert!(state.complete_cleanup(&retry, true));
+    impl Fixture {
+        fn transition(
+            transition: AccountPickerAuthorizationTransition,
+            expected: CleanupTransitionOutcome,
+        ) -> AccountPickerAuthorizationLifecycle {
+            assert_eq!(transition.outcome(), expected);
+            transition.into_lifecycle()
+        }
+
+        fn started(
+            state: AccountPickerAuthorizationLifecycle,
+            epoch: &str,
+        ) -> AccountPickerAuthorizationLifecycle {
+            Self::transition(
+                state.begin_cleanup(epoch.into()),
+                CleanupTransitionOutcome::Started,
+            )
+        }
+
+        fn completed(
+            state: AccountPickerAuthorizationLifecycle,
+            epoch: &str,
+            evidence: CleanupEvidence,
+            expected: CleanupTransitionOutcome,
+        ) -> AccountPickerAuthorizationLifecycle {
+            Self::transition(state.complete_cleanup(epoch, evidence), expected)
+        }
+
+        fn released(
+            state: AccountPickerAuthorizationLifecycle,
+            epoch: &str,
+        ) -> AccountPickerAuthorizationLifecycle {
+            Self::transition(
+                state.release_cleanup(epoch),
+                CleanupTransitionOutcome::Released,
+            )
+        }
     }
 
     #[test]
-    fn active_phase_rejects_cleanup_completion_and_ignores_release() {
-        let mut state = AccountPickerAuthorizationLifecycle::new("opening".into());
-        assert!(!state.complete_cleanup("opening", true));
-        assert!(!state.is_final_cleanup("opening", true));
-        state.release_cleanup("opening");
+    fn overlapping_cleanup_stays_invalid_until_every_attempt_finishes() {
+        let state = AccountPickerAuthorizationLifecycle::new("opening".into());
+        let state = Fixture::started(state, "lock-1");
+        let cleanup = state.snapshot();
+        let state = Fixture::started(state, "ignored");
+        assert_eq!(state.snapshot(), cleanup);
+        assert!(!state.is_current("opening"));
+        let state = Fixture::completed(
+            state,
+            &cleanup,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Pending,
+        );
+        let state = Fixture::completed(
+            state,
+            &cleanup,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Activated,
+        );
+        assert!(state.is_current(&cleanup));
+
+        let state = Fixture::started(state, "lock-2");
+        let retry = state.snapshot();
+        let state = Fixture::released(state, &retry);
+        let state = Fixture::started(state, "ignored");
+        let state = Fixture::completed(
+            state,
+            &retry,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Pending,
+        );
+        let state = Fixture::started(state, "ignored");
+        let state = Fixture::completed(
+            state,
+            &retry,
+            CleanupEvidence::Full,
+            CleanupTransitionOutcome::Activated,
+        );
+        assert!(state.is_current(&retry));
+    }
+
+    #[test]
+    fn active_phase_rejects_cleanup_completion_and_release() {
+        let state = AccountPickerAuthorizationLifecycle::new("opening".into());
+        let state = Fixture::completed(
+            state,
+            "opening",
+            CleanupEvidence::Full,
+            CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning),
+        );
+        assert!(!state.is_final_cleanup("opening", CleanupEvidence::Full));
+        let state = Fixture::transition(
+            state.release_cleanup("opening"),
+            CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning),
+        );
+        assert_eq!(state.snapshot(), "opening");
         assert!(state.is_current("opening"));
         assert!(!state.is_current("stale"));
     }
 
     #[test]
     fn stale_epochs_cannot_finish_or_release_current_cleanup() {
-        let mut state = AccountPickerAuthorizationLifecycle::new("opening".into());
-        let epoch = state.begin_cleanup("cleanup".into());
+        let state = AccountPickerAuthorizationLifecycle::new("opening".into());
+        let state = Fixture::started(state, "cleanup");
+        let epoch = state.snapshot();
         assert!(!state.is_current(&epoch));
-        assert!(!state.is_final_cleanup("stale", true));
-        assert!(!state.complete_cleanup("stale", true));
-        state.release_cleanup("stale");
-        assert!(state.complete_cleanup(&epoch, false));
+        assert!(!state.is_final_cleanup("stale", CleanupEvidence::Full));
+        let state = Fixture::completed(
+            state,
+            "stale",
+            CleanupEvidence::Full,
+            CleanupTransitionOutcome::Rejected(CleanupTransitionError::StaleEpoch),
+        );
+        let state = Fixture::transition(
+            state.release_cleanup("stale"),
+            CleanupTransitionOutcome::Rejected(CleanupTransitionError::StaleEpoch),
+        );
+        assert_eq!(state.snapshot(), epoch);
+        assert!(state.is_final_cleanup(&epoch, CleanupEvidence::Partial));
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Activated,
+        );
         assert!(state.is_current(&epoch));
-        assert!(!state.complete_cleanup(&epoch, true));
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Full,
+            CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning),
+        );
+        assert!(state.is_current(&epoch));
     }
 
     #[test]
     fn release_at_zero_preserves_the_full_cleanup_requirement() {
-        let mut state = AccountPickerAuthorizationLifecycle::new("opening".into());
-        let epoch = state.begin_cleanup("cleanup".into());
-        state.release_cleanup(&epoch);
-        state.release_cleanup(&epoch);
-        assert!(!state.complete_cleanup(&epoch, false));
+        let state = AccountPickerAuthorizationLifecycle::new("opening".into());
+        let state = Fixture::started(state, "cleanup");
+        let epoch = state.snapshot();
+        let state = Fixture::released(state, &epoch);
+        let state = Fixture::released(state, &epoch);
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Pending,
+        );
         assert!(!state.is_current(&epoch));
-        assert!(!state.is_final_cleanup(&epoch, true));
-        assert_eq!(state.begin_cleanup("ignored".into()), epoch);
-        assert!(!state.is_final_cleanup(&epoch, false));
-        assert!(state.is_final_cleanup(&epoch, true));
-        assert!(!state.complete_cleanup("stale", true));
-        assert!(!state.complete_cleanup(&epoch, false));
+        assert!(!state.is_final_cleanup(&epoch, CleanupEvidence::Full));
+        let state = Fixture::started(state, "ignored");
+        assert_eq!(state.snapshot(), epoch);
+        assert!(!state.is_final_cleanup(&epoch, CleanupEvidence::Partial));
+        assert!(state.is_final_cleanup(&epoch, CleanupEvidence::Full));
+        let state = Fixture::completed(
+            state,
+            "stale",
+            CleanupEvidence::Full,
+            CleanupTransitionOutcome::Rejected(CleanupTransitionError::StaleEpoch),
+        );
+        assert!(!state.is_final_cleanup(&epoch, CleanupEvidence::Partial));
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Pending,
+        );
         assert!(!state.is_current(&epoch));
-        state.begin_cleanup("still-ignored".into());
-        assert!(state.complete_cleanup(&epoch, true));
+        let state = Fixture::started(state, "still-ignored");
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Full,
+            CleanupTransitionOutcome::Activated,
+        );
+        assert!(state.is_current(&epoch));
     }
 
     #[test]
     fn full_evidence_at_zero_does_not_reactivate_without_a_cleanup_attempt() {
-        let mut state = AccountPickerAuthorizationLifecycle::new("opening".into());
-        let epoch = state.begin_cleanup("cleanup".into());
-        state.release_cleanup(&epoch);
-        assert!(!state.complete_cleanup(&epoch, true));
+        let state = AccountPickerAuthorizationLifecycle::new("opening".into());
+        let state = Fixture::started(state, "cleanup");
+        let epoch = state.snapshot();
+        let state = Fixture::released(state, &epoch);
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Full,
+            CleanupTransitionOutcome::Pending,
+        );
         assert!(!state.is_current(&epoch));
-        assert!(!state.complete_cleanup(&epoch, false));
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Pending,
+        );
         // Full evidence clears the requirement even at zero, but a subsequent
         // attempt must still complete before the epoch becomes active.
-        state.begin_cleanup("ignored".into());
-        assert!(state.complete_cleanup(&epoch, false));
+        let state = Fixture::started(state, "ignored");
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Activated,
+        );
+        assert!(state.is_current(&epoch));
     }
 
     #[test]
     fn completion_rechecks_overlap_after_the_advisory_final_query() {
-        let mut state = AccountPickerAuthorizationLifecycle::new("opening".into());
-        let epoch = state.begin_cleanup("cleanup".into());
-        assert!(state.is_final_cleanup(&epoch, false));
-        assert_eq!(state.begin_cleanup("overlapping".into()), epoch);
-        assert!(!state.complete_cleanup(&epoch, false));
+        let state = AccountPickerAuthorizationLifecycle::new("opening".into());
+        let state = Fixture::started(state, "cleanup");
+        let epoch = state.snapshot();
+        assert!(state.is_final_cleanup(&epoch, CleanupEvidence::Partial));
+        let state = Fixture::started(state, "overlapping");
+        assert_eq!(state.snapshot(), epoch);
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Pending,
+        );
         assert!(!state.is_current(&epoch));
-        assert!(state.complete_cleanup(&epoch, false));
+        let state = Fixture::completed(
+            state,
+            &epoch,
+            CleanupEvidence::Partial,
+            CleanupTransitionOutcome::Activated,
+        );
         assert!(state.is_current(&epoch));
         assert_eq!(state.snapshot(), epoch);
-        assert_eq!(state.begin_cleanup("next".into()), "next");
+        let state = Fixture::started(state, "next");
+        assert_eq!(state.snapshot(), "next");
         assert!(!state.is_current(&epoch));
+    }
+    #[test]
+    fn transition_outcomes_expose_the_typed_browser_contract() -> anyhow::Result<()> {
+        let cases = [
+            (CleanupTransitionOutcome::Started, r#"{"kind":"started"}"#),
+            (CleanupTransitionOutcome::Pending, r#"{"kind":"pending"}"#),
+            (
+                CleanupTransitionOutcome::Activated,
+                r#"{"kind":"activated"}"#,
+            ),
+            (CleanupTransitionOutcome::Released, r#"{"kind":"released"}"#),
+            (
+                CleanupTransitionOutcome::Rejected(CleanupTransitionError::StaleEpoch),
+                r#"{"kind":"rejected","error":"staleEpoch"}"#,
+            ),
+            (
+                CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning),
+                r#"{"kind":"rejected","error":"notCleaning"}"#,
+            ),
+        ];
+        for (outcome, expected) in cases {
+            assert_eq!(serde_json::to_string(&outcome)?, expected);
+        }
+        Ok(())
     }
 }
