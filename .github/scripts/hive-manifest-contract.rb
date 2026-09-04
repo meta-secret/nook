@@ -807,7 +807,7 @@ unless infra_taskfile.scan("kubectl get service hive-neo4j").length >= 2 &&
   raise "Hive NetworkPolicy must use live data endpoints and the stable k0s API address"
 end
 hive_taskfile = File.read(File.join(root, "agentic-ai/minds/hive/Taskfile.yml"))
-unless hive_taskfile.include?("for crate in hive lace")
+unless hive_taskfile.include?('docker cp "$container:/build/hive/src" "$formatted/hive-src"')
   raise "Hive formatting does not apply the entire checked workspace"
 end
 unless hive_taskfile.include?("--target verify-export") &&
