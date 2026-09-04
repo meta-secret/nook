@@ -99,10 +99,7 @@ type AuthenticationControlIdentitySnapshot = {
 function authenticationControlIdentitySnapshot(
   workflow: PasswordFormObservation,
 ): AuthenticationControlIdentitySnapshot {
-  const queryRoot =
-    workflow.formScope.kind === PasswordFormScopeKind.Owned
-      ? workflow.formScope.owner.ownerDocument
-      : workflow.root
+  const queryRoot = workflow.root
   const controls = Array.from(
     queryRoot.querySelectorAll<Element>(boundAuthenticationControlSelector),
   )

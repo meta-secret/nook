@@ -20,25 +20,10 @@ afterEach(() => {
 
 describe('popular-site login shells', () => {
   test('isolates and fills a local login inside a polluted page-wide form', () => {
-    document.body.innerHTML = `
-      <form id="aspnetForm" method="post">
-        <header>
-          <input name="header-user" autocomplete="username" hidden />
-          <input name="header-password" type="password" autocomplete="current-password" hidden />
-          <input name="search" type="search" value="account help" />
-          <button type="submit">Search</button>
-        </header>
-        <main class="login-panel">
-          <input name="username" autocomplete="username" />
-          <input name="password" type="password" autocomplete="current-password" />
-          <button id="login-submit" type="submit">Sign in</button>
-        </main>
-        <footer>
-          <input name="newsletter-email" type="email" value="reader@example.test" />
-          <button type="submit">Subscribe</button>
-        </footer>
-      </form>
-    `
+    document.body.innerHTML = `<form id="aspnetForm" method="post">
+      <header><input name="header-user" autocomplete="username" hidden /><input name="header-password" type="password" autocomplete="current-password" hidden /><input name="search" type="search" value="account help" /><button type="submit">Search</button></header>
+      <main class="login-panel"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /><button id="login-submit" type="submit">Sign in</button></main>
+      <footer><input name="newsletter-email" type="email" value="reader@example.test" /><button type="submit">Subscribe</button></footer></form>`
 
     const observations = summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
@@ -76,30 +61,25 @@ describe('popular-site login shells', () => {
   })
 
   test('keeps a page-wide owner when a rendered OTP sibling is present', () => {
-    document.body.innerHTML = `
-      <form>
-        <main class="login-panel">
-          <input autocomplete="username" />
-          <input type="password" autocomplete="current-password" />
-        </main>
-        <aside><input autocomplete="one-time-code" /></aside>
-      </form>
-    `
+    document.body.innerHTML = `<form><main class="login-panel"><input autocomplete="username" /><input type="password" autocomplete="current-password" /></main>
+      <aside><input autocomplete="one-time-code" /></aside></form>`
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+  })
+
+  test('rejects a document-shell root for associated login fields', () => {
+    document.body.innerHTML = `<form id="aspnetForm"></form>
+      <input form="aspnetForm" autocomplete="username" />
+      <input form="aspnetForm" type="password" autocomplete="current-password" />`
 
     expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
   })
 
   test('does not submit outside a bounded page-wide login panel', () => {
-    document.body.innerHTML = `
-      <form id="aspnetForm" method="post">
-        <header><button id="header-submit" type="submit">Sign in</button></header>
-        <main class="login-panel">
-          <input name="username" autocomplete="username" />
-          <input name="password" type="password" autocomplete="current-password" />
-        </main>
-        <footer><button id="footer-submit" type="submit">Continue</button></footer>
-      </form>
-    `
+    document.body.innerHTML = `<form id="aspnetForm" method="post">
+      <header><button id="header-submit" type="submit">Sign in</button></header>
+      <main class="login-panel"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /></main>
+      <footer><button id="footer-submit" type="submit">Continue</button></footer></form>`
     const activations: Event[] = []
     const form = document.querySelector<HTMLFormElement>('#aspnetForm')
     const header = document.querySelector<HTMLButtonElement>('#header-submit')
@@ -123,37 +103,21 @@ describe('popular-site login shells', () => {
   })
 
   test('preserves a same-form checkpoint outside the local login panel', () => {
-    document.body.innerHTML = `
-      <form id="aspnetForm" method="post">
-        <main class="login-panel">
-          <input name="username" autocomplete="username" />
-          <input name="password" type="password" autocomplete="current-password" />
-          <button type="submit">Sign in</button>
-        </main>
-        <aside>
-          <label><input type="checkbox" name="terms" /> I agree to the terms</label>
-        </aside>
-      </form>
-    `
+    document.body.innerHTML = `<form id="aspnetForm" method="post">
+      <main class="login-panel"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /><button type="submit">Sign in</button></main></form>
+      <aside><label><input form="aspnetForm" type="checkbox" name="terms" /> I agree to the terms</label></aside>`
 
     const [observation] = summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected checkpoint observation')
     expect(observation.root).toBe(document)
     expect(observation.summary.manualCheckpointPresent).toBe(true)
-    const factsRequest: Parameters<
-      typeof authenticationPageObservationFacts
-    >[0] = {
+    const facts = authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
-    }
-    const classificationRequest: Parameters<
-      typeof classify_companion_authentication_workflow_facts
-    >[0] = {
-      observations: [authenticationPageObservationFacts(factsRequest)],
-    }
-    const match = classify_companion_authentication_workflow_facts(
-      classificationRequest,
-    )
+    })
+    const match = classify_companion_authentication_workflow_facts({
+      observations: [facts],
+    })
     expect(companion_authentication_workflow_match_kind(match)).toBe(
       CompanionAuthenticationWorkflowMatchKind.Matched,
     )
