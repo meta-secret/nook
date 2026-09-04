@@ -49,7 +49,7 @@ impl LegacyExtensionReadySetup {
         if self.status != ExtensionReadySetupStatus::Ready
             || self.device_label.trim().is_empty()
             || self.paired_vaults.is_empty()
-            || setup
+            || self
                 .paired_vaults
                 .iter()
                 .any(|vault| vault.trim().is_empty())
