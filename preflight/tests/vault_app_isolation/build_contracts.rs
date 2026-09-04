@@ -23,11 +23,11 @@ exit 127
 fi";
 
 fn docker_script_fixture(
-    root: &std::path::Path,
+    root: &Path,
     relative: &str,
-    directory: &std::path::Path,
-    fake_docker: &std::path::Path,
-) -> anyhow::Result<std::path::PathBuf> {
+    directory: &Path,
+    fake_docker: &Path,
+) -> anyhow::Result<PathBuf> {
     let fake = fake_docker.to_string_lossy();
     let mut source = read(root, relative);
     for candidate in TRUSTED_DOCKER_PATHS {
@@ -541,10 +541,7 @@ fn delivery_avoids_a_shared_buildkit_container() -> anyhow::Result<()> {
 fn stuck_pr_buildkit_probe_is_killed_and_replaced_within_its_deadline() -> anyhow::Result<()> {
     let root = repository_root();
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let temp = std::env::temp_dir().join(format!(
-        "nook-buildkit-health-{}-{unique}",
-        std::process::id()
-    ));
+    let temp = env::temp_dir().join(format!("nook-buildkit-health-{}-{unique}", process::id()));
     fs::create_dir_all(&temp)?;
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
@@ -571,7 +568,7 @@ fi
     permissions.set_mode(0o755);
     fs::set_permissions(&fake_docker, permissions)?;
     for utility in ["ln", "mktemp"] {
-        std::os::unix::fs::symlink(&fake_docker, temp.join(utility))?;
+        unix_fs::symlink(&fake_docker, temp.join(utility))?;
     }
     let wrapper = docker_script_fixture(
         &root,
@@ -600,7 +597,7 @@ fi
         .env("DOCKER_HOST", "tcp://attacker.invalid:2375")
         .env("DOCKER_CONTEXT", "attacker")
         .env("BUILDKIT_HOST", "tcp://attacker.invalid:1234")
-        .env("PATH", format!("{}:{}", temp.display(), std::env::var("PATH")?))
+        .env("PATH", format!("{}:{}", temp.display(), env::var("PATH")?))
         .output()?;
     let elapsed = started.elapsed();
     assert!(
@@ -678,7 +675,7 @@ fi
         String::from_utf8_lossy(&unicode_folded.stderr).contains("non-ASCII Docker config key")
     );
     fs::remove_file(malicious_config.join("config.json"))?;
-    std::os::unix::fs::symlink("/", malicious_config.join("contexts"))?;
+    unix_fs::symlink("/", malicious_config.join("contexts"))?;
     let linked_contexts = Command::new("bash")
         .arg(&wrapper)
         .arg("true")
@@ -693,10 +690,7 @@ fi
 fn local_delivery_uses_daemon_buildkit_instead_of_a_shared_container() -> anyhow::Result<()> {
     let root = repository_root();
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let temp = std::env::temp_dir().join(format!(
-        "nook-buildkit-daemon-{}-{unique}",
-        std::process::id()
-    ));
+    let temp = env::temp_dir().join(format!("nook-buildkit-daemon-{}-{unique}", process::id()));
     fs::create_dir_all(&temp)?;
     let fake_docker = temp.join("docker");
     let docker_log = temp.join("docker.log");
@@ -771,9 +765,9 @@ printf '%s\n' "$*" >> "$FAKE_DOCKER_LOG"
 fn arc_delivery_uses_only_remote_buildkit_client_operations() -> anyhow::Result<()> {
     let root = repository_root();
     let unique = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
-    let temp = std::env::temp_dir().join(format!(
+    let temp = env::temp_dir().join(format!(
         "nook-remote-buildkit-health-{}-{unique}",
-        std::process::id()
+        process::id()
     ));
     fs::create_dir_all(&temp)?;
 

@@ -1,5 +1,5 @@
-use std::fs;
 use std::path::PathBuf;
+use std::{env, fs};
 
 use nook_preflight::{
     authored_rust_macro_definitions, portable_core_browser_dependencies,
@@ -54,7 +54,7 @@ fn rust_tsify_boundaries_never_override_domain_state_with_absence_sentinels() ->
 }
 
 fn repository_root() -> PathBuf {
-    std::env::var_os("NOOK_REPO_ROOT").map_or_else(
+    env::var_os("NOOK_REPO_ROOT").map_or_else(
         || PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(".."),
         PathBuf::from,
     )
