@@ -200,6 +200,13 @@ pub fn authentication_passkey_control_evidence_is_safe(
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: exposes the authentication observation priority to JavaScript"
+    )
+)]
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
@@ -209,6 +216,13 @@ pub fn authentication_form_observation_priority(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: exposes the authentication facts priority to JavaScript"
+    )
+)]
 pub fn authentication_page_observation_facts_priority(
     facts: nook_companion_core::AuthenticationPageObservationFacts,
 ) -> u8 {
