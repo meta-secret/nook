@@ -1,5 +1,6 @@
 import {
   CredentialFillEditability,
+  CredentialFillFieldClassificationOutcome,
   CredentialFillFieldIndex,
   CredentialFillFieldRole,
   CredentialFillObservation,
@@ -7,10 +8,17 @@ import {
   CredentialFillPlanningOutcome,
   CredentialFillRejection,
   CredentialKind,
+  NookPageInputFieldObservation,
+  classify_companion_credential_fill_field,
+  parse_page_input_type,
   plan_companion_credential_fill,
   type CredentialFillAssignment,
   type CredentialFillPlan,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  SiteFixture,
+  SiteFixtureField,
+} from '../../../../nook-web-extension/e2e/mock-auth/src/lib/site-fixtures'
 
 export type FakeLoginCredentials = {
   readonly username: string
@@ -34,6 +42,7 @@ export class SimulatedLoginPageIdentity {
 }
 
 export enum SimulatedCredentialFieldKind {
+  Classified = 'Classified',
   Credential = 'Credential',
   NewPassword = 'NewPassword',
   OneTimeCode = 'OneTimeCode',
@@ -47,6 +56,10 @@ type SimulatedCredentialFieldBase = {
 
 export type SimulatedCredentialFieldDefinition = SimulatedCredentialFieldBase &
   (
+    | {
+        readonly kind: SimulatedCredentialFieldKind.Classified
+        readonly field: SiteFixtureField
+      }
     | {
         readonly kind: SimulatedCredentialFieldKind.Credential
         readonly roleFactory: () => CredentialFillFieldRole
@@ -127,14 +140,22 @@ type CredentialFieldOwnership = {
 
 type SimulatedCredentialFieldOwnership =
   | CredentialFieldOwnership
+  | { readonly kind: SimulatedCredentialFieldKind.Classified }
   | { readonly kind: SimulatedCredentialFieldKind.NewPassword }
   | { readonly kind: SimulatedCredentialFieldKind.OneTimeCode }
+
+type SimulatedCredentialFieldClassification =
+  | {
+      readonly kind: CredentialFillFieldClassificationOutcome.Observed
+      readonly observation: CredentialFillObservation
+    }
+  | { readonly kind: CredentialFillFieldClassificationOutcome.Ignored }
 
 type MaterializedCredentialFieldDefinition = {
   readonly field_identity: SimulatedCredentialFieldIdentity
   readonly name: string
   readonly field_index: CredentialFillFieldIndex
-  readonly observation: CredentialFillObservation
+  readonly classification: SimulatedCredentialFieldClassification
   readonly ownership: SimulatedCredentialFieldOwnership
   readonly value: string
 }
@@ -143,7 +164,7 @@ class SimulatedCredentialField {
   readonly field_identity: SimulatedCredentialFieldIdentity
   readonly name: string
   readonly field_index: CredentialFillFieldIndex
-  readonly observation: CredentialFillObservation
+  readonly classification: SimulatedCredentialFieldClassification
   value: string
 
   private readonly ownership: SimulatedCredentialFieldOwnership
@@ -152,14 +173,22 @@ class SimulatedCredentialField {
     this.field_identity = definition.field_identity
     this.name = definition.name
     this.field_index = definition.field_index
-    this.observation = definition.observation
+    this.classification = definition.classification
     this.ownership = definition.ownership
     this.value = definition.value
   }
 
   free(): void {
-    this.observation.free()
+    switch (this.classification.kind) {
+      case CredentialFillFieldClassificationOutcome.Observed:
+        this.classification.observation.free()
+        break
+      case CredentialFillFieldClassificationOutcome.Ignored:
+        break
+    }
     switch (this.ownership.kind) {
+      case SimulatedCredentialFieldKind.Classified:
+        break
       case SimulatedCredentialFieldKind.Credential:
         this.ownership.editability.free()
         this.ownership.role.free()
@@ -190,6 +219,104 @@ type MaterializeCredentialObservationRequest = {
 type MaterializedCredentialObservation = {
   readonly observation: CredentialFillObservation
   readonly ownership: CredentialFieldOwnership
+}
+
+function fixtureFieldObservation(
+  field: SiteFixtureField,
+): NookPageInputFieldObservation {
+  const {
+    type = 'text',
+    autocomplete = '',
+    name = '',
+    id = '',
+    placeholder = '',
+    'aria-label': ariaLabel = '',
+    'data-qa': dataQa = '',
+    'data-testid': dataTestId = '',
+  } = field
+  const autocompleteTokens = autocomplete
+    .split(/\s+/u)
+    .map((token) => token.trim())
+    .filter(Boolean)
+  const identityId =
+    id === 'user' ||
+    /username|email|login|account|identifier|otp|totp|mfa|2fa|one-?time|verif/iu.test(
+      id,
+    )
+      ? id
+      : ''
+  const identityText = [
+    name,
+    identityId,
+    placeholder,
+    ariaLabel,
+    autocomplete,
+    dataQa,
+    dataTestId,
+  ].join(' ')
+  return new NookPageInputFieldObservation(
+    parse_page_input_type(type),
+    false,
+    false,
+    autocompleteTokens,
+    identityText,
+    true,
+  )
+}
+
+function materializeClassifiedCredentialField({
+  definition,
+  field_index,
+}: MaterializeCredentialFieldRequest): SimulatedCredentialField {
+  if (definition.kind !== SimulatedCredentialFieldKind.Classified) {
+    throw new Error('classified field materialization requires fixture facts')
+  }
+  const pageField = fixtureFieldObservation(definition.field)
+  try {
+    const classification = classify_companion_credential_fill_field(
+      field_index,
+      pageField,
+    )
+    try {
+      const ownership: SimulatedCredentialFieldOwnership = {
+        kind: SimulatedCredentialFieldKind.Classified,
+      }
+      switch (classification.kind) {
+        case CredentialFillFieldClassificationOutcome.Observed: {
+          const field: MaterializedCredentialFieldDefinition = {
+            field_identity: definition.field_identity,
+            name: definition.name,
+            field_index,
+            classification: {
+              kind: CredentialFillFieldClassificationOutcome.Observed,
+              observation: classification.observation(),
+            },
+            ownership,
+            value: definition.value,
+          }
+          return new SimulatedCredentialField(field)
+        }
+        case CredentialFillFieldClassificationOutcome.Ignored: {
+          const field: MaterializedCredentialFieldDefinition = {
+            field_identity: definition.field_identity,
+            name: definition.name,
+            field_index,
+            classification: {
+              kind: CredentialFillFieldClassificationOutcome.Ignored,
+            },
+            ownership,
+            value: definition.value,
+          }
+          return new SimulatedCredentialField(field)
+        }
+      }
+      throw new Error('unsupported fixture field classification')
+    } finally {
+      classification.free()
+    }
+  } finally {
+    pageField.free()
+  }
 }
 
 type ValidatedLoginJourney = {
@@ -272,6 +399,13 @@ function materializeCredentialField({
 }: MaterializeCredentialFieldRequest): SimulatedCredentialField {
   try {
     switch (definition.kind) {
+      case SimulatedCredentialFieldKind.Classified: {
+        const request: MaterializeCredentialFieldRequest = {
+          definition,
+          field_index,
+        }
+        return materializeClassifiedCredentialField(request)
+      }
       case SimulatedCredentialFieldKind.Credential: {
         const request: MaterializeCredentialObservationRequest = {
           definition,
@@ -282,7 +416,10 @@ function materializeCredentialField({
           field_identity: definition.field_identity,
           name: definition.name,
           field_index,
-          observation: materialized.observation,
+          classification: {
+            kind: CredentialFillFieldClassificationOutcome.Observed,
+            observation: materialized.observation,
+          },
           ownership: materialized.ownership,
           value: definition.value,
         }
@@ -294,7 +431,10 @@ function materializeCredentialField({
           field_identity: definition.field_identity,
           name: definition.name,
           field_index,
-          observation,
+          classification: {
+            kind: CredentialFillFieldClassificationOutcome.Observed,
+            observation,
+          },
           ownership: { kind: SimulatedCredentialFieldKind.NewPassword },
           value: definition.value,
         }
@@ -306,7 +446,10 @@ function materializeCredentialField({
           field_identity: definition.field_identity,
           name: definition.name,
           field_index,
-          observation,
+          classification: {
+            kind: CredentialFillFieldClassificationOutcome.Observed,
+            observation,
+          },
           ownership: { kind: SimulatedCredentialFieldKind.OneTimeCode },
           value: definition.value,
         }
@@ -385,7 +528,13 @@ function planCredentialFillPage({
         form,
       }
       const field = resolveSimulatedCredentialField(request)
-      observations.add(field.observation)
+      switch (field.classification.kind) {
+        case CredentialFillFieldClassificationOutcome.Observed:
+          observations.add(field.classification.observation)
+          break
+        case CredentialFillFieldClassificationOutcome.Ignored:
+          break
+      }
     }
     const result = plan_companion_credential_fill(observations)
     try {
@@ -625,4 +774,41 @@ export function simulateLoginJourney(
   }
   outcomes.push(simulateLoginPage(finalPageRequest))
   return outcomes
+}
+
+export type SiteFixtureLoginJourneyRequest = {
+  readonly fixture: SiteFixture
+  readonly credentials: FakeLoginCredentials
+}
+
+export function siteFixtureLoginJourney(
+  request: SiteFixtureLoginJourneyRequest,
+): CredentialFillJourneyRequest {
+  const pages: SimulatedLoginPageDefinition[] = []
+  for (const [pageOrdinal, step] of request.fixture.steps.entries()) {
+    const fields: SimulatedCredentialFieldDefinition[] = []
+    const observedFieldIdentities: SimulatedCredentialFieldIdentity[] = []
+    for (const [fieldOrdinal, fixtureField] of step.fields.entries()) {
+      const fieldIdentity = new SimulatedCredentialFieldIdentity(
+        `${request.fixture.id}-page-${pageOrdinal}-field-${fieldOrdinal}`,
+      )
+      const field: SimulatedCredentialFieldDefinition = {
+        kind: SimulatedCredentialFieldKind.Classified,
+        field_identity: fieldIdentity,
+        name: fieldIdentity.value,
+        field: fixtureField,
+        value: '',
+      }
+      fields.push(field)
+      observedFieldIdentities.push(fieldIdentity)
+    }
+    pages.push({
+      page_identity: new SimulatedLoginPageIdentity(
+        `${request.fixture.id}-page-${pageOrdinal}`,
+      ),
+      fields,
+      observed_field_identities: observedFieldIdentities,
+    })
+  }
+  return { pages, credentials: request.credentials }
 }
