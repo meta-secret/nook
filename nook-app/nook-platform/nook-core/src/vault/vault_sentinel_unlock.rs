@@ -1,38 +1,64 @@
 //! `SigningIdentity` adapters for the portable Sentinel quorum unlock protocol.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::{
-    DeviceIdentity, DeviceSigningPublicKey, SentinelUnlockPolicy, SentinelUnlockRequest,
-    SentinelUnlockResponse, SentinelUnlockSession, SigningIdentity, StoreId, StoredSecretRecord,
+    DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, SentinelUnlockPolicy,
+    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SigningIdentity, StoreId,
+    StoredSecretRecord,
 };
 
-pub fn start_sentinel_unlock(
-    store_id: StoreId,
-    policy: SentinelUnlockPolicy,
-    records: &[StoredSecretRecord],
-    requester_identity: &DeviceIdentity,
-    requester_signing: &SigningIdentity,
-) -> Result<SentinelUnlockSession, crate::MultiDeviceError> {
-    nook_auth2::start_sentinel_unlock(
-        store_id,
-        policy,
-        records,
-        requester_identity,
-        requester_signing.signing_key(),
-    )
+/// Sentinel signing operations for the event-log-owned identity.
+pub trait SentinelUnlockSigning {
+    fn start_sentinel_unlock(
+        &self,
+        store_id: StoreId,
+        policy: SentinelUnlockPolicy,
+        records: &[StoredSecretRecord],
+        requester_identity: &DeviceIdentity,
+    ) -> Result<SentinelUnlockSession, MultiDeviceError>;
+
+    fn respond_to_sentinel_unlock_request(
+        &self,
+        request: SentinelUnlockRequest,
+        records: &[StoredSecretRecord],
+        identity: &DeviceIdentity,
+        authorized_requester_signing_key: &DeviceSigningPublicKey,
+    ) -> Result<SentinelUnlockResponse, MultiDeviceError>;
 }
 
-pub fn respond_to_sentinel_unlock_request(
-    request: &SentinelUnlockRequest,
-    records: &[StoredSecretRecord],
-    identity: &DeviceIdentity,
-    signing: &SigningIdentity,
-    authorized_requester_signing_key: &DeviceSigningPublicKey,
-) -> Result<SentinelUnlockResponse, crate::MultiDeviceError> {
-    nook_auth2::respond_to_sentinel_unlock_request(
-        request,
-        records,
-        identity,
-        signing.signing_key(),
-        authorized_requester_signing_key,
-    )
+impl SentinelUnlockSigning for SigningIdentity {
+    fn start_sentinel_unlock(
+        &self,
+        store_id: StoreId,
+        policy: SentinelUnlockPolicy,
+        records: &[StoredSecretRecord],
+        requester_identity: &DeviceIdentity,
+    ) -> Result<SentinelUnlockSession, MultiDeviceError> {
+        nook_auth2::start_sentinel_unlock(
+            store_id,
+            policy,
+            records,
+            requester_identity,
+            self.signing_key(),
+        )
+    }
+
+    fn respond_to_sentinel_unlock_request(
+        &self,
+        request: SentinelUnlockRequest,
+        records: &[StoredSecretRecord],
+        identity: &DeviceIdentity,
+        authorized_requester_signing_key: &DeviceSigningPublicKey,
+    ) -> Result<SentinelUnlockResponse, MultiDeviceError> {
+        request.check(authorized_requester_signing_key)?.respond(
+            records,
+            identity,
+            self.signing_key(),
+        )
+    }
 }

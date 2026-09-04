@@ -6,7 +6,8 @@
 
 use nook_core::{
     DeviceMode, MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase,
-    SentinelVaultUnlockState, StoreId, SymmetricKey, VaultArchitecture, VaultMetaState, VaultType,
+    SentinelUnlockSigning, SentinelVaultUnlockState, StoreId, SymmetricKey, VaultArchitecture,
+    VaultMetaState, VaultType,
 };
 use std::collections::BTreeSet;
 mod genesis_finalization;
@@ -284,7 +285,7 @@ impl NookVaultManager {
         let policy = self.vault.architecture.sentinel.policy()?;
         let store_id = StoreId::parse(&self.vault.store_id)?;
         let records = self.stored_records_snapshot();
-        let mut session = nook_core::start_sentinel_unlock(
+        let mut session = signing.start_sentinel_unlock(
             store_id,
             nook_core::SentinelUnlockPolicy {
                 threshold: policy.threshold.into(),
@@ -292,17 +293,15 @@ impl NookVaultManager {
             },
             &records,
             &identity,
-            &signing,
         )?;
         if records.iter().any(|record| {
             record.key.as_str() == nook_core::sentinel_share_record_key(identity.device_id())
         }) {
             let request = nook_core::sentinel_unlock_request(&session);
-            let own_response = nook_core::respond_to_sentinel_unlock_request(
-                &request,
+            let own_response = signing.respond_to_sentinel_unlock_request(
+                request,
                 &records,
                 &identity,
-                &signing,
                 &signing.public_key(),
             )?;
             nook_core::add_sentinel_unlock_response(&mut session, own_response)?;
@@ -370,11 +369,10 @@ impl NookVaultManager {
             }
             stored.request.initiator_signing_public_key
         };
-        let response = nook_core::respond_to_sentinel_unlock_request(
-            &request,
+        let response = signing.respond_to_sentinel_unlock_request(
+            request,
             &records,
             &identity,
-            &signing,
             &authorized_signing_key,
         )?;
         Ok(serde_json::to_string(&response)
