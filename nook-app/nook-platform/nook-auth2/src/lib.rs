@@ -3,7 +3,6 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
-#![deny(clippy::absolute_paths)]
 
 //! Portable vault authentication and key-access primitives.
 //!

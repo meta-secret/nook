@@ -90,15 +90,15 @@ mod tests {
     use std::io;
 
     use super::super::{
-        approve_join_request, create_join_request_record, generate_vault_keys, genesis_auth_record,
-        genesis_members_records, replace_member_records, resolve_secrets_key,
+        VaultKeys, approve_join_request, create_join_request_record, generate_vault_keys,
+        genesis_auth_record, genesis_members_records, replace_member_records, resolve_secrets_key,
     };
     use super::*;
 
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
 
     fn genesis_vault(
-        keys: &super::super::VaultKeys,
+        keys: &VaultKeys,
     ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
         let genesis = DeviceIdentity::generate()?;
         let mut records = vec![genesis_auth_record(
@@ -115,7 +115,7 @@ mod tests {
     }
 
     fn approve_pending_join(
-        keys: &super::super::VaultKeys,
+        keys: &VaultKeys,
         approver: &DeviceIdentity,
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,

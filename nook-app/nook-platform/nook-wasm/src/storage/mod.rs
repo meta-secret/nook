@@ -4,8 +4,6 @@
 //! `nook_core::StorageMode`. New backends (S3, IPFS, …) become new
 //! submodules with the same async function shape.
 
-#![deny(clippy::absolute_paths)]
-
 use rexie::{ObjectStore, Rexie, TransactionMode};
 
 use crate::NookError;
