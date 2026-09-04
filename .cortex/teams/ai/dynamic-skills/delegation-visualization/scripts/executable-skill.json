@@ -3,12 +3,12 @@
   "id": "delegation-visualization",
   "executionKind": "in-process-read-only",
   "requestKind": "gizmo-delegation-visualization-v1",
-  "resultKind": "gizmo-delegation-tree-v1",
+  "resultKind": "gizmo-delegation-document-v1",
   "policyPaths": [
     ".cortex/teams/ai/dynamic-skills/delegation-visualization/SKILL.md"
   ],
   "limits": {
     "requestBytes": 65536,
-    "resultBytes": 65536
+    "resultBytes": 8454144
   }
 }

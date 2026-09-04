@@ -4,18 +4,14 @@ import {
   type RenderDelegationVisualizationRequest,
 } from './domain.ts';
 import { renderDelegationVisualization } from './renderer.ts';
-import {
-  decodeDelegationVisualizationResult,
-  verifyDelegationVisualizationResult,
-} from './result-codec.ts';
+import { verifyDelegationVisualizationResult } from './result-codec.ts';
 
 export function executeDelegationVisualizationApplication(
   request: RenderDelegationVisualizationRequest,
 ): DelegationVisualizationResult {
   const candidate: DelegationVisualizationResult = {
     kind: DelegationVisualizationContractKind.Result,
-    tree: renderDelegationVisualization(request),
+    document: renderDelegationVisualization(request),
   };
-  const result = decodeDelegationVisualizationResult(JSON.stringify(candidate));
-  return verifyDelegationVisualizationResult({ request, result });
+  return verifyDelegationVisualizationResult({ request, result: candidate });
 }

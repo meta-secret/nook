@@ -19,7 +19,7 @@ the active harness.
   `delegationVisualization.render` result.
 - The visualization request is ephemeral presentation input.
 - It is not admission, scheduling, persistence, or agent-lifecycle state.
-- Gizmo never composes, edits, or infers the returned tree.
+- Gizmo never composes, edits, or infers the returned plan document.
 - Give the Team Agent only its team entry point and task-relevant Cortex.
 - Use the active harness for Team Agent communication.
 - Do not use another Codex task, thread, cloud task, or external agent as
@@ -47,9 +47,10 @@ the active harness.
    - Keep tasks in native harness dispatch order.
    - Name only earlier tasks as dependencies.
 6. Invoke the static renderer through `task skills:run`.
-7. Emit one normal `GIZMO:STATE` activity line for the plan visualization.
-8. Publish the returned `tree` verbatim as one compact user-visible block
-   immediately below that activity line.
+7. Emit one normal `Gizmo Prime:STATE` activity update for the plan
+   visualization.
+8. Publish the returned `document` as the compact user-visible plan immediately
+   below that activity update.
 9. Start the Team Agent through the active harness in the current checkout.
 10. Let the Team Agent implement and run focused checks.
 11. Ask for a commit when a commit is useful for the delivery sequence.
