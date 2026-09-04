@@ -660,6 +660,35 @@ mod tests {
     }
 
     #[test]
+    fn finalize_rejects_deserialized_oversized_roster_without_mutation() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let owner_signing = signing_key()?;
+        let started =
+            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
+        let participant = started
+            .participants()
+            .first()
+            .ok_or_else(|| io::Error::other("started session must include its owner"))?
+            .clone();
+        let mut session: SentinelGenesisSession =
+            serde_json::from_str(&serde_json::to_string(&started)?)?;
+        session.participants = vec![participant; usize::from(u8::MAX) + 1];
+        let snapshot = session.clone();
+
+        let result = finalize_sentinel_genesis_shares(
+            session.clone(),
+            &StoreId::parse("store_AAAAAAAAAAA")?,
+            &owner_signing,
+        );
+        assert!(matches!(
+            result,
+            Err(MultiDeviceError::SentinelParticipantCountOverflow)
+        ));
+        assert_eq!(session, snapshot);
+        Ok(())
+    }
+
+    #[test]
     fn finalize_is_all_participants_or_nothing_and_deliveries_are_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
         let owner_signing = signing_key()?;
