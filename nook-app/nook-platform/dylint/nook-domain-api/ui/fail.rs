@@ -68,6 +68,7 @@ pub struct PublicRecord {
 }
 
 pub struct PublicTuple(pub isize, u32);
+pub struct PublicGeneric<T: Iterator<Item = RawAlias>>(pub UserId, T);
 
 pub enum PublicEvent {
     Direct(f32),

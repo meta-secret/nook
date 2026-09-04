@@ -171,6 +171,7 @@ The reason starts with `serialization boundary:`, `database boundary:`, or `FFI 
 Crate, module, type, and other blanket `allow` or expectation attributes are forbidden.
 Development core owns pass/fail UI fixtures, diagnostics snapshots, and staged crate activation.
 Hosted validation runs the locked standalone lint tests with the repository-pinned nightly toolchain.
+Nonlocal named-trait elaboration remains phase 2 and is outside this detector rollout.
 
 ## Remaining type-safety checklist
 

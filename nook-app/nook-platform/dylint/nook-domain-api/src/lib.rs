@@ -114,6 +114,22 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         if !matches!(item.kind, ItemKind::Fn { .. } | ItemKind::Mod(..)) {
             check_suppressions(cx, item.hir_id(), SuppressionScope::Broad);
         }
+        if matches!(item.kind, ItemKind::Struct(..) | ItemKind::Enum(..))
+            && !item.span.from_expansion()
+            && cx.effective_visibilities.is_reachable(item.owner_id.def_id)
+        {
+            let mut visitor = RawNumericHirVisitor(cx, false, Vec::new());
+            if let Some(generics) = item.kind.generics() {
+                visitor.visit_generics(generics);
+            }
+            if visitor.1 {
+                emit_api_diagnostic(
+                    cx,
+                    item.ident.span,
+                    "reachable struct or enum generic declaration",
+                );
+            }
+        }
     }
 
     fn check_fn(
@@ -167,7 +183,9 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         }
 
         let field_ty = cx.tcx.type_of(field.def_id).instantiate_identity();
-        if contains_raw_numeric(cx, field_ty) || hir_type_contains_raw_numeric(cx, field.ty) {
+        let mut visitor = RawNumericHirVisitor(cx, false, Vec::new());
+        visitor.visit_ty_unambig(field.ty);
+        if contains_raw_numeric(cx, field_ty) || visitor.1 {
             emit_api_diagnostic(cx, field.ty.span, "reachable struct or enum field");
         }
     }
@@ -189,10 +207,9 @@ fn is_struct_or_enum_field(cx: &LateContext<'_>, hir_id: HirId) -> bool {
 }
 
 fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
-    let normalized = cx
-        .tcx
-        .try_normalize_erasing_regions(cx.typing_env(), ty)
-        .unwrap_or(ty);
+    let Ok(normalized) = cx.tcx.try_normalize_erasing_regions(cx.typing_env(), ty) else {
+        return true;
+    };
     let raw_args = |args: ty::GenericArgsRef<'tcx>| {
         args.types()
             .any(|argument| contains_raw_numeric(cx, argument))
@@ -289,12 +306,6 @@ fn declaration_contains_raw_numeric<'tcx>(
     if let Some(generics) = cx.tcx.hir_node_by_def_id(local_def_id).generics() {
         visitor.visit_generics(generics);
     }
-    visitor.1
-}
-
-fn hir_type_contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, hir_ty: &'tcx HirTy<'tcx>) -> bool {
-    let mut visitor = RawNumericHirVisitor(cx, false, Vec::new());
-    visitor.visit_ty_unambig(hir_ty);
     visitor.1
 }
 

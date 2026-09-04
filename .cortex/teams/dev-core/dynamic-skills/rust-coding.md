@@ -51,7 +51,7 @@ When you see `Option<T>`, ask:
   scripts use concrete `thiserror` enums with operation-specific variants and
   typed sources. Only `#[cfg(test)]` unit tests and integration tests under
   `tests/` may use `anyhow`. Crates declare it under `[dev-dependencies]`.
-- Use named domain newtypes for reachable public function parameters, returns, and public struct or enum fields. Do not expose raw `String`, `u8`–`u128`, `i8`–`i128`, `usize`, `isize`, `f32`, or `f64`. Apply this recursively through `Option`, `Result`, collections, tuples, generics, aliases, and bounds. Exclude private implementation details and private inner storage of a newtype. Only legitimate serialization, database, or FFI boundaries may use a narrow item-scoped `expect` with a reason. Blanket `allow` is forbidden.
+- Use named domain newtypes for typed domain values in reachable public function parameters, returns, and public struct or enum fields. Do not expose raw `u8`–`u128`, `i8`–`i128`, `usize`, `isize`, `f32`, or `f64`. Do not expose raw `String` when it represents a typed domain value. Apply these rules recursively through `Option`, `Result`, collections, tuples, generics, aliases, and bounds. Exclude private implementation details and private inner storage of a newtype. Locale and i18n plumbing remain raw-string exceptions. Only legitimate serialization, database, or FFI boundaries may use a narrow item-scoped `expect` with a reason. Blanket `allow` is forbidden.
 - Keep raw YAML/JSON strings only at I/O boundaries. Parse them into typed Rust
   records immediately after deserialization, and serialize typed records back to
   wire strings only when crossing storage, provider, or JS boundaries.
