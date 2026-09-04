@@ -238,32 +238,30 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
     let writable_username_fields = fields
         .iter()
         .filter_map(|field| {
-            if let field::Observation::Credential(field::Credential {
-                field_index,
-                role: field::CredentialRole::Username,
-                editability: field::Editability::Writable,
-            }) = field
+            let field::Observation::Credential(credential) = field else {
+                return None;
+            };
+            if credential.role != field::CredentialRole::Username
+                || credential.editability != field::Editability::Writable
             {
-                Some(*field_index)
-            } else {
-                None
+                return None;
             }
+            Some(credential.field_index)
         })
         .collect::<Vec<_>>();
     let password_fields = fields
         .iter()
         .filter_map(|field| {
-            if let field::Observation::Credential(field::Credential {
-                field_index,
-                role:
-                    field::CredentialRole::CurrentPassword | field::CredentialRole::GenericPassword,
-                editability,
-            }) = field
-            {
-                Some((*field_index, *editability))
-            } else {
-                None
+            let field::Observation::Credential(credential) = field else {
+                return None;
+            };
+            if !matches!(
+                credential.role,
+                field::CredentialRole::CurrentPassword | field::CredentialRole::GenericPassword
+            ) {
+                return None;
             }
+            Some((credential.field_index, credential.editability))
         })
         .collect::<Vec<_>>();
 
