@@ -1,61 +1,15 @@
-import { afterAll, expect, mock, test } from 'bun:test'
+import { expect, mock, test } from 'bun:test'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import { BROWSER_MESSAGE_KEYS } from '../src/lib/browser-message-keys'
 import type { EnrollmentFlowHost } from '../src/content/enrollment-flow'
-
-mock.module(
-  '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js',
-  () => ({
-    AuthenticationWorkflowAction: { EnrollAuthenticator: 0 },
-    AuthenticatorEnrollmentConfirmResponseKind: {
-      Completed: 0,
-      Rejected: 1,
-    },
-    AuthenticatorEnrollmentStageResponseKind: { Staged: 0, Rejected: 1 },
-    AuthenticatorPreviewResponseKind: { Ready: 0, Unavailable: 1, Rejected: 2 },
-  }),
-)
-mock.module('../src/lib/backup-code-candidates', () => ({
-  authenticationRecoveryEvidence: () => ['', false],
-  authenticationRecoveryCopy: () => '',
-  clearBackupCodeCandidates: (codes: string[]) => codes.fill(''),
-  extractDocumentBackupCodeCandidates: () => [],
-  pageHasDocumentBackupCodeHint: () => false,
-  recoveryCopyHasBackupCodeHint: () => false,
-}))
-mock.module('../src/lib/page-qr-capture', () => ({
-  clearOtpauthCandidate: (candidate: {
-    sourceLabel: string
-    otpauthUri: string
-  }) => {
-    candidate.sourceLabel = ''
-    candidate.otpauthUri = ''
-  },
-  decodeVisibleOtpauthCandidates: async () => ({
-    status: 'empty',
-    candidates: [],
-  }),
-  pageHasQrEnrollmentHint: () => false,
-}))
-mock.module('../src/content/autofill/login-passkey-actions', () => ({
-  RuntimeMessageDeliveryKind: {
-    Delivered: 'delivered',
-    Unavailable: 'unavailable',
-  },
-}))
-mock.module('../src/content/enrollment-backup-flow', () => ({
-  startBackupEnrollment: () => {},
-}))
-mock.module('../src/content/autofill/backup-code-workflow-action', () => ({
-  startRevalidatedEnrollmentAction: async () => {},
-}))
 
 Object.assign(globalThis, {
   document: { querySelectorAll: () => [] },
   location: { origin: 'https://example.test' },
 })
 
+await companionWasmReady
 const enrollmentFlow = await import('../src/content/enrollment-flow')
-afterAll(() => mock.restore())
 const delivered = <Response>(response: Response) => ({
   kind: 'delivered' as const,
   response,
