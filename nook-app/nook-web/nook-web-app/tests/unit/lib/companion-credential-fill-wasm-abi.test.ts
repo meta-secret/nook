@@ -16,15 +16,18 @@ describe('companion credential-fill WASM ABI', () => {
   test('constructs generated fields and reads typed assignments', () => {
     const usernameIndex = new CredentialFillFieldIndex(4)
     const passwordIndex = new CredentialFillFieldIndex(7)
+    const usernameRole = CredentialFillFieldRole.username()
+    const genericPasswordRole = CredentialFillFieldRole.generic_password()
+    const writable = CredentialFillEditability.writable()
     const username = CredentialFillObservation.credential(
       usernameIndex,
-      CredentialFillFieldRole.Username,
-      CredentialFillEditability.Writable,
+      usernameRole,
+      writable,
     )
     const password = CredentialFillObservation.credential(
       passwordIndex,
-      CredentialFillFieldRole.GenericPassword,
-      CredentialFillEditability.Writable,
+      genericPasswordRole,
+      writable,
     )
     const fields = new CredentialFillObservations()
     fields.add(username)
@@ -42,18 +45,20 @@ describe('companion credential-fill WASM ABI', () => {
         expect(passwordAssignment).toBeInstanceOf(CredentialFillAssignment)
         const assignedUsernameIndex = usernameAssignment.field_index
         const assignedPasswordIndex = passwordAssignment.field_index
+        const assignedUsernameKind = usernameAssignment.credential
+        const assignedPasswordKind = passwordAssignment.credential
         try {
           expect(assignedUsernameIndex.value).toBe(4)
-          expect(usernameAssignment.credential).toBe(
-            CredentialFillKind.Username,
-          )
+          expect(assignedUsernameKind).toBeInstanceOf(CredentialFillKind)
+          expect(assignedUsernameKind.is_username()).toBe(true)
           expect(assignedPasswordIndex.value).toBe(7)
-          expect(passwordAssignment.credential).toBe(
-            CredentialFillKind.CurrentPassword,
-          )
+          expect(assignedPasswordKind).toBeInstanceOf(CredentialFillKind)
+          expect(assignedPasswordKind.is_current_password()).toBe(true)
         } finally {
           assignedUsernameIndex.free()
           assignedPasswordIndex.free()
+          assignedUsernameKind.free()
+          assignedPasswordKind.free()
         }
       } finally {
         for (const assignment of assignments) assignment.free()
@@ -65,6 +70,34 @@ describe('companion credential-fill WASM ABI', () => {
       password.free()
       usernameIndex.free()
       passwordIndex.free()
+      usernameRole.free()
+      genericPasswordRole.free()
+      writable.free()
+    }
+  })
+
+  test('fails closed for a generated readonly credential field', () => {
+    const fieldIndex = new CredentialFillFieldIndex(0)
+    const currentPasswordRole = CredentialFillFieldRole.current_password()
+    const readonly = CredentialFillEditability.readonly()
+    const observation = CredentialFillObservation.credential(
+      fieldIndex,
+      currentPasswordRole,
+      readonly,
+    )
+    const fields = new CredentialFillObservations()
+    fields.add(observation)
+
+    try {
+      expect(() => plan_companion_credential_fill(fields)).toThrow(
+        'every password field is read-only, so credential disclosure is blocked',
+      )
+    } finally {
+      fields.free()
+      observation.free()
+      readonly.free()
+      currentPasswordRole.free()
+      fieldIndex.free()
     }
   })
 
@@ -93,6 +126,34 @@ describe('companion credential-fill WASM ABI', () => {
       oneTimeCode.free()
       newPasswordIndex.free()
       oneTimeCodeIndex.free()
+    }
+  })
+
+  test('rejects an observation above the generated batch bound', () => {
+    const fieldIndex = new CredentialFillFieldIndex(0)
+    const usernameRole = CredentialFillFieldRole.username()
+    const writable = CredentialFillEditability.writable()
+    const observation = CredentialFillObservation.credential(
+      fieldIndex,
+      usernameRole,
+      writable,
+    )
+    const fields = new CredentialFillObservations()
+    const maxCount = CredentialFillObservations.max_count()
+
+    try {
+      for (let count = 0; count < maxCount; count += 1) {
+        fields.add(observation)
+      }
+      expect(() => fields.add(observation)).toThrow(
+        'the observed scope exceeds the field-count limit',
+      )
+    } finally {
+      fields.free()
+      observation.free()
+      writable.free()
+      usernameRole.free()
+      fieldIndex.free()
     }
   })
 })
