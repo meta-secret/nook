@@ -43,6 +43,13 @@ pub fn device_protection_status_name(status: nook_core::DeviceProtectionStatus) 
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the `assess_vault_security` count through a JavaScript Number scalar"
+    )
+)]
 pub fn assess_vault_security(
     sync_provider_count: u32,
     enrolled_device_count: u32,
@@ -65,6 +72,13 @@ pub fn authentication_workflow_snapshot(
 
 #[wasm_bindgen]
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: projects the `classify_authentication_outcome` timestamp or duration through a JavaScript Number scalar"
+    )
+)]
 pub fn classify_authentication_outcome(
     observation: &NookAuthenticationOutcomeObservation,
     timeout_ms: u32,

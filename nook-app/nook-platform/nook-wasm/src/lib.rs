@@ -1,6 +1,11 @@
 //! Typed browser and WASM adapter for the Nook Rust core.
 //! Browser lifecycle glue stays behind typed exports while domain policy remains in core.
 
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
@@ -27,9 +32,6 @@ mod storage;
 mod sync_io;
 mod types;
 
-#[doc(hidden)]
-pub use wasm_bindgen_futures as __wasm_bindgen_futures;
-
 pub use device_access::*;
 pub use identity_record::{
     NookIdentityDirectorySelectionKind, NookIdentityDirectorySnapshot,
@@ -37,7 +39,7 @@ pub use identity_record::{
     NookIdentitySnapshotLoad, load_identity_directory_snapshot, load_identity_snapshot,
     select_identity,
 };
-pub use logger::NookLogEntries;
+pub use logger::{NookLogEntries, log_count, log_dump_page};
 pub use manager::{
     NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
     NookExtensionIdentityHandoffContext, NookExternalEventLogRecords, NookVaultManager,

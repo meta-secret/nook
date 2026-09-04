@@ -136,6 +136,13 @@ impl NookSecretListItem {
     }
 
     #[wasm_bindgen(getter, js_name = seedWordCount)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `seed_word_count` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn seed_word_count(&self) -> u32 {
         match self.item.data {
             nook_core::SecretListItemData::SeedPhrase { word_count, .. } => {
@@ -210,6 +217,13 @@ impl NookSecretListItem {
     }
 
     #[wasm_bindgen(getter, js_name = sizeBytes)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `size_bytes` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn size_bytes(&self) -> u32 {
         match self.item.data {
             nook_core::SecretListItemData::FileAttachment { size_bytes, .. } => {
@@ -262,6 +276,13 @@ impl NookSecretListItem {
     }
 
     #[wasm_bindgen(getter, js_name = backupCodeCount)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `backup_code_count` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn backup_code_count(&self) -> u32 {
         match self.item.data {
             nook_core::SecretListItemData::Authenticator {

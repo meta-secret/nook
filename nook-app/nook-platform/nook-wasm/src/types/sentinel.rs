@@ -35,11 +35,25 @@ impl NookSentinelUnlockSessionStatus {
     }
 
     #[wasm_bindgen(getter)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `collected` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn collected(&self) -> u8 {
         self.collected
     }
 
     #[wasm_bindgen(getter)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `threshold` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn threshold(&self) -> u8 {
         self.threshold
     }
@@ -83,11 +97,25 @@ impl NookSentinelStoredDeliverySummary {
     }
 
     #[wasm_bindgen(getter, js_name = participantCount)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `participant_count` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn participant_count(&self) -> u8 {
         self.participant_count
     }
 
     #[wasm_bindgen(getter)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `threshold` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn threshold(&self) -> u8 {
         self.threshold
     }

@@ -204,6 +204,13 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter, js_name = sizeBytes)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `size_bytes` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn size_bytes(&self) -> u32 {
         match &self.record.data {
             nook_core::SecretValue::FileAttachment(value) => {
@@ -278,6 +285,13 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `digits` count through a JavaScript Number scalar"
+        )
+    )]
     pub fn digits(&self) -> u32 {
         match &self.record.data {
             nook_core::SecretValue::Authenticator(value) => match value.digits {
@@ -290,6 +304,13 @@ impl NookSecretRecord {
     }
 
     #[wasm_bindgen(getter)]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: projects the `period` timestamp or duration through a JavaScript Number scalar"
+        )
+    )]
     pub fn period(&self) -> u32 {
         match &self.record.data {
             nook_core::SecretValue::Authenticator(value) => {
