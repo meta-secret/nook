@@ -119,9 +119,30 @@ rules and cost tiers.
 
 ## 4. Typed WASM boundary (`nook-app/nook-platform/nook-wasm/src/types.rs`)
 
-**Use typed `#[wasm_bindgen]` structs instead of raw JavaScript values for every
-application data shape.** Errors surface as `JsError`. Browser adapters use the
-narrowest typed `web-sys` / `js-sys` object supported by the external API.
+**Use Rust-derived ABI types instead of authored raw `JsValue` for application
+data shapes.** Use `#[wasm_bindgen]` classes for object-owned boundaries. Use
+`Tsify` with `from_wasm_abi` when the declared ABI is a structural DTO. Errors
+surface as `JsError`. Browser adapters use the narrowest typed `web-sys` /
+`js-sys` object supported by the external API.
+
+### Required actions
+
+- Keep domain identifiers and counts wrapped at the WASM boundary.
+- Expose a primitive getter only for explicit edge unwrapping.
+- Export a canonical fieldless core enum directly through `wasm_bindgen`.
+- Wrap data-carrying core enums in generated WASM objects when direct export is
+  unavailable.
+- When an ABI parameter is a `#[wasm_bindgen]` class, make JavaScript construct
+  it through generated constructors or static factories.
+- When `Tsify` with `from_wasm_abi` declares a structural DTO parameter, accept
+  the generated structural object with its exact fields.
+
+### Prohibited actions
+
+- Do not create a mirrored bridge enum or translate variants manually.
+- Do not accept a plain object, string tag, or raw discriminant in place of a
+  declared `#[wasm_bindgen]` class.
+- Do not introduce a WASM class merely to replace a generated structural DTO.
 
 Syntax-aware repository preflight rejects authored `JsValue` paths before
 wasm-bindgen macro expansion. Clippy's built-in `disallowed_types` cannot
@@ -162,6 +183,8 @@ distinguish wasm-bindgen's generated ABI code from authored code.
   - That throws `null pointer passed to rust` and can reject an otherwise
     successful async Rust operation.
   - Continue freeing wrappers returned to JavaScript after copying out data.
+  - A wrapper passed by reference remains owned by JavaScript.
+  - Free that wrapper exactly once after its final use.
 
 ## 5. Vault secrets at the JS boundary
 
@@ -248,6 +271,29 @@ ends.
 ## 6. Testing
 
 - Test vault formats, crypto, validation, and passwords in `nook-core`.
+- Keep domain policy failures authoritative in focused core tests.
+- **Generated-package ABI changes**
+  - **Required actions**
+    - Test an introduced or changed generated-package ABI from JavaScript or
+      TypeScript.
+    - Place and wire the test into the relevant existing consumer test and CI
+      path.
+    - Import the generated package built for that consumer path.
+    - Construct exported WASM classes through their generated API when a
+      parameter is declared as a `#[wasm_bindgen]` class.
+    - Construct generated structural DTO objects when a parameter is declared
+      through `Tsify` with `from_wasm_abi`.
+    - Call the exported planner or operation through the generated binding.
+    - Exercise ownership according to by-value or by-reference parameters.
+    - Free every still-owned wrapper exactly once.
+    - Cover introduced or changed public `JsError` behavior through the
+      relevant generated-package consumer test path.
+  - **Prohibited actions**
+    - Do not substitute a Serde round trip followed by a direct Rust call.
+    - Do not assume or claim that a repository-wide generated-package test
+      harness exists.
+    - Do not invent a generic harness instead of using the relevant existing
+      consumer test and CI path.
 - **Coverage gate:** `task rust:coverage:check` (llvm-cov + nextest, **90%** line floor in `nook-app/nook-platform/nook-core/coverage-floor.json`). Part of `task check` / CI. Below 90%, add Rust tests.
 - **Fast tests:** `task rust:test` (nextest only, no coverage instrumentation).
 - Use Playwright e2e for UI flows; do not duplicate domain rules in TypeScript tests.
