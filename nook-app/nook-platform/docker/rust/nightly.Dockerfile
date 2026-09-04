@@ -41,7 +41,9 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && rustfmt --edition 2024 --check dylint/nook-domain-api/ui/*.rs \
     && RUSTC_WRAPPER= RUSTFLAGS= cargo llvm-cov test -p nook_domain_api \
       --manifest-path dylint/nook-domain-api/Cargo.toml --locked --no-report \
-    && lint_object="target/debug/libnook_domain_api@${RUSTUP_TOOLCHAIN}.so" \
+    && toolchain_id="$(rustup show active-toolchain | cut -d' ' -f1)" \
+    && test -n "$toolchain_id" \
+    && lint_object="target/debug/libnook_domain_api@${toolchain_id}.so" \
     && test -f "$lint_object" \
     && ln "$lint_object" dylint/nook-domain-api/target/llvm-cov-target/debug/libnook_domain_api-c0ffee.so \
     && cargo llvm-cov report -p nook_domain_api --manifest-path dylint/nook-domain-api/Cargo.toml \
