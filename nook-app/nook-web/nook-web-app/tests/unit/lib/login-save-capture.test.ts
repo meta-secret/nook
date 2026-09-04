@@ -47,4 +47,16 @@ describe('submitted login capture', () => {
     )
     expect(saveMocks.sendOffer).toHaveBeenCalledOnce()
   })
+
+  test('captures unambiguous submitter-null submission for an ordinary form', () => {
+    document.body.innerHTML = `<form method="post"><input autocomplete="username" value="pilot@example.test" />
+      <input type="password" autocomplete="current-password" value="secret" /></form>`
+    const form = document.querySelector('form')
+    if (!form) throw new Error('expected ordinary login form')
+    form.addEventListener('submit', captureSubmittedLogin)
+
+    form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }))
+
+    expect(saveMocks.sendOffer).toHaveBeenCalledOnce()
+  })
 })

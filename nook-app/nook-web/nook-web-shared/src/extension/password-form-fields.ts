@@ -15,6 +15,8 @@ import {
   strongest_authentication_username_evidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import type { AuthenticationUsernameEvidence } from "./nook-companion-wasm/nook_companion_wasm.js";
+import { containerHasAuthenticationIdentity } from "./password-form-container-identity";
+import { ownedAuthenticationFields } from "./password-form-owned-field-index";
 
 void companionWasmReady;
 
@@ -177,18 +179,23 @@ export function localOwnedLoginObservationRoot({
   usernameFields,
   oneTimeCodeFields,
 }: LocalOwnedLoginObservationRootRequest): ParentNode {
-  const ownedPasswordFields = passwordFields.filter(
-    (field) => field.form === owner,
-  );
-  const ownedUsernameFields = usernameFields.filter(
-    (field) => field.form === owner,
-  );
+  const ownedFieldsRequest: Parameters<typeof ownedAuthenticationFields>[0] = {
+    owner,
+    passwordFields,
+    usernameFields,
+    oneTimeCodeFields,
+  };
+  const {
+    passwordFields: ownedPasswordFields,
+    usernameFields: ownedUsernameFields,
+    oneTimeCodeFields: ownedOneTimeCodeFields,
+  } = ownedAuthenticationFields(ownedFieldsRequest);
   const [passwordField] = ownedPasswordFields;
   const [usernameField] = ownedUsernameFields;
   if (
     ownedPasswordFields.length !== 1 ||
     ownedUsernameFields.length !== 1 ||
-    oneTimeCodeFields.some((field) => field.form === owner) ||
+    ownedOneTimeCodeFields.length > 0 ||
     !passwordField ||
     !usernameField
   ) {
@@ -768,9 +775,8 @@ function containerHasSemanticSubmitControl(container: Element): boolean {
 }
 
 function containerLooksLikeExplicitAuthSurface(container: Element): boolean {
-  return container.matches(
-    'dialog, [role="dialog"], [role="form"], [id*="login" i], [id*="signin" i], [id*="signup" i], [id*="reset" i], [class*="login" i], [class*="signin" i], [class*="signup" i], [class*="reset" i]',
-  );
+  if (container.matches('dialog, [role="dialog"], [role="form"]')) return true;
+  return containerHasAuthenticationIdentity(container);
 }
 
 function containerIsFormlessAuthenticationScope({

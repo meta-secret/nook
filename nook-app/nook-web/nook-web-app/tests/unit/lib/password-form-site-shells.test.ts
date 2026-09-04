@@ -13,6 +13,7 @@ import {
   submitLoginForm,
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
+import { localOwnedLoginObservationRoot } from '../../../../nook-web-shared/src/extension/password-form-fields'
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -73,12 +74,47 @@ describe('popular-site login shells', () => {
     expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
   })
 
-  test('rejects a generic application shell as a local login root', () => {
-    document.body.innerHTML = `<form><main class="application-shell">
+  test('does not treat substring identity as a bounded login surface', () => {
+    document.body.innerHTML = `<form><main class="preset-layout">
       <section><input autocomplete="username" /></section><aside><input type="password" autocomplete="current-password" /></aside>
-      <button type="submit">Sign in</button></main></form>`
+      <button type="submit">Reset filters</button></main></form>`
 
-    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected generic shell observation')
+    expect(observation.root).toBe(document)
+    const request: Parameters<typeof submitLoginForm>[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      ...observation,
+    }
+    expect(submitLoginForm(request)).toBe(FormSubmissionResult.NotObserved)
+  })
+
+  test('indexes a large field set by exact form owner', () => {
+    document.body.innerHTML = Array.from(
+      { length: 101 },
+      (_, index) => `<form id="owner-${index}"><main class="login-panel">
+        <input autocomplete="username" /><input type="password" autocomplete="current-password" /></main></form>`,
+    ).join('')
+    const owner = document.querySelector<HTMLFormElement>('#owner-100')
+    if (!owner) throw new Error('expected indexed owner fixture')
+    const request: Parameters<typeof localOwnedLoginObservationRoot>[0] = {
+      owner,
+      passwordFields: [
+        ...document.querySelectorAll<HTMLInputElement>(
+          'input[type="password"]',
+        ),
+      ],
+      usernameFields: [
+        ...document.querySelectorAll<HTMLInputElement>(
+          'input[autocomplete="username"]',
+        ),
+      ],
+      oneTimeCodeFields: [],
+    }
+
+    expect(localOwnedLoginObservationRoot(request)).toBe(
+      owner.querySelector('.login-panel'),
+    )
   })
 
   test('does not submit outside a bounded page-wide login panel', () => {
