@@ -31,6 +31,13 @@ pub mod field {
         pub value: u32,
     }
 
+    impl Index {
+        pub const ZERO: Self = Self { value: 0 };
+        pub const ONE: Self = Self { value: 1 };
+        pub const TWO: Self = Self { value: 2 };
+        pub const THREE: Self = Self { value: 3 };
+    }
+
     impl From<u32> for Index {
         fn from(value: u32) -> Self {
             Self { value }
@@ -147,14 +154,14 @@ pub mod field {
         fn variant_payloads_preserve_their_field_index() {
             for observation in [
                 Observation::from(Credential {
-                    field_index: 1.into(),
+                    field_index: Index::ONE,
                     role: CredentialRole::Username,
                     editability: Editability::Writable,
                 }),
-                Observation::from(NewPassword::from(Index::from(1))),
-                Observation::from(OneTimeCode::from(Index::from(1))),
+                Observation::from(NewPassword::from(Index::ONE)),
+                Observation::from(OneTimeCode::from(Index::ONE)),
             ] {
-                assert_eq!(observation.field_index(), Index::from(1));
+                assert_eq!(observation.field_index(), Index::ONE);
             }
         }
 
@@ -162,7 +169,7 @@ pub mod field {
         fn serialization_preserves_source_names_and_payload_boundaries() -> anyhow::Result<()> {
             assert_eq!(serde_json::to_string(&Count::from(64))?, r#"{"value":64}"#);
             let credential = Observation::from(Credential {
-                field_index: 0.into(),
+                field_index: Index::ZERO,
                 role: CredentialRole::Username,
                 editability: Editability::Writable,
             });
@@ -171,11 +178,11 @@ pub mod field {
                 r#"{"Credential":{"field_index":{"value":0},"role":"Username","editability":"Writable"}}"#
             );
             assert_eq!(
-                serde_json::to_string(&Observation::from(NewPassword::from(Index::from(1))))?,
+                serde_json::to_string(&Observation::from(NewPassword::from(Index::ONE)))?,
                 r#"{"NewPassword":{"field_index":{"value":1}}}"#
             );
             assert_eq!(
-                serde_json::to_string(&Observation::from(OneTimeCode::from(Index::from(2))))?,
+                serde_json::to_string(&Observation::from(OneTimeCode::from(Index::TWO)))?,
                 r#"{"OneTimeCode":{"field_index":{"value":2}}}"#
             );
             Ok(())
@@ -333,36 +340,42 @@ mod tests {
         value: &'static str,
     }
 
-    fn field(field_index: u32, role: field::CredentialRole) -> field::Observation {
+    fn field(field_index: field::Index, role: field::CredentialRole) -> field::Observation {
         field::Credential {
-            field_index: field_index.into(),
+            field_index,
             role,
             editability: field::Editability::Writable,
         }
         .into()
     }
 
-    fn readonly_field(field_index: u32, role: field::CredentialRole) -> field::Observation {
+    fn readonly_field(
+        field_index: field::Index,
+        role: field::CredentialRole,
+    ) -> field::Observation {
         field::Credential {
-            field_index: field_index.into(),
+            field_index,
             role,
             editability: field::Editability::Readonly,
         }
         .into()
     }
 
-    fn new_password_field(field_index: u32) -> field::Observation {
-        field::NewPassword::from(field::Index::from(field_index)).into()
+    fn new_password_field(field_index: field::Index) -> field::Observation {
+        field::NewPassword::from(field_index).into()
     }
 
-    fn one_time_code_field(field_index: u32) -> field::Observation {
-        field::OneTimeCode::from(field::Index::from(field_index)).into()
+    fn one_time_code_field(field_index: field::Index) -> field::Observation {
+        field::OneTimeCode::from(field_index).into()
     }
 
     fn login_form() -> Vec<field::Observation> {
         vec![
-            field(0, field::CredentialRole::Username),
-            field(1, field::CredentialRole::Password(field::Password::Current)),
+            field(field::Index::ZERO, field::CredentialRole::Username),
+            field(
+                field::Index::ONE,
+                field::CredentialRole::Password(field::Password::Current),
+            ),
         ]
     }
 
@@ -373,11 +386,11 @@ mod tests {
             plan.assignments,
             vec![
                 Assignment {
-                    field_index: 0.into(),
+                    field_index: field::Index::ZERO,
                     credential: CredentialKind::Username,
                 },
                 Assignment {
-                    field_index: 1.into(),
+                    field_index: field::Index::ONE,
                     credential: CredentialKind::CurrentPassword,
                 },
             ]
@@ -387,12 +400,12 @@ mod tests {
 
     #[test]
     fn plans_username_only_fill_for_identifier_step() -> anyhow::Result<()> {
-        let username_only = vec![field(2, field::CredentialRole::Username)];
+        let username_only = vec![field(field::Index::TWO, field::CredentialRole::Username)];
         let plan = plan(&username_only)?;
         assert_eq!(
             plan.assignments,
             vec![Assignment {
-                field_index: 2.into(),
+                field_index: field::Index::TWO,
                 credential: CredentialKind::Username,
             }]
         );
@@ -402,14 +415,14 @@ mod tests {
     #[test]
     fn plans_password_only_fill_for_password_step() -> anyhow::Result<()> {
         let password_only = vec![field(
-            0,
+            field::Index::ZERO,
             field::CredentialRole::Password(field::Password::Current),
         )];
         let plan = plan(&password_only)?;
         assert_eq!(
             plan.assignments,
             vec![Assignment {
-                field_index: 0.into(),
+                field_index: field::Index::ZERO,
                 credential: CredentialKind::CurrentPassword,
             }]
         );
@@ -419,19 +432,22 @@ mod tests {
     #[test]
     fn plans_a_single_generic_password_as_a_login_password() -> anyhow::Result<()> {
         let generic_login = vec![
-            field(0, field::CredentialRole::Username),
-            field(1, field::CredentialRole::Password(field::Password::Generic)),
+            field(field::Index::ZERO, field::CredentialRole::Username),
+            field(
+                field::Index::ONE,
+                field::CredentialRole::Password(field::Password::Generic),
+            ),
         ];
         let plan = plan(&generic_login)?;
         assert_eq!(
             plan.assignments,
             vec![
                 Assignment {
-                    field_index: 0.into(),
+                    field_index: field::Index::ZERO,
                     credential: CredentialKind::Username,
                 },
                 Assignment {
-                    field_index: 1.into(),
+                    field_index: field::Index::ONE,
                     credential: CredentialKind::CurrentPassword,
                 },
             ]
@@ -442,9 +458,9 @@ mod tests {
     #[test]
     fn fails_closed_without_credential_fields() {
         assert_eq!(plan(&[]), Err(Error::NoCredentialField));
-        let otp_only = vec![one_time_code_field(0)];
+        let otp_only = vec![one_time_code_field(field::Index::ZERO)];
         assert_eq!(plan(&otp_only), Err(Error::OneTimeCodeFieldPresent));
-        let new_password_only = vec![new_password_field(0)];
+        let new_password_only = vec![new_password_field(field::Index::ZERO)];
         assert_eq!(
             plan(&new_password_only),
             Err(Error::NewPasswordFieldPresent)
@@ -454,7 +470,7 @@ mod tests {
     #[test]
     fn fails_closed_when_all_password_fields_are_readonly() {
         let readonly_password = vec![readonly_field(
-            0,
+            field::Index::ZERO,
             field::CredentialRole::Password(field::Password::Current),
         )];
         assert_eq!(plan(&readonly_password), Err(Error::PasswordFieldsReadonly));
@@ -463,8 +479,14 @@ mod tests {
     #[test]
     fn fails_closed_on_multiple_current_password_fields() {
         let ambiguous = vec![
-            field(0, field::CredentialRole::Password(field::Password::Current)),
-            field(1, field::CredentialRole::Password(field::Password::Current)),
+            field(
+                field::Index::ZERO,
+                field::CredentialRole::Password(field::Password::Current),
+            ),
+            field(
+                field::Index::ONE,
+                field::CredentialRole::Password(field::Password::Current),
+            ),
         ];
         assert_eq!(plan(&ambiguous), Err(Error::AmbiguousPasswordField));
     }
@@ -473,12 +495,24 @@ mod tests {
     fn fails_closed_on_mixed_or_multiple_login_password_fields() {
         for ambiguous in [
             vec![
-                field(0, field::CredentialRole::Password(field::Password::Current)),
-                field(1, field::CredentialRole::Password(field::Password::Generic)),
+                field(
+                    field::Index::ZERO,
+                    field::CredentialRole::Password(field::Password::Current),
+                ),
+                field(
+                    field::Index::ONE,
+                    field::CredentialRole::Password(field::Password::Generic),
+                ),
             ],
             vec![
-                field(0, field::CredentialRole::Password(field::Password::Generic)),
-                field(1, field::CredentialRole::Password(field::Password::Generic)),
+                field(
+                    field::Index::ZERO,
+                    field::CredentialRole::Password(field::Password::Generic),
+                ),
+                field(
+                    field::Index::ONE,
+                    field::CredentialRole::Password(field::Password::Generic),
+                ),
             ],
         ] {
             assert_eq!(plan(&ambiguous), Err(Error::AmbiguousPasswordField));
@@ -488,8 +522,11 @@ mod tests {
     #[test]
     fn fails_closed_on_duplicate_field_indices() {
         let duplicate = vec![
-            field(4, field::CredentialRole::Username),
-            field(4, field::CredentialRole::Password(field::Password::Current)),
+            field(4.into(), field::CredentialRole::Username),
+            field(
+                4.into(),
+                field::CredentialRole::Password(field::Password::Current),
+            ),
         ];
         assert_eq!(plan(&duplicate), Err(Error::DuplicateFieldIndex));
     }
@@ -497,7 +534,7 @@ mod tests {
     #[test]
     fn fails_closed_before_scanning_an_oversized_scope() {
         let fields = vec![
-            field(0, field::CredentialRole::Username);
+            field(field::Index::ZERO, field::CredentialRole::Username);
             crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1
         ];
         assert_eq!(plan(&fields), Err(Error::TooManyObservedFields));
@@ -506,8 +543,8 @@ mod tests {
     #[test]
     fn fails_closed_on_multiple_writable_username_fields() {
         let ambiguous = vec![
-            field(0, field::CredentialRole::Username),
-            field(1, field::CredentialRole::Username),
+            field(field::Index::ZERO, field::CredentialRole::Username),
+            field(field::Index::ONE, field::CredentialRole::Username),
         ];
         assert_eq!(plan(&ambiguous), Err(Error::AmbiguousUsernameField));
     }
@@ -515,10 +552,19 @@ mod tests {
     #[test]
     fn rejects_unsafe_scope_before_planning_username_only_fill() {
         for (unsafe_field, expected) in [
-            (new_password_field(1), Error::NewPasswordFieldPresent),
-            (one_time_code_field(1), Error::OneTimeCodeFieldPresent),
+            (
+                new_password_field(field::Index::ONE),
+                Error::NewPasswordFieldPresent,
+            ),
+            (
+                one_time_code_field(field::Index::ONE),
+                Error::OneTimeCodeFieldPresent,
+            ),
         ] {
-            let fields = vec![field(0, field::CredentialRole::Username), unsafe_field];
+            let fields = vec![
+                field(field::Index::ZERO, field::CredentialRole::Username),
+                unsafe_field,
+            ];
             assert_eq!(plan(&fields), Err(expected));
         }
     }
@@ -526,14 +572,17 @@ mod tests {
     #[test]
     fn skips_readonly_username_but_still_plans_password_fill() -> anyhow::Result<()> {
         let fields = vec![
-            readonly_field(0, field::CredentialRole::Username),
-            field(1, field::CredentialRole::Password(field::Password::Current)),
+            readonly_field(field::Index::ZERO, field::CredentialRole::Username),
+            field(
+                field::Index::ONE,
+                field::CredentialRole::Password(field::Password::Current),
+            ),
         ];
         let plan = plan(&fields)?;
         assert_eq!(
             plan.assignments,
             vec![Assignment {
-                field_index: 1.into(),
+                field_index: field::Index::ONE,
                 credential: CredentialKind::CurrentPassword,
             }]
         );
@@ -562,11 +611,11 @@ mod tests {
             simulated,
             vec![
                 TestFilledField {
-                    field_index: 0.into(),
+                    field_index: field::Index::ZERO,
                     value: credentials.username,
                 },
                 TestFilledField {
-                    field_index: 1.into(),
+                    field_index: field::Index::ONE,
                     value: credentials.password,
                 },
             ]
@@ -620,9 +669,9 @@ mod tests {
             assert_eq!(serde_json::to_string(&value)?, expected);
         }
 
-        let observation = field(0, field::CredentialRole::Username);
+        let observation = field(field::Index::ZERO, field::CredentialRole::Username);
         assert_eq!(
-            serde_json::to_string(&field::Index::from(0))?,
+            serde_json::to_string(&field::Index::ZERO)?,
             r#"{"value":0}"#
         );
         assert_eq!(
@@ -630,11 +679,11 @@ mod tests {
             r#"{"Credential":{"field_index":{"value":0},"role":"Username","editability":"Writable"}}"#
         );
         assert_eq!(
-            serde_json::to_string(&new_password_field(1))?,
+            serde_json::to_string(&new_password_field(field::Index::ONE))?,
             r#"{"NewPassword":{"field_index":{"value":1}}}"#
         );
         assert_eq!(
-            serde_json::to_string(&one_time_code_field(2))?,
+            serde_json::to_string(&one_time_code_field(field::Index::TWO))?,
             r#"{"OneTimeCode":{"field_index":{"value":2}}}"#
         );
         let plan = plan(&login_form())?;
