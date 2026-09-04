@@ -27,7 +27,7 @@ impl NookSentinelUnlockSessionStatus {
     pub(crate) fn from_status(status: nook_core::SentinelUnlockStatus) -> Self {
         Self {
             active: true,
-            collected: status.collected.into(),
+            collected: u8::try_from(usize::from(status.collected)).unwrap_or(u8::MAX),
             threshold: status.threshold.into(),
             ready: status.ready,
         }

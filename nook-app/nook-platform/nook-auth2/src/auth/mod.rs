@@ -20,7 +20,8 @@ mod slip39;
 pub use domain_numbers::{
     DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
     MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor,
-    SentinelParticipantCount, SentinelRecordCount, SentinelShareIndex, SentinelThreshold,
+    SentinelParticipantCount, SentinelRecordCount, SentinelShareCount, SentinelShareIndex,
+    SentinelThreshold,
 };
 
 #[cfg(any(test, feature = "mock-passkey"))]

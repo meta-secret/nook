@@ -3,7 +3,7 @@
 use super::age_crypto::AgeCryptoError;
 use super::validation::ValidationError;
 use super::vault_crypto::VaultCryptoError;
-use crate::{SentinelParticipantCount, SentinelRecordCount, SentinelThreshold};
+use crate::{SentinelParticipantCount, SentinelShareCount, SentinelThreshold};
 use thiserror::Error;
 
 pub type MultiDeviceResult<T> = Result<T, MultiDeviceError>;
@@ -115,6 +115,9 @@ pub enum MultiDeviceError {
     #[error("Sentinel genesis roster is full.")]
     SentinelGenesisRosterFull,
 
+    #[error("Sentinel participant count exceeds the supported range.")]
+    SentinelParticipantCountOverflow,
+
     #[error("Sentinel genesis needs {required} participants, but has {available}.")]
     SentinelGenesisIncomplete {
         required: SentinelParticipantCount,
@@ -150,7 +153,7 @@ pub enum MultiDeviceError {
     #[error("Not enough sentinel shares: need {threshold}, got {available}.")]
     NotEnoughSentinelShares {
         threshold: SentinelThreshold,
-        available: SentinelRecordCount,
+        available: SentinelShareCount,
     },
 
     #[error("Invalid sentinel share record JSON")]

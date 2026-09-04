@@ -63,7 +63,8 @@ pub use auth::mock_passkey::{
 pub use auth::{
     DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
     MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor,
-    SentinelParticipantCount, SentinelRecordCount, SentinelShareIndex, SentinelThreshold,
+    SentinelParticipantCount, SentinelRecordCount, SentinelShareCount, SentinelShareIndex,
+    SentinelThreshold,
 };
 pub use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 pub mod multi_device_api {

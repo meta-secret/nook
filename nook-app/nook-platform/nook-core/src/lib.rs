@@ -212,10 +212,14 @@ pub use website_login_save::{
 };
 
 pub use nook_auth2::{
-    SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,
-    SentinelGenesisPolicy, SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest,
-    SentinelGenesisSession, SentinelGenesisShareDelivery, accept_sentinel_genesis_share_delivery,
-    add_sentinel_genesis_participant_payload, add_sentinel_genesis_participant_payload_with_label,
+    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
+    MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor, SentinelGenesisIssued,
+    SentinelGenesisParticipant, SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
+    SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest, SentinelGenesisSession,
+    SentinelGenesisShareDelivery, SentinelParticipantCount, SentinelRecordCount,
+    SentinelShareCount, SentinelShareIndex, SentinelThreshold,
+    accept_sentinel_genesis_share_delivery, add_sentinel_genesis_participant_payload,
+    add_sentinel_genesis_participant_payload_with_label,
     add_sentinel_genesis_public_key_announcement, add_sentinel_genesis_response,
     build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
     finalize_sentinel_genesis_shares, normalize_sentinel_genesis_participant_payload,

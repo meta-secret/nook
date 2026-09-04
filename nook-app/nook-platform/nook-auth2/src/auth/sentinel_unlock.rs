@@ -14,7 +14,7 @@ use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     MultiDeviceError, MultiDeviceResult, StoreId, StoredSecretRecord,
 };
-use crate::{SentinelParticipantCount, SentinelShareIndex, SentinelThreshold};
+use crate::{SentinelParticipantCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
@@ -71,7 +71,7 @@ pub struct SentinelUnlockResponse {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelUnlockStatus {
-    pub collected: SentinelParticipantCount,
+    pub collected: SentinelShareCount,
     pub threshold: SentinelThreshold,
     pub ready: bool,
 }
@@ -214,8 +214,7 @@ pub fn add_sentinel_unlock_response(
 
 #[must_use]
 pub fn sentinel_unlock_status(session: &SentinelUnlockSession) -> SentinelUnlockStatus {
-    let collected =
-        SentinelParticipantCount::from(u8::try_from(session.responses.len()).unwrap_or(u8::MAX));
+    let collected = session.responses.len().into();
     SentinelUnlockStatus {
         collected,
         threshold: session.request.policy.threshold,

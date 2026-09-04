@@ -1,4 +1,7 @@
-use std::fmt::{self, Display};
+use std::{
+    fmt::{self, Display},
+    num::TryFromIntError,
+};
 
 use serde::{Deserialize, Serialize};
 
@@ -109,6 +112,13 @@ impl From<SentinelParticipantCount> for u8 {
         value.0
     }
 }
+impl TryFrom<usize> for SentinelParticipantCount {
+    type Error = TryFromIntError;
+
+    fn try_from(value: usize) -> Result<Self, Self::Error> {
+        u8::try_from(value).map(Self)
+    }
+}
 impl Display for SentinelParticipantCount {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
@@ -129,6 +139,25 @@ impl From<SentinelRecordCount> for usize {
     }
 }
 impl Display for SentinelRecordCount {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct SentinelShareCount(pub(crate) usize);
+impl From<usize> for SentinelShareCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+impl From<SentinelShareCount> for usize {
+    fn from(value: SentinelShareCount) -> Self {
+        value.0
+    }
+}
+impl Display for SentinelShareCount {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
     }

@@ -216,9 +216,8 @@ pub fn finalize_sentinel_genesis_shares(
     if !session.is_complete() {
         return Err(MultiDeviceError::SentinelGenesisIncomplete {
             required: session.request.policy.participant_count,
-            available: u8::try_from(session.participants.len())
-                .unwrap_or(u8::MAX)
-                .into(),
+            available: SentinelParticipantCount::try_from(session.participants.len())
+                .map_err(|_| MultiDeviceError::SentinelParticipantCountOverflow)?,
         });
     }
     if signing_public_key(initiator_signing_key) != session.request.initiator_signing_public_key
