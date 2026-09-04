@@ -26,7 +26,7 @@ pub mod field {
     use serde::{Deserialize, Serialize};
 
     /// Host-assigned identity for one field inside the observed scope.
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub struct Index {
         pub value: u32,
     }
@@ -243,11 +243,9 @@ pub fn plan(fields: &[field::Observation]) -> Result<Plan, Error> {
     if fields.len() > maximum_field_count.value as usize {
         return Err(Error::TooManyObservedFields);
     }
-    for (offset, field) in fields.iter().enumerate() {
-        if fields[..offset]
-            .iter()
-            .any(|candidate| candidate.field_index() == field.field_index())
-        {
+    let mut observed_field_indices = std::collections::HashSet::with_capacity(fields.len());
+    for field in fields {
+        if !observed_field_indices.insert(field.field_index()) {
             return Err(Error::DuplicateFieldIndex);
         }
     }
