@@ -306,8 +306,11 @@ test.describe('local folder backup provider', () => {
 
     await expect(page.getByTestId('vault-sync-conflict-dialog')).toBeVisible()
     await expect(page.getByTestId('vault-sync-conflict-dialog')).toContainText(
-      'Different vault on sync provider',
+      'Choose how to open this provider vault',
     )
+    await expect(
+      page.getByTestId('provider-vault-preserve-both'),
+    ).toContainText('Nook does not merge them automatically')
     await expect(
       page.getByTestId('sync-conflict-import-new-vault-btn'),
     ).toBeVisible()

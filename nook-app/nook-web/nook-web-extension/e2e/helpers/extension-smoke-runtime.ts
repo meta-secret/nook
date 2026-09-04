@@ -33,6 +33,7 @@ import {
   writeExtensionPairingStorage,
 } from './extension-pairing-storage'
 import { lockExtensionSession } from './paired-pin-extension'
+import { reportExtensionBrowserErrors } from './browser-errors'
 
 export {
   attachNookLogsForTest,
@@ -213,7 +214,7 @@ export async function getServiceWorker(context: BrowserContext) {
 
 export async function launchExtensionContext(userDataDir: string) {
   await mkdir(userDataDir, { recursive: true })
-  return chromium.launchPersistentContext(userDataDir, {
+  const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
     ...(chromiumExecutablePath
       ? { executablePath: chromiumExecutablePath }
@@ -223,6 +224,8 @@ export async function launchExtensionContext(userDataDir: string) {
       `--load-extension=${extensionDir}`,
     ],
   })
+  reportExtensionBrowserErrors(context)
+  return context
 }
 
 export async function setupPasskeyExtensionPopup(
