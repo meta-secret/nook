@@ -64,6 +64,7 @@ pub fn looks_like_one_time_code_auto_submit_signal(signal: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use super::super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
     use super::*;
 
     #[test]
@@ -148,7 +149,7 @@ mod tests {
     fn rejects_oversized_handler_signals_before_scanning() {
         let oversized = format!(
             "oninput=this.form.submit(){}",
-            "x".repeat(super::super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
+            "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES)
         );
         assert!(!looks_like_one_time_code_auto_submit_signal(&oversized));
     }

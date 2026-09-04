@@ -8,7 +8,7 @@ LL | pub extern crate external_api;
    = note: requested on the command line with `-W raw-numeric-public-api`
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:31:8
+  --> $DIR/fail.rs:33:8
    |
 LL | pub fn every_numeric_primitive(_value: EveryNumericPrimitive) {}
    |        ^^^^^^^^^^^^^^^^^^^^^^^
@@ -16,7 +16,7 @@ LL | pub fn every_numeric_primitive(_value: EveryNumericPrimitive) {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:33:8
+  --> $DIR/fail.rs:35:8
    |
 LL | pub fn direct_parameter(_id: u64) -> Option<Result<Vec<(u16, i32)>, f64>> {
    |        ^^^^^^^^^^^^^^^^
@@ -24,7 +24,7 @@ LL | pub fn direct_parameter(_id: u64) -> Option<Result<Vec<(u16, i32)>, f64>> {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:37:8
+  --> $DIR/fail.rs:39:8
    |
 LL | pub fn aliased_return() -> RawAlias {
    |        ^^^^^^^^^^^^^^
@@ -32,7 +32,7 @@ LL | pub fn aliased_return() -> RawAlias {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:41:8
+  --> $DIR/fail.rs:43:8
    |
 LL | pub fn tuple_parameter(_value: (UserId, u32)) -> [i16; 2] {
    |        ^^^^^^^^^^^^^^^
@@ -40,7 +40,7 @@ LL | pub fn tuple_parameter(_value: (UserId, u32)) -> [i16; 2] {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:45:8
+  --> $DIR/fail.rs:47:8
    |
 LL | pub fn borrowed_slice(_value: &[u8]) -> &UserId {
    |        ^^^^^^^^^^^^^^
@@ -48,7 +48,7 @@ LL | pub fn borrowed_slice(_value: &[u8]) -> &UserId {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:49:8
+  --> $DIR/fail.rs:51:8
    |
 LL | pub fn callback_parameter(_callback: fn(u16) -> i8, _pointer: *const i64) {}
    |        ^^^^^^^^^^^^^^^^^^
@@ -56,7 +56,7 @@ LL | pub fn callback_parameter(_callback: fn(u16) -> i8, _pointer: *const i64) {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:52:12
+  --> $DIR/fail.rs:54:12
    |
 LL |     pub fn raw_foreign(_raw: u32) -> i32;
    |            ^^^^^^^^^^^
@@ -64,7 +64,7 @@ LL |     pub fn raw_foreign(_raw: u32) -> i32;
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:56:8
+  --> $DIR/fail.rs:58:8
    |
 LL |     fn retry_count(&self) -> usize;
    |        ^^^^^^^^^^^
@@ -72,7 +72,7 @@ LL |     fn retry_count(&self) -> usize;
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:58:8
+  --> $DIR/fail.rs:60:8
    |
 LL |     fn default_timeout(&self) -> u64 {
    |        ^^^^^^^^^^^^^^^
@@ -80,7 +80,7 @@ LL |     fn default_timeout(&self) -> u64 {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:66:12
+  --> $DIR/fail.rs:68:12
    |
 LL |     pub fn exposed_method(&self, _count: Option<u32>) {}
    |            ^^^^^^^^^^^^^^
@@ -88,7 +88,7 @@ LL |     pub fn exposed_method(&self, _count: Option<u32>) {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:70:17
+  --> $DIR/fail.rs:72:17
    |
 LL |     pub direct: usize,
    |                 ^^^^^
@@ -96,7 +96,7 @@ LL |     pub direct: usize,
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:71:17
+  --> $DIR/fail.rs:73:17
    |
 LL |     pub nested: Wrapper<Option<[i8; 4]>>,
    |                 ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -104,7 +104,7 @@ LL |     pub nested: Wrapper<Option<[i8; 4]>>,
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:75:28
+  --> $DIR/fail.rs:77:28
    |
 LL | pub struct PublicTuple(pub isize, u32);
    |                            ^^^^^
@@ -112,7 +112,7 @@ LL | pub struct PublicTuple(pub isize, u32);
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:78:12
+  --> $DIR/fail.rs:80:12
    |
 LL |     Direct(f32),
    |            ^^^
@@ -120,7 +120,7 @@ LL |     Direct(f32),
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:79:22
+  --> $DIR/fail.rs:81:22
    |
 LL |     Nested { values: Result<Vec<u8>, i64> },
    |                      ^^^^^^^^^^^^^^^^^^^^
@@ -128,7 +128,7 @@ LL |     Nested { values: Result<Vec<u8>, i64> },
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:84:18
+  --> $DIR/fail.rs:86:18
    |
 LL |         pub raw: u64,
    |                  ^^^
@@ -136,7 +136,7 @@ LL |         pub raw: u64,
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:92:14
+  --> $DIR/fail.rs:94:14
    |
 LL | pub async fn async_raw_output() -> Option<RawAlias> {
    |              ^^^^^^^^^^^^^^^^
@@ -144,7 +144,7 @@ LL | pub async fn async_raw_output() -> Option<RawAlias> {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable struct or enum field
-  --> $DIR/fail.rs:97:17
+  --> $DIR/fail.rs:99:17
    |
 LL |     pub values: Box<RawSink>,
    |                 ^^^^^^^^^^^^
@@ -152,15 +152,15 @@ LL |     pub values: Box<RawSink>,
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:100:1
+  --> $DIR/fail.rs:102:1
    |
-LL | pub struct Defaulted<T = RawAlias>(pub UserId, std::marker::PhantomData<T>);
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+LL | pub struct Defaulted<T = RawAlias>(pub UserId, marker::PhantomData<T>);
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
    |
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:102:1
+  --> $DIR/fail.rs:104:1
    |
 LL | pub trait LocalRaw: Iterator<Item = RawAlias> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -168,7 +168,7 @@ LL | pub trait LocalRaw: Iterator<Item = RawAlias> {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:104:8
+  --> $DIR/fail.rs:106:8
    |
 LL | pub fn named_bound<T: LocalRaw>() {}
    |        ^^^^^^^^^^^
@@ -176,7 +176,7 @@ LL | pub fn named_bound<T: LocalRaw>() {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:106:8
+  --> $DIR/fail.rs:108:8
    |
 LL | pub fn external_named_bound<T: external_api::RawBound>() {}
    |        ^^^^^^^^^^^^^^^^^^^^
@@ -184,7 +184,7 @@ LL | pub fn external_named_bound<T: external_api::RawBound>() {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:108:8
+  --> $DIR/fail.rs:110:8
    |
 LL | pub fn unresolved_external_projection<D: external_api::RawAssociatedDecoder>() -> D::Error {
    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -192,7 +192,7 @@ LL | pub fn unresolved_external_projection<D: external_api::RawAssociatedDecoder
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:112:8
+  --> $DIR/fail.rs:114:8
    |
 LL | pub fn nested_unresolved_external_projection<D: external_api::RawAssociatedDecoder>()
    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -200,7 +200,7 @@ LL | pub fn nested_unresolved_external_projection<D: external_api::RawAssociated
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:117:8
+  --> $DIR/fail.rs:119:8
    |
 LL | pub fn nested_bound_projection<D: external_api::NestedRawAssociatedDecoder>() -> D::Error {
    |        ^^^^^^^^^^^^^^^^^^^^^^^
@@ -208,7 +208,7 @@ LL | pub fn nested_bound_projection<D: external_api::NestedRawAssociatedDecoder>
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:121:8
+  --> $DIR/fail.rs:123:8
    |
 LL | pub fn inline_projection<T: Iterator<Item = RawAlias>>() {}
    |        ^^^^^^^^^^^^^^^^^
@@ -216,7 +216,7 @@ LL | pub fn inline_projection<T: Iterator<Item = RawAlias>>() {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:123:8
+  --> $DIR/fail.rs:125:8
    |
 LL | pub fn where_projection<T>()
    |        ^^^^^^^^^^^^^^^^
@@ -224,7 +224,7 @@ LL | pub fn where_projection<T>()
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:129:1
+  --> $DIR/fail.rs:131:1
    |
 LL | / pub trait AssociatedBound {
 LL | |     type Values: Iterator<Item = RawAlias>;
@@ -234,7 +234,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:133:1
+  --> $DIR/fail.rs:135:1
    |
 LL | / pub trait AssociatedDefault {
 LL | |     type Value = RawAlias;
@@ -244,7 +244,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:137:1
+  --> $DIR/fail.rs:139:1
    |
 LL | / pub trait GenericAssociatedType {
 LL | |     type Values<T: Iterator<Item = RawAlias>>;
@@ -254,7 +254,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable generic declaration
-  --> $DIR/fail.rs:145:1
+  --> $DIR/fail.rs:147:1
    |
 LL | / pub trait EnclosingTrait<T>
 LL | | where
@@ -266,7 +266,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable impl generic declaration
-  --> $DIR/fail.rs:152:1
+  --> $DIR/fail.rs:154:1
    |
 LL | / impl<T> Wrapper<T>
 LL | | where
@@ -278,7 +278,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:159:9
+  --> $DIR/fail.rs:161:9
    |
 LL | pub use external_api::RawRecord;
    |         ^^^^^^^^^^^^^^^^^^^^^^^
@@ -286,7 +286,7 @@ LL | pub use external_api::RawRecord;
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:160:9
+  --> $DIR/fail.rs:162:9
    |
 LL | pub use external_api::raw_module::*;
    |         ^^^^^^^^^^^^^^^^^^^^^^^^
@@ -294,7 +294,7 @@ LL | pub use external_api::raw_module::*;
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:161:24
+  --> $DIR/fail.rs:163:24
    |
 LL | pub use external_api::{RawInherent, raw_opaque};
    |                        ^^^^^^^^^^^
@@ -302,7 +302,7 @@ LL | pub use external_api::{RawInherent, raw_opaque};
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable external reexport
-  --> $DIR/fail.rs:161:37
+  --> $DIR/fail.rs:163:37
    |
 LL | pub use external_api::{RawInherent, raw_opaque};
    |                                     ^^^^^^^^^^
@@ -310,7 +310,7 @@ LL | pub use external_api::{RawInherent, raw_opaque};
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:163:1
+  --> $DIR/fail.rs:165:1
    |
 LL | impl external_api::RawDefault for UserId {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -318,7 +318,7 @@ LL | impl external_api::RawDefault for UserId {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:164:1
+  --> $DIR/fail.rs:166:1
    |
 LL | impl external_api::GenericDefault<u64> for UserId {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -326,7 +326,7 @@ LL | impl external_api::GenericDefault<u64> for UserId {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:165:1
+  --> $DIR/fail.rs:167:1
    |
 LL | impl external_api::ReferenceRawDefault for &UserId {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -334,7 +334,7 @@ LL | impl external_api::ReferenceRawDefault for &UserId {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable inherited trait method
-  --> $DIR/fail.rs:166:1
+  --> $DIR/fail.rs:168:1
    |
 LL | impl LocalGenericDefault<u64> for Wrapper<UserId> {}
    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -342,7 +342,7 @@ LL | impl LocalGenericDefault<u64> for Wrapper<UserId> {}
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:171:8
+  --> $DIR/fail.rs:173:8
    |
 LL |     fn from(value: u64) -> Self {
    |        ^^^^
@@ -350,7 +350,7 @@ LL |     fn from(value: u64) -> Self {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable function signature
-  --> $DIR/fail.rs:181:8
+  --> $DIR/fail.rs:183:8
    |
 LL |     fn from_like(value: u64) -> Self {
    |        ^^^^^^^^^
@@ -358,7 +358,7 @@ LL |     fn from_like(value: u64) -> Self {
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable impl generic declaration
-  --> $DIR/fail.rs:188:1
+  --> $DIR/fail.rs:190:1
    |
 LL | / impl From<usize> for PredicateCount
 LL | | where
@@ -370,7 +370,7 @@ LL | | }
    = help: introduce a named domain type, or use a validated item-level expectation at a serialization, database, or FFI boundary
 
 warning: raw numeric primitive exposed in reachable impl generic declaration
-  --> $DIR/fail.rs:197:1
+  --> $DIR/fail.rs:199:1
    |
 LL | / impl From<PredicateCount> for usize
 LL | | where
