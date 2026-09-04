@@ -230,13 +230,10 @@ fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()
             && preflight_tasks.contains("preflight:dependency-policy:")
             && minds_tasks.contains("minds:dependency-policy:")
             && !root_tasks.contains("taskfile: fuzz/Taskfile.yml")
-            && root_tasks.contains("taskfile: agentic-ai/minds/Taskfile.yml"),
+            && root_tasks.contains("taskfile: agentic-ai/minds/Taskfile.yml")
+            && docker_tasks.find("task: dylint:dependency-policy")
+                < docker_tasks.find("task: rust:dependency-policy"),
         "each Rust workspace must own dependency-policy in its Taskfile"
-    );
-    assert!(
-        docker_tasks.find("task: dylint:dependency-policy")
-            < docker_tasks.find("task: rust:dependency-policy"),
-        "standalone Dylint policy must run before the platform workspace policy"
     );
     assert!(
         docker_tasks.contains("rust-ecosystem-dependency-policy")

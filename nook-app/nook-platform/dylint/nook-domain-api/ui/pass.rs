@@ -89,7 +89,7 @@ mod enabling_deny_is_not_suppression {}
 #[forbid(raw_numeric_public_api)]
 mod enabling_forbid_is_not_suppression {}
 
-pub async fn async_domain_output() -> Option<DomainAlias> {
+pub async fn async_domain_output<T: Iterator<Item = DomainAlias>>() -> Option<DomainAlias> {
     None
 }
 

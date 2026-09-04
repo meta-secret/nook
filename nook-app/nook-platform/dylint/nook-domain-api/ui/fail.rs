@@ -85,7 +85,7 @@ mod reachable_only {
     }
 }
 
-pub fn leak_reachable_type() -> reachable_only::Leaked {
+pub fn leak_reachable_type<T: Iterator<Item = RawAlias>>() -> reachable_only::Leaked {
     reachable_only::Leaked { raw: 0 }
 }
 

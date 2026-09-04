@@ -10,7 +10,7 @@ extern crate rustc_span;
 
 use clippy_utils::diagnostics::span_lint_and_help;
 use rustc_ast::attr::AttributeExt;
-use rustc_hir::def::Res;
+use rustc_hir::def::{DefKind, Res};
 use rustc_hir::intravisit::{self, FnKind, Visitor, VisitorExt};
 use rustc_hir::{
     AmbigArg, Attribute, CRATE_HIR_ID, FieldDef, FnDecl, ForeignItem, ForeignItemKind, HirId,
@@ -167,7 +167,7 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
         }
 
         let field_ty = cx.tcx.type_of(field.def_id).instantiate_identity();
-        if contains_raw_numeric(cx, field_ty) || hir_type_contains_raw_numeric(field.ty) {
+        if contains_raw_numeric(cx, field_ty) || hir_type_contains_raw_numeric(cx, field.ty) {
             emit_api_diagnostic(cx, field.ty.span, "reachable struct or enum field");
         }
     }
@@ -231,45 +231,52 @@ fn contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, ty: Ty<'tcx>) -> bool {
     }
 }
 
-#[derive(Default)]
-struct RawNumericHirVisitor {
-    found: bool,
-}
+struct RawNumericHirVisitor<'a, 'tcx>(&'a LateContext<'tcx>, bool);
 
-impl<'hir> Visitor<'hir> for RawNumericHirVisitor {
-    fn visit_ty(&mut self, hir_ty: &'hir HirTy<'hir, AmbigArg>) {
-        if matches!(
-            hir_ty.kind,
-            HirTyKind::Path(QPath::Resolved(_, path))
-                if matches!(
-                    path.res,
-                    Res::PrimTy(PrimTy::Int(_) | PrimTy::Uint(_) | PrimTy::Float(_))
-                )
-        ) {
-            self.found = true;
+impl<'tcx> Visitor<'tcx> for RawNumericHirVisitor<'_, 'tcx> {
+    fn visit_ty(&mut self, hir_ty: &'tcx HirTy<'tcx, AmbigArg>) {
+        let raw = match hir_ty.kind {
+            HirTyKind::Path(QPath::Resolved(_, path)) => match path.res {
+                Res::PrimTy(PrimTy::Int(_) | PrimTy::Uint(_) | PrimTy::Float(_)) => true,
+                Res::Def(DefKind::TyAlias, id) => {
+                    contains_raw_numeric(self.0, self.0.tcx.type_of(id).instantiate_identity())
+                }
+                _ => false,
+            },
+            _ => false,
+        };
+        if raw {
+            self.1 = true;
         } else {
             intravisit::walk_ty(self, hir_ty);
         }
     }
 }
 
-fn declaration_contains_raw_numeric(declaration: &FnDecl<'_>) -> bool {
-    let mut visitor = RawNumericHirVisitor::default();
+fn declaration_contains_raw_numeric<'tcx>(
+    cx: &LateContext<'tcx>,
+    local_def_id: LocalDefId,
+    declaration: &'tcx FnDecl<'tcx>,
+) -> bool {
+    let mut visitor = RawNumericHirVisitor(cx, false);
     visitor.visit_fn_decl(declaration);
-    visitor.found
+    if let Some(generics) = cx.tcx.hir_node_by_def_id(local_def_id).generics() {
+        visitor.visit_generics(generics);
+    }
+    visitor.1
 }
 
-fn hir_type_contains_raw_numeric(hir_ty: &HirTy<'_>) -> bool {
-    let mut visitor = RawNumericHirVisitor::default();
+fn hir_type_contains_raw_numeric<'tcx>(cx: &LateContext<'tcx>, hir_ty: &'tcx HirTy<'tcx>) -> bool {
+    let mut visitor = RawNumericHirVisitor(cx, false);
     visitor.visit_ty_unambig(hir_ty);
-    visitor.found
+    visitor.1
 }
 
-fn check_callable(
-    cx: &LateContext<'_>,
+fn check_callable<'tcx>(
+    cx: &LateContext<'tcx>,
     local_def_id: LocalDefId,
     span: Span,
-    declaration: &FnDecl<'_>,
+    declaration: &'tcx FnDecl<'tcx>,
 ) {
     if span.from_expansion() || !cx.effective_visibilities.is_reachable(local_def_id) {
         return;
@@ -281,7 +288,7 @@ fn check_callable(
         .inputs_and_output
         .iter()
         .any(|ty| contains_raw_numeric(cx, ty))
-        || declaration_contains_raw_numeric(declaration)
+        || declaration_contains_raw_numeric(cx, local_def_id, declaration)
     {
         let diagnostic_span = cx.tcx.def_ident_span(local_def_id).unwrap_or(span);
         emit_api_diagnostic(cx, diagnostic_span, "reachable function signature");
