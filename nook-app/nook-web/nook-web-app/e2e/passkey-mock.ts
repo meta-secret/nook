@@ -144,13 +144,12 @@ export function installMockPasskeyRuntime() {
           userHandle = bytesFrom(createdUserHandle)
           saveUserHandle()
         }
+        const [passkeyLabel = options.publicKey?.user?.name] = [
+          options.publicKey?.user?.displayName,
+        ]
         localStorage.setItem(
           'nook_e2e_passkey_label',
-          ((v) => (v ? v : ''))(
-            ((...[v = options.publicKey?.user?.name]) => v)(
-              options.publicKey?.user?.displayName,
-            ),
-          ),
+          ((v) => (v ? v : ''))(passkeyLabel),
         )
         const first = options.publicKey?.extensions?.prf?.eval?.first
         if (!(first instanceof Uint8Array)) {
