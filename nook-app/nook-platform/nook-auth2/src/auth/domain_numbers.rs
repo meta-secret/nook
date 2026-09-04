@@ -19,11 +19,8 @@ impl From<IdentityControlEpoch> for u64 {
     }
 }
 impl IdentityControlEpoch {
-    pub(crate) const fn next(self) -> Option<Self> {
-        match self.0.checked_add(1) {
-            Some(value) => Some(Self(value)),
-            None => None,
-        }
+    pub(crate) fn next(self) -> Option<Self> {
+        self.0.checked_add(1).map(Self)
     }
 }
 

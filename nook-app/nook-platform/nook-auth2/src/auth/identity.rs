@@ -501,7 +501,7 @@ impl IdentityRecord {
         Ok(())
     }
 
-    fn next_control_epoch(&self) -> MultiDeviceResult<IdentityControlEpoch> {
+    pub(crate) fn next_control_epoch(&self) -> MultiDeviceResult<IdentityControlEpoch> {
         self.control_epoch
             .next()
             .ok_or(MultiDeviceError::IdentityControlEpochOverflow)

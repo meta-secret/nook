@@ -417,6 +417,7 @@ impl IdentityDirectory {
         if matches!(&self.selection, IdentitySelection::Empty) {
             return self.create_identity(label, app_key, None);
         }
+        let next_control_epoch;
         {
             let selected = self.selected()?;
             if let Some(member) = selected
@@ -435,16 +436,18 @@ impl IdentityDirectory {
             if !selected.vault_deks.is_empty() {
                 return Err(MultiDeviceError::IdentityEnrollmentRequired);
             }
+            next_control_epoch = selected.next_control_epoch()?;
         }
         let selected = self.selected_mut()?;
-        let result = selected.add_prevalidated_member(IdentityMember {
+        selected.members.push(IdentityMember {
             app_id: app_key.app_id().clone(),
             auth_id: app_key.auth_id(),
             public_key: app_key.public_key(),
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
         });
-        result.map(|()| selected.identity_id.clone())
+        selected.control_epoch = next_control_epoch;
+        Ok(selected.identity_id.clone())
     }
 
     /// Drop directory ownership sealed to an inaccessible installation key.
