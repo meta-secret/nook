@@ -200,10 +200,13 @@ fn browser_timestamp() -> nook_core::IsoTimestamp {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
     use crate::storage::identity_record;
     use futures_util::future;
+    #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
+    use nook_core::AppKey;
     use nook_core::{
-        AppKey, DeviceId, DeviceIdentity, DeviceKeyProtectionSetup, IsoTimestamp,
+        DeviceId, DeviceIdentity, DeviceKeyProtectionSetup, IsoTimestamp,
         PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyObservedBrowser,
         PasskeyObservedPlatform, PasskeyTransport, StoreId,
     };
