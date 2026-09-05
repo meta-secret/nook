@@ -111,7 +111,12 @@ pub(super) fn partition_yaml_records(
         // Device-protection wrappers are browser-local state. Keep this final
         // serialization boundary defensive even if a caller accidentally
         // mixes an IndexedDB wrapper into the vault record collection.
-        if crate::parse_wrapped_device_identity(record.value.as_str()).is_ok() {
+        if is_local_device_wrapper(record.value.as_str()) {
+            if record.secret_type.is_some() {
+                return Err(VaultFormatError::InvalidAuthRecord(
+                    "browser-local device wrapper cannot be a typed vault secret".to_owned(),
+                ));
+            }
             continue;
         }
         if is_join_stored_record(record) {
@@ -150,6 +155,17 @@ pub(super) fn partition_yaml_records(
         }
     }
     Ok(vault)
+}
+
+fn is_local_device_wrapper(value: &str) -> bool {
+    let Ok(serde_json::Value::Object(fields)) = serde_json::from_str(value) else {
+        return false;
+    };
+    // Marker fields can be missing or malformed in corrupted/future local wrappers.
+    // Identify browser-local material by the remaining required structural fields.
+    let has_fields = |required: &[&str]| required.iter().all(|field| fields.contains_key(*field));
+    has_fields(&["credentialId", "userHandle", "prfInput", "kdf"])
+        || has_fields(&["kdf", "iterations", "salt", "cipher", "nonce", "ciphertext"])
 }
 
 #[allow(clippy::trivially_copy_pass_by_ref)]
@@ -265,11 +281,40 @@ mod tests {
             &[10u8; 32],
         )?;
         let local_record = crate::serialize_wrapped_device_identity(material.record())?;
-        let records = vec![StoredSecretRecord {
-            key: sid("device_identity_wrapped"),
-            secret_type: None,
-            value: StoredRecordPayload::from_trusted(local_record),
-        }];
+        let unsupported = local_record.replace(r#""version":4"#, r#""version":99"#);
+        let unknown = local_record.replace(
+            r#""protection":"passkey-wrapped-local""#,
+            r#""protection":"future-local-wrapper""#,
+        );
+        let missing = local_record.replace(r#""protection":"passkey-wrapped-local","#, "");
+        let numeric = local_record.replace(
+            "\"protection\":\"passkey-wrapped-local\"",
+            "\"protection\":7",
+        );
+        let invalid_typed = StoredSecretRecord {
+            key: sid("typed_wrapper_shape"),
+            secret_type: Some(SecretType::Login),
+            value: StoredRecordPayload::from_trusted(
+                r#"{"version":4,"protection":"passkey-wrapped-local","credentialId":7,"userHandle":"local","prfInput":"local","kdf":"HKDF-SHA256"}"#.to_owned(),
+            ),
+        };
+        assert_ne!(unsupported, local_record);
+        assert_ne!(unknown, local_record);
+        assert_ne!(missing, local_record);
+        assert_ne!(numeric, local_record);
+        assert!(matches!(
+            partition_yaml_records(&[invalid_typed]),
+            Err(VaultFormatError::InvalidAuthRecord(_))
+        ));
+        let records = [local_record, unsupported, unknown, missing, numeric]
+            .into_iter()
+            .enumerate()
+            .map(|(index, value)| StoredSecretRecord {
+                key: sid(&format!("device_identity_wrapped_{index}")),
+                secret_type: None,
+                value: StoredRecordPayload::from_trusted(value),
+            })
+            .collect::<Vec<_>>();
         let architecture = VaultArchitecture {
             device_mode: DeviceMode::AntiHacker,
             ..VaultArchitecture::default()
@@ -288,6 +333,8 @@ mod tests {
         assert!(stored.contains("device_mode: anti-hacker"));
         assert!(stored.contains("secrets: []"));
         assert!(!stored.contains("passkey-wrapped-local"));
+        assert!(!stored.contains("future-local-wrapper"));
+        assert!(!stored.contains("version: 99"));
         assert!(!stored.contains("credentialId"));
         assert!(!stored.contains("ciphertext"));
         assert!(!stored.contains("AGE-SECRET-KEY-"));
