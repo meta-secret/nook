@@ -18,7 +18,8 @@ pub const MAX_PASSWORD_LENGTH: PasswordCharacterCount = PasswordCharacterCount::
 #[tsify(into_wasm_abi, from_wasm_abi)]
 #[allow(clippy::struct_excessive_bools)]
 pub struct PasswordGenerationOptions {
-    pub length: u32,
+    #[tsify(type = "number")]
+    pub length: PasswordCharacterCount,
     pub lowercase: bool,
     pub uppercase: bool,
     pub numbers: bool,
@@ -28,7 +29,7 @@ pub struct PasswordGenerationOptions {
 impl Default for PasswordGenerationOptions {
     fn default() -> Self {
         Self {
-            length: 20,
+            length: 20.into(),
             lowercase: true,
             uppercase: true,
             numbers: true,
@@ -40,7 +41,7 @@ impl Default for PasswordGenerationOptions {
 impl PasswordGenerationOptions {
     pub fn validate(self) -> PasswordResult<()> {
         if !(usize::from(MIN_PASSWORD_LENGTH)..=usize::from(MAX_PASSWORD_LENGTH))
-            .contains(&(self.length as usize))
+            .contains(&usize::from(self.length))
         {
             return Err(PasswordError::LengthOutOfRange {
                 min: MIN_PASSWORD_LENGTH,
@@ -75,7 +76,7 @@ pub fn generate_password(options: PasswordGenerationOptions) -> PasswordResult<S
     options.validate()?;
     let charset = options.charset();
     let charset_bytes = charset.as_bytes();
-    let password_length = options.length as usize;
+    let password_length = usize::from(options.length);
     let mut random = vec![0u8; password_length * 4];
     fill(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
 
@@ -98,23 +99,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn secure_defaults_are_owned_by_the_domain() {
+    fn secure_defaults_preserve_numeric_json() -> anyhow::Result<()> {
+        let options = PasswordGenerationOptions::default();
         assert_eq!(
-            PasswordGenerationOptions::default(),
+            options,
             PasswordGenerationOptions {
-                length: 20,
+                length: 20.into(),
                 lowercase: true,
                 uppercase: true,
                 numbers: true,
                 symbols: true,
             }
         );
+        let encoded = serde_json::to_string(&options)?;
+        assert_eq!(
+            encoded,
+            r#"{"length":20,"lowercase":true,"uppercase":true,"numbers":true,"symbols":true}"#
+        );
+        assert_eq!(
+            serde_json::from_str::<PasswordGenerationOptions>(&encoded)?,
+            options
+        );
+        Ok(())
     }
 
     #[test]
     fn generates_password_with_requested_length() -> anyhow::Result<()> {
         let password = generate_password(PasswordGenerationOptions {
-            length: 24,
+            length: 24.into(),
             lowercase: true,
             uppercase: true,
             numbers: true,
@@ -127,7 +139,7 @@ mod tests {
     #[test]
     fn rejects_empty_charset() -> anyhow::Result<()> {
         let err = generate_password(PasswordGenerationOptions {
-            length: 16,
+            length: 16.into(),
             lowercase: false,
             uppercase: false,
             numbers: false,
@@ -142,7 +154,7 @@ mod tests {
     #[test]
     fn rejects_invalid_length() -> anyhow::Result<()> {
         let err = generate_password(PasswordGenerationOptions {
-            length: 4,
+            length: 4.into(),
             lowercase: true,
             uppercase: false,
             numbers: false,
@@ -157,7 +169,7 @@ mod tests {
     #[test]
     fn uses_only_selected_charsets() -> anyhow::Result<()> {
         let password = generate_password(PasswordGenerationOptions {
-            length: 32,
+            length: 32.into(),
             lowercase: true,
             uppercase: false,
             numbers: true,
@@ -174,7 +186,7 @@ mod tests {
     #[test]
     fn accepts_min_and_max_length() -> anyhow::Result<()> {
         let min = generate_password(PasswordGenerationOptions {
-            length: u32::try_from(usize::from(MIN_PASSWORD_LENGTH))?,
+            length: MIN_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
@@ -183,7 +195,7 @@ mod tests {
         assert_eq!(min.len(), usize::from(MIN_PASSWORD_LENGTH));
 
         let max = generate_password(PasswordGenerationOptions {
-            length: u32::try_from(usize::from(MAX_PASSWORD_LENGTH))?,
+            length: MAX_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
@@ -196,7 +208,7 @@ mod tests {
     #[test]
     fn rejects_length_above_max() -> anyhow::Result<()> {
         let err = generate_password(PasswordGenerationOptions {
-            length: u32::try_from(usize::from(MAX_PASSWORD_LENGTH))? + 1,
+            length: (usize::from(MAX_PASSWORD_LENGTH) + 1).into(),
             lowercase: true,
             uppercase: false,
             numbers: false,
@@ -211,7 +223,7 @@ mod tests {
     #[test]
     fn symbols_only_charset() -> anyhow::Result<()> {
         let password = generate_password(PasswordGenerationOptions {
-            length: 16,
+            length: 16.into(),
             lowercase: false,
             uppercase: false,
             numbers: false,
