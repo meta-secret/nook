@@ -68,7 +68,7 @@ Harness profile directories must not mirror or redefine these cards.
 - **[system-coherence-synthesizer.md](system-coherence-synthesizer.md)**
   - Purpose: Reconcile verified code and Cortex evidence without repository access or write authority
 - **[rust-coding.md](../../dev-core/dynamic-skills/rust-coding.md)**
-  - Purpose: Keep Rust domain models precise with enums and per-variant structs instead of booleans, string tags, sentinel values, and cross-workflow `Option<T>` fields. Outside `use` declarations, limit paths to two inline segments and retain meaningful owning module or type context.
+  - Purpose: Keep Rust domain models precise with enums and per-variant structs instead of booleans, string tags, sentinel values, and cross-workflow `Option<T>` fields. Require one non-receiver parameter and named request aggregates for multi-value APIs and command handlers. Outside `use` declarations, limit paths to two inline segments and retain meaningful owning module or type context.
 - **[rust-macro-minimization.md](../../dev-core/dynamic-skills/rust-macro-minimization.md)**
   - Purpose: Prohibit repository-defined Rust macros; prefer explicit structs, implementations, functions, and control flow over hidden code generation
 - **[rust-typescript-code-separation.md](../../dev-core/dynamic-skills/rust-typescript-code-separation.md)**
@@ -87,6 +87,8 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose:
     - Require named domain types and named unions instead of raw primitives or
       inline alternatives.
+    - Require validated construction, operation ownership, and typed state
+      transitions.
     - Nest same-prefix closed vocabularies into parent objects plus operation
       enums.
     - Use field enums instead of string sets.
