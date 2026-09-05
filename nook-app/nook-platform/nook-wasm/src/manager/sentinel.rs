@@ -646,7 +646,23 @@ mod tests {
         let keys = nook_core::generate_vault_keys()?;
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
         let records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
-        let yaml = nook_core::serialize_stored(&records, nook_core::VaultFormat::Yaml)?;
+        let architecture = VaultArchitecture::sentinel_personal(
+            DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            &records,
+            &nook_core::VaultUnlock::Keys,
+            &[],
+            nook_core::VaultStoreIdentityRef::Assigned("store_AAAAAAAAAAA"),
+            nook_core::VaultNameRef::Unnamed,
+            nook_core::VaultVersionWrite::Initial,
+            &architecture,
+        )?;
         let invalid = yaml.as_str().replacen("\"version\":1", "\"version\":3", 1);
         assert_ne!(invalid, yaml.as_str());
 
