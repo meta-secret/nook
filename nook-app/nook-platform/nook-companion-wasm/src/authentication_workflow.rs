@@ -1,3 +1,5 @@
+use nook_companion_core::WebsiteLoginOptions;
+use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
@@ -19,9 +21,10 @@ pub fn decode_authentication_workflow_runtime_response(
 #[wasm_bindgen]
 pub fn decode_website_login_match_availability(
     response: nook_companion_core::WebsiteLoginOptionsWireValue,
-) -> Result<nook_companion_core::WebsiteLoginMatchAvailability, wasm_bindgen::JsError> {
-    nook_companion_core::decode_website_login_match_availability(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+) -> Result<nook_companion_core::WebsiteLoginMatchAvailability, JsError> {
+    WebsiteLoginOptions::from_wire(response)
+        .and_then(WebsiteLoginOptions::into_match_availability)
+        .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]

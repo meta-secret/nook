@@ -178,18 +178,14 @@ pub use vault_host_policy::{
 };
 pub use website_login_options_response::{
     WebsiteLoginAccountOption, WebsiteLoginOptions, WebsiteLoginOptionsDecodeError,
-    WebsiteLoginOptionsWireValue, decode_website_login_match_availability,
-    decode_website_login_options, decode_website_login_options_json,
+    WebsiteLoginOptionsWireValue,
 };
 pub use website_login_save_offer_response::{
     WebsiteLoginSaveActionResponse, WebsiteLoginSaveOfferResponse,
     WebsiteLoginSaveOfferResponseDecodeError, WebsiteLoginSavePendingResponse,
-    decode_website_login_save_action_response, decode_website_login_save_offer_response,
-    decode_website_login_save_pending_response,
 };
 pub use website_passkey_account_list::{
     WebsitePasskeyAccount, WebsitePasskeyAccountList, WebsitePasskeyAccountListKind,
-    WebsitePasskeyAccountListWire, decode_website_passkey_account_list,
-    decode_website_passkey_account_list_json,
+    WebsitePasskeyAccountListWire,
 };
 pub use website_passkey_proposal::{WebsitePasskeyProposal, propose_website_passkey};
