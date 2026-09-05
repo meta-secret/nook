@@ -231,8 +231,42 @@ prohibited. This is a universal P1 rule.
 
 ## Agent communication
 
-This format applies to Gizmo Prime, every real Team Agent or subagent, and
-every user-visible skill-driven action.
+Default to quiet execution for Gizmo Prime, Team Agents, subagents, and skills.
+Follow higher-priority host instructions when they require progress updates.
+
+### Required actions
+
+- **Meaningful changes**
+  - Report a new actionable blocker, material risk, or required user decision.
+  - Report a consequential change to the expected outcome.
+  - Explain the impact and any action the recipient needs to take.
+  - Update a reported issue only when its impact changes or it resolves.
+  - Answer explicit requests for status or detail.
+  - Keep updates required by higher-priority host instructions concise.
+- **Completion and handoffs**
+  - Finish with the outcome and essential verification evidence.
+  - Include unresolved blockers or material limitations.
+  - Keep worker handoffs to the result, evidence references, and blockers.
+  - Include only context the recipient needs for the next action.
+  - Preserve required delivery records in their owning workflow.
+- **Tool evidence**
+  - Request narrow fields and relevant log excerpts.
+  - Retain sufficient evidence to diagnose failures and verify completion.
+  - Link to detailed evidence instead of repeating it in chat.
+
+### Prohibited actions
+
+- Do not repeat unchanged state or previously reported evidence.
+- Do not narrate routine commands, successful checks, polling, or waits.
+- Do not emit separate updates for routine skill loading or application.
+- Do not announce each activity or bounded wait merely because it occurred.
+- Do not repeat task history in handoffs or final responses.
+- Do not suppress failures or reduce required checks to save tokens.
+- Do not treat quiet execution as permission to skip delivery records.
+
+### Message format
+
+Apply this format only when a message is warranted under the rules above.
 
 Put only the existing metadata fields in a fenced `text` block:
 
@@ -286,31 +320,14 @@ and do not rename, reorder, or remove its time, PR, actor, or action fields.
   - `AI` covers agent coordination and AI-owned implementation.
   - `SKILL` covers a skill load, application, required action, or pause.
   - `DOCS/CORTEX` covers documentation and Cortex work.
-  - `CMD` identifies a command that is starting or still running.
-  - `WAIT` identifies a bounded wait and its elapsed time.
-  - `STATE` summarizes the current result, blocker, or next action.
+  - `CMD` identifies a consequential command event.
+  - `WAIT` identifies a consequential change during a wait.
+  - `STATE` summarizes a consequential result, blocker, or resolution.
 - Place no spaces around the colons between time, PR, actor, and action type.
-- State what changed, why it was done, or what current state was observed.
-- Show a command before waiting for it to finish.
-  - Prefer the task entrypoint, such as `task loom:verify`.
-  - Truncate a command longer than roughly 20 to 30 characters when its full
-    spelling would obscure the status.
-  - Report the command's completion, failure, or interruption with elapsed
-    time.
-- During a long command or external wait, emit a `WAIT` update at least once
-  every five minutes.
-- When there is no meaningful new evidence, limit the description to the exact
-  operation identifier, elapsed time, and `in progress`.
-- Identify the exact operation in every `WAIT` update.
-  - For local Task execution, name the exact `task <task-name>` command.
-  - For hosted execution, name the GitHub run or job ID and include its
-    clickable URL.
-  - A preceding `CMD` line does not replace this requirement.
-- Give every bounded wait a start update and a completion or timeout update.
+- State what changed and its impact.
+- Include an operation identifier or evidence URL when needed to act on it.
 - Apply the format to progress updates, questions, handoffs, and final
   responses.
-- Give each separate activity its own fenced metadata block and ordinary
-  Markdown description.
 - Do not add the activity format to code, logs, repository content, or commit
   messages.
 - A strict machine-readable protocol response is exempt from the entire
