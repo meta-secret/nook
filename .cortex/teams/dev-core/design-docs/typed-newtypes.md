@@ -262,6 +262,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [ ] `VaultProjection` maps — `BTreeMap<SecretId, …>` instead of `String` keys
 - [x] `device_key_protection` — validated `DeviceKeyProtectionVersion`
 - [x] `sentinel_genesis` — validated `SentinelGenesisVersion`
+- [x] `sentinel_genesis` command — typed participant count and threshold
 - [x] `sentinel_unlock` — validated `SentinelUnlockVersion`
 - [x] `sentinel_onboarding` — validated `SentinelOnboardingVersion`
 - [x] `identity` — `IdentityControlEpoch`
