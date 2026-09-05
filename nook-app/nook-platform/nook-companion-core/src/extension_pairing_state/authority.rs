@@ -1,7 +1,9 @@
 //! Exact-key classification of untrusted browser pairing storage.
 
-use super::{ExtensionPairingRecord, StoredExtensionPairingGrant, grant_storage_key};
+use super::{ExtensionPairingRecord, StoredExtensionPairingGrant};
+use crate::extension_pairing_state as pairing;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use tsify::Tsify;
 
 mod response;
@@ -72,11 +74,10 @@ pub enum ExtensionGrantAuthority {
 impl ExtensionGrantAuthorityRequest {
     #[must_use]
     pub fn classify(self) -> ExtensionGrantAuthority {
-        let Ok(serde_json::Value::Object(mut entries)) = serde_json::from_str(&self.stored_json.0)
-        else {
+        let Ok(Value::Object(mut entries)) = serde_json::from_str(&self.stored_json.0) else {
             return ExtensionGrantAuthority::InvalidStoredAuthority;
         };
-        let key = grant_storage_key(&self.vault_store_id.0);
+        let key = pairing::grant_storage_key(&self.vault_store_id.0);
         let Some(value) = entries.remove(&key) else {
             return match self.active_vault {
                 ExtensionActiveVaultScope::Active(active)
@@ -112,6 +113,8 @@ impl ExtensionGrantAuthority {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use pairing::{ExtensionConnectScope, ExtensionPairingVaultType};
+    use serde_json::Map;
     use std::collections::HashMap;
 
     #[derive(Deserialize)]
@@ -133,7 +136,7 @@ mod tests {
 
         fn grant() -> StoredExtensionPairingGrant {
             StoredExtensionPairingGrant {
-                vault_type: super::super::ExtensionPairingVaultType::Simple,
+                vault_type: ExtensionPairingVaultType::Simple,
                 device_id: "device-test".to_owned(),
                 device_public_key: "age1test".to_owned(),
                 device_signing_public_key: "signing-test".to_owned(),
@@ -141,7 +144,7 @@ mod tests {
                 vault_store_id: "store-test".to_owned(),
                 vault_name: "Personal".to_owned(),
                 approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
-                scopes: vec![super::super::ExtensionConnectScope::PasswordFilling],
+                scopes: vec![ExtensionConnectScope::PasswordFilling],
                 sync_provider_count: 1,
                 event_count: 2,
                 event_log_heads: vec!["event-2".to_owned()],
@@ -197,12 +200,12 @@ mod tests {
     #[test]
     fn valid_exact_target_ignores_malformed_unrelated_row() -> anyhow::Result<()> {
         let grant = Fixture::grant();
-        let mut entries = serde_json::Map::new();
+        let mut entries = Map::new();
         entries.insert(
-            grant_storage_key("store-test"),
+            pairing::grant_storage_key("store-test"),
             serde_json::to_value(&grant)?,
         );
-        entries.insert("unrelated".to_owned(), serde_json::Value::Null);
+        entries.insert("unrelated".to_owned(), Value::Null);
         assert_eq!(
             Fixture::request(serde_json::to_string(&entries)?).classify(),
             ExtensionGrantAuthority::Authorized(Box::new(AuthorizedExtensionGrant { grant }))
@@ -217,7 +220,7 @@ mod tests {
         let mut incomplete = Fixture::grant();
         incomplete.scopes.clear();
         for grant in [mismatched, incomplete] {
-            let entries = HashMap::from([(grant_storage_key("store-test"), grant)]);
+            let entries = HashMap::from([(pairing::grant_storage_key("store-test"), grant)]);
             assert_eq!(
                 Fixture::request(serde_json::to_string(&entries)?).classify(),
                 ExtensionGrantAuthority::InvalidStoredAuthority

@@ -1,14 +1,14 @@
 use nook_companion_core::ExtensionGrantAuthority;
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 pub fn decode_extension_grant_authority_response(
     response: nook_companion_core::GrantAuthorityResponseJson,
     requested: nook_companion_core::PairingVaultId,
-) -> Result<ExtensionGrantAuthority, wasm_bindgen::JsError> {
+) -> Result<ExtensionGrantAuthority, JsError> {
     response
         .decode(requested)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+        .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
