@@ -42,8 +42,8 @@ pub(crate) fn sync_result_session(
 pub(crate) fn apply_member_records(
     state: &mut nook_core::VaultMetaState,
     member_records: &[nook_core::StoredSecretRecord],
-) {
-    nook_core::apply_member_records(state, member_records);
+) -> Result<(), NookError> {
+    Ok(nook_core::apply_member_records(state, member_records)?)
 }
 
 pub(crate) fn wasm_iso_timestamp() -> String {
@@ -70,8 +70,8 @@ pub(crate) fn load_stored_vault(
 
 pub(crate) fn pending_join_records(
     records: &[nook_core::StoredSecretRecord],
-) -> Vec<nook_core::JoinRequest> {
-    nook_core::list_join_requests(records)
+) -> Result<Vec<nook_core::JoinRequest>, NookError> {
+    Ok(nook_core::list_join_requests(records)?)
 }
 
 pub(crate) fn vault_member_records(
@@ -86,8 +86,8 @@ pub(crate) fn vault_member_records(
 
 pub(crate) fn pending_joins_to_vec(
     records: &[nook_core::StoredSecretRecord],
-) -> Vec<crate::NookJoinRequest> {
-    joins_to_vec(pending_join_records(records))
+) -> Result<Vec<crate::NookJoinRequest>, NookError> {
+    Ok(joins_to_vec(pending_join_records(records)?))
 }
 
 pub(crate) fn vault_members_to_vec(

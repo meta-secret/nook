@@ -91,7 +91,7 @@ pub fn content_requires_genesis(content: &str, force_genesis: bool) -> VaultResu
     }
     let format = detect_stored_format(content)?;
     let records = deserialize_stored(content, format)?;
-    Ok(!vault_has_multi_device_records(&records))
+    Ok(!vault_has_multi_device_records(&records)?)
 }
 
 /// Pre-flight connect status tag for the web layer.
@@ -104,10 +104,10 @@ pub fn access_status_for_vault_content(
     }
     let format = detect_stored_format(content)?;
     let records = deserialize_stored(content, format)?;
-    if !vault_has_multi_device_records(&records) {
+    if !vault_has_multi_device_records(&records)? {
         return Ok(VaultAccessStatus::NewVault);
     }
-    Ok(assess_connect_access(&records, identity).into())
+    Ok(assess_connect_access(&records, identity)?.into())
 }
 
 /// Decrypt and hydrate an in-memory session from stored vault YAML.
@@ -132,7 +132,7 @@ pub fn unlock_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultRes
     let secrets_key = resolve_secrets_key(&stored_records, identity)?;
     let members_key = resolve_members_key(&stored_records, identity)?;
     Ok(UnlockedVault {
-        meta: VaultMetaState::from_stored_records(&stored_records),
+        meta: VaultMetaState::from_stored_records(&stored_records)?,
         secrets_key,
         members_key,
     })
@@ -142,7 +142,7 @@ fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()>
     for record in records {
         if record.secret_type.is_none()
             && matches!(
-                VaultMetaRecord::classify(record),
+                VaultMetaRecord::classify(record)?,
                 VaultMetaRecord::Secret(..)
             )
         {
@@ -175,7 +175,7 @@ pub fn load_sentinel_vault(
     architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_sentinel_vault_keys(&stored_records, identities)?;
     hydrate_loaded_vault(UnlockedVault {
-        meta: VaultMetaState::from_stored_records(&stored_records),
+        meta: VaultMetaState::from_stored_records(&stored_records)?,
         secrets_key: keys.secrets_key,
         members_key: keys.members_key,
     })
@@ -196,7 +196,7 @@ pub fn load_sentinel_vault_from_opened(
     architecture.validate_records(&stored_records)?;
     let keys = crate::reconstruct_sentinel_vault_keys_from_opened(&stored_records, opened)?;
     hydrate_loaded_vault(UnlockedVault {
-        meta: VaultMetaState::from_stored_records(&stored_records),
+        meta: VaultMetaState::from_stored_records(&stored_records)?,
         secrets_key: keys.secrets_key,
         members_key: keys.members_key,
     })
@@ -204,7 +204,7 @@ pub fn load_sentinel_vault_from_opened(
 
 fn hydrate_loaded_vault(unlocked: UnlockedVault) -> VaultResult<LoadedVault> {
     let crypto = VaultCrypto::new(&unlocked.secrets_key)?;
-    let user_records = user_stored_records(&unlocked.meta.to_stored_records());
+    let user_records = user_stored_records(&unlocked.meta.to_stored_records())?;
     let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
     Ok(LoadedVault {
         database: db,
@@ -215,13 +215,19 @@ fn hydrate_loaded_vault(unlocked: UnlockedVault) -> VaultResult<LoadedVault> {
 }
 
 /// Replace member roster rows in the typed session meta state.
-pub fn apply_member_records(state: &mut VaultMetaState, member_records: &[StoredSecretRecord]) {
-    state.members.clear();
+pub fn apply_member_records(
+    state: &mut VaultMetaState,
+    member_records: &[StoredSecretRecord],
+) -> VaultResult<()> {
+    let mut members = state.members.clone();
+    members.clear();
     for record in member_records {
-        if let VaultMetaRecord::Member(auth_id, payload) = VaultMetaRecord::classify(record) {
-            state.members.insert(auth_id, payload);
+        if let VaultMetaRecord::Member(auth_id, payload) = VaultMetaRecord::classify(record)? {
+            members.insert(auth_id, payload);
         }
     }
+    state.members = members;
+    Ok(())
 }
 
 /// Read unlock metadata from vault YAML without decrypting secrets.

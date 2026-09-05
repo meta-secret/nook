@@ -72,7 +72,7 @@ pub fn reconcile_yaml_sync(
 
     let format = crate::detect_stored_format(content)?;
     let fresh_records = crate::deserialize_stored(content, format)?;
-    merge_remote_join_records(state, &fresh_records);
+    merge_remote_join_records(state, &fresh_records)?;
     let loaded = load_stored_vault(content, identity)?;
     let metadata = capture_vault_unlock_from_content(content)?;
     Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
