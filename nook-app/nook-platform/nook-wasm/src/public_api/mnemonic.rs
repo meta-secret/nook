@@ -1,4 +1,5 @@
 use super::wasm_bindgen;
+use nook_core::Bip39MnemonicWordCount;
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,8 +73,8 @@ pub fn join_bip39_words(words: Vec<String>) -> String {
 #[must_use]
 pub fn infer_bip39_mnemonic_length(text: &str) -> NookBip39MnemonicLength {
     match nook_core::infer_bip39_mnemonic_length(text) {
-        Some(12) => NookBip39MnemonicLength::Words12,
-        Some(24) => NookBip39MnemonicLength::Words24,
+        Some(Bip39MnemonicWordCount::WORDS_12) => NookBip39MnemonicLength::Words12,
+        Some(Bip39MnemonicWordCount::WORDS_24) => NookBip39MnemonicLength::Words24,
         Some(_) | None => NookBip39MnemonicLength::Unsupported,
     }
 }
