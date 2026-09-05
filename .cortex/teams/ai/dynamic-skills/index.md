@@ -25,6 +25,18 @@ Harness profile directories must not mirror or redefine these cards.
       belong to a meaningful owner.
     - Reject free functions, module-only ownership, and catch-all utility
       containers.
+- **[domain-api-integrity.md](../../../shared/dynamic-skills/domain-api-integrity.md)**
+  - Purpose: **P1 / universal domain API rule**
+    - Require named domain types, concrete values, one-parameter request APIs,
+      validated capabilities, typed failures, and exhaustive states.
+    - Require explicit schema versions and migration decisions at persisted and
+      wire boundaries.
+- **[secret-lifecycle.md](../../security/dynamic-skills/secret-lifecycle.md)**
+  - Purpose: **P1 / cross-language secret-handling rule**
+    - Give every secret an explicit owner, purpose, lifetime, and destruction
+      event.
+    - Keep durable secret behavior in Rust/WASM and browser plaintext narrowly
+      scoped in TypeScript/Svelte.
 - **[cortex-writer.md](cortex-writer.md)**
   - **Purpose:** **P1 / critical `.cortex` writing rule**
     - Split long dense sentences into short sentences, bullets, and lists.
