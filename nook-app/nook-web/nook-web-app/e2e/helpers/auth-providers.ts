@@ -377,12 +377,16 @@ async function activeAuthProviderStateKey(page: Page): Promise<string> {
         __nookVault?: {
           readonly hasManager: boolean
           requireManager(): { readonly device_id: string }
+          enqueueStorage<T>(operation: () => T): Promise<T>
         }
       }
     ).__nookVault
-    if (!vault?.hasManager) return 'providers'
-    const appId = vault.requireManager().device_id
-    return appId ? `providers:${appId}` : 'providers'
+    if (!vault) return 'providers'
+    return vault.enqueueStorage(() => {
+      if (!vault.hasManager) return 'providers'
+      const appId = vault.requireManager().device_id
+      return appId ? `providers:${appId}` : 'providers'
+    })
   })
 }
 

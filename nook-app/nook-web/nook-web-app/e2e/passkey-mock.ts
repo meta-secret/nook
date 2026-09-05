@@ -89,119 +89,119 @@ export function installMockPasskeyRuntime() {
     configurable: true,
     value: publicKeyCredential,
   })
+  class MockCredentialsContainer {
+    async create(options: {
+      publicKey?: {
+        challenge?: ArrayBuffer | ArrayBufferView
+        user?: {
+          displayName?: string
+          id?: ArrayBuffer | ArrayBufferView
+          name?: string
+        }
+        extensions?: {
+          prf?: { eval?: { first?: ArrayBuffer | ArrayBufferView } }
+        }
+      }
+    }) {
+      const mode = localStorage.getItem('nook_e2e_passkey_mode')
+      if (mode === 'unavailable') {
+        throw new Error(
+          'PASSKEY_UNAVAILABLE: passkeys are unavailable in this browser profile',
+        )
+      }
+      if (mode === 'cancel') {
+        throw new DOMException(
+          'The operation was cancelled.',
+          'NotAllowedError',
+        )
+      }
+      if (mode === 'delayed-cancel') {
+        await new Promise((resolve) => window.setTimeout(resolve, 100))
+        throw new DOMException(
+          'The operation was cancelled.',
+          'NotAllowedError',
+        )
+      }
+      if (mode === 'not-supported-error') {
+        throw new DOMException(
+          'The requested public-key algorithm is not supported.',
+          'NotSupportedError',
+        )
+      }
+      if (mode === 'security-error') {
+        throw new DOMException('This is an invalid domain.', 'SecurityError')
+      }
+      const createdUserHandle = options.publicKey?.user?.id
+      if (!(options.publicKey?.challenge instanceof Uint8Array)) {
+        throw new TypeError('WebAuthn creation challenge must be binary')
+      }
+      if (!(createdUserHandle instanceof Uint8Array)) {
+        throw new TypeError('WebAuthn creation user id must be binary')
+      }
+      if (createdUserHandle) {
+        userHandle = bytesFrom(createdUserHandle)
+        saveUserHandle()
+      }
+      const [passkeyLabel = options.publicKey?.user?.name] = [
+        options.publicKey?.user?.displayName,
+      ]
+      localStorage.setItem(
+        'nook_e2e_passkey_label',
+        ((v) => (v ? v : ''))(passkeyLabel),
+      )
+      const first = options.publicKey?.extensions?.prf?.eval?.first
+      if (!(first instanceof Uint8Array)) {
+        throw new TypeError('WebAuthn creation PRF input must be binary')
+      }
+      if (!first) throw new Error('Missing E2E PRF create input')
+      return result(first, mode !== 'unsupported', true)
+    }
+    async get(options: {
+      publicKey?: {
+        challenge?: ArrayBuffer | ArrayBufferView
+        extensions?: {
+          prf?: {
+            eval?: { first?: ArrayBuffer | ArrayBufferView }
+            evalByCredential?: Record<
+              string,
+              { first?: ArrayBuffer | ArrayBufferView }
+            >
+          }
+        }
+      }
+    }) {
+      const mode = localStorage.getItem('nook_e2e_passkey_mode')
+      if (mode === 'unavailable') {
+        throw new Error(
+          'PASSKEY_UNAVAILABLE: passkeys are unavailable in this browser profile',
+        )
+      }
+      if (mode === 'cancel') {
+        throw new DOMException(
+          'The operation was cancelled.',
+          'NotAllowedError',
+        )
+      }
+      const prf = options.publicKey?.extensions?.prf
+      if (!(options.publicKey?.challenge instanceof Uint8Array)) {
+        throw new TypeError('WebAuthn request challenge must be binary')
+      }
+      const [
+        first = Object.values(((v) => (v ? v : {}))(prf?.evalByCredential))[0]
+          ?.first,
+      ] = [prf?.eval?.first]
+      if (!(first instanceof Uint8Array)) {
+        throw new TypeError('WebAuthn request PRF input must be binary')
+      }
+      if (!first) throw new Error('Missing E2E PRF get input')
+      // A credential that accepted PRF during registration keeps supporting
+      // it when it is used to unlock the vault. Returning `false` here makes
+      // the browser boundary reject an otherwise valid PRF result.
+      return result(first, mode !== 'unsupported', false)
+    }
+  }
   Object.defineProperty(navigator, 'credentials', {
     configurable: true,
-    value: {
-      create: async (options: {
-        publicKey?: {
-          challenge?: ArrayBuffer | ArrayBufferView
-          user?: {
-            displayName?: string
-            id?: ArrayBuffer | ArrayBufferView
-            name?: string
-          }
-          extensions?: {
-            prf?: { eval?: { first?: ArrayBuffer | ArrayBufferView } }
-          }
-        }
-      }) => {
-        const mode = localStorage.getItem('nook_e2e_passkey_mode')
-        if (mode === 'unavailable') {
-          throw new Error(
-            'PASSKEY_UNAVAILABLE: passkeys are unavailable in this browser profile',
-          )
-        }
-        if (mode === 'cancel') {
-          throw new DOMException(
-            'The operation was cancelled.',
-            'NotAllowedError',
-          )
-        }
-        if (mode === 'delayed-cancel') {
-          await new Promise((resolve) => window.setTimeout(resolve, 100))
-          throw new DOMException(
-            'The operation was cancelled.',
-            'NotAllowedError',
-          )
-        }
-        if (mode === 'not-supported-error') {
-          throw new DOMException(
-            'The requested public-key algorithm is not supported.',
-            'NotSupportedError',
-          )
-        }
-        if (mode === 'security-error') {
-          throw new DOMException('This is an invalid domain.', 'SecurityError')
-        }
-        const createdUserHandle = options.publicKey?.user?.id
-        if (!(options.publicKey?.challenge instanceof Uint8Array)) {
-          throw new TypeError('WebAuthn creation challenge must be binary')
-        }
-        if (!(createdUserHandle instanceof Uint8Array)) {
-          throw new TypeError('WebAuthn creation user id must be binary')
-        }
-        if (createdUserHandle) {
-          userHandle = bytesFrom(createdUserHandle)
-          saveUserHandle()
-        }
-        localStorage.setItem(
-          'nook_e2e_passkey_label',
-          ((v) => (v ? v : ''))(
-            ((...[v = options.publicKey?.user?.name]) => v)(
-              options.publicKey?.user?.displayName,
-            ),
-          ),
-        )
-        const first = options.publicKey?.extensions?.prf?.eval?.first
-        if (!(first instanceof Uint8Array)) {
-          throw new TypeError('WebAuthn creation PRF input must be binary')
-        }
-        if (!first) throw new Error('Missing E2E PRF create input')
-        return result(first, mode !== 'unsupported', true)
-      },
-      get: async (options: {
-        publicKey?: {
-          challenge?: ArrayBuffer | ArrayBufferView
-          extensions?: {
-            prf?: {
-              eval?: { first?: ArrayBuffer | ArrayBufferView }
-              evalByCredential?: Record<
-                string,
-                { first?: ArrayBuffer | ArrayBufferView }
-              >
-            }
-          }
-        }
-      }) => {
-        const mode = localStorage.getItem('nook_e2e_passkey_mode')
-        if (mode === 'unavailable') {
-          throw new Error(
-            'PASSKEY_UNAVAILABLE: passkeys are unavailable in this browser profile',
-          )
-        }
-        if (mode === 'cancel') {
-          throw new DOMException(
-            'The operation was cancelled.',
-            'NotAllowedError',
-          )
-        }
-        const prf = options.publicKey?.extensions?.prf
-        if (!(options.publicKey?.challenge instanceof Uint8Array)) {
-          throw new TypeError('WebAuthn request challenge must be binary')
-        }
-        const [
-          first = Object.values(((v) => (v ? v : {}))(prf?.evalByCredential))[0]
-            ?.first,
-        ] = [prf?.eval?.first]
-        if (!(first instanceof Uint8Array)) {
-          throw new TypeError('WebAuthn request PRF input must be binary')
-        }
-        if (!first) throw new Error('Missing E2E PRF get input')
-        // A credential that accepted PRF during registration keeps supporting
-        // it when it is used to unlock the vault. Returning `false` here makes
-        // the browser boundary reject an otherwise valid PRF result.
-        return result(first, mode !== 'unsupported', false)
-      },
-    },
+    value: new MockCredentialsContainer(),
   })
 }

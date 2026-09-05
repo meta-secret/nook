@@ -780,13 +780,12 @@ export async function waitForLoadedSyncProviders(
               }
             }
           ).__nookVault
+          const [providerCount = vault?.syncProviders?.length] = [
+            vault?.syncProviderCount,
+          ]
           return {
             authenticated: Boolean(vault?.isAuthenticated),
-            count: ((v) => (v ? v : 0))(
-              ((...[v = vault?.syncProviders?.length]) => v)(
-                vault?.syncProviderCount,
-              ),
-            ),
+            count: ((v) => (v ? v : 0))(providerCount),
           }
         })
         if (state.authenticated && state.count < minCount) {

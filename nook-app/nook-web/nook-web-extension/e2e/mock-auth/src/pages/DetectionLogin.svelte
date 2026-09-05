@@ -28,7 +28,7 @@
 
 <main>
   <h1>Sign in</h1>
-  <form id="login-form">
+  <form id="login-form" method="post" action="/auth/login">
     <label
       >Email <input autocomplete="username" name="email" type="email" /></label
     >

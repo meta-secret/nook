@@ -163,6 +163,7 @@ type ExtensionSessionIngressStage =
 const sensitiveSessionFields: Readonly<
   Record<ExtensionSessionMessageType, readonly string[]>
 > = {
+  [ExtensionSessionMessageType.ClassifyGrantAuthority]: ['stored_json'],
   [ExtensionSessionMessageType.Reset]: [],
   [ExtensionSessionMessageType.MigrateAuthProviders]: [],
   [ExtensionSessionMessageType.Status]: [],

@@ -53,6 +53,7 @@ pub use secrets::{
     NookExternalEventLogRecords,
 };
 pub use session::{NookEventLogSyncIssueResult, NookVaultManager, NookVaultNameState};
+mod grant_authority;
 
 pub(in crate::manager) use session::{
     CeremonyState, EventLogSessionState, EventLogSyncIssueState, SearchCatalogRestore,
