@@ -126,7 +126,8 @@ pub use nook_app_common::{
 pub use nook_auth2::{
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
     SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection,
-    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
+    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus,
+    SentinelUnlockVersion,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{

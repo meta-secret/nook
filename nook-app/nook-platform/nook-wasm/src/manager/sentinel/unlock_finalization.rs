@@ -306,18 +306,19 @@ mod tests {
         let mut manager = fixture.manager();
         {
             let completion = PendingUnlockCompletion::new(&mut manager);
-            match completion
+            completion
                 .manager
                 .apply_vault_keys("invalid", "partially-installed")
-            {
-                Err(_) => {
-                    assert_eq!(completion.manager.vault.members_key, "partially-installed");
-                    assert_eq!(completion.manager.vault.secrets_key, "invalid");
-                }
-                Ok(()) => return Err(anyhow::anyhow!("invalid vault key must be rejected")),
-            }
+                .err()
+                .ok_or_else(|| anyhow::anyhow!("invalid vault key must be rejected"))?;
+            assert_eq!(completion.manager.vault.members_key, "partially-installed");
+            assert_eq!(completion.manager.vault.secrets_key, "invalid");
         }
         fixture.assert_reset(&manager);
+        assert_eq!(
+            manager.sentinel_unlock_status(),
+            nook_core::SentinelVaultUnlockState::AwaitingShares
+        );
         Ok(())
     }
 
