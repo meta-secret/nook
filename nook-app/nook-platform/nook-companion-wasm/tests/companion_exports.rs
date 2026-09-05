@@ -34,7 +34,7 @@ fn imported_event_log(event_count: u32) -> nook_companion_core::ImportedExtensio
 
 #[wasm_bindgen_test]
 fn backup_and_persistence_collection_exports_preserve_core_results() {
-    assert!(contains_backup_code_candidate("ABCD-EFGH-IJKL"));
+    assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
     assert!(!contains_backup_code_candidate("ordinary sentence"));
 
     let area = ExtensionPersistenceArea::EventLog;
