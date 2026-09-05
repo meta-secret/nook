@@ -215,7 +215,7 @@ impl NookSecretRecord {
     pub fn size_bytes(&self) -> u32 {
         match &self.record.data {
             SecretValue::FileAttachment(value) => {
-                u32::try_from(value.size_bytes).unwrap_or(u32::MAX)
+                u32::try_from(u64::from(value.size_bytes)).unwrap_or(u32::MAX)
             }
             _ => 0,
         }

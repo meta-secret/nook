@@ -28,7 +28,7 @@ fn sample_yaml(version: u64, armor_line: &str) -> anyhow::Result<String> {
         &VaultUnlock::Keys,
         &[],
         VaultStoreIdentityRef::Assigned(STORE_ID),
-        VaultVersionWrite::Version(version),
+        VaultVersionWrite::Version(version.into()),
     )?
     .into_inner())
 }
@@ -54,7 +54,10 @@ fn local_save_then_fan_out_replicates_to_all_providers() -> anyhow::Result<()> {
     assert_eq!(actions["provider-beta"], VaultSyncAction::PushLocal);
     assert_eq!(remotes["provider-alpha"].blob(), v3);
     assert_eq!(remotes["provider-beta"].blob(), v3);
-    assert_eq!(read_vault_version(remotes["provider-alpha"].blob())?, 3);
+    assert_eq!(
+        u64::from(read_vault_version(remotes["provider-alpha"].blob())?),
+        3
+    );
     Ok(())
 }
 
@@ -67,7 +70,7 @@ fn remote_ahead_adopts_into_local_on_reconcile() -> anyhow::Result<()> {
     let action = reconcile_vault_stores(&mut local, &mut remote)?;
     assert_eq!(action, VaultSyncAction::AdoptRemote);
     assert_eq!(local.blob(), remote_blob);
-    assert_eq!(read_vault_version(local.blob())?, 4);
+    assert_eq!(u64::from(read_vault_version(local.blob())?), 4);
     assert_eq!(
         compare_vault_sync(local.blob(), remote.blob())?,
         VaultSyncAction::Unchanged
@@ -202,8 +205,8 @@ fn sequential_fan_out_stops_updating_local_when_remote_is_newer() -> anyhow::Res
     assert_eq!(actions["stale"], VaultSyncAction::PushLocal);
     assert_eq!(actions["ahead"], VaultSyncAction::AdoptRemote);
     assert_eq!(local.blob(), remotes["ahead"].blob());
-    assert_eq!(read_vault_version(local.blob())?, 5);
-    assert_eq!(read_vault_version(remotes["stale"].blob())?, 5);
+    assert_eq!(u64::from(read_vault_version(local.blob())?), 5);
+    assert_eq!(u64::from(read_vault_version(remotes["stale"].blob())?), 5);
     assert_eq!(
         read_vault_store_id(local.blob())?,
         VaultStoreIdentity::Assigned(store_id.to_owned())

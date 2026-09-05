@@ -16,7 +16,7 @@ fn restore_secret_search_catalog(
             .map_err(NookError::from)
             .and_then(|ciphertext| {
                 let mut plaintext = crypto.decrypt_value(&ciphertext)?;
-                let result = catalog.restore_bucket_json(bucket, plaintext.as_str());
+                let result = catalog.restore_bucket_json(bucket.into(), plaintext.as_str());
                 plaintext.zeroize_plaintext();
                 result.map_err(NookError::from)
             });
@@ -61,7 +61,7 @@ fn encrypt_secret_search_catalog_buckets(
         if pending_mask & (1_u64 << bucket) == 0 {
             continue;
         }
-        let ciphertext = match catalog.bucket_json(bucket)? {
+        let ciphertext = match catalog.bucket_json(bucket.into())? {
             SearchCatalogBucketPayload::Json(mut json) => {
                 let ciphertext = crypto.encrypt_value(&json)?;
                 json.zeroize();
@@ -115,6 +115,7 @@ impl NookVaultManager {
             )?;
             self.vault.search_catalog_dirty = false;
             for bucket in outcome.changed_buckets() {
+                let bucket = u8::from(bucket);
                 self.vault.search_catalog_pending_bucket_mask |= 1_u64 << bucket;
             }
             tracing::info!(

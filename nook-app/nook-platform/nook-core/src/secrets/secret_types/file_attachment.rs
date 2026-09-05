@@ -10,6 +10,29 @@ const FILE_ATTACHMENT_MAX_TITLE_CHARS: usize = 256;
 const FILE_ATTACHMENT_MAX_FILE_NAME_CHARS: usize = 255;
 const FILE_ATTACHMENT_MAX_MIME_TYPE_CHARS: usize = 127;
 
+/// Declared byte length of a file attachment's decoded content.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FileAttachmentByteCount(u64);
+
+impl From<u64> for FileAttachmentByteCount {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<FileAttachmentByteCount> for u64 {
+    fn from(value: FileAttachmentByteCount) -> Self {
+        value.0
+    }
+}
+
+impl Zeroize for FileAttachmentByteCount {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
 /// Encrypted file blob stored as a vault secret.
 ///
 /// Binary content is standard base64 so the browser can round-trip
@@ -21,7 +44,7 @@ pub struct FileAttachmentSecret {
     pub title: String,
     pub file_name: String,
     pub mime_type: String,
-    pub size_bytes: u64,
+    pub size_bytes: FileAttachmentByteCount,
     pub content_base64: String,
 }
 
@@ -92,7 +115,7 @@ impl FileAttachmentSecret {
                 "file exceeds the {FILE_ATTACHMENT_MAX_BYTES}-byte limit"
             ));
         }
-        if u64::try_from(decoded.len()).unwrap_or(u64::MAX) != self.size_bytes {
+        if u64::try_from(decoded.len()).unwrap_or(u64::MAX) != u64::from(self.size_bytes) {
             return invalid_file_attachment("sizeBytes does not match decoded content length");
         }
         if STANDARD.encode(&decoded) != self.content_base64 {
@@ -133,7 +156,7 @@ mod tests {
             title: "Recovery PDF".to_owned(),
             file_name: "recovery.pdf".to_owned(),
             mime_type: "application/pdf".to_owned(),
-            size_bytes: content.len() as u64,
+            size_bytes: (content.len() as u64).into(),
             content_base64: STANDARD.encode(content),
         }
     }
@@ -146,6 +169,7 @@ mod tests {
         assert_eq!(decoded, value);
         assert!(yaml.as_str().contains("fileName: recovery.pdf"));
         assert!(yaml.as_str().contains("mimeType: application/pdf"));
+        assert!(yaml.as_str().contains("sizeBytes: 16"));
         Ok(())
     }
 
@@ -153,12 +177,12 @@ mod tests {
     fn file_attachment_validation_rejects_oversize_and_mismatched_length() {
         let mut oversize = file_attachment();
         let big = vec![7u8; FILE_ATTACHMENT_MAX_BYTES + 1];
-        oversize.size_bytes = big.len() as u64;
+        oversize.size_bytes = (big.len() as u64).into();
         oversize.content_base64 = STANDARD.encode(&big);
         assert!(oversize.validate().is_err());
 
         let mut mismatched = file_attachment();
-        mismatched.size_bytes = 1;
+        mismatched.size_bytes = 1.into();
         assert!(mismatched.validate().is_err());
 
         let mut path_name = file_attachment();
@@ -180,5 +204,6 @@ mod tests {
         };
         assert!(value.content_base64.is_empty());
         assert!(value.file_name.is_empty());
+        assert_eq!(u64::from(value.size_bytes), 0);
     }
 }

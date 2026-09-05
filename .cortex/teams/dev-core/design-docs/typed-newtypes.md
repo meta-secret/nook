@@ -233,7 +233,7 @@ enum VersionedVaultEventBody {
 
 Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
 Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
-`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, and `nook-event-log` are activated.
+`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, `nook-event-log`, and `nook-core` are activated.
 Later crates migrate in dependency order.
 Activate a migrated crate only while the Dylint library is loaded:
 
@@ -276,8 +276,11 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] seed phrases — `Bip39MnemonicWordCount` for inferred supported lengths
 - [x] seed phrases — `Bip39WordSuggestionLimit` for completion result bounds
 - [x] seed phrases — `Bip39WordSequenceExpectedCount` for membership checks
+- [x] secret imports — typed result counts, QR batch counts, and rejected 1PUX versions
+- [x] secret presentation — typed seed-word, backup-code, and attachment-byte counts
 - [x] authenticator codes — validated `TotpPeriod`
 - [x] authenticator codes — `TotpRemainingSeconds`
+- [x] authenticator codes — `TotpUnixSeconds` for code-generation instants
 - [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
 - [ ] `multi_device` — `SentinelShareVersion`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`
@@ -285,6 +288,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `vault_sync` — `VaultSyncUnixMilliseconds` for successful-sync timestamps
 - [x] `vault diagnostics` — `VaultEncryptedPayloadCount` for event payload counts
 - [x] search catalog — `SecretSearchCatalogChangeCount` for reconciliation outcomes
+- [x] Core vault and sync APIs — typed paging, policy counts, timings, versions, and Sentinel policy values
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
 - [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`

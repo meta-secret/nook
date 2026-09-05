@@ -136,9 +136,9 @@ impl OnboardingType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct SentinelPolicy {
-    pub threshold: u8,
-    pub required_participants: u8,
-    pub ready_participants: u8,
+    pub threshold: crate::SentinelThreshold,
+    pub required_participants: crate::SentinelParticipantCount,
+    pub ready_participants: crate::SentinelParticipantCount,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -151,12 +151,12 @@ pub enum SentinelConfiguration {
 
 impl SentinelConfiguration {
     #[must_use]
-    pub const fn policy_or_default(self) -> SentinelPolicy {
+    pub fn policy_or_default(self) -> SentinelPolicy {
         match self {
             Self::Disabled => SentinelPolicy {
-                threshold: 2,
-                required_participants: 3,
-                ready_participants: 0,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 0.into(),
             },
             Self::Enabled(policy) => policy,
         }
@@ -173,9 +173,9 @@ impl SentinelConfiguration {
 impl Default for SentinelPolicy {
     fn default() -> Self {
         Self {
-            threshold: 2,
-            required_participants: 3,
-            ready_participants: 0,
+            threshold: 2.into(),
+            required_participants: 3.into(),
+            ready_participants: 0.into(),
         }
     }
 }
@@ -183,19 +183,22 @@ impl Default for SentinelPolicy {
 impl SentinelPolicy {
     #[must_use]
     pub fn is_ready(self) -> bool {
-        self.threshold > 1
-            && self.threshold <= self.required_participants
-            && self.ready_participants >= self.required_participants
+        let threshold = u8::from(self.threshold);
+        let required = u8::from(self.required_participants);
+        threshold > 1 && threshold <= required && u8::from(self.ready_participants) >= required
     }
 
     pub fn validate(self) -> ValidationResult<()> {
-        if self.threshold <= 1 || self.threshold > self.required_participants {
+        let threshold = u8::from(self.threshold);
+        let required = u8::from(self.required_participants);
+        let ready = u8::from(self.ready_participants);
+        if threshold <= 1 || threshold > required {
             return Err(ValidationError::InvalidSentinelPolicy);
         }
-        if self.required_participants > 16 {
+        if required > 16 {
             return Err(ValidationError::InvalidSentinelPolicy);
         }
-        if self.ready_participants > self.required_participants {
+        if ready > required {
             return Err(ValidationError::InvalidSentinelPolicy);
         }
         Ok(())
@@ -247,9 +250,9 @@ impl VaultArchitecture {
             sentinel: match vault_type {
                 VaultType::Simple => SentinelConfiguration::Disabled,
                 VaultType::Sentinel => SentinelConfiguration::Enabled(SentinelPolicy {
-                    threshold: 2,
-                    required_participants: 2,
-                    ready_participants: 0,
+                    threshold: 2.into(),
+                    required_participants: 2.into(),
+                    ready_participants: 0.into(),
                 }),
             },
         };
@@ -333,7 +336,7 @@ impl VaultArchitecture {
                     return Err(ValidationError::SentinelVaultHasFullKeyEnvelopes);
                 }
                 if shares.is_empty() {
-                    return if self.sentinel.policy()?.ready_participants == 0 {
+                    return if u8::from(self.sentinel.policy()?.ready_participants) == 0 {
                         Ok(())
                     } else {
                         Err(ValidationError::InvalidSentinelShareSet)
@@ -341,13 +344,13 @@ impl VaultArchitecture {
                 }
 
                 let policy = self.sentinel.policy()?;
-                if shares.len() != usize::from(policy.required_participants)
+                if shares.len() != usize::from(u8::from(policy.required_participants))
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
-                        u8::from(share.threshold) != policy.threshold
-                            || u8::from(share.required_participants) != policy.required_participants
+                        share.threshold != policy.threshold
+                            || share.required_participants != policy.required_participants
                             || u8::from(share.share_index) == 0
-                            || u8::from(share.share_index) > policy.required_participants
+                            || u8::from(share.share_index) > u8::from(policy.required_participants)
                     })
                 {
                     return Err(ValidationError::InvalidSentinelShareSet);
@@ -435,9 +438,9 @@ mod tests {
         assert_eq!(
             sentinel.sentinel,
             SentinelConfiguration::Enabled(SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 0,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 0.into(),
             })
         );
         Ok(())
@@ -448,9 +451,9 @@ mod tests {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 3,
-                ready_participants: 0,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 0.into(),
             },
         );
 
@@ -502,9 +505,9 @@ mod tests {
         let not_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 3,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 2.into(),
             },
         );
         not_ready.validate()?;
@@ -513,9 +516,9 @@ mod tests {
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 3,
-                ready_participants: 3,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 3.into(),
             },
         );
         ready.validate()?;
@@ -524,9 +527,9 @@ mod tests {
         let invalid = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 1,
-                required_participants: 1,
-                ready_participants: 1,
+                threshold: 1.into(),
+                required_participants: 1.into(),
+                ready_participants: 1.into(),
             },
         );
         assert!(invalid.validate().is_err());
@@ -542,9 +545,9 @@ mod tests {
         let ready = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
             },
         );
 
@@ -564,9 +567,9 @@ mod tests {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
             },
         );
         let shares = crate::create_sentinel_share_records(
@@ -592,9 +595,9 @@ mod tests {
         let stale_readiness = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 1,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 1.into(),
             },
         );
         assert_eq!(
@@ -640,9 +643,9 @@ mod tests {
         let sentinel = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 0,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 0.into(),
             },
         );
 

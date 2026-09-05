@@ -102,6 +102,13 @@ impl VaultEventSession {
         Ok(event_id)
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: accepts canonical signed event payload bytes from remote replicas"
+        )
+    )]
     pub fn union_remote(&mut self, remote_events: &[(EventId, Vec<u8>)]) -> VaultResult<()> {
         union_remote_events(&mut self.store, remote_events, &self.store_id)?;
         self.set_heads_from_graph()

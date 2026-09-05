@@ -513,7 +513,7 @@ mod tests {
                     issuer: "Namecheap".to_owned(),
                     account: "bynull".to_owned(),
                     website_url: String::new(),
-                    backup_code_count: 0,
+                    backup_code_count: 0.into(),
                 },
             },
         ];
@@ -546,7 +546,7 @@ mod tests {
                     issuer: "Google".to_owned(),
                     account: "alice@example.com".to_owned(),
                     website_url: String::new(),
-                    backup_code_count: 0,
+                    backup_code_count: 0.into(),
                 },
             },
         ];
@@ -568,7 +568,7 @@ mod tests {
                 issuer: "Totally Unknown Service".to_owned(),
                 account: "bynull".to_owned(),
                 website_url: String::new(),
-                backup_code_count: 0,
+                backup_code_count: 0.into(),
             },
         }];
         assert_eq!(

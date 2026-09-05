@@ -48,7 +48,7 @@ impl VaultSyncAction {
 /// Parsed revision metadata from an on-disk vault blob.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VaultRevision {
-    pub version: u64,
+    pub version: crate::VaultVersion,
     /// SHA-256 hex digest of trimmed UTF-8 content (for conflict detection).
     pub content_hash: String,
     pub store: VaultRevisionStore,
@@ -65,7 +65,7 @@ pub fn read_vault_revision(stored: &str) -> VaultSyncResult<VaultRevision> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
         return Ok(VaultRevision {
-            version: 0,
+            version: 0.into(),
             content_hash: content_hash(trimmed),
             store: VaultRevisionStore::EmptyVault,
         });
@@ -159,8 +159,8 @@ pub fn compare_vault_sync_with_common(
         if !local_matches_base && !remote_matches_base {
             tracing::warn!(
                 scope = "vault-sync",
-                local_version = local_rev.version,
-                remote_version = remote_rev.version,
+                local_version = %local_rev.version,
+                remote_version = %remote_rev.version,
                 "vault blobs diverged from last common content hash; refusing scalar-version winner"
             );
             return Ok(VaultSyncAction::Conflict);
@@ -179,8 +179,8 @@ pub fn compare_vault_sync_with_common(
 
     tracing::debug!(
         scope = "vault-sync",
-        local_version = local_rev.version,
-        remote_version = remote_rev.version,
+        local_version = %local_rev.version,
+        remote_version = %remote_rev.version,
         action = action.label(),
         "reconciled vault versions"
     );

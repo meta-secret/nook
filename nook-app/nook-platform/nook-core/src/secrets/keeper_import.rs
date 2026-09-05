@@ -26,8 +26,8 @@ pub enum KeeperImportError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeeperImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 #[derive(Clone)]
@@ -351,8 +351,8 @@ pub fn plan_keeper_import(csv_text: &str) -> Result<KeeperImportPlan, KeeperImpo
 
     Ok(KeeperImportPlan {
         items: collection.items,
-        source_count: collection.source_count,
-        skipped_unsupported: collection.skipped_unsupported,
+        source_count: collection.source_count.into(),
+        skipped_unsupported: collection.skipped_unsupported.into(),
     })
 }
 
@@ -371,8 +371,8 @@ mod tests {
         );
 
         let plan = plan_keeper_import(csv)?;
-        assert_eq!(plan.source_count, 2);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 2);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(
             plan.items[0],
             SecretValue::Login(LoginSecret {
@@ -408,8 +408,8 @@ mod tests {
         );
 
         let plan = plan_keeper_import(csv)?;
-        assert_eq!(plan.source_count, 3);
-        assert_eq!(plan.skipped_unsupported, 1);
+        assert_eq!(usize::from(plan.source_count), 3);
+        assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
             plan.items[0],

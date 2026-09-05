@@ -1,6 +1,8 @@
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::vault_wire::{StoredVaultBlob, StoredVaultYaml as VaultYamlBlob};
-use crate::{PasswordUnlockEntry, StoredSecretRecord, VaultArchitecture, VaultUnlock};
+use crate::{
+    PasswordUnlockEntry, StoredSecretRecord, VaultArchitecture, VaultSchemaVersion, VaultUnlock,
+};
 
 mod model;
 mod vault_yaml;
@@ -65,9 +67,9 @@ pub fn deserialize_stored(
 }
 
 /// Maximum projection YAML schema this build reads and writes.
-pub const CURRENT_VAULT_SCHEMA_VERSION: u32 = 1;
+pub const CURRENT_VAULT_SCHEMA_VERSION: VaultSchemaVersion = VaultSchemaVersion::CURRENT;
 
-fn ensure_supported_vault_schema(version: u32) -> VaultFormatResult<()> {
+fn ensure_supported_vault_schema(version: VaultSchemaVersion) -> VaultFormatResult<()> {
     if version != CURRENT_VAULT_SCHEMA_VERSION {
         return Err(VaultFormatError::UnsupportedSchemaVersion {
             found: version,
@@ -79,20 +81,20 @@ fn ensure_supported_vault_schema(version: u32) -> VaultFormatResult<()> {
 
 /// Schema version written on new projection caches.
 #[must_use]
-pub fn current_vault_schema_version() -> u32 {
+pub fn current_vault_schema_version() -> VaultSchemaVersion {
     CURRENT_VAULT_SCHEMA_VERSION
 }
 
 /// Cheap parse of top-level `schema_version` (missing → `1`).
-pub fn read_vault_schema_version(stored: &str) -> VaultFormatResult<u32> {
+pub fn read_vault_schema_version(stored: &str) -> VaultFormatResult<VaultSchemaVersion> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
-        return Ok(1);
+        return Ok(1.into());
     }
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
-    Ok(vault.schema_version)
+    Ok(vault.schema_version.into())
 }
 
 pub fn serialize_stored_yaml(records: &[StoredSecretRecord]) -> VaultFormatResult<VaultYamlBlob> {
@@ -189,10 +191,10 @@ pub fn serialize_stored_yaml_with_unlock_name_architecture(
 ) -> VaultFormatResult<VaultYamlBlob> {
     architecture.validate_records(records)?;
     let mut vault = partition_yaml_records(records)?;
-    vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION;
+    vault.schema_version = CURRENT_VAULT_SCHEMA_VERSION.into();
     vault.vault_version = match vault_version {
         VaultVersionWrite::Initial => 0,
-        VaultVersionWrite::Version(version) => version,
+        VaultVersionWrite::Version(version) => version.into(),
     };
     vault.store_id = match resolve_store_id_for_write(store_id)? {
         VaultStoreIdentity::Assigned(store_id) => Some(store_id),
@@ -219,7 +221,7 @@ pub fn read_vault_name(stored: &str) -> VaultFormatResult<VaultName> {
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
-    ensure_supported_vault_schema(vault.schema_version)?;
+    ensure_supported_vault_schema(vault.schema_version.into())?;
     Ok(match vault.name {
         Some(name) => resolve_vault_name_for_write(VaultNameRef::Named(&name)),
         None => VaultName::Unnamed,
@@ -235,7 +237,7 @@ pub fn set_vault_name(stored: &str, name: &str) -> VaultFormatResult<VaultYamlBl
     detect_stored_format(trimmed)?;
     let mut vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseName)?;
-    ensure_supported_vault_schema(vault.schema_version)?;
+    ensure_supported_vault_schema(vault.schema_version.into())?;
     vault.name = match resolve_vault_name_for_write(VaultNameRef::Named(name)) {
         VaultName::Named(name) => Some(name),
         VaultName::Unnamed => None,
@@ -246,16 +248,16 @@ pub fn set_vault_name(stored: &str, name: &str) -> VaultFormatResult<VaultYamlBl
 }
 
 /// Read the monotonic revision counter from on-disk YAML.
-pub fn read_vault_version(stored: &str) -> VaultFormatResult<u64> {
+pub fn read_vault_version(stored: &str) -> VaultFormatResult<crate::VaultVersion> {
     let trimmed = stored.trim();
     if trimmed.is_empty() {
-        return Ok(0);
+        return Ok(0.into());
     }
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseVersion)?;
-    ensure_supported_vault_schema(vault.schema_version)?;
-    Ok(vault.vault_version)
+    ensure_supported_vault_schema(vault.schema_version.into())?;
+    Ok(vault.vault_version.into())
 }
 
 fn vault_unlock_is_keys(unlock: &VaultUnlock) -> bool {
@@ -281,7 +283,7 @@ pub fn read_vault_password_entries(stored: &str) -> VaultFormatResult<Vec<Passwo
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParsePasswordEntries)?;
-    ensure_supported_vault_schema(vault.schema_version)?;
+    ensure_supported_vault_schema(vault.schema_version.into())?;
     Ok(extract_password_entries(&vault))
 }
 
@@ -294,7 +296,7 @@ pub fn read_vault_store_id(stored: &str) -> VaultFormatResult<VaultStoreIdentity
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseStoreId)?;
-    ensure_supported_vault_schema(vault.schema_version)?;
+    ensure_supported_vault_schema(vault.schema_version.into())?;
     match vault.store_id {
         Some(id) => Ok(VaultStoreIdentity::Assigned(
             crate::validate_store_id(&id)?.to_string(),
@@ -313,7 +315,7 @@ pub fn read_vault_architecture(stored: &str) -> VaultFormatResult<VaultArchitect
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseArchitecture)?;
-    ensure_supported_vault_schema(vault.schema_version)?;
+    ensure_supported_vault_schema(vault.schema_version.into())?;
     vault.architecture.validate()?;
     Ok(vault.architecture)
 }
@@ -334,7 +336,7 @@ pub fn deserialize_stored_yaml_with_unlock(
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(|_| VaultFormatError::YamlMissingSections)?;
 
-    ensure_supported_vault_schema(vault.schema_version)?;
+    ensure_supported_vault_schema(vault.schema_version.into())?;
 
     let unlock = vault.unlock.clone();
 
@@ -367,7 +369,7 @@ pub fn read_vault_unlock(stored: &str) -> VaultFormatResult<VaultUnlock> {
     detect_stored_format(trimmed)?;
     let vault: StoredVaultYaml =
         serde_yaml::from_str(trimmed).map_err(VaultFormatError::YamlParseUnlock)?;
-    ensure_supported_vault_schema(vault.schema_version)?;
+    ensure_supported_vault_schema(vault.schema_version.into())?;
     Ok(vault.unlock)
 }
 
@@ -547,7 +549,7 @@ mod tests {
             &VaultUnlock::Keys,
             slice::from_ref(&entry),
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
-            VaultVersionWrite::Version(1),
+            VaultVersionWrite::Version(1.into()),
         )?;
         assert!(!yaml.as_str().contains("unlock:"));
         assert!(yaml.as_str().contains("password_entries:"));
@@ -590,13 +592,13 @@ mod tests {
             &VaultUnlock::Keys,
             &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
-            VaultVersionWrite::Version(1),
+            VaultVersionWrite::Version(1.into()),
         )?;
         assert!(yaml.as_str().contains("store_id: store_SMypl8K0w9Y"));
         assert!(yaml.as_str().contains("schema_version: 1"));
         assert!(yaml.as_str().contains("vault_version: 1"));
-        assert_eq!(read_vault_schema_version(yaml.as_str())?, 1);
-        assert_eq!(read_vault_version(yaml.as_str())?, 1);
+        assert_eq!(u32::from(read_vault_schema_version(yaml.as_str())?), 1);
+        assert_eq!(u64::from(read_vault_version(yaml.as_str())?), 1);
         assert_eq!(
             read_vault_store_id(yaml.as_str())?,
             VaultStoreIdentity::Assigned("store_SMypl8K0w9Y".to_owned())
@@ -611,9 +613,9 @@ mod tests {
             vault_type: VaultType::Sentinel,
             replication_type: ReplicationType::Shared,
             sentinel: SentinelConfiguration::Enabled(crate::SentinelPolicy {
-                threshold: 2,
-                required_participants: 3,
-                ready_participants: 0,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 0.into(),
             }),
         };
         let yaml = serialize_stored_yaml_with_unlock_name_architecture(
@@ -622,7 +624,7 @@ mod tests {
             &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("Team vault"),
-            VaultVersionWrite::Version(7),
+            VaultVersionWrite::Version(7.into()),
             &architecture,
         )?;
         assert!(yaml.as_str().contains("architecture:"));
@@ -683,7 +685,7 @@ secrets: []
             &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("  Personal vault  "),
-            VaultVersionWrite::Version(1),
+            VaultVersionWrite::Version(1.into()),
         )?;
         assert!(yaml.as_str().contains("name: Personal vault"));
         assert_eq!(
@@ -697,7 +699,7 @@ secrets: []
             read_vault_name(renamed.as_str())?,
             VaultName::Named("Work vault".to_owned())
         );
-        assert_eq!(read_vault_version(renamed.as_str())?, 1);
+        assert_eq!(u64::from(read_vault_version(renamed.as_str())?), 1);
         assert_eq!(
             read_vault_store_id(renamed.as_str())?,
             VaultStoreIdentity::Assigned("store_SMypl8K0w9Y".to_owned())
@@ -715,9 +717,9 @@ secrets: []
         assert!(matches!(
             err,
             VaultFormatError::UnsupportedSchemaVersion {
-                found: 99,
-                max_supported: 1
-            }
+                found,
+                max_supported
+            } if u32::from(found) == 99 && u32::from(max_supported) == 1
         ));
         Ok(())
     }

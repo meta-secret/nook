@@ -45,8 +45,8 @@ pub enum BitwardenImportError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BitwardenImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 #[derive(Debug, Deserialize)]
@@ -399,8 +399,8 @@ fn plan_plaintext(value: &serde_json::Value) -> Result<BitwardenImportPlan, Bitw
     let skipped_unsupported = source_count.saturating_sub(converted.len());
     Ok(BitwardenImportPlan {
         items: converted,
-        source_count,
-        skipped_unsupported,
+        source_count: source_count.into(),
+        skipped_unsupported: skipped_unsupported.into(),
     })
 }
 
@@ -459,8 +459,8 @@ mod tests {
         }"#;
 
         let plan = plan_bitwarden_import(json)?;
-        assert_eq!(plan.source_count, 1);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };
@@ -482,8 +482,8 @@ mod tests {
           {"type":4,"name":"Identity"}
         ]}"#;
         let plan = plan_bitwarden_import(json)?;
-        assert_eq!(plan.source_count, 3);
-        assert_eq!(plan.skipped_unsupported, 1);
+        assert_eq!(usize::from(plan.source_count), 3);
+        assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
             plan.items[0],
@@ -531,8 +531,8 @@ mod tests {
     #[test]
     fn accepts_real_export_shape_with_folders_dates_nulls_and_fido_fields() -> anyhow::Result<()> {
         let plan = plan_bitwarden_import(include_str!("fixtures/bitwarden_real_export.json"))?;
-        assert_eq!(plan.source_count, 2);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 2);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
 
         let SecretValue::Login(first) = &plan.items[0] else {
@@ -621,8 +621,8 @@ mod tests {
             include_str!("fixtures/bitwarden_encrypted_pbkdf2.json"),
             Some("correct horse battery staple"),
         )?;
-        assert_eq!(plan.source_count, 2);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 2);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
         Ok(())
     }

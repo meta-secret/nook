@@ -391,9 +391,9 @@ mod tests {
                     manager.vault.architecture = VaultArchitecture::sentinel_personal(
                         DeviceMode::Standard,
                         nook_core::SentinelPolicy {
-                            threshold: 3,
-                            required_participants: 3,
-                            ready_participants: 3,
+                            threshold: 3.into(),
+                            required_participants: 3.into(),
+                            ready_participants: 3.into(),
                         },
                     )
                 }

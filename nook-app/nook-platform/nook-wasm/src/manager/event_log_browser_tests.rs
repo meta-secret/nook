@@ -692,9 +692,9 @@ async fn extension_repair_import_replaces_sentinel_vault_and_preserves_device() 
     replacement.vault.architecture = VaultArchitecture::sentinel_personal(
         DeviceMode::Standard,
         nook_core::SentinelPolicy {
-            threshold: 2,
-            required_participants: 3,
-            ready_participants: 3,
+            threshold: 2.into(),
+            required_participants: 3.into(),
+            ready_participants: 3.into(),
         },
     );
     let status = replacement

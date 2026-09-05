@@ -16,9 +16,9 @@ impl NookSecretPage {
     pub(crate) fn from_core(page: nook_core::SecretPage) -> Result<Self, NookError> {
         Ok(Self {
             items: list_items_to_vec(page.records),
-            total: u32::try_from(page.total).unwrap_or(u32::MAX),
-            offset: u32::try_from(page.offset).unwrap_or(u32::MAX),
-            limit: u32::try_from(page.limit).unwrap_or(u32::MAX),
+            total: u32::try_from(usize::from(page.total)).unwrap_or(u32::MAX),
+            offset: u32::try_from(usize::from(page.offset)).unwrap_or(u32::MAX),
+            limit: u32::try_from(usize::from(page.limit)).unwrap_or(u32::MAX),
         })
     }
 }
@@ -248,7 +248,7 @@ impl NookSecretFormFields {
                 title,
                 file_name,
                 mime_type,
-                size_bytes: u64::from(size_bytes),
+                size_bytes: u64::from(size_bytes).into(),
                 content_base64,
             }),
         }
@@ -381,7 +381,7 @@ mod wasm_tests {
         assert_eq!(attachment.title, "Recovery codes");
         assert_eq!(attachment.file_name, "recovery.txt");
         assert_eq!(attachment.mime_type, "text/plain");
-        assert_eq!(attachment.size_bytes, 17);
+        assert_eq!(u64::from(attachment.size_bytes), 17);
         assert_eq!(attachment.content_base64, "cmVjb3ZlcnkgY29kZXM=");
     }
 }

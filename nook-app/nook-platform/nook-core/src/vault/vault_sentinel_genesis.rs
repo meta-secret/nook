@@ -176,9 +176,9 @@ impl SentinelGenesisOutput {
             // genesis, readiness, quorum, or later provider configuration.
             replication_type: ReplicationType::Personal,
             sentinel: SentinelConfiguration::Enabled(SentinelPolicy {
-                threshold: policy.threshold.into(),
-                required_participants: policy.participant_count.into(),
-                ready_participants: policy.participant_count.into(),
+                threshold: policy.threshold,
+                required_participants: policy.participant_count,
+                ready_participants: policy.participant_count,
             }),
         };
         architecture.validate_records(&stored_records)?;
