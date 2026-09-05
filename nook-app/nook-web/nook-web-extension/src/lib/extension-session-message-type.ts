@@ -1,6 +1,7 @@
 import type { ExtensionSessionRequest } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export enum ExtensionSessionMessageType {
+  ClassifyGrantAuthority = 'nook:extension-session-classify-grant-authority',
   Reset = 'nook:extension-session-reset',
   MigrateAuthProviders = 'nook:extension-session-migrate-auth-providers',
   Status = 'nook:extension-session-status',

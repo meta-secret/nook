@@ -20,6 +20,7 @@ import {
 } from './pin-device'
 import { waitForExtensionPairingReady } from './extension-approval'
 import { readExtensionPairingStorage } from './extension-pairing-storage'
+import { reportExtensionBrowserErrors } from './browser-errors'
 
 /** Local Simple Vault from playwright webServer / test-e2e.sh. */
 const LOCAL_E2E_SIMPLE_VAULT_URL = 'http://127.0.0.1:5174/'
@@ -145,6 +146,7 @@ export async function launchPairedPinExtension(
       `--load-extension=${extensionDir}`,
     ],
   })
+  reportExtensionBrowserErrors(context)
   // Vault pages need a WebAuthn mock so LoginGate can boot under Chromium e2e.
   // Extension pages then force-hide PublicKeyCredential to take the PIN path.
   await context.addInitScript(installMockPasskeyRuntime)

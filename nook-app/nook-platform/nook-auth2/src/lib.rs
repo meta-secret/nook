@@ -39,13 +39,13 @@ pub use auth::device_key_protection::{
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
 };
 pub use auth::enrollment::{
-    DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIssueInput,
-    EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState, OAuthAccountIdentity,
-    OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry, PersonalCredentialTransfer,
-    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, SharedEnrollmentProvider,
-    SharedEnrollmentProviderData, SharedProviderGrant, TypedEnrollmentProvider,
-    build_enrollment_link, decrypt_enrollment_payload, encrypt_enrollment_payload,
-    is_plausible_email, normalize_enrollment_code, parse_enrollment_envelope,
+    CheckedEnrollmentEnvelope, DecryptedEnrollmentPayload, EnrollmentCodeEnvelope,
+    EnrollmentEntryLabel, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
+    EnrollmentState, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
+    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
+    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+    SharedProviderGrant, TypedEnrollmentProvider, build_enrollment_link,
+    encrypt_enrollment_payload, is_plausible_email, normalize_enrollment_code,
     peek_enrollment_entry_id, peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use auth::identity::{

@@ -60,7 +60,7 @@ mod tests {
                 .await;
             assert!(failure.is_err());
             assert!(
-                device_access::load_device_access_profile()
+                device_access::load_companion_device_access_profile()
                     .await?
                     .verified_vaults
                     .is_empty()
@@ -68,7 +68,9 @@ mod tests {
 
             flow.complete(Ok(()), &device_id, "store_testtoken11")
                 .await?;
-            let profile = device_access::load_device_access_profile().await?;
+            // This unregistered device records into the companion profile,
+            // independently of a protected identity selected by another test.
+            let profile = device_access::load_companion_device_access_profile().await?;
             assert_eq!(profile.verified_vaults.len(), 1);
             assert_eq!(profile.verified_vaults[0].device_id, device_id);
             assert_eq!(

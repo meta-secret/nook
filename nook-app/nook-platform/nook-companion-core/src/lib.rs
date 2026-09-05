@@ -127,11 +127,14 @@ pub use domain_numbers::{
     AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
 };
 pub use extension_pairing_state::{
-    CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY,
-    ExtensionConnectScope, ExtensionPairingEntry, ExtensionPairingGrantApproval,
-    ExtensionPairingGrantRemovalInput, ExtensionPairingRecord, ExtensionPairingState,
-    ExtensionPairingStateError, ExtensionPairingVaultType, ExtensionReadySetup,
-    ExtensionReadySetupStatus, ExtensionSetupAfterRemoval, ImportedExtensionEventLog,
+    ActiveExtensionVault, AuthorizedExtensionGrant, CreateExtensionPairingStateInput,
+    EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY, ExtensionActiveVaultScope,
+    ExtensionConnectScope, ExtensionGrantAuthority, ExtensionGrantAuthorityRequest,
+    ExtensionPairingEntry, ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput,
+    ExtensionPairingRecord, ExtensionPairingState, ExtensionPairingStateError,
+    ExtensionPairingVaultType, ExtensionReadySetup, ExtensionReadySetupStatus,
+    ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
+    ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
     RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
 };
 pub use extension_persistence::{

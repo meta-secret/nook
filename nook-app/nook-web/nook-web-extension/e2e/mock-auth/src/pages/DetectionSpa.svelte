@@ -29,7 +29,7 @@
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
-  <form id="login-form" {onsubmit}>
+  <form id="login-form" method="post" action="/auth/login" {onsubmit}>
     <input autocomplete="username" name="email" type="email" />
     {#if showPassword}
       <input autocomplete="current-password" name="password" type="password" />

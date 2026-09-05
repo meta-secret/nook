@@ -38,7 +38,7 @@
   {#if error}
     <p class="error" role="alert" data-nook-auth-outcome="error">{error}</p>
   {/if}
-  <form id="enroll-otp-form" {onsubmit}>
+  <form id="enroll-otp-form" method="post" action="/auth/verify" {onsubmit}>
     <h2>Enter OTP Code</h2>
     <p>
       Enter the code from the authenticator you just set up for

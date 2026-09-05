@@ -799,15 +799,25 @@ test('re-approves an existing local vault after reload without event-log-access-
     }
 
     const repairPopup = await context.newPage()
-    const reopenedConnect = context.waitForEvent('page', {
-      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
-    })
     await repairPopup.goto(
       `chrome-extension://${extensionId}/popup/index.html?intent=pair`,
     )
+    // Removing the active grant must close the session before re-approval.
+    await expect(repairPopup.getByTestId('extension-device-setup')).toBeVisible(
+      {
+        timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+      },
+    )
+    await expect(
+      repairPopup.getByTestId('connect-simple-vault-btn'),
+    ).toHaveCount(0)
+    await repairPopup.getByTestId('device-protection-unlock-btn').click()
     await expect(
       repairPopup.getByTestId('connect-simple-vault-btn'),
     ).toBeVisible({ timeout: EXTENSION_UNLOCK_TIMEOUT_MS })
+    const reopenedConnect = context.waitForEvent('page', {
+      timeout: EXTENSION_UNLOCK_TIMEOUT_MS,
+    })
     await repairPopup.getByTestId('connect-simple-vault-btn').click()
     const reconnectPage = await reopenedConnect
     await expect(reconnectPage).toHaveURL((url) =>
