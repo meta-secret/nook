@@ -1,6 +1,8 @@
 //! Testable event-log session orchestration (append, union, projection, outbox).
 
-use crate::{EpochMetadataState, EpochPasswordState, VaultEpochError};
+use crate::{
+    EpochMetadataState, EpochPasswordState, EventError, EventInsertStatus, VaultEpochError,
+};
 
 use crate::errors::VaultResult;
 use crate::vault_ids::{AuthKeyId, StoreId};
@@ -84,7 +86,15 @@ impl VaultEventSession {
             operations,
         })?;
         let event_id = event.id()?;
-        let _ = self.store.append_event(&event, &self.store_id)?;
+        let (_, status) = self.store.append_event(&event, &self.store_id)?;
+        match status {
+            EventInsertStatus::Quarantined(reason) => {
+                return Err(EventError::LocalAppendQuarantined { event_id, reason }.into());
+            }
+            EventInsertStatus::Applied
+            | EventInsertStatus::Pending(_)
+            | EventInsertStatus::Duplicate => {}
+        }
         self.heads = vec![event_id.as_str().to_owned()];
         if let Some(provider) = provider_id {
             self.store.queue_outbox(provider, event_id.clone(), bytes);
