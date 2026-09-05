@@ -974,6 +974,19 @@ unless hive_workflow.include?("run: task hive:console:image") &&
        !hive_workflow.include?("task web:e2e:kubernetes-image")
   raise "Hive console CI must not solve the Nook Web Rust/WASM browser graph"
 end
+console_image_job = load_yaml.call(".github/workflows/hive.yml")
+  .fetch("jobs")
+  .fetch("console-image")
+console_registry_setup = console_image_job.fetch("steps").find do |step|
+  step["uses"] == "./.github/actions/nook-docker-setup"
+end
+trusted_main = "github.event_name == 'push' && github.ref == 'refs/heads/main'"
+unless console_registry_setup&.dig("with", "registry-username") ==
+       "${{ #{trusted_main} && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}" &&
+       console_registry_setup&.dig("with", "registry-password") ==
+       "${{ #{trusted_main} && secrets.NOOK_REGISTRY_PASSWORD || secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}"
+  raise "Hive console cache must use trusted writer credentials only on Main pushes"
+end
 unless hive_cache_simulation.include?("FROM console-browser AS console-dependencies") &&
        hive_cache_simulation.include?("FROM console-dependencies AS console-verify") &&
        hive_cache_simulation.index("bake-sim-hive-console-dependencies") <
