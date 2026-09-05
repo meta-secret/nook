@@ -22,25 +22,34 @@ class GenesisFinalizationFixture {
     label: 'Previous participant',
     fingerprint: 'previous-fingerprint',
     free: vi.fn(),
-  }
+    [Symbol.dispose]() {
+      this.free()
+    },
+  } satisfies NookSentinelGenesisParticipantStatus
   readonly currentParticipant = {
     deviceId: 'current-participant',
     label: 'Current participant',
     fingerprint: 'current-fingerprint',
     free: vi.fn(),
-  }
+    [Symbol.dispose]() {
+      this.free()
+    },
+  } satisfies NookSentinelGenesisParticipantStatus
   readonly status = {
-    phase: SentinelGenesisPhase.Inactive,
+    phase: SentinelGenesisPhase.Inactive as SentinelGenesisPhase,
     participants: [] as NookSentinelGenesisParticipantStatus[],
     free: vi.fn(),
-  }
+    [Symbol.dispose]() {
+      this.free()
+    },
+  } satisfies NookSentinelGenesisStatus
   readonly failure = new Error('genesis finalization rejected')
   readonly manager = {
     finalize_sentinel_genesis: vi.fn(async () => {
       throw this.failure
     }),
     sentinel_genesis_status: vi.fn(
-      () => this.status as NookSentinelGenesisStatus,
+      (): NookSentinelGenesisStatus => this.status,
     ),
     start_sentinel_genesis: vi.fn(async () => {
       throw this.failure
@@ -57,9 +66,7 @@ class GenesisFinalizationFixture {
     initDeviceIdentity: vi.fn(async () => {}),
     sentinelGenesisPhase: SentinelGenesisPhase.ReadyToFinalize,
     sentinelGenesisParticipantCount: 1,
-    sentinelGenesisParticipants: [
-      this.previousParticipant as NookSentinelGenesisParticipantStatus,
-    ],
+    sentinelGenesisParticipants: [this.previousParticipant],
     requireManager: () =>
       this.manager as unknown as ReturnType<VaultState['requireManager']>,
     enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
@@ -73,9 +80,7 @@ class GenesisFinalizationFixture {
 
   retain(phase: SentinelGenesisPhase): void {
     this.status.phase = phase
-    this.status.participants = [
-      this.currentParticipant as NookSentinelGenesisParticipantStatus,
-    ]
+    this.status.participants = [this.currentParticipant]
   }
 
   async reject(): Promise<void> {
