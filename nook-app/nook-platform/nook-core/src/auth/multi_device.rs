@@ -534,7 +534,7 @@ mod tests {
             vec![VaultOperation::PasswordRotated {
                 entry_id: PasswordEntryId::parse("pwdentry001")?,
                 envelope: crate::PasswordEnvelope {
-                    version: 2,
+                    version: crate::PasswordEnvelopeVersion::CURRENT,
                     kdf: "scrypt".to_owned(),
                     work_factor: 10.into(),
                     recipient: "recipient".to_owned(),

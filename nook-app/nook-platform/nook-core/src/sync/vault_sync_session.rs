@@ -131,7 +131,7 @@ mod tests {
             label: "Backup password".to_owned(),
             created_at: "2026-06-28T00:00:00Z".to_owned(),
             envelope: PasswordEnvelope {
-                version: 1,
+                version: crate::PasswordEnvelopeVersion::LEGACY,
                 kdf: "argon2id".to_owned(),
                 work_factor: 3.into(),
                 recipient: String::new(),
