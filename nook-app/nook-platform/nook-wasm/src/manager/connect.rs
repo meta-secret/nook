@@ -453,7 +453,7 @@ impl NookVaultManager {
                 pending: &completed,
             }
         };
-        identity_record::clear_pending_simple_genesis(completion).await?;
+        completion.clear_pending().await?;
         if staged_handoff {
             self.device.pending_extension_handoff = None;
         }
