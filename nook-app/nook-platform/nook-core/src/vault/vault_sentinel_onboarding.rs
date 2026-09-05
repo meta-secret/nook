@@ -8,7 +8,7 @@ use crate::ActiveVaultScope;
 
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use flate2::{Compression, read::DeflateDecoder, write::DeflateEncoder};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::io::{Read, Write};
 
 use crate::{
@@ -18,14 +18,40 @@ use crate::{
     encrypt_for_recipient, normalize_auth_snapshot,
 };
 
-const SENTINEL_ONBOARDING_VERSION: u32 = 1;
 const MAX_ENCODED_PACKAGE_BYTES: usize = 16 * 1024;
 const MAX_DECOMPRESSED_PACKAGE_BYTES: u64 = 64 * 1024;
+
+/// Version of the post-genesis Sentinel onboarding package wire format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct SentinelOnboardingVersion(u32);
+
+impl SentinelOnboardingVersion {
+    pub const CURRENT: Self = Self(1);
+}
+
+impl From<SentinelOnboardingVersion> for u32 {
+    fn from(value: SentinelOnboardingVersion) -> Self {
+        value.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SentinelOnboardingVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            1 => Ok(Self::CURRENT),
+            _ => Err(de::Error::custom("unsupported Sentinel onboarding version")),
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelOnboardingPackage {
-    pub version: u32,
+    pub version: SentinelOnboardingVersion,
     pub request: SentinelGenesisRequest,
     pub delivery: SentinelGenesisShareDelivery,
     pub provider_snapshot: AgeArmoredCiphertext,
@@ -52,7 +78,7 @@ pub fn create_sentinel_onboarding_package(
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
     let provider_snapshot = encrypt_for_recipient(&provider_json, &delivery.encryption_public_key)?;
     Ok(SentinelOnboardingPackage {
-        version: SENTINEL_ONBOARDING_VERSION,
+        version: SentinelOnboardingVersion::CURRENT,
         request,
         delivery,
         provider_snapshot,
@@ -63,9 +89,6 @@ pub fn accept_sentinel_onboarding_package(
     package: &SentinelOnboardingPackage,
     identity: &DeviceIdentity,
 ) -> Result<AcceptedSentinelOnboarding, MultiDeviceError> {
-    if package.version != SENTINEL_ONBOARDING_VERSION {
-        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
-    }
     validate_request_delivery(&package.request, &package.delivery)?;
     let share_record =
         accept_sentinel_genesis_share_delivery(&package.delivery, &package.request, identity)?;
@@ -190,6 +213,20 @@ mod tests {
             }],
             active_vault_store_id: ActiveVaultScope::StoreId(store_id.to_owned()),
         }
+    }
+
+    #[test]
+    fn onboarding_version_preserves_scalar_and_rejects_unsupported_values() -> anyhow::Result<()> {
+        let encoded = serde_json::to_string(&SentinelOnboardingVersion::CURRENT)?;
+        assert_eq!(encoded, "1");
+        assert_eq!(
+            serde_json::from_str::<SentinelOnboardingVersion>(&encoded)?,
+            SentinelOnboardingVersion::CURRENT
+        );
+        for invalid in ["0", "2", "4294967296"] {
+            assert!(serde_json::from_str::<SentinelOnboardingVersion>(invalid).is_err());
+        }
+        Ok(())
     }
 
     #[test]
