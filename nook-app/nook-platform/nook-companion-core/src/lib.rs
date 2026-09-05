@@ -21,6 +21,7 @@ mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
 pub mod credential_fill;
+mod domain_numbers;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
@@ -112,6 +113,9 @@ pub use authenticator_preview_response::{
 };
 pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
+};
+pub use domain_numbers::{
+    AuthenticationOutcomeElapsedMilliseconds, AuthenticationOutcomeTimeoutMilliseconds,
 };
 pub use extension_pairing_state::{
     CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY,
