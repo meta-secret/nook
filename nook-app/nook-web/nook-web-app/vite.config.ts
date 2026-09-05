@@ -289,6 +289,12 @@ export default defineConfig(({ mode }) => {
       },
     },
     test: {
+      alias: {
+        'nook-wasm': new URL(
+          '../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js',
+          import.meta.url,
+        ).pathname,
+      },
       include: ['tests/unit/**/*.{test,spec}.{js,ts}'],
       exclude: ['e2e/**', 'node_modules/**'],
       environment: 'happy-dom',

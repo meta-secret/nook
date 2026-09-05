@@ -332,7 +332,6 @@ runs:
           publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
           publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
           publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v2$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
           echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"

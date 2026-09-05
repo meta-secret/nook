@@ -186,11 +186,16 @@ fn theorem_loom_release_dependencies_are_source_free_and_main_seeded() {
 }
 
 #[test]
-fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
+fn theorem_wasm_node_consumer_uses_portable_dependencies() -> anyhow::Result<()> {
     let root = repository_root();
     let app_bake = read(&root, "nook-app/docker-bake.hcl");
     let rust_bake = read(&root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
     let wasm_bake = read(&root, "nook-app/nook-platform/nook-wasm/docker-bake.hcl");
+    let core_bake = read(&root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
+    let product = read(
+        &root,
+        "nook-app/nook-platform/docker/rust/product.Dockerfile",
+    );
     let tasks = read(&root, "nook-app/nook-platform/docker/Taskfile.yml");
     let setup = read(&root, ".github/actions/nook-docker-setup/action.yml");
     let main = read(&root, ".github/workflows/main.yml");
@@ -199,10 +204,9 @@ fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
     let builder = bake_target_body(&wasm_bake, "builder-wasm");
     assert!(
         builder.contains("target     = \"builder-wasm\"")
-            && builder.contains("cache-from = rust_wasm_node_cache_from")
-            && builder.contains("cache-to   = rust_wasm_node_cache_to")
-            && !builder.contains("rust_wasm_source_cache_to"),
-        "WASM Node tests must own a full-graph scope distinct from the parallel WASM source writer"
+            && builder.contains("cache-from = rust_wasm_deps_cache_from")
+            && !builder.contains("cache-to"),
+        "WASM Node tests must restore portable dependencies without exporting a terminal source graph"
     );
     let node_task = taskfile_task_body(&tasks, "docker:ci:wasm:node-test")?;
     assert!(
@@ -211,13 +215,14 @@ fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
         "the Node-test task must finish the cache-owning builder-wasm target"
     );
     assert!(
-        app_bake.contains("variable \"GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE\"")
-            && setup.contains(
-                "publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE \"nook-rust-wasm-node-v2$scope_suffix\""
-            )
-            && rust_bake.contains("nook/buildcache/nook-rust-wasm-node-v2")
-            && rust_bake.contains("nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}"),
-        "hosted setup must select exact-only Node restore or trusted Main fallback"
+        !app_bake.contains("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE")
+            && !setup.contains("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE")
+            && !rust_bake.contains("nook-rust-wasm-node-v2")
+            && bake_target_body(&core_bake, "builder-wasm-deps-cache-proof")
+                .contains("target     = \"builder-wasm-node-deps\"")
+            && product.find("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")
+                < product.find("FROM builder-wasm-node-deps AS builder-wasm-handoff"),
+        "hosted WASM dependencies must carry Node tooling before the real-source join"
     );
     let main_node = section(
         &main,
@@ -235,7 +240,7 @@ fn theorem_wasm_node_consumer_owns_exact_cache() -> anyhow::Result<()> {
             && pr_node.contains("isolated-cache-write: \"true\"")
             && pr_node.contains("GHA_CACHE_WRITE_ENABLED=\"\" task ci:wasm:node-test")
             && pr_node.contains("GHA_CACHE_WRITE_ENABLED=1 task ci:wasm:node-test"),
-        "trusted Main and hosted PR fallback must retain publication without exporting WASM Node graphs from ARC"
+        "trusted Main and hosted PR retries must run without a WASM Node terminal cache exporter"
     );
     Ok(())
 }

@@ -2,6 +2,7 @@ use super::{
     AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
     AuthenticationPasskeyControlObservation,
 };
+use crate::AuthenticationPasskeyAccountCount;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -76,7 +77,7 @@ pub struct AuthenticationAuthenticatorObservationFacts {
     pub backup_codes_copy: String,
     pub passkey_control: AuthenticationPasskeyControlObservation,
     pub passkey_account_availability: AuthenticationPasskeyAccountAvailability,
-    pub matching_passkey_account_count: u32,
+    pub matching_passkey_account_count: AuthenticationPasskeyAccountCount,
     /// Detailed evidence is classified in Rust; the legacy presence flag is ignored.
     #[serde(default)]
     pub detailed_passkey_control: AuthenticationDetailedPasskeyControlObservation,
@@ -99,7 +100,8 @@ impl AuthenticationAuthenticatorObservationFacts {
 
     pub(super) fn is_bounded(&self) -> bool {
         self.backup_codes_copy.len() <= crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-            && self.matching_passkey_account_count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            && self.matching_passkey_account_count.raw()
+                <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
             && self.detailed_passkey_control.is_bounded()
     }
 
@@ -115,14 +117,14 @@ impl AuthenticationAuthenticatorObservationFacts {
             .is_safe_for_fields(Some(fields))
     }
 
-    pub(super) const fn matching_passkey_account_count(&self) -> u32 {
+    pub(super) const fn matching_passkey_account_count(&self) -> AuthenticationPasskeyAccountCount {
         if matches!(
             self.passkey_account_availability,
             AuthenticationPasskeyAccountAvailability::Ready
         ) {
             self.matching_passkey_account_count
         } else {
-            0
+            AuthenticationPasskeyAccountCount::ZERO
         }
     }
 }

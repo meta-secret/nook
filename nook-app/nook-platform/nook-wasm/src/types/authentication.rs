@@ -38,16 +38,16 @@ impl NookAuthenticationPageObservation {
         matching_passkey_account_count: u32,
     ) -> Self {
         Self(nook_core::AuthenticationPageObservation {
-            username_field_count,
-            current_password_field_count,
-            new_password_field_count,
-            generic_password_field_count,
-            one_time_code_field_count,
+            username_field_count: username_field_count.into(),
+            current_password_field_count: current_password_field_count.into(),
+            new_password_field_count: new_password_field_count.into(),
+            generic_password_field_count: generic_password_field_count.into(),
+            one_time_code_field_count: one_time_code_field_count.into(),
             manual_checkpoint_present,
             authenticator_setup_hint,
             backup_codes_hint,
             passkey_control_present,
-            matching_passkey_account_count,
+            matching_passkey_account_count: matching_passkey_account_count.into(),
         })
     }
 }
@@ -158,7 +158,7 @@ impl NookAuthenticationOutcomeObservation {
             error_marker_present,
             same_document_mutation,
             in_iframe,
-            elapsed_ms,
+            elapsed_ms: elapsed_ms.into(),
         })
     }
 
@@ -232,7 +232,7 @@ impl NookAuthenticationWorkflowSnapshot {
         )
     )]
     pub fn current_step(&self) -> u8 {
-        self.0.current_step
+        self.0.current_step.into()
     }
 
     #[wasm_bindgen(getter, js_name = totalSteps)]
@@ -244,7 +244,7 @@ impl NookAuthenticationWorkflowSnapshot {
         )
     )]
     pub fn total_steps(&self) -> u8 {
-        self.0.total_steps
+        self.0.total_steps.into()
     }
 
     #[wasm_bindgen(getter, js_name = approvalRequirement)]
@@ -266,7 +266,7 @@ impl NookAuthenticationWorkflowSnapshot {
         )
     )]
     pub fn observation_index(&self) -> u32 {
-        self.0.observation_index
+        self.0.observation_index.into()
     }
 }
 

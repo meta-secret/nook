@@ -90,11 +90,11 @@ impl AuthenticationCeremonyContextObservation {
     }
 
     pub(super) fn is_authenticated(&self, fields: AuthenticationFieldObservationFacts) -> bool {
-        fields.one_time_code_field_count > 0
-            && fields.current_password_field_count == 0
-            && fields.new_password_field_count == 0
-            && fields.generic_password_field_count == 0
-            && (fields.username_field_count > 0)
+        fields.one_time_code_field_count.raw() > 0
+            && fields.current_password_field_count.raw() == 0
+            && fields.new_password_field_count.raw() == 0
+            && fields.generic_password_field_count.raw() == 0
+            && (fields.username_field_count.raw() > 0)
                 != matches!(
                     self.authentication_username,
                     AuthenticationUsernameEvidence::Absent
@@ -171,22 +171,22 @@ impl AuthenticationCeremonyObservationFacts {
             self.advance_control,
             AuthenticationAdvanceControlEvidence::ImplicitSubmission
         ) && !password_implicit_submission_uses_get(self, fields)
-            && fields.one_time_code_field_count == 0
+            && fields.one_time_code_field_count.raw() == 0
             && [
-                fields.current_password_field_count,
-                fields.generic_password_field_count,
-                fields.new_password_field_count,
-                fields.username_field_count,
+                fields.current_password_field_count.raw(),
+                fields.generic_password_field_count.raw(),
+                fields.new_password_field_count.raw(),
+                fields.username_field_count.raw(),
             ]
             .into_iter()
             .any(|count| count > 0)
-            && (fields.username_field_count > 0)
+            && (fields.username_field_count.raw() > 0)
                 != matches!(
                     self.authentication_context.authentication_username,
                     AuthenticationUsernameEvidence::Absent
                 )
             && self.authentication_context.is_bounded()
-            && if fields.new_password_field_count > 0 {
+            && if fields.new_password_field_count.raw() > 0 {
                 has_safe_credential_update_route_identity(
                     &self.authentication_context.source_origin,
                     &self.authentication_context.form_identity,
@@ -206,9 +206,9 @@ fn password_implicit_submission_uses_get(
     ceremony: &AuthenticationCeremonyObservationFacts,
     fields: AuthenticationFieldObservationFacts,
 ) -> bool {
-    (fields.current_password_field_count
-        + fields.generic_password_field_count
-        + fields.new_password_field_count)
+    (fields.current_password_field_count.raw()
+        + fields.generic_password_field_count.raw()
+        + fields.new_password_field_count.raw())
         > 0
         && matches!(
             ceremony.implicit_submission_method,

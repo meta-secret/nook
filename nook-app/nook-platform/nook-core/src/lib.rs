@@ -89,13 +89,13 @@ pub use device_key_protection::{
     unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
 };
 pub use enrollment::{
-    DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIssueInput,
-    EnrollmentProvider, EnrollmentProviderDataRef, EnrollmentState, OAuthAccountIdentity,
-    OAuthRefreshCredential, OAuthRemoteFile, OAuthTokenExpiry, PersonalCredentialTransfer,
-    PersonalEnrollmentProvider, PersonalEnrollmentProviderData, SharedEnrollmentProvider,
-    SharedEnrollmentProviderData, SharedProviderGrant, TypedEnrollmentProvider,
-    build_enrollment_link, decrypt_enrollment_payload, encrypt_enrollment_payload,
-    normalize_enrollment_code, parse_enrollment_envelope, peek_enrollment_entry_id,
+    CheckedEnrollmentEnvelope, DecryptedEnrollmentPayload, EnrollmentCodeEnvelope,
+    EnrollmentEntryLabel, EnrollmentIssueInput, EnrollmentProvider, EnrollmentProviderDataRef,
+    EnrollmentState, OAuthAccountIdentity, OAuthRefreshCredential, OAuthRemoteFile,
+    OAuthTokenExpiry, PersonalCredentialTransfer, PersonalEnrollmentProvider,
+    PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
+    SharedProviderGrant, TypedEnrollmentProvider, build_enrollment_link,
+    encrypt_enrollment_payload, normalize_enrollment_code, peek_enrollment_entry_id,
     peek_enrollment_entry_label, peek_enrollment_issued_at,
 };
 pub use errors::{
@@ -137,19 +137,21 @@ pub use nook_auth2::{
 };
 pub use nook_companion_core::{
     AuthenticationApprovalRequirement, AuthenticationOutcomeDecision,
-    AuthenticationOutcomeObservation, AuthenticationOutcomeVerdict, AuthenticationPageObservation,
-    AuthenticationPageObservations, AuthenticationPilotPresentationCapability,
-    AuthenticationSavedLoginCapability, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowMatch, AuthenticationWorkflowRuntimeResponse,
-    AuthenticationWorkflowRuntimeResponseDecodeError, AuthenticationWorkflowRuntimeResponseWire,
-    AuthenticationWorkflowSnapshot, AuthenticationWorkflowSnapshotError,
-    AuthenticationWorkflowSnapshotResponse, AuthenticationWorkflowSnapshotResponseDecodeError,
-    AuthenticationWorkflowSnapshotResponseKind, AuthenticationWorkflowSnapshotResponseWire,
-    AuthenticationWorkflowStage, BrowserOAuthProvider, DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
-    DEFAULT_SIMPLE_VAULT_URL, LoginContextObservation, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
-    MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS, OAuthOriginSupport, OAuthOriginUnsupportedReason,
-    PageInputFieldObservation, PageInputType, VaultHostPolicyError, WebsiteLoginMatchAvailability,
-    WebsiteLoginMatchAvailabilityKind, WebsiteLoginMatchAvailabilityWire, WebsitePasskeyProposal,
+    AuthenticationOutcomeElapsedMilliseconds, AuthenticationOutcomeObservation,
+    AuthenticationOutcomeTimeoutMilliseconds, AuthenticationOutcomeVerdict,
+    AuthenticationPageObservation, AuthenticationPageObservations,
+    AuthenticationPilotPresentationCapability, AuthenticationSavedLoginCapability,
+    AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowRuntimeResponseDecodeError,
+    AuthenticationWorkflowRuntimeResponseWire, AuthenticationWorkflowSnapshot,
+    AuthenticationWorkflowSnapshotError, AuthenticationWorkflowSnapshotResponse,
+    AuthenticationWorkflowSnapshotResponseDecodeError, AuthenticationWorkflowSnapshotResponseKind,
+    AuthenticationWorkflowSnapshotResponseWire, AuthenticationWorkflowStage, BrowserOAuthProvider,
+    DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS, DEFAULT_SIMPLE_VAULT_URL, LoginContextObservation,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
+    OAuthOriginSupport, OAuthOriginUnsupportedReason, PageInputFieldObservation, PageInputType,
+    VaultHostPolicyError, WebsiteLoginMatchAvailability, WebsiteLoginMatchAvailabilityKind,
+    WebsiteLoginMatchAvailabilityWire, WebsitePasskeyProposal,
     authentication_form_observation_priority, authentication_page_observations_are_valid,
     belongs_to_sentinel_vault, belongs_to_simple_vault,
     classify_authentication_backup_codes_observation, classify_authentication_outcome,
@@ -161,6 +163,12 @@ pub use nook_companion_core::{
     matching_sentinel_vault_base_url, nook_vault_app_exclude_match_patterns,
     normalize_simple_vault_base_url, page_has_backup_code_hint, propose_website_passkey,
     sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
+};
+pub use nook_companion_core::{
+    AuthenticationFieldCount, AuthenticationPasskeyAccountCount,
+    AuthenticationSavedLoginAccountCount, AuthenticationSemanticSubmitControlCount,
+    AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
+    AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
 };
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
@@ -189,9 +197,9 @@ pub use secret_view::{
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
-    AcceptedSentinelOnboarding, SentinelOnboardingPackage, accept_sentinel_onboarding_package,
-    create_sentinel_onboarding_package, decode_sentinel_onboarding_package,
-    encode_sentinel_onboarding_package,
+    AcceptedSentinelOnboarding, SentinelOnboardingPackage, SentinelOnboardingVersion,
+    accept_sentinel_onboarding_package, create_sentinel_onboarding_package,
+    decode_sentinel_onboarding_package, encode_sentinel_onboarding_package,
 };
 pub use vault_sync_conflict::{
     ContentSyncConflict, CurrentVaultReplaceability, ProviderVaultDecision,
@@ -202,7 +210,7 @@ pub use vault_sync_conflict::{
 };
 pub use vault_sync_state::{
     LocalFolderHealth, LocalFolderMultipleVaultsIssue, ManualProviderSync, SyncConflictReview,
-    VaultLastSync,
+    VaultLastSync, VaultSyncUnixMilliseconds,
 };
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
@@ -343,9 +351,9 @@ pub use vault::vault_recovery_options::{
 };
 pub use vault_access_diagnostics::{
     DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticsReport,
-    VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic, VaultEventPayloadAccessDiagnostic,
-    VaultKeyAccessDiagnostic, VaultKeyAccessDiagnosticStatus, VaultRecordDecryptabilityStatus,
-    VaultSecretAccessDiagnostic, diagnose_vault_access,
+    VaultEncryptedPayloadCount, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
+    VaultEventPayloadAccessDiagnostic, VaultKeyAccessDiagnostic, VaultKeyAccessDiagnosticStatus,
+    VaultRecordDecryptabilityStatus, VaultSecretAccessDiagnostic, diagnose_vault_access,
 };
 pub use vault_architecture::{
     DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderOauthPreset,

@@ -277,7 +277,8 @@ impl NookVaultAccessReport {
                     event_id: entry.event_id,
                     key_epoch: entry.key_epoch,
                     epoch_status: entry.epoch_status.as_str().to_owned(),
-                    encrypted_payloads: u32::try_from(entry.encrypted_payloads).unwrap_or(u32::MAX),
+                    encrypted_payloads: u32::try_from(usize::from(entry.encrypted_payloads))
+                        .unwrap_or(u32::MAX),
                     explanation: entry.explanation,
                 })
                 .collect(),

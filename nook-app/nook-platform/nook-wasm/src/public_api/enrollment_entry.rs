@@ -1,6 +1,6 @@
 use super::wasm_bindgen;
 use crate::{NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput};
-use nook_core::EnrollmentEntryLabel;
+use nook_core::{CheckedEnrollmentEnvelope, EnrollmentEntryLabel};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -89,7 +89,7 @@ pub fn decrypt_enrollment_payload(
 ) -> Result<NookDecryptedEnrollmentPayload, wasm_bindgen::JsError> {
     let code = nook_core::normalize_enrollment_code(code);
     Ok(NookDecryptedEnrollmentPayload::from_core(
-        nook_core::decrypt_enrollment_payload(&code, password)?,
+        CheckedEnrollmentEnvelope::parse(&code)?.decrypt(password)?,
     ))
 }
 

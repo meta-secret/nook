@@ -11,6 +11,7 @@ import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
 import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
+import { LocalEventLogUpdateFailure } from './pairing-import'
 import type * as PairingStateQuery from './pairing-state-query'
 import type * as SessionLifecycle from './session-lifecycle'
 import type * as SessionRuntimeMessages from './session-runtime-messages'
@@ -327,22 +328,25 @@ export function routeExtensionLifecycleMessage({
     }
     void beginAccountPickerAuthorizationCleanup()
       .then(async (cleanupStart) => {
+        const cleanupArgs: ClearAuthorizationStateArgs = {
+          beginAccountPickerAuthorizationCleanup,
+          clearPendingAccountPickers,
+          clearStagedAuthenticatorEnrollments,
+          closeExtensionSessionDocument,
+          completeAccountPickerAuthorizationCleanup,
+          releaseAccountPickerAuthorizationCleanup,
+          closeSession: true,
+          cleanupStart: {
+            kind: AuthorizationCleanupStartKind.Existing,
+            cleanup: cleanupStart,
+          },
+        }
         try {
           const response = await importLocalEventLogUpdate(importArgs)
-          if (!response.ok) {
-            const cleanupArgs: ClearAuthorizationStateArgs = {
-              beginAccountPickerAuthorizationCleanup,
-              clearPendingAccountPickers,
-              clearStagedAuthenticatorEnrollments,
-              closeExtensionSessionDocument,
-              completeAccountPickerAuthorizationCleanup,
-              releaseAccountPickerAuthorizationCleanup,
-              closeSession: true,
-              cleanupStart: {
-                kind: AuthorizationCleanupStartKind.Existing,
-                cleanup: cleanupStart,
-              },
-            }
+          if (
+            !response.ok &&
+            response.reason !== LocalEventLogUpdateFailure.VaultNotPaired
+          ) {
             try {
               await clearAuthorizationState(cleanupArgs)
             } catch {
@@ -356,17 +360,21 @@ export function routeExtensionLifecycleMessage({
               cleanupStart.authorizationGeneration,
               CleanupEvidence.Partial,
             )
-            // The import succeeded; a superseded cleanup must not report a
-            // failed import or refresh surfaces for the rejected generation.
+            // Preserve the import outcome without refreshing a rejected generation.
             if ('error' in outcome) return response
-            await refreshAuthenticationSurfaces()
+            if (response.ok) await refreshAuthenticationSurfaces()
           }
           return response
-        } catch (error) {
-          releaseAccountPickerAuthorizationCleanup(
-            cleanupStart.authorizationGeneration,
-          )
-          throw error
+        } catch {
+          try {
+            await clearAuthorizationState(cleanupArgs)
+          } catch {
+            // The persisted marker keeps authorization invalid if cleanup fails.
+          }
+          return {
+            ok: false,
+            reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+          }
         }
       })
       .then(sendResponse)

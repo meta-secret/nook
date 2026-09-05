@@ -20,6 +20,7 @@ use super::{
     looks_like_non_authentication_submit_control_label,
     looks_like_password_update_submit_control_label,
 };
+use crate::{AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -78,10 +79,10 @@ pub struct AuthenticationAdvanceControlObservation {
     pub ownership: PageControlOwnership,
     pub semantics: PageControlSemantics,
     pub authentication_username: AuthenticationUsernameEvidence,
-    pub password_field_count: u32,
-    pub new_password_field_count: u32,
-    pub one_time_code_field_count: u32,
-    pub semantic_submit_control_count: u32,
+    pub password_field_count: AuthenticationFieldCount,
+    pub new_password_field_count: AuthenticationFieldCount,
+    pub one_time_code_field_count: AuthenticationFieldCount,
+    pub semantic_submit_control_count: AuthenticationSemanticSubmitControlCount,
     pub source_origin: String,
     pub form_identity: String,
     pub destination_identity: String,
@@ -105,7 +106,7 @@ pub enum AuthenticationAdvanceControlDecision {
 
 impl AuthenticationAdvanceControlObservation {
     fn credential_update_destination(&self) -> bool {
-        self.new_password_field_count > 0
+        self.new_password_field_count.raw() > 0
             && (control_destination_indicates_registration_route(&self.destination_identity)
                 || control_destination_indicates_password_recovery_route(
                     &self.destination_identity,
@@ -137,10 +138,10 @@ impl AuthenticationAdvanceControlObservation {
             && self.label.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && self.machine_identity.len() <= super::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && [
-                self.password_field_count,
-                self.new_password_field_count,
-                self.one_time_code_field_count,
-                self.semantic_submit_control_count,
+                self.password_field_count.raw(),
+                self.new_password_field_count.raw(),
+                self.one_time_code_field_count.raw(),
+                self.semantic_submit_control_count.raw(),
             ]
             .into_iter()
             .all(|count| count <= crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
@@ -195,7 +196,7 @@ impl AuthenticationAdvanceControlObservation {
         );
         let non_authentication_label =
             looks_like_non_authentication_submit_control_label(&self.label);
-        let contextual_password_update = self.new_password_field_count > 0
+        let contextual_password_update = self.new_password_field_count.raw() > 0
             && looks_like_password_update_submit_control_label(&self.label);
         let credential_update_destination = self.credential_update_destination();
         if has_unconditional_veto_identity(self, credential_update_destination) {
@@ -204,8 +205,8 @@ impl AuthenticationAdvanceControlObservation {
         if one_time_code_control_lacks_authentication_context(self, positive_destination_identity) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count == 0
-            && self.one_time_code_field_count == 0
+        if self.new_password_field_count.raw() == 0
+            && self.one_time_code_field_count.raw() == 0
             && form_identity_indicates_non_authentication_account_management(&self.form_identity)
             && !identity_indicates_explicit_authentication_route(&self.form_identity)
         {
@@ -214,9 +215,9 @@ impl AuthenticationAdvanceControlObservation {
         if non_authentication_label && !contextual_password_update {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let current_password_only = self.password_field_count > 0
-            && self.new_password_field_count == 0
-            && self.one_time_code_field_count == 0;
+        let current_password_only = self.password_field_count.raw() > 0
+            && self.new_password_field_count.raw() == 0
+            && self.one_time_code_field_count.raw() == 0;
         if current_password_only
             && !has_positive_login_identity(
                 self,
@@ -232,7 +233,7 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count == 0
+        if self.new_password_field_count.raw() == 0
             && (looks_like_registration_route_control_label(&self.label)
                 || contains_any_word(&expand_identity_text(&self.label), &["join"]))
         {
@@ -241,12 +242,12 @@ impl AuthenticationAdvanceControlObservation {
         if looks_like_auxiliary_authentication_control_label(&self.label) {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.one_time_code_field_count > 0
+        if self.one_time_code_field_count.raw() > 0
             && looks_like_one_time_code_resend_control_label(&self.label)
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count == 0
+        if self.new_password_field_count.raw() == 0
             && looks_like_password_recovery_route_control_label(&self.label)
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
@@ -256,7 +257,7 @@ impl AuthenticationAdvanceControlObservation {
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count == 0
+        if self.new_password_field_count.raw() == 0
             && control_destination_indicates_non_authentication_route(&self.form_identity)
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
@@ -284,10 +285,10 @@ mod tests {
             ownership: PageControlOwnership::OwnedForm,
             semantics: PageControlSemantics::SemanticSubmit,
             authentication_username: AuthenticationUsernameEvidence::Explicit,
-            password_field_count: 1,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 1,
+            password_field_count: 1.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 1.into(),
             source_origin: "https://login.example.test".to_owned(),
             form_identity: "login-form".to_owned(),
             destination_identity: "https://login.example.test/auth/login".to_owned(),
@@ -319,7 +320,7 @@ mod tests {
     #[test]
     fn username_only_submits_require_positive_authentication_identity() {
         let mut control = login_control();
-        control.password_field_count = 0;
+        control.password_field_count = 0.into();
         control.form_identity = "security-form".to_owned();
         control.destination_identity = "https://login.example.test/account/security".to_owned();
         control.label = "Continue".to_owned();
@@ -341,14 +342,14 @@ mod tests {
         for label in ["Open settings", "Enable MFA"] {
             let mut control = login_control();
             control.semantics = PageControlSemantics::Activation;
-            control.semantic_submit_control_count = 0;
+            control.semantic_submit_control_count = 0.into();
             control.label = label.to_owned();
             assert!(!authentication_advance_control_is_safe(&control));
         }
 
         let mut continue_control = login_control();
         continue_control.semantics = PageControlSemantics::Activation;
-        continue_control.semantic_submit_control_count = 0;
+        continue_control.semantic_submit_control_count = 0.into();
         continue_control.label = "Continue".to_owned();
         assert!(authentication_advance_control_is_safe(&continue_control));
 
@@ -371,7 +372,7 @@ mod tests {
             ),
         ] {
             let mut control = login_control();
-            control.new_password_field_count = 1;
+            control.new_password_field_count = 1.into();
             control.destination_identity = destination.to_owned();
             control.label = label.to_owned();
             assert!(
@@ -381,14 +382,14 @@ mod tests {
         }
 
         let mut destructive = login_control();
-        destructive.new_password_field_count = 1;
+        destructive.new_password_field_count = 1.into();
         destructive.destination_identity =
             "https://login.example.test/register/delete-account".to_owned();
         destructive.label = "Create account".to_owned();
         assert!(!authentication_advance_control_is_safe(&destructive));
 
         let mut provider = login_control();
-        provider.new_password_field_count = 1;
+        provider.new_password_field_count = 1.into();
         provider.destination_identity =
             "https://login.example.test/register?provider=google".to_owned();
         provider.label = "Create account".to_owned();
@@ -406,11 +407,11 @@ mod tests {
     #[test]
     fn ambiguous_semantic_submits_require_advance_label_evidence() {
         let mut verify = login_control();
-        verify.password_field_count = 0;
-        verify.one_time_code_field_count = 1;
+        verify.password_field_count = 0.into();
+        verify.one_time_code_field_count = 1.into();
         verify.form_identity = "otp-challenge-form".to_owned();
         verify.destination_identity = "https://login.example.test/auth/mfa/verify".to_owned();
-        verify.semantic_submit_control_count = 2;
+        verify.semantic_submit_control_count = 2.into();
         verify.label = "Verify".to_owned();
         assert!(authentication_advance_control_is_safe(&verify));
 
@@ -424,7 +425,7 @@ mod tests {
         }
 
         let mut unique_continue = verify;
-        unique_continue.semantic_submit_control_count = 1;
+        unique_continue.semantic_submit_control_count = 1.into();
         unique_continue.label = "Continue".to_owned();
         assert!(authentication_advance_control_is_safe(&unique_continue));
     }

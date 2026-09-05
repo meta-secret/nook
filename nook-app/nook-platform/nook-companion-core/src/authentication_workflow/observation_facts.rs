@@ -112,8 +112,8 @@ impl AuthenticationPageObservationFacts {
 #[must_use]
 pub fn authentication_page_observation_facts_priority(
     facts: AuthenticationPageObservationFacts,
-) -> u8 {
-    facts.form_priority().value()
+) -> AuthenticationFormObservationPriority {
+    facts.form_priority()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -173,9 +173,9 @@ mod tests {
     fn password_login() -> AuthenticationPageObservationFacts {
         AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                username_field_count: 1,
-                current_password_field_count: 1,
-                actionable_password_field_count: 1,
+                username_field_count: 1.into(),
+                current_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
             detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
@@ -184,10 +184,10 @@ mod tests {
                     ownership: PageControlOwnership::OwnedForm,
                     semantics: PageControlSemantics::SemanticSubmit,
                     authentication_username: AuthenticationUsernameEvidence::Strong,
-                    password_field_count: 1,
-                    new_password_field_count: 0,
-                    one_time_code_field_count: 0,
-                    semantic_submit_control_count: 1,
+                    password_field_count: 1.into(),
+                    new_password_field_count: 0.into(),
+                    one_time_code_field_count: 0.into(),
+                    semantic_submit_control_count: 1.into(),
                     source_origin: "https://example.test".to_owned(),
                     form_identity: "login".to_owned(),
                     destination_identity: "https://example.test/login".to_owned(),
@@ -227,7 +227,7 @@ mod tests {
         );
 
         let mut mismatched = password_login();
-        mismatched.fields.current_password_field_count = 2;
+        mismatched.fields.current_password_field_count = 2.into();
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![mismatched],
@@ -266,7 +266,8 @@ mod tests {
     #[test]
     fn oversized_sibling_field_counts_reject_the_entire_fact_batch() {
         let mut oversized = password_login();
-        oversized.fields.username_field_count = crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1;
+        oversized.fields.username_field_count =
+            (crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into();
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![password_login(), oversized],
@@ -287,7 +288,7 @@ mod tests {
     fn excessive_flat_counts_are_rejected_before_progression_reduction() {
         let mut observation = AuthenticationPageObservationFacts::default();
         observation.fields.username_field_count =
-            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1;
+            (crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into();
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![observation],
@@ -298,7 +299,7 @@ mod tests {
 
         let mut observation = AuthenticationPageObservationFacts::default();
         observation.authenticator.matching_passkey_account_count =
-            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1;
+            (crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into();
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![observation],
@@ -309,7 +310,7 @@ mod tests {
 
         let mut observation = password_login();
         observation.authenticator.matching_passkey_account_count =
-            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT;
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT.into();
         assert!(matches!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![observation],
@@ -319,8 +320,8 @@ mod tests {
         ));
 
         let mut observation = password_login();
-        observation.fields.current_password_field_count = 50;
-        observation.fields.generic_password_field_count = 51;
+        observation.fields.current_password_field_count = 50.into();
+        observation.fields.generic_password_field_count = 51.into();
         assert_eq!(
             AuthenticationPageObservationFactsBatch {
                 observations: vec![observation],
@@ -334,7 +335,7 @@ mod tests {
     fn rust_rejected_otp_controls_do_not_keep_progressing_form_priority() {
         let otp = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                one_time_code_field_count: 1,
+                one_time_code_field_count: 1.into(),
                 ..Default::default()
             },
             detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
@@ -343,10 +344,10 @@ mod tests {
                     ownership: PageControlOwnership::OwnedForm,
                     semantics: PageControlSemantics::SemanticSubmit,
                     authentication_username: AuthenticationUsernameEvidence::Absent,
-                    password_field_count: 0,
-                    new_password_field_count: 0,
-                    one_time_code_field_count: 1,
-                    semantic_submit_control_count: 1,
+                    password_field_count: 0.into(),
+                    new_password_field_count: 0.into(),
+                    one_time_code_field_count: 1.into(),
+                    semantic_submit_control_count: 1.into(),
                     source_origin: "https://example.test".to_owned(),
                     form_identity: "otp".to_owned(),
                     destination_identity: "https://example.test/otp".to_owned(),
@@ -362,10 +363,15 @@ mod tests {
             otp_priority,
             AuthenticationFormObservationPriority::default()
         );
-        assert_eq!(authentication_page_observation_facts_priority(otp), 1);
+        assert_eq!(
+            u8::from(authentication_page_observation_facts_priority(otp)),
+            1
+        );
         assert!(password_login().form_priority() > otp_priority);
         assert_eq!(
-            authentication_page_observation_facts_priority(password_login()),
+            u8::from(authentication_page_observation_facts_priority(
+                password_login()
+            )),
             4
         );
     }
@@ -375,7 +381,7 @@ mod tests {
         let valid_priority = password_login().form_priority();
         let mut unbounded = password_login();
         unbounded.fields.one_time_code_field_count =
-            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1;
+            (crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into();
 
         let isolated_priority = unbounded.form_priority();
         assert_eq!(
@@ -392,10 +398,10 @@ mod tests {
             ownership: PageControlOwnership::LocallyScoped,
             semantics: PageControlSemantics::Activation,
             authentication_username: AuthenticationUsernameEvidence::Absent,
-            password_field_count: 0,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 0,
+            password_field_count: 0.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 0.into(),
             source_origin: "https://example.test".to_owned(),
             form_identity: "login".to_owned(),
             destination_identity: "https://example.test/login".to_owned(),
@@ -426,10 +432,10 @@ mod tests {
             ownership: PageControlOwnership::LocallyScoped,
             semantics: PageControlSemantics::Activation,
             authentication_username: AuthenticationUsernameEvidence::Absent,
-            password_field_count: 0,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 0,
+            password_field_count: 0.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 0.into(),
             source_origin: "https://example.test".to_owned(),
             form_identity: "login".to_owned(),
             destination_identity: "https://example.test/login".to_owned(),
@@ -467,10 +473,10 @@ mod tests {
                     ownership: PageControlOwnership::LocallyScoped,
                     semantics: PageControlSemantics::Activation,
                     authentication_username: AuthenticationUsernameEvidence::Explicit,
-                    password_field_count: 0,
-                    new_password_field_count: 0,
-                    one_time_code_field_count: 0,
-                    semantic_submit_control_count: 0,
+                    password_field_count: 0.into(),
+                    new_password_field_count: 0.into(),
+                    one_time_code_field_count: 0.into(),
+                    semantic_submit_control_count: 0.into(),
                     source_origin: "https://example.test".to_owned(),
                     form_identity: "login".to_owned(),
                     destination_identity: "https://example.test/login".to_owned(),
@@ -495,9 +501,9 @@ mod tests {
     fn implicit_owned_form_submission_preserves_password_login() {
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                username_field_count: 1,
-                current_password_field_count: 1,
-                actionable_password_field_count: 1,
+                username_field_count: 1.into(),
+                current_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -527,9 +533,9 @@ mod tests {
     fn implicit_get_password_submission_is_rejected() {
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                username_field_count: 1,
-                current_password_field_count: 1,
-                actionable_password_field_count: 1,
+                username_field_count: 1.into(),
+                current_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -560,9 +566,9 @@ mod tests {
     fn implicit_dialog_password_submission_is_rejected() {
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                username_field_count: 1,
-                current_password_field_count: 1,
-                actionable_password_field_count: 1,
+                username_field_count: 1.into(),
+                current_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -593,9 +599,9 @@ mod tests {
     fn implicit_credential_creation_admits_register_destinations() {
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                username_field_count: 1,
-                new_password_field_count: 1,
-                actionable_password_field_count: 1,
+                username_field_count: 1.into(),
+                new_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -625,9 +631,9 @@ mod tests {
     fn implicit_credential_creation_rejects_destructive_register_destinations() {
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                username_field_count: 1,
-                new_password_field_count: 1,
-                actionable_password_field_count: 1,
+                username_field_count: 1.into(),
+                new_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -678,7 +684,7 @@ mod tests {
     fn otp_auto_submit_requires_authenticated_ceremony_context() {
         let mut otp = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                one_time_code_field_count: 1,
+                one_time_code_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -742,10 +748,10 @@ mod tests {
             ownership: PageControlOwnership::LocallyScoped,
             semantics: PageControlSemantics::Activation,
             authentication_username: AuthenticationUsernameEvidence::Explicit,
-            password_field_count: 0,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 0,
+            password_field_count: 0.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 0.into(),
             source_origin: "https://example.test".to_owned(),
             form_identity: "login".to_owned(),
             destination_identity: "https://example.test/login".to_owned(),
@@ -755,7 +761,7 @@ mod tests {
         };
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                one_time_code_field_count: 1,
+                one_time_code_field_count: 1.into(),
                 ..Default::default()
             },
             authenticator: AuthenticationAuthenticatorObservationFacts {
@@ -796,7 +802,7 @@ mod tests {
     fn otp_handler_candidates_are_classified_independently() {
         let otp = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                one_time_code_field_count: 1,
+                one_time_code_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -831,7 +837,7 @@ mod tests {
         let mut signals = vec![invalid; crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize];
         let invalid_only = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                one_time_code_field_count: 1,
+                one_time_code_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {
@@ -858,7 +864,7 @@ mod tests {
         signals[last] = "oninput=this.form.submit()".to_owned();
         let kept_submit = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {
-                one_time_code_field_count: 1,
+                one_time_code_field_count: 1.into(),
                 ..Default::default()
             },
             ceremony: AuthenticationCeremonyObservationFacts {

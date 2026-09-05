@@ -4,7 +4,13 @@
 
 <main>
   <h1>Verify account</h1>
-  <form id="otp-form" hidden={!revealed}>
+  <form
+    id="otp-form"
+    method="post"
+    action="/auth/verify"
+    hidden={!revealed}
+    onsubmit={(event) => event.preventDefault()}
+  >
     <input autocomplete="one-time-code" inputmode="numeric" name="otp" />
     <button type="submit">Verify</button>
   </form>

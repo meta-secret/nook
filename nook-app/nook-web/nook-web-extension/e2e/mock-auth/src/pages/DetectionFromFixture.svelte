@@ -131,7 +131,7 @@
       {#if error}
         <p class="error" role="alert">{error}</p>
       {/if}
-      <form id="login_form" {onsubmit}>
+      <form id="login_form" method="post" action="/auth/login" {onsubmit}>
         {#each step.fields as field (((...[v = field.placeholder]) => v)(((...[v = field.name]) => v)(field.id)))}
           <input
             type={((...[v = 'text']) => v)(field.type)}
@@ -175,7 +175,7 @@
     {#if error}
       <p class="error" role="alert">{error}</p>
     {/if}
-    <form id="login_form" {onsubmit}>
+    <form id="login_form" method="post" action="/auth/login" {onsubmit}>
       {#each step.fields as field (((...[v = field.placeholder]) => v)(((...[v = field.name]) => v)(field.id)))}
         <input
           type={((...[v = 'text']) => v)(field.type)}

@@ -25,6 +25,112 @@ async function decodeProviders(providers: StorageProvider[]) {
 }
 
 describe('ExtensionSessionMessageDispatcher', () => {
+  test('routes grant authority through runtime ingress and the owned queue', async () => {
+    type RuntimeListener = Parameters<
+      typeof chrome.runtime.onMessage.addListener
+    >[0]
+    const registered = Promise.withResolvers<RuntimeListener>()
+    const blocked = Promise.withResolvers<void>()
+    const started = Promise.withResolvers<void>()
+    const events: string[] = []
+    globalThis.chrome = {
+      runtime: {
+        id: 'nook-extension',
+        getURL: (path: string) => `chrome-extension://nook-extension/${path}`,
+        onMessage: { addListener: registered.resolve },
+      },
+    } as typeof chrome
+    Object.assign(globalThis, {
+      __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
+    })
+    const { classifySessionGrantAuthority } =
+      await import('../src/offscreen/session-operations')
+    const manager = {
+      classify_extension_grant_authority: (stored: string, vault: string) => {
+        expect(events).toEqual([
+          'block-started',
+          'block-finished',
+          'interactive',
+        ])
+        expect(stored).toBe('{}')
+        expect(vault).toBe('vault')
+        events.push('classified')
+        return { kind: 'NoMatchingAuthority' as const }
+      },
+    }
+    const stagedPayloads: { stored_json: string }[] = []
+    const dispatcher = new ExtensionSessionMessageDispatcher({
+      decodeProviders,
+      handleMessage: async (message) => {
+        if (message.type === ExtensionSessionMessageType.MigrateAuthProviders) {
+          events.push('interactive')
+          return { kind: 'NoMatchingAuthority' as const }
+        }
+        if (message.type === ExtensionSessionMessageType.Status) {
+          events.push('block-started')
+          started.resolve()
+          await blocked.promise
+          events.push('block-finished')
+          return { kind: 'NoMatchingAuthority' as const }
+        }
+        if (message.type !== ExtensionSessionMessageType.ClassifyGrantAuthority)
+          throw new Error('unexpected request')
+        stagedPayloads.push(message.payload)
+        return classifySessionGrantAuthority({
+          manager,
+          payload: message.payload,
+        })
+      },
+    })
+    dispatcher.registerRuntimeListener()
+    const listener = await registered.promise
+    const queued = Promise.withResolvers<void>()
+    const enqueue = dispatcher.enqueue.bind(dispatcher)
+    dispatcher.enqueue = (message) => {
+      const result = enqueue(message)
+      if (message.type === ExtensionSessionMessageType.ClassifyGrantAuthority)
+        queued.resolve()
+      return result
+    }
+    const pending = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.Status,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    })
+    await started.promise
+    const payload = {
+      stored_json: '{}',
+      vault_store_id: 'vault',
+      queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+    }
+    const response = Promise.withResolvers<unknown>()
+    expect(
+      listener(
+        { type: ExtensionSessionMessageType.ClassifyGrantAuthority, payload },
+        { id: 'nook-extension' },
+        response.resolve,
+      ),
+    ).toBe(true)
+    await queued.promise
+    expect(events).toEqual(['block-started'])
+    const interactive = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.MigrateAuthProviders,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    })
+    blocked.resolve()
+    await pending
+    await interactive
+    expect(await response.promise).toEqual({ kind: 'NoMatchingAuthority' })
+    expect(events).toEqual([
+      'block-started',
+      'block-finished',
+      'interactive',
+      'classified',
+    ])
+    expect(payload.stored_json).toBe('')
+    expect(stagedPayloads).toHaveLength(1)
+    expect(stagedPayloads[0].stored_json).toBe('')
+  })
+
   test('accepts explicit default queue state for control commands', async () => {
     for (const type of [
       ExtensionSessionMessageType.MigrateAuthProviders,

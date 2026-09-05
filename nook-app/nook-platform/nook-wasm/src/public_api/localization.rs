@@ -87,7 +87,7 @@ pub fn classify_authentication_outcome(
 ) -> NookAuthenticationOutcomeVerdict {
     NookAuthenticationOutcomeVerdict::from_core(nook_core::classify_authentication_outcome(
         observation.to_core(),
-        timeout_ms,
+        timeout_ms.into(),
     ))
 }
 

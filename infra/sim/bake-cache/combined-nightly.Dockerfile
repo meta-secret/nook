@@ -58,3 +58,23 @@ RUN test -n "$PRODUCT_SOURCE" \
   && printf '%s\n' "$PRODUCT_SOURCE" >/opt/product-source-stamp \
   && sleep 1 \
   && echo bake-sim-dylint-product-expensive
+
+# WASM Node's OS/browser/coverage dependency vertices belong before the product source boundary.
+FROM parent AS wasm-node-deps
+RUN sleep 1 \
+  && echo bake-sim-wasm-node-os-tooling-expensive
+RUN sleep 1 \
+  && echo bake-sim-wasm-node-browser-tooling-expensive
+RUN sleep 1 \
+  && echo bake-sim-wasm-node-host-coverage-dependencies-expensive
+RUN sleep 1 \
+  && echo bake-sim-wasm-node-browser-coverage-dependencies-expensive
+
+FROM wasm-node-deps AS wasm-node-source
+ARG PRODUCT_SOURCE
+RUN test -n "$PRODUCT_SOURCE" \
+  && printf '%s\n' "$PRODUCT_SOURCE" >/opt/wasm-node-source-stamp \
+  && sleep 1 \
+  && echo bake-sim-wasm-node-source-expensive
+RUN sleep 1 \
+  && echo bake-sim-wasm-node-coverage-execution-expensive

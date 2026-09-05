@@ -43,8 +43,8 @@ mod tests {
         AuthenticationPageObservationFactsBatch {
             observations: vec![AuthenticationPageObservationFacts {
                 fields: AuthenticationFieldObservationFacts {
-                    current_password_field_count: 1,
-                    actionable_password_field_count: 1,
+                    current_password_field_count: 1.into(),
+                    actionable_password_field_count: 1.into(),
                     ..Default::default()
                 },
                 credential_submission: AuthenticationCredentialSubmissionObservation::Observed(

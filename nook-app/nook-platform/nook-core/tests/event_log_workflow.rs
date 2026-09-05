@@ -1,6 +1,9 @@
 //! Event-sourcing integration scenarios using the in-memory harness.
 
-use nook_core::{DeviceId, LocalEventStore, VaultCrypto};
+use nook_core::{
+    DeviceId, LocalEventStore, ObservedHeads, SigningIdentity, VaultCrypto, VaultError,
+    VaultEventSession,
+};
 
 use std::slice;
 
@@ -21,6 +24,145 @@ use nook_core::{
 use std::collections::{BTreeSet, HashMap};
 
 const TS: &str = "2026-06-28T00:00:00Z";
+
+impl EventLogDevice {
+    fn expect_quarantine_unchanged(
+        &self,
+        result: VaultResult<()>,
+        expected_id: &EventId,
+        before: &VaultEventSession,
+    ) -> anyhow::Result<()> {
+        match result {
+            Err(VaultError::Event(EventError::LocalAppendQuarantined { event_id, reason })) => {
+                assert_eq!(&event_id, expected_id);
+                assert_eq!(
+                    reason,
+                    format!(
+                        "Event actor {} was not authorized in causal history",
+                        self.actor_id()?
+                    )
+                );
+            }
+            _ => anyhow::bail!("expected typed local quarantine rejection"),
+        }
+        assert_eq!(self.session.heads, before.heads);
+        assert_eq!(self.session.key_epoch, before.key_epoch);
+        assert_eq!(self.session.store.event_ids(), before.store.event_ids());
+        for id in before.store.event_ids() {
+            assert_eq!(
+                self.session.store.get_bytes(&id),
+                before.store.get_bytes(&id)
+            );
+        }
+        assert_eq!(
+            self.session.store.pending_outbox("github"),
+            before.store.pending_outbox("github")
+        );
+        assert!(self.session.store.get_bytes(expected_id).is_none());
+        Ok(())
+    }
+}
+
+#[test]
+fn unauthorized_append_and_rotation_do_not_publish() -> anyhow::Result<()> {
+    let mut device = EventLogDevice::genesis("owner")?;
+    let (signing, seed) = SigningIdentity::generate()?;
+    device.session.signing = signing;
+    device.session.signing_seed = seed.into_inner();
+    let before = device.session.clone();
+    let trigger = VaultOperation::DeviceRevoked {
+        device_id: DeviceId::parse("abcd1234ef567890")?,
+    };
+    let store_id = StoreId::parse(device.store_id())?;
+    let (event, _) = nook_core::build_signed_event(AppendEventInput {
+        store_id: &store_id,
+        actor_id: &device.actor_id()?,
+        signing_identity: &device.session.signing,
+        parents: ObservedHeads::parse(&device.session.heads)?.as_parents(),
+        key_epoch: &EventId::parse(&device.session.key_epoch)?,
+        created_at: &IsoTimestamp::parse(TS)?,
+        operations: vec![trigger.clone()],
+    })?;
+    let expected_id = event.validate_envelope(&store_id)?;
+    let result = device
+        .session
+        .append_operations(vec![trigger.clone()], TS, Some("github"));
+    device.expect_quarantine_unchanged(result.map(|_| ()), &expected_id, &before)?;
+
+    let new_keys = nook_core::generate_vault_keys()?;
+    let old_secrets_key = SymmetricKey::parse(&device.secrets_key)?;
+    let result = device
+        .session
+        .rotate_security_epoch(VaultSecurityEpochRotationInput {
+            trigger,
+            new_keys: &new_keys,
+            user_records: &[],
+            old_secrets_key: &old_secrets_key,
+            members_records: &[],
+            rotated_meta_records: Vec::new(),
+            rewrapped_password_entries: Vec::new(),
+            created_at: TS,
+            provider_id: Some("github"),
+        });
+    device.expect_quarantine_unchanged(result.map(|_| ()), &expected_id, &before)?;
+    Ok(())
+}
+
+#[test]
+fn applied_pending_and_duplicate_appends_keep_publication_behavior() -> VaultResult<()> {
+    let mut applied = EventLogDevice::genesis("owner")?;
+    let genesis_heads = applied.session.heads.clone();
+    let epoch = applied.session.key_epoch.clone();
+    let mut pending = EventLogDevice::replica_of(&applied)?;
+    pending.session.heads = genesis_heads.clone();
+    let operation = VaultOperation::SecretDeleted {
+        secret_id: SecretId::from_vault_record("secret_absent0001"),
+    };
+    let event_id = applied.append_signed(vec![operation.clone()])?;
+    assert_eq!(applied.session.heads, vec![event_id.as_str().to_owned()]);
+    assert_eq!(applied.session.key_epoch, epoch);
+    let graph = applied.session.store.load_graph(applied.store_id())?;
+    assert_eq!(graph.applicable_events().len(), 2);
+    assert!(graph.pending_events().is_empty());
+    let pending_id = pending.append_signed(vec![operation.clone()])?;
+    assert_eq!(pending_id, event_id);
+    assert_eq!(pending.session.heads, applied.session.heads);
+    assert_eq!(pending.session.key_epoch, epoch);
+    assert_eq!(
+        pending.session.store.get_bytes(&event_id),
+        applied.session.store.get_bytes(&event_id)
+    );
+    assert_eq!(
+        pending
+            .session
+            .store
+            .load_graph(pending.store_id())?
+            .pending_events()
+            .len(),
+        1
+    );
+    let pending_outbox = pending.session.store.pending_outbox("github");
+    assert_eq!(pending_outbox.len(), 1);
+    assert_eq!(pending_outbox[0].0, event_id);
+    assert_eq!(
+        Some(pending_outbox[0].1.as_slice()),
+        applied.session.store.get_bytes(&event_id)
+    );
+
+    let before_events = applied.remote_events();
+    let before_outbox = applied.session.store.pending_outbox("github");
+    assert!(before_outbox.contains(&pending_outbox[0]));
+    applied.session.heads = genesis_heads;
+    assert_eq!(applied.append_signed(vec![operation])?, event_id);
+    assert_eq!(applied.session.heads, pending.session.heads);
+    assert_eq!(applied.session.key_epoch, epoch);
+    assert_eq!(applied.remote_events(), before_events);
+    assert_eq!(
+        applied.session.store.pending_outbox("github"),
+        before_outbox
+    );
+    Ok(())
+}
 
 fn test_fingerprint(label: &str) -> SecretFingerprint {
     SecretFingerprint::from_trusted(format!("test:{label}"))

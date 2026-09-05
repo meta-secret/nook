@@ -50,8 +50,8 @@ mod tests {
         AuthenticationPageObservationFactsBatch {
             observations: vec![AuthenticationPageObservationFacts {
                 fields: AuthenticationFieldObservationFacts {
-                    current_password_field_count: 1,
-                    actionable_password_field_count: 1,
+                    current_password_field_count: 1.into(),
+                    actionable_password_field_count: 1.into(),
                     ..Default::default()
                 },
                 credential_submission: AuthenticationCredentialSubmissionObservation::Observed(
@@ -102,10 +102,10 @@ mod tests {
         let mut readonly = approved;
         readonly.observations[0]
             .fields
-            .actionable_password_field_count = 0;
+            .actionable_password_field_count = 0.into();
         readonly.observations[0]
             .fields
-            .readonly_password_field_count = 1;
+            .readonly_password_field_count = 1.into();
         assert!(!authentication_page_observation_facts_match_binding(
             &binding, &readonly
         ));
@@ -124,7 +124,7 @@ mod tests {
         let mut incomplete = bound_password_observation();
         incomplete.observations[0]
             .fields
-            .actionable_password_field_count = 0;
+            .actionable_password_field_count = 0.into();
         assert!(bind_authentication_page_observation_facts(&incomplete).is_err());
     }
 }

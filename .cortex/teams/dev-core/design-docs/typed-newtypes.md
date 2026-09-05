@@ -230,7 +230,7 @@ enum VersionedVaultEventBody {
 
 Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
 Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
-`nook-app-common`, `nook-authenticator-domain`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, and `nook-event-log` are activated.
+`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, and `nook-event-log` are activated.
 Later crates migrate in dependency order.
 Activate a migrated crate only while the Dylint library is loaded:
 
@@ -263,12 +263,15 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `device_key_protection` — validated `DeviceKeyProtectionVersion`
 - [x] `sentinel_genesis` — validated `SentinelGenesisVersion`
 - [x] `sentinel_unlock` — validated `SentinelUnlockVersion`
+- [x] `sentinel_onboarding` — validated `SentinelOnboardingVersion`
 - [x] `identity` — `IdentityControlEpoch`
 - [x] `password_envelope` — `PasswordCharacterCount` for password policy bounds
 - [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
 - [ ] `multi_device` — `SentinelShareVersion`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`
 - [ ] `vault_sync` — `VaultContentHash` for revision hashes
+- [x] `vault_sync` — `VaultSyncUnixMilliseconds` for successful-sync timestamps
+- [x] `vault diagnostics` — `VaultEncryptedPayloadCount` for event payload counts
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
 - [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`

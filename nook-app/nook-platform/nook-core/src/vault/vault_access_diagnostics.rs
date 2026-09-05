@@ -373,7 +373,8 @@ fn diagnose_event_payloads(
             .operations
             .iter()
             .map(encrypted_payload_count)
-            .sum();
+            .sum::<usize>()
+            .into();
         let epoch_status = if projection_unresolved
             || event.body.schema_version != VaultEventSchemaVersion::CURRENT
         {
@@ -454,6 +455,17 @@ mod tests {
 
     fn signing_key() -> SigningKey {
         SigningKey::from_bytes(&[11_u8; 32])
+    }
+
+    #[test]
+    fn encrypted_payload_count_preserves_scalar_json() -> Result<(), serde_json::Error> {
+        let count = VaultEncryptedPayloadCount::from(3);
+        assert_eq!(serde_json::to_string(&count)?, "3");
+        assert_eq!(
+            serde_json::from_str::<VaultEncryptedPayloadCount>("3")?,
+            count
+        );
+        Ok(())
     }
 
     fn encrypted_secret(
@@ -664,7 +676,7 @@ mod tests {
             report.events[0].epoch_status,
             VaultEpochDiagnosticStatus::CurrentEpoch
         );
-        assert_eq!(report.events[0].encrypted_payloads, 1);
+        assert_eq!(usize::from(report.events[0].encrypted_payloads), 1);
         Ok(())
     }
 

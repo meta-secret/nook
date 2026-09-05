@@ -19,12 +19,12 @@ use nook_companion_core::{
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod account_picker_authorization;
-mod page_form_policy;
-
 mod authentication_observation_binding;
 mod authentication_workflow;
 mod authenticator_code_response;
 mod credential_fill;
+mod grant_authority;
+mod page_form_policy;
 mod response_decoding;
 
 pub use account_picker_authorization::*;
@@ -32,6 +32,7 @@ pub use authentication_observation_binding::*;
 pub use authentication_workflow::*;
 pub use authenticator_code_response::*;
 pub use credential_fill::*;
+pub use grant_authority::*;
 pub use page_form_policy::*;
 pub use response_decoding::*;
 
@@ -447,7 +448,7 @@ pub fn belongs_to_sentinel_vault(
 #[cfg(test)]
 mod tests {
     use super::*;
-
+    use nook_companion_core::ExtensionEventCount;
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn extension_persistence_wasm_exports_match_core_policy() {
@@ -470,14 +471,13 @@ mod tests {
             nook_companion_core::ExtensionPersistenceStoreState::Present
         );
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn workflow_wasm_export_rejects_unbounded_observations() {
         let input = nook_companion_core::AuthenticationPageObservations {
             observations: vec![nook_companion_core::AuthenticationPageObservation {
                 one_time_code_field_count:
-                    nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+                    (nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into(),
                 ..Default::default()
             }],
         };
@@ -488,7 +488,6 @@ mod tests {
             CompanionAuthenticationWorkflowMatchKind::Rejected
         );
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn detailed_workflow_wasm_export_rejects_unbounded_handler_facts() {
@@ -509,7 +508,6 @@ mod tests {
             CompanionAuthenticationWorkflowMatchKind::Rejected
         );
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn username_evidence_exports_preserve_core_classification_and_ordering() {
@@ -539,7 +537,6 @@ mod tests {
             nook_companion_core::AuthenticationUsernameEvidence::Absent
         );
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn saved_login_capability_export_rejects_impossible_snapshots() {
@@ -547,13 +544,13 @@ mod tests {
             kind: nook_companion_core::AuthenticationWorkflowKind::Login,
             stage: nook_companion_core::AuthenticationWorkflowStage::Credentials,
             action: nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook,
-            current_step: 1,
-            total_steps: 3,
+            current_step: 1.into(),
+            total_steps: 3.into(),
             approval_requirement:
                 nook_companion_core::AuthenticationApprovalRequirement::ExplicitUserApproval,
             saved_login_capability:
                 nook_companion_core::AuthenticationSavedLoginCapability::FillSavedLogin,
-            observation_index: 0,
+            observation_index: 0.into(),
         };
         assert_eq!(
             authentication_workflow_saved_login_capability(valid),
@@ -591,7 +588,6 @@ mod tests {
             nook_companion_core::AuthenticationPilotPresentationCapability::Hidden
         );
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn backup_code_classifier_bridge_preserves_typed_variants() {
@@ -607,7 +603,6 @@ mod tests {
             nook_companion_core::AuthenticationBackupCodesObservation::Present
         );
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn enrollment_match_bridge_preserves_selected_recovery_action() -> Result<(), String> {
@@ -622,7 +617,6 @@ mod tests {
         );
         Ok(())
     }
-
     fn pairing_approval() -> nook_companion_core::ExtensionPairingGrantApproval {
         nook_companion_core::ExtensionPairingGrantApproval {
             vault_type: nook_companion_core::ExtensionPairingVaultType::Simple,
@@ -634,14 +628,14 @@ mod tests {
             vault_name: "Personal".to_owned(),
             approved_at: "2026-09-05T00:00:00.000Z".to_owned(),
             scopes: vec![nook_companion_core::ExtensionConnectScope::PasswordFilling],
-            sync_provider_count: 1,
+            sync_provider_count: 1.into(),
         }
     }
 
     fn imported_event_log(event_count: u32) -> nook_companion_core::ImportedExtensionEventLog {
         nook_companion_core::ImportedExtensionEventLog {
             vault_store_id: "store-test".to_owned(),
-            event_count,
+            event_count: event_count.into(),
             heads: vec![format!("event-{event_count}")],
             access_granted: true,
         }
@@ -659,7 +653,7 @@ mod tests {
             })
             .map_err(|error| format!("create failed: {error:?}"))?;
         let grant = ordered_extension_pairing_grants(created.clone())[0].clone();
-        assert_eq!(grant.event_count, 2);
+        assert_eq!(grant.event_count, ExtensionEventCount::from(2));
         assert!(matches!(
             selected_extension_pairing_grant(created.clone()),
             nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
@@ -680,7 +674,10 @@ mod tests {
         )
         .map_err(|error| format!("refresh failed: {error:?}"))?;
         let refreshed_grants = ordered_extension_pairing_grants(refreshed.clone());
-        assert_eq!(refreshed_grants[0].event_count, 4);
+        assert_eq!(
+            refreshed_grants[0].event_count,
+            ExtensionEventCount::from(4)
+        );
         assert!(matches!(
             extension_setup_after_pairing_grant_removal(
                 nook_companion_core::ExtensionPairingGrantRemovalInput {
@@ -704,7 +701,7 @@ mod tests {
                     error_marker_present: true,
                     ..Default::default()
                 },
-                timeout_ms: 1_000,
+                timeout_ms: 1_000.into(),
             },
         );
         assert_eq!(

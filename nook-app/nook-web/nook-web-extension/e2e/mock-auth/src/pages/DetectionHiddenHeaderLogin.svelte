@@ -34,7 +34,7 @@
   }
 </script>
 
-<form id="aspnetForm" {onsubmit}>
+<form id="aspnetForm" method="post" action="/auth/login" {onsubmit}>
   <div class="gb-dropdown__holder" style="display: none">
     <input name="LoginUserName" type="text" />
     <input id="header-password" name="LoginPassword" type="password" />

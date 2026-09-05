@@ -8,6 +8,11 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 
 mod account_picker_authorization;
 mod authentication_outcome_response;
@@ -21,6 +26,7 @@ mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
 pub mod credential_fill;
+mod domain_numbers;
 mod extension_pairing_state;
 mod extension_persistence;
 mod extension_session_protocol;
@@ -113,12 +119,22 @@ pub use authenticator_preview_response::{
 pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
 };
+pub use domain_numbers::{
+    AuthenticationFieldCount, AuthenticationOutcomeElapsedMilliseconds,
+    AuthenticationOutcomeTimeoutMilliseconds, AuthenticationPasskeyAccountCount,
+    AuthenticationSavedLoginAccountCount, AuthenticationSemanticSubmitControlCount,
+    AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
+    AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
+};
 pub use extension_pairing_state::{
-    CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY,
-    ExtensionConnectScope, ExtensionPairingEntry, ExtensionPairingGrantApproval,
-    ExtensionPairingGrantRemovalInput, ExtensionPairingRecord, ExtensionPairingState,
-    ExtensionPairingStateError, ExtensionPairingVaultType, ExtensionReadySetup,
-    ExtensionReadySetupStatus, ExtensionSetupAfterRemoval, ImportedExtensionEventLog,
+    ActiveExtensionVault, AuthorizedExtensionGrant, CreateExtensionPairingStateInput,
+    EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY, ExtensionActiveVaultScope,
+    ExtensionConnectScope, ExtensionGrantAuthority, ExtensionGrantAuthorityRequest,
+    ExtensionPairingEntry, ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput,
+    ExtensionPairingRecord, ExtensionPairingState, ExtensionPairingStateError,
+    ExtensionPairingVaultType, ExtensionReadySetup, ExtensionReadySetupStatus,
+    ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
+    ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
     RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
 };
 pub use extension_persistence::{
