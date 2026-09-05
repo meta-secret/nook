@@ -60,7 +60,7 @@ target "builder-wasm-deps-restore" {
 // that every dependency vertex is reusable.
 target "builder-wasm-deps-cache-proof" {
   inherits   = ["builder-wasm-deps-restore"]
-  target     = "builder-wasm-deps"
+  target     = "builder-wasm-node-deps"
 }
 
 // Explicit non-Main writer retained for isolated/local cache candidates. The

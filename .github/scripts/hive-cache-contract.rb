@@ -73,7 +73,6 @@ irrelevant_hive_probes = [
   "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE",
   "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
   "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE",
-  "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
   "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
   "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE"
 ]
@@ -84,6 +83,51 @@ unless general_probe_start && general_probe_end && hive_probe_start &&
          probe_index && general_probe_start < probe_index && probe_index < general_probe_end
        end
   raise "Hive cache selection must not issue general Rust, WASM, preflight, or web probes"
+end
+
+rust_bake = File.read(File.join(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl"))
+wasm_bake = File.read(File.join(root, "nook-app/nook-platform/nook-wasm/docker-bake.hcl"))
+core_bake = File.read(File.join(root, "nook-app/nook-platform/nook-core/docker-bake.hcl"))
+rust_product = File.read(File.join(root, "nook-app/nook-platform/docker/rust/product.Dockerfile"))
+node_deps_start = rust_product.index("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")
+node_source_join = rust_product.index("FROM builder-wasm-node-deps AS builder-wasm-handoff")
+node_coverage_execution = rust_product.index("nook-sccache-report wasm-node-test-and-coverage")
+node_coverage_clean = rust_product.index('llvm-cov clean --workspace', node_deps_start)
+node_coverage_environment = rust_product.index('llvm-cov show-env --sh)', node_deps_start)
+node_browser_coverage_environment = rust_product.index(
+  'llvm-cov show-env --sh --target wasm32-unknown-unknown',
+  node_deps_start
+)
+node_coverage_prewarm = rust_product.index(
+  'test --release -p nook-wasm --no-run',
+  node_deps_start
+)
+node_browser_coverage_prewarm = rust_product.index(
+  'test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run',
+  node_deps_start
+)
+unless !docker_setup_cache_script.include?("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE") &&
+       !rust_bake.include?("nook-rust-wasm-node-v2") &&
+       !wasm_bake.include?("rust_wasm_node_cache_") &&
+       wasm_bake.include?("cache-from = rust_wasm_deps_cache_from") &&
+       core_bake.match?(/target "builder-wasm-deps-cache-proof".*?target\s+= "builder-wasm-node-deps"/m) &&
+       node_deps_start && node_source_join && node_coverage_execution &&
+       rust_product.index("apt-get install -y --no-install-recommends clang unzip", node_deps_start) < node_source_join &&
+       rust_product.index("bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium", node_deps_start) < node_source_join &&
+       node_coverage_clean && node_coverage_environment && node_browser_coverage_environment &&
+       node_coverage_prewarm && node_browser_coverage_prewarm &&
+       node_coverage_clean < node_coverage_environment && node_coverage_environment < node_coverage_prewarm &&
+       node_coverage_prewarm < node_browser_coverage_environment &&
+       node_browser_coverage_environment < node_browser_coverage_prewarm &&
+       node_browser_coverage_prewarm < node_source_join &&
+       rust_product[node_deps_start...node_source_join].include?("--no-run\nRUN eval") &&
+       rust_product[node_deps_start...node_source_join].scan("CARGO_TARGET_DIR=target/llvm-cov-target").length == 4 &&
+       !rust_product[node_deps_start...node_source_join].include?("RUSTC_WRAPPER=") &&
+       !rust_product[node_deps_start...node_source_join].include?("llvm-cov test") &&
+       !rust_product[node_deps_start...node_source_join].include?("llvm-cov --no-run") &&
+       !rust_product[node_source_join...node_coverage_execution].include?("--no-clean --release -p nook-wasm --no-report") &&
+       node_source_join < node_coverage_execution
+  raise "WASM Node must reuse source-free dependency caches, never a terminal source cache"
 end
 
 unless hive_workflow.include?("run: task hive:console:image") &&

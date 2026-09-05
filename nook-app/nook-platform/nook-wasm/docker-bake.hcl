@@ -31,8 +31,7 @@ target "builder-wasm" {
   args = {
     WASM_BUILD_MODE = WASM_BUILD_MODE
   }
-  cache-from = rust_wasm_node_cache_from
-  cache-to   = rust_wasm_node_cache_to
+  cache-from = rust_wasm_deps_cache_from
 }
 
 target "_nook-rust-fast-common" {

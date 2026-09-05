@@ -118,13 +118,6 @@ fn theorem_short_parent_import_graph() -> anyhow::Result<()> {
     );
     assert_scope_arms(
         &rust_bake,
-        "rust_wasm_node_cache_from",
-        &["nook-rust-wasm-node-v2"],
-        &[],
-        &["nook-rust-wasm-source-v3", "nook-rust-wasm-deps-v6"],
-    )?;
-    assert_scope_arms(
-        &rust_bake,
         "rust_ecosystem_policy_tools_cache_from",
         &["nook-rust-ecosystem-policy-tools-v5"],
         &[],
@@ -237,13 +230,6 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
             "nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}",
             "nook/buildcache/nook-rust-wasm-source-v3",
-        ),
-        (
-            rust_bake.as_str(),
-            "rust_wasm_node_cache_from",
-            "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
-            "nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-wasm-node-v2",
         ),
         (
             preflight_bake.as_str(),
@@ -456,7 +442,6 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
         (rust_bake.as_str(), "rust_wasm_deps_cache_to"),
         (rust_bake.as_str(), "rust_native_source_cache_to"),
         (rust_bake.as_str(), "rust_wasm_source_cache_to"),
-        (rust_bake.as_str(), "rust_wasm_node_cache_to"),
     ] {
         let body = assignment_body(bake, name)?;
         assert!(
@@ -479,7 +464,7 @@ fn theorem_context_parents_never_write_publishers_mode_max() -> anyhow::Result<(
     assert!(
         app_bake.contains("variable \"GHA_CACHE_EXPORT_MODE\"")
             && app_bake.contains("default = \"max\"")
-            && rust_bake.matches("mode=${GHA_CACHE_EXPORT_MODE}").count() == 11
+            && rust_bake.matches("mode=${GHA_CACHE_EXPORT_MODE}").count() == 10
             && preflight_bake.contains("mode=${GHA_CACHE_EXPORT_MODE}"),
         "trusted publishers must default to full exports while ARC may select minimal exact-SHA handoffs"
     );
@@ -546,7 +531,6 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         (rust_bake.as_str(), "rust_wasm_deps_cache_from"),
         (rust_bake.as_str(), "rust_native_source_cache_from"),
         (rust_bake.as_str(), "rust_wasm_source_cache_from"),
-        (rust_bake.as_str(), "rust_wasm_node_cache_from"),
         (web_image.as_str(), "web_e2e_cache_from"),
         (preflight_bake.as_str(), "preflight_cache_from"),
     ] {
@@ -570,7 +554,6 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE",
         "GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE",
         "GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE",
-        "GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE",
         "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
         "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE",
     ] {
@@ -603,7 +586,6 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "rust_wasm_deps_cache_from",
         "rust_native_source_cache_from",
         "rust_wasm_source_cache_from",
-        "rust_wasm_node_cache_from",
     ] {
         let body = assignment_body(&rust_bake, name)?;
         assert!(
@@ -616,7 +598,6 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "rust_wasm_deps_cache_to",
         "rust_native_source_cache_to",
         "rust_wasm_source_cache_to",
-        "rust_wasm_node_cache_to",
         "rust_base_cache_to",
     ] {
         let body = assignment_body(&rust_bake, name)?;

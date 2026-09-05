@@ -309,6 +309,28 @@ tasks:
           exit 1
         fi
         awk '
+          /^FROM wasm-coverage-toolchain AS builder-wasm-node-deps$/ { node_deps = NR }
+          /apt-get install -y --no-install-recommends clang unzip/ { os_tools = NR }
+          /bunx playwright@\$\{PLAYWRIGHT_VERSION\} install-deps chromium/ { browser_tools = NR }
+          /llvm-cov clean --workspace/ { coverage_clean = NR }; /llvm-cov show-env --sh\)/ { coverage_env = NR }
+          /llvm-cov show-env --sh --target wasm32-unknown-unknown/ { browser_coverage_env = NR }
+          /test --release -p nook-wasm --no-run/ { coverage_deps = NR }; /test --target wasm32-unknown-unknown --release -p nook-wasm .* --no-run/ { browser_coverage_deps = NR }
+          /^FROM builder-wasm-node-deps AS builder-wasm-handoff$/ { source_join = NR }
+          /nook-sccache-report wasm-node-test-and-coverage/ { coverage_execution = NR }
+          END {
+            exit !(node_deps < os_tools && os_tools < browser_tools &&
+              browser_tools < coverage_clean && coverage_clean < coverage_env && coverage_env < coverage_deps && coverage_deps < browser_coverage_env &&
+              browser_coverage_env < browser_coverage_deps && browser_coverage_deps < source_join && source_join < coverage_execution)
+          }
+        ' "$product_dockerfile"
+        if grep -Eq 'nook-rust-wasm-node-v2|GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE|rust_wasm_node_cache_' \
+          "$repo_root/.github/actions/nook-docker-setup/action.yml" \
+          "$repo_root/nook-app/nook-platform/docker/rust/docker-bake.hcl" \
+          "$repo_root/nook-app/nook-platform/nook-wasm/docker-bake.hcl"; then
+          echo "source-sensitive WASM Node terminal cache wiring remains" >&2
+          exit 1
+        fi
+        awk '
           /COPY nook-app\/nook-platform\/dylint\/nook-domain-api\/ dylint\/nook-domain-api\// {
             lint_copy = NR
           }
@@ -336,6 +358,17 @@ tasks:
           dylint-split
         require_cached_step "$proof_log" "bake-sim-dylint-self-test-expensive"
         require_uncached_step "$proof_log" "bake-sim-dylint-product-expensive"
+        bake_plain "$proof_log" \
+          --set "wasm-node-source.args.PRODUCT_SOURCE=${suffix}-first" \
+          wasm-node-source
+        bake_plain "$proof_log" \
+          --set "wasm-node-source.args.PRODUCT_SOURCE=${suffix}-second" \
+          wasm-node-source
+        require_cached_step "$proof_log" "bake-sim-wasm-node-os-tooling-expensive"
+        require_cached_step "$proof_log" "bake-sim-wasm-node-browser-tooling-expensive"
+        require_cached_step "$proof_log" "bake-sim-wasm-node-host-coverage-dependencies-expensive"; require_cached_step "$proof_log" "bake-sim-wasm-node-browser-coverage-dependencies-expensive"
+        require_uncached_step "$proof_log" "bake-sim-wasm-node-source-expensive"
+        require_uncached_step "$proof_log" "bake-sim-wasm-node-coverage-execution-expensive"
         echo "Rust source-boundary cache proof: ok"
 
         echo "== Scenario A: Main cold publish =="

@@ -266,26 +266,6 @@ rust_wasm_source_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-source-v3${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
 ] : []
 
-// Node tests are a distinct source-sensitive consumer running on a separate PR
-// worker. Its own mode=max scope embeds the complete WASM lineage without
-// racing wasm-export's source-v3 writer. A present exact ref is imported alone;
-// the first solve for a new head falls back only to trusted Main's full graph.
-rust_wasm_node_cache_from = GHA_CACHE_ENABLED == "" ? [] : GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
-] : GHA_CACHE_EXACT_PROBES_COMPLETE != "" && GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-node-v2:buildcache,ignore-error=true",
-] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-rust-wasm-node-v2:buildcache,ignore-error=true",
-] : [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
-]
-
-rust_wasm_node_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
-  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-rust-wasm-node-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=${GHA_CACHE_EXPORT_MODE},compression=zstd,force-compression=true,timeout=10m",
-] : []
-
-
 // Context parent for ecosystem/product leaves. No cache-from and no cache-to:
 // importing the short rust-base index while nesting nightly/policy orphans their
 // expensive RUNs even after Main nightly FALLBACK restored them.
