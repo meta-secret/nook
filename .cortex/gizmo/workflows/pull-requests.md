@@ -146,8 +146,13 @@ ownership until merge or a concrete blocked handoff:
    - After checks and any opted-in review settle, inspect the available result
      sets.
    - Batch current review findings and failed checks into one repair iteration.
-   - A head or base change invalidates both evidence sets. Dispatch validation
-     and opt in to review again only when the replacement is final and coherent.
+   - A new PR head invalidates both evidence sets. An explicit base-ref
+     retarget also invalidates them.
+   - A later advance of the `main` branch does not invalidate successful
+     exact-head evidence by itself. Do not rebase or restart expensive checks
+     solely because the PR is now behind `main`.
+   - Dispatch validation and opt in to review again only when the replacement
+     head is final and coherent.
    - Three automated finding batches open the circuit breaker. Perform a
      comprehensive stabilization pass, resolve its batch, and set
      `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation run.
@@ -165,7 +170,10 @@ ownership until merge or a concrete blocked handoff:
    required when no candidate qualifies. If a promotion changes the head,
    repeat complete hosted validation.
 8. **Merge automatically when ready.**
-   - Require a current branch.
+   - Require a mergeable PR.
+   - Require the branch to contain the current `origin/main` before starting
+     expensive validation. A later `main` advance is allowed after successful
+     exact-head checks and does not require a rebase by itself.
    - Require green repository-owned checks.
    - Require final dispositions for every substantive review finding.
    - Require handled accepted or rejected comments.
@@ -543,22 +551,18 @@ task pr:preflight PR=<number>
   - Do not request Claude, CodeRabbit, or other optional external reviews.
 - Repository-owned checks and exact-head deployment remain required when
   applicable.
-- Before merge, always verify the branch against latest `origin/main` even when
-  all visible checks are green.
-- If a green PR cannot merge, first suspect a stale branch after `main`
-  advanced.
-
-GitHub may surface that stale-branch state as:
-
-- an "Update branch" requirement
-- `mergeStateStatus: BLOCKED`
-- a missing active check because the green run belongs to an older base
-
-Before chasing other branch-policy explanations:
-
-1. Fetch `main`.
-2. Compare divergence.
-3. Update the PR branch when stale.
+- Before starting expensive validation, verify the branch against the latest
+  `origin/main`.
+- Before merge, verify the exact PR head, mergeability, required checks,
+  deployment, and review state again.
+- A PR may be behind `main` at the merge boundary when the exact-head checks
+  already passed and no other readiness blocker exists.
+- If a green PR cannot merge, inspect mergeability, required deployment,
+  required reviews, and unresolved conversations before treating base
+  divergence as a blocker.
+- A later `main` advance is observable in `behindBy` but is not a readiness
+  failure. A new PR head or an explicit base-ref retarget still invalidates
+  prior evidence.
 
 ```bash
 git fetch origin main
@@ -566,12 +570,15 @@ git rev-list --left-right --count HEAD...origin/main
 gh pr view <number> --json mergeStateStatus,baseRefOid,headRefOid,statusCheckRollup
 ```
 
-If the branch is behind `origin/main`:
+If the branch is behind `origin/main` before expensive validation starts:
 
 1. Merge the base branch into the PR branch.
 2. Push the new head.
 3. Explicitly validate applicable workflows.
-4. Do not merge until freshness passes.
+
+If the branch becomes behind `origin/main` after successful exact-head checks,
+re-run the read-only readiness audit. Do not create a replacement head or
+restart expensive validation solely for that base advance.
 
 ```bash
 git merge origin/main --no-edit
@@ -674,7 +681,9 @@ head, repeat complete hosted validation.
 Merge only when all readiness conditions pass:
 
 - Nook's applicable repository-owned PR test checks are green.
-- The branch is current with `origin/main`.
+- The branch contains the current `origin/main` before expensive validation,
+  or is behind only because `main` advanced after the successful exact-head
+  checks.
 - Every substantive review finding has a final accepted or rejected defect
   disposition.
 - Every accepted or rejected inline thread has a targeted reply and is
