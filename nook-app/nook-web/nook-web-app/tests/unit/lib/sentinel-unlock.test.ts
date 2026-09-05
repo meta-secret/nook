@@ -23,6 +23,11 @@ import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
 import { finalizeSentinelUnlock } from '$lib/vault/sentinel-unlock'
 
+enum LoginSurface {
+  Gate = 'gate',
+  Step = 'step',
+}
+
 class SentinelFinalizationFixture {
   readonly previous = NookSentinelUnlockSessionStatus.inactive()
   readonly current = NookSentinelUnlockSessionStatus.inactive()
@@ -99,7 +104,7 @@ class SentinelFinalizationFixture {
     await finalizeSentinelUnlock(this.state as unknown as VaultState)
   }
 
-  renderLogin(surface: 'gate' | 'step') {
+  renderLogin(surface: LoginSurface) {
     const props = {
       vault: this.state as unknown as VaultState,
       isVerifying: false,
@@ -108,7 +113,7 @@ class SentinelFinalizationFixture {
       onUnlockWithPassword: vi.fn(),
       onSwitchVault: vi.fn(),
     }
-    return surface === 'gate'
+    return surface === LoginSurface.Gate
       ? render(LoginGate, {
           ...props,
           appKind: VaultApplication.UnifiedDevelopment,
@@ -175,11 +180,13 @@ describe('Sentinel quorum completion presentation', () => {
     expect(fixture.state.loadSecretPage).not.toHaveBeenCalled()
     fixture.expectNoAutomaticCeremony()
 
-    for (const surface of ['gate', 'step'] as const) {
+    for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       fixture.openVault.mockClear()
       const view = fixture.renderLogin(surface)
-      expect(view.queryByTestId('sentinel-ceremony-panel')).toBeNull()
-      expect(view.queryByTestId('login-unlock-method-password')).toBeNull()
+      expect(view.queryAllByTestId('sentinel-ceremony-panel')).toHaveLength(0)
+      expect(
+        view.queryAllByTestId('login-unlock-method-password'),
+      ).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
       const open = view.getByTestId('unlock-vault-btn') as HTMLButtonElement
       expect(open.disabled).toBe(false)
@@ -222,11 +229,11 @@ describe('Sentinel quorum completion presentation', () => {
     expect(fixture.state.isVerifying).toBe(false)
     expect(fixture.state.markVaultUnlocked).not.toHaveBeenCalled()
     fixture.expectNoAutomaticCeremony()
-    for (const surface of ['gate', 'step'] as const) {
+    for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
       expect(view.getByTestId('sentinel-unlock-initiator')).toBeTruthy()
-      expect(view.queryByTestId('unlock-vault-btn')).toBeNull()
-      expect(view.queryByTestId('sentinel-unlock-start-btn')).toBeNull()
+      expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
+      expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
       view.unmount()
     }
@@ -240,13 +247,13 @@ describe('Sentinel quorum completion presentation', () => {
       new Error('waiting for shares'),
     )
     await fixture.finalize()
-    for (const surface of ['gate', 'step'] as const) {
+    for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
       const view = fixture.renderLogin(surface)
       expect(
         (view.getByTestId('sentinel-unlock-start-btn') as HTMLButtonElement)
           .disabled,
       ).toBe(true)
-      expect(view.queryByTestId('unlock-vault-btn')).toBeNull()
+      expect(view.queryAllByTestId('unlock-vault-btn')).toHaveLength(0)
       expect(fixture.openVault).not.toHaveBeenCalled()
       view.unmount()
     }
@@ -289,11 +296,15 @@ describe('Sentinel quorum completion presentation', () => {
       fixture.expectNoAutomaticCeremony()
       // Rust's unlocked result also overrides a stale presentation hint.
       fixture.state.sentinelCeremonyPrompt = true
-      for (const surface of ['gate', 'step'] as const) {
+      for (const surface of [LoginSurface.Gate, LoginSurface.Step]) {
         const view = fixture.renderLogin(surface)
-        expect(view.queryByTestId('sentinel-ceremony-panel')).toBeNull()
-        expect(view.queryByTestId('sentinel-unlock-start-btn')).toBeNull()
-        expect(view.queryByTestId('login-unlock-method-password')).toBeNull()
+        expect(view.queryAllByTestId('sentinel-ceremony-panel')).toHaveLength(0)
+        expect(view.queryAllByTestId('sentinel-unlock-start-btn')).toHaveLength(
+          0,
+        )
+        expect(
+          view.queryAllByTestId('login-unlock-method-password'),
+        ).toHaveLength(0)
         expect(fixture.openVault).not.toHaveBeenCalled()
         view.unmount()
       }
