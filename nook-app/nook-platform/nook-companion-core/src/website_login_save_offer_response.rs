@@ -1,3 +1,9 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 //! Typed service-worker response boundary for website login-save offers.
 
 use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
@@ -51,28 +57,30 @@ pub enum WebsiteLoginSaveOfferResponse {
 #[error("website login-save offer response is malformed")]
 pub struct WebsiteLoginSaveOfferResponseDecodeError;
 
-fn offer_is_valid(offer: &WebsiteLoginSaveOffer) -> bool {
-    !offer.offer_id.trim().is_empty()
-        && !offer.vault_store_id.trim().is_empty()
-        && !offer.vault_name.trim().is_empty()
+impl WebsiteLoginSaveOffer {
+    fn is_valid(&self) -> bool {
+        !self.offer_id.trim().is_empty()
+            && !self.vault_store_id.trim().is_empty()
+            && !self.vault_name.trim().is_empty()
+    }
 }
 
-pub fn decode_website_login_save_offer_response(
-    response: WebsiteLoginSaveOfferResponse,
-) -> Result<WebsiteLoginSaveOfferResponse, WebsiteLoginSaveOfferResponseDecodeError> {
-    match &response {
-        WebsiteLoginSaveOfferResponse::OfferAvailable { offer } if offer_is_valid(offer) => {
-            Ok(response)
-        }
-        WebsiteLoginSaveOfferResponse::NotRequired {}
-        | WebsiteLoginSaveOfferResponse::Locked {}
-        | WebsiteLoginSaveOfferResponse::Unavailable {} => Ok(response),
-        WebsiteLoginSaveOfferResponse::Rejected { reason } if !reason.trim().is_empty() => {
-            Ok(response)
-        }
-        WebsiteLoginSaveOfferResponse::OfferAvailable { .. }
-        | WebsiteLoginSaveOfferResponse::Rejected { .. } => {
-            Err(WebsiteLoginSaveOfferResponseDecodeError)
+impl WebsiteLoginSaveOfferResponse {
+    pub fn validate(
+        self,
+    ) -> Result<WebsiteLoginSaveOfferResponse, WebsiteLoginSaveOfferResponseDecodeError> {
+        match &self {
+            WebsiteLoginSaveOfferResponse::OfferAvailable { offer } if offer.is_valid() => Ok(self),
+            WebsiteLoginSaveOfferResponse::NotRequired {}
+            | WebsiteLoginSaveOfferResponse::Locked {}
+            | WebsiteLoginSaveOfferResponse::Unavailable {} => Ok(self),
+            WebsiteLoginSaveOfferResponse::Rejected { reason } if !reason.trim().is_empty() => {
+                Ok(self)
+            }
+            WebsiteLoginSaveOfferResponse::OfferAvailable { .. }
+            | WebsiteLoginSaveOfferResponse::Rejected { .. } => {
+                Err(WebsiteLoginSaveOfferResponseDecodeError)
+            }
         }
     }
 }
@@ -109,23 +117,25 @@ pub enum WebsiteLoginSavePendingResponse {
     Rejected(WebsiteLoginSavePendingRejected),
 }
 
-pub fn decode_website_login_save_pending_response(
-    response: WebsiteLoginSavePendingResponse,
-) -> Result<WebsiteLoginSavePendingResponse, WebsiteLoginSaveOfferResponseDecodeError> {
-    match &response {
-        WebsiteLoginSavePendingResponse::Available(
-            WebsiteLoginSavePendingAvailable::Unavailable { ok: true },
-        ) => Ok(response),
-        WebsiteLoginSavePendingResponse::Available(
-            WebsiteLoginSavePendingAvailable::Available { ok: true, offer },
-        ) if offer_is_valid(offer) => Ok(response),
-        WebsiteLoginSavePendingResponse::Rejected(WebsiteLoginSavePendingRejected {
-            ok: false,
-            reason,
-        }) if !reason.trim().is_empty() => Ok(response),
-        WebsiteLoginSavePendingResponse::Available(_)
-        | WebsiteLoginSavePendingResponse::Rejected(_) => {
-            Err(WebsiteLoginSaveOfferResponseDecodeError)
+impl WebsiteLoginSavePendingResponse {
+    pub fn validate(
+        self,
+    ) -> Result<WebsiteLoginSavePendingResponse, WebsiteLoginSaveOfferResponseDecodeError> {
+        match &self {
+            WebsiteLoginSavePendingResponse::Available(
+                WebsiteLoginSavePendingAvailable::Unavailable { ok: true },
+            ) => Ok(self),
+            WebsiteLoginSavePendingResponse::Available(
+                WebsiteLoginSavePendingAvailable::Available { ok: true, offer },
+            ) if offer.is_valid() => Ok(self),
+            WebsiteLoginSavePendingResponse::Rejected(WebsiteLoginSavePendingRejected {
+                ok: false,
+                reason,
+            }) if !reason.trim().is_empty() => Ok(self),
+            WebsiteLoginSavePendingResponse::Available(_)
+            | WebsiteLoginSavePendingResponse::Rejected(_) => {
+                Err(WebsiteLoginSaveOfferResponseDecodeError)
+            }
         }
     }
 }
@@ -138,16 +148,18 @@ pub enum WebsiteLoginSaveActionResponse {
     Rejected { reason: String },
 }
 
-pub fn decode_website_login_save_action_response(
-    response: WebsiteLoginSaveActionResponse,
-) -> Result<WebsiteLoginSaveActionResponse, WebsiteLoginSaveOfferResponseDecodeError> {
-    match &response {
-        WebsiteLoginSaveActionResponse::Completed {} => Ok(response),
-        WebsiteLoginSaveActionResponse::Rejected { reason } if !reason.trim().is_empty() => {
-            Ok(response)
-        }
-        WebsiteLoginSaveActionResponse::Rejected { .. } => {
-            Err(WebsiteLoginSaveOfferResponseDecodeError)
+impl WebsiteLoginSaveActionResponse {
+    pub fn validate(
+        self,
+    ) -> Result<WebsiteLoginSaveActionResponse, WebsiteLoginSaveOfferResponseDecodeError> {
+        match &self {
+            WebsiteLoginSaveActionResponse::Completed {} => Ok(self),
+            WebsiteLoginSaveActionResponse::Rejected { reason } if !reason.trim().is_empty() => {
+                Ok(self)
+            }
+            WebsiteLoginSaveActionResponse::Rejected { .. } => {
+                Err(WebsiteLoginSaveOfferResponseDecodeError)
+            }
         }
     }
 }
@@ -166,7 +178,7 @@ mod tests {
             r#"{"kind":"rejected","reason":"login-save-plan-failed"}"#,
         ] {
             let response = serde_json::from_str::<WebsiteLoginSaveOfferResponse>(serialized)?;
-            assert!(decode_website_login_save_offer_response(response).is_ok());
+            assert!(WebsiteLoginSaveOfferResponse::validate(response).is_ok());
         }
         Ok(())
     }
@@ -183,7 +195,7 @@ mod tests {
         ] {
             let decoded = serde_json::from_str::<WebsiteLoginSaveOfferResponse>(serialized)
                 .map_err(|_| WebsiteLoginSaveOfferResponseDecodeError)
-                .and_then(decode_website_login_save_offer_response);
+                .and_then(WebsiteLoginSaveOfferResponse::validate);
             assert!(decoded.is_err(), "accepted {serialized}");
         }
     }
@@ -196,14 +208,14 @@ mod tests {
             r#"{"ok":false,"reason":"login-save-pending-failed"}"#,
         ] {
             let response = serde_json::from_str::<WebsiteLoginSavePendingResponse>(serialized)?;
-            assert!(decode_website_login_save_pending_response(response).is_ok());
+            assert!(WebsiteLoginSavePendingResponse::validate(response).is_ok());
         }
         for serialized in [
             r#"{"kind":"completed"}"#,
             r#"{"kind":"rejected","reason":"login-save-commit-failed"}"#,
         ] {
             let response = serde_json::from_str::<WebsiteLoginSaveActionResponse>(serialized)?;
-            assert!(decode_website_login_save_action_response(response).is_ok());
+            assert!(WebsiteLoginSaveActionResponse::validate(response).is_ok());
         }
         for serialized in [
             r#"{"ok":true,"state":"unavailable","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
@@ -211,7 +223,7 @@ mod tests {
         ] {
             let decoded = serde_json::from_str::<WebsiteLoginSavePendingResponse>(serialized)
                 .map_err(|_| WebsiteLoginSaveOfferResponseDecodeError)
-                .and_then(decode_website_login_save_pending_response);
+                .and_then(WebsiteLoginSavePendingResponse::validate);
             assert!(decoded.is_err(), "accepted {serialized}");
         }
         assert!(
@@ -220,6 +232,36 @@ mod tests {
             )
             .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn preserves_save_decisions_and_string_discriminators() -> anyhow::Result<()> {
+        for decision in [0, 1] {
+            let wire = format!(
+                r#"{{"kind":"offer-available","offer":{{"offerId":"offer","decision":{decision},"vaultStoreId":"vault","vaultName":"Personal"}}}}"#
+            );
+            let response: WebsiteLoginSaveOfferResponse = serde_json::from_str(&wire)?;
+            assert_eq!(serde_json::to_string(&response.validate()?)?, wire);
+        }
+        let completed: WebsiteLoginSaveActionResponse =
+            serde_json::from_str(r#"{"kind":"completed"}"#)?;
+        assert_eq!(
+            serde_json::to_string(&completed.validate()?)?,
+            r#"{"kind":"completed"}"#
+        );
+        for wire in [
+            r#"{"ok":false,"state":"unavailable"}"#,
+            r#"{"ok":false,"state":"available","offer":{"offerId":"offer","decision":1,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
+            r#"{"ok":true,"reason":"denied"}"#,
+            r#"{"ok":true,"state":"available","offer":{"offerId":"offer","decision":1,"vaultStoreId":" ","vaultName":"Personal"}}"#,
+        ] {
+            let response: WebsiteLoginSavePendingResponse = serde_json::from_str(wire)?;
+            assert!(response.validate().is_err());
+        }
+        let rejected: WebsiteLoginSaveActionResponse =
+            serde_json::from_str(r#"{"kind":"rejected","reason":" "}"#)?;
+        assert!(rejected.validate().is_err());
         Ok(())
     }
 }
