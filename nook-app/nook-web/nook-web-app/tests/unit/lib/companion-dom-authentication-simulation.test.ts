@@ -71,7 +71,9 @@ describe('DOM-backed companion authentication simulation', () => {
       workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
       credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
       credentialFillRejection: false,
-      implicitSubmissionMethod: 'absent',
+      implicitSubmissionMethod: 'post',
+      advanceControl: 'absent',
+      credentialSubmissionKind: 'observed',
       filled: true,
       submissionResult: FormSubmissionResult.Submitted,
       submittedControlIdentity: 'login-submit',
@@ -103,9 +105,9 @@ describe('DOM-backed companion authentication simulation', () => {
 
     expect(result).toMatchObject({
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
-      matchKind: CompanionAuthenticationWorkflowMatchKind.NoMatch,
-      workflowKind: false,
       implicitSubmissionMethod: 'absent',
+      advanceControl: 'absent',
+      credentialSubmissionKind: 'absent',
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
       submittedControlIdentity: '',

@@ -58,6 +58,8 @@ type DomAuthenticationSimulationEvidence = {
   readonly credentialFillOutcome: CredentialFillJourneyOutcomeKind | false
   readonly credentialFillRejection: CredentialFillRejection | false
   readonly implicitSubmissionMethod: AuthenticationPageObservationFacts['ceremony']['implicitSubmissionMethod']
+  readonly advanceControl: AuthenticationPageObservationFacts['ceremony']['advanceControl']
+  readonly credentialSubmissionKind: AuthenticationPageObservationFacts['credentialSubmission']['kind']
   readonly filled: boolean
   readonly submissionResult: FormSubmissionResult
   readonly submittedControlIdentity: string
@@ -212,6 +214,12 @@ export function simulateDomAuthentication({
   const implicitSubmissionMethod = selected
     ? selected.facts.ceremony.implicitSubmissionMethod
     : 'absent'
+  const advanceControl = selected
+    ? selected.facts.ceremony.advanceControl
+    : 'absent'
+  const credentialSubmissionKind = selected
+    ? selected.facts.credentialSubmission.kind
+    : 'absent'
   if (!selected) {
     return {
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
@@ -224,6 +232,8 @@ export function simulateDomAuthentication({
       credentialFillOutcome: false,
       credentialFillRejection: false,
       implicitSubmissionMethod,
+      advanceControl,
+      credentialSubmissionKind,
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
       submittedControlIdentity,
@@ -243,7 +253,9 @@ export function simulateDomAuthentication({
   const loginApproved =
     workflowKind === AuthenticationWorkflowKind.Login &&
     workflowAction === AuthenticationWorkflowAction.ContinueWithNook &&
-    credentialFill.kind === CredentialFillJourneyOutcomeKind.Completed
+    credentialFill.kind === CredentialFillJourneyOutcomeKind.Completed &&
+    advanceControl !== 'implicit-submission' &&
+    credentialSubmissionKind === 'observed'
   if (!loginApproved) {
     return {
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
@@ -256,6 +268,8 @@ export function simulateDomAuthentication({
       credentialFillOutcome: credentialFill.kind,
       credentialFillRejection: credentialFill.rejection,
       implicitSubmissionMethod,
+      advanceControl,
+      credentialSubmissionKind,
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
       submittedControlIdentity,
@@ -296,6 +310,8 @@ export function simulateDomAuthentication({
     credentialFillOutcome: credentialFill.kind,
     credentialFillRejection: credentialFill.rejection,
     implicitSubmissionMethod,
+    advanceControl,
+    credentialSubmissionKind,
     filled: approvedFill && submissionResult !== FormSubmissionResult.Rejected,
     submissionResult,
     submittedControlIdentity,
