@@ -37,9 +37,9 @@ pub use device_access::{
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
-    keepassxc_import, keeper_import, lastpass_import, login_site_hosts, onepassword_import,
-    passkey_authenticator, password, proton_pass_import, secret_fingerprint, secret_types,
-    secret_view, session,
+    import_support, keepassxc_import, keeper_import, lastpass_import, login_site_hosts,
+    onepassword_import, passkey_authenticator, password, proton_pass_import, secret_fingerprint,
+    secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,

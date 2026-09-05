@@ -104,6 +104,12 @@ impl From<LocalVaultCount> for usize {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct EnrolledDeviceCount(usize);
 
+impl EnrolledDeviceCount {
+    pub(crate) const fn is_at_most_one(self) -> bool {
+        self.0 <= 1
+    }
+}
+
 impl From<usize> for EnrolledDeviceCount {
     fn from(value: usize) -> Self {
         Self(value)

@@ -21,8 +21,8 @@ pub const fn assess_vault_security(
     enrolled_device_count: crate::EnrolledDeviceCount,
 ) -> VaultSecurityRecommendations {
     VaultSecurityRecommendations {
-        needs_sync_provider: usize::from(sync_provider_count) == 0,
-        needs_another_device: usize::from(enrolled_device_count) <= 1,
+        needs_sync_provider: sync_provider_count.is_zero(),
+        needs_another_device: enrolled_device_count.is_at_most_one(),
     }
 }
 
