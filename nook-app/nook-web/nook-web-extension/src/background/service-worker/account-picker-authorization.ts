@@ -1,4 +1,8 @@
-import { AccountPickerAuthorizationLifecycle } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import {
+  AccountPickerAuthorizationLifecycle,
+  CleanupEvidence,
+  type CleanupTransitionOutcome,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
 import {
   getSessionStorage,
@@ -19,16 +23,15 @@ let accountPickerAuthorizationState:
   AccountPickerAuthorizationLifecycle | AccountPickerAuthorizationAvailability =
   AccountPickerAuthorizationAvailability.Unavailable
 let accountPickerAuthorizationStatePromise:
-  | Promise<AccountPickerAuthorizationLifecycle>
-  | AccountPickerAuthorizationAvailability =
+  Promise<void> | AccountPickerAuthorizationAvailability =
   AccountPickerAuthorizationAvailability.Unavailable
 
-async function initializedAccountPickerAuthorizationState(): Promise<AccountPickerAuthorizationLifecycle> {
+async function initializedAccountPickerAuthorizationState(): Promise<void> {
   if (
     accountPickerAuthorizationState !==
     AccountPickerAuthorizationAvailability.Unavailable
   ) {
-    return accountPickerAuthorizationState
+    return
   }
   if (
     accountPickerAuthorizationStatePromise ===
@@ -53,22 +56,35 @@ async function initializedAccountPickerAuthorizationState(): Promise<AccountPick
       const wasmEpoch: ConstructorParameters<
         typeof AccountPickerAuthorizationLifecycle
       >[0] = epoch
-      return new AccountPickerAuthorizationLifecycle(wasmEpoch)
+      accountPickerAuthorizationState = new AccountPickerAuthorizationLifecycle(
+        wasmEpoch,
+      )
     })()
   }
   try {
-    accountPickerAuthorizationState =
-      await accountPickerAuthorizationStatePromise
+    await accountPickerAuthorizationStatePromise
   } catch (error) {
     accountPickerAuthorizationStatePromise =
       AccountPickerAuthorizationAvailability.Unavailable
     throw error
   }
+}
+
+// Read synchronously after each await: another cleanup may consume the handle
+// while browser storage is pending. The initialization promise owns no handle.
+function currentAccountPickerAuthorizationState(): AccountPickerAuthorizationLifecycle {
+  if (
+    accountPickerAuthorizationState ===
+    AccountPickerAuthorizationAvailability.Unavailable
+  ) {
+    throw new Error('account picker authorization is not initialized')
+  }
   return accountPickerAuthorizationState
 }
 
 export async function accountPickerAuthorizationGeneration(): Promise<string> {
-  return (await initializedAccountPickerAuthorizationState()).snapshot()
+  await initializedAccountPickerAuthorizationState()
+  return currentAccountPickerAuthorizationState().snapshot()
 }
 
 export function accountPickerAuthorizationIsCurrent(
@@ -92,8 +108,11 @@ export type AccountPickerAuthorizationCleanupStart = {
 }
 
 export async function beginAccountPickerAuthorizationCleanup(): Promise<AccountPickerAuthorizationCleanupStart> {
-  const state = await initializedAccountPickerAuthorizationState()
-  const generation = state.begin_cleanup(crypto.randomUUID())
+  await initializedAccountPickerAuthorizationState()
+  accountPickerAuthorizationState = currentAccountPickerAuthorizationState()
+    .begin_cleanup(crypto.randomUUID())
+    .into_lifecycle()
+  const generation = accountPickerAuthorizationState.snapshot()
   const cleanupStorage: Parameters<typeof setSessionStorage>[0] = {
     [ACCOUNT_PICKER_CLEANUP_STORAGE_KEY]: true,
     [ACCOUNT_PICKER_AUTHORIZATION_EPOCH_STORAGE_KEY]: generation,
@@ -115,18 +134,29 @@ export async function beginAccountPickerAuthorizationCleanup(): Promise<AccountP
 // eslint-disable-next-line max-params -- The WASM lifecycle transition requires its epoch and completion class.
 export async function completeAccountPickerAuthorizationCleanup(
   authorizationGeneration: string,
-  fullCleanupCompleted: boolean,
-): Promise<void> {
-  const state = await initializedAccountPickerAuthorizationState()
+  evidence: CleanupEvidence,
+): Promise<CleanupTransitionOutcome> {
+  await initializedAccountPickerAuthorizationState()
   try {
-    if (state.is_final_cleanup(authorizationGeneration, fullCleanupCompleted)) {
+    if (
+      currentAccountPickerAuthorizationState().is_final_cleanup(
+        authorizationGeneration,
+        evidence,
+      )
+    ) {
       await removeSessionStorage(ACCOUNT_PICKER_CLEANUP_STORAGE_KEY)
     }
-    state.complete_cleanup(authorizationGeneration, fullCleanupCompleted)
   } catch (error) {
-    state.release_cleanup(authorizationGeneration)
+    releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
     throw error
   }
+  const transition = currentAccountPickerAuthorizationState().complete_cleanup(
+    authorizationGeneration,
+    evidence,
+  )
+  const outcome = transition.outcome()
+  accountPickerAuthorizationState = transition.into_lifecycle()
+  return outcome
 }
 
 export function releaseAccountPickerAuthorizationCleanup(
@@ -136,7 +166,9 @@ export function releaseAccountPickerAuthorizationCleanup(
     accountPickerAuthorizationState !==
     AccountPickerAuthorizationAvailability.Unavailable
   ) {
-    accountPickerAuthorizationState.release_cleanup(authorizationGeneration)
+    accountPickerAuthorizationState = accountPickerAuthorizationState
+      .release_cleanup(authorizationGeneration)
+      .into_lifecycle()
   }
 }
 
