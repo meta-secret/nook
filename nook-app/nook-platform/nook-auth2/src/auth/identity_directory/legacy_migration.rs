@@ -1,10 +1,15 @@
 //! Normalization for identity directories written before app-key uniqueness.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
 use std::collections::HashMap;
 
 use super::IdentityDirectory;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
-use crate::{AppId, IdentityId, IdentityMember, IdentitySelection};
+use crate::{AppId, IdentityId, IdentityMember, IdentityRecord, IdentitySelection};
 
 impl IdentityDirectory {
     /// Whether this directory predates unique app-key ownership enforcement.
@@ -153,7 +158,7 @@ impl IdentityDirectory {
         let survivor = &mut self.identities[survivor_index];
         survivor.control_epoch = survivor.control_epoch.max(absorbed.control_epoch);
         for member in absorbed.members {
-            merge_member(&mut survivor.members, member)?;
+            survivor.merge_legacy_member(member)?;
         }
         for vault in absorbed.vault_deks {
             if survivor
@@ -171,41 +176,122 @@ impl IdentityDirectory {
     }
 }
 
-fn merge_member(
-    members: &mut Vec<IdentityMember>,
-    incoming: IdentityMember,
-) -> MultiDeviceResult<()> {
-    let Some(existing) = members
-        .iter_mut()
-        .find(|member| member.app_id == incoming.app_id)
-    else {
-        members.push(incoming);
-        return Ok(());
-    };
-    if existing.auth_id != incoming.auth_id || existing.public_key != incoming.public_key {
-        return Err(MultiDeviceError::InvalidDeviceIdentity(
-            "Legacy identity directory has conflicting material for one app key.".to_owned(),
-        ));
+impl IdentityRecord {
+    fn merge_legacy_member(&mut self, incoming: IdentityMember) -> MultiDeviceResult<()> {
+        let Some(existing) = self
+            .members
+            .iter_mut()
+            .find(|member| member.app_id == incoming.app_id)
+        else {
+            self.members.push(incoming);
+            return Ok(());
+        };
+        if existing.auth_id != incoming.auth_id || existing.public_key != incoming.public_key {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "Legacy identity directory has conflicting material for one app key.".to_owned(),
+            ));
+        }
+        if existing.signing_public_key.is_empty() {
+            existing.signing_public_key = incoming.signing_public_key;
+        } else if !incoming.signing_public_key.is_empty()
+            && existing.signing_public_key != incoming.signing_public_key
+        {
+            return Err(MultiDeviceError::InvalidDeviceIdentity(
+                "Legacy identity directory has conflicting signing keys for one app key."
+                    .to_owned(),
+            ));
+        }
+        if existing.label.is_none() {
+            existing.label = incoming.label;
+        }
+        Ok(())
     }
-    if existing.signing_public_key.is_empty() {
-        existing.signing_public_key = incoming.signing_public_key;
-    } else if !incoming.signing_public_key.is_empty()
-        && existing.signing_public_key != incoming.signing_public_key
-    {
-        return Err(MultiDeviceError::InvalidDeviceIdentity(
-            "Legacy identity directory has conflicting signing keys for one app key.".to_owned(),
-        ));
-    }
-    if existing.label.is_none() {
-        existing.label = incoming.label;
-    }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AppKey, IdentityRecord};
+    use crate::{AppKey, DeviceSigningPublicKey};
+
+    impl IdentityMember {
+        fn fixture(app: &AppKey) -> Self {
+            Self {
+                app_id: app.app_id().clone(),
+                auth_id: app.auth_id(),
+                public_key: app.public_key(),
+                signing_public_key: DeviceSigningPublicKey::Unavailable,
+                label: None,
+            }
+        }
+    }
+
+    #[test]
+    fn member_merge_inserts_new_app_without_changing_existing_member() -> anyhow::Result<()> {
+        let owner = AppKey::generate()?;
+        let peer = AppKey::generate()?;
+        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
+        let existing = record.members[0].clone();
+        let incoming = IdentityMember::fixture(&peer);
+        record.merge_legacy_member(incoming.clone())?;
+        assert_eq!(record.members, vec![existing, incoming]);
+        Ok(())
+    }
+
+    #[test]
+    fn member_merge_completes_missing_metadata_and_preserves_existing_values() -> anyhow::Result<()>
+    {
+        let owner = AppKey::generate()?;
+        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
+        let mut incoming = IdentityMember::fixture(&owner);
+        incoming.signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
+        incoming.label = Some("First label".to_owned());
+        record.merge_legacy_member(incoming.clone())?;
+        assert_eq!(record.members, vec![incoming.clone()]);
+        let mut later = incoming.clone();
+        later.label = Some("Later label".to_owned());
+        record.merge_legacy_member(later)?;
+        record.merge_legacy_member(IdentityMember::fixture(&owner))?;
+        assert_eq!(record.members, vec![incoming]);
+        Ok(())
+    }
+
+    #[test]
+    fn member_merge_rejects_conflicting_material_before_mutation() -> anyhow::Result<()> {
+        let owner = AppKey::generate()?;
+        let other = AppKey::generate()?;
+        let mut record = IdentityRecord::create_with_app_key("Personal", &owner, None)?;
+        record.members[0].signing_public_key = DeviceSigningPublicKey::parse(&"11".repeat(32))?;
+        let before = record.clone();
+        let mut wrong_auth = IdentityMember::fixture(&owner);
+        wrong_auth.auth_id = other.auth_id();
+        let mut wrong_public_key = IdentityMember::fixture(&owner);
+        wrong_public_key.public_key = other.public_key();
+        let mut wrong_signing_key = IdentityMember::fixture(&owner);
+        wrong_signing_key.signing_public_key = DeviceSigningPublicKey::parse(&"22".repeat(32))?;
+        for (incoming, expected) in [
+            (
+                wrong_auth,
+                "Legacy identity directory has conflicting material for one app key.",
+            ),
+            (
+                wrong_public_key,
+                "Legacy identity directory has conflicting material for one app key.",
+            ),
+            (
+                wrong_signing_key,
+                "Legacy identity directory has conflicting signing keys for one app key.",
+            ),
+        ] {
+            match record.merge_legacy_member(incoming) {
+                Err(MultiDeviceError::InvalidDeviceIdentity(message)) => {
+                    assert_eq!(message, expected)
+                }
+                _ => anyhow::bail!("expected conflicting legacy member rejection"),
+            }
+            assert_eq!(record, before);
+        }
+        Ok(())
+    }
 
     #[test]
     fn merges_legacy_duplicate_owners_into_selected_identity() -> anyhow::Result<()> {
