@@ -28,6 +28,9 @@ Keep Rust domain models precise. Use this when a struct has optional fields,
 string tags, sentinel values, or a shared DTO that seems to serve multiple
 workflows.
 
+This document is Rust's language-specific application of
+[domain API integrity](../../../shared/dynamic-skills/domain-api-integrity.md).
+
 ## Concise Rust paths
 
 Authored Rust keeps meaningful context without spelling a dependency hierarchy
@@ -38,7 +41,8 @@ at each use site.
 - Keep every non-`use` path to at most two inline segments.
 - Import the owning module or type when a reference would exceed that limit.
 - Retain useful context such as `auth::Item` or `SecretValue::from_yaml_str`.
-- Use a module-qualified call when a free function needs context.
+- Keep a required boundary free function module-qualified so its external
+  context remains visible.
 - Import `std::str` and write `str::from_utf8(data)` for UTF-8 decoding.
 - Deny `clippy::absolute_paths` as the mechanical baseline.
 - Set `absolute-paths-max-segments = 2` at each applicable Clippy configuration
@@ -170,6 +174,8 @@ When you see `Option<T>`, ask:
   malformed, or deliberately partial JSON. A narrow `Value::Object`/`.get()`
   assertion may verify that a serializer omitted or renamed a property. Domain
   values still require a typed round trip.
+- Keep domain and application values concrete. Use a generic type parameter or
+  trait object only for a real shared contract or capability.
 - Use typed fields such as `event: VaultEvent` internally and across merge or
   sync APIs. Add explicit parse or serialize helpers for a narrow browser file
   or provider boundary that reads or writes YAML text.
@@ -233,6 +239,10 @@ When you see `Option<T>`, ask:
 - Do not keep raw YAML or JSON strings past an I/O boundary.
 - Do not index `serde_json::Value` or use `Value::is_null()` for known-contract
   field-value assertions.
+- Do not use `dyn Any`, `Box<dyn Any>`, raw JSON trees, generic string-keyed
+  maps, or equivalent erased value bags as domain or application values.
+- Do not introduce a generic type parameter only to avoid naming the concrete
+  domain contract.
 - Do not expose a WASM DTO field named `yaml` when an event or vault payload has
   a typed domain representation.
 - Do not store secret material that remains in Rust as raw `String`.
@@ -595,6 +605,10 @@ whether a value exists.
 - Require an exhaustive `match` for evolving domain decisions.
 - Inventory reachable public numeric APIs recursively. Enforce them with
   `raw_numeric_public_api`.
+- Inventory `dyn Any`, raw JSON trees, and generic string-keyed value maps in
+  changed domain and application code. Keep only narrow decoding boundaries.
+- Verify every generic type parameter and trait object represents a real shared
+  contract or capability.
 - Inventory authored Rust `bool` fields, parameters, returns, and lint
   allowances in the changed scope.
 - Replace every domain, state, policy, mode, command, configuration, persisted,
