@@ -1,6 +1,4 @@
-#![cfg(not(target_arch = "wasm32"))]
-
-use nook_wasm::{NookClientRunMode, NookRuntimeConfig, NookVaultClientPolicy};
+use crate::{NookClientRunMode, NookRuntimeConfig, NookVaultClientPolicy};
 
 #[test]
 fn policy_wrappers_project_sync_and_connection_paths() {

@@ -30,6 +30,8 @@ mod logger;
 mod manager;
 mod passkey_browser;
 mod passkey_observation;
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod runtime_policy_tests;
 mod storage;
 mod sync_io;
 mod types;
