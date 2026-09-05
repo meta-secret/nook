@@ -1,35 +1,174 @@
 import { describe, expect, test } from 'bun:test'
+import { CleanupEvidence } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
 })
 
+class AuthorizationStorageFixture {
+  readonly runtime = {}
+  readonly session = {
+    get: (_key: string, callback: (items: Record<string, unknown>) => void) =>
+      callback({}),
+    set: (_items: Record<string, unknown>, callback: () => void) => callback(),
+    remove: (_key: string, callback: () => void) => callback(),
+  }
+
+  constructor() {
+    globalThis.chrome = {
+      runtime: this.runtime,
+      storage: { session: this.session },
+    } as typeof chrome
+  }
+
+  holdRemoval(): Promise<() => void> {
+    return new Promise((resolve) => {
+      this.session.remove = (_key, callback) => resolve(callback)
+    })
+  }
+
+  finishRemoval(callback: () => void): void {
+    this.session.remove = (_key, complete) => complete()
+    callback()
+  }
+
+  failRemoval(callback: () => void): void {
+    Object.assign(this.runtime, { lastError: { message: 'removal denied' } })
+    this.finishRemoval(callback)
+    Reflect.deleteProperty(this.runtime, 'lastError')
+  }
+}
+
 describe('account picker authorization cleanup', () => {
-  test('rejects picker rehydration while cleanup is active', async () => {
+  test('shares initialization and successor handles across overlapping cleanups', async () => {
     const accountPickers =
       await import('../src/background/service-worker/account-pickers')
-    globalThis.chrome = {
-      runtime: {},
-      storage: {
-        session: {
-          get: (_key, callback) => {
-            callback({})
-          },
-          set: (_items, callback) => callback(),
-          remove: (_key, callback) => callback(),
-        },
-      },
-    } as typeof chrome
+    new AuthorizationStorageFixture()
 
-    const cleanup =
-      await accountPickers.beginAccountPickerAuthorizationCleanup()
+    const [cleanup, overlap] = await Promise.all([
+      accountPickers.beginAccountPickerAuthorizationCleanup(),
+      accountPickers.beginAccountPickerAuthorizationCleanup(),
+    ])
+    expect(overlap.authorizationGeneration).toBe(
+      cleanup.authorizationGeneration,
+    )
     const result = await accountPickers.loadLoginPicker('persisted-request')
     await accountPickers.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
-      true,
+      CleanupEvidence.Full,
     )
+    expect(
+      accountPickers.accountPickerAuthorizationIsCurrent(
+        cleanup.authorizationGeneration,
+      ),
+    ).toBe(false)
+    await accountPickers.completeAccountPickerAuthorizationCleanup(
+      overlap.authorizationGeneration,
+      CleanupEvidence.Full,
+    )
+    expect(
+      accountPickers.accountPickerAuthorizationIsCurrent(
+        overlap.authorizationGeneration,
+      ),
+    ).toBe(true)
 
     expect(result).toEqual({ kind: 'unavailable' })
+  })
+
+  test('reacquires the successor after marker removal overlaps another cleanup', async () => {
+    const authorization =
+      await import('../src/background/service-worker/account-picker-authorization')
+    const storage = new AuthorizationStorageFixture()
+    const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
+    const removal = storage.holdRemoval()
+    const completing = authorization.completeAccountPickerAuthorizationCleanup(
+      cleanup.authorizationGeneration,
+      CleanupEvidence.Full,
+    )
+    const callback = await removal
+    const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
+    storage.finishRemoval(callback)
+    await completing
+    expect(
+      authorization.accountPickerAuthorizationIsCurrent(
+        cleanup.authorizationGeneration,
+      ),
+    ).toBe(false)
+    await authorization.completeAccountPickerAuthorizationCleanup(
+      overlap.authorizationGeneration,
+      CleanupEvidence.Full,
+    )
+    expect(
+      authorization.accountPickerAuthorizationIsCurrent(
+        overlap.authorizationGeneration,
+      ),
+    ).toBe(true)
+  })
+
+  test('releases the current successor when overlapping marker removal fails', async () => {
+    const authorization =
+      await import('../src/background/service-worker/account-picker-authorization')
+    const storage = new AuthorizationStorageFixture()
+    const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
+    const removal = storage.holdRemoval()
+    const completing = authorization.completeAccountPickerAuthorizationCleanup(
+      cleanup.authorizationGeneration,
+      CleanupEvidence.Full,
+    )
+    const rejected = completing.catch((error: Error) => error)
+    const callback = await removal
+    const overlap = await authorization.beginAccountPickerAuthorizationCleanup()
+    storage.failRemoval(callback)
+    expect(await rejected).toEqual(new Error('removal denied'))
+    await authorization.completeAccountPickerAuthorizationCleanup(
+      overlap.authorizationGeneration,
+      CleanupEvidence.Partial,
+    )
+    expect(
+      authorization.accountPickerAuthorizationIsCurrent(
+        overlap.authorizationGeneration,
+      ),
+    ).toBe(false)
+    const fullCleanup =
+      await authorization.beginAccountPickerAuthorizationCleanup()
+    await authorization.completeAccountPickerAuthorizationCleanup(
+      fullCleanup.authorizationGeneration,
+      CleanupEvidence.Full,
+    )
+    expect(
+      authorization.accountPickerAuthorizationIsCurrent(
+        fullCleanup.authorizationGeneration,
+      ),
+    ).toBe(true)
+  })
+
+  test('preserves the current handle after stale completion and release', async () => {
+    const authorization =
+      await import('../src/background/service-worker/account-picker-authorization')
+    new AuthorizationStorageFixture()
+    const old = await authorization.accountPickerAuthorizationGeneration()
+    const cleanup = await authorization.beginAccountPickerAuthorizationCleanup()
+    const rejected =
+      await authorization.completeAccountPickerAuthorizationCleanup(
+        old,
+        CleanupEvidence.Full,
+      )
+    expect(rejected).toHaveProperty('error')
+    authorization.releaseAccountPickerAuthorizationCleanup(old)
+    expect(
+      authorization.accountPickerAuthorizationIsCurrent(
+        cleanup.authorizationGeneration,
+      ),
+    ).toBe(false)
+    await authorization.completeAccountPickerAuthorizationCleanup(
+      cleanup.authorizationGeneration,
+      CleanupEvidence.Partial,
+    )
+    expect(
+      authorization.accountPickerAuthorizationIsCurrent(
+        cleanup.authorizationGeneration,
+      ),
+    ).toBe(true)
   })
 
   test('rejects picker rehydration after a worker restart during cleanup', async () => {
