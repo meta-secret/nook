@@ -306,14 +306,16 @@ mod tests {
         let mut manager = fixture.manager();
         {
             let completion = PendingUnlockCompletion::new(&mut manager);
-            assert!(
-                completion
-                    .manager
-                    .apply_vault_keys("invalid", "partially-installed")
-                    .is_err()
-            );
-            assert_eq!(completion.manager.vault.members_key, "partially-installed");
-            assert_eq!(completion.manager.vault.secrets_key, "invalid");
+            match completion
+                .manager
+                .apply_vault_keys("invalid", "partially-installed")
+            {
+                Err(_) => {
+                    assert_eq!(completion.manager.vault.members_key, "partially-installed");
+                    assert_eq!(completion.manager.vault.secrets_key, "invalid");
+                }
+                Ok(()) => return Err(anyhow::anyhow!("invalid vault key must be rejected")),
+            }
         }
         fixture.assert_reset(&manager);
         Ok(())
