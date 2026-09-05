@@ -36,7 +36,10 @@ mod website_login_save_offer_response;
 mod website_passkey_account_list;
 mod website_passkey_proposal;
 
-pub use account_picker_authorization::AccountPickerAuthorizationLifecycle;
+pub use account_picker_authorization::{
+    AccountPickerAuthorizationLifecycle, AccountPickerAuthorizationTransition, CleanupEvidence,
+    CleanupTransitionError, CleanupTransitionOutcome,
+};
 pub use authentication_outcome_response::{
     AuthenticationOutcomeResponse, AuthenticationOutcomeResponseDecodeError,
     AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,
