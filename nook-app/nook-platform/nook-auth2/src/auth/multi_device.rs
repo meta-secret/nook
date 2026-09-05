@@ -129,7 +129,6 @@ pub fn is_auth_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<b
 }
 
 /// Back-compat alias.
-#[must_use]
 pub fn is_dec_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
     is_auth_stored_record(record)
 }

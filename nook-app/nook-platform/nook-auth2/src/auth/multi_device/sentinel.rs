@@ -122,7 +122,6 @@ pub fn parse_sentinel_share_envelope(value: &str) -> MultiDeviceResult<SentinelS
     serde_json::from_str(value).map_err(MultiDeviceError::SentinelShareJson)
 }
 
-#[must_use]
 pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
     Ok(matches!(
         VaultMetaRecord::classify(record)?,
