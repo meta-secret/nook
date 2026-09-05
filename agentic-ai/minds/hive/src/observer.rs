@@ -1,8 +1,12 @@
+use axum::response;
 use std::collections::BTreeMap;
+use std::io;
 use std::net::SocketAddr;
 use std::path::{Path as FilePath, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::fs as async_fs;
+use tokio::net as async_net;
 
 use crate::HiveContext;
 use async_trait::async_trait;
@@ -44,7 +48,7 @@ pub async fn run_observer<S: ObserverStore>(
     address: SocketAddr,
     dashboard: PathBuf,
 ) -> crate::HiveResult<()> {
-    let listener = tokio::net::TcpListener::bind(address)
+    let listener = async_net::TcpListener::bind(address)
         .await
         .with_hive_context(|| format!("bind Hive observer to {address}"))?;
     run_observer_on_listener(store, listener, dashboard).await
@@ -52,7 +56,7 @@ pub async fn run_observer<S: ObserverStore>(
 
 async fn run_observer_on_listener<S: ObserverStore>(
     store: S,
-    listener: tokio::net::TcpListener,
+    listener: async_net::TcpListener,
     dashboard: PathBuf,
 ) -> crate::HiveResult<()> {
     let index = dashboard.join("index.html");
@@ -74,7 +78,7 @@ pub async fn run_observer_coordinator(
 ) -> crate::HiveResult<()> {
     store.migrate().await?;
     if let Some(parent) = socket.parent() {
-        tokio::fs::create_dir_all(parent).await?;
+        async_fs::create_dir_all(parent).await?;
     }
     remove_socket_if_present(&socket).await?;
     let listener = UnixListener::bind(&socket)
@@ -98,7 +102,7 @@ pub async fn run_observer_coordinator(
                 .observer_task_value(&task_id, &locale)
                 .await
                 .map(ObserverResponse::Task),
-            Err(error) => Err(crate::error::HiveError::message(format!(
+            Err(error) => Err(crate::HiveError::message(format!(
                 "decode observer request: {error}"
             ))),
         }
@@ -111,9 +115,9 @@ pub async fn run_observer_coordinator(
 }
 
 async fn remove_socket_if_present(path: &FilePath) -> crate::HiveResult<()> {
-    match tokio::fs::remove_file(path).await {
+    match async_fs::remove_file(path).await {
         Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => {
             Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
         }
@@ -170,7 +174,7 @@ impl From<crate::HiveError> for ObserverError {
 }
 
 impl IntoResponse for ObserverError {
-    fn into_response(self) -> axum::response::Response {
+    fn into_response(self) -> response::Response {
         (
             self.status,
             Json(serde_json::json!({ "error": self.message })),
@@ -577,7 +581,13 @@ mod tests {
     use axum::http::StatusCode;
     use axum::response::IntoResponse;
     use serde_json::{Value, json};
+    use std::io;
+    use std::net;
+    use std::time;
+    use tokio::fs as async_fs;
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net as async_net;
+    use tokio::time as async_time;
 
     use super::{
         LocaleQuery, ObserverRequest, ObserverState, ObserverStore, health, overview, task_detail,
@@ -613,16 +623,16 @@ mod tests {
         }
     }
 
-    async fn http_get(address: std::net::SocketAddr, path: &str) -> crate::HiveResult<String> {
+    async fn http_get(address: net::SocketAddr, path: &str) -> crate::HiveResult<String> {
         let mut attempts = 0;
         let mut stream = loop {
             attempts += 1;
-            match tokio::net::TcpStream::connect(address).await {
+            match async_net::TcpStream::connect(address).await {
                 Ok(stream) => break stream,
                 Err(error)
-                    if error.kind() == std::io::ErrorKind::ConnectionRefused && attempts < 100 =>
+                    if error.kind() == io::ErrorKind::ConnectionRefused && attempts < 100 =>
                 {
-                    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+                    async_time::sleep(time::Duration::from_millis(10)).await;
                 }
                 Err(error) => return Err(error.into()),
             }
@@ -729,9 +739,9 @@ mod tests {
     async fn observer_server_routes_health_api_and_dashboard_requests() -> crate::HiveResult<()> {
         let root = tempfile::tempdir()?;
         let dashboard = root.path().join("dashboard");
-        tokio::fs::create_dir(&dashboard).await?;
-        tokio::fs::write(dashboard.join("index.html"), "Hive dashboard fixture").await?;
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        async_fs::create_dir(&dashboard).await?;
+        async_fs::write(dashboard.join("index.html"), "Hive dashboard fixture").await?;
+        let listener = async_net::TcpListener::bind("127.0.0.1:0").await?;
         let address = listener.local_addr()?;
         let server = tokio::spawn(super::run_observer_on_listener(
             FixtureStore::Ready,
