@@ -217,6 +217,7 @@
     "sentinel_terminal_status": "Session status",
     "sentinel_genesis_phase_inactive": "Inactive",
     "sentinel_genesis_phase_collecting_participants": "Collecting participants",
+    "sentinel_genesis_phase_awaiting_completion_check": "Check setup completion",
     "sentinel_genesis_phase_ready_to_finalize": "Ready to finalize",
     "sentinel_genesis_phase_delivering_shares": "Delivering shares",
     "sentinel_genesis_phase_complete": "Complete",

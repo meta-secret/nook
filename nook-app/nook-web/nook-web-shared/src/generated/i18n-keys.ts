@@ -1271,6 +1271,7 @@ export const I18N_KEYS = {
   LoginSentinelGenesisParticipantCount: 'login.sentinel_genesis_participant_count',
   LoginSentinelGenesisParticipantCountHint: 'login.sentinel_genesis_participant_count_hint',
   LoginSentinelGenesisParticipantImportFailed: 'login.sentinel_genesis_participant_import_failed',
+  LoginSentinelGenesisPhaseAwaitingCompletionCheck: 'login.sentinel_genesis_phase_awaiting_completion_check',
   LoginSentinelGenesisPhaseCollectingParticipants: 'login.sentinel_genesis_phase_collecting_participants',
   LoginSentinelGenesisPhaseComplete: 'login.sentinel_genesis_phase_complete',
   LoginSentinelGenesisPhaseDeliveringShares: 'login.sentinel_genesis_phase_delivering_shares',

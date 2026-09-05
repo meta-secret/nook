@@ -177,8 +177,8 @@ impl CompletionCheckpoint {
 mod tests {
     use super::*;
     use nook_core::{
-        DeviceMode, SentinelUnlockSigning, SentinelVaultUnlockState, SigningIdentity,
-        VaultArchitecture,
+        DeviceMode, SentinelGenesisOutput, SentinelUnlockSigning, SentinelVaultUnlockState,
+        SigningIdentity, VaultArchitecture,
     };
     use std::future::Future;
     use std::task::{Context, Poll, Waker};
@@ -209,23 +209,20 @@ mod tests {
             let signer = SigningIdentity::generate()?.0;
             let participant = DeviceIdentity::generate()?;
             let participant_signer = SigningIdentity::generate()?.0;
-            let mut genesis = nook_core::start_sentinel_genesis(
-                &identity,
-                &signer,
-                nook_core::StartSentinelGenesisArgs {
-                    label: "Requester".to_owned(),
-                    participant_count: 2,
-                    threshold: 2,
-                },
-            )?;
+            let genesis = nook_core::StartSentinelGenesisArgs {
+                label: "Requester".to_owned(),
+                participant_count: 2,
+                threshold: 2,
+            }
+            .start(&identity, &signer)?;
             let response = nook_core::respond_to_sentinel_genesis_request(
-                &nook_core::sentinel_genesis_request(&genesis),
+                genesis.request(),
                 &participant,
                 &participant_signer,
                 "Participant".to_owned(),
             )?;
-            nook_core::add_sentinel_genesis_response(&mut genesis, response)?;
-            let output = nook_core::finalize_sentinel_genesis(genesis, &signer)?;
+            let genesis = genesis.collect(response)?;
+            let output = SentinelGenesisOutput::from_ready(genesis.prepare(signer.signing_key())?)?;
             Ok(Self {
                 identity,
                 signer,

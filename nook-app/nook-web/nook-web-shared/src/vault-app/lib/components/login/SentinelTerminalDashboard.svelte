@@ -69,6 +69,20 @@
   let copied = $state(false)
   let outputElement = $state<HTMLDivElement>()
 
+  const canFinalize = $derived(
+    status === SentinelGenesisPhase.ReadyToFinalize ||
+      status === SentinelGenesisPhase.AwaitingCompletionCheck,
+  )
+
+  function finalize() {
+    const action: Parameters<typeof runSentinelDashboardAction>[0] = {
+      allowed: canFinalize && !isBusy && !actionBusy,
+      setBusy: (value) => (actionBusy = value),
+      action: onFinalize,
+    }
+    return runSentinelDashboardAction(action)
+  }
+
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
   )
@@ -87,7 +101,7 @@
     status === SentinelGenesisPhase.DeliveringShares ||
       status === SentinelGenesisPhase.Complete
       ? 5
-      : status === SentinelGenesisPhase.ReadyToFinalize
+      : canFinalize
         ? 4
         : status === SentinelGenesisPhase.CollectingParticipants
           ? 3
@@ -148,7 +162,7 @@
         label: name.trim(),
         participantCount,
         threshold,
-      };
+      }
       await onStart(onStartArgs)
     } finally {
       actionBusy = false
@@ -240,7 +254,7 @@
                 {vault.t(I18N_KEYS.LoginSentinelTerminalParticipantOne)}
               </p>
             </div>
-          {:else if status !== SentinelGenesisPhase.Inactive}
+          {:else if status !== SentinelGenesisPhase.Inactive && status !== SentinelGenesisPhase.AwaitingCompletionCheck}
             <div
               class="mt-7 space-y-5 border border-[#4f7a46] bg-[#081008] p-5"
               data-testid="sentinel-genesis-ceremony-step"
@@ -262,18 +276,27 @@
                 class="inline-flex items-center gap-2 border border-[#4f7a46] px-4 py-2 text-xs"
                 data-testid="sentinel-genesis-copy-request"
                 onclick={() =>
-                  void (() => { const copySentinelRequestArgs: Parameters<typeof copySentinelRequest>[0] = { request, onCopied: () => {
-                      copied = true
-                      setTimeout(() => (copied = false), 1500)
-                    }, onFailure: () =>
-                      (vault.errorMsg = vault.t(
-                        I18N_KEYS.LoginSentinelGenesisCopyFailed,
-                      )) }; return copySentinelRequest(
-                    copySentinelRequestArgs,
-                  ); })()}
+                  void (() => {
+                    const copySentinelRequestArgs: Parameters<
+                      typeof copySentinelRequest
+                    >[0] = {
+                      request,
+                      onCopied: () => {
+                        copied = true
+                        setTimeout(() => (copied = false), 1500)
+                      },
+                      onFailure: () =>
+                        (vault.errorMsg = vault.t(
+                          I18N_KEYS.LoginSentinelGenesisCopyFailed,
+                        )),
+                    }
+                    return copySentinelRequest(copySentinelRequestArgs)
+                  })()}
               >
                 <Copy class="size-4" />
-                {copied ? vault.t(I18N_KEYS.CommonCopied) : vault.t(I18N_KEYS.CommonCopy)}
+                {copied
+                  ? vault.t(I18N_KEYS.CommonCopied)
+                  : vault.t(I18N_KEYS.CommonCopy)}
               </button>
               {#if status === SentinelGenesisPhase.CollectingParticipants}
                 <label class="block text-[#83e273]">
@@ -356,22 +379,19 @@
                   {vault.t(I18N_KEYS.LoginSentinelGenesisStart)}
                 </button>
               </div>
-            {:else if status === SentinelGenesisPhase.ReadyToFinalize}
+            {:else if canFinalize}
               <button
                 class="flex items-center gap-2 border border-[#83e273] bg-[#11200f] px-5 py-3 text-xs text-[#d4ffc7] disabled:opacity-30"
                 data-testid="sentinel-genesis-finalize"
-                disabled={status !== SentinelGenesisPhase.ReadyToFinalize ||
-                  isBusy ||
-                  actionBusy}
-                onclick={() =>
-                  void (() => { const runSentinelDashboardActionArgs: Parameters<typeof runSentinelDashboardAction>[0] = { allowed: status === SentinelGenesisPhase.ReadyToFinalize &&
-                      !isBusy &&
-                      !actionBusy, setBusy: (value) => (actionBusy = value), action: onFinalize }; return runSentinelDashboardAction(
-                    runSentinelDashboardActionArgs,
-                  ); })()}
+                disabled={!canFinalize || isBusy || actionBusy}
+                onclick={() => void finalize()}
               >
                 <KeyRound class="size-4" />
-                {vault.t(I18N_KEYS.LoginSentinelGenesisFinalize)}
+                {vault.t(
+                  status === SentinelGenesisPhase.AwaitingCompletionCheck
+                    ? I18N_KEYS.LoginSentinelGenesisPhaseAwaitingCompletionCheck
+                    : I18N_KEYS.LoginSentinelGenesisFinalize,
+                )}
               </button>
             {/if}
           </div>
@@ -392,12 +412,16 @@
                 <div class="mt-4 grid gap-3 sm:grid-cols-[110px_1fr]">
                   <EnrollmentQrCode
                     enrollmentLink={delivery.payload}
-                    loadingLabel={vault.t(I18N_KEYS.LoginSentinelGenesisQrLoading)}
+                    loadingLabel={vault.t(
+                      I18N_KEYS.LoginSentinelGenesisQrLoading,
+                    )}
                     dense
                   />
                   <div>
                     <p class="text-xs">
-                      {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryParticipant)}
+                      {vault.t(
+                        I18N_KEYS.LoginSentinelGenesisDeliveryParticipant,
+                      )}
                       {index + 2}
                     </p>
                     <textarea
@@ -412,7 +436,9 @@
                 {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyTitle)}
               </p>
               <p class="mt-2 text-xs text-[#6ca85e]">
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyDescription)}
+                {vault.t(
+                  I18N_KEYS.LoginSentinelOnboardingVaultReadyDescription,
+                )}
               </p>
               <button
                 class="mt-5 border border-[#83e273] px-5 py-3 text-xs disabled:opacity-30"

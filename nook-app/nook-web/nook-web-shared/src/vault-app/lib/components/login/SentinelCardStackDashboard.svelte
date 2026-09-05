@@ -1,7 +1,10 @@
 <script lang="ts">
-  type SentinelParticipation = { readonly payload: string; readonly participantLabel: string }
+  type SentinelParticipation = {
+    readonly payload: string
+    readonly participantLabel: string
+  }
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { I18N_KEYS, type I18nKey } from '../../../../generated/i18n-keys'
   import {
     ArrowLeft,
     Check,
@@ -63,9 +66,7 @@
     onPrepareInitiator: () => void | Promise<void>
     onBack: () => void
     onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onAddParticipant: (
-      args: SentinelParticipation,
-    ) => void | Promise<void>
+    onAddParticipant: (args: SentinelParticipation) => void | Promise<void>
     onFinalize: () => void | Promise<void>
     onCompleteDelivery: () => void | Promise<void>
   } = $props()
@@ -82,7 +83,49 @@
     SentinelCardOnboardingStage.Identity,
   )
 
-  const participantChoices = [3, 4, 5]
+  const canFinalize = $derived(
+    status === SentinelGenesisPhase.ReadyToFinalize ||
+      status === SentinelGenesisPhase.AwaitingCompletionCheck,
+  )
+
+  const t: VaultState['t'] = (request) => vault.t(request)
+
+  function rosterLabel(key: I18nKey) {
+    const translation: Parameters<VaultState['t']>[0] = {
+      key,
+      replacements: { count: String(availableRosterSlots) },
+    }
+    return t(translation)
+  }
+
+  function policyLabel(key: I18nKey) {
+    const translation: Parameters<VaultState['t']>[0] = {
+      key,
+      replacements: {
+        count: String(participantCount),
+        threshold: String(threshold),
+      },
+    }
+    return t(translation)
+  }
+
+  const requestCopy = $derived<Parameters<typeof copySentinelRequest>[0]>({
+    request,
+    onCopied: () => {
+      copied = true
+      setTimeout(() => (copied = false), 1500)
+    },
+    onFailure: () =>
+      (vault.errorMsg = t(I18N_KEYS.LoginSentinelGenesisCopyFailed)),
+  })
+
+  const finalization = $derived<
+    Parameters<typeof runSentinelDashboardAction>[0]
+  >({
+    allowed: canFinalize && !isBusy && !actionBusy,
+    setBusy: (value) => (actionBusy = value),
+    action: onFinalize,
+  })
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
@@ -136,7 +179,9 @@
       onboardingStage = SentinelCardOnboardingStage.Build
     } else if (
       initiatorKeyReady &&
-      onboardingStage === SentinelCardOnboardingStage.Identity
+      (onboardingStage === SentinelCardOnboardingStage.Identity ||
+        onboardingStage === SentinelCardOnboardingStage.Build ||
+        onboardingStage === SentinelCardOnboardingStage.Roster)
     ) {
       onboardingStage = SentinelCardOnboardingStage.Name
     } else if (!initiatorKeyReady) {
@@ -167,7 +212,7 @@
         label: name.trim(),
         participantCount,
         threshold,
-      };
+      }
       const started = await onStart(onStartArgs)
       if (started !== false) {
         onboardingStage = SentinelCardOnboardingStage.Roster
@@ -191,14 +236,17 @@
       return
     actionBusy = true
     try {
-      const onAddParticipantArgs: Parameters<typeof onAddParticipant>[0] = { payload, participantLabel: participantLabel.trim() };
+      const onAddParticipantArgs: Parameters<typeof onAddParticipant>[0] = {
+        payload,
+        participantLabel: participantLabel.trim(),
+      }
       await onAddParticipant(onAddParticipantArgs)
       response = ''
       participantLabel = ''
       participantInputError = ''
       selected = participants.length
     } catch {
-      participantInputError = vault.t(
+      participantInputError = t(
         I18N_KEYS.LoginSentinelGenesisParticipantImportFailed,
       )
       vault.errorMsg = participantInputError
@@ -227,7 +275,7 @@
         <p
           class="font-mono text-[10px] tracking-[0.24em] text-[#8a98a5] uppercase"
         >
-          {vault.t(I18N_KEYS.LoginSentinelCardStackEyebrow)}
+          {t(I18N_KEYS.LoginSentinelCardStackEyebrow)}
         </p>
         <h1 class="mt-1 text-3xl font-semibold tracking-[0.18em]">SENTINEL</h1>
       </div>
@@ -239,7 +287,7 @@
           onclick={onBack}
         >
           <ArrowLeft class="size-4" aria-hidden="true" />
-          {vault.t(I18N_KEYS.LoginSentinelDashboardChange)}
+          {t(I18N_KEYS.LoginSentinelDashboardChange)}
         </button>
       {/if}
     </header>
@@ -248,7 +296,7 @@
       class="mt-5 mb-8 grid gap-2 rounded-xl border border-white/10 bg-black/20 p-2 backdrop-blur-sm sm:grid-cols-4"
       data-testid="sentinel-onboarding-progress"
     >
-      {#each [vault.t(I18N_KEYS.LoginSentinelOnboardingStepKeys), vault.t(I18N_KEYS.LoginSentinelOnboardingStepShares), vault.t(I18N_KEYS.LoginSentinelOnboardingStepDevices), vault.t(I18N_KEYS.LoginSentinelOnboardingStepBuild)] as label, index (label)}
+      {#each [t(I18N_KEYS.LoginSentinelOnboardingStepKeys), t(I18N_KEYS.LoginSentinelOnboardingStepShares), t(I18N_KEYS.LoginSentinelOnboardingStepDevices), t(I18N_KEYS.LoginSentinelOnboardingStepBuild)] as label, index (label)}
         <li
           class={[
             'flex items-center gap-3 rounded-lg px-3 py-3 transition-colors',
@@ -286,7 +334,7 @@
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
         >
-          {vault.t(I18N_KEYS.LoginSentinelCardStackParticipantCards)}
+          {t(I18N_KEYS.LoginSentinelCardStackParticipantCards)}
         </p>
         {#if onboardingStage === SentinelCardOnboardingStage.Identity}
           <div
@@ -294,13 +342,13 @@
             data-testid="sentinel-onboarding-identity"
           >
             <p class="font-mono text-[9px] tracking-[0.18em] text-[#79dfff]">
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingFirstStep)}
+              {t(I18N_KEYS.LoginSentinelOnboardingFirstStep)}
             </p>
             <h2 class="mt-3 text-xl font-semibold">
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingCreateKeysTitle)}
+              {t(I18N_KEYS.LoginSentinelOnboardingCreateKeysTitle)}
             </h2>
             <p class="mt-2 text-sm leading-6 text-[#aeb8c2]">
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingCreateKeysDescription)}
+              {t(I18N_KEYS.LoginSentinelOnboardingCreateKeysDescription)}
             </p>
           </div>
         {/if}
@@ -320,19 +368,19 @@
             </span>
             <span class="min-w-0">
               <b class="block truncate text-sm">
-                {vault.t(I18N_KEYS.LoginSentinelCardStackThisDevice)} ·
-                {vault.t(I18N_KEYS.LoginSentinelCardStackParticipant)} 01
+                {t(I18N_KEYS.LoginSentinelCardStackThisDevice)} ·
+                {t(I18N_KEYS.LoginSentinelCardStackParticipant)} 01
               </b>
               <span
                 class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
               >
                 {participants[0]?.fingerprint ||
                   initiatorFingerprint ||
-                  vault.t(I18N_KEYS.LoginSentinelCardStackKeyPending)}
+                  t(I18N_KEYS.LoginSentinelCardStackKeyPending)}
                 ·
                 {initiatorKeyReady
-                  ? vault.t(I18N_KEYS.LoginSentinelCardStackAutomaticallyIncluded)
-                  : vault.t(I18N_KEYS.LoginSentinelCardStackInitializeDevice)}
+                  ? t(I18N_KEYS.LoginSentinelCardStackAutomaticallyIncluded)
+                  : t(I18N_KEYS.LoginSentinelCardStackInitializeDevice)}
               </span>
             </span>
             {#if initiatorKeyLoading}
@@ -343,7 +391,7 @@
               <span
                 class="rounded-full border border-[#79dfff]/40 bg-[#79dfff]/10 px-3 py-2 font-mono text-[9px] tracking-wider text-[#79dfff] shadow-[0_0_24px_rgb(82_198_238/0.12)]"
               >
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingCreateKeysAction)}
+                {t(I18N_KEYS.LoginSentinelOnboardingCreateKeysAction)}
               </span>
             {/if}
           </button>
@@ -353,7 +401,7 @@
               type="button"
               class="grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 border-white/10 border-l-[#63eaa1] bg-[#303840]/85 px-5 py-4 text-left transition hover:border-[#6ed9ff]/60 hover:bg-[#37424b] disabled:cursor-default disabled:hover:border-white/10 disabled:hover:border-l-[#63eaa1] disabled:hover:bg-[#303840]/85"
               data-testid="sentinel-onboarding-name-summary-card"
-              aria-label={vault.t(I18N_KEYS.LoginVaultNameLabel)}
+              aria-label={t(I18N_KEYS.LoginVaultNameLabel)}
               disabled={status !== SentinelGenesisPhase.Inactive ||
                 isBusy ||
                 actionBusy}
@@ -369,7 +417,7 @@
                 <span
                   class="block font-mono text-[9px] tracking-[0.16em] text-[#9ba7b1] uppercase"
                 >
-                  {vault.t(I18N_KEYS.LoginVaultNameLabel)}
+                  {t(I18N_KEYS.LoginVaultNameLabel)}
                 </span>
                 <b class="mt-1 block truncate text-sm text-white">{name}</b>
               </span>
@@ -390,7 +438,7 @@
               <span class="min-w-0">
                 <b class="block truncate text-sm">
                   {participant.label || participant.deviceId} ·
-                  {vault.t(I18N_KEYS.LoginSentinelCardStackParticipant)}
+                  {t(I18N_KEYS.LoginSentinelCardStackParticipant)}
                   {String(index + 2).padStart(2, '0')}
                 </b>
                 <span
@@ -408,18 +456,18 @@
               <div class="flex items-center justify-between gap-4">
                 <div>
                   <p class="text-sm text-[#d6dde3]">
-                    {vault.t(I18N_KEYS.LoginSentinelCardStackAddParticipant)}
+                    {t(I18N_KEYS.LoginSentinelCardStackAddParticipant)}
                   </p>
                   <p class="mt-1 font-mono text-[9px] text-[#75818c]">
-                    {(() => { const tArgs: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelCardStackSlotsRemaining, replacements: {
-                      count: String(availableRosterSlots),
-                    } }; return vault.t(tArgs); })()}
+                    {rosterLabel(
+                      I18N_KEYS.LoginSentinelCardStackSlotsRemaining,
+                    )}
                   </p>
                 </div>
                 <button
                   class="grid size-10 shrink-0 place-items-center rounded-full bg-white text-[#1f2830] disabled:opacity-30"
                   data-testid="sentinel-genesis-add-participant"
-                  aria-label={vault.t(I18N_KEYS.LoginSentinelGenesisAddParticipant)}
+                  aria-label={t(I18N_KEYS.LoginSentinelGenesisAddParticipant)}
                   disabled={!participantLabel.trim() ||
                     !response.trim() ||
                     isBusy ||
@@ -438,12 +486,12 @@
                 <label
                   class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
                 >
-                  {vault.t(I18N_KEYS.LoginSentinelCardStackDeviceNameLabel)}
+                  {t(I18N_KEYS.LoginSentinelCardStackDeviceNameLabel)}
                   <input
                     class="mt-2 h-11 w-full border border-white/20 bg-[#192128] px-3 text-sm text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
                     data-testid="sentinel-genesis-participant-name"
                     maxlength="80"
-                    placeholder={vault.t(
+                    placeholder={t(
                       I18N_KEYS.LoginSentinelCardStackDeviceNamePlaceholder,
                     )}
                     bind:value={participantLabel}
@@ -452,11 +500,11 @@
                 <label
                   class="text-[9px] tracking-wider text-[#8d99a4] uppercase"
                 >
-                  {vault.t(I18N_KEYS.LoginSentinelCardStackPublicKeyLabel)}
+                  {t(I18N_KEYS.LoginSentinelCardStackPublicKeyLabel)}
                   <textarea
                     class="mt-2 min-h-24 w-full resize-y border border-white/20 bg-[#192128] px-3 py-3 font-mono text-xs text-white outline-none placeholder:text-[#596670] focus:border-[#6ed9ff]"
                     data-testid="sentinel-genesis-response-input"
-                    placeholder={vault.t(
+                    placeholder={t(
                       I18N_KEYS.LoginSentinelCardStackPublicKeyPlaceholder,
                     )}
                     bind:value={response}></textarea>
@@ -471,12 +519,10 @@
                       class="flex items-center gap-2 text-[10px] font-semibold tracking-wider text-[#63eaa1] uppercase"
                     >
                       <Check class="size-4" />
-                      {vault.t(
-                        I18N_KEYS.LoginSentinelCardStackAuthenticationReady,
-                      )}
+                      {t(I18N_KEYS.LoginSentinelCardStackAuthenticationReady)}
                     </p>
                     <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
-                      {vault.t(
+                      {t(
                         I18N_KEYS.LoginSentinelCardStackAuthenticationReadyHelp,
                       )}
                     </p>
@@ -489,12 +535,10 @@
                     <p
                       class="text-[10px] font-semibold tracking-wider text-[#8d99a4] uppercase"
                     >
-                      {vault.t(
-                        I18N_KEYS.LoginSentinelCardStackAuthenticationLabel,
-                      )}
+                      {t(I18N_KEYS.LoginSentinelCardStackAuthenticationLabel)}
                     </p>
                     <p class="mt-2 text-xs leading-5 text-[#aeb8c2]">
-                      {vault.t(I18N_KEYS.LoginSentinelCardStackAuthenticationHelp)}
+                      {t(I18N_KEYS.LoginSentinelCardStackAuthenticationHelp)}
                     </p>
                   </div>
                 {/if}
@@ -517,15 +561,13 @@
               data-testid="sentinel-onboarding-roster-next"
             >
               <p class="text-xs font-semibold text-[#d6dde3]">
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingRosterTitle)}
+                {t(I18N_KEYS.LoginSentinelOnboardingRosterTitle)}
               </p>
               <p
                 class="font-mono text-[9px] tracking-wider text-[#8f9ca7] uppercase"
                 data-testid="sentinel-onboarding-devices-remaining"
               >
-                {(() => { const tArgs2: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelOnboardingDevicesRemaining, replacements: {
-                  count: String(availableRosterSlots),
-                } }; return vault.t(tArgs2); })()}
+                {rosterLabel(I18N_KEYS.LoginSentinelOnboardingDevicesRemaining)}
               </p>
             </div>
           {/if}
@@ -541,17 +583,17 @@
                 <span
                   class="block font-mono text-[9px] tracking-[0.16em] text-[#79dfff]"
                 >
-                  {vault.t(I18N_KEYS.LoginLandingStepName)}
+                  {t(I18N_KEYS.LoginLandingStepName)}
                 </span>
                 <span
                   class="mt-3 block text-[10px] tracking-[0.14em] text-[#b5c0c9] uppercase"
                 >
-                  {vault.t(I18N_KEYS.LoginVaultNameLabel)}
+                  {t(I18N_KEYS.LoginVaultNameLabel)}
                 </span>
                 <input
                   class="mt-1 w-full border-b border-white/35 bg-transparent py-2 text-xl font-medium text-white outline-none placeholder:text-white/25 focus:border-[#79dfff]"
                   data-testid="sentinel-genesis-name-input"
-                  placeholder={vault.t(I18N_KEYS.LoginVaultNamePlaceholder)}
+                  placeholder={t(I18N_KEYS.LoginVaultNamePlaceholder)}
                   bind:value={name}
                 />
               </label>
@@ -562,7 +604,7 @@
                 data-testid="sentinel-onboarding-continue-policy"
                 onclick={continueToPolicy}
               >
-                {vault.t(I18N_KEYS.LoginCreateWizardContinue)}
+                {t(I18N_KEYS.LoginCreateWizardContinue)}
               </button>
             </div>
           </section>
@@ -572,14 +614,14 @@
             data-testid="sentinel-genesis-policy-step"
           >
             <p class="font-mono text-[9px] tracking-[0.16em] text-[#79dfff]">
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingPolicyStep)}
+              {t(I18N_KEYS.LoginSentinelOnboardingPolicyStep)}
             </p>
             <div class="mt-4" data-testid="sentinel-onboarding-policy">
               <div class="max-w-sm">
                 <span
                   class="text-[10px] tracking-wider text-[#aab5be] uppercase"
                 >
-                  {vault.t(I18N_KEYS.LoginSentinelCardStackThresholdPolicy)}
+                  {t(I18N_KEYS.LoginSentinelCardStackThresholdPolicy)}
                 </span>
                 <span
                   class="mt-2 grid h-16 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-white/70"
@@ -593,7 +635,7 @@
                       class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
                       data-testid="sentinel-genesis-threshold"
                       data-value={threshold}
-                      aria-label={vault.t(I18N_KEYS.LoginSentinelGenesisThreshold)}
+                      aria-label={t(I18N_KEYS.LoginSentinelGenesisThreshold)}
                     >
                       <span>
                         <span class="block text-3xl font-light text-white">
@@ -601,7 +643,7 @@
                         </span>
                         <small
                           class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                          >{vault.t(I18N_KEYS.LoginSentinelCardStackNeeded)}</small
+                          >{t(I18N_KEYS.LoginSentinelCardStackNeeded)}</small
                         >
                       </span>
                     </Select.Trigger>
@@ -631,7 +673,7 @@
                       class="h-auto w-full gap-3 rounded-none border-0 bg-transparent p-0 text-left text-white shadow-none focus-visible:ring-1 focus-visible:ring-[#79dfff] [&_svg]:text-[#aab5be]"
                       data-testid="sentinel-genesis-participant-count"
                       data-value={participantCount}
-                      aria-label={vault.t(
+                      aria-label={t(
                         I18N_KEYS.LoginSentinelGenesisParticipantCount,
                       )}
                     >
@@ -641,7 +683,7 @@
                         </span>
                         <small
                           class="mt-1 block text-[8px] tracking-wider text-[#aab5be] uppercase"
-                          >{vault.t(I18N_KEYS.LoginSentinelCardStackTotal)}</small
+                          >{t(I18N_KEYS.LoginSentinelCardStackTotal)}</small
                         >
                       </span>
                     </Select.Trigger>
@@ -650,7 +692,7 @@
                       side="top"
                       class="max-h-80 border border-[#657580] bg-[#192128] p-1 text-[#d7e0e6] shadow-2xl ring-0"
                     >
-                      {#each participantChoices as option (option)}
+                      {#each [3, 4, 5] as option (option)}
                         <Select.Item
                           value={String(option)}
                           class="rounded-none px-3 py-2 font-mono text-sm text-[#d7e0e6] data-highlighted:bg-[#33414b] data-highlighted:text-white"
@@ -673,7 +715,7 @@
                 onclick={() =>
                   (onboardingStage = SentinelCardOnboardingStage.Name)}
               >
-                {vault.t(I18N_KEYS.CommonBack)}
+                {t(I18N_KEYS.CommonBack)}
               </button>
               <button
                 disabled={!policyValid || isBusy || actionBusy}
@@ -681,31 +723,28 @@
                 data-testid="sentinel-onboarding-continue-devices"
                 onclick={() => void continueToRoster()}
               >
-                {(() => { const tArgs3: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelOnboardingContinueWithDevices, replacements: {
-                  count: String(participantCount),
-                } }; return vault.t(tArgs3); })()}
+                {policyLabel(
+                  I18N_KEYS.LoginSentinelOnboardingContinueWithDevices,
+                )}
               </button>
             </div>
           </section>
-        {:else if status === SentinelGenesisPhase.CollectingParticipants || status === SentinelGenesisPhase.ReadyToFinalize}
+        {:else if status === SentinelGenesisPhase.CollectingParticipants || canFinalize}
           <div class="mt-6 flex justify-end">
             <button
-              disabled={status !== SentinelGenesisPhase.ReadyToFinalize ||
-                isBusy ||
-                actionBusy}
+              disabled={!canFinalize || isBusy || actionBusy}
               class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
               data-testid="sentinel-genesis-finalize"
-              onclick={() =>
-                void (() => { const runSentinelDashboardActionArgs: Parameters<typeof runSentinelDashboardAction>[0] = { allowed: status === SentinelGenesisPhase.ReadyToFinalize &&
-                    !isBusy &&
-                    !actionBusy, setBusy: (value) => (actionBusy = value), action: onFinalize }; return runSentinelDashboardAction(
-                  runSentinelDashboardActionArgs,
-                ); })()}
+              onclick={() => void runSentinelDashboardAction(finalization)}
             >
               {#if actionBusy}<RefreshCw
                   class="mr-2 inline size-4 animate-spin"
                 />{/if}
-              {vault.t(I18N_KEYS.LoginSentinelGenesisFinalize)}
+              {t(
+                status === SentinelGenesisPhase.AwaitingCompletionCheck
+                  ? I18N_KEYS.LoginSentinelGenesisPhaseAwaitingCompletionCheck
+                  : I18N_KEYS.LoginSentinelGenesisFinalize,
+              )}
             </button>
           </div>
         {/if}
@@ -718,13 +757,13 @@
             <p
               class="font-mono text-[10px] tracking-[0.16em] text-[#79dfff] uppercase"
             >
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyStep)}
+              {t(I18N_KEYS.LoginSentinelOnboardingVaultReadyStep)}
             </p>
             <h2 class="mt-2 text-xl font-semibold">
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyTitle)}
+              {t(I18N_KEYS.LoginSentinelOnboardingVaultReadyTitle)}
             </h2>
             <p class="mt-2 text-sm leading-relaxed text-[#aeb8c2]">
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingVaultReadyDescription)}
+              {t(I18N_KEYS.LoginSentinelOnboardingVaultReadyDescription)}
             </p>
             <label
               class="mt-5 flex cursor-pointer items-start gap-3 border border-white/10 bg-black/10 p-3 text-xs leading-5 text-[#d7e0e6]"
@@ -736,7 +775,7 @@
                 data-testid="sentinel-genesis-delivery-acknowledgement"
               />
               <span>
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingDeliveryAcknowledgement)}
+                {t(I18N_KEYS.LoginSentinelOnboardingDeliveryAcknowledgement)}
               </span>
             </label>
             <Button
@@ -747,7 +786,7 @@
                 !deliveriesAcknowledged}
               onclick={() => void onCompleteDelivery()}
             >
-              {vault.t(I18N_KEYS.LoginSentinelOnboardingFinishAction)}
+              {t(I18N_KEYS.LoginSentinelOnboardingFinishAction)}
             </Button>
           </div>
         {/if}
@@ -757,7 +796,7 @@
         <p
           class="font-mono text-[10px] tracking-[0.18em] text-[#88949f] uppercase"
         >
-          {vault.t(I18N_KEYS.LoginSentinelCardStackActiveConfiguration)}
+          {t(I18N_KEYS.LoginSentinelCardStackActiveConfiguration)}
         </p>
         <div
           class="relative mt-5 overflow-hidden border border-[#657580] border-l-4 border-l-[#6ed9ff] bg-[#242d35] p-5 shadow-[0_35px_80px_rgb(0_0_0/0.38)] [background-image:linear-gradient(rgb(255_255_255/0.025)_1px,transparent_1px),linear-gradient(90deg,rgb(255_255_255/0.025)_1px,transparent_1px)] [background-size:32px_32px] sm:p-6"
@@ -768,17 +807,17 @@
             <div class="flex items-center gap-3">
               <ShieldCheck class="text-[#79dfff]" />
               <span class="text-sm font-semibold tracking-wider">
-                {vault.t(I18N_KEYS.LoginSentinelCardStackControlPlane)}
+                {t(I18N_KEYS.LoginSentinelCardStackControlPlane)}
               </span>
             </div>
             <span
               class="border border-[#657580] bg-[#192128] px-3 py-2 font-mono text-[9px] tracking-wider text-[#aab5be]"
             >
               {status === SentinelGenesisPhase.Inactive
-                ? vault.t(I18N_KEYS.LoginSentinelCardStackPreGenesis)
-                : vault
-                    .t(sentinel_genesis_phase_translation_key(status))
-                    .toUpperCase()}
+                ? t(I18N_KEYS.LoginSentinelCardStackPreGenesis)
+                : t(
+                    sentinel_genesis_phase_translation_key(status),
+                  ).toUpperCase()}
             </span>
           </div>
 
@@ -790,20 +829,20 @@
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
-                {vault.t(I18N_KEYS.LoginSentinelCardStackModuleIdentity)}
+                {t(I18N_KEYS.LoginSentinelCardStackModuleIdentity)}
               </dt>
               <dd
                 class="mt-1 truncate text-sm leading-tight font-semibold text-[#d7e0e6]"
                 data-testid="sentinel-onboarding-summary-name"
               >
-                {name.trim() || vault.t(I18N_KEYS.LoginSentinelOnboardingNotSet)}
+                {name.trim() || t(I18N_KEYS.LoginSentinelOnboardingNotSet)}
               </dd>
             </div>
             <div class="min-w-0 border border-white/10 bg-black/10 px-3 py-2">
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
-                {vault.t(I18N_KEYS.LoginSentinelCardStackPolicy)}
+                {t(I18N_KEYS.LoginSentinelCardStackPolicy)}
               </dt>
               <dd
                 class="mt-1 font-mono text-sm leading-tight text-[#d7e0e6]"
@@ -811,11 +850,10 @@
               >
                 {onboardingStage === SentinelCardOnboardingStage.Identity ||
                 onboardingStage === SentinelCardOnboardingStage.Name
-                  ? vault.t(I18N_KEYS.LoginSentinelOnboardingNotSet)
-                  : (() => { const tArgs4: Parameters<typeof vault.t>[0] = { key: I18N_KEYS.LoginSentinelOnboardingThresholdSummary, replacements: {
-                      threshold: String(threshold),
-                      count: String(participantCount),
-                    } }; return vault.t(tArgs4); })()}
+                  ? t(I18N_KEYS.LoginSentinelOnboardingNotSet)
+                  : policyLabel(
+                      I18N_KEYS.LoginSentinelOnboardingThresholdSummary,
+                    )}
               </dd>
             </div>
             <div
@@ -824,7 +862,7 @@
               <dt
                 class="font-mono text-[9px] tracking-[0.14em] text-[#7f8c97] uppercase"
               >
-                {vault.t(I18N_KEYS.LoginSentinelOnboardingDevicesReady)}
+                {t(I18N_KEYS.LoginSentinelOnboardingDevicesReady)}
               </dt>
               <dd
                 class="mt-1 font-mono text-sm leading-tight text-[#d7e0e6]"
@@ -835,17 +873,17 @@
             </div>
           </dl>
 
-          {#if status !== SentinelGenesisPhase.Inactive && status !== SentinelGenesisPhase.DeliveringShares && status !== SentinelGenesisPhase.Complete}
+          {#if status === SentinelGenesisPhase.CollectingParticipants || status === SentinelGenesisPhase.ReadyToFinalize}
             <div
               class="relative mt-6 space-y-4"
               data-testid="sentinel-genesis-ceremony-step"
             >
               <div>
                 <h2 class="text-xl font-semibold">
-                  {vault.t(I18N_KEYS.LoginSentinelGenesisCollectTitle)}
+                  {t(I18N_KEYS.LoginSentinelGenesisCollectTitle)}
                 </h2>
                 <p class="mt-2 text-sm leading-6 text-[#aeb8c2]">
-                  {vault.t(I18N_KEYS.LoginSentinelGenesisCollectDescription)}
+                  {t(I18N_KEYS.LoginSentinelGenesisCollectDescription)}
                 </p>
               </div>
               <div
@@ -855,10 +893,10 @@
                 <div class="flex items-start justify-between gap-4">
                   <div>
                     <p class="text-sm font-semibold">
-                      {vault.t(I18N_KEYS.LoginSentinelGenesisRequestTitle)}
+                      {t(I18N_KEYS.LoginSentinelGenesisRequestTitle)}
                     </p>
                     <p class="mt-1 text-xs text-[#aeb8c2]">
-                      {vault.t(I18N_KEYS.LoginSentinelGenesisRequestDescription)}
+                      {t(I18N_KEYS.LoginSentinelGenesisRequestDescription)}
                     </p>
                   </div>
                   <span
@@ -872,9 +910,7 @@
                   <div class="mt-4 grid gap-4 sm:grid-cols-[150px_1fr]">
                     <EnrollmentQrCode
                       enrollmentLink={request}
-                      loadingLabel={vault.t(
-                        I18N_KEYS.LoginSentinelGenesisQrLoading,
-                      )}
+                      loadingLabel={t(I18N_KEYS.LoginSentinelGenesisQrLoading)}
                     />
                     <div class="space-y-3">
                       <textarea
@@ -887,21 +923,12 @@
                         variant="outline"
                         class="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
                         data-testid="sentinel-genesis-copy-request"
-                        onclick={() =>
-                          void (() => { const copySentinelRequestArgs: Parameters<typeof copySentinelRequest>[0] = { request, onCopied: () => {
-                              copied = true
-                              setTimeout(() => (copied = false), 1500)
-                            }, onFailure: () =>
-                              (vault.errorMsg = vault.t(
-                                I18N_KEYS.LoginSentinelGenesisCopyFailed,
-                              )) }; return copySentinelRequest(
-                            copySentinelRequestArgs,
-                          ); })()}
+                        onclick={() => void copySentinelRequest(requestCopy)}
                       >
                         <Copy class="size-4" />
                         {copied
-                          ? vault.t(I18N_KEYS.CommonCopied)
-                          : vault.t(I18N_KEYS.CommonCopy)}
+                          ? t(I18N_KEYS.CommonCopied)
+                          : t(I18N_KEYS.CommonCopy)}
                       </Button>
                     </div>
                   </div>
@@ -910,7 +937,7 @@
               <p
                 class="border border-white/10 bg-black/10 p-3 text-xs leading-5 text-[#aeb8c2]"
               >
-                {vault.t(I18N_KEYS.LoginSentinelGenesisAtomicNotice)}
+                {t(I18N_KEYS.LoginSentinelGenesisAtomicNotice)}
               </p>
             </div>
           {/if}
@@ -923,7 +950,7 @@
               ><Check class="size-3" /></span
             >
             <span>
-              {vault.t(I18N_KEYS.LoginSentinelCardStackSharesReturn)}
+              {t(I18N_KEYS.LoginSentinelCardStackSharesReturn)}
             </span>
           </div>
         {/if}
@@ -931,10 +958,10 @@
         {#if status === SentinelGenesisPhase.DeliveringShares || deliveries.length > 0}
           <div class="mt-8 space-y-4" data-testid="sentinel-genesis-deliveries">
             <h2 class="text-lg font-semibold">
-              {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryTitle)}
+              {t(I18N_KEYS.LoginSentinelGenesisDeliveryTitle)}
             </h2>
             <p class="text-sm text-[#aeb8c2]">
-              {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryDescription)}
+              {t(I18N_KEYS.LoginSentinelGenesisDeliveryDescription)}
             </p>
             {#each memberDeliveries as delivery, index (delivery.deviceId)}
               <div
@@ -943,12 +970,12 @@
               >
                 <EnrollmentQrCode
                   enrollmentLink={delivery.payload}
-                  loadingLabel={vault.t(I18N_KEYS.LoginSentinelGenesisQrLoading)}
+                  loadingLabel={t(I18N_KEYS.LoginSentinelGenesisQrLoading)}
                   dense
                 />
                 <div class="space-y-2">
                   <p class="text-sm font-semibold">
-                    {vault.t(I18N_KEYS.LoginSentinelGenesisDeliveryParticipant)}
+                    {t(I18N_KEYS.LoginSentinelGenesisDeliveryParticipant)}
                     {index + 2}
                   </p>
                   <textarea
@@ -967,7 +994,7 @@
     <footer
       class="mt-14 border-t border-white/[0.08] pt-5 text-center font-mono text-[8px] tracking-[0.14em] text-[#65717b] uppercase"
     >
-      {vault.t(I18N_KEYS.LoginSentinelCardStackFooter)}
+      {t(I18N_KEYS.LoginSentinelCardStackFooter)}
     </footer>
   </section>
 </div>
