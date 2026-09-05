@@ -47,7 +47,11 @@ describe('ExtensionSessionMessageDispatcher', () => {
       await import('../src/offscreen/session-operations')
     const manager = {
       classify_extension_grant_authority: (stored: string, vault: string) => {
-        expect(events).toEqual(['block-started', 'block-finished'])
+        expect(events).toEqual([
+          'block-started',
+          'block-finished',
+          'interactive',
+        ])
         expect(stored).toBe('{}')
         expect(vault).toBe('vault')
         events.push('classified')
@@ -58,6 +62,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders,
       handleMessage: async (message) => {
+        if (message.type === ExtensionSessionMessageType.MigrateAuthProviders) {
+          events.push('interactive')
+          return { kind: 'NoMatchingAuthority' as const }
+        }
         if (message.type === ExtensionSessionMessageType.Status) {
           events.push('block-started')
           started.resolve()
@@ -104,10 +112,20 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ).toBe(true)
     await queued.promise
     expect(events).toEqual(['block-started'])
+    const interactive = dispatcher.enqueue({
+      type: ExtensionSessionMessageType.MigrateAuthProviders,
+      payload: { queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
+    })
     blocked.resolve()
     await pending
+    await interactive
     expect(await response.promise).toEqual({ kind: 'NoMatchingAuthority' })
-    expect(events).toEqual(['block-started', 'block-finished', 'classified'])
+    expect(events).toEqual([
+      'block-started',
+      'block-finished',
+      'interactive',
+      'classified',
+    ])
     expect(payload.stored_json).toBe('')
     expect(stagedPayloads).toHaveLength(1)
     expect(stagedPayloads[0].stored_json).toBe('')
