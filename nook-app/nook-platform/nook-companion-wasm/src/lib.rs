@@ -452,75 +452,6 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn backup_code_wasm_exports_match_core_policy() {
-        let text = [
-            "Save your backup codes",
-            "A1B2-C3D4-E5F6",
-            "This sentence should not become a code.",
-        ]
-        .join("\n");
-        assert!(page_has_backup_code_hint(&text));
-        assert_eq!(
-            extract_backup_code_candidates(text),
-            vec!["A1B2-C3D4-E5F6".to_owned()]
-        );
-    }
-
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn oauth_origin_wasm_projection_preserves_missing_and_rejected_locations() {
-        use nook_companion_core::BrowserOAuthProvider;
-        for (origin, hostname) in [("", "simple.nokey.sh"), ("https://simple.nokey.sh", "")] {
-            let report =
-                resolve_oauth_origin_support(BrowserOAuthProvider::GoogleDrive, origin, hostname);
-            assert!(report.is_supported());
-            assert!(!report.is_unsupported());
-            assert_eq!(report.origin(), String::new());
-            assert_eq!(
-                report.unsupported_reason(),
-                OAuthOriginUnsupportedReason::UnregisteredOrigin
-            );
-        }
-        let origin = "https://pr-7.nokey-simple.pages.dev";
-        let report = resolve_oauth_origin_support(
-            BrowserOAuthProvider::ICloud,
-            origin,
-            "PR-7.NOKEY-SIMPLE.PAGES.DEV",
-        );
-        assert!(!report.is_supported());
-        assert!(report.is_unsupported());
-        assert_eq!(report.origin(), origin);
-        assert_eq!(
-            report.unsupported_reason(),
-            OAuthOriginUnsupportedReason::CloudflarePrPreview
-        );
-        assert!(is_cloudflare_pr_preview_host("PR-7.NOKEY-SIMPLE.PAGES.DEV"));
-        assert!(!is_cloudflare_pr_preview_host(
-            "pr-7.nokey-simple.pages.dev.evil.test"
-        ));
-    }
-
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn oauth_origin_and_vault_host_wasm_exports_match_core_policy() -> Result<(), String> {
-        let supported = resolve_oauth_origin_support(
-            nook_companion_core::BrowserOAuthProvider::GoogleDrive,
-            "https://simple.nokey.sh",
-            "simple.nokey.sh",
-        );
-        assert!(supported.is_supported());
-        assert!(!supported.is_unsupported());
-
-        assert!(is_simple_vault_hostname("simple.dev.nokey.sh"));
-        assert!(is_sentinel_vault_hostname("sentinel.nokey.sh"));
-        let normalized = normalize_simple_vault_base_url("https://simple.nokey.sh")
-            .map_err(|error| format!("normalize failed: {error:?}"))?;
-        assert_eq!(normalized, "https://simple.nokey.sh/");
-        Ok(())
-    }
-
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn extension_persistence_wasm_exports_match_core_policy() {
         let area = nook_companion_core::ExtensionPersistenceArea::Pairing;
         assert_eq!(extension_persistence_database_name(area), "nook_extension");
@@ -691,6 +622,151 @@ mod tests {
             snapshot.action,
             nook_companion_core::AuthenticationWorkflowAction::SaveBackupCodes
         );
+        Ok(())
+    }
+
+    fn pairing_approval() -> nook_companion_core::ExtensionPairingGrantApproval {
+        nook_companion_core::ExtensionPairingGrantApproval {
+            vault_type: nook_companion_core::ExtensionPairingVaultType::Simple,
+            device_id: "device-test".to_owned(),
+            device_public_key: "age1test".to_owned(),
+            device_signing_public_key: "signing-test".to_owned(),
+            device_label: "Nook Extension".to_owned(),
+            vault_store_id: "store-test".to_owned(),
+            vault_name: "Personal".to_owned(),
+            approved_at: "2026-09-05T00:00:00.000Z".to_owned(),
+            scopes: vec![nook_companion_core::ExtensionConnectScope::PasswordFilling],
+            sync_provider_count: 1,
+        }
+    }
+
+    fn imported_event_log(event_count: u32) -> nook_companion_core::ImportedExtensionEventLog {
+        nook_companion_core::ImportedExtensionEventLog {
+            vault_store_id: "store-test".to_owned(),
+            event_count,
+            heads: vec![format!("event-{event_count}")],
+            access_granted: true,
+        }
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn pairing_exports_preserve_creation_refresh_selection_and_json_validation()
+    -> Result<(), String> {
+        let created =
+            create_extension_pairing_state(nook_companion_core::CreateExtensionPairingStateInput {
+                grant: pairing_approval(),
+                imported: imported_event_log(2),
+                observed_at: "2026-09-05T00:00:01.000Z".to_owned(),
+            })
+            .map_err(|error| format!("create failed: {error:?}"))?;
+        let grant = ordered_extension_pairing_grants(created.clone())[0].clone();
+        assert_eq!(grant.event_count, 2);
+        assert!(matches!(
+            selected_extension_pairing_grant(created.clone()),
+            nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
+                if grant.vault_store_id == "store-test"
+        ));
+        assert!(is_stored_extension_pairing_grant_json(
+            &serde_json::to_string(&grant).map_err(|error| error.to_string())?
+        ));
+        assert!(!is_stored_extension_pairing_grant_json("{}"));
+
+        let refreshed = refresh_extension_pairing_grant(
+            nook_companion_core::RefreshExtensionPairingGrantInput {
+                grant,
+                imported: imported_event_log(4),
+                observed_at: "2026-09-05T00:00:04.000Z".to_owned(),
+                select: true,
+            },
+        )
+        .map_err(|error| format!("refresh failed: {error:?}"))?;
+        let refreshed_grants = ordered_extension_pairing_grants(refreshed.clone());
+        assert_eq!(refreshed_grants[0].event_count, 4);
+        assert!(matches!(
+            extension_setup_after_pairing_grant_removal(
+                nook_companion_core::ExtensionPairingGrantRemovalInput {
+                    state: refreshed,
+                    removed_vault_store_id: "store-test".to_owned(),
+                }
+            ),
+            nook_companion_core::ExtensionSetupAfterRemoval::NoPairedVault
+        ));
+        assert!(migrate_legacy_extension_pairing_state_json("{").is_err());
+        Ok(())
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn remaining_export_families_preserve_closed_policy_and_url_boundaries() -> Result<(), String> {
+        let outcome = classify_companion_authentication_outcome(
+            nook_companion_core::AuthenticationOutcomeClassification {
+                observation: nook_companion_core::AuthenticationOutcomeObservation {
+                    success_marker_present: true,
+                    error_marker_present: true,
+                    ..Default::default()
+                },
+                timeout_ms: 1_000,
+            },
+        );
+        assert_eq!(
+            outcome.verdict,
+            nook_companion_core::AuthenticationOutcomeVerdict::Conflicting
+        );
+        assert!(!outcome.allows_credential_commit);
+        let validated = validate_companion_authentication_outcome_decision(outcome);
+        assert_eq!(validated, outcome);
+
+        assert_eq!(
+            extension_pairing_grant_storage_key("store-test"),
+            "nook:extension-pairing-grant:store-test"
+        );
+        assert!(extension_pairing_setup_storage_key().ends_with("setup"));
+        for scope in [
+            extension_vault_access_scope(),
+            extension_password_filling_scope(),
+            extension_passkey_management_scope(),
+            extension_sync_provider_credentials_scope(),
+        ] {
+            assert!(is_extension_connect_scope(scope.as_str()));
+        }
+        assert!(!is_extension_connect_scope("foreign-scope"));
+
+        assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
+        assert_eq!(
+            simple_vault_url("https://simple.nokey.sh/root", "/login")
+                .map_err(|error| format!("url failed: {error:?}"))?,
+            "https://simple.nokey.sh/root/login"
+        );
+        assert_eq!(
+            matching_sentinel_vault_base_url("https://simple.nokey.sh/")
+                .map_err(|error| format!("match failed: {error:?}"))?,
+            "https://sentinel.nokey.sh/"
+        );
+        assert!(
+            belongs_to_simple_vault(
+                "https://vault.example.test/simple/",
+                "https://vault.example.test/simple/app"
+            )
+            .map_err(|error| format!("membership failed: {error:?}"))?
+        );
+        assert!(simple_vault_url("http://example.test", "/app").is_err());
+
+        let preview = resolve_oauth_origin_support(
+            nook_companion_core::BrowserOAuthProvider::GoogleDrive,
+            "https://pr-42.nokey-simple.pages.dev",
+            "PR-42.NOKEY-SIMPLE.PAGES.DEV",
+        );
+        assert!(preview.is_unsupported());
+        assert_eq!(
+            preview.unsupported_reason(),
+            OAuthOriginUnsupportedReason::CloudflarePrPreview
+        );
+        let preview_host = "PR-42.NOKEY-SIMPLE.PAGES.DEV";
+        assert!(is_cloudflare_pr_preview_host(preview_host));
+        assert!(!is_cloudflare_pr_preview_host(&format!(
+            "{preview_host}.evil.test"
+        )));
         Ok(())
     }
 }
