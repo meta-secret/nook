@@ -73,7 +73,8 @@ mod tests {
 
     use super::super::{
         VaultKeys, approve_join_request, create_join_request_record, generate_vault_keys,
-        genesis_auth_record, genesis_members_records, replace_member_records, resolve_secrets_key,
+        genesis_auth_record, genesis_members_records, member_stored_key, replace_member_records,
+        resolve_secrets_key,
     };
     use super::*;
 

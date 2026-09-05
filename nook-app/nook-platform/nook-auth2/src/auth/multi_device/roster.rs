@@ -230,9 +230,9 @@ mod tests {
 
     use super::*;
     use crate::auth::multi_device::{
-        VaultKeys, approve_join_request, create_join_request_record, create_sentinel_share_records,
-        generate_vault_keys, genesis_auth_record, pending_join_for_device, resolve_members_key,
-        resolve_secrets_key,
+        MEMBER_RECORD_PREFIX, VaultKeys, approve_join_request, create_join_request_record,
+        create_sentinel_share_records, generate_vault_keys, genesis_auth_record,
+        pending_join_for_device, resolve_members_key, resolve_secrets_key,
     };
     use crate::{SecretType, StoredRecordPayload};
 

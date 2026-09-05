@@ -751,10 +751,12 @@ mod tests {
             &StoreId::parse("store_AAAAAAAAAAA")?,
             &owner_signing,
         )?;
-        assert!(issued.records.iter().all(|record| !matches!(
-            VaultMetaRecord::classify(record)?,
-            VaultMetaRecord::Auth(..)
-        )));
+        for record in &issued.records {
+            assert!(!matches!(
+                VaultMetaRecord::classify(record)?,
+                VaultMetaRecord::Auth(..)
+            ));
+        }
         let share_count = multi_device::count_sentinel_share_records(&issued.records)?;
         assert_eq!(usize::from(share_count), 3);
         assert!(
