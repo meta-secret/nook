@@ -356,7 +356,7 @@ fn incremental_update_secret_replaces_armored_entry() -> anyhow::Result<()> {
 fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
     let crypto = VaultCrypto::new(&test_key()?)?;
     let password = generate_password(PasswordGenerationOptions {
-        length: 20,
+        length: 20.into(),
         lowercase: true,
         uppercase: true,
         numbers: true,
