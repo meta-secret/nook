@@ -14,12 +14,12 @@ pub(super) fn select_successful_main_run<'a>(
         if matches!(run.conclusion.as_str(), "cancelled" | "skipped" | "neutral") {
             continue;
         }
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery failed on Main: run at {} concluded {}",
             run.head_sha, run.conclusion
         )));
     }
-    Err(crate::error::HiveError::message(format!(
+    Err(crate::HiveError::message(format!(
         "Hive repair delivery is incomplete: no successful Main workflow contains merge {}",
         merge_commit
     )))
@@ -46,9 +46,7 @@ mod tests {
         ];
         let error = select_successful_main_run(&runs, "merge")
             .err()
-            .ok_or_else(|| {
-                crate::error::HiveError::message("an explicit failure must remain terminal")
-            })?;
+            .ok_or_else(|| crate::HiveError::message("an explicit failure must remain terminal"))?;
         assert!(error.to_string().contains("repair"));
         Ok(())
     }

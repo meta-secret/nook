@@ -25,7 +25,7 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
         .and_then(|row| row.get::<i64>("version").ok())
         .unwrap_or(0);
     if installed_version > LATEST_SCHEMA_VERSION {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive graph schema {installed_version} is newer than supported version {LATEST_SCHEMA_VERSION}"
         )));
     }
@@ -43,7 +43,7 @@ pub(super) async fn migrate(graph: &Graph) -> crate::HiveResult<()> {
             .and_then(|row| row.get::<i64>("legacy_tasks").ok())
             .unwrap_or(0);
         if legacy_tasks > 0 {
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "Hive schema 1 contains {legacy_tasks} task(s) without source_commit; \
                      drain or remove those legacy tasks before upgrading to schema 2"
             )));
