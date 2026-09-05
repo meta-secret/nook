@@ -39,7 +39,7 @@ impl SentinelUnlockSigning for SigningIdentity {
         records: &[StoredSecretRecord],
         requester_identity: &DeviceIdentity,
     ) -> Result<SentinelUnlockSession, MultiDeviceError> {
-        nook_auth2::start_sentinel_unlock(
+        SentinelUnlockSession::start(
             store_id,
             policy,
             records,
