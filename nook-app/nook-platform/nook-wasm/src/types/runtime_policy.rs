@@ -1,6 +1,8 @@
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
-use nook_core::{ActiveVaultStore, VaultClientPolicy, VaultSwitchDecision};
+use nook_core::{
+    ActiveVaultStore, VaultAccessObservation, VaultClientPolicy, VaultSwitchDecision,
+};
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, Default)]

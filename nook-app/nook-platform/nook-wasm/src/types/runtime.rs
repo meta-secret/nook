@@ -1,5 +1,5 @@
 use super::{wasm_bindgen, window};
-use nook_core::{ClientRunMode, RuntimeConfigValue, VaultAccessObservation, VaultRuntimePolicy};
+use nook_core::{ClientRunMode, RuntimeConfigValue, VaultRuntimePolicy};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen(typescript_custom_section)]
