@@ -1,6 +1,6 @@
 //! Vault event envelope, typed domain operations, and signing helpers.
 
-use std::str;
+use std::{fmt, str};
 
 use crate::canonical::{
     Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
@@ -12,8 +12,9 @@ use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelSh
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
-    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SecretId, SecretType, Sha256Hex,
-    StoreId, StoredRecordPayload, StoredSecretRecord,
+    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SecretId, SecretType,
+    SentinelParticipantCount, SentinelShareIndex, SentinelThreshold, Sha256Hex, StoreId,
+    StoredRecordPayload, StoredSecretRecord,
 };
 use serde::{Deserialize, Serialize, ser::Error as _};
 use serde_json::{Value, json};
@@ -32,10 +33,17 @@ impl VaultEventSchemaVersion {
     pub const fn is_supported(self) -> bool {
         self.0 >= Self::V2.0 && self.0 <= Self::CURRENT.0
     }
+}
 
-    #[must_use]
-    pub const fn get(self) -> u32 {
-        self.0
+impl From<VaultEventSchemaVersion> for u32 {
+    fn from(value: VaultEventSchemaVersion) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for VaultEventSchemaVersion {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
     }
 }
 
@@ -67,9 +75,9 @@ impl EncryptedSecretPayload {
 pub struct SentinelShareIssuedPayload {
     pub device_id: DeviceId,
     pub version: SentinelShareVersion,
-    pub threshold: u8,
-    pub required_participants: u8,
-    pub share_index: u8,
+    pub threshold: SentinelThreshold,
+    pub required_participants: SentinelParticipantCount,
+    pub share_index: SentinelShareIndex,
     pub ciphertext: AgeArmoredCiphertext,
 }
 
@@ -275,6 +283,13 @@ impl VaultEventBody {
         Ok(canonicalize_json(&value))
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: emits canonical event-body bytes for content addressing and signing"
+        )
+    )]
     pub fn to_canonical_bytes(&self) -> EventResult<Vec<u8>> {
         canonical_json_bytes(&self.to_canonical_value()?)
     }
@@ -329,7 +344,7 @@ impl VaultEvent {
     pub fn validate_envelope(&self, expected_store_id: &StoreId) -> EventResult<EventId> {
         if !self.body.schema_version.is_supported() {
             return Err(EventError::UnsupportedSchemaVersion {
-                version: self.body.schema_version.get(),
+                version: self.body.schema_version,
             });
         }
         if &self.body.store_id != expected_store_id {
@@ -381,6 +396,13 @@ impl VaultEvent {
 ///
 /// Event ids and signatures still use canonical compact JSON body bytes. The
 /// persisted event envelope is pretty YAML so humans can inspect provider files.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: emits the signed event YAML storage byte representation"
+    )
+)]
 pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<Vec<u8>> {
     let mut yaml =
         serde_yaml::to_string(event).map_err(|e| EventError::EventSerialize(e.to_string()))?;
@@ -391,6 +413,13 @@ pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<Vec<u8>> 
 }
 
 /// Parse a stored event from YAML bytes.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: parses signed event bytes loaded from local storage"
+    )
+)]
 pub fn parse_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
     let text = str::from_utf8(bytes).map_err(|e| {
         EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
@@ -400,6 +429,13 @@ pub fn parse_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
 }
 
 /// Parse a remote event and classify errors for provider sync.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: parses signed event bytes received from a remote provider"
+    )
+)]
 pub fn parse_remote_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
     parse_event_storage_bytes(bytes).map_err(|error| match error {
         EventError::ParseStoredEvent(message) => EventError::ParseRemoteEvent(message),
@@ -553,7 +589,8 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("event test should reject invalid input"))?;
         assert!(matches!(
             err,
-            EventError::UnsupportedSchemaVersion { version: 1 }
+            EventError::UnsupportedSchemaVersion { version }
+                if version == VaultEventSchemaVersion(1)
         ));
         Ok(())
     }
