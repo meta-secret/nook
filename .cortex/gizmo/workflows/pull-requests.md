@@ -138,13 +138,16 @@ ownership until merge or a concrete blocked handoff:
      `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
    - It dispatches every required hosted check before any GitHub review wait.
-   - It then requests one idempotent exact-head Codex review without waiting.
-   - Hosted validation and exact-head review proceed concurrently.
+   - Ordinary `task pr:validate` does not request Codex.
+   - Set `CODEX_REVIEW=1` only for the final coherent head.
+   - The opt-in requests one idempotent exact-head Codex review without waiting.
+   - Hosted validation and an opted-in exact-head review proceed concurrently.
    - The eye reaction is liveness evidence only. It never settles review.
-   - After checks and review settle, inspect both result sets.
+   - After checks and any opted-in review settle, inspect the available result
+     sets.
    - Batch current review findings and failed checks into one repair iteration.
    - A head or base change invalidates both evidence sets. Dispatch validation
-     and request review again for the replacement state.
+     and opt in to review again only when the replacement is final and coherent.
    - Three automated finding batches open the circuit breaker. Perform a
      comprehensive stabilization pass, resolve its batch, and set
      `REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1` on the next validation run.
@@ -381,12 +384,14 @@ See [pre-push hygiene](../../teams/sre/dynamic-skills/pre-push-hygiene.md).
   Focused remote tasks are not a prerequisite.
   - Never wait for GitHub review before hosted validation dispatch.
   - Dispatch every required check first.
-  - Request one idempotent exact-head Codex review without waiting.
-  - Use the hosted validation window to collect that review.
-- After checks and review settle, address current review findings and failed
-  checks as one coherent batch.
-- Validate and review every replacement head again.
-- Do not defer the review request until after checks finish.
+  - Ordinary validation does not contact Codex.
+  - Set `CODEX_REVIEW=1` for the final coherent head.
+  - Use the hosted validation window to collect the opted-in review.
+- After checks and any opted-in review settle, address current review findings
+  and failed checks as one coherent batch.
+- Validate every replacement head again.
+- Opt in to review again only when the replacement is final and coherent.
+- Do not defer an opted-in review request until after checks finish.
   - Codex is the only automatic provider. Do not activate Cursor Bugbot.
   - See [Code review](code-review.md).
 
@@ -407,7 +412,7 @@ Rust jobs may use ARC; its remaining jobs stay hosted.
 initial implement → task loom:pre-push → commit → push/create PR
 review fix → task loom:pre-push PR=<number> → commit → push/update PR
 → focused remote evidence when not ready or immediate complete validation
-→ concurrent exact-head Codex review → combined repair batch
+→ final-head Codex review opt-in → combined repair batch
 ```
 
 **Required local action** before the initial branch push:
@@ -433,8 +438,10 @@ Complete validation:
 
 ```bash
 task pr:validate PR=<number>
+# Final coherent head:
+task pr:validate PR=<number> CODEX_REVIEW=1
 # Main-fix PR:
-task pr:validate PR=<number> FULL_E2E=1
+task pr:validate PR=<number> FULL_E2E=1 CODEX_REVIEW=1
 ```
 
 - **Before every push**
@@ -648,9 +655,9 @@ gate. See [quality](../../teams/sre/workflows/quality.md#fix-check-findings--not
 5. Run Loom/Task validation and return to monitoring Nook's complete exact-head
    PR checks. If the pushed fix is not validation-ready, dispatch at least one
    relevant focused `task remote` job first.
-6. Complete validation dispatches before any GitHub review wait. Exact-head
-   review runs during hosted checks. Batch review findings and failed checks
-   after both settle. No other review service is activated.
+6. Complete validation dispatches before any GitHub review wait. An opted-in
+   exact-head review runs during hosted checks. Batch its findings with failed
+   checks after both settle. No other review service is activated.
 
 If the failure was obviously fmt-only, `task loom:pre-push` is the only local
 proof required before re-push. Every replacement head still requires refreshed
@@ -782,9 +789,9 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
 6. If the pushed head is not validation-ready, immediately dispatch at least
    one relevant focused `task remote` job.
 7. Immediately run Loom or Task validation when the head is validation-ready.
-8. It dispatches hosted checks before requesting exact-head Codex review.
-9. Review runs during hosted validation. Batch its findings with failed checks
-   after both settle.
+8. It dispatches hosted checks before any opted-in exact-head Codex review.
+9. Final-head review runs during hosted validation. Batch its findings with
+   failed checks after both settle.
 10. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
     Claude, CodeRabbit, or other optional reviews.
 11. Disposition all substantive review findings. Implement accepted defects and

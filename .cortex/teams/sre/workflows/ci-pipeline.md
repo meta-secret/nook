@@ -973,24 +973,27 @@ and `nook-wasm` at 51 percent.
   least one relevant focused command; `TASK_NAMES=<a>,<b>` may reuse one job for
   a relevant focused batch.
 - When the pushed branch is validation-ready, Gizmo immediately runs
-  `task pr:validate PR=<number>` or adds `FULL_E2E=1`. Focused tasks are optional
-  for that head and never replace complete validation.
-- Validation dispatches repository-owned checks before any GitHub review wait.
-- It then requests one idempotent exact-head Codex review without waiting.
-- Review runs concurrently with hosted checks.
-- Current findings and failed checks form one coherent repair batch after both
-  settle.
+  `task pr:validate PR=<number>` or adds `FULL_E2E=1`. The command dispatches
+  repository-owned checks without requesting review by default.
+- A final coherent head may add `CODEX_REVIEW=1` to request one idempotent
+  exact-head Codex review without waiting.
+- A requested review runs concurrently with hosted checks.
+- Focused tasks are optional for that head and never replace complete
+  validation.
+- When review is requested, its current findings and failed checks form one
+  coherent repair batch after both settle.
 - Three finding batches open a circuit breaker and require comprehensive
   stabilization before another review request.
-- Codex is the sole automatic provider. Cursor Bugbot remains inactive.
-- They wait only for applicable repository-owned exact-head PR checks.
+- Codex is the sole automatic provider. No fallback reviewer is requested.
+- `task pr:ready PR=<number>` remains the feedback and exact-head readiness
+  authority.
 - Ordinary pushes do not start `pr.yml`.
 - Every later push requires another explicit validation before readiness.
 - Every actionable comment already present must be addressed and resolved.
-- Request review immediately after dispatch. Do not defer it until checks
-  finish.
-- Claude, CodeRabbit, and other optional services are not requested or
-  awaited. Cursor Bugbot is not activated.
+- When review is requested, request it immediately after dispatch. Do not defer
+  it until checks finish.
+- Claude, CodeRabbit, Cursor Bugbot, and other optional services are not
+  requested or awaited.
 - The local ci-agent image tag is derived from the worktree path, preventing parallel worktrees from replacing each other's review/readiness binaries.
 
 **Ephemeral but cache-aware delivery jobs:**

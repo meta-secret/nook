@@ -217,9 +217,9 @@ by Git commit and worktree. See
 task loom:pr-land CONFIG=path/to/validate-request.yaml
 ```
 
-`prLand.validate` dispatches hosted validation first. Its `nextStep` requires
-repository-owned checks and concurrent exact-head review collection or
-stabilization to settle before `prLand.ready`.
+`prLand.validate` dispatches hosted validation first. It explicitly opts the
+final coherent head into exact-head Codex review. Its `nextStep` requires the
+repository-owned checks and opted-in review to settle before `prLand.ready`.
 
 ### toolsCall
 

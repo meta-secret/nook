@@ -151,7 +151,7 @@ const DISCOVERABLE_DEFINITIONS: readonly DiscoverableRequestDefinition[] = [
     family: RequestFamily.PrLand,
     operation: PrLandOperation.Validate,
     description:
-      'Run prePush and task pr:validate, then require hosted checks and concurrent exact-head review collection before readiness.',
+      'Run prePush and task pr:validate with final-head Codex review opted in, then require hosted checks and review collection before readiness.',
     exampleRequest: 'task loom:pr-land CONFIG=<request.yaml>',
     inputSchema: PR_LAND_VALIDATE_INPUT_SCHEMA,
   },
