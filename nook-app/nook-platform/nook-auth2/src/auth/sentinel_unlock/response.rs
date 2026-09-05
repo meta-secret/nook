@@ -8,7 +8,6 @@ use ed25519_dalek::{Signer, SigningKey};
 
 use super::{
     SentinelUnlockContribution, SentinelUnlockRequest, SentinelUnlockResponse, UNLOCK_VERSION,
-    sentinel_signing,
 };
 use crate::{
     DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, MultiDeviceResult,
@@ -108,7 +107,7 @@ impl CheckedSentinelUnlockRequest {
         {
             return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
         }
-        let participant_signing_public_key = sentinel_signing::signing_public_key(signing_key);
+        let participant_signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
         let contribution = SentinelUnlockContribution {
             version: UNLOCK_VERSION,
             session_id: request.session_id.clone(),
@@ -170,8 +169,7 @@ impl SentinelUnlockResponse {
         .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)
     }
     pub(super) fn verify_signature(&self) -> MultiDeviceResult<()> {
-        sentinel_signing::verify_signature(
-            &self.participant_signing_public_key,
+        self.participant_signing_public_key.verify_signature(
             &self.signature,
             &self.signing_bytes()?,
             || MultiDeviceError::InvalidSentinelUnlockSignature,
