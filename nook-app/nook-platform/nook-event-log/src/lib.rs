@@ -63,8 +63,8 @@ pub use store::{
 pub use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, PasswordEnvelope,
-    PasswordUnlockEntry, SecretId, SecretType, Sha256Hex, SigningSeedHex, StoreId,
-    StoredRecordPayload, StoredSecretRecord,
+    PasswordEnvelopeVersion, PasswordUnlockEntry, SecretId, SecretType, Sha256Hex, SigningSeedHex,
+    StoreId, StoredRecordPayload, StoredSecretRecord,
 };
 
 #[cfg(test)]
