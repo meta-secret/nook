@@ -48,4 +48,18 @@ mod tests {
         assert_eq!(result.expires_at, expires_at);
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn bridge_rejects_a_non_numeric_authenticator_code() -> Result<(), JsError> {
+        let input = serde_wasm_bindgen::to_value(&AuthenticatorCodeFixture {
+            ok: true,
+            code: "invalid",
+            expires_at: 1_725_000_030_000.0,
+        })
+        .map_err(|error| JsError::new(&error.to_string()))?;
+        let wire = serde_wasm_bindgen::from_value(input)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        assert!(super::decode_authenticator_code_response(wire).is_err());
+        Ok(())
+    }
 }
