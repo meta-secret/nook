@@ -19,13 +19,12 @@ use nook_companion_core::{
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod account_picker_authorization;
-mod grant_authority;
-mod page_form_policy;
-
 mod authentication_observation_binding;
 mod authentication_workflow;
 mod authenticator_code_response;
 mod credential_fill;
+mod grant_authority;
+mod page_form_policy;
 mod response_decoding;
 
 pub use account_picker_authorization::*;
