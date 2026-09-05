@@ -4,7 +4,10 @@ import test from "node:test";
 import type { Octokit } from "@octokit/rest";
 
 import type { RepoRef } from "../main/github.js";
-import { buildPrAudit } from "../main/pr-audit.js";
+import {
+  buildPrAudit,
+  PullRequestMergeability,
+} from "../main/pr-audit.js";
 
 const repoRef = { owner: "meta-secret", repo: "nook" };
 
@@ -320,7 +323,7 @@ test("buildPrAudit still blocks an unresolved thread from an old review", async 
   assert.equal(audit.feedback.unresolvedThreads, 1);
 });
 
-test("buildPrAudit reports current-head and existing-feedback blockers", async () => {
+test("buildPrAudit exposes stale-base status while reporting other blockers", async () => {
   const audit = await buildPrAudit(
     mockOctokit({
       behindBy: 2,
@@ -332,8 +335,10 @@ test("buildPrAudit reports current-head and existing-feedback blockers", async (
   );
 
   assert.equal(audit.ready, false);
-  assert.ok(
-    audit.reasons.some((reason) => reason.includes("behind main by 2")),
+  assert.equal(audit.mergeState.behindBy, 2);
+  assert.equal(
+    audit.reasons.some((reason) => reason.includes("behind main")),
+    false,
   );
   assert.ok(
     audit.reasons.some((reason) => reason.includes("PR run is in_progress")),
@@ -384,9 +389,84 @@ test("buildPrAudit rejects when a required PR job is missing from the latest run
   );
 });
 
-test("buildPrAudit rejects validation from a previous base revision", async () => {
+test("buildPrAudit stays ready after main advances with successful exact-head checks", async () => {
   const audit = await buildPrAudit(
-    mockOctokit({ staleBaseRun: true }),
+    mockOctokit({ behindBy: 2 }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.mergeState.behindBy, 2);
+  assert.deepEqual(audit.reasons, []);
+});
+
+test("buildPrAudit blocks a stale-base PR with a merge conflict", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ behindBy: 2, mergeable: false, staleBaseRun: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, false);
+  assert.equal(audit.mergeState.behindBy, 2);
+  assert.equal(
+    audit.mergeState.mergeability,
+    PullRequestMergeability.Conflicting,
+  );
+  assert.ok(
+    audit.reasons.some((reason) => reason.includes("merge conflict")),
+  );
+  assert.equal(
+    audit.reasons.some((reason) => reason.includes("not indexed")),
+    false,
+  );
+});
+
+test("buildPrAudit blocks stale-base PRs with unresolved or unhandled feedback", async () => {
+  const unresolved = await buildPrAudit(
+    mockOctokit({ behindBy: 2, staleBaseRun: true, unresolvedThreads: 1 }),
+    repoRef,
+    410,
+  );
+  const unhandled = await buildPrAudit(
+    mockOctokit({ behindBy: 2, historicalFinding: true, staleBaseRun: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(unresolved.ready, false);
+  assert.equal(unresolved.feedback.unresolvedThreads, 1);
+  assert.ok(
+    unresolved.reasons.some((reason) =>
+      reason.includes("unresolved review thread"),
+    ),
+  );
+  assert.equal(unhandled.ready, false);
+  assert.equal(unhandled.feedback.unhandledComments, 1);
+  assert.ok(
+    unhandled.reasons.some((reason) =>
+      reason.includes("unhandled substantive PR comment"),
+    ),
+  );
+});
+
+test("buildPrAudit accepts a same-branch run from a previous base revision", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ behindBy: 2, staleBaseRun: true }),
+    repoRef,
+    410,
+  );
+
+  assert.equal(audit.ready, true);
+  assert.equal(audit.mergeState.behindBy, 2);
+  assert.equal(audit.requiredWorkflows[0]?.state, "indexed");
+  assert.deepEqual(audit.reasons, []);
+});
+
+test("buildPrAudit rejects an exact-head run from another base branch", async () => {
+  const audit = await buildPrAudit(
+    mockOctokit({ workflowBaseBranch: "release" }),
     repoRef,
     410,
   );
@@ -442,6 +522,8 @@ type MockOptions = {
   historicalFinding?: boolean;
   legacyAutomationComment?: boolean;
   legacyAutomationDeletionFails?: boolean;
+  mergeable?: boolean;
+  workflowBaseBranch?: string;
   headRepository?: RepoRef;
   nativeConclusion?: MockJobConclusion;
   omitNativeJob?: boolean;
@@ -472,6 +554,8 @@ function mockOctokitWithAgentHandoff(
 function createMockOctokit(options: MockOptions): Octokit {
   const headSha = "0123456789abcdef0123456789abcdef01234567";
   const [headRepository = (repoRef)] = [options.headRepository];
+  const [mergeable = (true)] = [options.mergeable];
+  const [workflowBaseBranch = ("main")] = [options.workflowBaseBranch];
   const pulls = {
     get: async () => ({
       data: {
@@ -487,7 +571,7 @@ function createMockOctokit(options: MockOptions): Octokit {
         },
         html_url: "https://github.com/meta-secret/nook/pull/410",
         created_at: "2026-08-08T00:00:00Z",
-        mergeable: true,
+        mergeable,
         number: 410,
         state: "open",
       },
@@ -738,6 +822,7 @@ function createMockOctokit(options: MockOptions): Octokit {
                 pull_requests: [
                   {
                     base: {
+                      ref: workflowBaseBranch,
                       sha:
                         options.staleBaseRun === true
                           ? "previous-base-sha"
