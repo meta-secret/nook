@@ -204,9 +204,24 @@ const mainWorkflow = new TextContract({
   label: "Main workflow",
   source: await read(".github/workflows/main.yml"),
 });
+const prWorkflowSource = await read(".github/workflows/pr.yml");
 const prWorkflow = new TextContract({
   label: "PR workflow",
-  source: await read(".github/workflows/pr.yml"),
+  source: prWorkflowSource,
+});
+const authSensitiveJobStart = prWorkflowSource.indexOf(
+  "  auth-sensitive-extension-e2e:",
+);
+const authSensitiveJobEnd = prWorkflowSource.indexOf(
+  "  preview:",
+  authSensitiveJobStart,
+);
+if (authSensitiveJobStart < 0 || authSensitiveJobEnd < 0) {
+  throw new Error("PR authentication-sensitive extension e2e job is missing");
+}
+const authSensitiveJob = new TextContract({
+  label: "PR authentication-sensitive extension e2e job",
+  source: prWorkflowSource.slice(authSensitiveJobStart, authSensitiveJobEnd),
 });
 const hiveWorkflow = new TextContract({
   label: "Hive workflow",
@@ -231,6 +246,10 @@ const webTasks = new TextContract({
 const webDockerTasks = new TextContract({
   label: "web Docker browser tasks",
   source: await read("nook-app/nook-web/docker/Taskfile.yml"),
+});
+const extensionTasks = new TextContract({
+  label: "extension browser tasks",
+  source: await read("nook-app/nook-web/nook-web-extension/Taskfile.yml"),
 });
 const wasmCacheProofSource = await read(
   ".github/scripts/verify-wasm-gha-cache.sh",
@@ -578,6 +597,36 @@ prWorkflow.requireAll([
   "task _ci:main:web:e2e-only",
   "task _extension:test:e2e",
   "task _web:test:ui-demo",
+  "auth-sensitive-e2e-required: ${{ steps.auth-sensitive-e2e-contract.outputs.required }}",
+  "name: Detect authentication-sensitive browser changes",
+  "steps.auth-sensitive-e2e-contract.outputs.required == 'true' &&\n          github.event.pull_request.head.repo.full_name == github.repository &&\n          github.event.pull_request.user.login != 'dependabot[bot]'",
+  "nook-app/nook-web/nook-web-shared/src/extension/password-form-*",
+  "nook-app/nook-web/nook-web-extension/src/content/autofill.ts",
+  "nook-app/nook-web/nook-web-extension/src/content/autofill/*",
+  "nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte",
+  "nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts",
+  "auth-sensitive-extension-e2e:",
+  "name: Authentication-sensitive extension e2e",
+  "needs: [validation-request, verify, wasm-node-test]",
+  "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
+  "AUTH_SENSITIVE_E2E_RESULT: ${{ needs.auth-sensitive-extension-e2e.result }}",
+  "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]",
+  "Authentication-sensitive extension e2e finished with $AUTH_SENSITIVE_E2E_RESULT",
+  "task _extension:test:e2e:file",
+]);
+authSensitiveJob.requireAll([
+  "needs.verify.outputs.auth-sensitive-e2e-required == 'true'",
+  "github.event.pull_request.head.repo.full_name == github.repository",
+  "github.event.pull_request.user.login != 'dependabot[bot]'",
+  "runs-on: nook-k0s-container",
+  "image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}",
+  "run: task _extension:test:e2e:file",
+  "E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts",
+]);
+extensionTasks.requireAll([
+  "_extension:test:e2e:file:",
+  'test -n "${E2E_SPEC:-}"',
+  'bash scripts/test-e2e.sh "$E2E_SPEC"',
 ]);
 prWorkflow.forbid("    runs-on: ubuntu-latest");
 nodeSetup.requireAll([
