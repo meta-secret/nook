@@ -7,7 +7,6 @@
   import { I18N_KEYS } from '../../../../generated/i18n-keys'
   import {
     NookSelectedVaultIdentityContextKind,
-    SentinelVaultUnlockState,
     type NookPasswordEntrySummary,
   } from '$app-wasm'
   import { ShieldCheck } from '@lucide/svelte'
@@ -19,7 +18,10 @@
   import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import { isSentinelVault } from '$lib/vault/sentinel-unlock'
+  import {
+    isSentinelVault,
+    sentinelCeremonyIsVisible,
+  } from '$lib/vault/sentinel-unlock'
   import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
   import {
     DeviceKeysUnlockCapabilityKind,
@@ -77,13 +79,7 @@
 
   const isBusy = $derived(isVerifying || isInitializing)
   let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
-  const showSentinelCeremony = $derived(
-    vault.sentinelCeremonyPrompt ||
-      vault.sentinelUnlockStatus ===
-        SentinelVaultUnlockState.CeremonyRequired ||
-      vault.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares ||
-      (isSentinelVault(vault) && !vault.isAuthenticated),
-  )
+  const showSentinelCeremony = $derived(sentinelCeremonyIsVisible(vault))
   const hidePasswordUnlock = $derived(
     showSentinelCeremony || isSentinelVault(vault),
   )

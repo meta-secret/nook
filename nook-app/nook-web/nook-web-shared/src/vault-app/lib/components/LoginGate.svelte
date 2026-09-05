@@ -22,10 +22,7 @@
     readDevicesAccessNudgeStorage,
     shouldShowDevicesAccessNudge,
   } from './devices-access-dashboard-state'
-  import {
-    SentinelVaultUnlockState,
-    type StartSentinelGenesisArgs,
-  } from '$app-wasm'
+  import { type StartSentinelGenesisArgs } from '$app-wasm'
   import { Button } from '$lib/components/ui/button'
   import type {
     ProviderSetupRequest,
@@ -70,6 +67,7 @@
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
+  import { sentinelCeremonyIsVisible } from '$lib/vault/sentinel-unlock'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
@@ -334,13 +332,7 @@
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )
-  const showSentinelCeremony = $derived(
-    !vault.isAuthenticated &&
-      (vault.sentinelCeremonyPrompt ||
-        vault.sentinelUnlockStatus ===
-          SentinelVaultUnlockState.CeremonyRequired ||
-        vault.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares),
-  )
+  const showSentinelCeremony = $derived(sentinelCeremonyIsVisible(vault))
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
   )
