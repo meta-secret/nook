@@ -4,9 +4,9 @@ use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation
 
 use crate::i18n_keys;
 use crate::{
-    DeviceIdentity, DeviceMode, ReplicationType, SentinelGenesisSession,
-    SentinelGenesisShareDelivery, SentinelPolicy, SigningIdentity, StoredSecretRecord,
-    VaultArchitecture, VaultType, finalize_sentinel_genesis_shares, generate_store_id,
+    DeviceIdentity, DeviceMode, ReadySentinelGenesis, ReplicationType, SentinelGenesisReadiness,
+    SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelPolicy, SigningIdentity,
+    StoredSecretRecord, VaultArchitecture, VaultType,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -39,7 +39,7 @@ pub enum SentinelGenesisPhase {
 impl SentinelGenesisPhase {
     #[must_use]
     pub fn from_session(session: &SentinelGenesisSession) -> Self {
-        if session.is_complete() {
+        if session.readiness() == SentinelGenesisReadiness::Complete {
             Self::ReadyToFinalize
         } else {
             Self::CollectingParticipants
@@ -112,18 +112,20 @@ pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate:
     operations
 }
 
-pub fn start_sentinel_genesis(
-    identity: &DeviceIdentity,
-    signing: &SigningIdentity,
-    args: StartSentinelGenesisArgs,
-) -> Result<SentinelGenesisSession, crate::MultiDeviceError> {
-    nook_auth2::start_sentinel_genesis(
-        identity,
-        signing.signing_key(),
-        args.participant_count.into(),
-        args.threshold.into(),
-        args.label,
-    )
+impl StartSentinelGenesisArgs {
+    pub fn start(
+        self,
+        identity: &DeviceIdentity,
+        signing: &SigningIdentity,
+    ) -> Result<SentinelGenesisSession, crate::MultiDeviceError> {
+        SentinelGenesisSession::start(
+            identity,
+            signing.signing_key(),
+            self.participant_count.into(),
+            self.threshold.into(),
+            self.label,
+        )
+    }
 }
 
 pub fn create_sentinel_genesis_public_key_announcement(
@@ -149,39 +151,39 @@ pub fn respond_to_sentinel_genesis_request(
 
 /// Generate keys, encrypted member rows, and the complete encrypted share set
 /// as one result after all `N` signed participant responses are verified.
-pub fn finalize_sentinel_genesis(
-    session: SentinelGenesisSession,
-    initiator_signing: &SigningIdentity,
-) -> Result<SentinelGenesisOutput, crate::MultiDeviceError> {
-    let store_id = generate_store_id()?;
-    let issued =
-        finalize_sentinel_genesis_shares(session, &store_id, initiator_signing.signing_key())?;
-    let policy = issued
-        .deliveries
-        .first()
-        .map(|delivery| delivery.policy)
-        .ok_or(MultiDeviceError::InvalidSentinelGenesisPayload)?;
-    let stored_records = issued.records;
-    let architecture = VaultArchitecture {
-        device_mode: DeviceMode::Standard,
-        vault_type: VaultType::Sentinel,
-        // Compatibility-only persisted field; it does not affect Sentinel
-        // genesis, readiness, quorum, or later provider configuration.
-        replication_type: ReplicationType::Personal,
-        sentinel: SentinelConfiguration::Enabled(SentinelPolicy {
-            threshold: policy.threshold.into(),
-            required_participants: policy.participant_count.into(),
-            ready_participants: policy.participant_count.into(),
-        }),
-    };
-    architecture.validate_records(&stored_records)?;
-    Ok(SentinelGenesisOutput {
-        store_id,
-        architecture,
-        stored_records,
-        participants: issued.participants,
-        participant_deliveries: issued.deliveries,
-    })
+impl SentinelGenesisOutput {
+    pub fn from_ready(
+        ready: ReadySentinelGenesis<'_>,
+    ) -> Result<SentinelGenesisOutput, crate::MultiDeviceError> {
+        let store_id = crate::generate_store_id()?;
+        let issued = ready.issue(&store_id)?;
+        let policy = issued
+            .deliveries
+            .first()
+            .map(|delivery| delivery.policy)
+            .ok_or(MultiDeviceError::InvalidSentinelGenesisPayload)?;
+        let stored_records = issued.records;
+        let architecture = VaultArchitecture {
+            device_mode: DeviceMode::Standard,
+            vault_type: VaultType::Sentinel,
+            // Compatibility-only persisted field; it does not affect Sentinel
+            // genesis, readiness, quorum, or later provider configuration.
+            replication_type: ReplicationType::Personal,
+            sentinel: SentinelConfiguration::Enabled(SentinelPolicy {
+                threshold: policy.threshold.into(),
+                required_participants: policy.participant_count.into(),
+                ready_participants: policy.participant_count.into(),
+            }),
+        };
+        architecture.validate_records(&stored_records)?;
+        Ok(SentinelGenesisOutput {
+            store_id,
+            architecture,
+            stored_records,
+            participants: issued.participants,
+            participant_deliveries: issued.deliveries,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -189,9 +191,7 @@ mod tests {
     use crate::VaultMetaState;
 
     use super::*;
-    use crate::{
-        SentinelGenesisParticipantResponse, VaultMetaRecord, add_sentinel_genesis_response,
-    };
+    use crate::{SentinelGenesisParticipantResponse, VaultMetaRecord};
 
     #[test]
     fn core_finalization_has_no_full_key_envelope() -> crate::VaultResult<()> {
@@ -209,15 +209,12 @@ mod tests {
         );
         let owner = DeviceIdentity::generate()?;
         let (owner_signing, _) = SigningIdentity::generate()?;
-        let mut session = start_sentinel_genesis(
-            &owner,
-            &owner_signing,
-            StartSentinelGenesisArgs {
-                label: "Owner".to_owned(),
-                participant_count: 2,
-                threshold: 2,
-            },
-        )?;
+        let session = StartSentinelGenesisArgs {
+            label: "Owner".to_owned(),
+            participant_count: 2,
+            threshold: 2,
+        }
+        .start(&owner, &owner_signing)?;
         assert_eq!(
             SentinelGenesisPhase::from_session(&session),
             SentinelGenesisPhase::CollectingParticipants
@@ -225,17 +222,23 @@ mod tests {
         let peer = DeviceIdentity::generate()?;
         let (peer_signing, _) = SigningIdentity::generate()?;
         let response: SentinelGenesisParticipantResponse = respond_to_sentinel_genesis_request(
-            &session.request,
+            session.request(),
             &peer,
             &peer_signing,
             "Peer".to_owned(),
         )?;
-        add_sentinel_genesis_response(&mut session, response)?;
+        let session = session
+            .collect(response)
+            .map_err(|rejected| rejected.into_parts().1)?;
         assert_eq!(
             SentinelGenesisPhase::from_session(&session),
             SentinelGenesisPhase::ReadyToFinalize
         );
-        let output = finalize_sentinel_genesis(session, &owner_signing)?;
+        let output = SentinelGenesisOutput::from_ready(
+            session
+                .prepare(owner_signing.signing_key())
+                .map_err(|rejected| rejected.into_parts().1)?,
+        )?;
         assert_eq!(output.participant_deliveries.len(), 2);
         let operations = sentinel_genesis_operations(&output);
         assert_eq!(operations.len(), 3);

@@ -10,6 +10,7 @@ use nook_core::{
     VaultMetaState, VaultType,
 };
 use std::collections::BTreeSet;
+use std::mem;
 mod genesis_finalization;
 mod unlock_finalization;
 
@@ -151,7 +152,7 @@ impl NookVaultManager {
         self.assign_vault_name(&args.label);
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
-        let session = nook_core::start_sentinel_genesis(&identity, &signing, args)?;
+        let session = args.start(&identity, &signing)?;
         self.sentinel_genesis_phase = SentinelGenesisPhase::from_session(&session);
         self.sentinel_genesis = CeremonyState::Active(session);
         Ok(self.sentinel_genesis_status())
@@ -163,10 +164,8 @@ impl NookVaultManager {
         let session = self
             .sentinel_genesis
             .get("No Sentinel genesis ceremony is active.")?;
-        Ok(
-            serde_json::to_string(&nook_core::sentinel_genesis_request(session))
-                .map_err(|error| NookError::Serialization(error.to_string()))?,
-        )
+        Ok(serde_json::to_string(session.request())
+            .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
 
     /// Create this device's signed public-key announcement for local initiator
@@ -231,17 +230,26 @@ impl NookVaultManager {
         response_json: &str,
         participant_label: &str,
     ) -> Result<NookSentinelGenesisStatus, JsError> {
-        let session = self
-            .sentinel_genesis
-            .get_mut("No Sentinel genesis ceremony is active.")?;
+        self.sentinel_genesis
+            .get("No Sentinel genesis ceremony is active.")?;
         let response_json =
             nook_core::normalize_sentinel_genesis_participant_payload(response_json)?;
-        nook_core::add_sentinel_genesis_participant_payload_with_label(
-            session,
-            &response_json,
-            participant_label,
-        )?;
-        self.sentinel_genesis_phase = SentinelGenesisPhase::from_session(session);
+        let session = match mem::replace(&mut self.sentinel_genesis, CeremonyState::Inactive) {
+            CeremonyState::Active(session) => session,
+            CeremonyState::Inactive => {
+                return Err(JsError::new("No Sentinel genesis ceremony is active."));
+            }
+        };
+        let (session, result) = match session.collect_payload(&response_json, participant_label) {
+            Ok(session) => (session, Ok(())),
+            Err(rejected) => {
+                let (session, error) = rejected.into_parts();
+                (session, Err(error))
+            }
+        };
+        self.sentinel_genesis_phase = SentinelGenesisPhase::from_session(&session);
+        self.sentinel_genesis = CeremonyState::Active(session);
+        result?;
         Ok(self.sentinel_genesis_status())
     }
 
@@ -593,15 +601,12 @@ mod tests {
     fn genesis_status_exposes_public_roster_without_persisting_a_vault() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;
-        let session = nook_core::start_sentinel_genesis(
-            &identity,
-            &signing,
-            nook_core::StartSentinelGenesisArgs {
-                label: "Initiator".to_owned(),
-                participant_count: 3,
-                threshold: 2,
-            },
-        )?;
+        let session = nook_core::StartSentinelGenesisArgs {
+            label: "Initiator".to_owned(),
+            participant_count: 3,
+            threshold: 2,
+        }
+        .start(&identity, &signing)?;
         let mut manager = NookVaultManager::new();
         manager.sentinel_genesis = CeremonyState::Active(session);
 

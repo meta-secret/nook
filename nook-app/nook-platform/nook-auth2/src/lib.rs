@@ -102,17 +102,15 @@ pub use auth::password_envelope::{
     verify_password_entry,
 };
 pub use auth::sentinel_genesis::{
-    SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,
-    SentinelGenesisPolicy, SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest,
-    SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelGenesisVersion,
-    accept_sentinel_genesis_share_delivery, add_sentinel_genesis_participant_payload,
-    add_sentinel_genesis_participant_payload_with_label,
-    add_sentinel_genesis_public_key_announcement, add_sentinel_genesis_response,
+    ReadySentinelGenesis, SentinelGenesisIssued, SentinelGenesisParticipant,
+    SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
+    SentinelGenesisPublicKeyAnnouncement, SentinelGenesisReadiness, SentinelGenesisRejection,
+    SentinelGenesisRequest, SentinelGenesisSession, SentinelGenesisShareDelivery,
+    SentinelGenesisVersion, accept_sentinel_genesis_share_delivery,
     build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
-    create_sentinel_genesis_public_key_announcement, finalize_sentinel_genesis_shares,
+    create_sentinel_genesis_public_key_announcement,
     normalize_sentinel_genesis_participant_payload, normalize_sentinel_genesis_request,
     respond_to_sentinel_genesis_request, sentinel_genesis_participant_fingerprint,
-    sentinel_genesis_request, start_sentinel_genesis,
 };
 pub use auth::sentinel_unlock::{
     CheckedSentinelUnlockRequest, SentinelUnlockPolicy, SentinelUnlockQuorum,
