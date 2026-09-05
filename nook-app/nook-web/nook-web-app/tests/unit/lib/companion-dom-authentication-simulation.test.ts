@@ -50,8 +50,9 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-function fieldValue(selector: string): string | undefined {
-  return document.querySelector<HTMLInputElement>(selector)?.value
+function fieldValue(selector: string): string | false {
+  const field = document.querySelector<HTMLInputElement>(selector)
+  return field ? field.value : false
 }
 
 describe('DOM-backed companion authentication simulation', () => {
