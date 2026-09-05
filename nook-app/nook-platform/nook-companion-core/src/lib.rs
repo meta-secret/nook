@@ -145,7 +145,6 @@ pub use generated_password_response::{
 };
 pub use oauth_origin_policy::{
     BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
-    is_cloudflare_pr_preview_host, resolve_oauth_origin_support,
 };
 pub use outcome_evidence::{
     AuthenticationOutcomeClassification, AuthenticationOutcomeDecision,
