@@ -13,6 +13,7 @@ description = "Minds: AI Agent Team Orchestration and Task Management"
 repository = "https://github.com/meta-secret/nook"
 
 [workspace.lints.clippy]
+absolute_paths = "deny"
 expect_used = "deny"
 unwrap_used = "deny"
 

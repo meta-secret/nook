@@ -14,7 +14,7 @@ pub(super) async fn gh_output(repository: &Path, arguments: &[&str]) -> crate::H
         .await
         .hive_context("failed to execute gh")?;
     if !output.status.success() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "gh {:?} failed with status {}",
             arguments, output.status
         )));
@@ -33,7 +33,7 @@ pub(super) async fn git_output(repository: &Path, arguments: &[&str]) -> crate::
         .await
         .hive_context("failed to execute git")?;
     if !output.status.success() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "git {:?} failed with status {}",
             arguments, output.status
         )));
@@ -58,7 +58,7 @@ pub(super) async fn run_git_status(
         .await
         .with_hive_context(|| format!("failed to {operation}"))?;
     if !status.success() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "{operation} failed with status {status}"
         )));
     }

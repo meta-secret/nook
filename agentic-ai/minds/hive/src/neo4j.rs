@@ -2,6 +2,7 @@ use crate::HiveContext;
 use async_trait::async_trait;
 use neo4rs::{ConfigBuilder, Graph, Row, query};
 use serde::Serialize;
+use tokio::time as async_time;
 use uuid::Uuid;
 
 use self::claim_retry::{CLAIM_RETRY_LIMIT, transient_claim_retry_delay};
@@ -413,12 +414,12 @@ impl TaskStore for Neo4jTaskStore {
             match result {
                 Ok(claimed) => return Ok(claimed),
                 Err(error) => match transient_claim_retry_delay(retry, &error) {
-                    Some(delay) => tokio::time::sleep(delay).await,
+                    Some(delay) => async_time::sleep(delay).await,
                     None => return Err(error),
                 },
             }
         }
-        Err(crate::error::HiveError::message(
+        Err(crate::HiveError::message(
             "Neo4j claim retry budget exhausted after transient failures",
         ))
     }
@@ -733,17 +734,17 @@ impl TaskStore for Neo4jTaskStore {
     ) -> crate::HiveResult<bool> {
         blocker.validate()?;
         if task.kind == "blocker" {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "a blocker task cannot create another blocking dependency",
             ));
         }
         if blocker.source_commit != task.source_commit {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "a blocker must target the same pinned repository revision",
             ));
         }
         if !blocker.dependencies.is_empty() {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "a newly discovered blocker must not have undeclared dependencies",
             ));
         }
