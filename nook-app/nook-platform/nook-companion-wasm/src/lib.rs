@@ -704,7 +704,7 @@ mod tests {
                     error_marker_present: true,
                     ..Default::default()
                 },
-                timeout_ms: 1_000,
+                timeout_ms: 1_000.into(),
             },
         );
         assert_eq!(
