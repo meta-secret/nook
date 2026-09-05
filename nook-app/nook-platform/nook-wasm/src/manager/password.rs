@@ -56,14 +56,13 @@ impl NookVaultManager {
     }
 
     async fn hydrate_listed_password_entries(&mut self, content: &str) -> Result<(), NookError> {
-        if let Ok(entries) = nook_core::read_vault_password_entries(content)
-            && !entries.is_empty()
-        {
+        let entries = nook_core::read_vault_password_entries(content)?;
+        if !entries.is_empty() {
             self.vault.password_entries = entries;
             return Ok(());
         }
         if !content.trim().is_empty() {
-            self.capture_vault_unlock(content).ok();
+            self.capture_vault_unlock(content)?;
         }
         if self.vault.store_id.trim().is_empty()
             && let Some(store_id) = get_active_vault_id().await?
@@ -438,9 +437,9 @@ impl NookVaultManager {
                     .to_owned(),
             ));
         }
-        self.capture_vault_unlock(content)?;
         let format = nook_core::detect_stored_format(content)?;
         let mut records = nook_core::deserialize_stored(content, format)?;
+        self.capture_vault_unlock(content)?;
         records.retain(|record| !nook_core::is_join_stored_record(record));
         Ok((false, records))
     }
@@ -516,6 +515,7 @@ mod metadata_tests {
     use super::*;
     use crate::manager::VaultNameState;
     use nook_core::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
+    use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -573,6 +573,51 @@ mod metadata_tests {
 
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn invalid_password_envelope_does_not_mutate_session_or_fall_back_to_events()
+    -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let entry = nook_core::create_password_entry_with_work_factor(
+            &keys,
+            nook_core::generate_id()?.as_str(),
+            "Recovery",
+            "2026-09-05T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
+        )?;
+        let remote_store_id = nook_core::generate_store_id()?;
+        let content = nook_core::serialize_stored_yaml_with_unlock_and_name(
+            &[],
+            &VaultUnlock::Keys,
+            slice::from_ref(&entry),
+            VaultStoreIdentityRef::Assigned(remote_store_id.as_str()),
+            VaultNameRef::Named("Rejected remote"),
+            VaultVersionWrite::Initial,
+        )?
+        .into_inner()
+        .replacen("version: 2", "version: 3", 1);
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "store_existing11".to_owned();
+        manager.vault.vault_name = VaultNameState::Named("Existing".to_owned());
+        manager.vault.password_entries = vec![entry.clone()];
+
+        match manager.load_password_unlock_records(&content, false).await {
+            Err(_) => {}
+            Ok(_) => return Err(anyhow::anyhow!("password load accepted version 3")),
+        }
+        match manager.hydrate_listed_password_entries(&content).await {
+            Err(_) => {}
+            Ok(()) => return Err(anyhow::anyhow!("password hydration accepted version 3")),
+        }
+        assert_eq!(manager.vault.store_id, "store_existing11");
+        assert!(matches!(
+            &manager.vault.vault_name,
+            VaultNameState::Named(name) if name == "Existing"
+        ));
+        assert_eq!(manager.vault.password_entries, vec![entry]);
+        Ok(())
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
@@ -607,7 +652,7 @@ mod wasm_tests {
                 password,
                 E2E_PASSWORD_SCRYPT_LOG_N.into(),
             )?;
-            entry.envelope.version = 1;
+            entry.envelope.version = nook_core::PasswordEnvelopeVersion::LEGACY;
             entries.push(entry);
         }
         let mut manager = NookVaultManager::new();

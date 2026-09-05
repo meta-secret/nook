@@ -16,14 +16,16 @@
 //! See `.cortex/teams/dev-core/product-specs/password-envelope.md` for the full design.
 
 use crate::VaultKeys;
-use crate::errors::{AgeCryptoError, PasswordError, PasswordResult};
+use crate::errors::{
+    AgeCryptoError, PasswordError, PasswordResult, RejectedPasswordEnvelopeVersion,
+};
 use crate::{AgeArmoredCiphertext, PasswordCharacterCount, PasswordWorkFactor, SymmetricKey};
 use age::{
     scrypt,
     secrecy::{self, ExposeSecret},
     x25519,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::{
     io::{Read, Write},
     iter, mem,
@@ -77,7 +79,7 @@ pub struct PasswordUnlockEntry {
 /// header; the `kdf` / `work_factor` fields are redundant hints for tooling.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PasswordEnvelope {
-    pub version: u32,
+    pub version: PasswordEnvelopeVersion,
     pub kdf: String,
     pub work_factor: PasswordWorkFactor,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -85,6 +87,39 @@ pub struct PasswordEnvelope {
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub wrapped_keys: String,
     pub ciphertext: String,
+}
+
+/// Supported persisted password-envelope wire versions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct PasswordEnvelopeVersion(u32);
+
+impl PasswordEnvelopeVersion {
+    pub const LEGACY: Self = Self(1);
+    pub const CURRENT: Self = Self(2);
+
+    fn parse(value: u32) -> Result<Self, RejectedPasswordEnvelopeVersion> {
+        match value {
+            1 => Ok(Self::LEGACY),
+            2 => Ok(Self::CURRENT),
+            _ => Err(RejectedPasswordEnvelopeVersion::from_raw(value)),
+        }
+    }
+}
+
+impl From<PasswordEnvelopeVersion> for u32 {
+    fn from(value: PasswordEnvelopeVersion) -> Self {
+        value.0
+    }
+}
+
+impl<'de> Deserialize<'de> for PasswordEnvelopeVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+    }
 }
 
 /// The vault's active unlock mechanism — mutually exclusive across variants.
@@ -238,15 +273,13 @@ struct EnvelopePlaintext {
     members_key: String,
 }
 
-const LEGACY_ENVELOPE_VERSION: u32 = 1;
-const ENVELOPE_VERSION: u32 = 2;
 const ENVELOPE_KDF: &str = "scrypt";
 
 /// Whether an envelope can follow a security-epoch key rotation without the
 /// password plaintext.
 #[must_use]
 pub fn password_envelope_supports_key_rewrap(envelope: &PasswordEnvelope) -> bool {
-    envelope.version == ENVELOPE_VERSION
+    envelope.version == PasswordEnvelopeVersion::CURRENT
 }
 
 /// Wrap `secrets_key` + `members_key` with a password-derived scrypt key.
@@ -288,7 +321,7 @@ pub fn attach_password_envelope_with_work_factor(
     )?;
 
     Ok(PasswordEnvelope {
-        version: ENVELOPE_VERSION,
+        version: PasswordEnvelopeVersion::CURRENT,
         kdf: ENVELOPE_KDF.to_owned(),
         work_factor,
         recipient: recipient.to_string(),
@@ -311,9 +344,9 @@ pub fn rewrap_password_envelope(
     envelope: &PasswordEnvelope,
     keys: &VaultKeys,
 ) -> PasswordResult<PasswordEnvelope> {
-    if envelope.version != ENVELOPE_VERSION {
+    if envelope.version != PasswordEnvelopeVersion::CURRENT {
         return Err(PasswordError::UnsupportedEnvelopeVersion {
-            version: envelope.version,
+            version: RejectedPasswordEnvelopeVersion::from_raw(envelope.version.into()),
         });
     }
     let recipient = envelope
@@ -336,17 +369,6 @@ pub fn resolve_keys_from_password(
     envelope: &PasswordEnvelope,
     password: &str,
 ) -> PasswordResult<VaultKeys> {
-    if envelope.version != ENVELOPE_VERSION && envelope.version != LEGACY_ENVELOPE_VERSION {
-        tracing::warn!(
-            scope = "password-envelope",
-            version = envelope.version,
-            supported = ENVELOPE_VERSION,
-            "unsupported password envelope version"
-        );
-        return Err(PasswordError::UnsupportedEnvelopeVersion {
-            version: envelope.version,
-        });
-    }
     if envelope.kdf != ENVELOPE_KDF {
         tracing::warn!(
             scope = "password-envelope",
@@ -362,7 +384,7 @@ pub fn resolve_keys_from_password(
     let secret = secrecy::SecretString::from(password.to_owned());
     let identity = scrypt::Identity::new(secret);
     let mut password_plaintext = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
-    let mut plaintext_bytes = if envelope.version == LEGACY_ENVELOPE_VERSION {
+    let mut plaintext_bytes = if envelope.version == PasswordEnvelopeVersion::LEGACY {
         Zeroizing::new(mem::take(&mut *password_plaintext))
     } else {
         let wrapping_identity_text = Zeroizing::new(
@@ -514,7 +536,7 @@ mod tests {
     fn roundtrip_attach_and_resolve() -> anyhow::Result<()> {
         let keys = sample_keys()?;
         let envelope = attach_password_envelope(&keys, "correct horse battery staple")?;
-        assert_eq!(envelope.version, 2);
+        assert_eq!(envelope.version, PasswordEnvelopeVersion::CURRENT);
         assert_eq!(envelope.kdf, "scrypt");
         assert!(
             envelope
@@ -582,11 +604,20 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_version_rejected() -> anyhow::Result<()> {
-        let mut envelope =
-            attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
-        envelope.version = 99;
-        assert!(resolve_keys_from_password(&envelope, "correct horse battery staple").is_err());
+    fn password_envelope_versions_roundtrip_as_validated_scalars() -> anyhow::Result<()> {
+        for version in [
+            PasswordEnvelopeVersion::LEGACY,
+            PasswordEnvelopeVersion::CURRENT,
+        ] {
+            let encoded = serde_json::to_string(&version)?;
+            assert_eq!(
+                serde_json::from_str::<PasswordEnvelopeVersion>(&encoded)?,
+                version
+            );
+        }
+        for unsupported in ["0", "3", "99", "4294967296"] {
+            assert!(serde_json::from_str::<PasswordEnvelopeVersion>(unsupported).is_err());
+        }
         Ok(())
     }
 
@@ -594,7 +625,7 @@ mod tests {
     fn legacy_envelope_requires_explicit_upgrade_before_key_rewrap() -> anyhow::Result<()> {
         let current = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
         let mut legacy = current.clone();
-        legacy.version = LEGACY_ENVELOPE_VERSION;
+        legacy.version = PasswordEnvelopeVersion::LEGACY;
 
         assert!(password_envelope_supports_key_rewrap(&current));
         assert!(!password_envelope_supports_key_rewrap(&legacy));

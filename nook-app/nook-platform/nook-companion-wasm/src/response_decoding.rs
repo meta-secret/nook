@@ -3,7 +3,8 @@
 use nook_companion_core::{
     AuthenticatorBackupAttachResponse, AuthenticatorEnrollmentConfirmResponse,
     AuthenticatorEnrollmentStageResponse, AuthenticatorOptionsResponse,
-    AuthenticatorPickerOpenResponse, AuthenticatorPreviewResponse,
+    AuthenticatorPickerOpenResponse, AuthenticatorPreviewResponse, WebsiteLoginOptions,
+    WebsitePasskeyAccountList,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -28,9 +29,8 @@ pub fn decode_extension_session_status_response(
 #[wasm_bindgen]
 pub fn decode_website_login_options(
     response: nook_companion_core::WebsiteLoginOptionsWireValue,
-) -> Result<nook_companion_core::WebsiteLoginOptions, wasm_bindgen::JsError> {
-    nook_companion_core::decode_website_login_options(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+) -> Result<nook_companion_core::WebsiteLoginOptions, JsError> {
+    WebsiteLoginOptions::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
@@ -39,33 +39,36 @@ pub fn decode_website_passkey_account_list(
     response: wasm_bindgen::JsValue,
 ) -> nook_companion_core::WebsitePasskeyAccountList {
     serde_wasm_bindgen::from_value(response).map_or_else(
-        |_| nook_companion_core::WebsitePasskeyAccountList::invalid(),
-        nook_companion_core::decode_website_passkey_account_list,
+        |_| WebsitePasskeyAccountList::invalid(),
+        WebsitePasskeyAccountList::from_wire,
     )
 }
 
 #[wasm_bindgen]
 pub fn decode_website_login_save_offer_response(
     response: nook_companion_core::WebsiteLoginSaveOfferResponse,
-) -> Result<nook_companion_core::WebsiteLoginSaveOfferResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_website_login_save_offer_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+) -> Result<nook_companion_core::WebsiteLoginSaveOfferResponse, JsError> {
+    response
+        .validate()
+        .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
 pub fn decode_website_login_save_pending_response(
     response: nook_companion_core::WebsiteLoginSavePendingResponse,
-) -> Result<nook_companion_core::WebsiteLoginSavePendingResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_website_login_save_pending_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+) -> Result<nook_companion_core::WebsiteLoginSavePendingResponse, JsError> {
+    response
+        .validate()
+        .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
 pub fn decode_website_login_save_action_response(
     response: nook_companion_core::WebsiteLoginSaveActionResponse,
-) -> Result<nook_companion_core::WebsiteLoginSaveActionResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_website_login_save_action_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+) -> Result<nook_companion_core::WebsiteLoginSaveActionResponse, JsError> {
+    response
+        .validate()
+        .map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]

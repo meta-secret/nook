@@ -1,3 +1,9 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 //! Portable classification of browser-collected extension persistence state.
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
@@ -92,46 +98,42 @@ pub struct ExtensionPersistenceObservation {
     pub observed_names: Vec<String>,
 }
 
-#[must_use]
-pub fn classify_extension_database_names(
-    area: ExtensionPersistenceArea,
-    observed_names: &[String],
-) -> ExtensionPersistenceDatabaseState {
-    if observed_names
-        .iter()
-        .any(|name| name == area.database_name())
-    {
-        ExtensionPersistenceDatabaseState::Present
-    } else {
-        ExtensionPersistenceDatabaseState::Absent
+impl ExtensionPersistenceArea {
+    #[must_use]
+    pub fn classify_database_names(
+        self,
+        observed_names: &[String],
+    ) -> ExtensionPersistenceDatabaseState {
+        if observed_names
+            .iter()
+            .any(|name| name == self.database_name())
+        {
+            ExtensionPersistenceDatabaseState::Present
+        } else {
+            ExtensionPersistenceDatabaseState::Absent
+        }
     }
-}
 
-#[must_use]
-pub fn classify_extension_store_names(
-    area: ExtensionPersistenceArea,
-    observed_names: &[String],
-) -> ExtensionPersistenceStoreState {
-    let expected = area.store_names();
-    if expected
-        .iter()
-        .any(|name| observed_names.iter().any(|observed| observed == name))
-    {
-        ExtensionPersistenceStoreState::Present
-    } else {
-        ExtensionPersistenceStoreState::Absent
+    #[must_use]
+    pub fn classify_store_names(self, observed_names: &[String]) -> ExtensionPersistenceStoreState {
+        let expected = self.store_names();
+        if expected
+            .iter()
+            .any(|name| observed_names.iter().any(|observed| observed == name))
+        {
+            ExtensionPersistenceStoreState::Present
+        } else {
+            ExtensionPersistenceStoreState::Absent
+        }
     }
-}
 
-#[must_use]
-pub fn matching_extension_store_names(
-    area: ExtensionPersistenceArea,
-    observed_names: &[String],
-) -> Vec<String> {
-    area.store_names()
-        .into_iter()
-        .filter(|name| observed_names.iter().any(|observed| observed == name))
-        .collect()
+    #[must_use]
+    pub fn matching_store_names(self, observed_names: &[String]) -> Vec<String> {
+        self.store_names()
+            .into_iter()
+            .filter(|name| observed_names.iter().any(|observed| observed == name))
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -143,11 +145,11 @@ mod tests {
         let observed = vec!["nook_db".to_owned(), "nook_auth".to_owned()];
 
         assert_eq!(
-            classify_extension_database_names(ExtensionPersistenceArea::EventLog, &observed),
+            ExtensionPersistenceArea::EventLog.classify_database_names(&observed),
             ExtensionPersistenceDatabaseState::Present
         );
         assert_eq!(
-            classify_extension_database_names(ExtensionPersistenceArea::Pairing, &observed),
+            ExtensionPersistenceArea::Pairing.classify_database_names(&observed),
             ExtensionPersistenceDatabaseState::Absent
         );
     }
@@ -157,15 +159,15 @@ mod tests {
         let observed = vec!["events".to_owned(), "other".to_owned()];
 
         assert_eq!(
-            classify_extension_store_names(ExtensionPersistenceArea::EventLog, &observed),
+            ExtensionPersistenceArea::EventLog.classify_store_names(&observed),
             ExtensionPersistenceStoreState::Present
         );
         assert_eq!(
-            classify_extension_store_names(ExtensionPersistenceArea::Pairing, &observed),
+            ExtensionPersistenceArea::Pairing.classify_store_names(&observed),
             ExtensionPersistenceStoreState::Absent
         );
         assert_eq!(
-            matching_extension_store_names(ExtensionPersistenceArea::EventLog, &observed),
+            ExtensionPersistenceArea::EventLog.matching_store_names(&observed),
             vec!["events".to_owned()]
         );
     }

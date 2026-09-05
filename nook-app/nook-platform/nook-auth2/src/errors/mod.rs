@@ -13,7 +13,7 @@ pub use age_crypto::AgeCryptoError;
 pub use device_key_protection::{DeviceKeyProtectionError, DeviceKeyProtectionResult};
 pub use enrollment::{EnrollmentError, EnrollmentResult};
 pub use multi_device::{MultiDeviceError, MultiDeviceResult};
-pub use password::{PasswordError, PasswordResult};
+pub use password::{PasswordError, PasswordResult, RejectedPasswordEnvelopeVersion};
 pub use secret_payload::{SecretPayloadError, SecretPayloadResult};
 pub use validation::{ValidationError, ValidationResult};
 pub use vault_crypto::{VaultCryptoError, VaultCryptoResult};
