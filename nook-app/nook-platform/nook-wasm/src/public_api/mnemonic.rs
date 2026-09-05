@@ -78,3 +78,62 @@ pub fn infer_bip39_mnemonic_length(text: &str) -> NookBip39MnemonicLength {
         Some(_) | None => NookBip39MnemonicLength::Unsupported,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const VALID_TWELVE_WORD_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    #[test]
+    fn bip39_exports_cover_validation_word_queries_and_composition() {
+        assert!(validate_bip39_mnemonic(VALID_TWELVE_WORD_MNEMONIC));
+        assert!(!validate_bip39_mnemonic("abandon abandon"));
+
+        let wordlist = get_bip39_english_wordlist();
+        assert_eq!(wordlist.len(), 2048);
+        assert!(wordlist.iter().any(|word| word == "abandon"));
+        assert!(is_known_bip39_word("abandon"));
+        assert!(!is_known_bip39_word("not-a-bip39-word"));
+
+        let suggestions = suggest_bip39_words("abou", 2);
+        assert!(suggestions.len() <= 2);
+        assert!(suggestions.iter().all(|word| word.starts_with("abou")));
+        assert!(suggest_bip39_words("abou", 0).is_empty());
+
+        assert!(is_bip39_word_sequence_valid(VALID_TWELVE_WORD_MNEMONIC, 12));
+        assert!(!is_bip39_word_sequence_valid(
+            VALID_TWELVE_WORD_MNEMONIC,
+            24
+        ));
+        assert_eq!(
+            parse_bip39_words(" abandon\t about "),
+            vec!["abandon", "about"]
+        );
+        assert_eq!(
+            join_bip39_words(vec!["abandon".into(), "about".into()]),
+            "abandon about"
+        );
+    }
+
+    #[test]
+    fn bip39_length_projection_distinguishes_supported_counts() {
+        assert_eq!(
+            infer_bip39_mnemonic_length(VALID_TWELVE_WORD_MNEMONIC),
+            NookBip39MnemonicLength::Words12
+        );
+        let words = VALID_TWELVE_WORD_MNEMONIC
+            .split_whitespace()
+            .chain(VALID_TWELVE_WORD_MNEMONIC.split_whitespace())
+            .collect::<Vec<_>>()
+            .join(" ");
+        assert_eq!(
+            infer_bip39_mnemonic_length(&words),
+            NookBip39MnemonicLength::Words24
+        );
+        assert_eq!(
+            infer_bip39_mnemonic_length("abandon"),
+            NookBip39MnemonicLength::Unsupported
+        );
+    }
+}
