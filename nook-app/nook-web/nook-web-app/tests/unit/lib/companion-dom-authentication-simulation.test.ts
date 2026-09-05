@@ -78,7 +78,9 @@ describe('DOM-backed companion authentication simulation', () => {
       submissionResult: FormSubmissionResult.Submitted,
       submittedControlIdentity: 'login-submit',
     })
-    expect(result.selectedRoot).toBe(document.querySelector('.loginForm'))
+    expect(result.observedRoots).toHaveLength(1)
+    expect(result.observedRoots[0]).toBe(document)
+    expect(result.selectedRoot).toBe(document)
     expect(fieldValue('.loginForm [name="LoginUserName"]')).toBe(
       FAKE_CREDENTIALS.username,
     )
@@ -89,6 +91,32 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('header [name="LoginPassword"]')).toBe('header-password')
     expect(fieldValue('[name="search"]')).toBe('account help')
     expect(fieldValue('[name="newsletter-email"]')).toBe('reader@example.test')
+  })
+
+  test('selects the local root of an unambiguous login surface', () => {
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<form method="post"><section class="login-panel"><input name="username" autocomplete="username"><input name="password" type="password" autocomplete="current-password"><button id="local-submit" type="submit">Sign in</button></section></form>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const result = simulateDomAuthentication(request)
+    const loginPanel = document.querySelector('.login-panel')
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      implicitSubmissionMethod: 'absent',
+      advanceControl: 'absent',
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'local-submit',
+    })
+    expect(result.observedRoots).toHaveLength(1)
+    expect(result.observedRoots[0]).toBe(loginPanel)
+    expect(result.selectedRoot).toBe(loginPanel)
   })
 
   test('does not implicitly submit the page-wide owner without a local control', () => {
@@ -105,15 +133,16 @@ describe('DOM-backed companion authentication simulation', () => {
 
     expect(result).toMatchObject({
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
-      implicitSubmissionMethod: 'absent',
+      implicitSubmissionMethod: 'post',
       advanceControl: 'absent',
       credentialSubmissionKind: 'absent',
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
       submittedControlIdentity: '',
     })
-    expect(result.observedRoots).toEqual([document.querySelector('.loginForm')])
-    expect(result.selectedRoot).toBe(false)
+    expect(result.observedRoots).toHaveLength(1)
+    expect(result.observedRoots[0]).toBe(document)
+    expect(result.selectedRoot).toBe(document)
     expect(fieldValue('.loginForm [name="LoginUserName"]')).toBe('')
     expect(fieldValue('.loginForm [name="LoginPassword"]')).toBe('')
     expect(fieldValue('header [name="LoginUserName"]')).toBe('header-user')
