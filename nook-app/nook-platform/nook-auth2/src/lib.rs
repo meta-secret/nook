@@ -93,8 +93,9 @@ pub mod multi_device_api {
     };
 }
 pub use auth::password_envelope::{
-    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordUnlockEntry, VaultUnlock,
-    attach_password_envelope, attach_password_envelope_with_work_factor, create_password_entry,
+    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordEnvelopeVersion,
+    PasswordUnlockEntry, VaultUnlock, attach_password_envelope,
+    attach_password_envelope_with_work_factor, create_password_entry,
     create_password_entry_with_work_factor, is_vault_password_long_enough,
     is_vault_password_recommended_length, password_envelope_supports_key_rewrap,
     resolve_keys_from_entry, resolve_keys_from_password, rewrap_password_envelope,
@@ -121,8 +122,8 @@ pub use crypto::vault_crypto::VaultCrypto;
 pub use errors::{
     AgeCryptoError, DeviceKeyProtectionError, DeviceKeyProtectionResult, EnrollmentError,
     EnrollmentResult, MultiDeviceError, MultiDeviceResult, PasswordError, PasswordResult,
-    SecretPayloadError, SecretPayloadResult, ValidationError, ValidationResult, VaultCryptoError,
-    VaultCryptoResult,
+    RejectedPasswordEnvelopeVersion, SecretPayloadError, SecretPayloadResult, ValidationError,
+    ValidationResult, VaultCryptoError, VaultCryptoResult,
 };
 pub use ids::{
     AUTH_KEY_ID_PREFIX, AppId, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX,
