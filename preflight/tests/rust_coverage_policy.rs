@@ -24,7 +24,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
             "nook-wasm" => 51.0,
-            "nook-companion-wasm" => 75.0,
+            "nook-companion-wasm" => 88.0,
             "hive" => 60.0,
             _ => 90.0,
         };
@@ -87,9 +87,10 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));
     assert!(product
-        .split_once("llvm-cov test --no-clean --release -p nook-wasm --no-report")
+        .split_once("llvm-cov test --no-clean --release -p nook-wasm")
         .and_then(|(_, later)| later.split_once("llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \\\n    && nook-sccache-report wasm-node-test-and-coverage"))
         .is_some_and(|(_, later)| later.contains("--features browser-wasm-tests --fail-under-lines \"$nook_wasm_floor\"")));
+    assert!(!product.contains("--no-clean --release -p nook-wasm --no-report"));
     assert!(product.contains("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true"));
     assert!(product.contains(
         "WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=\"$runner\""

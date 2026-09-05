@@ -125,6 +125,7 @@ unless !docker_setup_cache_script.include?("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAIL
        !rust_product[node_deps_start...node_source_join].include?("RUSTC_WRAPPER=") &&
        !rust_product[node_deps_start...node_source_join].include?("llvm-cov test") &&
        !rust_product[node_deps_start...node_source_join].include?("llvm-cov --no-run") &&
+       !rust_product[node_source_join...node_coverage_execution].include?("--no-clean --release -p nook-wasm --no-report") &&
        node_source_join < node_coverage_execution
   raise "WASM Node must reuse source-free dependency caches, never a terminal source cache"
 end
