@@ -8,7 +8,7 @@ use ed25519_dalek::{Signer, SigningKey};
 
 use super::{
     SentinelUnlockContribution, SentinelUnlockRequest, SentinelUnlockResponse, UNLOCK_VERSION,
-    response_signing_bytes, signing_public_key, validate_request,
+    sentinel_signing,
 };
 use crate::{
     DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, MultiDeviceResult,
@@ -83,7 +83,7 @@ impl SentinelUnlockRequest {
         self,
         expected_signing_key: &DeviceSigningPublicKey,
     ) -> MultiDeviceResult<CheckedSentinelUnlockRequest> {
-        validate_request(&self)?;
+        self.validate()?;
         if &self.requester_signing_public_key != expected_signing_key {
             return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
         }
@@ -108,7 +108,7 @@ impl CheckedSentinelUnlockRequest {
         {
             return Err(MultiDeviceError::InvalidSentinelUnlockPayload);
         }
-        let participant_signing_public_key = signing_public_key(signing_key);
+        let participant_signing_public_key = sentinel_signing::signing_public_key(signing_key);
         let contribution = SentinelUnlockContribution {
             version: UNLOCK_VERSION,
             session_id: request.session_id.clone(),
@@ -134,11 +134,47 @@ impl CheckedSentinelUnlockRequest {
             )?,
             signature: String::new(),
         };
-        response.signature = hex::encode(
-            signing_key
-                .sign(&response_signing_bytes(&response)?)
-                .to_bytes(),
-        );
+        response.signature = hex::encode(signing_key.sign(&response.signing_bytes()?).to_bytes());
         Ok(response)
+    }
+}
+
+impl SentinelUnlockResponse {
+    pub(super) fn validate_binding(
+        &self,
+        request: &SentinelUnlockRequest,
+    ) -> MultiDeviceResult<()> {
+        if self.version != UNLOCK_VERSION
+            || self.session_id != request.session_id
+            || self.store_id != request.store_id
+            || self.policy != request.policy
+            || self.participant_signing_public_key.is_empty()
+            || u8::from(self.share_index) == 0
+            || u8::from(self.share_index) > u8::from(request.policy.required_participants)
+        {
+            return Err(MultiDeviceError::InvalidSentinelUnlockSession);
+        }
+        Ok(())
+    }
+    pub(super) fn signing_bytes(&self) -> MultiDeviceResult<Vec<u8>> {
+        serde_json::to_vec(&(
+            self.version,
+            &self.session_id,
+            &self.store_id,
+            self.policy,
+            &self.participant_device_id,
+            &self.participant_signing_public_key,
+            self.share_index,
+            &self.ciphertext,
+        ))
+        .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)
+    }
+    pub(super) fn verify_signature(&self) -> MultiDeviceResult<()> {
+        sentinel_signing::verify_signature(
+            &self.participant_signing_public_key,
+            &self.signature,
+            &self.signing_bytes()?,
+            || MultiDeviceError::InvalidSentinelUnlockSignature,
+        )
     }
 }
