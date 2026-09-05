@@ -444,7 +444,7 @@ mod tests {
         let signer = SigningKey::from_bytes(&[1; 32]);
         let mut session = Fixture::start(&signer)?;
         for (payload, label) in [
-            ("invalid-json", "".to_owned()),
+            ("invalid-json", String::new()),
             ("invalid-json", "x".repeat(81)),
         ] {
             let rejected = session

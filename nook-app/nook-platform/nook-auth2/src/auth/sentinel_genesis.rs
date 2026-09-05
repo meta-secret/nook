@@ -448,7 +448,7 @@ mod tests {
         let (_, _, response) = Fixture::participant(session.request(), "Peer")?;
         let duplicate = response.clone();
         let session = session.collect(response)?;
-        assert!(session.readiness() == SentinelGenesisReadiness::Complete);
+        assert_eq!(session.readiness(), SentinelGenesisReadiness::Complete);
         let (retained, error) = session
             .collect(duplicate)
             .err()

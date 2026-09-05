@@ -244,7 +244,7 @@ mod tests {
         let normalized = normalize_sentinel_genesis_participant_payload(&link)?;
         assert_eq!(normalized, response_json);
         let session = session.collect_payload(&normalized, "")?;
-        assert!(session.readiness() == SentinelGenesisReadiness::Complete);
+        assert_eq!(session.readiness(), SentinelGenesisReadiness::Complete);
         assert!(normalize_sentinel_genesis_participant_payload("not-a-response").is_err());
         Ok(())
     }
