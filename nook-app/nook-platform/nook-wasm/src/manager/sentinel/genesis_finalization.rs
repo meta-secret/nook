@@ -242,11 +242,11 @@ impl IssuanceCheckpoint {
 mod tests {
     use super::*;
     use crate::storage::{event_db, indexed_db};
-    use js_sys::Reflect;
+    use js_sys::Error as BrowserError;
     use nook_core::{DeviceIdentity, StartSentinelGenesisArgs};
     use std::future::Future;
     use std::task::{Context, Poll, Waker};
-    use wasm_bindgen::JsValue;
+    use wasm_bindgen::convert::TryFromJsValue;
     use wasm_bindgen_test::wasm_bindgen_test;
 
     struct Fixture {
@@ -274,11 +274,9 @@ mod tests {
                 Err(error) => error,
                 Ok(_) => return Err(anyhow::anyhow!("expected finalization failure")),
             };
-            let value = JsValue::from(error);
-            let message = Reflect::get(&value, &JsValue::from_str("message"))
-                .map_err(|_| anyhow::anyhow!("error message unavailable"))?
-                .as_string();
-            assert_eq!(message.as_deref(), Some(expected));
+            let error = BrowserError::try_from_js_value(error.into())
+                .map_err(|_| anyhow::anyhow!("browser error type unavailable"))?;
+            assert_eq!(String::from(error.message()), expected);
             Ok(())
         }
         fn reject_failed_journal_read(&mut self) -> anyhow::Result<()> {
