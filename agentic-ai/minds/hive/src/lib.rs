@@ -1,4 +1,7 @@
+use rustls::crypto::aws_lc_rs;
 use std::sync::OnceLock;
+#[cfg(test)]
+use tokio::sync as async_sync;
 
 pub mod auth;
 pub mod codex;
@@ -22,11 +25,11 @@ pub use worker::{Worker, WorkerConfig};
 static RUSTLS_PROVIDER_INSTALL: OnceLock<Result<(), &'static str>> = OnceLock::new();
 
 #[cfg(test)]
-pub(crate) static GIT_PROCESS_TEST_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+pub(crate) static GIT_PROCESS_TEST_LOCK: async_sync::Mutex<()> = async_sync::Mutex::const_new(());
 
 pub fn install_rustls_crypto_provider() -> HiveResult<()> {
     match RUSTLS_PROVIDER_INSTALL.get_or_init(|| {
-        rustls::crypto::aws_lc_rs::default_provider()
+        aws_lc_rs::default_provider()
             .install_default()
             .map_err(|_| "failed to install the AWS-LC rustls crypto provider")
     }) {

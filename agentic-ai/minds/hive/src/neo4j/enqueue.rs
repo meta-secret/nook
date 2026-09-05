@@ -47,7 +47,7 @@ impl Neo4jTaskStore {
             .is_some_and(|row| row.get::<bool>("created").unwrap_or(false));
         if !created {
             transaction.rollback().await?;
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "task {} already exists",
                 task.id
             )));
@@ -70,7 +70,7 @@ impl Neo4jTaskStore {
                 .with_hive_context(|| format!("dependency {} does not exist", dependency))?;
             if rows.next(transaction.handle()).await?.is_none() {
                 transaction.rollback().await?;
-                return Err(crate::error::HiveError::message(format!(
+                return Err(crate::HiveError::message(format!(
                     "dependency {dependency} does not exist or targets a different source commit"
                 )));
             }

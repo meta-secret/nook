@@ -1,4 +1,5 @@
 use std::time::Duration;
+use tokio::time as async_time;
 
 use tokio::process::Command;
 
@@ -59,12 +60,12 @@ pub(super) async fn fetch_run(run_id: u64) -> crate::HiveResult<RunEvidence> {
             &url,
         ])
         .kill_on_drop(true);
-    let output = tokio::time::timeout(Duration::from_secs(100), command.output())
+    let output = async_time::timeout(Duration::from_secs(100), command.output())
         .await
-        .map_err(|_| crate::error::HiveError::message("Workbench fetch exceeded 100 seconds"))?
+        .map_err(|_| crate::HiveError::message("Workbench fetch exceeded 100 seconds"))?
         .hive_context("start Workbench fetch")?;
     if !output.status.success() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Workbench fetch failed with status {}: {}",
             output.status,
             String::from_utf8_lossy(&output.stderr).trim()
@@ -118,7 +119,7 @@ fn parse_run_page(run_id: u64, page: &str) -> crate::HiveResult<RunEvidence> {
     } else if header.contains("favicons/favicon-pending.svg") {
         RunLifecycle::InProgress
     } else {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "GitHub run page has no recognized workflow status",
         ));
     };
@@ -150,7 +151,7 @@ fn require_marker(page: &str, marker: &str, evidence: &str) -> crate::HiveResult
     if page.contains(marker) {
         Ok(())
     } else {
-        Err(crate::error::HiveError::message(format!(
+        Err(crate::HiveError::message(format!(
             "GitHub run page has no {evidence} evidence"
         )))
     }
@@ -180,11 +181,11 @@ mod tests {
 
     fn expect_rejection(page: &str, evidence: &str) -> crate::HiveResult<()> {
         match super::parse_run_page(42, page) {
-            Ok(run) => Err(crate::error::HiveError::message(format!(
+            Ok(run) => Err(crate::HiveError::message(format!(
                 "page without {evidence} unexpectedly parsed as {run:?}"
             ))),
             Err(error) if format!("{error:#}").contains(evidence) => Ok(()),
-            Err(error) => Err(crate::error::HiveError::message(format!(
+            Err(error) => Err(crate::HiveError::message(format!(
                 "page without {evidence} returned the wrong error: {error:#}"
             ))),
         }

@@ -1,7 +1,11 @@
+use std::fs;
 use std::future::Future;
+use std::io;
 use std::io::Write as _;
 use std::path::Path;
 use std::time::Duration;
+use tokio::fs as async_fs;
+use tokio::time as async_time;
 
 use tokio::sync::watch;
 
@@ -58,13 +62,13 @@ async fn release_during_shutdown<S: TaskStore>(store: &S, task: &ClaimedTask, ag
     loop {
         match store.release(task, agent_id).await {
             Ok(_) => return,
-            Err(_) => tokio::time::sleep(Duration::from_millis(250)).await,
+            Err(_) => async_time::sleep(Duration::from_millis(250)).await,
         }
     }
 }
 
 pub(super) async fn mark_interrupted(lifecycle_marker: &Path) -> HiveResult<()> {
-    tokio::fs::write(lifecycle_marker, b"rollout-before-execution")
+    async_fs::write(lifecycle_marker, b"rollout-before-execution")
         .await
         .hive_context("mark interrupted Pod for replacement")
 }
@@ -101,16 +105,16 @@ pub(super) async fn shutdown_requested(mut shutdown: watch::Receiver<bool>) -> H
 }
 
 pub(super) fn establish_worker_lifecycle(workspace: &Path, pod_name: &str) -> HiveResult<()> {
-    std::fs::create_dir_all(workspace)?;
+    fs::create_dir_all(workspace)?;
     let startup_marker = workspace.join(".hive-worker-started");
-    let startup_file = std::fs::OpenOptions::new()
+    let startup_file = fs::OpenOptions::new()
         .create_new(true)
         .write(true)
         .open(&startup_marker);
     let mut startup_file = match startup_file {
         Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            std::fs::write(workspace.join(".hive-task-finished"), pod_name)?;
+        Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            fs::write(workspace.join(".hive-task-finished"), pod_name)?;
             return Err(error)
                 .hive_context("refusing to restart a Hive worker inside an existing Pod");
         }
@@ -128,9 +132,10 @@ mod tests {
     use std::path::PathBuf;
     use std::sync::Arc;
     use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+    use tokio::sync::{Notify, oneshot, watch};
+    use tokio::task;
 
     use async_trait::async_trait;
-    use tokio::sync::Notify;
 
     use super::{
         ClaimStep, ClaimWindow, claim_once, establish_worker_lifecycle,
@@ -144,9 +149,9 @@ mod tests {
 
     #[tokio::test]
     async fn shutdown_finishes_an_inflight_claim_before_releasing_control() -> anyhow::Result<()> {
-        let (claim_tx, claim_rx) = tokio::sync::oneshot::channel();
-        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (claim_tx, claim_rx) = oneshot::channel();
+        let (started_tx, started_rx) = oneshot::channel();
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let claim = tokio::spawn(finish_claim_during_shutdown(
             async move {
                 let _ = started_tx.send(());
@@ -157,7 +162,7 @@ mod tests {
 
         started_rx.await?;
         shutdown_tx.send(true)?;
-        tokio::task::yield_now().await;
+        task::yield_now().await;
         assert!(
             !claim.is_finished(),
             "shutdown must not cancel a claim that can still commit in Neo4j"
@@ -175,7 +180,7 @@ mod tests {
 
     #[tokio::test]
     async fn shutdown_before_polling_does_not_start_a_new_claim() -> anyhow::Result<()> {
-        let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
         shutdown_tx.send(true)?;
 
         assert!(matches!(
@@ -191,7 +196,7 @@ mod tests {
         let marker = workspace.path().join(".hive-task-finished");
         let store = RecordingStore::new(marker.clone())?;
         let agent = AgentId::new("agent-a")?;
-        let (_shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
+        let (_shutdown_tx, shutdown_rx) = watch::channel(false);
         let shutdown_tx = _shutdown_tx;
         let claim_store = store.clone();
         let claim_agent = agent.clone();
@@ -352,7 +357,7 @@ mod tests {
                 "worker lifecycle marker must follow the lease release"
             );
             if self.release_attempts.fetch_add(1, Ordering::SeqCst) == 0 {
-                return Err(crate::error::HiveError::message(
+                return Err(crate::HiveError::message(
                     "transient coordinator transport failure",
                 ));
             }

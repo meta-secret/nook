@@ -1,7 +1,11 @@
+use std::env;
+use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::fs as async_fs;
+use tokio::time as async_time;
 
 use crate::HiveContext;
 use codex::{
@@ -53,7 +57,7 @@ impl BrokerExternalAuth {
                     }));
                 }
                 Err(_) if attempt + 1 < AUTH_CONNECT_ATTEMPTS => {
-                    tokio::time::sleep(AUTH_CONNECT_DELAY).await;
+                    async_time::sleep(AUTH_CONNECT_DELAY).await;
                 }
                 Err(error) => {
                     return Err(error).with_hive_context(|| {
@@ -68,30 +72,28 @@ impl BrokerExternalAuth {
         unreachable!("bounded auth broker connection loop always returns")
     }
 
-    async fn request(&self, refresh: bool) -> std::io::Result<CodexAuth> {
+    async fn request(&self, refresh: bool) -> io::Result<CodexAuth> {
         let mut channel = self.channel.lock().await;
-        let request =
-            serde_json::to_vec(&BrokerRequest { refresh }).map_err(std::io::Error::other)?;
+        let request = serde_json::to_vec(&BrokerRequest { refresh }).map_err(io::Error::other)?;
         channel.get_mut().write_all(&request).await?;
         channel.get_mut().write_all(b"\n").await?;
         channel.get_mut().flush().await?;
 
         let mut response = String::new();
         if channel.read_line(&mut response).await? == 0 {
-            return Err(std::io::Error::other(
+            return Err(io::Error::other(
                 "Hive auth broker closed the private channel",
             ));
         }
-        let response: BrokerResponse =
-            serde_json::from_str(&response).map_err(std::io::Error::other)?;
+        let response: BrokerResponse = serde_json::from_str(&response).map_err(io::Error::other)?;
         CodexAuth::from_external_chatgpt_tokens(&response.access_token, &response.account_id, None)
     }
 
-    pub async fn validate(&self) -> std::io::Result<()> {
+    pub async fn validate(&self) -> io::Result<()> {
         self.request(false).await.map(drop)
     }
 
-    pub async fn refresh_and_validate(&self) -> std::io::Result<()> {
+    pub async fn refresh_and_validate(&self) -> io::Result<()> {
         self.request(true).await.map(drop)
     }
 }
@@ -114,7 +116,7 @@ pub(crate) async fn prepare_worker_auth_and_readiness(
         .refresh_and_validate()
         .await
         .hive_context("Hive auth refresh failed before worker readiness")?;
-    tokio::fs::write(workspace.join(".hive-worker-ready"), b"ready")
+    async_fs::write(workspace.join(".hive-worker-ready"), b"ready")
         .await
         .hive_context("failed to publish worker readiness")
 }
@@ -124,18 +126,18 @@ pub async fn run_auth_broker(
     auth_source: PathBuf,
     auth_home: PathBuf,
 ) -> crate::HiveResult<()> {
-    tokio::fs::create_dir_all(&auth_home).await?;
+    async_fs::create_dir_all(&auth_home).await?;
     let private_auth = auth_home.join("auth.json");
-    tokio::fs::copy(&auth_source, &private_auth)
+    async_fs::copy(&auth_source, &private_auth)
         .await
         .hive_context("failed to stage Codex authentication inside the broker container")?;
-    let mut permissions = tokio::fs::metadata(&private_auth).await?.permissions();
+    let mut permissions = async_fs::metadata(&private_auth).await?.permissions();
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
         permissions.set_mode(0o600);
     }
-    tokio::fs::set_permissions(&private_auth, permissions).await?;
+    async_fs::set_permissions(&private_auth, permissions).await?;
 
     let mut auth_manager = AuthManager::shared(
         auth_home.clone(),
@@ -148,23 +150,23 @@ pub async fn run_auth_broker(
     )
     .await;
     if auth_manager.auth_cached().is_none() {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "Codex authentication is unavailable to the broker",
         ));
     }
 
     if let Some(parent) = socket_path.parent() {
-        tokio::fs::create_dir_all(parent).await?;
+        async_fs::create_dir_all(parent).await?;
     }
-    match tokio::fs::remove_file(&socket_path).await {
+    match async_fs::remove_file(&socket_path).await {
         Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
     let listener = UnixListener::bind(&socket_path)?;
     let (stream, _) = listener.accept().await?;
     drop(listener);
-    tokio::fs::remove_file(&socket_path)
+    async_fs::remove_file(&socket_path)
         .await
         .hive_context("failed to unlink the accepted auth broker socket")?;
 
@@ -177,12 +179,12 @@ pub async fn run_auth_broker(
         let request: BrokerRequest =
             serde_json::from_str(&request).hive_context("invalid auth broker request")?;
         if request.refresh {
-            let projected_auth = tokio::fs::read(&auth_source)
+            let projected_auth = async_fs::read(&auth_source)
                 .await
                 .hive_context("failed to reload projected Codex authentication")?;
-            let private_auth_bytes = tokio::fs::read(&private_auth).await?;
+            let private_auth_bytes = async_fs::read(&private_auth).await?;
             if projected_auth != private_auth_bytes {
-                tokio::fs::write(&private_auth, projected_auth).await?;
+                async_fs::write(&private_auth, projected_auth).await?;
                 auth_manager = AuthManager::shared(
                     auth_home.clone(),
                     false,
@@ -202,8 +204,8 @@ pub async fn run_auth_broker(
                         // from the durable replacement instead of failing the active task.
                         let mut replacement = None;
                         for _ in 0..AUTH_CONNECT_ATTEMPTS {
-                            tokio::time::sleep(AUTH_CONNECT_DELAY).await;
-                            let candidate = tokio::fs::read(&auth_source)
+                            async_time::sleep(AUTH_CONNECT_DELAY).await;
+                            let candidate = async_fs::read(&auth_source)
                                 .await
                                 .hive_context("failed to reload projected Codex authentication")?;
                             if candidate != private_auth_bytes {
@@ -212,11 +214,11 @@ pub async fn run_auth_broker(
                             }
                         }
                         let replacement = replacement.ok_or_else(|| {
-                            crate::error::HiveError::message(format!(
+                            crate::HiveError::message(format!(
                                 "Codex authentication refresh failed: {refresh_error}"
                             ))
                         })?;
-                        tokio::fs::write(&private_auth, replacement).await?;
+                        async_fs::write(&private_auth, replacement).await?;
                         auth_manager = AuthManager::shared(
                             auth_home.clone(),
                             false,
@@ -232,12 +234,12 @@ pub async fn run_auth_broker(
             }
         }
         let auth = auth_manager.auth_cached().ok_or_else(|| {
-            crate::error::HiveError::message("Codex authentication disappeared from the broker")
+            crate::HiveError::message("Codex authentication disappeared from the broker")
         })?;
         let response = BrokerResponse {
             access_token: auth.get_token()?,
             account_id: auth.get_account_id().ok_or_else(|| {
-                crate::error::HiveError::message("Codex authentication has no account id")
+                crate::HiveError::message("Codex authentication has no account id")
             })?,
         };
         let response = serde_json::to_vec(&response)?;
@@ -256,7 +258,7 @@ async fn persist_rotated_auth(private_auth: &Path, auth_home: &Path) {
                 eprintln!(
                     "Hive auth broker is retaining rotated credentials until Kubernetes persistence succeeds: {error:#}"
                 );
-                tokio::time::sleep(delay).await;
+                async_time::sleep(delay).await;
                 delay = (delay * 2).min(AUTH_PERSIST_RETRY_MAX);
             }
         }
@@ -264,12 +266,12 @@ async fn persist_rotated_auth(private_auth: &Path, auth_home: &Path) {
 }
 
 async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> crate::HiveResult<()> {
-    let url = std::env::var(AUTH_PERSIST_URL_ENV)
+    let url = env::var(AUTH_PERSIST_URL_ENV)
         .hive_context("HIVE_AUTH_PERSIST_URL is required to persist rotated credentials")?;
-    let token = tokio::fs::read_to_string(AUTH_API_TOKEN)
+    let token = async_fs::read_to_string(AUTH_API_TOKEN)
         .await
         .hive_context("failed to read the broker-only Kubernetes API token")?;
-    let auth = tokio::fs::read_to_string(private_auth)
+    let auth = async_fs::read_to_string(private_auth)
         .await
         .hive_context("failed to read rotated broker credentials")?;
     serde_json::from_str::<serde_json::Value>(&auth)
@@ -277,20 +279,20 @@ async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> cra
     let patch = serde_json::json!({ "stringData": { "auth.json": auth } });
     let patch_path = auth_home.join("secret-patch.json");
     let header_path = auth_home.join("kubernetes-auth-header");
-    tokio::fs::write(&patch_path, serde_json::to_vec(&patch)?).await?;
-    tokio::fs::write(
+    async_fs::write(&patch_path, serde_json::to_vec(&patch)?).await?;
+    async_fs::write(
         &header_path,
         format!("Authorization: Bearer {}", token.trim()),
     )
     .await?;
     for path in [&patch_path, &header_path] {
-        let mut permissions = tokio::fs::metadata(path).await?.permissions();
+        let mut permissions = async_fs::metadata(path).await?.permissions();
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
             permissions.set_mode(0o600);
         }
-        tokio::fs::set_permissions(path, permissions).await?;
+        async_fs::set_permissions(path, permissions).await?;
     }
     let status = Command::new("curl")
         .args([
@@ -318,12 +320,12 @@ async fn persist_rotated_auth_once(private_auth: &Path, auth_home: &Path) -> cra
         .stdin(Stdio::null())
         .status()
         .await;
-    let _ = tokio::fs::remove_file(&patch_path).await;
-    let _ = tokio::fs::remove_file(&header_path).await;
+    let _ = async_fs::remove_file(&patch_path).await;
+    let _ = async_fs::remove_file(&header_path).await;
     let status =
         status.hive_context("failed to start the Kubernetes credential persistence request")?;
     if !status.success() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Kubernetes rejected rotated credential persistence with status {status}"
         )));
     }
@@ -335,6 +337,8 @@ mod tests {
     use super::{
         BrokerExternalAuth, BrokerRequest, BrokerResponse, prepare_worker_auth_and_readiness,
     };
+    use std::io;
+    use tokio::fs as async_fs;
 
     #[tokio::test]
     async fn worker_refreshes_once_before_readiness_then_uses_cached_validation()
@@ -345,7 +349,7 @@ mod tests {
         let root = tempfile::tempdir()?;
         let socket = root.path().join("broker.sock");
         let workspace = root.path().join("workspace");
-        tokio::fs::create_dir(&workspace).await?;
+        async_fs::create_dir(&workspace).await?;
         let listener = UnixListener::bind(&socket)?;
         let ready_marker = workspace.join(".hive-worker-ready");
         let broker = tokio::spawn(async move {
@@ -431,7 +435,7 @@ mod tests {
         let malformed = client.refresh_and_validate().await.err().ok_or_else(|| {
             crate::HiveError::message("malformed auth response produced credentials")
         })?;
-        assert_eq!(malformed.kind(), std::io::ErrorKind::Other);
+        assert_eq!(malformed.kind(), io::ErrorKind::Other);
         malformed_server.await??;
         Ok(())
     }
