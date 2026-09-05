@@ -927,6 +927,20 @@ unless hive_dockerfile.include?("FROM bun AS console-verification") &&
        hive_taskfile.include?('HIVE_CONSOLE_CACHE_TO')
   raise "Hive console verification must own a narrow cached browser image lineage"
 end
+console_image_task = hive_taskfile.match(
+  /^  console:image:\n(?<body>.*?)(?=^  image:)/m
+)&.[](:body)
+unless console_image_task&.include?('probe_output="$(mktemp)"') &&
+       console_image_task.include?('2>"$probe_output"') &&
+       console_image_task.include?("grep -Eqi 'not found|manifest unknown|name unknown'") &&
+       console_image_task.include?('cat "$probe_output" >&2') &&
+       console_image_task.scan('rm -f "$probe_output"').length == 3 &&
+       console_image_task.include?('return 2') &&
+       console_image_task.include?('probe_status=$?') &&
+       console_image_task.include?('exit "$probe_status"') &&
+       !console_image_task.include?('imagetools inspect "$exact_ref" >/dev/null 2>&1')
+  raise "Hive console exact-cache probe must distinguish absence from registry failure"
+end
 if hive_taskfile.include?("host.docker.internal")
   raise "Hive verification must not depend on Docker Desktop host aliases"
 end
