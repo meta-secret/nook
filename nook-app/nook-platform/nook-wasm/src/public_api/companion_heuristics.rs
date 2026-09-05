@@ -155,13 +155,14 @@ pub fn parse_page_input_type(value: &str) -> nook_core::PageInputType {
 #[wasm_bindgen]
 #[must_use]
 pub fn is_cloudflare_pr_preview_host(hostname: &str) -> bool {
-    nook_core::is_cloudflare_pr_preview_host(hostname)
+    OAuthOriginUnsupportedReason::for_unregistered_hostname(hostname)
+        == OAuthOriginUnsupportedReason::CloudflarePrPreview
 }
 
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct NookOAuthOriginSupport {
-    inner: nook_core::OAuthOriginSupport,
+    inner: OAuthOriginSupport,
 }
 
 #[wasm_bindgen]
@@ -194,7 +195,7 @@ impl NookOAuthOriginSupport {
     /// Reason when [`Self::is_unsupported`] is true; otherwise `UnregisteredOrigin`.
     #[wasm_bindgen]
     #[must_use]
-    pub fn unsupported_reason(&self) -> nook_core::OAuthOriginUnsupportedReason {
+    pub fn unsupported_reason(&self) -> OAuthOriginUnsupportedReason {
         match self.inner {
             OAuthOriginSupport::Unsupported { reason, .. } => reason,
             _ => OAuthOriginUnsupportedReason::UnregisteredOrigin,
@@ -215,7 +216,7 @@ pub fn resolve_oauth_origin_support(
         (Some(origin), Some(hostname))
     };
     NookOAuthOriginSupport {
-        inner: nook_core::resolve_oauth_origin_support(provider, origin, hostname),
+        inner: provider.origin_support(origin, hostname),
     }
 }
 
@@ -321,6 +322,38 @@ mod tests {
             extract_backup_code_candidates(text),
             vec!["A1B2-C3D4-E5F6".to_owned()]
         );
+    }
+
+    #[test]
+    fn oauth_origin_wasm_projection_preserves_missing_and_rejected_locations() {
+        for (origin, hostname) in [("", "simple.nokey.sh"), ("https://simple.nokey.sh", "")] {
+            let report =
+                resolve_oauth_origin_support(BrowserOAuthProvider::GoogleDrive, origin, hostname);
+            assert!(report.is_supported());
+            assert!(!report.is_unsupported());
+            assert_eq!(report.origin(), String::new());
+            assert_eq!(
+                report.unsupported_reason(),
+                OAuthOriginUnsupportedReason::UnregisteredOrigin
+            );
+        }
+        let origin = "https://pr-7.nokey-simple.pages.dev";
+        let report = resolve_oauth_origin_support(
+            BrowserOAuthProvider::ICloud,
+            origin,
+            "PR-7.NOKEY-SIMPLE.PAGES.DEV",
+        );
+        assert!(!report.is_supported());
+        assert!(report.is_unsupported());
+        assert_eq!(report.origin(), origin);
+        assert_eq!(
+            report.unsupported_reason(),
+            OAuthOriginUnsupportedReason::CloudflarePrPreview
+        );
+        assert!(is_cloudflare_pr_preview_host("PR-7.NOKEY-SIMPLE.PAGES.DEV"));
+        assert!(!is_cloudflare_pr_preview_host(
+            "pr-7.nokey-simple.pages.dev.evil.test"
+        ));
     }
 
     #[test]
