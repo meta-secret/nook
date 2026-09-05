@@ -26,7 +26,7 @@ pub use links::{
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 
-const GENESIS_VERSION: u32 = 1;
+const GENESIS_VERSION: SentinelGenesisVersion = SentinelGenesisVersion::CURRENT;
 const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
 
 pub fn start_sentinel_genesis(
@@ -381,7 +381,7 @@ fn verify_response(response: &SentinelGenesisParticipantResponse) -> MultiDevice
 }
 
 fn response_signing_bytes(
-    version: u32,
+    version: SentinelGenesisVersion,
     session_id: &CompactToken,
     participant: &SentinelGenesisParticipant,
 ) -> MultiDeviceResult<Vec<u8>> {
@@ -476,7 +476,7 @@ fn verify_public_key_announcement(
 }
 
 fn announcement_signing_bytes(
-    version: u32,
+    version: SentinelGenesisVersion,
     device_id: &DeviceId,
     encryption_public_key: &DevicePublicKey,
     signing_public_key: &DeviceSigningPublicKey,
@@ -555,6 +555,17 @@ mod tests {
             .validate()
             .is_err()
         );
+    }
+
+    #[test]
+    fn sentinel_genesis_version_validates_serde_input() -> anyhow::Result<()> {
+        assert_eq!(
+            serde_json::from_str::<SentinelGenesisVersion>("1")?,
+            SentinelGenesisVersion::CURRENT
+        );
+        assert!(serde_json::from_str::<SentinelGenesisVersion>("2").is_err());
+        assert!(serde_json::from_str::<SentinelGenesisVersion>("4294967296").is_err());
+        Ok(())
     }
 
     #[test]
