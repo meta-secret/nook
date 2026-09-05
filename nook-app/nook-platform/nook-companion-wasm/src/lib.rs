@@ -459,7 +459,7 @@ mod tests {
             observed_names: vec!["nook_extension".to_owned()],
         };
         assert_eq!(
-            classify_extension_persistence_databases(database_observation),
+            classify_extension_persistence_databases(database_observation.clone()),
             nook_companion_core::ExtensionPersistenceDatabaseState::Present
         );
         let store_observation = nook_companion_core::ExtensionPersistenceObservation {
