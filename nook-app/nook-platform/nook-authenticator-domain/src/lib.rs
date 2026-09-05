@@ -239,6 +239,24 @@ mod tests {
     }
 
     #[test]
+    fn renders_closed_authenticator_values_for_wire_boundaries() -> Result<(), serde_json::Error> {
+        assert_eq!(
+            PasskeyDeviceProtectionMode::AntiHacker.as_str(),
+            "anti-hacker"
+        );
+        assert_eq!(BackupCodeAttachMode::Replace.as_str(), "replace");
+        assert_eq!(BackupCodeAttachMode::Merge.as_str(), "merge");
+        assert_eq!(TotpAlgorithm::Sha512.as_str(), "SHA512");
+        assert_eq!(serde_json::to_string(&TotpDigits::Eight)?, "8");
+        assert_eq!(TotpDigits::Eight.to_string(), "8");
+        assert_eq!(
+            TotpPeriod::parse(300).map(TotpPeriod::serialized_value),
+            Ok(300)
+        );
+        Ok(())
+    }
+
+    #[test]
     fn bounds_authenticator_numbers() {
         assert_eq!(TotpDigits::parse(6), Ok(TotpDigits::Six));
         assert_eq!(TotpDigits::parse(7), Ok(TotpDigits::Seven));
