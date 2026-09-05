@@ -58,6 +58,17 @@ boundary where it is used.
   narrowest boundary.
 - Preserve the named type through domain calls, state, storage, and WASM
   adapters.
+- Create branded and opaque values through a named parser or validating
+  factory. Keep the brand token and unchecked construction private.
+- Return a domain-specific decode outcome or throw a named domain error class
+  when external input cannot become the domain type.
+- Put domain operations in the cohesive type or module that owns the required
+  knowledge. A module is a valid owner when object identity is not meaningful.
+- Model state changes as named transitions from one domain state to a named
+  next state or outcome.
+- Keep advanced-state construction private to the transition that validates
+  it.
+- Expose an operation only from the state owner where that operation is legal.
 
 ### Prohibited actions
 
@@ -76,6 +87,15 @@ boundary where it is used.
   not stop two string-backed domain values from being exchanged.
 - Do not unwrap a domain type merely to pass its primitive representation
   through another application layer.
+- Do not fabricate a branded or opaque domain value with `as` inside
+  application behavior.
+- Do not export a brand token, unchecked constructor, or writable field that
+  bypasses validation.
+- Do not put domain behavior in generic `Utils` or `Helpers` containers.
+- Do not encode a transition by mutating parallel booleans, sentinels, or
+  optional fields.
+- Do not force pure cohesive module behavior into a class with artificial
+  identity or lifecycle.
 
 Raw primitives are allowed only in narrow cases.
 

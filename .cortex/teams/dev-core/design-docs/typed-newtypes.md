@@ -175,6 +175,9 @@ let credential = Credential {
 #### Required actions
 
 - Construct independent aggregate fields with named struct literals.
+- Pass a multi-value aggregate as the one non-receiver parameter to authored
+  functions and methods. Follow the single-parameter API rule in
+  [Rust coding](../dynamic-skills/rust-coding.md).
 - Distinguish ordinary data aggregates from validated state capabilities.
 - Follow [action ownership and typestate](rust-action-ownership.md) for state
   construction and transitions.
