@@ -27,6 +27,9 @@ mutable flags create the same problem.
 
 - Use a discriminated union for named product, workflow, lifecycle, resource,
   and component states.
+- Declare the union as a named domain type and reference that type from fields,
+  parameters, returns, and generic containers. Do not embed `A | B`,
+  `DomainType | false`, or another inline alternative in a field.
 - Classify ownership before creating an enum. Authentication, vault, recovery,
   Sentinel, provider, sync, secret-schema, and other portable product
   vocabularies belong to `nook-core` and are exposed directly through

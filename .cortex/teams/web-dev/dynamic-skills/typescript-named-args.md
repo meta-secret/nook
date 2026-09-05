@@ -46,10 +46,25 @@ function collectOutcomeObservation({
 ## Preferred Pattern
 
 ```ts
+declare const ObservationStartedAtBrand: unique symbol;
+type ObservationStartedAt = number & {
+  readonly [ObservationStartedAtBrand]: "ObservationStartedAt";
+};
+
+declare const AuthenticationPathBrand: unique symbol;
+type AuthenticationPath = string & {
+  readonly [AuthenticationPathBrand]: "AuthenticationPath";
+};
+
+enum MutationObservation {
+  Applied = "applied",
+  NotApplied = "not-applied",
+}
+
 interface OutcomeObservationRequest {
-  readonly startedAt: number;
-  readonly authPath: string;
-  readonly sawMutation: boolean;
+  readonly startedAt: ObservationStartedAt;
+  readonly authPath: AuthenticationPath;
+  readonly mutation: MutationObservation;
 }
 
 function collectOutcomeObservation({
