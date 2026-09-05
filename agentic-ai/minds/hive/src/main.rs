@@ -1,5 +1,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::time;
+use tokio::time as async_time;
 
 use clap::{Parser, Subcommand};
 use codex::{Arg0DispatchPaths, arg0_dispatch_or_else};
@@ -314,8 +316,8 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
                 .neo4j_password
                 .as_deref()
                 .hive_context("NEO4J_PASSWORD is required for the Workbench dispatcher")?;
-            let store = tokio::time::timeout(
-                std::time::Duration::from_secs(300),
+            let store = async_time::timeout(
+                time::Duration::from_secs(300),
                 Neo4jTaskStore::connect(&cli.neo4j_uri, &cli.neo4j_username, neo4j_password),
             )
             .await
@@ -338,7 +340,7 @@ async fn run_main(arg0_paths: Arg0DispatchPaths) -> hive::HiveResult<()> {
             max_age_seconds,
             progress,
         } => {
-            let max_age = std::time::Duration::from_secs(max_age_seconds);
+            let max_age = time::Duration::from_secs(max_age_seconds);
             if progress {
                 check_workbench_dispatcher_progress(&health_path, max_age)
             } else {
@@ -455,6 +457,7 @@ fn with_linux_sandbox_override(
 #[cfg(test)]
 mod tests {
     use clap::Parser;
+    use std::path;
 
     use super::{
         Arg0DispatchPaths, Cli, Command, PathBuf, QueueAction, install_rustls_crypto_provider,
@@ -540,7 +543,7 @@ mod tests {
         let coordinator = parse(&["hive", "coordinator", "--socket", "/tmp/coordinator"])?;
         assert!(matches!(
             coordinator.command,
-            Command::Coordinator { socket } if socket.as_path() == std::path::Path::new("/tmp/coordinator")
+            Command::Coordinator { socket } if socket.as_path() == path::Path::new("/tmp/coordinator")
         ));
         let observer = parse(&[
             "hive",
@@ -556,8 +559,8 @@ mod tests {
             observer.command,
             Command::Observer { address, dashboard, coordinator_socket }
                 if address.to_string() == "127.0.0.1:8081"
-                    && dashboard.as_path() == std::path::Path::new("/tmp/dashboard")
-                    && coordinator_socket.as_path() == std::path::Path::new("/tmp/observer-coordinator")
+                    && dashboard.as_path() == path::Path::new("/tmp/dashboard")
+                    && coordinator_socket.as_path() == path::Path::new("/tmp/observer-coordinator")
         ));
         let observer_coordinator = parse(&[
             "hive",
@@ -567,7 +570,7 @@ mod tests {
         ])?;
         assert!(matches!(
             observer_coordinator.command,
-            Command::ObserverCoordinator { socket } if socket.as_path() == std::path::Path::new("/tmp/observer-store")
+            Command::ObserverCoordinator { socket } if socket.as_path() == path::Path::new("/tmp/observer-store")
         ));
         Ok(())
     }
@@ -594,8 +597,8 @@ mod tests {
                 health_path,
                 poll_seconds: 45,
             } if repository_url == "https://example.invalid/workbench.git"
-                && checkout.as_path() == std::path::Path::new("/tmp/workbench")
-                && health_path.as_path() == std::path::Path::new("/tmp/health")
+                && checkout.as_path() == path::Path::new("/tmp/workbench")
+                && health_path.as_path() == path::Path::new("/tmp/health")
         ));
         let health = parse(&[
             "hive",
@@ -612,7 +615,7 @@ mod tests {
                 health_path,
                 max_age_seconds: 120,
                 progress: true,
-            } if health_path.as_path() == std::path::Path::new("/tmp/health")
+            } if health_path.as_path() == path::Path::new("/tmp/health")
         ));
         let broker = parse(&[
             "hive",
@@ -627,9 +630,9 @@ mod tests {
         assert!(matches!(
             broker.command,
             Command::AuthBroker { socket, auth_source, auth_home }
-                if socket.as_path() == std::path::Path::new("/tmp/auth.sock")
-                    && auth_source.as_path() == std::path::Path::new("/tmp/source.json")
-                    && auth_home.as_path() == std::path::Path::new("/tmp/auth-home")
+                if socket.as_path() == path::Path::new("/tmp/auth.sock")
+                    && auth_source.as_path() == path::Path::new("/tmp/source.json")
+                    && auth_home.as_path() == path::Path::new("/tmp/auth-home")
         ));
 
         for (arguments, expected) in [

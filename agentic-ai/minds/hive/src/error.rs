@@ -1,4 +1,13 @@
+use crate::codex;
+use crate::model;
+use std::env;
+use std::io;
+use std::num;
+use std::string;
 use thiserror::Error;
+use time::error as time_error;
+use tokio::sync::watch::error as watch_error;
+use tokio::task;
 
 pub type HiveResult<T> = Result<T, HiveError>;
 
@@ -10,10 +19,10 @@ pub enum HiveError {
     IoOperation {
         operation: String,
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     #[error(transparent)]
-    Io(#[from] std::io::Error),
+    Io(#[from] io::Error),
     #[error("{operation}: {source}")]
     JsonOperation {
         operation: String,
@@ -42,74 +51,74 @@ pub enum HiveError {
     ModelOperation {
         operation: String,
         #[source]
-        source: crate::model::ModelError,
+        source: model::ModelError,
     },
     #[error(transparent)]
-    Model(#[from] crate::model::ModelError),
+    Model(#[from] model::ModelError),
     #[error("{operation}: {source}")]
     CodexOperation {
         operation: String,
         #[source]
-        source: crate::codex::CodexError,
+        source: codex::CodexError,
     },
     #[error(transparent)]
-    Codex(#[from] crate::codex::CodexError),
+    Codex(#[from] codex::CodexError),
     #[error("{operation}: {source}")]
     Utf8Operation {
         operation: String,
         #[source]
-        source: std::string::FromUtf8Error,
+        source: string::FromUtf8Error,
     },
     #[error(transparent)]
-    Utf8(#[from] std::string::FromUtf8Error),
+    Utf8(#[from] string::FromUtf8Error),
     #[error("{operation}: {source}")]
     IntegerConversionOperation {
         operation: String,
         #[source]
-        source: std::num::TryFromIntError,
+        source: num::TryFromIntError,
     },
     #[error(transparent)]
-    IntegerConversion(#[from] std::num::TryFromIntError),
+    IntegerConversion(#[from] num::TryFromIntError),
     #[error("{operation}: {source}")]
     IntegerParseOperation {
         operation: String,
         #[source]
-        source: std::num::ParseIntError,
+        source: num::ParseIntError,
     },
     #[error(transparent)]
-    IntegerParse(#[from] std::num::ParseIntError),
+    IntegerParse(#[from] num::ParseIntError),
     #[error("{operation}: {source}")]
     EnvironmentVariableOperation {
         operation: String,
         #[source]
-        source: std::env::VarError,
+        source: env::VarError,
     },
     #[error(transparent)]
-    EnvironmentVariable(#[from] std::env::VarError),
+    EnvironmentVariable(#[from] env::VarError),
     #[error("{operation}: {source}")]
     WatchReceiveOperation {
         operation: String,
         #[source]
-        source: tokio::sync::watch::error::RecvError,
+        source: watch_error::RecvError,
     },
     #[error(transparent)]
-    WatchReceive(#[from] tokio::sync::watch::error::RecvError),
+    WatchReceive(#[from] watch_error::RecvError),
     #[error("{operation}: {source}")]
     TaskJoinOperation {
         operation: String,
         #[source]
-        source: tokio::task::JoinError,
+        source: task::JoinError,
     },
     #[error(transparent)]
-    TaskJoin(#[from] tokio::task::JoinError),
+    TaskJoin(#[from] task::JoinError),
     #[error("{operation}: {source}")]
     TimeFormatOperation {
         operation: String,
         #[source]
-        source: time::error::Format,
+        source: time_error::Format,
     },
     #[error(transparent)]
-    TimeFormat(#[from] time::error::Format),
+    TimeFormat(#[from] time_error::Format),
     #[error("worker interrupted for rollout")]
     WorkerInterrupted,
     #[error("worker persisted a blocking dependency")]
@@ -287,13 +296,18 @@ impl<T> HiveContext<T> for Option<T> {
 #[cfg(test)]
 mod tests {
     use super::{HiveContext, HiveError};
+    use crate::codex;
+    use std::env;
+    use std::hint;
+    use std::io;
+    use tokio::sync::watch;
 
     #[tokio::test]
     async fn context_preserves_typed_sources_and_accumulates_operations() -> crate::HiveResult<()> {
         let Err(json_error) = serde_json::from_str::<serde_json::Value>("{") else {
             return Err(HiveError::message("invalid JSON fixture parsed"));
         };
-        let Err(model_error) = crate::model::TaskId::new("") else {
+        let Err(model_error) = crate::TaskId::new("") else {
             return Err(HiveError::message("empty identifier fixture was accepted"));
         };
         let Err(utf8_error) = String::from_utf8(vec![0xff]) else {
@@ -305,14 +319,14 @@ mod tests {
         let Err(integer_parse_error) = "invalid".parse::<u64>() else {
             return Err(HiveError::message("invalid integer fixture parsed"));
         };
-        let Err(environment_error) = std::env::var("NOOK_TEST_VARIABLE_THAT_MUST_NOT_EXIST") else {
+        let Err(environment_error) = env::var("NOOK_TEST_VARIABLE_THAT_MUST_NOT_EXIST") else {
             return Err(HiveError::message("absent fixture variable was present"));
         };
         let cases = [
-            HiveError::from(std::io::Error::other("disk unavailable")),
+            HiveError::from(io::Error::other("disk unavailable")),
             HiveError::from(json_error),
             HiveError::from(model_error),
-            HiveError::from(crate::codex::CodexError::Run("turn failed".into())),
+            HiveError::from(codex::CodexError::Run("turn failed".into())),
             HiveError::from(utf8_error),
             HiveError::from(integer_conversion_error),
             HiveError::from(integer_parse_error),
@@ -326,7 +340,7 @@ mod tests {
             assert!(rendered.starts_with("outer operation: inner operation:"));
         }
 
-        let (sender, mut receiver) = tokio::sync::watch::channel(false);
+        let (sender, mut receiver) = watch::channel(false);
         drop(sender);
         let Err(watch) = receiver.changed().await else {
             return Err(HiveError::message("closed watch unexpectedly changed"));
@@ -339,7 +353,7 @@ mod tests {
         );
         let Err(joined) = tokio::spawn(async {
             assert!(
-                !std::hint::black_box(true),
+                !hint::black_box(true),
                 "expected test panic for JoinError conversion"
             );
         })
