@@ -158,7 +158,7 @@ impl NookAuthenticationOutcomeObservation {
             error_marker_present,
             same_document_mutation,
             in_iframe,
-            elapsed_ms,
+            elapsed_ms: elapsed_ms.into(),
         })
     }
 
