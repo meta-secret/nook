@@ -658,9 +658,9 @@ mod tests {
                 shares: vec![SentinelShareIssuedPayload {
                     device_id: DeviceId::parse("0123456789abcdef")?,
                     version: crate::SentinelShareVersion::LEGACY,
-                    threshold: 2,
-                    required_participants: 2,
-                    share_index: 1,
+                    threshold: 2.into(),
+                    required_participants: 2.into(),
+                    share_index: 1.into(),
                     ciphertext: AgeArmoredCiphertext::from_trusted("share-ct".to_owned()),
                 }],
             },

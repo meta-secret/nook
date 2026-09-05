@@ -106,9 +106,9 @@ pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate:
             .map(|delivery| crate::SentinelShareIssuedPayload {
                 device_id: delivery.device_id.clone(),
                 version: delivery.share.version,
-                threshold: delivery.share.threshold.into(),
-                required_participants: delivery.share.required_participants.into(),
-                share_index: delivery.share.share_index.into(),
+                threshold: delivery.share.threshold,
+                required_participants: delivery.share.required_participants,
+                share_index: delivery.share.share_index,
                 ciphertext: delivery.share.ciphertext.clone(),
             })
             .collect(),

@@ -75,6 +75,13 @@ impl EventId {
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: constructs an event id from canonical SHA-256 digest bytes"
+        )
+    )]
     pub fn from_sha256_bytes(bytes: &[u8; SHA256_BYTES_LEN]) -> Self {
         Self(format!(
             "{EVENT_ID_PREFIX}{}",
@@ -174,12 +181,26 @@ impl<'de> Deserialize<'de> for Ed25519Signature {
 
 /// SHA-256 hex digest of arbitrary bytes.
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: hashes canonical payload bytes into a wire digest"
+    )
+)]
 pub fn sha256_hex(bytes: &[u8]) -> Sha256Hex {
     Sha256Hex::from_trusted(hex::encode(Sha256::digest(bytes)))
 }
 
 /// Compute the content-addressed [`EventId`] for canonical event body bytes.
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: derives an event id from canonical event-body bytes"
+    )
+)]
 pub fn event_id_from_body_bytes(body_bytes: &[u8]) -> EventId {
     let digest: [u8; SHA256_BYTES_LEN] = Sha256::digest(body_bytes).into();
     EventId::from_sha256_bytes(&digest)
@@ -203,6 +224,13 @@ pub fn canonicalize_json(value: &Value) -> Value {
 }
 
 /// Serialize a JSON value to canonical compact UTF-8 bytes.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: emits canonical compact JSON bytes for signing and storage"
+    )
+)]
 pub fn canonical_json_bytes(value: &Value) -> EventResult<Vec<u8>> {
     let canonical = canonicalize_json(value);
     serde_json::to_vec(&canonical).map_err(EventError::from)
@@ -230,11 +258,25 @@ pub fn format_ed25519_signature(signature: &Signature) -> String {
 
 /// Sign canonical body bytes with an Ed25519 key.
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: signs canonical event-body bytes"
+    )
+)]
 pub fn sign_body(body_bytes: &[u8], signing_key: &SigningKey) -> Ed25519Signature {
     Ed25519Signature::from_trusted(format_ed25519_signature(&signing_key.sign(body_bytes)))
 }
 
 /// Verify an Ed25519 signature over canonical body bytes.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: verifies a signature over canonical event-body bytes"
+    )
+)]
 pub fn verify_body_signature(
     body_bytes: &[u8],
     signature: impl AsRef<str>,
