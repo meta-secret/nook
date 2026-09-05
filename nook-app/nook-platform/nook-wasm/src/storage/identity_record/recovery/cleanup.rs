@@ -112,6 +112,10 @@ mod tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn completion_preserves_changed_targets_and_clears_only_the_matching_marker()
     -> Result<(), NookError> {
         identity_record::clear_identity_directory_for_test().await?;
