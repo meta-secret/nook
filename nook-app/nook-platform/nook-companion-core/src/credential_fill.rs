@@ -44,7 +44,7 @@ pub mod field {
     /// Host-assigned identity for one field inside the observed scope.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
     pub struct Index {
-        pub value: u32,
+        value: u32,
     }
 
     impl Index {
@@ -60,10 +60,16 @@ pub mod field {
         }
     }
 
+    impl From<Index> for u32 {
+        fn from(value: Index) -> Self {
+            value.value
+        }
+    }
+
     /// Number of fields in an observed authentication scope.
     #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
     pub struct Count {
-        pub value: u32,
+        value: u32,
     }
 
     impl Count {
@@ -76,6 +82,12 @@ pub mod field {
     impl From<u32> for Count {
         fn from(value: u32) -> Self {
             Self { value }
+        }
+    }
+
+    impl From<Count> for u32 {
+        fn from(value: Count) -> Self {
+            value.value
         }
     }
 
@@ -283,7 +295,7 @@ impl Plan {
     /// sole current-password or generic-password field. A scope with only a
     /// username field still plans a username fill; every other shape fails closed.
     pub fn from_fields(fields: &[field::Observation]) -> Result<Self, CredentialFillRejection> {
-        if fields.len() > field::Count::MAXIMUM.value as usize {
+        if fields.len() > u32::from(field::Count::MAXIMUM) as usize {
             return Err(CredentialFillRejection::TooManyObservedFields);
         }
         let mut observed_field_indices = HashSet::with_capacity(fields.len());
@@ -599,12 +611,12 @@ mod tests {
 
     #[test]
     fn accepts_the_maximum_observation_count() -> anyhow::Result<()> {
-        let mut fields = Vec::with_capacity(field::Count::MAXIMUM.value as usize);
+        let mut fields = Vec::with_capacity(u32::from(field::Count::MAXIMUM) as usize);
         fields.push(Fixture::field(
             field::Index::ZERO,
             field::CredentialRole::Username,
         ));
-        fields.extend((1..field::Count::MAXIMUM.value).map(|value| {
+        fields.extend((1..u32::from(field::Count::MAXIMUM)).map(|value| {
             Fixture::readonly_field(field::Index::from(value), field::CredentialRole::Username)
         }));
 
@@ -621,7 +633,7 @@ mod tests {
 
     #[test]
     fn rejects_one_observation_above_the_maximum() {
-        let fields = (0..=field::Count::MAXIMUM.value)
+        let fields = (0..=u32::from(field::Count::MAXIMUM))
             .map(|value| {
                 Fixture::readonly_field(field::Index::from(value), field::CredentialRole::Username)
             })
@@ -637,7 +649,7 @@ mod tests {
     fn rejects_overflow_before_scanning_duplicate_indices() {
         let fields = vec![
             Fixture::field(field::Index::ZERO, field::CredentialRole::Username);
-            field::Count::MAXIMUM.value as usize + 1
+            u32::from(field::Count::MAXIMUM) as usize + 1
         ];
         assert_eq!(
             Plan::from_fields(&fields),
@@ -805,6 +817,11 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&field::Index::ZERO)?,
             r#"{"value":0}"#
+        );
+        assert_eq!(u32::from(field::Index::THREE), 3);
+        assert_eq!(
+            u32::from(field::Count::MAXIMUM),
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
         );
         assert_eq!(
             serde_json::to_string(&observation)?,
