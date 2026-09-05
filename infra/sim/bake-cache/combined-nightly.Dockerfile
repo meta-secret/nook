@@ -43,3 +43,18 @@ COPY inputs/consumer.txt /tmp/consumer.txt
 RUN cat /tmp/consumer.txt >/opt/consumer-stamp \
   && sleep 1 \
   && echo bake-sim-consumer-expensive
+
+# Dylint's standalone lint crate is independent of product source. Keep its
+# expensive self-test before the product-wide source boundary.
+FROM parent AS dylint-self-test
+COPY inputs/crate-a.txt /tmp/dylint-crate.txt
+RUN cat /tmp/dylint-crate.txt >/opt/dylint-self-test-stamp \
+  && sleep 1 \
+  && echo bake-sim-dylint-self-test-expensive
+
+FROM dylint-self-test AS dylint-split
+ARG PRODUCT_SOURCE
+RUN test -n "$PRODUCT_SOURCE" \
+  && printf '%s\n' "$PRODUCT_SOURCE" >/opt/product-source-stamp \
+  && sleep 1 \
+  && echo bake-sim-dylint-product-expensive
