@@ -73,6 +73,27 @@ export function isSentinelVault(state: VaultState): boolean {
   }
 }
 
+export function sentinelCeremonyIsVisible(state: VaultState): boolean {
+  if (
+    state.isAuthenticated ||
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked
+  )
+    return false;
+  if (
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares &&
+    !state.sentinelUnlockSession.active &&
+    state.hasManager &&
+    state.requireManager().vaultStoreId === ""
+  )
+    return false;
+  return (
+    state.sentinelCeremonyPrompt ||
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.CeremonyRequired ||
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares ||
+    isSentinelVault(state)
+  );
+}
+
 async function getSentinelUnlockStatus(
   state: VaultState,
 ): Promise<SentinelVaultUnlockState> {

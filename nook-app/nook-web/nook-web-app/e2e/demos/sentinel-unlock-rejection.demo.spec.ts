@@ -121,14 +121,24 @@ test('a reset Sentinel ceremony replaces stale readiness after a rejected unlock
     await finalize.click()
 
     const start = page.getByTestId('sentinel-unlock-start-btn')
-    await expect(start).toBeVisible()
-    await expect(start).toBeEnabled()
+    const open = page.getByTestId('unlock-vault-btn')
+    await expect(open).toBeVisible()
+    await expect(open).toBeEnabled()
+    await expect(start).toHaveCount(0)
     await expect(finalize).toHaveCount(0)
     await expect(request).toHaveCount(0)
     await expect(page.getByTestId('vault-panel')).toHaveCount(0)
     await page.waitForTimeout(DEMO_BEAT_MS)
-    await expect(start).toBeVisible()
+    await expect(open).toBeVisible()
     await expect(page.getByTestId('sentinel-unlock-initiator')).toHaveCount(0)
+    await open.click()
+    await expect(start).toBeEnabled({ timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS })
+    await expect(request).toHaveCount(0)
+    await start.click()
+    await expect(request).not.toHaveValue('')
+    await expect(page.getByTestId('sentinel-unlock-progress')).toContainText(
+      '1/2',
+    )
   } finally {
     await participantContext.close()
     await otherContext.close()
