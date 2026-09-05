@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
   AuthenticationWorkflowAction,
+  AuthenticationWorkflowKind,
   CompanionAuthenticationWorkflowMatchKind,
   classify_companion_authentication_workflow_facts,
   companion_authentication_workflow_match_kind,
@@ -20,20 +21,38 @@ afterEach(() => {
 })
 
 describe('popular-site login shells', () => {
-  test('isolates and fills a local login inside a polluted page-wide form', () => {
-    document.body.innerHTML = `<form id="aspnetForm" method="post"><header><input name="header-user" autocomplete="username" hidden /><input name="header-password" type="password" autocomplete="current-password" hidden /><input name="search" type="search" value="account help" /><button type="submit">Search</button></header><main class="login-panel"><div class="field-grid"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /><button id="login-submit" type="submit">Sign in</button></div></main>
-      <footer><input name="newsletter-email" type="email" value="reader@example.test" /><button type="submit">Subscribe</button></footer></form>`
+  test('isolates and classifies the Namecheap login inside its page-wide form', () => {
+    document.body.innerHTML = `<form id="aspnetForm" method="post"><header><input name="LoginUserName" title="Your username" autocomplete="on" hidden /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" hidden /><input name="search" type="search" value="account help" /><button type="submit">Search</button></header><div class="gb-scope loginBox nc_login"><div class="gb-panel"><div class="gb-panel__body"><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" class="gb-form-control nc_username nc_username_required" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" class="nc_password nc_password_required handlereturn gb-form-control" /><input id="login-submit" type="submit" value="Sign in" class="nc_login_submit" /></fieldset></div></div></div>
+      <footer><input name="newsletter-email" type="email" value="reader@example.test" /><button type="button">Use a passkey</button><button type="submit">Subscribe</button></footer></form>`
 
     const observations = summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     const [observation] = observations
     if (!observation) throw new Error('expected local login observation')
-    expect(observation.root).toBe(document.querySelector('.login-panel'))
+    expect(observation.root).toBe(document.querySelector('.loginForm'))
     expect(observation.summary).toMatchObject({
       usernameFieldCount: 1,
-      currentPasswordFieldCount: 1,
+      currentPasswordFieldCount: 0,
+      genericPasswordFieldCount: 1,
       passwordFieldCount: 1,
     })
+
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+    })
+    expect(facts.authenticator.detailedPasskeyControl).toMatchObject({
+      kind: 'absent',
+    })
+    expect(facts.ceremony.implicitSubmissionMethod).toBe('absent')
+    const match = classify_companion_authentication_workflow_facts({
+      observations: [facts],
+    })
+    expect(companion_authentication_workflow_match_kind(match)).toBe(
+      CompanionAuthenticationWorkflowMatchKind.Matched,
+    )
+    if (!('snapshot' in match)) throw new Error('expected matched workflow')
+    expect(match.snapshot.kind).toBe(AuthenticationWorkflowKind.Login)
 
     const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
       credentials: {
@@ -45,11 +64,23 @@ describe('popular-site login shells', () => {
     }
     expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
-      document.querySelector<HTMLInputElement>('[name="username"]')?.value,
+      document.querySelector<HTMLInputElement>(
+        '.loginForm [name="LoginUserName"]',
+      )?.value,
     ).toBe('pilot@nook.test')
     expect(
-      document.querySelector<HTMLInputElement>('[name="password"]')?.value,
+      document.querySelector<HTMLInputElement>(
+        '.loginForm [name="LoginPassword"]',
+      )?.value,
     ).toBe('extension-fill-password')
+    expect(
+      document.querySelector<HTMLInputElement>('header [name="LoginUserName"]')
+        ?.value,
+    ).toBe('')
+    expect(
+      document.querySelector<HTMLInputElement>('header [name="LoginPassword"]')
+        ?.value,
+    ).toBe('')
     expect(
       document.querySelector<HTMLInputElement>('[name="search"]')?.value,
     ).toBe('account help')
@@ -60,8 +91,29 @@ describe('popular-site login shells', () => {
   })
 
   test('keeps a page-wide owner when a rendered OTP sibling is present', () => {
-    document.body.innerHTML = `<form><main class="login-panel"><input autocomplete="username" /><input type="password" autocomplete="current-password" /></main>
+    document.body.innerHTML = `<form><main class="login-panel"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></main>
       <aside><input autocomplete="one-time-code" /></aside></form>`
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+  })
+
+  test.each([
+    {
+      kind: 'username',
+      extra: '<aside><input autocomplete="username" /></aside>',
+    },
+    {
+      kind: 'password',
+      extra: '<aside><input type="password" /></aside>',
+    },
+  ])('keeps a page-wide owner with an extra rendered $kind', ({ extra }) => {
+    document.body.innerHTML = `<form><fieldset class="loginForm"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></fieldset>${extra}</form>`
+
+    expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
+  })
+
+  test('keeps an explicit new-password surface at document scope', () => {
+    document.body.innerHTML = `<form><fieldset class="loginForm"><input autocomplete="username" /><input type="password" autocomplete="new-password" /></fieldset></form>`
 
     expect(summarizeAuthenticationWorkflowForms()[0]?.root).toBe(document)
   })
@@ -164,7 +216,7 @@ describe('popular-site login shells', () => {
   test('does not submit outside a bounded page-wide login panel', () => {
     document.body.innerHTML = `<form id="aspnetForm" method="post">
       <header><button id="header-submit" type="submit">Sign in</button></header>
-      <main class="login-panel"><input name="username" autocomplete="username" /><input name="password" type="password" autocomplete="current-password" /></main>
+      <main class="login-panel"><input name="LoginUserName" title="Your username" autocomplete="on" /><input name="LoginPassword" title="Your password" type="password" autocomplete="on" /></main>
       <footer><button id="footer-submit" type="submit">Continue</button></footer></form>`
     const activations: Event[] = []
     const form = document.querySelector<HTMLFormElement>('#aspnetForm')

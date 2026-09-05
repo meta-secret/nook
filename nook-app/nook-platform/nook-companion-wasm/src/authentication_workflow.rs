@@ -118,3 +118,35 @@ pub fn companion_authentication_workflow_match_kind(
         }
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod tests {
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn match_kind_preserves_every_closed_workflow_variant() {
+        for (workflow_match, expected) in [
+            (
+                nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
+                super::CompanionAuthenticationWorkflowMatchKind::NoMatch,
+            ),
+            (
+                nook_companion_core::AuthenticationWorkflowMatch::Rejected,
+                super::CompanionAuthenticationWorkflowMatchKind::Rejected,
+            ),
+            (
+                super::authentication_enrollment_workflow_match(
+                    true,
+                    "Save these recovery codes",
+                    false,
+                ),
+                super::CompanionAuthenticationWorkflowMatchKind::Matched,
+            ),
+        ] {
+            assert_eq!(
+                super::companion_authentication_workflow_match_kind(workflow_match),
+                expected
+            );
+        }
+    }
+}

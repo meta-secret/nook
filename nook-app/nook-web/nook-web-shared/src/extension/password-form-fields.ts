@@ -201,11 +201,13 @@ export function localOwnedLoginObservationRoot({
   ) {
     return owner.ownerDocument;
   }
-  const currentPasswordTokenRequest: AutocompleteTokenMatchRequest = {
+  // Login pages may expose only autocomplete="on"; an explicit new-password
+  // token still identifies a non-login credential surface.
+  const newPasswordTokenRequest: AutocompleteTokenMatchRequest = {
     field: passwordField,
-    expected: "current-password",
+    expected: "new-password",
   };
-  if (!hasAutocompleteToken(currentPasswordTokenRequest)) {
+  if (hasAutocompleteToken(newPasswordTokenRequest)) {
     return owner.ownerDocument;
   }
   let container = passwordField.parentElement;
