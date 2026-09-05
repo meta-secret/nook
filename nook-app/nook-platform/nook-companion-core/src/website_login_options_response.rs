@@ -1,5 +1,12 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 //! Typed runtime response boundary for website-login options.
 
+use crate::WebsiteLoginMatchAvailability;
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -108,86 +115,87 @@ pub enum WebsiteLoginOptionsDecodeError {
     Malformed,
 }
 
-pub fn decode_website_login_options_json(
-    serialized: &str,
-) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
-    let wire = serde_json::from_str::<WebsiteLoginOptionsWireValue>(serialized)
-        .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?;
-    decode_website_login_options(wire)
-}
+impl WebsiteLoginOptions {
+    pub fn from_json(
+        serialized: &str,
+    ) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
+        let wire = serde_json::from_str::<WebsiteLoginOptionsWireValue>(serialized)
+            .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?;
+        WebsiteLoginOptions::from_wire(wire)
+    }
 
-pub fn decode_website_login_options(
-    wire: WebsiteLoginOptionsWireValue,
-) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
-    let WebsiteLoginOptionsWireValue(wire) = wire;
-    match wire {
-        WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Ready {
-            ok: true,
-            authorization_generation,
-            accounts,
-        }) => {
-            if authorization_generation.trim().is_empty()
-                || accounts.iter().any(|account| {
-                    account.vault_store_id.trim().is_empty() || account.secret_id.trim().is_empty()
-                })
-            {
-                return Err(WebsiteLoginOptionsDecodeError::Malformed);
-            }
-            Ok(WebsiteLoginOptions::Ready {
-                kind: WebsiteLoginOptionsKind::Ready,
+    pub fn from_wire(
+        wire: WebsiteLoginOptionsWireValue,
+    ) -> Result<WebsiteLoginOptions, WebsiteLoginOptionsDecodeError> {
+        let WebsiteLoginOptionsWireValue(wire) = wire;
+        match wire {
+            WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Ready {
+                ok: true,
                 authorization_generation,
-                accounts: accounts
-                    .into_iter()
-                    .map(|account| WebsiteLoginAccountOption {
-                        vault_store_id: account.vault_store_id,
-                        vault_name: account.vault_name,
-                        secret_id: account.secret_id,
-                        username: account.username,
-                        website_url: account.website_url,
-                        website_host: account.website_host,
+                accounts,
+            }) => {
+                if authorization_generation.trim().is_empty()
+                    || accounts.iter().any(|account| {
+                        account.vault_store_id.trim().is_empty()
+                            || account.secret_id.trim().is_empty()
                     })
-                    .collect(),
-            })
-        }
-        WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Locked {
-            ok: true,
-        }) => Ok(WebsiteLoginOptions::Locked {
-            kind: WebsiteLoginOptionsKind::Locked,
-        }),
-        WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Unavailable {
-            ok: true,
-        }) => Ok(WebsiteLoginOptions::Unavailable {
-            kind: WebsiteLoginOptionsKind::Unavailable,
-        }),
-        WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire {
-            ok: false,
-            reason,
-        }) if !reason.trim().is_empty() => Ok(WebsiteLoginOptions::Rejected {
-            kind: WebsiteLoginOptionsKind::Rejected,
-            reason,
-        }),
-        WebsiteLoginOptionsWire::Available(_)
-        | WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire { .. }) => {
-            Err(WebsiteLoginOptionsDecodeError::Malformed)
+                {
+                    return Err(WebsiteLoginOptionsDecodeError::Malformed);
+                }
+                Ok(WebsiteLoginOptions::Ready {
+                    kind: WebsiteLoginOptionsKind::Ready,
+                    authorization_generation,
+                    accounts: accounts
+                        .into_iter()
+                        .map(|account| WebsiteLoginAccountOption {
+                            vault_store_id: account.vault_store_id,
+                            vault_name: account.vault_name,
+                            secret_id: account.secret_id,
+                            username: account.username,
+                            website_url: account.website_url,
+                            website_host: account.website_host,
+                        })
+                        .collect(),
+                })
+            }
+            WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Locked {
+                ok: true,
+            }) => Ok(WebsiteLoginOptions::Locked {
+                kind: WebsiteLoginOptionsKind::Locked,
+            }),
+            WebsiteLoginOptionsWire::Available(WebsiteLoginOptionsAvailableWire::Unavailable {
+                ok: true,
+            }) => Ok(WebsiteLoginOptions::Unavailable {
+                kind: WebsiteLoginOptionsKind::Unavailable,
+            }),
+            WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire {
+                ok: false,
+                reason,
+            }) if !reason.trim().is_empty() => Ok(WebsiteLoginOptions::Rejected {
+                kind: WebsiteLoginOptionsKind::Rejected,
+                reason,
+            }),
+            WebsiteLoginOptionsWire::Available(_)
+            | WebsiteLoginOptionsWire::Rejected(WebsiteLoginOptionsRejectedWire { .. }) => {
+                Err(WebsiteLoginOptionsDecodeError::Malformed)
+            }
         }
     }
-}
 
-pub fn decode_website_login_match_availability(
-    wire: WebsiteLoginOptionsWireValue,
-) -> Result<crate::WebsiteLoginMatchAvailability, WebsiteLoginOptionsDecodeError> {
-    Ok(match decode_website_login_options(wire)? {
-        WebsiteLoginOptions::Ready { accounts, .. } => {
-            crate::WebsiteLoginMatchAvailability::Ready {
+    pub fn into_match_availability(
+        self,
+    ) -> Result<WebsiteLoginMatchAvailability, WebsiteLoginOptionsDecodeError> {
+        Ok(match self {
+            WebsiteLoginOptions::Ready { accounts, .. } => WebsiteLoginMatchAvailability::Ready {
                 count: u32::try_from(accounts.len())
                     .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?,
+            },
+            WebsiteLoginOptions::Locked { .. } => WebsiteLoginMatchAvailability::Locked,
+            WebsiteLoginOptions::Unavailable { .. } | WebsiteLoginOptions::Rejected { .. } => {
+                WebsiteLoginMatchAvailability::Unavailable
             }
-        }
-        WebsiteLoginOptions::Locked { .. } => crate::WebsiteLoginMatchAvailability::Locked,
-        WebsiteLoginOptions::Unavailable { .. } | WebsiteLoginOptions::Rejected { .. } => {
-            crate::WebsiteLoginMatchAvailability::Unavailable
-        }
-    })
+        })
+    }
 }
 
 #[cfg(test)]
@@ -198,7 +206,7 @@ mod tests {
     fn decodes_every_login_options_variant_and_invariant() -> anyhow::Result<()> {
         let ready = r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#;
         assert!(matches!(
-            decode_website_login_options_json(ready)?,
+            WebsiteLoginOptions::from_json(ready)?,
             WebsiteLoginOptions::Ready { .. }
         ));
         for serialized in [
@@ -206,11 +214,9 @@ mod tests {
             r#"{"ok":true,"status":"unavailable"}"#,
             r#"{"ok":false,"reason":"vault-locked"}"#,
         ] {
-            assert!(decode_website_login_options_json(serialized).is_ok());
+            assert!(WebsiteLoginOptions::from_json(serialized).is_ok());
         }
-        assert!(
-            decode_website_login_options_json(&ready.replacen("\"vault\"", "\"\"", 1)).is_err()
-        );
+        assert!(WebsiteLoginOptions::from_json(&ready.replacen("\"vault\"", "\"\"", 1)).is_err());
         for malformed in [
             r#"{"ok":true,"status":"ready"}"#,
             r#"{"ok":false,"status":"ready","accounts":[]}"#,
@@ -220,7 +226,7 @@ mod tests {
             r#"{"ok":false,"reason":" "}"#,
             r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com","password":"foreign"}]}"#,
         ] {
-            assert!(decode_website_login_options_json(malformed).is_err());
+            assert!(WebsiteLoginOptions::from_json(malformed).is_err());
         }
         Ok(())
     }
@@ -230,23 +236,70 @@ mod tests {
         for (serialized, expected) in [
             (
                 r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#,
-                crate::WebsiteLoginMatchAvailability::Ready { count: 1 },
+                WebsiteLoginMatchAvailability::Ready { count: 1 },
             ),
             (
                 r#"{"ok":true,"status":"locked"}"#,
-                crate::WebsiteLoginMatchAvailability::Locked,
+                WebsiteLoginMatchAvailability::Locked,
             ),
             (
                 r#"{"ok":true,"status":"unavailable"}"#,
-                crate::WebsiteLoginMatchAvailability::Unavailable,
+                WebsiteLoginMatchAvailability::Unavailable,
             ),
             (
                 r#"{"ok":false,"reason":"login-forbidden-origin"}"#,
-                crate::WebsiteLoginMatchAvailability::Unavailable,
+                WebsiteLoginMatchAvailability::Unavailable,
             ),
         ] {
             let wire = serde_json::from_str::<WebsiteLoginOptionsWireValue>(serialized)?;
-            assert_eq!(decode_website_login_match_availability(wire)?, expected);
+            assert_eq!(
+                WebsiteLoginOptions::from_wire(wire)?.into_match_availability()?,
+                expected
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn preserves_empty_lists_presentation_fields_and_numeric_kinds() -> anyhow::Result<()> {
+        let empty = WebsiteLoginOptions::from_json(
+            r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch","accounts":[]}"#,
+        )?;
+        assert_eq!(
+            serde_json::to_string(&empty)?,
+            r#"{"kind":0,"authorizationGeneration":"epoch","accounts":[]}"#
+        );
+        assert_eq!(
+            empty.into_match_availability()?,
+            WebsiteLoginMatchAvailability::Ready { count: 0 }
+        );
+        let blank_presentation = r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch","accounts":[{"vaultStoreId":"vault","vaultName":"","secretId":"secret","username":"","websiteUrl":"","websiteHost":""}]}"#;
+        let response = WebsiteLoginOptions::from_json(blank_presentation)?;
+        assert_eq!(
+            response.into_match_availability()?,
+            WebsiteLoginMatchAvailability::Ready { count: 1 }
+        );
+        for invalid in [
+            blank_presentation.replace("\"epoch\"", "\" \""),
+            blank_presentation.replace("\"secret\"", "\" \""),
+        ] {
+            assert!(matches!(
+                WebsiteLoginOptions::from_json(&invalid),
+                Err(WebsiteLoginOptionsDecodeError::Malformed)
+            ));
+        }
+        for (wire, expected) in [
+            (r#"{"ok":true,"status":"locked"}"#, r#"{"kind":1}"#),
+            (r#"{"ok":true,"status":"unavailable"}"#, r#"{"kind":2}"#),
+            (
+                r#"{"ok":false,"reason":"denied"}"#,
+                r#"{"kind":3,"reason":"denied"}"#,
+            ),
+        ] {
+            assert_eq!(
+                serde_json::to_string(&WebsiteLoginOptions::from_json(wire)?)?,
+                expected
+            );
         }
         Ok(())
     }
