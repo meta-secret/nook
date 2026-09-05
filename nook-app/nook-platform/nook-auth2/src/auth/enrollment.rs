@@ -8,9 +8,9 @@ use crate::errors::{EnrollmentError, EnrollmentResult};
 
 mod code;
 pub use code::{
-    build_enrollment_link, decrypt_enrollment_payload, encrypt_enrollment_payload,
-    normalize_enrollment_code, parse_enrollment_envelope, peek_enrollment_entry_id,
-    peek_enrollment_entry_label, peek_enrollment_issued_at,
+    CheckedEnrollmentEnvelope, build_enrollment_link, encrypt_enrollment_payload,
+    normalize_enrollment_code, peek_enrollment_entry_id, peek_enrollment_entry_label,
+    peek_enrollment_issued_at,
 };
 
 /// Marker state for enrollment payloads that intentionally transfer the
@@ -389,7 +389,7 @@ mod tests {
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
         let code = encrypt_enrollment_payload(&input, "hunter2", "")?;
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2")?;
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("hunter2")?;
         assert_eq!(
             decrypted.provider,
             EnrollmentProvider::personal(PersonalEnrollmentProvider::local())
@@ -409,7 +409,7 @@ mod tests {
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
         let code = encrypt_enrollment_payload(&input, "hunter2", "Shared Drive grant")?;
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2")?;
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("hunter2")?;
         assert_eq!(decrypted.provider, input.provider);
         match decrypted.provider.data() {
             EnrollmentProviderDataRef::Shared(SharedEnrollmentProviderData::GoogleDrive {
@@ -421,8 +421,9 @@ mod tests {
             other => panic!("expected shared grant, got {other:?}"),
         }
 
-        let envelope = parse_enrollment_envelope(&code)?;
-        let serialized = serde_json::to_string(&envelope)?;
+        let checked = CheckedEnrollmentEnvelope::parse(&code)?;
+        let envelope = checked.envelope();
+        let serialized = serde_json::to_string(envelope)?;
         assert!(!serialized.contains("ya29."));
         assert!(!serialized.contains("github_pat_"));
         assert!(!serialized.contains("hunter2"));
@@ -483,7 +484,7 @@ mod tests {
             issued_at: "2026-06-23T12:00:00Z".to_owned(),
         };
         let code = encrypt_enrollment_payload(&input, "hunter2", "Shared iCloud")?;
-        let decrypted = decrypt_enrollment_payload(&code, "hunter2")?;
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("hunter2")?;
         assert_eq!(decrypted.provider, input.provider);
         assert!(!code.contains("web-auth-token"));
         assert!(storage_target_id.contains("shortGuid"));
@@ -512,7 +513,7 @@ mod tests {
         assert!(!code.contains("ya29.secret"));
         assert!(!code.contains("refresh.secret"));
 
-        let decrypted = decrypt_enrollment_payload(&code, "correct horse")?;
+        let decrypted = CheckedEnrollmentEnvelope::parse(&code)?.decrypt("correct horse")?;
         assert_eq!(decrypted.provider, input.provider);
         Ok(())
     }
