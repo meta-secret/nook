@@ -467,13 +467,13 @@ mod tests {
             observed_names: vec!["pairing".to_owned()],
         };
         assert_eq!(
-            classify_extension_persistence_stores(store_observation),
+            classify_extension_persistence_stores(store_observation.clone()),
             nook_companion_core::ExtensionPersistenceStoreState::Present
         );
         assert_eq!(extension_persistence_store_names(area), vec!["pairing"]);
         assert_eq!(
-            matching_extension_persistence_stores(database_observation),
-            vec!["nook_extension"]
+            matching_extension_persistence_stores(store_observation),
+            vec!["pairing"]
         );
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
