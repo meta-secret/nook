@@ -125,9 +125,9 @@ pub use nook_app_common::{
 };
 pub use nook_auth2::{
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
-    SentinelUnlockPolicy, SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession,
-    SentinelUnlockStatus, SentinelUnlockVersion, add_sentinel_unlock_response,
-    finalize_sentinel_unlock, sentinel_unlock_request, sentinel_unlock_status,
+    SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection,
+    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus,
+    SentinelUnlockVersion,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
@@ -211,9 +211,9 @@ pub use website_login_save::{
 };
 
 pub use nook_auth2::{
-    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, MockPasskeyCredentialCount,
-    PasswordWorkFactor, SentinelGenesisIssued, SentinelGenesisParticipant,
-    SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
+    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
+    MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor, SentinelGenesisIssued,
+    SentinelGenesisParticipant, SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
     SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest, SentinelGenesisSession,
     SentinelGenesisShareDelivery, SentinelGenesisVersion, SentinelParticipantCount,
     SentinelRecordCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold,

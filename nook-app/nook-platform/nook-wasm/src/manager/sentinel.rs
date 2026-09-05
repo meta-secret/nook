@@ -11,8 +11,8 @@ use nook_core::{
 };
 use std::collections::BTreeSet;
 mod genesis_finalization;
+mod unlock_finalization;
 
-use super::verified_access::VerifiedVaultAccessFlow;
 use super::{CeremonyState, NookVaultManager, VaultCryptoState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
@@ -22,8 +22,7 @@ use crate::storage::indexed_db::{
     load_sentinel_genesis_share_delivery, save_sentinel_genesis_share_delivery,
 };
 use crate::{
-    NookSecretRecord, NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary,
-    NookSentinelUnlockSessionStatus,
+    NookSentinelGenesisStatus, NookSentinelStoredDeliverySummary, NookSentinelUnlockSessionStatus,
 };
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::JsError;
@@ -297,14 +296,16 @@ impl NookVaultManager {
         if records.iter().any(|record| {
             record.key.as_str() == nook_core::sentinel_share_record_key(identity.device_id())
         }) {
-            let request = nook_core::sentinel_unlock_request(&session);
+            let request = session.request();
             let own_response = signing.respond_to_sentinel_unlock_request(
                 request,
                 &records,
                 &identity,
                 &signing.public_key(),
             )?;
-            nook_core::add_sentinel_unlock_response(&mut session, own_response)?;
+            session = session
+                .collect(own_response)
+                .map_err(|rejected| rejected.into_parts().1)?;
         }
         self.sentinel_unlock = CeremonyState::Active(session);
         self.sentinel_unlock_session_status()
@@ -315,10 +316,8 @@ impl NookVaultManager {
         let session = self
             .sentinel_unlock
             .get("No Sentinel unlock ceremony is active.")?;
-        Ok(
-            serde_json::to_string(&nook_core::sentinel_unlock_request(session))
-                .map_err(|error| NookError::Serialization(error.to_string()))?,
-        )
+        Ok(serde_json::to_string(&session.request())
+            .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
 
     /// Open this participant's local share only inside Rust and return an opaque
@@ -386,10 +385,15 @@ impl NookVaultManager {
     ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
         let response: nook_core::SentinelUnlockResponse = serde_json::from_str(response_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        let session = self
-            .sentinel_unlock
-            .get_mut("No Sentinel unlock ceremony is active.")?;
-        nook_core::add_sentinel_unlock_response(session, response)?;
+        let session = self.take_sentinel_unlock()?;
+        self.sentinel_unlock = match session.collect(response) {
+            Ok(session) => CeremonyState::Active(session),
+            Err(rejected) => {
+                let (session, error) = rejected.into_parts();
+                self.sentinel_unlock = CeremonyState::Active(session);
+                return Err(error.into());
+            }
+        };
         self.sentinel_unlock_session_status()
     }
 
@@ -398,38 +402,11 @@ impl NookVaultManager {
         &self,
     ) -> Result<NookSentinelUnlockSessionStatus, JsError> {
         match &self.sentinel_unlock {
-            CeremonyState::Active(session) => NookSentinelUnlockSessionStatus::from_status(
-                nook_core::sentinel_unlock_status(session),
-            ),
+            CeremonyState::Active(session) => {
+                NookSentinelUnlockSessionStatus::from_status(session.status())
+            }
             CeremonyState::Inactive => Ok(NookSentinelUnlockSessionStatus::inactive()),
         }
-    }
-
-    #[wasm_bindgen]
-    pub async fn finalize_sentinel_unlock(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
-        let identity = self.ensure_device_identity()?;
-        let session = self
-            .sentinel_unlock
-            .get("No Sentinel unlock ceremony is active.")?
-            .clone();
-        let keys = nook_core::finalize_sentinel_unlock(session, &identity)?;
-        let records = self.stored_records_snapshot();
-        self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.vault.meta = VaultMetaState::from_stored_records(&records);
-        if self.event_log_has_events().await? {
-            self.apply_event_projection_to_session().await?;
-        }
-        self.persist_projection_cache().await?;
-        self.purge_legacy_plaintext_search_catalog().await?;
-        let records = VerifiedVaultAccessFlow::SentinelUnlock
-            .complete(
-                self.get_records(),
-                identity.device_id(),
-                &self.vault.store_id,
-            )
-            .await?;
-        self.sentinel_unlock = CeremonyState::Inactive;
-        Ok(records)
     }
 
     /// Verify this participant's returned share against the exact request it

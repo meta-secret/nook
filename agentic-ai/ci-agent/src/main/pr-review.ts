@@ -16,7 +16,7 @@ import {
 } from "./github.js";
 import { prettyJson } from "./json.js";
 
-const DEFAULT_STABILIZATION_WAIT_SECONDS = 600;
+const DEFAULT_STABILIZATION_WAIT_SECONDS = 0;
 const STABILIZATION_POLL_INTERVAL_MS = 15_000;
 const ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS = 15_000;
 const REVIEW_REQUEST_TIMEOUT_MS = 45_000;
@@ -247,6 +247,12 @@ export async function runPrReviewStabilization(): Promise<void> {
     );
   }
   if (result.state === ReviewStabilizationState.TimedOut) {
+    if (waitSeconds === 0) {
+      console.log(
+        "::notice::Exact-head review is not settled in the bounded feedback snapshot; pr:ready remains the final feedback authority.",
+      );
+      return;
+    }
     console.log(
       `::warning::Exact-head review did not settle within ${waitSeconds}s; hosted validation remains independent of review availability.`,
     );
@@ -256,18 +262,17 @@ export async function runPrReviewStabilization(): Promise<void> {
 export async function stabilizeExactHeadReview(
   input: ReviewStabilizationInput,
 ): Promise<ReviewStabilizationResult> {
+  if (input.timeoutMs === 0) {
+    return inspectReviewSnapshot(input);
+  }
   const deadline = input.now() + input.timeoutMs;
-  const initialFeedbackDeadline =
-    input.timeoutMs === 0
-      ? deadline + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS
-      : deadline;
   let headSha = "";
   let latestFeedback: LatestFeedback = { state: LatestFeedbackState.Missing };
   let settled = false;
   while (true) {
     try {
       const inspection = await attemptBeforeDeadline({
-        deadline: initialFeedbackDeadline,
+        deadline,
         now: input.now,
         operation: input.inspectFeedback,
       });
@@ -317,10 +322,7 @@ export async function stabilizeExactHeadReview(
     if (!settled) {
       try {
         const request = await attemptBeforeDeadline({
-          deadline:
-            input.timeoutMs === 0
-              ? input.now() + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS
-              : deadline,
+          deadline,
           now: input.now,
           operation: input.requestReview,
         });
@@ -397,6 +399,52 @@ export async function stabilizeExactHeadReview(
     }
     const remainingMs = deadline - input.now();
     await input.waitMs(Math.min(input.pollIntervalMs, remainingMs));
+  }
+}
+
+async function inspectReviewSnapshot(
+  input: ReviewStabilizationInput,
+): Promise<ReviewStabilizationResult> {
+  try {
+    const inspection = await attemptBeforeDeadline({
+      deadline: input.now() + ZERO_WAIT_FEEDBACK_SNAPSHOT_TIMEOUT_MS,
+      now: input.now,
+      operation: input.inspectFeedback,
+    });
+    if (!inspection.completed) {
+      return { headSha: "", state: ReviewStabilizationState.TimedOut };
+    }
+    const feedback = inspection.value;
+    const [circuitBreakerAcknowledged = (false)] = [
+      input.circuitBreakerAcknowledged,
+    ];
+    const feedbackState = classifyFeedbackState(
+      feedback,
+      circuitBreakerAcknowledged,
+    );
+    if (feedbackState === FeedbackClassificationState.CircuitBreaker) {
+      return {
+        feedback,
+        headSha: "",
+        state: ReviewStabilizationState.CircuitBreaker,
+      };
+    }
+    if (feedbackState === FeedbackClassificationState.Findings) {
+      return {
+        feedback,
+        headSha: "",
+        state: ReviewStabilizationState.Findings,
+      };
+    }
+    return {
+      feedback,
+      headSha: "",
+      state: feedback.codexReview.settled
+        ? ReviewStabilizationState.Clean
+        : ReviewStabilizationState.TimedOut,
+    };
+  } catch {
+    return { headSha: "", state: ReviewStabilizationState.TimedOut };
   }
 }
 

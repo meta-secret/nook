@@ -48,14 +48,17 @@ pushes the replacement head.
 When the coherent head is ready, run complete validation:
 
 ```bash
-task pr:validate PR=<number>
+task pr:validate PR=<number> CODEX_REVIEW=1
 ```
+
+`CODEX_REVIEW=1` is the explicit final-head review opt-in. Ordinary
+`task pr:validate PR=<number>` dispatches validation without contacting Codex.
 
 The command:
 
 1. Dispatches repository-owned GitHub Actions immediately.
-2. Freezes the current PR head and base only to bind the review request to the
-   intended revision.
+2. When `CODEX_REVIEW=1`, freezes the current PR head and base to bind the
+   review request to the intended revision.
    - Inspects every PR comment, submitted review body, and review thread without
      filtering by timestamp, marker, or head transition.
    - Deletes retired GitHub Actions exact-head boundary notices before feedback
@@ -65,7 +68,7 @@ The command:
      before Codex contact.
    - Checks the review circuit, then contacts Codex without waiting for a result.
 3. Rechecks that the PR head and base did not change during dispatch.
-4. Lets hosted checks and exact-head review proceed concurrently.
+4. Lets hosted checks and an opted-in exact-head review proceed concurrently.
 5. Batches current review findings and failed checks after both settle.
 6. Opens a circuit breaker after three finding batches and requires a
    comprehensive stabilization pass. After resolving its coherent batch, the
@@ -82,6 +85,9 @@ validation merely because the review request was unavailable.
 
 Never run `task pr:review:stabilize` before hosted validation dispatch. It may
 collect a pending review only after dispatch while checks are already running.
+Its default `REVIEW_WAIT_SECONDS=0` performs one bounded feedback snapshot and
+does not request a review. Set an explicit positive wait only when bounded
+polling is needed for a review that was already requested.
 
 Use `task pr:review PR=<number>` only when an exact-head review request is needed
 without complete validation. It is idempotent and does not wait for a result.
@@ -202,10 +208,10 @@ Cursor, CodeRabbit, or another service:
 10. When the head changed and is not validation-ready, dispatch at least one
    relevant focused hosted task.
 11. When complete validation was already requested for a changed head,
-    dispatch it for the replacement head first and collect exact-head Codex
-    review concurrently. Otherwise start it when that changed head is ready for
-    the final gate. Wait for both result sets before forming another repair
-    batch.
+    dispatch it for the replacement head first. Opt in to exact-head Codex
+    review only when that replacement is the final coherent head. Otherwise
+    start review when that changed head is ready for the final gate. Wait for
+    both result sets before forming another repair batch.
 12. Do not run commit, push, or replacement-head validation when the batch has
     no accepted fix or failed-check repair.
 13. Reply on the original thread or comment with the disposition, evidence, fix,

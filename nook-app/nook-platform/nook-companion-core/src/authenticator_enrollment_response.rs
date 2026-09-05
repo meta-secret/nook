@@ -1,5 +1,11 @@
 //! Typed runtime response boundaries for authenticator enrollment.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -105,54 +111,61 @@ pub enum AuthenticatorEnrollmentConfirmResponse {
 #[error("authenticator enrollment response is malformed")]
 pub struct AuthenticatorEnrollmentResponseDecodeError;
 
-pub fn decode_authenticator_enrollment_stage_response(
-    wire: AuthenticatorEnrollmentStageResponseWire,
-) -> Result<AuthenticatorEnrollmentStageResponse, AuthenticatorEnrollmentResponseDecodeError> {
-    match wire {
-        AuthenticatorEnrollmentStageResponseWire::Staged(AuthenticatorEnrollmentStagedWire {
-            ok: true,
-            stage_id,
-        }) if !stage_id.trim().is_empty() => Ok(AuthenticatorEnrollmentStageResponse::Staged {
-            kind: AuthenticatorEnrollmentStageResponseKind::Staged,
-            stage_id,
-        }),
-        AuthenticatorEnrollmentStageResponseWire::Rejected(
-            AuthenticatorEnrollmentRejectedWire { ok: false, reason },
-        ) if !reason.trim().is_empty() => Ok(AuthenticatorEnrollmentStageResponse::Rejected {
-            kind: AuthenticatorEnrollmentStageResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticatorEnrollmentStageResponseWire::Staged(_)
-        | AuthenticatorEnrollmentStageResponseWire::Rejected(_) => {
-            Err(AuthenticatorEnrollmentResponseDecodeError)
+impl AuthenticatorEnrollmentStageResponse {
+    pub fn from_wire(
+        wire: AuthenticatorEnrollmentStageResponseWire,
+    ) -> Result<AuthenticatorEnrollmentStageResponse, AuthenticatorEnrollmentResponseDecodeError>
+    {
+        match wire {
+            AuthenticatorEnrollmentStageResponseWire::Staged(
+                AuthenticatorEnrollmentStagedWire { ok: true, stage_id },
+            ) if !stage_id.trim().is_empty() => Ok(AuthenticatorEnrollmentStageResponse::Staged {
+                kind: AuthenticatorEnrollmentStageResponseKind::Staged,
+                stage_id,
+            }),
+            AuthenticatorEnrollmentStageResponseWire::Rejected(
+                AuthenticatorEnrollmentRejectedWire { ok: false, reason },
+            ) if !reason.trim().is_empty() => Ok(AuthenticatorEnrollmentStageResponse::Rejected {
+                kind: AuthenticatorEnrollmentStageResponseKind::Rejected,
+                reason,
+            }),
+            AuthenticatorEnrollmentStageResponseWire::Staged(_)
+            | AuthenticatorEnrollmentStageResponseWire::Rejected(_) => {
+                Err(AuthenticatorEnrollmentResponseDecodeError)
+            }
         }
     }
 }
 
-pub fn decode_authenticator_enrollment_confirm_response(
-    wire: AuthenticatorEnrollmentConfirmResponseWire,
-) -> Result<AuthenticatorEnrollmentConfirmResponse, AuthenticatorEnrollmentResponseDecodeError> {
-    match wire {
-        AuthenticatorEnrollmentConfirmResponseWire::Completed(
-            AuthenticatorEnrollmentCompletedWire {
-                ok: true,
-                secret_id,
-            },
-        ) if !secret_id.trim().is_empty() => {
-            Ok(AuthenticatorEnrollmentConfirmResponse::Completed {
-                kind: AuthenticatorEnrollmentConfirmResponseKind::Completed,
-                secret_id,
-            })
-        }
-        AuthenticatorEnrollmentConfirmResponseWire::Rejected(
-            AuthenticatorEnrollmentRejectedWire { ok: false, reason },
-        ) if !reason.trim().is_empty() => Ok(AuthenticatorEnrollmentConfirmResponse::Rejected {
-            kind: AuthenticatorEnrollmentConfirmResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticatorEnrollmentConfirmResponseWire::Completed(_)
-        | AuthenticatorEnrollmentConfirmResponseWire::Rejected(_) => {
-            Err(AuthenticatorEnrollmentResponseDecodeError)
+impl AuthenticatorEnrollmentConfirmResponse {
+    pub fn from_wire(
+        wire: AuthenticatorEnrollmentConfirmResponseWire,
+    ) -> Result<AuthenticatorEnrollmentConfirmResponse, AuthenticatorEnrollmentResponseDecodeError>
+    {
+        match wire {
+            AuthenticatorEnrollmentConfirmResponseWire::Completed(
+                AuthenticatorEnrollmentCompletedWire {
+                    ok: true,
+                    secret_id,
+                },
+            ) if !secret_id.trim().is_empty() => {
+                Ok(AuthenticatorEnrollmentConfirmResponse::Completed {
+                    kind: AuthenticatorEnrollmentConfirmResponseKind::Completed,
+                    secret_id,
+                })
+            }
+            AuthenticatorEnrollmentConfirmResponseWire::Rejected(
+                AuthenticatorEnrollmentRejectedWire { ok: false, reason },
+            ) if !reason.trim().is_empty() => {
+                Ok(AuthenticatorEnrollmentConfirmResponse::Rejected {
+                    kind: AuthenticatorEnrollmentConfirmResponseKind::Rejected,
+                    reason,
+                })
+            }
+            AuthenticatorEnrollmentConfirmResponseWire::Completed(_)
+            | AuthenticatorEnrollmentConfirmResponseWire::Rejected(_) => {
+                Err(AuthenticatorEnrollmentResponseDecodeError)
+            }
         }
     }
 }
@@ -167,7 +180,7 @@ mod tests {
             r#"{"ok":true,"stageId":"stage-1"}"#,
         )?;
         assert_eq!(
-            decode_authenticator_enrollment_stage_response(staged)?,
+            AuthenticatorEnrollmentStageResponse::from_wire(staged)?,
             AuthenticatorEnrollmentStageResponse::Staged {
                 kind: AuthenticatorEnrollmentStageResponseKind::Staged,
                 stage_id: "stage-1".to_owned(),
@@ -178,7 +191,7 @@ mod tests {
             r#"{"ok":true,"secretId":"secret-1"}"#,
         )?;
         assert_eq!(
-            decode_authenticator_enrollment_confirm_response(completed)?,
+            AuthenticatorEnrollmentConfirmResponse::from_wire(completed)?,
             AuthenticatorEnrollmentConfirmResponse::Completed {
                 kind: AuthenticatorEnrollmentConfirmResponseKind::Completed,
                 secret_id: "secret-1".to_owned(),
@@ -196,7 +209,7 @@ mod tests {
         ] {
             let wire =
                 serde_json::from_str::<AuthenticatorEnrollmentStageResponseWire>(serialized)?;
-            assert!(decode_authenticator_enrollment_stage_response(wire).is_err());
+            assert!(AuthenticatorEnrollmentStageResponse::from_wire(wire).is_err());
         }
         for serialized in [
             r#"{"ok":true,"secretId":" "}"#,
@@ -205,7 +218,7 @@ mod tests {
         ] {
             let wire =
                 serde_json::from_str::<AuthenticatorEnrollmentConfirmResponseWire>(serialized)?;
-            assert!(decode_authenticator_enrollment_confirm_response(wire).is_err());
+            assert!(AuthenticatorEnrollmentConfirmResponse::from_wire(wire).is_err());
         }
         assert!(
             serde_json::from_str::<AuthenticatorEnrollmentConfirmResponseWire>(

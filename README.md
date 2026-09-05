@@ -459,10 +459,12 @@ selectors execute separately in exact-image Kubernetes Pods; compatible
 build-only selectors may share one ARC batch. When the head is ready, Gizmo
 explicitly starts complete PR validation with
 **`task pr:validate PR=<number>`**. Ordinary PR pushes do not start the complete
-pipeline. Validation dispatches hosted checks before requesting concurrent
-exact-head review. Use review stabilization only after dispatch while those
-checks run. Local Task mirrors below remain available for humans. Main-fix PRs
-use `FULL_E2E=1` to request the Main-equivalent browser suites.
+pipeline. Ordinary validation does not contact Codex. Set `CODEX_REVIEW=1` only
+for the final coherent head. Validation dispatches hosted checks before the
+opted-in exact-head review. Use review stabilization only after dispatch while
+those checks run. Its default performs one bounded feedback snapshot. Local
+Task mirrors below remain available for humans. Main-fix PRs use `FULL_E2E=1`
+to request the Main-equivalent browser suites.
 
 Project-scoped module experts use stable semantic role names defined by the
 [Cortex registry](.cortex/teams/ai/architecture/module-experts.md). Universal
@@ -525,8 +527,9 @@ task remote TASK_NAME=preflight # repository invariant checks on exact pushed HE
 task remote TASK_NAME=web:build # direct-Pod web build
 task remote TASK_NAME=web:e2e # direct-Pod browser proof
 task remote TASK_NAME=extension:e2e # direct-Pod extension browser proof
-task pr:validate PR=410    # explicitly trigger complete exact-head PR validation
-task pr:validate PR=410 FULL_E2E=1 # complete gate plus Main-fix browser suites
+task pr:validate PR=410    # complete exact-head validation without Codex review
+task pr:validate PR=410 CODEX_REVIEW=1 # final coherent head plus Codex review
+task pr:validate PR=410 FULL_E2E=1 CODEX_REVIEW=1 # final Main-fix gate and review
 task check                 # format, lint, tests, coverage floor, builds (optional local / CI mirror)
 task preflight             # fast Rust checks for whole-repository invariants
 task build                 # Rust, WASM, web, and extension production build
@@ -549,7 +552,7 @@ task ci:pr                 # optional local mirror of the non-browser PR gate (d
 task ci:pr:e2e             # explicit full web + extension e2e validation (optional)
 task pr:preflight PR=410   # JSON audit: base, policy, exact-head runs/deployments, feedback
 task pr:review PR=410      # optional circuit-guarded exact-head Codex review request
-task pr:review:stabilize PR=410 # bounded Codex collection after hosted validation dispatch
+task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation dispatch
 task pr:ready PR=410       # read-only exact-head readiness assertion; never merges
 task docker:coverage:export  # coverage-only CI fallback (no app image export)
 task sccache:stats          # shared SeaweedFS S3 compiler-cache object presence

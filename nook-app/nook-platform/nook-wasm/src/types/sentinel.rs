@@ -1,6 +1,8 @@
 use super::{NookVaultArchitecture, wasm_bindgen};
 use crate::NookError;
-use nook_core::{MultiDeviceError, RemoteEventLogClassification, SentinelGenesisPhase};
+use nook_core::{
+    MultiDeviceError, RemoteEventLogClassification, SentinelGenesisPhase, SentinelUnlockReadiness,
+};
 use std::mem;
 use wasm_bindgen::JsError;
 
@@ -33,7 +35,7 @@ impl NookSentinelUnlockSessionStatus {
                 )
             })?,
             threshold: status.threshold.into(),
-            ready: status.ready,
+            ready: matches!(status.readiness, SentinelUnlockReadiness::Ready),
         })
     }
 
@@ -75,7 +77,7 @@ impl NookSentinelUnlockSessionStatus {
 #[cfg(test)]
 mod tests {
     use super::NookSentinelUnlockSessionStatus;
-    use nook_core::SentinelUnlockStatus;
+    use nook_core::{SentinelUnlockReadiness, SentinelUnlockStatus};
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
@@ -84,7 +86,7 @@ mod tests {
         let status = SentinelUnlockStatus {
             collected: 2.into(),
             threshold: 3.into(),
-            ready: false,
+            readiness: SentinelUnlockReadiness::Collecting,
         };
         let projected = NookSentinelUnlockSessionStatus::from_status(status)?;
         assert_eq!(projected.collected, 2);
@@ -92,7 +94,7 @@ mod tests {
         let overflow = SentinelUnlockStatus {
             collected: 256.into(),
             threshold: 3.into(),
-            ready: true,
+            readiness: SentinelUnlockReadiness::Ready,
         };
         assert!(NookSentinelUnlockSessionStatus::from_status(overflow).is_err());
         Ok(())
