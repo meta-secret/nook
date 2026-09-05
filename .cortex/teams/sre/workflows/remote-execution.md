@@ -177,7 +177,9 @@ Complete validation:
 
 - binds every result to the exact PR head;
 - runs repository-owned merge gates;
-- requests the configured exact-head review;
+- requests no review by default;
+- may add `CODEX_REVIEW=1` on a final coherent head to request one idempotent
+  exact-head Codex review without waiting;
 - proves preview deployment when required; and
 - becomes stale after any later push.
 
