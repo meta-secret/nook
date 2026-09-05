@@ -122,7 +122,7 @@ impl CredentialFillFieldIndex {
         )
     )]
     pub fn value(&self) -> u32 {
-        self.inner.value
+        self.inner.into()
     }
 }
 
@@ -150,7 +150,7 @@ impl CredentialFillObservationCount {
         )
     )]
     pub fn value(&self) -> u32 {
-        self.inner.value
+        self.inner.into()
     }
 }
 
@@ -269,7 +269,7 @@ impl CredentialFillObservations {
         let Ok(fields) = &mut self.inner else {
             return;
         };
-        if fields.len() >= Self::maximum_count().value as usize {
+        if fields.len() >= u32::from(Self::maximum_count()) as usize {
             self.inner = Err(credential_fill::CredentialFillRejection::TooManyObservedFields);
             return;
         }
@@ -566,7 +566,7 @@ mod tests {
         let observation = field(field::Index::ZERO, &CredentialFillFieldRole::username());
         let expected_observation = observation.as_core();
         let mut fields = CredentialFillObservations::new();
-        for _ in 0..CredentialFillObservations::maximum_count().value {
+        for _ in 0..u32::from(CredentialFillObservations::maximum_count()) {
             fields.add(&observation);
         }
 
