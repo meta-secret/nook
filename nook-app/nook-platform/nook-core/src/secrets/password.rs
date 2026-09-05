@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn accepts_min_and_max_length() -> anyhow::Result<()> {
         let min = generate_password(PasswordGenerationOptions {
-            length: usize::from(MIN_PASSWORD_LENGTH) as u32,
+            length: u32::try_from(usize::from(MIN_PASSWORD_LENGTH))?,
             lowercase: true,
             uppercase: false,
             numbers: false,
@@ -183,7 +183,7 @@ mod tests {
         assert_eq!(min.len(), usize::from(MIN_PASSWORD_LENGTH));
 
         let max = generate_password(PasswordGenerationOptions {
-            length: usize::from(MAX_PASSWORD_LENGTH) as u32,
+            length: u32::try_from(usize::from(MAX_PASSWORD_LENGTH))?,
             lowercase: true,
             uppercase: false,
             numbers: false,
@@ -196,7 +196,7 @@ mod tests {
     #[test]
     fn rejects_length_above_max() -> anyhow::Result<()> {
         let err = generate_password(PasswordGenerationOptions {
-            length: usize::from(MAX_PASSWORD_LENGTH) as u32 + 1,
+            length: u32::try_from(usize::from(MAX_PASSWORD_LENGTH))? + 1,
             lowercase: true,
             uppercase: false,
             numbers: false,
