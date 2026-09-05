@@ -412,7 +412,7 @@ pub use vault_runtime_policy::{
 };
 pub use vault_search_catalog::{
     SECRET_SEARCH_CATALOG_BUCKET_COUNT, SearchCatalogBucketPayload, SecretSearchCatalog,
-    SecretSearchCatalogReconcile,
+    SecretSearchCatalogChangeCount, SecretSearchCatalogReconcile,
 };
 pub use vault_sentinel_genesis::{
     SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
