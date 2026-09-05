@@ -11,7 +11,7 @@ use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{bip39, passkey_authenticator};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::fmt;
 use zeroize::Zeroize;
 
@@ -52,7 +52,34 @@ pub struct SecureNoteSecret {
     pub note: String,
 }
 
-pub const PASSKEY_SECRET_VERSION: u32 = 1;
+/// Version of the persisted website-passkey secret payload.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct PasskeySecretVersion(u32);
+
+impl PasskeySecretVersion {
+    pub const CURRENT: Self = Self(1);
+}
+
+impl From<PasskeySecretVersion> for u32 {
+    fn from(value: PasskeySecretVersion) -> Self {
+        value.0
+    }
+}
+
+impl<'de> Deserialize<'de> for PasskeySecretVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match u32::deserialize(deserializer)? {
+            1 => Ok(Self::CURRENT),
+            _ => Err(de::Error::custom("unsupported passkey payload version")),
+        }
+    }
+}
+
+pub const PASSKEY_SECRET_VERSION: PasskeySecretVersion = PasskeySecretVersion::CURRENT;
 const PASSKEY_CREDENTIAL_ID_MAX_LEN: usize = 1023;
 const PASSKEY_USER_HANDLE_MAX_LEN: usize = 64;
 const PASSKEY_PRIVATE_KEY_MAX_LEN: usize = 4096;
@@ -191,7 +218,7 @@ impl PasskeyCredentialKey {
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeySecret {
-    pub version: u32,
+    pub version: PasskeySecretVersion,
     pub rp_id: String,
     pub rp_name: String,
     pub credential_id: String,
@@ -227,9 +254,6 @@ impl fmt::Debug for PasskeySecret {
 
 impl PasskeySecret {
     pub fn validate(&self) -> SecretPayloadResult<()> {
-        if self.version != PASSKEY_SECRET_VERSION {
-            return invalid_passkey("unsupported passkey payload version");
-        }
         validate_rp_id(&self.rp_id)?;
         validate_text_field("RP name", &self.rp_name, 1, 256)?;
         validate_base64url_field(
@@ -493,6 +517,19 @@ impl SecretRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn passkey_version_preserves_scalars_and_rejects_unsupported_values() -> anyhow::Result<()> {
+        let version = PasskeySecretVersion::CURRENT;
+        assert_eq!(serde_json::to_string(&version)?, "1");
+        assert_eq!(serde_yaml::to_string(&version)?.trim(), "1");
+        assert_eq!(serde_json::from_str::<PasskeySecretVersion>("1")?, version);
+        assert_eq!(serde_yaml::from_str::<PasskeySecretVersion>("1")?, version);
+        for invalid in ["0", "2", "4294967296"] {
+            assert!(serde_json::from_str::<PasskeySecretVersion>(invalid).is_err());
+        }
+        Ok(())
+    }
 
     fn encoded(byte: u8, length: usize) -> String {
         URL_SAFE_NO_PAD.encode(vec![byte; length])
