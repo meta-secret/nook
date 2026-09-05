@@ -55,6 +55,42 @@ at each use site.
 - Do not write `std::str::from_utf8(data)`.
 - Do not import `from_utf8` and write the ambiguous `from_utf8(data)` call.
 
+## Single-parameter APIs
+
+Authored functions, methods, and constructors take at most one non-receiver
+parameter. Multiple input values form one named domain or operation request.
+The receiver `self`, `&self`, or `&mut self` does not count as a parameter.
+
+Command handlers follow the same rule. Parse command-line values at the edge,
+then pass one typed command request into application behavior.
+
+### Required actions
+
+- Use zero or one non-receiver parameter.
+- Use a named struct when an operation needs multiple independent values.
+- Name that struct for its domain or operation, such as `RotateKeyRequest`.
+- Construct independent request values with named fields.
+- Use the domain newtype directly when the operation needs one scalar value.
+- Validate request-wide invariants in a named fallible constructor.
+- Destructure or match the request inside the function or method that owns the
+  operation.
+- Keep fixed-signature boundary callbacks thin. Delegate their portable
+  behavior to an owned API that follows this rule.
+
+### Prohibited actions
+
+- Do not author two or more positional non-receiver parameters.
+- Do not use tuples, arrays, or collections to hide unrelated parameters.
+- Do not add a trivial positional constructor such as `new(a, b, c)`.
+- Do not use generic request names such as `Args`, `Params`, `Input`, or
+  `Options` without domain or operation meaning.
+- Do not bundle booleans, sentinel values, or cross-workflow optional fields
+  into a request to bypass domain modeling.
+
+Compiler-required trait methods, FFI functions, generated ABI functions, and
+framework callbacks may retain a fixed external signature. Keep each exception
+at the narrow boundary and document why the signature is externally owned.
+
 ## Problem Pattern
 
 An `Option<T>` can mean one Rust shape is being reused across different worlds.
