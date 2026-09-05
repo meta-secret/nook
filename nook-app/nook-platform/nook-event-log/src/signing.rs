@@ -79,10 +79,24 @@ impl SigningIdentity {
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: signs canonical event-body bytes with the device identity"
+        )
+    )]
     pub fn sign_bytes(&self, body_bytes: &[u8]) -> String {
         format_ed25519_signature(&self.signing_key.sign(body_bytes))
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: verifies canonical event-body bytes with a device public key"
+        )
+    )]
     pub fn verify_bytes(
         body_bytes: &[u8],
         signature: &str,

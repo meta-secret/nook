@@ -259,9 +259,9 @@ fn apply_sentinel_shares(state: &mut VaultMetaState, shares: &[crate::SentinelSh
             share.device_id.clone(),
             SentinelShareEnvelope {
                 version: share.version,
-                threshold: share.threshold.into(),
-                required_participants: share.required_participants.into(),
-                share_index: share.share_index.into(),
+                threshold: share.threshold,
+                required_participants: share.required_participants,
+                share_index: share.share_index,
                 ciphertext: share.ciphertext.clone(),
             },
         );
