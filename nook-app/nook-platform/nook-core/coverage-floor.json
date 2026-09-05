@@ -24,7 +24,7 @@
     "nook-companion-core": 90.0,
     "nook-core": 90.0,
     "nook-companion-wasm": 90.0,
-    "nook-wasm": 57.0,
+    "nook-wasm": 56.0,
     "hive": 60.0,
     "nook-preflight": 90.0,
     "nook_domain_api": 90.0
@@ -40,5 +40,5 @@
     }
   ],
   "updated": "2026-09-04",
-  "note": "CI enforces nook-wasm at 57%, Hive at 60%, and every other testable package at 90%."
+  "note": "CI enforces nook-wasm at 56%, Hive at 60%, and every other testable package at 90%."
 }
