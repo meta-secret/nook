@@ -7,6 +7,11 @@ import { normalizeOpenCompanionLauncherMessage } from '../../nook-web-shared/src
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
+import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
+import {
+  AccountPickerAuthorizationLifecycle,
+  CleanupEvidence,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 Object.assign(globalThis, {
   __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
@@ -20,6 +25,28 @@ globalThis.chrome = {
 
 const { AccountPickerCleanupMarkerStatus } =
   await import('../src/background/service-worker/account-pickers')
+
+// Obtain the generated outcome variants from Rust rather than mirroring them.
+await companionWasmReady
+const started = new AccountPickerAuthorizationLifecycle('opening')
+  .begin_cleanup('cleanup')
+  .into_lifecycle()
+const rejectedTransition = started.complete_cleanup(
+  'stale',
+  CleanupEvidence.Full,
+)
+const rejectedCleanup = rejectedTransition.outcome()
+const pendingTransition = rejectedTransition
+  .into_lifecycle()
+  .begin_cleanup('overlap')
+  .into_lifecycle()
+  .complete_cleanup('cleanup', CleanupEvidence.Full)
+const pendingCleanup = pendingTransition.outcome()
+const completedTransition = pendingTransition
+  .into_lifecycle()
+  .complete_cleanup('cleanup', CleanupEvidence.Full)
+const completedCleanup = completedTransition.outcome()
+completedTransition.into_lifecycle().free()
 
 const unusedAsyncDependency = mock(() =>
   Promise.reject(new Error('unused routing test dependency')),
@@ -38,7 +65,9 @@ const beginAccountPickerAuthorizationCleanup = mock(() =>
 const clearPendingAccountPickers = mock(() => Promise.resolve())
 const clearStagedAuthenticatorEnrollments = mock(() => {})
 const rebindStagedAuthenticatorEnrollmentsAuthorization = mock(() => {})
-const completeAccountPickerAuthorizationCleanup = mock(() => Promise.resolve())
+const completeAccountPickerAuthorizationCleanup = mock(() =>
+  Promise.resolve(completedCleanup),
+)
 const releaseAccountPickerAuthorizationCleanup = mock(() => {})
 const refreshAuthenticationSurfaces = mock(() => Promise.resolve())
 
@@ -179,7 +208,7 @@ describe('service worker routing', () => {
       },
       completeAccountPickerAuthorizationCleanup: (generation) => {
         events.push(`authorization-restored-${generation}`)
-        return Promise.resolve()
+        return Promise.resolve(completedCleanup)
       },
       isExtensionSessionEnsureMessage: () => false,
       isExtensionSessionLockMessage: () => true,
@@ -214,6 +243,38 @@ describe('service worker routing', () => {
     ])
     expect(sendResponse).toHaveBeenCalledWith({ ok: true })
   })
+
+  test.each([pendingCleanup, rejectedCleanup])(
+    'reports lock cleanup outcome %j',
+    async (outcome) => {
+      const { routeExtensionLifecycleMessage } =
+        await import('../src/background/service-worker/extension-lifecycle-routing')
+      const sendResponse = mock(() => {})
+      const dependencies: ExtensionLifecycleRoutingDependencies = {
+        ...lifecycleDependencies,
+        clearPendingAccountPickers: () => Promise.resolve(),
+        closeExtensionSessionDocument: () => Promise.resolve(),
+        completeAccountPickerAuthorizationCleanup: () =>
+          Promise.resolve(outcome),
+        isExtensionSessionEnsureMessage: () => false,
+        isExtensionSessionLockMessage: () => true,
+      }
+      routeExtensionLifecycleMessage({
+        dependencies,
+        message: { type: 'test-session-lock' },
+        sender: { id: 'nook-extension' },
+        sendResponse,
+      })
+      await flushResponses()
+      await flushResponses()
+      await flushResponses()
+      expect(sendResponse).toHaveBeenCalledWith(
+        'error' in outcome
+          ? { ok: false, reason: 'session-lock-failed' }
+          : { ok: true },
+      )
+    },
+  )
 
   test('closes the session when authorization initialization fails', async () => {
     const closeSession = mock(() => Promise.resolve())
@@ -272,6 +333,14 @@ describe('service worker routing', () => {
       recoverInterruptedAuthorizationCleanup(dependencies),
     ).rejects.toThrow('authorization cleanup marker lookup failed')
     expect(events).toEqual(['marker-read-started', 'authorization-invalidated'])
+    const rejectedDependencies: ExtensionLifecycleRoutingDependencies = {
+      ...lifecycleDependencies,
+      completeAccountPickerAuthorizationCleanup: () =>
+        Promise.resolve(rejectedCleanup),
+    }
+    await expect(
+      recoverInterruptedAuthorizationCleanup(rejectedDependencies),
+    ).rejects.toThrow('authorization cleanup rejected')
   })
 
   test('invalidates picker authorization before reconciling revocation', async () => {
@@ -350,7 +419,7 @@ describe('service worker routing', () => {
       },
       completeAccountPickerAuthorizationCleanup: (generation) => {
         events.push(`authorization-restored-${generation}`)
-        return Promise.resolve()
+        return Promise.resolve(completedCleanup)
       },
       refreshAuthenticationSurfaces: () => {
         events.push('authentication-surfaces-refreshed')
@@ -360,7 +429,9 @@ describe('service worker routing', () => {
     const { routeExtensionLifecycleMessage } =
       await import('../src/background/service-worker/extension-lifecycle-routing')
 
-    routeExtensionLifecycleMessage({
+    const sendResponse = mock(() => {})
+    const release = mock(() => {})
+    const routingArgs: Parameters<typeof routeExtensionLifecycleMessage>[0] = {
       dependencies,
       message: {
         type: 'nook:extension-local-event-log-updated',
@@ -376,8 +447,9 @@ describe('service worker routing', () => {
         },
       },
       sender: { id: 'nook-extension', url: 'https://simple.example.test/' },
-      sendResponse: mock(() => {}),
-    })
+      sendResponse,
+    }
+    routeExtensionLifecycleMessage(routingArgs)
     await flushResponses()
     await flushResponses()
 
@@ -386,6 +458,20 @@ describe('service worker routing', () => {
       'authorization-restored-epoch-15',
       'authentication-surfaces-refreshed',
     ])
+    events.length = 0
+    sendResponse.mockClear()
+    routingArgs.dependencies = {
+      ...dependencies,
+      completeAccountPickerAuthorizationCleanup: () =>
+        Promise.resolve(rejectedCleanup),
+      releaseAccountPickerAuthorizationCleanup: release,
+    }
+    routeExtensionLifecycleMessage(routingArgs)
+    await flushResponses()
+    await flushResponses()
+    expect(events).toEqual(['enrollments-rebound-epoch-15'])
+    expect(sendResponse).toHaveBeenCalledWith({ ok: true })
+    expect(release).not.toHaveBeenCalled()
   })
 
   test('rejects a companion launcher request from an unauthorized external sender', async () => {
