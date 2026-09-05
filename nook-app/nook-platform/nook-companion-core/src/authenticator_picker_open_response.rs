@@ -1,5 +1,11 @@
 //! Typed runtime response boundary for opening the authenticator picker.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -83,43 +89,44 @@ pub enum AuthenticatorPickerOpenResponse {
 #[error("authenticator picker-open response is malformed")]
 pub struct AuthenticatorPickerOpenResponseDecodeError;
 
-pub fn decode_authenticator_picker_open_response(
-    wire: AuthenticatorPickerOpenResponseWire,
-) -> Result<AuthenticatorPickerOpenResponse, AuthenticatorPickerOpenResponseDecodeError> {
-    match wire {
-        AuthenticatorPickerOpenResponseWire::Available(
-            AuthenticatorPickerOpenAvailableWire::Ready {
-                ok: true,
-                request_id,
-                expires_at,
-            },
-        ) if !request_id.trim().is_empty() && expires_at.is_finite() => {
-            Ok(AuthenticatorPickerOpenResponse::Ready {
-                kind: AuthenticatorPickerOpenResponseKind::Ready,
-                request_id,
-                expires_at,
-            })
-        }
-        AuthenticatorPickerOpenResponseWire::Available(
-            AuthenticatorPickerOpenAvailableWire::Locked { ok: true },
-        ) => Ok(AuthenticatorPickerOpenResponse::Locked {
-            kind: AuthenticatorPickerOpenResponseKind::Locked,
-        }),
-        AuthenticatorPickerOpenResponseWire::Available(
-            AuthenticatorPickerOpenAvailableWire::Unavailable { ok: true },
-        ) => Ok(AuthenticatorPickerOpenResponse::Unavailable {
-            kind: AuthenticatorPickerOpenResponseKind::Unavailable,
-        }),
-        AuthenticatorPickerOpenResponseWire::Rejected(AuthenticatorPickerOpenRejectedWire {
-            ok: false,
-            reason,
-        }) if !reason.trim().is_empty() => Ok(AuthenticatorPickerOpenResponse::Rejected {
-            kind: AuthenticatorPickerOpenResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticatorPickerOpenResponseWire::Available(_)
-        | AuthenticatorPickerOpenResponseWire::Rejected(_) => {
-            Err(AuthenticatorPickerOpenResponseDecodeError)
+impl AuthenticatorPickerOpenResponse {
+    pub fn from_wire(
+        wire: AuthenticatorPickerOpenResponseWire,
+    ) -> Result<AuthenticatorPickerOpenResponse, AuthenticatorPickerOpenResponseDecodeError> {
+        match wire {
+            AuthenticatorPickerOpenResponseWire::Available(
+                AuthenticatorPickerOpenAvailableWire::Ready {
+                    ok: true,
+                    request_id,
+                    expires_at,
+                },
+            ) if !request_id.trim().is_empty() && expires_at.is_finite() => {
+                Ok(AuthenticatorPickerOpenResponse::Ready {
+                    kind: AuthenticatorPickerOpenResponseKind::Ready,
+                    request_id,
+                    expires_at,
+                })
+            }
+            AuthenticatorPickerOpenResponseWire::Available(
+                AuthenticatorPickerOpenAvailableWire::Locked { ok: true },
+            ) => Ok(AuthenticatorPickerOpenResponse::Locked {
+                kind: AuthenticatorPickerOpenResponseKind::Locked,
+            }),
+            AuthenticatorPickerOpenResponseWire::Available(
+                AuthenticatorPickerOpenAvailableWire::Unavailable { ok: true },
+            ) => Ok(AuthenticatorPickerOpenResponse::Unavailable {
+                kind: AuthenticatorPickerOpenResponseKind::Unavailable,
+            }),
+            AuthenticatorPickerOpenResponseWire::Rejected(
+                AuthenticatorPickerOpenRejectedWire { ok: false, reason },
+            ) if !reason.trim().is_empty() => Ok(AuthenticatorPickerOpenResponse::Rejected {
+                kind: AuthenticatorPickerOpenResponseKind::Rejected,
+                reason,
+            }),
+            AuthenticatorPickerOpenResponseWire::Available(_)
+            | AuthenticatorPickerOpenResponseWire::Rejected(_) => {
+                Err(AuthenticatorPickerOpenResponseDecodeError)
+            }
         }
     }
 }
@@ -137,7 +144,7 @@ mod tests {
             r#"{"ok":false,"reason":"picker-failed"}"#,
         ] {
             let wire = serde_json::from_str::<AuthenticatorPickerOpenResponseWire>(serialized)?;
-            assert!(decode_authenticator_picker_open_response(wire).is_ok());
+            assert!(AuthenticatorPickerOpenResponse::from_wire(wire).is_ok());
         }
         Ok(())
     }
@@ -153,7 +160,7 @@ mod tests {
         ] {
             let decoded = serde_json::from_str::<AuthenticatorPickerOpenResponseWire>(serialized)
                 .map_err(|_| AuthenticatorPickerOpenResponseDecodeError)
-                .and_then(decode_authenticator_picker_open_response);
+                .and_then(AuthenticatorPickerOpenResponse::from_wire);
             assert!(decoded.is_err(), "accepted {serialized}");
         }
     }

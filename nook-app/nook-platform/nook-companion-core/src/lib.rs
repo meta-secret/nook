@@ -85,34 +85,30 @@ pub use authentication_workflow_response::{
 pub use authenticator_backup_attach_response::{
     AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError,
     AuthenticatorBackupAttachResponseKind, AuthenticatorBackupAttachResponseWire,
-    decode_authenticator_backup_attach_response,
 };
 pub use authenticator_code_response::{
     AuthenticatorCodeExpiryEpochMilliseconds, AuthenticatorCodeResponse,
     AuthenticatorCodeResponseDecodeError, AuthenticatorCodeResponseKind,
-    AuthenticatorCodeResponseWire, decode_authenticator_code_response,
+    AuthenticatorCodeResponseWire,
 };
 pub use authenticator_enrollment_response::{
     AuthenticatorEnrollmentConfirmResponse, AuthenticatorEnrollmentConfirmResponseKind,
     AuthenticatorEnrollmentConfirmResponseWire, AuthenticatorEnrollmentResponseDecodeError,
     AuthenticatorEnrollmentStageResponse, AuthenticatorEnrollmentStageResponseKind,
-    AuthenticatorEnrollmentStageResponseWire, decode_authenticator_enrollment_confirm_response,
-    decode_authenticator_enrollment_stage_response,
+    AuthenticatorEnrollmentStageResponseWire,
 };
 pub use authenticator_options_response::{
     AuthenticatorOptionsResponse, AuthenticatorOptionsResponseDecodeError,
     AuthenticatorOptionsResponseKind, AuthenticatorOptionsResponseWire, WebsiteAuthenticatorOption,
-    decode_authenticator_options_response,
 };
 pub use authenticator_picker_open_response::{
     AuthenticatorPickerOpenResponse, AuthenticatorPickerOpenResponseDecodeError,
     AuthenticatorPickerOpenResponseKind, AuthenticatorPickerOpenResponseWire,
-    decode_authenticator_picker_open_response,
 };
 pub use authenticator_preview_response::{
     AuthenticatorEnrollmentPreview, AuthenticatorPreviewResponse,
     AuthenticatorPreviewResponseDecodeError, AuthenticatorPreviewResponseKind,
-    AuthenticatorPreviewResponseWire, decode_authenticator_preview_response,
+    AuthenticatorPreviewResponseWire,
 };
 pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
