@@ -470,6 +470,11 @@ mod tests {
             classify_extension_persistence_stores(store_observation),
             nook_companion_core::ExtensionPersistenceStoreState::Present
         );
+        assert_eq!(extension_persistence_store_names(area), vec!["pairing"]);
+        assert_eq!(
+            matching_extension_persistence_stores(database_observation),
+            vec!["nook_extension"]
+        );
     }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -631,7 +636,6 @@ mod tests {
             sync_provider_count: 1.into(),
         }
     }
-
     fn imported_event_log(event_count: u32) -> nook_companion_core::ImportedExtensionEventLog {
         nook_companion_core::ImportedExtensionEventLog {
             vault_store_id: "store-test".to_owned(),
@@ -640,7 +644,6 @@ mod tests {
             access_granted: true,
         }
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn pairing_exports_preserve_creation_refresh_selection_and_json_validation()
@@ -655,6 +658,11 @@ mod tests {
         let grant = ordered_extension_pairing_grants(created.clone())[0].clone();
         assert_eq!(grant.event_count, ExtensionEventCount::from(2));
         assert!(matches!(
+            first_extension_pairing_grant(created.clone()),
+            nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
+                if grant.vault_store_id == "store-test"
+        ));
+        assert!(matches!(
             selected_extension_pairing_grant(created.clone()),
             nook_companion_core::SelectedExtensionPairingGrant::Selected { grant }
                 if grant.vault_store_id == "store-test"
@@ -663,7 +671,6 @@ mod tests {
             &serde_json::to_string(&grant).map_err(|error| error.to_string())?
         ));
         assert!(!is_stored_extension_pairing_grant_json("{}"));
-
         let refreshed = refresh_extension_pairing_grant(
             nook_companion_core::RefreshExtensionPairingGrantInput {
                 grant,
@@ -690,7 +697,6 @@ mod tests {
         assert!(migrate_legacy_extension_pairing_state_json("{").is_err());
         Ok(())
     }
-
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn remaining_export_families_preserve_closed_policy_and_url_boundaries() -> Result<(), String> {
@@ -711,7 +717,11 @@ mod tests {
         assert!(!outcome.allows_credential_commit);
         let validated = validate_companion_authentication_outcome_decision(outcome);
         assert_eq!(validated, outcome);
-
+        assert_eq!(
+            classify_companion_authentication_outcome_with_default_timeout(Default::default())
+                .verdict,
+            nook_companion_core::AuthenticationOutcomeVerdict::Insufficient
+        );
         assert_eq!(
             extension_pairing_grant_storage_key("store-test"),
             "nook:extension-pairing-grant:store-test"
@@ -726,8 +736,8 @@ mod tests {
             assert!(is_extension_connect_scope(scope.as_str()));
         }
         assert!(!is_extension_connect_scope("foreign-scope"));
-
         assert!(contains_backup_code_candidate("A1B2-C3D4-E5F6"));
+        assert_eq!(default_simple_vault_url(), "https://simple.nokey.sh/");
         assert_eq!(
             simple_vault_url("https://simple.nokey.sh/root", "/login")
                 .map_err(|error| format!("url failed: {error:?}"))?,
@@ -746,7 +756,6 @@ mod tests {
             .map_err(|error| format!("membership failed: {error:?}"))?
         );
         assert!(simple_vault_url("http://example.test", "/app").is_err());
-
         let preview = resolve_oauth_origin_support(
             nook_companion_core::BrowserOAuthProvider::GoogleDrive,
             "https://pr-42.nokey-simple.pages.dev",
@@ -900,7 +909,6 @@ mod wasm_tests {
                 expected
             );
         }
-
         let unlocked = SessionStatusFixture {
             ok: true,
             status: 6,
@@ -918,7 +926,6 @@ mod wasm_tests {
         );
         Ok(())
     }
-
     #[wasm_bindgen_test]
     fn runtime_response_bridge_accepts_the_complete_js_envelope()
     -> Result<(), wasm_bindgen::JsError> {
@@ -947,12 +954,10 @@ mod wasm_tests {
         let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
         let result: RuntimeResponseResult =
             serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
-
         assert_eq!(result.login_matches.kind, "ready");
         assert_eq!(result.login_matches.count, 2);
         Ok(())
     }
-
     #[wasm_bindgen_test]
     fn login_match_bridge_accepts_the_website_options_js_envelope()
     -> Result<(), wasm_bindgen::JsError> {
@@ -966,7 +971,6 @@ mod wasm_tests {
         let js_output = serde_wasm_bindgen::to_value(&decoded).map_err(js_error)?;
         let result: LoginAvailabilityResult =
             serde_wasm_bindgen::from_value(js_output).map_err(js_error)?;
-
         assert_eq!(result.kind, "locked");
         Ok(())
     }
