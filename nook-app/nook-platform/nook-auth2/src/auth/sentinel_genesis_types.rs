@@ -103,30 +103,6 @@ pub struct SentinelGenesisPublicKeyAnnouncement {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SentinelGenesisSession {
-    pub request: SentinelGenesisRequest,
-    /// Verified responses are intentionally session-only. Serializing a public
-    /// draft never turns unverified participant fields into a trusted roster;
-    /// deserialization yields an incomplete request-only draft that must be
-    /// restarted through `start_sentinel_genesis`.
-    #[serde(skip, default)]
-    pub(super) participants: Vec<SentinelGenesisParticipant>,
-}
-
-impl SentinelGenesisSession {
-    #[must_use]
-    pub fn participants(&self) -> &[SentinelGenesisParticipant] {
-        &self.participants
-    }
-
-    #[must_use]
-    pub fn is_complete(&self) -> bool {
-        self.participants.len() == usize::from(u8::from(self.request.policy.participant_count))
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct SentinelGenesisShareDelivery {
     pub version: SentinelGenesisVersion,
     pub session_id: CompactToken,

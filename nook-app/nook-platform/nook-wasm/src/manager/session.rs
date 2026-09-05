@@ -133,13 +133,6 @@ impl<T> CeremonyState<T> {
             Self::Inactive => Err(JsError::new(message)),
         }
     }
-
-    pub(in crate::manager) fn get_mut(&mut self, message: &'static str) -> Result<&mut T, JsError> {
-        match self {
-            Self::Active(session) => Ok(session),
-            Self::Inactive => Err(JsError::new(message)),
-        }
-    }
 }
 
 impl SearchCatalogState {
