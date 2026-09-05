@@ -1,7 +1,8 @@
 # Pull requests: run Rust/WASM/JS unit tests, Svelte/type/lint/format checks, build no-opt WASM,
 # build and deploy the preview, and the shared Rust ecosystem gates. Full browser regression e2e
-# is opt-in through the `ci:full-e2e` label for PRs that repair a Main failure. Headless UI demos
-# are temporarily disabled while their implementation remains available for later re-enable.
+# is opt-in through the `ci:full-e2e` label for PRs that repair a Main failure. Authentication-
+# sensitive extension changes run one focused real-extension spec. Headless UI demos are
+# temporarily disabled while their implementation remains available for later re-enable.
 # Main still runs the full local-provider and extension suites. Live-provider
 # sync checks remain available through the manually dispatched e2e-pr.yml workflow.
 # Research-only changes are handled by web-research.yml. Cortex, Cursor,
@@ -414,6 +415,7 @@ jobs:
     outputs:
       ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}
       ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}
+      auth-sensitive-e2e-required: ${{ steps.auth-sensitive-e2e-contract.outputs.required }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -426,6 +428,29 @@ jobs:
           set -euo pipefail
           git fetch "https://github.com/${{ github.repository }}.git" "$BASE_SHA" --depth=1
           bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
+
+      # Authentication observation and actuation changes require the focused
+      # real-extension regression that exercises the polluted Namecheap shell.
+      - name: Detect authentication-sensitive browser changes
+        id: auth-sensitive-e2e-contract
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          required=false
+          while IFS= read -r -d '' path; do
+            case "$path" in
+              nook-app/nook-web/nook-web-shared/src/extension/password-form* |\
+              nook-app/nook-web/nook-web-extension/src/content/autofill.ts |\
+              nook-app/nook-web/nook-web-extension/src/content/autofill/* |\
+              nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte |\
+              nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts)
+                required=true
+                ;;
+            esac
+          done < <(git diff --name-only -z "$BASE_SHA" HEAD)
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          echo "Authentication-sensitive extension e2e required: $required"
 
       - name: Expose Actions Node.js runtime
         uses: ./.github/actions/nook-node-setup
@@ -515,7 +540,10 @@ jobs:
         if: >-
           contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||
           (needs.validation-request.outputs.ui-demos-enabled == 'true' &&
-          steps.ui-demo-contract.outputs.required == 'true')
+          steps.ui-demo-contract.outputs.required == 'true') ||
+          (steps.auth-sensitive-e2e-contract.outputs.required == 'true' &&
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]')
         run: >-
           task web:e2e:kubernetes-image:artifacts
           CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/joined
@@ -636,6 +664,29 @@ jobs:
               })
             }
 
+  auth-sensitive-extension-e2e:
+    name: Authentication-sensitive extension e2e
+    if: >-
+      needs.verify.outputs.auth-sensitive-e2e-required == 'true' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.user.login != 'dependabot[bot]' &&
+      (github.event.label.name == 'ci:validate' ||
+      github.event.label.name == 'ci:full-e2e')
+    needs: [validation-request, verify, wasm-node-test]
+    runs-on: nook-k0s-container
+    container:
+      image: registry.dev.nokey.sh/nook/remote-buildcache/nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}
+      credentials:
+        username: ${{ secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
+        password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
+    steps:
+      - name: Run the focused real-extension authentication regression
+        working-directory: /meta-secret/nook
+        run: task _extension:test:e2e:file
+        env:
+          CI: true
+          E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts
+
   preview:
     name: Verify and preview
     if: >-
@@ -644,7 +695,7 @@ jobs:
       github.event.label.name == 'ci:full-e2e')
     # Native must succeed before the merge gate check can go green. A green
     # preview with a failed Native job previously allowed false readiness.
-    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]
+    needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]
     runs-on: ${{ github.event.pull_request.head.repo.full_name == github.repository && github.event.pull_request.user.login != 'dependabot[bot]' && (vars.NOOK_RUNS_ON || 'nook-k0s') || 'ubuntu-latest' }}
     steps:
       - name: Enforce required verification results
@@ -656,6 +707,8 @@ jobs:
           UI_DEMOS_ENABLED: ${{ needs.validation-request.outputs.ui-demos-enabled }}
           UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}
           UI_DEMO_RESULT: ${{ needs.ui-demo.result }}
+          AUTH_SENSITIVE_E2E_REQUIRED: ${{ needs.verify.outputs.auth-sensitive-e2e-required }}
+          AUTH_SENSITIVE_E2E_RESULT: ${{ needs.auth-sensitive-extension-e2e.result }}
         run: |
           set -euo pipefail
           failed=0
@@ -677,6 +730,12 @@ jobs:
             && [ "$UI_DEMO_REQUIRED" = "true" ] \
             && [ "$UI_DEMO_RESULT" != "success" ]; then
             echo "::error::Headless UI demo finished with $UI_DEMO_RESULT"
+            failed=1
+          fi
+          echo "Authentication-sensitive extension e2e=$AUTH_SENSITIVE_E2E_RESULT (required=$AUTH_SENSITIVE_E2E_REQUIRED)"
+          if [ "$AUTH_SENSITIVE_E2E_REQUIRED" = "true" ] \
+            && [ "$AUTH_SENSITIVE_E2E_RESULT" != "success" ]; then
+            echo "::error::Authentication-sensitive extension e2e finished with $AUTH_SENSITIVE_E2E_RESULT"
             failed=1
           fi
           test "$failed" -eq 0
