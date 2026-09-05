@@ -298,8 +298,8 @@ mod tests {
         fn args() -> StartSentinelGenesisArgs {
             StartSentinelGenesisArgs {
                 label: "Owner".to_owned(),
-                participant_count: 2,
-                threshold: 2,
+                participant_count: 2.into(),
+                threshold: 2.into(),
             }
         }
         fn complete_roster(&mut self) -> anyhow::Result<()> {

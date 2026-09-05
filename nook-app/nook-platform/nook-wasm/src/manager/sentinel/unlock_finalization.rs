@@ -212,8 +212,8 @@ mod tests {
             let participant_signer = SigningIdentity::generate()?.0;
             let genesis = nook_core::StartSentinelGenesisArgs {
                 label: "Requester".to_owned(),
-                participant_count: 2,
-                threshold: 2,
+                participant_count: 2.into(),
+                threshold: 2.into(),
             }
             .start(&identity, &signer)?;
             let response = nook_core::respond_to_sentinel_genesis_request(
