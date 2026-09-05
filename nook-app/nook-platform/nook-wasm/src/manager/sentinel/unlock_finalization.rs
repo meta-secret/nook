@@ -192,6 +192,18 @@ mod tests {
     }
 
     impl Fixture {
+        fn require_invalid_key(result: Result<(), NookError>) -> anyhow::Result<()> {
+            match result {
+                Err(NookError::Database(message)) => {
+                    use nook_core::ValidationError;
+                    assert_eq!(message, ValidationError::SymmetricKeyInvalid.to_string());
+                    Ok(())
+                }
+                Err(error) => Err(error.into()),
+                Ok(()) => Err(anyhow::anyhow!("invalid vault key must be rejected")),
+            }
+        }
+
         fn new() -> anyhow::Result<Self> {
             let identity = DeviceIdentity::generate()?;
             let signer = SigningIdentity::generate()?.0;
@@ -309,11 +321,11 @@ mod tests {
         let mut manager = fixture.manager();
         {
             let completion = PendingUnlockCompletion::new(&mut manager);
-            completion
-                .manager
-                .apply_vault_keys("invalid", "partially-installed")
-                .err()
-                .ok_or_else(|| anyhow::anyhow!("invalid vault key must be rejected"))?;
+            Fixture::require_invalid_key(
+                completion
+                    .manager
+                    .apply_vault_keys("invalid", "partially-installed"),
+            )?;
             assert_eq!(completion.manager.vault.members_key, "partially-installed");
             assert_eq!(completion.manager.vault.secrets_key, "invalid");
         }
