@@ -34,7 +34,7 @@ impl NookVaultLastSync {
         let at_unix_milliseconds =
             valid_javascript_milliseconds(at_unix_milliseconds).map_err(JsError::new)?;
         Ok(Self(VaultLastSync::Synced {
-            at_unix_milliseconds,
+            at_unix_milliseconds: at_unix_milliseconds.into(),
         }))
     }
 
@@ -59,7 +59,7 @@ impl NookVaultLastSync {
         match &self.0 {
             VaultLastSync::Synced {
                 at_unix_milliseconds,
-            } => Ok(*at_unix_milliseconds as f64),
+            } => Ok(u64::from(*at_unix_milliseconds) as f64),
             VaultLastSync::NeverSynced => {
                 Err(JsError::new("vault has not completed a synchronization"))
             }

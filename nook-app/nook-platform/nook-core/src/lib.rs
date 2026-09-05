@@ -210,7 +210,7 @@ pub use vault_sync_conflict::{
 };
 pub use vault_sync_state::{
     LocalFolderHealth, LocalFolderMultipleVaultsIssue, ManualProviderSync, SyncConflictReview,
-    VaultLastSync,
+    VaultLastSync, VaultSyncUnixMilliseconds,
 };
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,

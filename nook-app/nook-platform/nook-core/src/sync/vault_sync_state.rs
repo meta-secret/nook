@@ -1,12 +1,31 @@
 //! Portable state contracts for vault synchronization workflows.
 
+use serde::{Deserialize, Serialize};
+
+/// Unix timestamp in milliseconds for a completed vault synchronization.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct VaultSyncUnixMilliseconds(u64);
+
+impl From<u64> for VaultSyncUnixMilliseconds {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<VaultSyncUnixMilliseconds> for u64 {
+    fn from(value: VaultSyncUnixMilliseconds) -> Self {
+        value.0
+    }
+}
+
 /// Most recent successful vault synchronization observed by the host.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum VaultLastSync {
     #[default]
     NeverSynced,
     Synced {
-        at_unix_milliseconds: u64,
+        at_unix_milliseconds: VaultSyncUnixMilliseconds,
     },
 }
 
@@ -52,13 +71,13 @@ mod tests {
     #[test]
     fn sync_states_keep_variant_owned_data() {
         let last_sync = VaultLastSync::Synced {
-            at_unix_milliseconds: 1_754_041_200_000,
+            at_unix_milliseconds: 1_754_041_200_000.into(),
         };
         assert!(matches!(
             last_sync,
             VaultLastSync::Synced {
-                at_unix_milliseconds: 1_754_041_200_000
-            }
+                at_unix_milliseconds
+            } if u64::from(at_unix_milliseconds) == 1_754_041_200_000
         ));
 
         let manual_sync = ManualProviderSync::Running {
@@ -89,6 +108,18 @@ mod tests {
                 ..
             }) if provider_id == "folder-1" && store_ids.len() == 2
         ));
+    }
+
+    #[test]
+    fn sync_timestamp_preserves_scalar_serialization() -> Result<(), serde_json::Error> {
+        let timestamp = VaultSyncUnixMilliseconds::from(1_754_041_200_000);
+        let encoded = serde_json::to_string(&timestamp)?;
+        assert_eq!(encoded, "1754041200000");
+        assert_eq!(
+            serde_json::from_str::<VaultSyncUnixMilliseconds>(&encoded)?,
+            timestamp
+        );
+        Ok(())
     }
 
     #[test]

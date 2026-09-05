@@ -269,6 +269,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [ ] `multi_device` — `SentinelShareVersion`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`
 - [ ] `vault_sync` — `VaultContentHash` for revision hashes
+- [x] `vault_sync` — `VaultSyncUnixMilliseconds` for successful-sync timestamps
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
 - [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`
