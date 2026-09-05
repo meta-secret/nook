@@ -269,6 +269,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `password_envelope` — `PasswordCharacterCount` for password policy bounds
 - [x] password generation — `PasswordCharacterCount` for requested length
 - [x] passkey secrets — validated `PasskeySecretVersion`
+- [x] passkey secrets — `PasskeySignatureCount`
 - [x] authenticator codes — validated `TotpPeriod`
 - [x] authenticator codes — `TotpRemainingSeconds`
 - [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`

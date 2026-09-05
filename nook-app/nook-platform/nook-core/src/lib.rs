@@ -187,8 +187,8 @@ pub use secret_fingerprint::{enrich_secret, secret_fingerprint, secret_identity_
 pub use secret_types::{
     ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentSecret, LoginSecret,
     PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose,
-    PasskeySecret, PasskeySecretVersion, SecretRecord, SecretType, SecretValue, SecureNoteSecret,
-    SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
+    PasskeySecret, PasskeySecretVersion, PasskeySignatureCount, SecretRecord, SecretType,
+    SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm,
