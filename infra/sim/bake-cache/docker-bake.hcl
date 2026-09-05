@@ -341,6 +341,16 @@ target "dylint-split" {
   output = ["type=cacheonly"]
 }
 
+target "wasm-node-source" {
+  context    = "."
+  dockerfile = "combined-nightly.Dockerfile"
+  target     = "wasm-node-source"
+  args = {
+    PRODUCT_SOURCE = "default-product-source"
+  }
+  output = ["type=cacheonly"]
+}
+
 target "hive" {
   context = "."
   dockerfile = "hive.Dockerfile"
