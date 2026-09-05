@@ -21,7 +21,7 @@ pub struct GrantAuthorityResponseError;
 impl GrantAuthorityResponseJson {
     pub fn decode(
         self,
-        requested: PairingVaultId,
+        requested: &PairingVaultId,
     ) -> Result<ExtensionGrantAuthority, GrantAuthorityResponseError> {
         let serde_json::Value::Object(mut fields) =
             serde_json::from_str(&self.0).map_err(|_| GrantAuthorityResponseError)?
@@ -70,7 +70,7 @@ mod tests {
         ] {
             assert!(
                 GrantAuthorityResponseJson::from(json.to_owned())
-                    .decode(PairingVaultId::from("store-test".to_owned()))
+                    .decode(&PairingVaultId::from("store-test".to_owned()))
                     .is_err()
             );
         }
@@ -94,7 +94,7 @@ mod tests {
         ] {
             assert_eq!(
                 GrantAuthorityResponseJson::from(json.to_owned())
-                    .decode(PairingVaultId::from("store-test".to_owned()))?,
+                    .decode(&PairingVaultId::from("store-test".to_owned()))?,
                 expected
             );
         }

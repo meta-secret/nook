@@ -247,12 +247,12 @@ mod tests {
         let response = serde_json::to_string(&outcome)?;
         assert_eq!(
             GrantAuthorityResponseJson::from(response.clone())
-                .decode("store-test".to_owned().into())?,
+                .decode(&"store-test".to_owned().into())?,
             outcome
         );
         assert!(
             GrantAuthorityResponseJson::from(response)
-                .decode("another-store".to_owned().into())
+                .decode(&"another-store".to_owned().into())
                 .is_err()
         );
         Ok(())
