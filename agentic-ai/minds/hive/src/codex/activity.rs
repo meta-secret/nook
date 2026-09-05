@@ -1,8 +1,10 @@
 use std::path::Path;
+use std::time as std_time;
+use tokio::fs as async_fs;
 
 use codex::EventMsg;
 use serde::Serialize;
-use time::{OffsetDateTime, format_description::well_known::Rfc3339};
+use time::{Duration as SignedDuration, OffsetDateTime, format_description::well_known::Rfc3339};
 use tokio::io::AsyncWriteExt;
 
 use crate::model::{ActivityKind, TaskActivity};
@@ -99,14 +101,14 @@ pub(super) async fn record_local_execution(
     path: &Path,
     command: &[String],
     exit_code: i32,
-    duration: std::time::Duration,
+    duration: std_time::Duration,
 ) -> crate::HiveResult<()> {
     let Some(category) = local_execution_category(command) else {
         return Ok(());
     };
     let finished = OffsetDateTime::now_utc();
     let duration_seconds = duration.as_secs();
-    let started = finished - time::Duration::seconds(i64::try_from(duration_seconds)?);
+    let started = finished - SignedDuration::seconds(i64::try_from(duration_seconds)?);
     let record = LocalExecutionRecord {
         command: sanitized_execution_command(command, category),
         category,
@@ -118,7 +120,7 @@ pub(super) async fn record_local_execution(
     };
     let mut line = serde_json::to_vec(&record)?;
     line.push(b'\n');
-    let mut output = tokio::fs::OpenOptions::new()
+    let mut output = async_fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)

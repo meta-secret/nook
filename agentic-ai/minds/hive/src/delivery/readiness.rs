@@ -69,13 +69,13 @@ pub(super) async fn validate_review_and_deployment_readiness(
             .and_then(serde_json::Value::as_str)
             .map(str::to_owned);
         if cursor.is_none() {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "GitHub review pagination omitted its cursor",
             ));
         }
     }
     if unresolved > 0 {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} has {} unresolved review thread(s)",
             pull_request.number, unresolved
         )));
@@ -134,7 +134,7 @@ pub(super) async fn validate_review_and_deployment_readiness(
         }
     }
     if state.as_deref() != Some("success") {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Hive repair delivery is incomplete: PR #{} exact-head github-pages deployment is {:?}",
             pull_request.number,
             state.as_deref()
@@ -153,7 +153,7 @@ async fn validate_non_thread_feedback(repository: &Path, number: u64) -> crate::
         let references = arguments.iter().map(String::as_str).collect::<Vec<_>>();
         let bodies = gh_output(repository, &references).await?;
         if is_actionable_feedback(&bodies) {
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "Hive repair delivery is incomplete: PR #{number} has actionable non-thread feedback"
             )));
         }

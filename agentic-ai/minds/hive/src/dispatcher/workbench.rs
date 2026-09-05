@@ -1,5 +1,8 @@
 use std::path::Path;
+use std::process;
 use std::time::Duration;
+use tokio::fs as async_fs;
+use tokio::time as async_time;
 
 use tokio::process::Command;
 
@@ -18,7 +21,7 @@ pub(super) async fn sync_workbench_checkout(
         .await?;
     } else {
         if checkout.exists() {
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "Workbench checkout {} exists without Git metadata",
                 checkout.display()
             )));
@@ -26,7 +29,7 @@ pub(super) async fn sync_workbench_checkout(
         let parent = checkout
             .parent()
             .hive_context("Workbench checkout has no parent directory")?;
-        tokio::fs::create_dir_all(parent).await?;
+        async_fs::create_dir_all(parent).await?;
         let mut command = Command::new("git");
         command
             .args(workbench_git_transport_arguments())
@@ -35,7 +38,7 @@ pub(super) async fn sync_workbench_checkout(
             .arg(checkout);
         let output = bounded_command_output(command, "Workbench clone").await?;
         if !output.status.success() {
-            return Err(crate::error::HiveError::message(format!(
+            return Err(crate::HiveError::message(format!(
                 "Workbench clone failed: {}",
                 String::from_utf8_lossy(&output.stderr).trim()
             )));
@@ -58,7 +61,7 @@ pub(super) async fn sync_workbench_checkout(
         .trim()
         .to_owned();
     if revision.len() != 40 || !revision.bytes().all(|byte| byte.is_ascii_hexdigit()) {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "Workbench checkout returned an invalid revision",
         ));
     }
@@ -88,7 +91,7 @@ async fn git(checkout: &Path, args: &[&str]) -> crate::HiveResult<Vec<u8>> {
         .args(args);
     let output = bounded_command_output(command, "Workbench Git operation").await?;
     if !output.status.success() {
-        return Err(crate::error::HiveError::message(format!(
+        return Err(crate::HiveError::message(format!(
             "Workbench Git operation failed: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         )));
@@ -112,9 +115,9 @@ fn workbench_git_transport_arguments() -> &'static [&'static str] {
 async fn bounded_command_output(
     mut command: Command,
     operation: &str,
-) -> crate::HiveResult<std::process::Output> {
+) -> crate::HiveResult<process::Output> {
     command.kill_on_drop(true);
-    tokio::time::timeout(Duration::from_secs(300), command.output())
+    async_time::timeout(Duration::from_secs(300), command.output())
         .await
         .map_err(|_| crate::HiveError::message(format!("{operation} exceeded 300 seconds")))?
         .with_hive_context(|| format!("start {operation}"))
@@ -124,7 +127,12 @@ async fn bounded_command_output(
 mod tests {
     #[cfg(target_os = "linux")]
     use std::collections::HashSet;
+    use std::fs;
+    use std::io;
+    use std::path;
     use std::process::Command as StdCommand;
+    use std::time;
+    use tokio::time as async_time;
 
     use super::{
         sync_workbench_checkout, workbench_cleanup_arguments, workbench_fetch_arguments,
@@ -144,14 +152,14 @@ mod tests {
                 .args(args)
                 .status()?;
             if !status.success() {
-                return Err(crate::error::HiveError::message(format!(
+                return Err(crate::HiveError::message(format!(
                     "test Git command failed: {args:?}"
                 )));
             }
             Ok(())
         };
         git(&["init", "--initial-branch=main"])?;
-        std::fs::write(origin.path().join("README.md"), "first\n")?;
+        fs::write(origin.path().join("README.md"), "first\n")?;
         git(&["add", "README.md"])?;
         git(&[
             "-c",
@@ -168,7 +176,7 @@ mod tests {
         let unchanged = sync_workbench_checkout(&repository_url, &checkout_path).await?;
         assert_eq!(first, unchanged);
 
-        std::fs::write(origin.path().join("README.md"), "second\n")?;
+        fs::write(origin.path().join("README.md"), "second\n")?;
         git(&["add", "README.md"])?;
         git(&[
             "-c",
@@ -182,7 +190,7 @@ mod tests {
         let changed = sync_workbench_checkout(&repository_url, &checkout_path).await?;
         assert_ne!(first, changed);
         assert_eq!(
-            std::fs::read_to_string(checkout_path.join("README.md"))?,
+            fs::read_to_string(checkout_path.join("README.md"))?,
             "second\n"
         );
         let reachable = StdCommand::new("git")
@@ -208,7 +216,7 @@ mod tests {
         assert!(status.success());
         let (before_zombies, _) = git_process_ids(repository.path())?;
         super::git(repository.path(), workbench_cleanup_arguments()).await?;
-        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        async_time::sleep(time::Duration::from_millis(100)).await;
 
         let (after_zombies, matching_repository) = git_process_ids(repository.path())?;
         assert!(
@@ -223,25 +231,23 @@ mod tests {
     }
 
     #[cfg(target_os = "linux")]
-    fn git_process_ids(
-        repository: &std::path::Path,
-    ) -> crate::HiveResult<(HashSet<u32>, HashSet<u32>)> {
+    fn git_process_ids(repository: &path::Path) -> crate::HiveResult<(HashSet<u32>, HashSet<u32>)> {
         let mut zombies = HashSet::new();
         let mut matching_repository = HashSet::new();
         let repository = repository.to_string_lossy();
-        for entry in std::fs::read_dir("/proc")? {
+        for entry in fs::read_dir("/proc")? {
             let entry = entry?;
             let name = entry.file_name();
             let Ok(process_id) = name.to_string_lossy().parse::<u32>() else {
                 continue;
             };
-            let command = match std::fs::read_to_string(entry.path().join("comm")) {
+            let command = match fs::read_to_string(entry.path().join("comm")) {
                 Ok(command) => command,
                 Err(error) if process_vanished(&error) => continue,
                 Err(error) => return Err(error.into()),
             };
             if command.trim() == "git" {
-                let stat = match std::fs::read_to_string(entry.path().join("stat")) {
+                let stat = match fs::read_to_string(entry.path().join("stat")) {
                     Ok(stat) => stat,
                     Err(error) if process_vanished(&error) => continue,
                     Err(error) => return Err(error.into()),
@@ -253,7 +259,7 @@ mod tests {
                 {
                     zombies.insert(process_id);
                 }
-                let command_line = match std::fs::read(entry.path().join("cmdline")) {
+                let command_line = match fs::read(entry.path().join("cmdline")) {
                     Ok(command_line) => command_line,
                     Err(error) if process_vanished(&error) => continue,
                     Err(error) => return Err(error.into()),
@@ -267,8 +273,8 @@ mod tests {
     }
 
     #[cfg(target_os = "linux")]
-    fn process_vanished(error: &std::io::Error) -> bool {
-        error.kind() == std::io::ErrorKind::NotFound || error.raw_os_error() == Some(3)
+    fn process_vanished(error: &io::Error) -> bool {
+        error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(3)
     }
 
     #[test]

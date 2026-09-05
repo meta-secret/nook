@@ -18,7 +18,7 @@ impl Neo4jTaskStore {
 
     pub async fn queue_status(&self, limit: i64) -> crate::HiveResult<Vec<QueueTaskStatus>> {
         if !(1..=200).contains(&limit) {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "queue status limit must be between 1 and 200",
             ));
         }
