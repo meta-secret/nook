@@ -4,6 +4,7 @@ use std::string;
 
 use super::age_crypto::AgeCryptoError;
 use super::validation::ValidationError;
+use crate::PasswordCharacterCount;
 use thiserror::Error;
 
 pub type PasswordResult<T> = Result<T, PasswordError>;
@@ -11,7 +12,10 @@ pub type PasswordResult<T> = Result<T, PasswordError>;
 #[derive(Debug, Error)]
 pub enum PasswordError {
     #[error("Password length must be between {min} and {max}.")]
-    LengthOutOfRange { min: u32, max: u32 },
+    LengthOutOfRange {
+        min: PasswordCharacterCount,
+        max: PasswordCharacterCount,
+    },
 
     #[error("Select at least one character set.")]
     NoCharacterSet,
@@ -23,7 +27,7 @@ pub enum PasswordError {
     LabelEmpty,
 
     #[error("Password must be at least {min} characters.")]
-    TooShort { min: usize },
+    TooShort { min: PasswordCharacterCount },
 
     #[error("Failed to serialize envelope plaintext")]
     EnvelopePlaintextSerialize(#[source] serde_json::Error),

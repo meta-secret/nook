@@ -2,6 +2,7 @@ use getrandom::fill;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+use crate::PasswordCharacterCount;
 use crate::errors::{PasswordError, PasswordResult};
 
 const LOWERCASE: &str = "abcdefghijklmnopqrstuvwxyz";
@@ -9,8 +10,8 @@ const UPPERCASE: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
 const NUMBERS: &str = "0123456789";
 const SYMBOLS: &str = "!@#$%^&*()_+-=[]{}|;:,.<>?";
 
-pub const MIN_PASSWORD_LENGTH: u32 = 8;
-pub const MAX_PASSWORD_LENGTH: u32 = 128;
+pub const MIN_PASSWORD_LENGTH: PasswordCharacterCount = PasswordCharacterCount::RECOMMENDED_MINIMUM;
+pub const MAX_PASSWORD_LENGTH: PasswordCharacterCount = PasswordCharacterCount::GENERATOR_MAXIMUM;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
@@ -38,7 +39,9 @@ impl Default for PasswordGenerationOptions {
 
 impl PasswordGenerationOptions {
     pub fn validate(self) -> PasswordResult<()> {
-        if !(MIN_PASSWORD_LENGTH..=MAX_PASSWORD_LENGTH).contains(&self.length) {
+        if !(usize::from(MIN_PASSWORD_LENGTH)..=usize::from(MAX_PASSWORD_LENGTH))
+            .contains(&(self.length as usize))
+        {
             return Err(PasswordError::LengthOutOfRange {
                 min: MIN_PASSWORD_LENGTH,
                 max: MAX_PASSWORD_LENGTH,
@@ -171,29 +174,29 @@ mod tests {
     #[test]
     fn accepts_min_and_max_length() -> anyhow::Result<()> {
         let min = generate_password(PasswordGenerationOptions {
-            length: MIN_PASSWORD_LENGTH,
+            length: usize::from(MIN_PASSWORD_LENGTH) as u32,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
         })?;
-        assert_eq!(min.len(), MIN_PASSWORD_LENGTH as usize);
+        assert_eq!(min.len(), MIN_PASSWORD_LENGTH.into());
 
         let max = generate_password(PasswordGenerationOptions {
-            length: MAX_PASSWORD_LENGTH,
+            length: usize::from(MAX_PASSWORD_LENGTH) as u32,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
         })?;
-        assert_eq!(max.len(), MAX_PASSWORD_LENGTH as usize);
+        assert_eq!(max.len(), MAX_PASSWORD_LENGTH.into());
         Ok(())
     }
 
     #[test]
     fn rejects_length_above_max() -> anyhow::Result<()> {
         let err = generate_password(PasswordGenerationOptions {
-            length: MAX_PASSWORD_LENGTH + 1,
+            length: usize::from(MAX_PASSWORD_LENGTH) as u32 + 1,
             lowercase: true,
             uppercase: false,
             numbers: false,
