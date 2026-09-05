@@ -850,3 +850,103 @@ impl NookRuntimeConfig {
             .resolve_vault_sync_interval_ms(RuntimeConfigValue::Unset)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locale_run_modes_and_storage_wrappers_project_successful_values() {
+        let locale = NookBrowserLocale::from_tags(vec!["ru-RU".to_owned(), "en-US".to_owned()]);
+        assert_eq!(locale.language_tags(), vec!["ru-RU", "en-US"]);
+        assert_eq!(locale.app_locale(), "ru");
+
+        assert_eq!(
+            NookClientRunModeUtil::parse("local").expect("local mode"),
+            NookClientRunMode::Local
+        );
+        assert_eq!(
+            NookClientRunModeUtil::parse("dev").expect("dev mode"),
+            NookClientRunMode::Dev
+        );
+        assert_eq!(
+            NookClientRunModeUtil::parse("prod").expect("prod mode"),
+            NookClientRunMode::Prod
+        );
+
+        let args = NookStorageConnectArgs::from(nook_core::StorageConnectArgs::local());
+        assert_eq!(args.mode(), "local");
+        assert_eq!(args.pat(), "");
+        assert_eq!(args.repo(), "");
+
+        let folder = NookGoogleDriveFolder::new("folder-1".to_owned(), "Vault".to_owned());
+        assert_eq!(folder.id(), "folder-1");
+        assert_eq!(folder.name(), "Vault");
+    }
+
+    #[test]
+    fn runtime_config_projects_each_mode_and_resolved_defaults() {
+        let local = NookRuntimeConfig::new(NookClientRunMode::Local, true);
+        assert_eq!(local.run_mode(), NookClientRunMode::Local);
+        assert!(local.is_local());
+        assert!(!local.is_dev());
+        assert!(!local.is_prod());
+        assert!(local.e2e_expose_vault());
+
+        let dev = NookRuntimeConfig::new(NookClientRunMode::Dev, false);
+        assert_eq!(dev.run_mode(), NookClientRunMode::Dev);
+        assert!(!dev.is_local());
+        assert!(dev.is_dev());
+        assert!(!dev.is_prod());
+        assert!(!dev.e2e_expose_vault());
+
+        let prod = NookRuntimeConfig::new(NookClientRunMode::Prod, false);
+        assert_eq!(prod.run_mode(), NookClientRunMode::Prod);
+        assert!(!prod.is_local());
+        assert!(!prod.is_dev());
+        assert!(prod.is_prod());
+        assert_eq!(
+            prod.resolve_vault_idle_timeout_ms("bad"),
+            prod.resolve_default_vault_idle_timeout_ms()
+        );
+        assert_eq!(
+            prod.resolve_vault_idle_warning_ms("bad"),
+            prod.resolve_default_vault_idle_warning_ms()
+        );
+        assert_eq!(
+            prod.resolve_vault_sync_interval_ms("bad"),
+            prod.resolve_default_vault_sync_interval_ms()
+        );
+    }
+
+    #[test]
+    fn vault_policy_and_switch_wrappers_project_deterministic_decisions() {
+        let policy = NookVaultClientPolicy::new();
+        assert!(!policy.manual_sync_has_target(false, 0));
+        assert!(policy.manual_sync_has_target(true, 1));
+
+        assert!(
+            policy.remote_recovery_prompt_visible(
+                nook_core::RemoteVaultRecoveryState::PromptWithCache
+            )
+        );
+        assert!(policy.remote_recovery_prompt_has_cache(
+            nook_core::RemoteVaultRecoveryState::PromptWithCache
+        ));
+        assert!(
+            policy.remote_recovery_connect_confirmed(
+                nook_core::RemoteVaultRecoveryState::ConnectFresh
+            )
+        );
+        assert!(policy.is_sync_activity_visible(false, false, false, true));
+        assert!(policy.should_auto_connect_after_approval(true, false, false, false, false));
+        assert_eq!(policy.normalized_secret_page_offset(10, 99, 5), 5);
+
+        let switch = policy.vault_switch_target("remote", true, "local", false);
+        assert_eq!(switch.state(), NookVaultSwitchState::Switch);
+        assert_eq!(switch.target().expect("switch target"), "remote");
+
+        let no_change = policy.vault_switch_target("local", true, "local", false);
+        assert_eq!(no_change.state(), NookVaultSwitchState::NoChange);
+    }
+}
