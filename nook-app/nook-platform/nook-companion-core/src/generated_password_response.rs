@@ -166,8 +166,14 @@ mod tests {
                 serde_json::json!({"ok": true, "password": password}),
             )?;
             let response = GeneratedPasswordResponse::from_wire(wire)?;
-            let serialized = serde_json::to_value(response)?;
-            assert_eq!(serialized["password"].as_str(), Some(password));
+            let GeneratedPasswordResponse::Generated {
+                password: decoded, ..
+            } = response
+            else {
+                return Err(anyhow::anyhow!("expected generated password response"));
+            };
+            let roundtrip: String = serde_json::from_str(&serde_json::to_string(&decoded)?)?;
+            assert_eq!(roundtrip.as_bytes(), password.as_bytes());
         }
         Ok(())
     }
