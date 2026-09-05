@@ -504,8 +504,7 @@ mod tests {
 
     use super::*;
     use crate::storage::identity_record::{
-        SimpleGenesisCompletion, clear_identity_directory_for_test, clear_pending_simple_genesis,
-        update_identity_directory,
+        SimpleGenesisCompletion, clear_identity_directory_for_test, update_identity_directory,
     };
     use crate::storage::indexed_db::idb_put_string;
     use wasm_bindgen_test::*;
@@ -529,10 +528,53 @@ mod tests {
         let resumed = begin_or_resume_simple_genesis(&app_key, "Ignored").await?;
         assert_eq!(resumed.store_id, pending.store_id);
         assert_eq!(resumed.identity_id, pending.identity_id);
-        clear_pending_simple_genesis(SimpleGenesisCompletion::Ordinary { pending: &pending })
+        SimpleGenesisCompletion::Ordinary { pending: &pending }
+            .clear_pending()
             .await?;
         let replacement = begin_or_resume_simple_genesis(&another_key, "Work").await?;
         assert_ne!(replacement.store_id, pending.store_id);
+        clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn cleanup_preserves_marker_when_any_completion_identity_differs() -> Result<(), NookError>
+    {
+        clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(map_domain_error)?;
+        let pending = begin_or_resume_simple_genesis(&app_key, "Personal").await?;
+        let original = idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
+            .await?
+            .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
+        let different_store = PendingSimpleGenesis {
+            store_id: nook_core::generate_store_id().map_err(map_domain_error)?,
+            ..pending.clone()
+        };
+        let different_identity = PendingSimpleGenesis {
+            identity_id: IdentityId::generate().map_err(map_domain_error)?,
+            ..pending.clone()
+        };
+        let different_time = PendingSimpleGenesis {
+            created_at: IsoTimestamp::parse("2000-01-01T00:00:00Z")?,
+            ..pending.clone()
+        };
+        assert_ne!(different_store.store_id, pending.store_id);
+        assert_ne!(different_identity.identity_id, pending.identity_id);
+        assert_ne!(different_time.created_at, pending.created_at);
+        for completed in [different_store, different_identity, different_time] {
+            SimpleGenesisCompletion::Ordinary {
+                pending: &completed,
+            }
+            .clear_pending()
+            .await?;
+            assert_eq!(
+                idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?.as_ref(),
+                Some(&original)
+            );
+        }
+        SimpleGenesisCompletion::Ordinary { pending: &pending }
+            .clear_pending()
+            .await?;
+        assert!(idb_get_string(PENDING_SIMPLE_GENESIS_KEY).await?.is_none());
         clear_identity_directory_for_test().await
     }
 

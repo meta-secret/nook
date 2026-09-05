@@ -272,6 +272,38 @@ test('retains incomplete failed steps without inventing duration', () => {
   assert.equal(record.comparison.baseline_quality, 'not_applicable')
 })
 
+test('records a cancelled attempt without jobs as queue-only time', () => {
+  const input = fixture()
+  input.run.id = 33964298285
+  input.run.conclusion = 'cancelled'
+  input.run.created_at = '2026-09-05T11:48:07Z'
+  input.run.run_started_at = '2026-09-05T11:48:07Z'
+  input.run.updated_at = '2026-09-05T12:05:14Z'
+  input.jobs = []
+
+  const record = buildMainBuildStats(input)
+
+  assert.equal(record.source_run.started_at, '2026-09-05T12:05:14Z')
+  assert.equal(record.source_run.completed_at, '2026-09-05T12:05:14Z')
+  assert.equal(record.summary.queue_seconds, 1027)
+  assert.equal(record.summary.execution_seconds, 0)
+  assert.equal(record.summary.wall_seconds, 1027)
+  assert.equal(record.summary.job_count, 0)
+  assert.equal(record.summary.step_count, 0)
+  assert.deepEqual(record.jobs, [])
+  assert.equal(record.comparison.baseline_quality, 'not_applicable')
+})
+
+test('rejects a non-cancelled attempt without executed jobs', () => {
+  const input = fixture()
+  input.jobs = []
+
+  assert.throws(
+    () => buildMainBuildStats(input),
+    /Main attempt 1 has no executed jobs/,
+  )
+})
+
 test('normalizes one-second GitHub timestamp skew for skipped jobs', () => {
   const input = fixture()
   input.jobs = [
