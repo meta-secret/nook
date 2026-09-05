@@ -960,4 +960,6 @@ unless hive_workflow.include?("run: task hive:verify") &&
   raise "Hive workflow must use the parallel BuildKit verification join"
 end
 
+load File.join(__dir__, "hive-cache-contract.rb")
+
 puts "Hive Kubernetes manifest contract: ok"

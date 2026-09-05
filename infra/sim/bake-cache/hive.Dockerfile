@@ -41,3 +41,23 @@ RUN cat /tmp/hive-source >/opt/clippy-source \
 FROM scratch AS verify
 COPY --from=test-source /opt/test-source /test-source
 COPY --from=clippy-source /opt/clippy-source /clippy-source
+
+# Independent console lineage: browser/tooling and package dependencies are
+# source-free; only the final verification layer receives console source.
+FROM alpine:3.24.1@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b AS console-browser
+COPY inputs/base.txt /tmp/browser-toolchain
+RUN cat /tmp/browser-toolchain >/opt/console-browser \
+  && sleep 1 \
+  && echo bake-sim-hive-console-browser
+
+FROM console-browser AS console-dependencies
+COPY inputs/loom.txt /tmp/bun.lock
+RUN cat /tmp/bun.lock >/opt/console-dependencies \
+  && sleep 1 \
+  && echo bake-sim-hive-console-dependencies
+
+FROM console-dependencies AS console-verify
+COPY inputs/leaf.txt /tmp/console-source
+RUN cat /tmp/console-source >/opt/console-source \
+  && sleep 1 \
+  && echo bake-sim-hive-console-source

@@ -25,15 +25,13 @@ RUN cargo install cargo-dylint dylint-link \
       --version "${CARGO_DYLINT_VERSION}" --locked \
     && cargo dylint --version
 
-FROM rust-ecosystem-nightly AS rust-dylint
+FROM rust-ecosystem-nightly AS rust-dylint-self-test
 
 ARG DYLINT_NIGHTLY=nightly-2026-04-16
 ARG RUST_DYLINT_COVERAGE_FLOOR
 
-WORKDIR /meta-secret/nook
-COPY nook-app/nook-platform/ nook-app/nook-platform/
-
 WORKDIR /meta-secret/nook/nook-app/nook-platform
+COPY nook-app/nook-platform/dylint/nook-domain-api/ dylint/nook-domain-api/
 ENV RUSTUP_TOOLCHAIN=${DYLINT_NIGHTLY}
 ENV RUSTFLAGS="-D warnings"
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
@@ -50,7 +48,17 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo llvm-cov report -p nook_domain_api --manifest-path dylint/nook-domain-api/Cargo.toml \
       --locked --fail-under-lines "${RUST_DYLINT_COVERAGE_FLOOR:?}" \
     && cargo clippy --manifest-path dylint/nook-domain-api/Cargo.toml --locked --all-targets -- -D warnings \
-    && cargo dylint --all -- --all-targets \
+    && nook-sccache-report rust-dylint-self-test
+
+FROM rust-dylint-self-test AS rust-dylint
+
+WORKDIR /meta-secret/nook
+COPY nook-app/nook-platform/ nook-app/nook-platform/
+
+WORKDIR /meta-secret/nook/nook-app/nook-platform
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo dylint --all -- --all-targets \
     && nook-sccache-report rust-dylint
 
 FROM rust-ecosystem-nightly AS rust-fuzz-smoke
