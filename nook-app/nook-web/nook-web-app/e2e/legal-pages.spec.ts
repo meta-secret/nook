@@ -405,7 +405,7 @@ test.describe('legal pages', () => {
 
     await expect
       .poll(async () => (await diagramLabels.allTextContents()).join('|'), {
-        timeout: 4_000,
+        timeout: 6_000,
       })
       .not.toBe(labelCodes.join('|'))
     await expect

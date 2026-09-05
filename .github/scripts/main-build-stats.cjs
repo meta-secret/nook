@@ -387,7 +387,8 @@ function buildMainBuildStats({
           return jobStartedMilliseconds >= attemptStartedMilliseconds - 1000
         })
       : jobs
-  if (attemptJobs.length === 0) {
+  const hasExecutedJobs = attemptJobs.length > 0
+  if (!hasExecutedJobs && run.conclusion !== 'cancelled') {
     throw new Error(`Main attempt ${run.run_attempt} has no executed jobs`)
   }
 
@@ -403,15 +404,16 @@ function buildMainBuildStats({
     normalizedJobs.map((job) => job.started_at),
     run.run_started_at || run.created_at,
   )
-  const startedAt =
-    run.run_attempt > 1
-      ? earliestJobStartedAt
-      : run.run_started_at || earliestJobStartedAt
   const wallStartedAt = run.run_attempt > 1 ? attemptStartedAt : run.created_at
   const completedAt = maximumTimestamp(
     normalizedJobs.map((job) => job.completed_at),
     run.updated_at,
   )
+  const startedAt = hasExecutedJobs
+    ? run.run_attempt > 1
+      ? earliestJobStartedAt
+      : run.run_started_at || earliestJobStartedAt
+    : completedAt
   const queueSeconds = durationSeconds(
     wallStartedAt,
     startedAt,
@@ -570,6 +572,19 @@ function validateMainBuildStats(record, expected = {}) {
   }
   if (summary.job_count !== record.jobs.length)
     throw new Error('summary.job_count mismatch')
+  if (record.jobs.length === 0) {
+    if (source.conclusion !== 'cancelled') {
+      throw new Error('only cancelled Main attempts may have no executed jobs')
+    }
+    if (
+      summary.execution_seconds !== 0 ||
+      summary.queue_seconds !== summary.wall_seconds
+    ) {
+      throw new Error(
+        'cancelled Main attempts without jobs must record only queue time',
+      )
+    }
+  }
   const stepCount = record.jobs.reduce(
     (total, job) => total + job.steps.length,
     0,
