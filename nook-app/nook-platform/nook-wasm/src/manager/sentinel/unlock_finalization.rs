@@ -131,7 +131,7 @@ impl Drop for PendingUnlockCompletion<'_> {
 }
 
 #[cfg(test)]
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum CompletionStep {
     EventLogRead,
     Projection,
@@ -491,7 +491,9 @@ mod tests {
                 assert!(
                     error
                         .to_string()
-                        .contains("injected Sentinel completion failure")
+                        .contains("injected Sentinel completion failure"),
+                    "completion failed before injected {step:?}; error variant: {:?}",
+                    mem::discriminant(&error)
                 );
                 fixture.assert_reset(&manager);
                 event_db::clear_local_event_store(fixture.output.store_id.as_str()).await?;
