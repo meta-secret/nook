@@ -939,7 +939,7 @@ mod tests {
             )
         );
         assert!(policy.is_sync_activity_visible(false, false, false, true));
-        assert!(policy.should_auto_connect_after_approval(true, false, false, false, false));
+        assert!(policy.should_auto_connect_after_approval(false, false, false, false, false));
         assert_eq!(policy.normalized_secret_page_offset(10, 99, 5), 5);
 
         let switch = policy.vault_switch_target("remote", true, "local", false);
