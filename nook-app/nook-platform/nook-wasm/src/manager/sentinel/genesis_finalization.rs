@@ -63,7 +63,9 @@ impl NookVaultManager {
         }
 
         if matches!(self.sentinel_genesis, CeremonyState::Inactive) {
-            self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
+            if self.sentinel_genesis_phase == SentinelGenesisPhase::AwaitingCompletionCheck {
+                self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
+            }
             return Err(JsError::new("No Sentinel genesis ceremony is active."));
         }
         let signing = self.ensure_signing_identity().await?;
@@ -514,6 +516,14 @@ mod tests {
             load_sentinel_genesis_finalization_pending()
                 .await?
                 .is_none()
+        );
+        Fixture::require_finalization_failure(
+            fixture.manager.finalize_sentinel_genesis().await,
+            "No Sentinel genesis ceremony is active.",
+        )?;
+        assert_eq!(
+            fixture.manager.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::DeliveringShares
         );
         event_db::clear_local_event_store(&pending.store_id).await?;
         let stored = indexed_db::load_sentinel_genesis_share_delivery(
