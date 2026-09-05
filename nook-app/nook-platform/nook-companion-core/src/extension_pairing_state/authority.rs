@@ -45,8 +45,7 @@ pub enum ExtensionActiveVaultScope {
     Active(ActiveExtensionVault),
 }
 
-#[derive(Debug, Deserialize, Serialize, Tsify)]
-#[tsify(from_wasm_abi)]
+#[derive(Debug)]
 pub struct ExtensionGrantAuthorityRequest {
     pub stored_json: PairingStorageJson,
     pub vault_store_id: PairingVaultId,
@@ -237,8 +236,6 @@ mod tests {
         ] {
             assert!(ExtensionGrantAuthority::DECL.contains(variant));
         }
-        assert!(ExtensionGrantAuthorityRequest::DECL.contains("stored_json"));
-        assert!(ExtensionGrantAuthorityRequest::DECL.contains("vault_store_id"));
         assert!(AuthorizedExtensionGrant::DECL.contains("grant: StoredExtensionPairingGrant"));
         let grant = Fixture::grant();
         let outcome = ExtensionGrantAuthority::Authorized(Box::new(AuthorizedExtensionGrant {
