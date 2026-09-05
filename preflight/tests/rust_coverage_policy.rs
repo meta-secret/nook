@@ -24,7 +24,7 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
     for (package, floor) in package_floors {
         let expected = match package.as_str() {
             "nook-wasm" => 51.0,
-            "nook-companion-wasm" => 75.0,
+            "nook-companion-wasm" => 88.0,
             "hive" => 60.0,
             _ => 90.0,
         };
