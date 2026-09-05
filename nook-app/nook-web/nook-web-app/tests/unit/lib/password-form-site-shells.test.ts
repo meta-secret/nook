@@ -64,11 +64,23 @@ describe('popular-site login shells', () => {
     }
     expect(fillLoginCredentials(loginFillArgs)).toBe(true)
     expect(
-      document.querySelector<HTMLInputElement>('[name="username"]')?.value,
+      document.querySelector<HTMLInputElement>(
+        '.loginForm [name="LoginUserName"]',
+      )?.value,
     ).toBe('pilot@nook.test')
     expect(
-      document.querySelector<HTMLInputElement>('[name="password"]')?.value,
+      document.querySelector<HTMLInputElement>(
+        '.loginForm [name="LoginPassword"]',
+      )?.value,
     ).toBe('extension-fill-password')
+    expect(
+      document.querySelector<HTMLInputElement>('header [name="LoginUserName"]')
+        ?.value,
+    ).toBe('')
+    expect(
+      document.querySelector<HTMLInputElement>('header [name="LoginPassword"]')
+        ?.value,
+    ).toBe('')
     expect(
       document.querySelector<HTMLInputElement>('[name="search"]')?.value,
     ).toBe('account help')
