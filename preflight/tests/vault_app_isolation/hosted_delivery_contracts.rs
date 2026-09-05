@@ -235,9 +235,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "name: WASM Node tests",
         "name: Web verification",
         "name: Headless UI demo",
+        "name: Authentication-sensitive extension e2e",
         "name: Verify and preview",
         "always() &&",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]",
         "name: Enforce required verification results",
         "NATIVE_RESULT: ${{ needs.rust.result }}",
         "WASM_RESULT: ${{ needs.wasm.result }}",
@@ -246,6 +247,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "UI_DEMOS_ENABLED: ${{ needs.validation-request.outputs.ui-demos-enabled }}",
         "UI_DEMO_REQUIRED: ${{ needs.verify.outputs.ui-demo-required }}",
         "UI_DEMO_RESULT: ${{ needs.ui-demo.result }}",
+        "AUTH_SENSITIVE_E2E_RESULT: ${{ needs.auth-sensitive-extension-e2e.result }}",
         "Preserve the secret-free hosted validation boundary",
         "name: Rust coverage report",
         "uses: ./.github/workflows/pr-coverage.yml",
@@ -285,7 +287,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "chmod +x \"$dir/tools/nook-preflight\"",
         "test -x \"$dir/tools/nook-preflight\"",
         "needs: [validation-request, wasm]",
-        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]",
+        "needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]",
         "name: Download built WASM handoff",
         "name: Upload preview dist handoff",
         "NOOK_HOST_PAGES_DEPLOY",
@@ -327,7 +329,8 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     let wasm_job = section(&pr, "  wasm:\n", "  wasm-node-test:\n");
     let wasm_node_job = section(&pr, "  wasm-node-test:\n", "  verify:\n");
     let verify_job = section(&pr, "  verify:\n", "  ui-demo:\n");
-    let ui_demo_job = section(&pr, "  ui-demo:\n", "  preview:\n");
+    let ui_demo_job = section(&pr, "  ui-demo:\n", "  auth-sensitive-extension-e2e:\n");
+    let auth_sensitive_e2e_job = section(&pr, "  auth-sensitive-extension-e2e:\n", "  preview:\n");
     let preview_job = section(&pr, "  preview:\n", "  coverage:\n");
     assert!(
         wasm_job.contains("task ci:pr:wasm")
@@ -362,8 +365,13 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         verify_job.contains("id: ui-demo-contract")
+            && verify_job.contains("id: auth-sensitive-e2e-contract")
             && verify_job
                 .contains("ui-demo-required: ${{ steps.ui-demo-contract.outputs.required }}")
+            && verify_job.contains("auth-sensitive-e2e-required: ${{ steps.auth-sensitive-e2e-contract.outputs.required }}")
+            && verify_job.contains("nook-web-shared/src/extension/password-form*")
+            && verify_job.contains("nook-web-extension/src/content/autofill/*")
+            && verify_job.contains("DetectionHiddenHeaderLogin.svelte")
             && verify_job.contains("ui-demo-specs: ${{ steps.ui-demo-contract.outputs.specs }}")
             && !verify_job.contains("Record headless UI demo")
             && ui_demo_job.contains(
@@ -387,15 +395,33 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
         "the disabled UI demo job must retain its exact trusted ARC implementation for later re-enable"
     );
     assert!(
+        auth_sensitive_e2e_job
+            .contains("needs.verify.outputs.auth-sensitive-e2e-required == 'true'")
+            && auth_sensitive_e2e_job
+                .contains("github.event.pull_request.head.repo.full_name == github.repository")
+            && auth_sensitive_e2e_job
+                .contains("github.event.pull_request.user.login != 'dependabot[bot]'")
+            && auth_sensitive_e2e_job
+                .contains("needs: [validation-request, verify, wasm-node-test]")
+            && auth_sensitive_e2e_job.contains("runs-on: nook-k0s-container")
+            && auth_sensitive_e2e_job
+                .contains("nook-pr-e2e:run-${{ github.run_id }}-${{ github.run_attempt }}")
+            && auth_sensitive_e2e_job.contains("task _extension:test:e2e:file")
+            && auth_sensitive_e2e_job.contains("E2E_SPEC: e2e/mock-auth-pilot-coverage.spec.ts"),
+        "authentication-sensitive PR changes must run only the focused extension regression in the exact trusted browser image"
+    );
+    assert!(
         preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]")
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]")
             && preview_job.contains("UI_DEMOS_ENABLED")
             && preview_job.contains("UI_DEMO_REQUIRED")
             && preview_job.contains("UI_DEMO_RESULT")
             && preview_job.contains("Headless UI demo=$UI_DEMO_RESULT")
             && preview_job.contains("[ \"$UI_DEMO_RESULT\" != \"success\" ]")
+            && preview_job.contains("AUTH_SENSITIVE_E2E_REQUIRED")
+            && preview_job.contains("[ \"$AUTH_SENSITIVE_E2E_RESULT\" != \"success\" ]")
             && !preview_job.contains("UI_DEMO_RESULT=success"),
-        "PR readiness must observe disabled demos and propagate enabled required demo failures without rewriting skipped results"
+        "PR readiness must propagate required authentication e2e and enabled demo failures without rewriting skipped results"
     );
     assert!(
         !pr.contains("actions/cache/"),
@@ -497,6 +523,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             && verify_job.contains(
                 "contains(github.event.pull_request.labels.*.name, 'ci:full-e2e') ||\n          (needs.validation-request.outputs.ui-demos-enabled == 'true' &&\n          steps.ui-demo-contract.outputs.required == 'true')"
             )
+            && verify_job.contains("steps.auth-sensitive-e2e-contract.outputs.required == 'true'")
             && verify_job.contains("actions/download-artifact@v8")
             && verify_job.contains("name: pr-wasm-${{ github.run_id }}")
             && !verify_job.contains("Wait for built WASM handoff")
@@ -510,9 +537,10 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert!(
         preview_job
-            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo]")
+            .contains("needs: [validation-request, rust, wasm, verify, wasm-node-test, ui-demo, auth-sensitive-extension-e2e]")
             && preview_job.contains("always() &&")
             && preview_job.contains("name: Enforce required verification results")
+            && preview_job.contains("AUTH_SENSITIVE_E2E_RESULT")
             && preview_job.contains("NOOK_HOST_PAGES_DEPLOY: \"1\"")
             && preview_job.contains("bash .github/scripts/ci-pr-deploy-and-verify-previews.sh")
             && preview_job.contains(
@@ -520,7 +548,7 @@ fn assert_pr_workflow_contract(root: &Path) -> anyhow::Result<()> {
             )
             && preview_job.contains("name: pr-web-dist-${{ github.run_id }}")
             && !preview_job.contains("attempt $attempt/900"),
-        "PR preview must deploy only after required Native Rust, WASM, web, Node, and enabled UI demo verification succeeds"
+        "PR preview must deploy only after required Native Rust, WASM, web, Node, authentication e2e, and enabled UI demo verification succeeds"
     );
     let coverage_job = section(&pr, "  coverage:\n", "  full-e2e-shard:\n");
     let coverage_workflow = read(root, ".github/workflows/pr-coverage.yml");

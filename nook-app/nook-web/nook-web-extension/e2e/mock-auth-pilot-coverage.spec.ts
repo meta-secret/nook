@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import {
   launchPairedPinExtension,
   lockExtensionSession,
@@ -111,7 +111,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
-  test('fills SPA, hidden-header, Facebook, and combined login forms to success', async ({
+  test('fills SPA, polluted Namecheap, Facebook, and combined login forms to success', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -139,10 +139,10 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         },
       )
 
-      await expectPilotPlainSuccess(
-        paired.context,
-        `${mockAuth.origin}/login-with-hidden-header`,
-      )
+      await expectPilotNamecheapShellSuccess({
+        context: paired.context,
+        url: `${mockAuth.origin}/login-with-hidden-header`,
+      })
 
       // Facebook: aria-hidden ancestor must not block CSS-visible email/pass.
       await expectPilotPlainSuccess(
@@ -316,5 +316,40 @@ async function expectPilotPlainSuccess(
     'Authentication complete',
     { timeout: 20_000 },
   )
+  await page.close()
+}
+
+async function expectPilotNamecheapShellSuccess({
+  context,
+  url,
+}: {
+  readonly context: BrowserContext
+  readonly url: string
+}): Promise<void> {
+  const page = await context.newPage()
+  await page.goto(url)
+  const widget = page.locator('#nook-auth-widget')
+  await expect(widget.getByText('Ready to sign in')).toBeVisible()
+  await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+  await expect(page.getByTestId('mock-auth-success')).toHaveText(
+    'Authentication complete',
+    { timeout: 20_000 },
+  )
+  const expectedEvidence = JSON.stringify({
+    submittedControlIdentity: 'login-submit',
+    headerUsernameUnchanged: true,
+    headerPasswordUnchanged: true,
+    searchUnchanged: true,
+    newsletterUnchanged: true,
+    loginCredentialsMatched: true,
+  })
+  await expect
+    .poll(() =>
+      page.evaluate(
+        (key) => sessionStorage.getItem(key) || '',
+        'namecheap-submission-evidence',
+      ),
+    )
+    .toBe(expectedEvidence)
   await page.close()
 }
