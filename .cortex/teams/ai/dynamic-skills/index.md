@@ -84,7 +84,13 @@ Harness profile directories must not mirror or redefine these cards.
 - **[typescript-enums-over-booleans.md](../../web-dev/dynamic-skills/typescript-enums-over-booleans.md)**
   - Purpose: Replace authored domain, state, policy, mode, configuration, and owned-contract booleans with semantic enums; retain booleans only at required boundaries or as immediately consumed predicates
 - **[typescript-domain-structure.md](../../web-dev/dynamic-skills/typescript-domain-structure.md)**
-  - Purpose: Nest same-prefix closed vocabularies into parent objects + operation enums; use field enums instead of string sets; ban hand-rolled TypeScript `Result`/`Maybe`
+  - Purpose:
+    - Require named domain types and named unions instead of raw primitives or
+      inline alternatives.
+    - Nest same-prefix closed vocabularies into parent objects plus operation
+      enums.
+    - Use field enums instead of string sets.
+    - Ban hand-rolled TypeScript `Result` / `Maybe` utilities.
 - **[typescript-single-parameter.md](../../web-dev/dynamic-skills/typescript-single-parameter.md)**
   - Purpose: Limit authored functions to one parameter
 - **[typescript-no-unknown.md](../../web-dev/dynamic-skills/typescript-no-unknown.md)**
