@@ -15,7 +15,7 @@ use getrandom::fill;
 use hkdf::Hkdf;
 use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256 as Pbkdf2Sha256};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use sha2::{Digest, Sha256};
 use std::fmt;
 use zeroize::{Zeroize, Zeroizing};
@@ -29,9 +29,56 @@ use crate::{
 mod protected_identity;
 pub use protected_identity::*;
 
-pub const PIN_DEVICE_KEY_PROTECTION_VERSION: u32 = 2;
-pub const PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION: u32 = 3;
-pub const PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION: u32 = 4;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct DeviceKeyProtectionVersion(u32);
+
+impl DeviceKeyProtectionVersion {
+    pub const PIN: Self = Self(2);
+    pub const PASSKEY_DERIVED: Self = Self(3);
+    pub const PASSKEY_WRAPPED_LOCAL: Self = Self(4);
+
+    pub(crate) const fn to_be_bytes(self) -> [u8; size_of::<u32>()] {
+        self.0.to_be_bytes()
+    }
+
+    fn parse(value: u32) -> Result<Self, &'static str> {
+        match value {
+            2 => Ok(Self::PIN),
+            3 => Ok(Self::PASSKEY_DERIVED),
+            4 => Ok(Self::PASSKEY_WRAPPED_LOCAL),
+            _ => Err("unsupported device-key protection version"),
+        }
+    }
+}
+
+impl From<DeviceKeyProtectionVersion> for u32 {
+    fn from(value: DeviceKeyProtectionVersion) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for DeviceKeyProtectionVersion {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+impl<'de> Deserialize<'de> for DeviceKeyProtectionVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+    }
+}
+
+pub const PIN_DEVICE_KEY_PROTECTION_VERSION: DeviceKeyProtectionVersion =
+    DeviceKeyProtectionVersion::PIN;
+pub const PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION: DeviceKeyProtectionVersion =
+    DeviceKeyProtectionVersion::PASSKEY_DERIVED;
+pub const PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION: DeviceKeyProtectionVersion =
+    DeviceKeyProtectionVersion::PASSKEY_WRAPPED_LOCAL;
 
 const PRF_INPUT_LEN: usize = 32;
 const PRF_OUTPUT_LEN: usize = 32;
@@ -336,7 +383,10 @@ pub fn unlock_passkey_device_identity(
     prf_output: &[u8],
 ) -> DeviceKeyProtectionResult<DeviceIdentitySecret> {
     let secret = match record {
-        WrappedDeviceIdentity::PasskeyDerived(_) => {
+        WrappedDeviceIdentity::PasskeyDerived(inner) => {
+            if inner.version != PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION {
+                return Err(DeviceKeyProtectionError::UnsupportedVersion(inner.version));
+            }
             let user_handle = record.user_handle_bytes()?;
             derive_device_identity_from_passkey_prf(&user_handle, prf_output)?
         }
@@ -555,6 +605,20 @@ mod tests {
 
         assert_eq!(assertion.credential_id(), registration.credential_id());
         assert_eq!(&unlocked, material.identity_secret());
+
+        let mut wrong_version = material.record().clone();
+        let WrappedDeviceIdentity::PasskeyDerived(inner) = &mut wrong_version else {
+            return Err(anyhow::anyhow!("expected passkey-derived record"));
+        };
+        inner.version = DeviceKeyProtectionVersion::PIN;
+        assert!(matches!(
+            unlock_passkey_device_identity(
+                material.device_id(),
+                &wrong_version,
+                assertion.prf_output()
+            ),
+            Err(DeviceKeyProtectionError::UnsupportedVersion(_))
+        ));
         Ok(())
     }
 
@@ -696,5 +760,20 @@ mod tests {
             derive_device_identity_from_passkey_prf(&[8u8; 32], &[10u8; 31]),
             Err(DeviceKeyProtectionError::PrfOutputInvalid)
         ));
+    }
+
+    #[test]
+    fn device_key_protection_version_validates_serde_input() -> anyhow::Result<()> {
+        assert_eq!(
+            serde_json::from_str::<DeviceKeyProtectionVersion>("2")?,
+            DeviceKeyProtectionVersion::PIN
+        );
+        assert_eq!(
+            serde_json::from_str::<DeviceKeyProtectionVersion>("4")?,
+            DeviceKeyProtectionVersion::PASSKEY_WRAPPED_LOCAL
+        );
+        assert!(serde_json::from_str::<DeviceKeyProtectionVersion>("1").is_err());
+        assert!(serde_json::from_str::<DeviceKeyProtectionVersion>("4294967296").is_err());
+        Ok(())
     }
 }
