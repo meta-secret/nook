@@ -16,6 +16,7 @@ Load only the category that owns the assigned security question.
 ## Security skills
 
 - [Browser extension release security](dynamic-skills/browser-extension-release-security.md)
+- [Secret lifecycle](dynamic-skills/secret-lifecycle.md)
 - [User-facing security abstractions](dynamic-skills/user-facing-security-abstractions.md)
 
 ## Security reference

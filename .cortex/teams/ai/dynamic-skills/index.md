@@ -19,6 +19,24 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one non-bypassable 1,000-line ceiling; a violation requires architectural review and cohesive decomposition
+- **[function-ownership.md](../../../shared/dynamic-skills/function-ownership.md)**
+  - Purpose: **P1 / primary action-structure rule**
+    - Require every authored function in every implementation language to
+      belong to a meaningful owner.
+    - Reject free functions, module-only ownership, and catch-all utility
+      containers.
+- **[domain-api-integrity.md](../../../shared/dynamic-skills/domain-api-integrity.md)**
+  - Purpose: **P1 / universal domain API rule**
+    - Require named domain types, concrete values, one-parameter request APIs,
+      validated capabilities, typed failures, and exhaustive states.
+    - Require explicit schema versions and migration decisions at persisted and
+      wire boundaries.
+- **[secret-lifecycle.md](../../security/dynamic-skills/secret-lifecycle.md)**
+  - Purpose: **P1 / cross-language secret-handling rule**
+    - Give every secret an explicit owner, purpose, lifetime, and destruction
+      event.
+    - Keep durable secret behavior in Rust/WASM and browser plaintext narrowly
+      scoped in TypeScript/Svelte.
 - **[cortex-writer.md](cortex-writer.md)**
   - **Purpose:** **P1 / critical `.cortex` writing rule**
     - Split long dense sentences into short sentences, bullets, and lists.

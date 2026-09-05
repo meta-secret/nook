@@ -210,6 +210,14 @@ tasks:
     cmds:
       - cd "{{.EXTENSION_ROOT}}" && bun run test:e2e
 
+  _extension:test:e2e:file:
+    desc: Run one browser extension Playwright e2e spec.
+    preconditions:
+      - sh: test -n "${E2E_SPEC:-}"
+        msg: E2E_SPEC is required.
+    cmds:
+      - cd "{{.EXTENSION_ROOT}}" && bash scripts/test-e2e.sh "$E2E_SPEC"
+
   _extension:smoke:hosted:
     desc: Run the disposable hosted extension smoke inside the e2e image.
     cmds:

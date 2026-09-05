@@ -2,6 +2,8 @@
 
 ## Purpose
 
+- Apply the concrete-value requirement from
+  [domain API integrity](../../../shared/dynamic-skills/domain-api-integrity.md).
 - Do not author the `object` type in linted TypeScript or Svelte code.
 - Do not author the `unknown` type except at an unavoidable untyped transport
   boundary that narrows it immediately.

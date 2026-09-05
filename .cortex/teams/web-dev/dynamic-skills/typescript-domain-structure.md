@@ -2,6 +2,12 @@
 
 ## Purpose
 
+- Apply the repository's primary function-ownership rule to every authored
+  TypeScript function.
+- Apply the repository-wide
+  [domain API integrity rule](../../../shared/dynamic-skills/domain-api-integrity.md)
+  to every authored TypeScript domain and application API.
+
 Keep TypeScript domain models typed by meaning, nested, and enum-driven. A raw
 representation does not carry the metadata that makes a domain value safe to
 use. Treat raw domain primitives, inline unions, raw-string field allow-lists,
@@ -62,13 +68,30 @@ boundary where it is used.
   factory. Keep the brand token and unchecked construction private.
 - Return a domain-specific decode outcome or throw a named domain error class
   when external input cannot become the domain type.
-- Put domain operations in the cohesive type or module that owns the required
-  knowledge. A module is a valid owner when object identity is not meaningful.
+- Give actionable failures a stable enum kind or code.
+- Preserve the concrete source error when translating a lower-level failure.
+- Catch a failure only when the current owner adds domain meaning, recovery, or
+  boundary presentation.
+- Put every authored public, private, and nested function on a meaningful
+  class, value object, domain object, fixture, or required framework owner.
+- Use an instance method when the operation depends on owned state.
+- Use a static method for cohesive construction or stateless behavior.
+- Keep component handlers on a Svelte component only when they belong to that
+  component's state or interaction contract.
+- Follow the repository-wide
+  [function ownership rule](../../../shared/dynamic-skills/function-ownership.md).
 - Model state changes as named transitions from one domain state to a named
   next state or outcome.
 - Keep advanced-state construction private to the transition that validates
   it.
 - Expose an operation only from the state owner where that operation is legal.
+- Give every TypeScript-owned persisted or wire schema a named version type.
+- Keep one explicit current writer version and an explicit supported-reader
+  set. Reject unsupported versions with a domain-specific failure.
+- Define an explicit migration before changing a persisted shape.
+- Follow the security-owned
+  [secret lifecycle](../../security/dynamic-skills/secret-lifecycle.md) for
+  browser interactions that temporarily receive plaintext.
 
 ### Prohibited actions
 
@@ -92,10 +115,21 @@ boundary where it is used.
 - Do not export a brand token, unchecked constructor, or writable field that
   bypasses validation.
 - Do not put domain behavior in generic `Utils` or `Helpers` containers.
+- Do not introduce an unowned top-level or nested free function.
+- Do not treat a file, module, namespace, or directory as function ownership.
+- Do not create an empty class, interface, namespace, or object only to move a
+  free function.
+- Do not throw raw strings or expose generic `Error` as an actionable domain
+  contract.
+- Do not swallow a failure or replace its domain kind with freeform text.
+- Do not silently accept, reinterpret, or overwrite an unsupported schema
+  version.
+- Do not persist or log secret plaintext or retain it after the interaction
+  lifecycle ends.
 - Do not encode a transition by mutating parallel booleans, sentinels, or
   optional fields.
-- Do not force pure cohesive module behavior into a class with artificial
-  identity or lifecycle.
+- Do not invent instance identity or lifecycle when a static operation on the
+  meaningful owner is truthful.
 
 Raw primitives are allowed only in narrow cases.
 
@@ -185,6 +219,8 @@ Does not apply to:
 
 ## Application Checklist
 
+- [ ] Put every authored function on a meaningful owner. Reject module-only,
+      namespace-only, and catch-all utility ownership.
 - [ ] Search the changed scope for raw primitives in domain fields, parameters,
       returns, state, DTOs, collections, tuples, and generic arguments.
 - [ ] Give every scalar domain meaning a generated, branded, opaque, enum, or
@@ -193,6 +229,13 @@ Does not apply to:
       fields.
 - [ ] Reject primitive sentinels such as `false`, `undefined`, `null`, empty
       strings, and zero when they stand for a domain state.
+- [ ] Verify each actionable failure has a stable domain kind or code and
+      preserves its concrete source when translated.
+- [ ] Verify each changed TypeScript-owned persisted schema has an explicit
+      version, supported-reader set, unsupported-version failure, and migration
+      decision.
+- [ ] Inventory browser plaintext creation, copies, persistence, logs, and every
+      terminal cleanup transition.
 - [ ] Normalize raw external values immediately at the boundary.
 - [ ] Search for `new Set(['...'])` field allow-lists and replace with field
       enums.
