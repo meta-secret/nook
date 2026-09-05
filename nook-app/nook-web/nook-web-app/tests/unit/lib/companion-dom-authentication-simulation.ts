@@ -3,6 +3,7 @@ import {
   AuthenticationWorkflowKind,
   CompanionAuthenticationWorkflowMatchKind,
   CredentialFillRejection,
+  authentication_advance_control_is_safe,
   classify_companion_authentication_workflow_facts,
   companion_authentication_workflow_match_kind,
   type AuthenticationPageObservationFacts,
@@ -59,6 +60,9 @@ type DomAuthenticationSimulationEvidence = {
   readonly credentialFillRejection: CredentialFillRejection | false
   readonly implicitSubmissionMethod: AuthenticationPageObservationFacts['ceremony']['implicitSubmissionMethod']
   readonly advanceControl: AuthenticationPageObservationFacts['ceremony']['advanceControl']
+  readonly detailedAdvanceControlKind: NonNullable<
+    AuthenticationPageObservationFacts['detailedAdvanceControl']
+  >['kind']
   readonly credentialSubmissionKind: AuthenticationPageObservationFacts['credentialSubmission']['kind']
   readonly filled: boolean
   readonly submissionResult: FormSubmissionResult
@@ -216,6 +220,18 @@ export function simulateDomAuthentication({
   const credentialSubmissionKind = selected
     ? selected.facts.credentialSubmission.kind
     : 'absent'
+  const detailedAdvanceControl = selected
+    ? selected.facts.detailedAdvanceControl
+    : false
+  const detailedAdvanceControlKind = detailedAdvanceControl
+    ? detailedAdvanceControl.kind
+    : 'absent'
+  const detailedAdvanceControlSupportsLogin =
+    detailedAdvanceControl && detailedAdvanceControl.kind === 'observed'
+      ? detailedAdvanceControl.observations.some(
+          authentication_advance_control_is_safe,
+        )
+      : false
   if (!selected) {
     return {
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
@@ -229,6 +245,7 @@ export function simulateDomAuthentication({
       credentialFillRejection: false,
       implicitSubmissionMethod,
       advanceControl,
+      detailedAdvanceControlKind,
       credentialSubmissionKind,
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
@@ -251,7 +268,8 @@ export function simulateDomAuthentication({
     workflowAction === AuthenticationWorkflowAction.ContinueWithNook &&
     credentialFill.kind === CredentialFillJourneyOutcomeKind.Completed &&
     advanceControl !== 'implicit-submission' &&
-    credentialSubmissionKind === 'observed'
+    (credentialSubmissionKind === 'observed' ||
+      detailedAdvanceControlSupportsLogin)
   if (!loginApproved) {
     return {
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
@@ -265,6 +283,7 @@ export function simulateDomAuthentication({
       credentialFillRejection: credentialFill.rejection,
       implicitSubmissionMethod,
       advanceControl,
+      detailedAdvanceControlKind,
       credentialSubmissionKind,
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
@@ -307,6 +326,7 @@ export function simulateDomAuthentication({
     credentialFillRejection: credentialFill.rejection,
     implicitSubmissionMethod,
     advanceControl,
+    detailedAdvanceControlKind,
     credentialSubmissionKind,
     filled: approvedFill && submissionResult !== FormSubmissionResult.Rejected,
     submissionResult,
