@@ -83,17 +83,32 @@ struct SecretSearchCatalogBucket {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct SecretSearchCatalogChangeCount(usize);
+
+impl From<usize> for SecretSearchCatalogChangeCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SecretSearchCatalogChangeCount> for usize {
+    fn from(value: SecretSearchCatalogChangeCount) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct SecretSearchCatalogReconcile {
-    pub added: usize,
-    pub updated: usize,
-    pub removed: usize,
+    pub added: SecretSearchCatalogChangeCount,
+    pub updated: SecretSearchCatalogChangeCount,
+    pub removed: SecretSearchCatalogChangeCount,
     changed_bucket_mask: u64,
 }
 
 impl SecretSearchCatalogReconcile {
     #[must_use]
     pub fn changed(self) -> bool {
-        self.added > 0 || self.updated > 0 || self.removed > 0
+        self.added.0 > 0 || self.updated.0 > 0 || self.removed.0 > 0
     }
 
     pub fn changed_buckets(self) -> impl Iterator<Item = u8> {
@@ -185,7 +200,8 @@ impl SecretSearchCatalog {
                 .entries
                 .keys()
                 .filter(|id| !secrets.contains_key(*id))
-                .count(),
+                .count()
+                .into(),
             ..SecretSearchCatalogReconcile::default()
         };
         for id in self.entries.keys().filter(|id| !secrets.contains_key(*id)) {
@@ -204,9 +220,9 @@ impl SecretSearchCatalog {
             }
 
             if self.entries.contains_key(id) {
-                outcome.updated += 1;
+                outcome.updated.0 += 1;
             } else {
-                outcome.added += 1;
+                outcome.added.0 += 1;
             }
             outcome.changed_bucket_mask |= bucket_mask(id);
             let mut record = decrypt_encrypted_secret(secrets, crypto, id)?;
@@ -396,8 +412,9 @@ mod tests {
 
         let mut catalog = SecretSearchCatalog::default();
         let initial = catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
-        assert_eq!((initial.added, initial.updated, initial.removed), (3, 0, 0));
-        assert!(initial.changed_buckets().next().is_some());
+        assert_eq!(usize::from(initial.added), 3);
+        assert_eq!(usize::from(initial.updated), 0);
+        assert!(initial.changed() && initial.changed_buckets().next().is_some());
         assert_eq!(
             catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?,
             SecretSearchCatalogReconcile::default()
@@ -418,7 +435,9 @@ mod tests {
             ),
         );
         let changed = catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
-        assert_eq!((changed.added, changed.updated, changed.removed), (0, 1, 0));
+        assert_eq!(usize::from(changed.added), 0);
+        assert_eq!(usize::from(changed.updated), 1);
+        assert_eq!(usize::from(changed.removed), 0);
         assert_eq!(
             changed.changed_buckets().collect::<Vec<_>>(),
             vec![search_catalog_bucket(&changed_id)]
@@ -435,6 +454,9 @@ mod tests {
                 .total,
             0
         );
+        secrets.remove(&changed_id);
+        let removed = catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
+        assert_eq!(usize::from(removed.removed), 1);
         Ok(())
     }
 
@@ -471,7 +493,9 @@ mod tests {
         let mut tampered = SecretSearchCatalog::default();
         tampered.restore_bucket_json(bucket, &tampered_json)?;
         let outcome = tampered.reconcile(&secrets, &crypto, &keys.secrets_key)?;
-        assert_eq!((outcome.added, outcome.updated, outcome.removed), (0, 1, 0));
+        assert_eq!(usize::from(outcome.added), 0);
+        assert_eq!(usize::from(outcome.updated), 1);
+        assert_eq!(usize::from(outcome.removed), 0);
         assert_eq!(
             tampered
                 .query("forged-user", SecretTypeFilter::All, 0, 50)

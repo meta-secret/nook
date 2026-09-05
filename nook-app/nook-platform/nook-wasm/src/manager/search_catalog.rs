@@ -120,9 +120,9 @@ impl NookVaultManager {
             tracing::info!(
                 scope = "wasm-search",
                 action = "reconcile-catalog",
-                added = outcome.added,
-                updated = outcome.updated,
-                removed = outcome.removed,
+                added = usize::from(outcome.added),
+                updated = usize::from(outcome.updated),
+                removed = usize::from(outcome.removed),
                 count = self.vault.meta.secrets.len(),
                 "in-memory secret search catalog reconciled"
             );
