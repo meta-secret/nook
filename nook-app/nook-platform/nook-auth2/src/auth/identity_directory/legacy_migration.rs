@@ -178,28 +178,32 @@ impl IdentityDirectory {
 
 impl IdentityRecord {
     fn merge_legacy_member(&mut self, incoming: IdentityMember) -> MultiDeviceResult<()> {
-        let Some(existing) = self
+        let Some(index) = self
             .members
-            .iter_mut()
-            .find(|member| member.app_id == incoming.app_id)
+            .iter()
+            .position(|member| member.app_id == incoming.app_id)
         else {
             self.members.push(incoming);
             return Ok(());
         };
+        let existing = &self.members[index];
         if existing.auth_id != incoming.auth_id || existing.public_key != incoming.public_key {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "Legacy identity directory has conflicting material for one app key.".to_owned(),
             ));
         }
-        if existing.signing_public_key.is_empty() {
-            existing.signing_public_key = incoming.signing_public_key;
-        } else if !incoming.signing_public_key.is_empty()
+        if !existing.signing_public_key.is_empty()
+            && !incoming.signing_public_key.is_empty()
             && existing.signing_public_key != incoming.signing_public_key
         {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "Legacy identity directory has conflicting signing keys for one app key."
                     .to_owned(),
             ));
+        }
+        let existing = &mut self.members[index];
+        if existing.signing_public_key.is_empty() {
+            existing.signing_public_key = incoming.signing_public_key;
         }
         if existing.label.is_none() {
             existing.label = incoming.label;
