@@ -17,7 +17,7 @@
   ],
   "package_lines_percent": {
     "nook-app-common": 90.0,
-    "nook-authenticator-domain": 87.0,
+    "nook-authenticator-domain": 90.0,
     "nook-auth2": 90.0,
     "nook-replication": 90.0,
     "nook-event-log": 90.0,
@@ -40,5 +40,5 @@
     }
   ],
   "updated": "2026-09-04",
-  "note": "CI enforces nook-companion-wasm at 18%, nook-wasm at 51%, nook-authenticator-domain at 87%, Hive at 60%, and every other testable package at 90%."
+  "note": "CI enforces nook-companion-wasm at 18%, nook-wasm at 51%, Hive at 60%, and every other testable package at 90%."
 }

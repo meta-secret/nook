@@ -95,6 +95,7 @@ tasks:
         builder=""
         buildkit_cfg=""
         proof_log=""
+        rust_source_block=""
         parent_input="$sim_dir/inputs/parent.txt"
         parent_input_orig="$(cat "$parent_input")"
         leaf_input="$sim_dir/inputs/leaf.txt"
@@ -124,6 +125,9 @@ tasks:
           fi
           if [ -n "$proof_log" ]; then
             rm -f "$proof_log"
+          fi
+          if [ -n "$rust_source_block" ]; then
+            rm -f "$rust_source_block"
           fi
           rm -rf -- "$trusted_docker_config"
         }
@@ -288,6 +292,51 @@ tasks:
         test "$ready" -eq 1
 
         proof_log="$(mktemp)"
+
+        echo "== Rust source-boundary cache proof =="
+        product_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/product.Dockerfile"
+        nightly_dockerfile="$repo_root/nook-app/nook-platform/docker/rust/nightly.Dockerfile"
+        rust_source_block="$(mktemp)"
+        awk '
+          /^FROM builder-wasm-deps AS builder-wasm-source$/ { capture = 1 }
+          /^FROM builder-wasm-source AS builder-wasm-clippy$/ { capture = 0 }
+          capture { print }
+        ' "$product_dockerfile" >"$rust_source_block"
+        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-wasm' "$rust_source_block")" -eq 8
+        test "$(grep -Fc 'cargo build --lib --release --target wasm32-unknown-unknown -p nook-companion-wasm' "$rust_source_block")" -eq 8
+        if grep -Fq -- '-p nook-wasm -p nook-companion-wasm' "$rust_source_block"; then
+          echo "WASM source prewarm must not use a joint package feature graph" >&2
+          exit 1
+        fi
+        awk '
+          /COPY nook-app\/nook-platform\/dylint\/nook-domain-api\/ dylint\/nook-domain-api\// {
+            lint_copy = NR
+          }
+          /nook-sccache-report rust-dylint-self-test/ { self_test = NR }
+          /COPY nook-app\/nook-platform\/ nook-app\/nook-platform\// && !product_copy {
+            product_copy = NR
+          }
+          /cargo dylint --all -- --all-targets/ { product_lint = NR }
+          END {
+            exit !(lint_copy < self_test && self_test < product_copy && product_copy < product_lint)
+          }
+        ' "$nightly_dockerfile"
+        BAKE_SIM_CACHE_ENABLED=
+        BAKE_SIM_CACHE_WRITE_ENABLED=
+        BAKE_SIM_CACHE_FALLBACK_ENABLED=
+        BAKE_SIM_CACHE_SCOPE_SUFFIX=
+        BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
+        BAKE_SIM_BASE_OWN_CACHE_ENABLED=
+        create_builder "nook-bake-sim-rust-source-${suffix}"
+        bake_plain "$proof_log" \
+          --set "dylint-split.args.PRODUCT_SOURCE=${suffix}-first" \
+          dylint-split
+        bake_plain "$proof_log" \
+          --set "dylint-split.args.PRODUCT_SOURCE=${suffix}-second" \
+          dylint-split
+        require_cached_step "$proof_log" "bake-sim-dylint-self-test-expensive"
+        require_uncached_step "$proof_log" "bake-sim-dylint-product-expensive"
+        echo "Rust source-boundary cache proof: ok"
 
         echo "== Scenario A: Main cold publish =="
         BAKE_SIM_CACHE_ENABLED=1

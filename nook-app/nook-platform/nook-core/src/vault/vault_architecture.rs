@@ -7,8 +7,8 @@
 
 use crate::VaultMetaRecord;
 
+use crate::StoredSecretRecord;
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{StoredSecretRecord, is_sentinel_share_stored_record};
 use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
 use std::collections::BTreeSet;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -305,15 +305,8 @@ impl VaultArchitecture {
         let mut has_auth = false;
 
         for record in records {
-            let classified = VaultMetaRecord::classify(record);
-            if record
-                .key
-                .as_str()
-                .starts_with(crate::SENTINEL_SHARE_RECORD_PREFIX)
-                && !matches!(&classified, VaultMetaRecord::SentinelShare(..))
-            {
-                return Err(ValidationError::InvalidSentinelShareSet);
-            }
+            let classified = VaultMetaRecord::classify(record)
+                .map_err(|_| ValidationError::InvalidSentinelShareSet)?;
             match classified {
                 VaultMetaRecord::Auth(..) => has_auth = true,
                 VaultMetaRecord::SentinelShare(device_id, share) => {
@@ -351,8 +344,7 @@ impl VaultArchitecture {
                 if shares.len() != usize::from(policy.required_participants)
                     || policy.ready_participants != policy.required_participants
                     || shares.iter().any(|share| {
-                        !matches!(share.version, 1 | 2)
-                            || u8::from(share.threshold) != policy.threshold
+                        u8::from(share.threshold) != policy.threshold
                             || u8::from(share.required_participants) != policy.required_participants
                             || u8::from(share.share_index) == 0
                             || u8::from(share.share_index) > policy.required_participants
@@ -386,8 +378,12 @@ impl VaultArchitecture {
         match self.vault_type {
             VaultType::Simple => true,
             VaultType::Sentinel => {
-                records.iter().any(is_sentinel_share_stored_record)
-                    && self.validate_records(records).is_ok()
+                records.iter().any(|record| {
+                    record
+                        .key
+                        .as_str()
+                        .starts_with(crate::SENTINEL_SHARE_RECORD_PREFIX)
+                }) && self.validate_records(records).is_ok()
             }
         }
     }

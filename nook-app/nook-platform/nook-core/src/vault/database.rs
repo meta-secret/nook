@@ -8,7 +8,7 @@
 use crate::{AgeArmoredCiphertext, VaultFormat};
 
 use crate::SecretId;
-use crate::errors::{DatabaseError, DatabaseResult};
+use crate::errors::{DatabaseError, DatabaseResult, VaultFormatError};
 use crate::multi_device;
 use crate::secret_types::{
     SecretRecord, SecretType, SecretValue, StoredRecordPayload, StoredSecretRecord,
@@ -120,7 +120,8 @@ impl Database {
         stored_records: &[StoredSecretRecord],
         crypto: &VaultCrypto,
     ) -> DatabaseResult<Self> {
-        let user_records = multi_device::user_stored_records(stored_records);
+        let user_records = multi_device::user_stored_records(stored_records)
+            .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
         let mut records = HashMap::new();
         for stored in user_records {
             let secret_type = stored.secret_type.ok_or(DatabaseError::MissingSecretType {

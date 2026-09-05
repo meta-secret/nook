@@ -329,7 +329,7 @@ impl ReadySentinelGenesis<'_> {
         let mut deliveries = Vec::with_capacity(share_records.len());
         for (participant, record) in session.participants.iter().zip(&share_records) {
             let VaultMetaRecord::SentinelShare(device_id, share) =
-                VaultMetaRecord::classify(record)
+                VaultMetaRecord::classify(record)?
             else {
                 return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
             };

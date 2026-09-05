@@ -99,11 +99,13 @@ pub fn rewrap_vault_meta_for_epoch(
 ) -> VaultResult<()> {
     let records =
         rewrapped_vault_meta_records_for_epoch(records_snapshot, old_members_key, new_keys)?;
-    state.auth.clear();
-    state.members.clear();
+    let mut replacement = state.clone();
+    replacement.auth.clear();
+    replacement.members.clear();
     for record in &records {
-        state.apply_record(record);
+        replacement.apply_record(record)?;
     }
+    *state = replacement;
     Ok(())
 }
 
@@ -192,7 +194,7 @@ mod tests {
             &old_keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let mut state = VaultMetaState::from_stored_records(&records);
+        let mut state = VaultMetaState::from_stored_records(&records)?;
         let old_auth_envelopes = state.auth.get(&identity.auth_id()).cloned();
 
         rewrap_vault_meta_for_epoch(&mut state, &records, &old_keys.members_key, &new_keys)?;
@@ -222,7 +224,7 @@ mod tests {
             "2026-06-28T00:00:00Z",
         )?);
         records.push(create_join_request_record(&joiner, "2026-06-28T00:01:00Z")?);
-        let join = pending_join_for_device(&records, joiner.device_id())
+        let join = pending_join_for_device(&records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("join request must exist"))?;
         let (joiner_auth, join_key, member_records) = approve_join_request(
             &old_keys.secrets_key,
@@ -233,11 +235,11 @@ mod tests {
         )?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(joiner_auth);
-        replace_member_records(&mut records, member_records);
+        replace_member_records(&mut records, member_records)?;
 
         let rotated_meta_records =
             rewrapped_vault_meta_records_for_epoch(&records, &old_keys.members_key, &new_keys)?;
-        let mut state = VaultMetaState::from_stored_records(&records);
+        let mut state = VaultMetaState::from_stored_records(&records)?;
         crate::apply_vault_meta_operation(
             &mut state,
             &VaultOperation::EpochCheckpoint {
