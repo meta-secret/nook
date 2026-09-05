@@ -124,6 +124,7 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(wasm_node_deps.contains(
         "test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run"
     ));
+    assert!(wasm_node_deps.contains("--no-run\nRUN eval"));
     assert!(!wasm_node_deps.contains("llvm-cov test"));
     assert!(!wasm_node_deps.contains("llvm-cov --no-run"));
     assert!(!wasm_node_deps.contains("RUSTC_WRAPPER="));

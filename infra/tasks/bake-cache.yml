@@ -366,7 +366,7 @@ tasks:
           wasm-node-source
         require_cached_step "$proof_log" "bake-sim-wasm-node-os-tooling-expensive"
         require_cached_step "$proof_log" "bake-sim-wasm-node-browser-tooling-expensive"
-        require_cached_step "$proof_log" "bake-sim-wasm-node-coverage-dependencies-expensive"
+        require_cached_step "$proof_log" "bake-sim-wasm-node-host-coverage-dependencies-expensive"; require_cached_step "$proof_log" "bake-sim-wasm-node-browser-coverage-dependencies-expensive"
         require_uncached_step "$proof_log" "bake-sim-wasm-node-source-expensive"
         require_uncached_step "$proof_log" "bake-sim-wasm-node-coverage-execution-expensive"
         echo "Rust source-boundary cache proof: ok"

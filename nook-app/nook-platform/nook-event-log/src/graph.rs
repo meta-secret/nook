@@ -3,7 +3,7 @@
 mod authorization;
 use crate::canonical::EventId;
 use crate::event::VaultEvent;
-use crate::{EventError, EventResult};
+use crate::{EventCount, EventError, EventResult};
 use nook_replication::{CausalGraph, CausalGraphError, CausalInsertStatus};
 use std::collections::BTreeMap;
 
@@ -36,8 +36,8 @@ impl EventGraph {
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
-        self.events.len()
+    pub fn len(&self) -> EventCount {
+        self.causal.len()
     }
 
     #[must_use]

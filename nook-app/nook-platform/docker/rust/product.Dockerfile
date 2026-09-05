@@ -294,8 +294,8 @@ RUN curl -fsSL https://bun.sh/install | bash -s -- "bun-v${BUN_VERSION}" \
 # graphs against dummy roots. Ordinary cargo --no-run never tries to merge absent profraw.
 RUN cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov clean --workspace \
     && eval "$(CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov show-env --sh)" \
-    && CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" test --release -p nook-wasm --no-run \
-    && eval "$(CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov show-env --sh --target wasm32-unknown-unknown)" \
+    && CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" test --release -p nook-wasm --no-run
+RUN eval "$(CARGO_TARGET_DIR=target/llvm-cov-target cargo +"${WASM_COVERAGE_NIGHTLY}" llvm-cov show-env --sh --target wasm32-unknown-unknown)" \
     && CARGO_TARGET_DIR=target/llvm-cov-target CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage" cargo +"${WASM_COVERAGE_NIGHTLY}" test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run
 # Source overlay for bulk native leaves. Keep this after cook so builder-*-deps stay
 # manifest-stable; platform tree edits invalidate only this stage and its consumers.

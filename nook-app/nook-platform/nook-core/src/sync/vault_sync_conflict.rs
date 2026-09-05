@@ -1,6 +1,6 @@
 //! Typed whole-vault sync conflicts.
 
-use crate::{IdentityVaultAppGrantKind, VaultOperation};
+use crate::{EventCount, IdentityVaultAppGrantKind, VaultOperation};
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -109,7 +109,8 @@ pub fn classify_current_vault_replaceability(
     else {
         return CurrentVaultReplaceability::Unknown;
     };
-    if !secrets.is_empty() || !password_entries.is_empty() || graph.len() > 1 {
+    if !secrets.is_empty() || !password_entries.is_empty() || graph.len() > EventCount::SINGLE_EVENT
+    {
         return CurrentVaultReplaceability::PreserveRequired;
     }
     CurrentVaultReplaceability::Replaceable

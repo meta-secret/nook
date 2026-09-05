@@ -120,6 +120,7 @@ unless !docker_setup_cache_script.include?("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAIL
        node_coverage_prewarm < node_browser_coverage_environment &&
        node_browser_coverage_environment < node_browser_coverage_prewarm &&
        node_browser_coverage_prewarm < node_source_join &&
+       rust_product[node_deps_start...node_source_join].include?("--no-run\nRUN eval") &&
        rust_product[node_deps_start...node_source_join].scan("CARGO_TARGET_DIR=target/llvm-cov-target").length == 4 &&
        !rust_product[node_deps_start...node_source_join].include?("RUSTC_WRAPPER=") &&
        !rust_product[node_deps_start...node_source_join].include?("llvm-cov test") &&

@@ -22,6 +22,13 @@ pub struct AppendEventInput<'a> {
 }
 
 /// Build and sign a vault event; returns the event and its provider-storage YAML bytes.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: returns canonical signed event storage bytes"
+    )
+)]
 pub fn build_signed_event(input: AppendEventInput<'_>) -> EventResult<(VaultEvent, Vec<u8>)> {
     let signing_actor_id = input.signing_identity.actor_id()?;
     if signing_actor_id != *input.actor_id {

@@ -66,7 +66,9 @@ RUN sleep 1 \
 RUN sleep 1 \
   && echo bake-sim-wasm-node-browser-tooling-expensive
 RUN sleep 1 \
-  && echo bake-sim-wasm-node-coverage-dependencies-expensive
+  && echo bake-sim-wasm-node-host-coverage-dependencies-expensive
+RUN sleep 1 \
+  && echo bake-sim-wasm-node-browser-coverage-dependencies-expensive
 
 FROM wasm-node-deps AS wasm-node-source
 ARG PRODUCT_SOURCE
