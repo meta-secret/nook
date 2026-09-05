@@ -174,8 +174,8 @@ impl AuthenticatorSecret {
         let code = format!("{:0width$}", binary % modulus, width = width);
         Ok(TotpCode {
             code,
-            seconds_remaining: period - (unix_seconds % period),
-            period,
+            seconds_remaining: (period - (unix_seconds % period)).into(),
+            period: self.period,
         })
     }
 
@@ -320,11 +320,26 @@ pub fn authenticator_setup_key_changed(
     Ok(stored != TotpSecret::parse(candidate_key)?)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TotpRemainingSeconds(u64);
+
+impl From<u64> for TotpRemainingSeconds {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<TotpRemainingSeconds> for u64 {
+    fn from(value: TotpRemainingSeconds) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TotpCode {
     pub code: String,
-    pub seconds_remaining: u64,
-    pub period: u64,
+    pub seconds_remaining: TotpRemainingSeconds,
+    pub period: TotpPeriod,
 }
 
 fn normalize_base32(value: &str) -> String {
@@ -553,6 +568,8 @@ mod tests {
         let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59)?;
         let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)?.current_code(59)?;
         assert_eq!(from_uri.code, from_secret.code);
+        assert_eq!(u64::from(from_uri.seconds_remaining), 1);
+        assert_eq!(from_uri.period, TotpPeriod::default());
         Ok(())
     }
 

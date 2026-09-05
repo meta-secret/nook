@@ -312,11 +312,12 @@ impl NookTotpCode {
 
     #[allow(clippy::cast_precision_loss)]
     pub(crate) fn from_core(value: nook_core::TotpCode, unix_seconds: u64) -> Self {
-        let seconds_remaining = u32::try_from(value.seconds_remaining).unwrap_or(u32::MAX);
+        let seconds_remaining =
+            u32::try_from(u64::from(value.seconds_remaining)).unwrap_or(u32::MAX);
         Self {
             code: value.code,
             seconds_remaining,
-            period: u32::try_from(value.period).unwrap_or(u32::MAX),
+            period: u32::try_from(value.period.serialized_value()).unwrap_or(u32::MAX),
             expires_at_unix_seconds: unix_seconds as f64 + f64::from(seconds_remaining),
         }
     }
