@@ -1544,6 +1544,8 @@ pub const LOGIN_SENTINEL_GENESIS_PARTICIPANT_COUNT_HINT: &str =
     "login.sentinel_genesis_participant_count_hint";
 pub const LOGIN_SENTINEL_GENESIS_PARTICIPANT_IMPORT_FAILED: &str =
     "login.sentinel_genesis_participant_import_failed";
+pub const LOGIN_SENTINEL_GENESIS_PHASE_AWAITING_COMPLETION_CHECK: &str =
+    "login.sentinel_genesis_phase_awaiting_completion_check";
 pub const LOGIN_SENTINEL_GENESIS_PHASE_COLLECTING_PARTICIPANTS: &str =
     "login.sentinel_genesis_phase_collecting_participants";
 pub const LOGIN_SENTINEL_GENESIS_PHASE_COMPLETE: &str = "login.sentinel_genesis_phase_complete";

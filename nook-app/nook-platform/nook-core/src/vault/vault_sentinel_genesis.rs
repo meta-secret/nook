@@ -34,6 +34,7 @@ pub enum SentinelGenesisPhase {
     ReadyToFinalize,
     DeliveringShares,
     Complete,
+    AwaitingCompletionCheck,
 }
 
 impl SentinelGenesisPhase {
@@ -56,6 +57,9 @@ impl SentinelGenesisPhase {
             Self::ReadyToFinalize => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_READY_TO_FINALIZE,
             Self::DeliveringShares => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_DELIVERING_SHARES,
             Self::Complete => i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_COMPLETE,
+            Self::AwaitingCompletionCheck => {
+                i18n_keys::LOGIN_SENTINEL_GENESIS_PHASE_AWAITING_COMPLETION_CHECK
+            }
         }
     }
 
@@ -192,6 +196,20 @@ mod tests {
 
     use super::*;
     use crate::{SentinelGenesisParticipantResponse, VaultMetaRecord};
+
+    #[test]
+    fn appended_completion_phase_preserves_public_discriminants() {
+        for (phase, discriminant) in [
+            (SentinelGenesisPhase::Inactive, 0),
+            (SentinelGenesisPhase::CollectingParticipants, 1),
+            (SentinelGenesisPhase::ReadyToFinalize, 2),
+            (SentinelGenesisPhase::DeliveringShares, 3),
+            (SentinelGenesisPhase::Complete, 4),
+            (SentinelGenesisPhase::AwaitingCompletionCheck, 5),
+        ] {
+            assert_eq!(phase as u32, discriminant);
+        }
+    }
 
     #[test]
     fn core_finalization_has_no_full_key_envelope() -> crate::VaultResult<()> {

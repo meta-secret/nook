@@ -140,10 +140,8 @@ impl NookVaultManager {
         &mut self,
         mut args: nook_core::StartSentinelGenesisArgs,
     ) -> Result<NookSentinelGenesisStatus, JsError> {
-        if load_sentinel_genesis_finalization_pending()
-            .await?
-            .is_some()
-        {
+        let pending = load_sentinel_genesis_finalization_pending().await;
+        if self.observe_sentinel_genesis_journal(pending)?.is_some() {
             return Err(JsError::new(
                 "A finalized Sentinel setup is awaiting durable completion; retry finalization first.",
             ));
