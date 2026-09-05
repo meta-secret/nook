@@ -1,6 +1,7 @@
 //! Local identity creation, selection, and session adoption.
 
 use crate::storage::{auth_providers, device_access, identity_record, indexed_db};
+use identity_record::LocalIdentityRecovery;
 use nook_core::{AppId, IdentityId, i18n_keys};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
@@ -23,7 +24,7 @@ async fn ensure_no_pending_vault_creation() -> Result<(), NookError> {
     let sentinel_pending = indexed_db::load_sentinel_genesis_finalization_pending()
         .await?
         .is_some();
-    let recovery_cleanup_pending = identity_record::has_pending_identity_recovery_cleanup().await?;
+    let recovery_cleanup_pending = LocalIdentityRecovery::has_pending().await?;
     if simple_pending || sentinel_pending || recovery_cleanup_pending {
         return Err(NookError::Database(
             "Pending vault creation or recovery cleanup must finish before changing identities"

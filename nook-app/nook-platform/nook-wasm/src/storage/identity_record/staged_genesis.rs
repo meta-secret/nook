@@ -1,6 +1,6 @@
 //! Staged identity ownership for crash-safe fresh-vault genesis.
 
-use super::recovery;
+use super::LocalIdentityRecovery;
 use nook_core::IsoTimestamp;
 
 use std::{cell::RefCell, rc::Rc};
@@ -78,7 +78,7 @@ pub(crate) async fn begin_or_resume_staged_simple_genesis(
     ),
     NookError,
 > {
-    if recovery::has_pending_identity_recovery_cleanup().await? {
+    if LocalIdentityRecovery::has_pending().await? {
         return Err(NookError::Database(
             "Pending identity recovery cleanup must finish before staged vault creation."
                 .to_owned(),

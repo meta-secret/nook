@@ -105,10 +105,7 @@ use reconciliation::{
 };
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY;
-pub(crate) use recovery::{
-    LocalIdentityRecovery, complete_identity_recovery_cleanup,
-    delete_identity_directory_for_recovery, has_pending_identity_recovery_cleanup,
-};
+pub(crate) use recovery::{LocalIdentityRecovery, delete_identity_directory_for_recovery};
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
     PendingSimpleGenesis, begin_or_resume_simple_genesis, pending_simple_genesis,

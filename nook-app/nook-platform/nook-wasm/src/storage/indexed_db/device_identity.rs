@@ -349,7 +349,7 @@ mod tests {
             idb_get_string("vault:preserved").await?,
             Some("ciphertext".to_owned())
         );
-        identity_record::complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         Ok(())
     }
 }

@@ -874,7 +874,7 @@ impl NookVaultManager {
         } else {
             auth_providers::delete_auth_providers_db().await?;
         }
-        identity_record::complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         Ok(())
     }
 }
