@@ -13,7 +13,7 @@ use std::collections::BTreeSet;
 mod genesis_finalization;
 mod unlock_finalization;
 
-use super::{CeremonyState, NookVaultManager, VaultCryptoState};
+use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::auth_providers::save_auth_providers;
@@ -524,12 +524,24 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(content)?;
         let stored_records = nook_core::deserialize_stored(content, format)?;
         let meta = VaultMetaState::from_stored_records(&stored_records)?;
-        self.capture_vault_unlock(content)?;
-        self.vault.meta = meta;
-        self.ensure_sentinel_architecture_from_shares()?;
-        if !self.is_sentinel_session() {
+        let metadata = nook_core::capture_vault_unlock_from_content(content)?;
+        self.application
+            .validate_session_access(metadata.architecture.vault_type)?;
+        let mut architecture = metadata.architecture;
+        if let Some(policy) = Self::sentinel_policy_from_shares(&meta)? {
+            architecture.vault_type = VaultType::Sentinel;
+            architecture.sentinel = SentinelConfiguration::Enabled(policy);
+        }
+        if architecture.vault_type != VaultType::Sentinel {
             return Err(MultiDeviceError::InvalidSentinelThreshold.into());
         }
+        self.vault.unlock = metadata.unlock;
+        self.vault.password_entries = metadata.password_entries;
+        self.vault.store_id = metadata.store_id;
+        self.vault.vault_name = VaultNameState::Named(metadata.vault_name);
+        self.vault.vault_version = metadata.version;
+        self.vault.architecture = architecture;
+        self.vault.meta = meta;
         self.vault.secrets_key.clear();
         self.vault.members_key.clear();
         self.vault.crypto = VaultCryptoState::Locked;
@@ -546,10 +558,20 @@ impl NookVaultManager {
     pub(in crate::manager) fn ensure_sentinel_architecture_from_shares(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.vault.meta.sentinel_shares.is_empty() {
-            return Ok(());
+        if let Some(policy) = Self::sentinel_policy_from_shares(&self.vault.meta)? {
+            self.vault.architecture.vault_type = VaultType::Sentinel;
+            self.vault.architecture.sentinel = SentinelConfiguration::Enabled(policy);
         }
-        let mut shares = self.vault.meta.sentinel_shares.values();
+        Ok(())
+    }
+
+    fn sentinel_policy_from_shares(
+        meta: &VaultMetaState,
+    ) -> Result<Option<nook_core::SentinelPolicy>, NookError> {
+        if meta.sentinel_shares.is_empty() {
+            return Ok(None);
+        }
+        let mut shares = meta.sentinel_shares.values();
         let first = shares
             .next()
             .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
@@ -574,16 +596,13 @@ impl NookVaultManager {
         {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding.into());
         }
-        let share_count = u8::try_from(self.vault.meta.sentinel_shares.len())
+        let share_count = u8::try_from(meta.sentinel_shares.len())
             .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
-        self.vault.architecture.vault_type = VaultType::Sentinel;
-        self.vault.architecture.sentinel =
-            SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
-                threshold,
-                required_participants: required,
-                ready_participants: share_count,
-            });
-        Ok(())
+        Ok(Some(nook_core::SentinelPolicy {
+            threshold,
+            required_participants: required,
+            ready_participants: share_count,
+        }))
     }
 }
 

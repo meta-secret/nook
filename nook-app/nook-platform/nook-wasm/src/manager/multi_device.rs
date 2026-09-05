@@ -122,7 +122,7 @@ impl NookVaultManager {
         }
 
         let format = nook_core::detect_stored_format(&content)?;
-        let mut records = nook_core::deserialize_stored(&content, format)?;
+        let records = nook_core::deserialize_stored(&content, format)?;
         let parsed_secrets = SymmetricKey::parse(&secrets_key)?;
         let parsed_members = SymmetricKey::parse(&members_key)?;
 

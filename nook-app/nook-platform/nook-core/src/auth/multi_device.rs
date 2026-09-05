@@ -446,8 +446,8 @@ pub fn sentinel_member_records_from_public_roster(
 #[cfg(test)]
 mod tests {
     use crate::{
-        AppKey, EpochMetadataState, EpochPasswordState, IdentityRecord, PasswordEntryId,
-        SecretType, StoredRecordPayload,
+        AppKey, EpochMetadataState, EpochPasswordState, IdentityRecord, PasswordEntryId, SecretId,
+        SecretType, StoredRecordPayload, StoredSecretRecord,
     };
 
     use std::io;
