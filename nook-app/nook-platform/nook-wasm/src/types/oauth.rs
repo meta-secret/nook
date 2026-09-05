@@ -206,3 +206,48 @@ impl NookOAuthAccountIdentity {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refresh_credentials_and_expiry_project_states_and_values() {
+        let missing = NookOAuthRefreshCredential::not_issued();
+        assert_eq!(missing.state(), NookOAuthRefreshCredentialState::NotIssued);
+        let issued = NookOAuthRefreshCredential::token("refresh-token".into());
+        assert_eq!(issued.state(), NookOAuthRefreshCredentialState::Token);
+        assert_eq!(issued.value().unwrap(), "refresh-token");
+
+        let unknown = NookOAuthTokenExpiry::unknown();
+        assert_eq!(unknown.state(), NookOAuthTokenExpiryState::Unknown);
+        let known = NookOAuthTokenExpiry::expires_at("2030-01-01T00:00:00Z".into());
+        assert_eq!(known.state(), NookOAuthTokenExpiryState::ExpiresAt);
+        assert_eq!(known.value().unwrap(), "2030-01-01T00:00:00Z");
+    }
+
+    #[test]
+    fn remote_files_and_account_identities_project_all_variants() {
+        let unresolved = NookOAuthRemoteFile::unresolved();
+        assert_eq!(unresolved.state(), NookOAuthRemoteFileState::Unresolved);
+
+        let by_id = NookOAuthRemoteFile::file_id("file-1".into());
+        assert_eq!(by_id.state(), NookOAuthRemoteFileState::FileId);
+        assert_eq!(by_id.file_id_value().unwrap(), "file-1");
+
+        let by_name = NookOAuthRemoteFile::file_name("events.json".into());
+        assert_eq!(by_name.state(), NookOAuthRemoteFileState::FileName);
+        assert_eq!(by_name.file_name_value().unwrap(), "events.json");
+
+        let identified = NookOAuthRemoteFile::identified("file-2".into(), "vault.json".into());
+        assert_eq!(identified.state(), NookOAuthRemoteFileState::Identified);
+        assert_eq!(identified.file_id_value().unwrap(), "file-2");
+        assert_eq!(identified.file_name_value().unwrap(), "vault.json");
+
+        let unknown = NookOAuthAccountIdentity::unknown();
+        assert_eq!(unknown.state(), NookOAuthAccountIdentityState::Unknown);
+        let account = NookOAuthAccountIdentity::email("owner@example.com".into());
+        assert_eq!(account.state(), NookOAuthAccountIdentityState::Email);
+        assert_eq!(account.value().unwrap(), "owner@example.com");
+    }
+}

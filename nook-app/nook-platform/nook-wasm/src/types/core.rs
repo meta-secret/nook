@@ -317,6 +317,66 @@ impl NookProviderReplicationCapability {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nook_core::{DeviceMode, ReplicationType};
+
+    #[test]
+    fn revision_and_store_scope_wrappers_project_presence_and_values() {
+        let unknown = NookProviderSyncRevision::untracked();
+        assert_eq!(unknown.state(), NookProviderSyncRevisionState::Untracked);
+        assert!(matches!(
+            unknown.as_core(),
+            ProviderSyncRevisionRef::Unreported
+        ));
+
+        let tracked = NookProviderSyncRevision::tracked("r-7".into());
+        assert_eq!(tracked.state(), NookProviderSyncRevisionState::Tracked);
+        assert_eq!(tracked.value().unwrap(), "r-7");
+        assert!(matches!(
+            tracked.as_core(),
+            ProviderSyncRevisionRef::Revision("r-7")
+        ));
+
+        let unscoped = NookManagerStoreScope::unscoped();
+        assert_eq!(unscoped.state(), NookManagerStoreScopeState::Unscoped);
+        assert!(matches!(unscoped.as_core(), ManagerStoreScopeRef::Unscoped));
+
+        let scoped = NookManagerStoreScope::scoped("store-1".into());
+        assert_eq!(scoped.state(), NookManagerStoreScopeState::Scoped);
+        assert_eq!(scoped.store_id().unwrap(), "store-1");
+        assert!(matches!(
+            scoped.as_core(),
+            ManagerStoreScopeRef::Store("store-1")
+        ));
+    }
+
+    #[test]
+    fn vault_architecture_wrappers_project_simple_and_sentinel_policy() {
+        let simple = NookVaultArchitecture::simple(DeviceMode::Standard, ReplicationType::Personal)
+            .expect("valid simple architecture");
+        assert_eq!(simple.device_mode(), DeviceMode::Standard);
+        assert_eq!(simple.vault_type(), VaultType::Simple);
+        assert_eq!(simple.replication_type(), ReplicationType::Personal);
+
+        let sentinel = NookVaultArchitecture::sentinel(
+            DeviceMode::AntiHacker,
+            ReplicationType::Shared,
+            2,
+            3,
+            1,
+        )
+        .expect("valid sentinel architecture");
+        assert_eq!(sentinel.device_mode(), DeviceMode::AntiHacker);
+        assert_eq!(sentinel.vault_type(), VaultType::Sentinel);
+        assert_eq!(sentinel.replication_type(), ReplicationType::Shared);
+        assert_eq!(sentinel.sentinel_threshold().unwrap(), 2);
+        assert_eq!(sentinel.sentinel_required_participants().unwrap(), 3);
+        assert_eq!(sentinel.sentinel_ready_participants().unwrap(), 1);
+    }
+}
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookAuthenticatorAccount {
