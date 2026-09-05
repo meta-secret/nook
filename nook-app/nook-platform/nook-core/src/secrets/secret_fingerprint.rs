@@ -198,7 +198,10 @@ fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
                 public_key_cose, ..
             } = &passkey.key;
             append_field(&mut bytes, public_key_cose.encoded());
-            append_field(&mut bytes, passkey.signature_count.to_string().as_str());
+            append_field(
+                &mut bytes,
+                u32::from(passkey.signature_count).to_string().as_str(),
+            );
             append_field(&mut bytes, if passkey.discoverable { "1" } else { "0" });
             append_field(&mut bytes, if passkey.backup_eligible { "1" } else { "0" });
             append_field(&mut bytes, if passkey.backup_state { "1" } else { "0" });
@@ -610,7 +613,7 @@ mod tests {
         let SecretValue::Passkey(updated_passkey) = &mut updated else {
             unreachable!();
         };
-        updated_passkey.signature_count = 1;
+        updated_passkey.signature_count = 1.into();
 
         assert_eq!(
             secret_identity_fingerprint(&first, &key('a')?),
