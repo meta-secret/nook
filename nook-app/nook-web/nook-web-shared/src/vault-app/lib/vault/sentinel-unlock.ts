@@ -276,7 +276,12 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     const replacement: UnlockSessionReplacement = { state, status };
     replaceUnlockSession(replacement);
     if (!status.active) state.sentinelUnlockRequest = "";
-    if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
+    state.sentinelUnlockStatus = state
+      .requireManager()
+      .sentinel_unlock_status();
+    if (state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked) {
+      state.sentinelCeremonyPrompt = false;
+    } else if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
       state.sentinelCeremonyPrompt = true;
       state.errorMsg = "";
       return;

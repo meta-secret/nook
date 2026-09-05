@@ -32,7 +32,7 @@ class SentinelFinalizationFixture {
     sentinelCeremonyPrompt: true,
     loginPasswordPrompt: false,
     requireManager: () =>
-      this.manager as ReturnType<VaultState['requireManager']>,
+      this.manager as unknown as ReturnType<VaultState['requireManager']>,
     enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
       operation(),
     dismissSuccess: vi.fn(),
@@ -59,7 +59,7 @@ class SentinelFinalizationFixture {
   }
 
   async finalize(): Promise<void> {
-    await finalizeSentinelUnlock(this.state as VaultState)
+    await finalizeSentinelUnlock(this.state as unknown as VaultState)
   }
 
   expectNoAutomaticCeremony(): void {
@@ -68,7 +68,6 @@ class SentinelFinalizationFixture {
     expect(this.state.connectStorageArgs).not.toHaveBeenCalled()
     expect(this.manager.connect).not.toHaveBeenCalled()
     expect(this.manager.start_sentinel_unlock).not.toHaveBeenCalled()
-    expect(this.manager.sentinel_unlock_status).not.toHaveBeenCalled()
   }
 
   dispose(): void {
@@ -96,6 +95,10 @@ describe('Sentinel quorum completion presentation', () => {
     expect(fixture.state.sentinelUnlockSession.ready).toBe(false)
     expect(fixture.state.sentinelUnlockRequest).toBe('')
     expect(fixture.state.errorMsg).toBe('terminal reconstruction failed')
+    expect(fixture.state.sentinelUnlockStatus).toBe(
+      SentinelVaultUnlockState.NotSentinel,
+    )
+    expect(fixture.manager.sentinel_unlock_status).toHaveBeenCalledOnce()
     expect(fixture.state.isVerifying).toBe(false)
     expect(fixture.state.loadSecretPage).not.toHaveBeenCalled()
     fixture.expectNoAutomaticCeremony()
@@ -108,6 +111,9 @@ describe('Sentinel quorum completion presentation', () => {
   test('reflects the retained active ceremony after admission rejection without hydration', async () => {
     const fixture = new SentinelFinalizationFixture()
     vi.spyOn(fixture.current, 'active', 'get').mockReturnValue(true)
+    fixture.manager.sentinel_unlock_status.mockReturnValue(
+      SentinelVaultUnlockState.CeremonyRequired,
+    )
     fixture.manager.finalize_sentinel_unlock.mockRejectedValue(
       new Error('SentinelCeremonyRequired'),
     )
@@ -123,12 +129,53 @@ describe('Sentinel quorum completion presentation', () => {
     expect(fixture.state.sentinelUnlockSession.ready).toBe(false)
     expect(fixture.state.sentinelUnlockRequest).toBe('current ceremony request')
     expect(fixture.state.sentinelCeremonyPrompt).toBe(true)
+    expect(fixture.state.sentinelUnlockStatus).toBe(
+      SentinelVaultUnlockState.CeremonyRequired,
+    )
+    expect(fixture.manager.sentinel_unlock_status).toHaveBeenCalledOnce()
     expect(fixture.state.errorMsg).toBe('')
     expect(fixture.state.isVerifying).toBe(false)
     expect(fixture.state.markVaultUnlocked).not.toHaveBeenCalled()
     fixture.expectNoAutomaticCeremony()
     fixture.dispose()
   })
+
+  test.each([
+    'loadSecretPage',
+    'ensureProviderSaved',
+    'loadProviders',
+  ] as const)(
+    'keeps Rust unlocked and the ceremony closed when %s rejects after finalization',
+    async (operation) => {
+      const fixture = new SentinelFinalizationFixture()
+      fixture.manager.sentinel_unlock_status.mockReturnValue(
+        SentinelVaultUnlockState.Unlocked,
+      )
+      fixture.state[operation].mockRejectedValue(
+        new Error('SentinelCeremonyRequired'),
+      )
+
+      await fixture.finalize()
+
+      expect(fixture.manager.finalize_sentinel_unlock).toHaveBeenCalledOnce()
+      expect(fixture.manager.sentinel_unlock_status).toHaveBeenCalledOnce()
+      expect(fixture.previousFree).toHaveBeenCalledOnce()
+      expect(fixture.state.sentinelUnlockSession).toBe(fixture.current)
+      expect(fixture.state.sentinelUnlockSession.active).toBe(false)
+      expect(fixture.state.sentinelUnlockStatus).toBe(
+        SentinelVaultUnlockState.Unlocked,
+      )
+      expect(fixture.state.sentinelCeremonyPrompt).toBe(false)
+      expect(fixture.state.sentinelUnlockRequest).toBe('')
+      expect(fixture.state.errorMsg).toBe('SentinelCeremonyRequired')
+      expect(fixture.state.isVerifying).toBe(false)
+      expect(fixture.state.isAuthenticated).toBe(false)
+      expect(fixture.state.markVaultUnlocked).not.toHaveBeenCalled()
+      expect(fixture.state.startVaultSync).not.toHaveBeenCalled()
+      fixture.expectNoAutomaticCeremony()
+      fixture.dispose()
+    },
+  )
 
   test('keeps successful page and provider loading before unlocked presentation and sync', async () => {
     const fixture = new SentinelFinalizationFixture()
@@ -138,6 +185,7 @@ describe('Sentinel quorum completion presentation', () => {
     expect(
       fixture.manager.sentinel_unlock_session_status,
     ).not.toHaveBeenCalled()
+    expect(fixture.manager.sentinel_unlock_status).not.toHaveBeenCalled()
     expect(fixture.previousFree).toHaveBeenCalledOnce()
     expect(fixture.state.sentinelUnlockSession.active).toBe(false)
     expect(fixture.state.sentinelUnlockRequest).toBe('')
