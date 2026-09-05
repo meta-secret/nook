@@ -65,6 +65,26 @@ export type HandleSessionMessageArgs = {
   context: SessionOperationContext
 }
 
+type ClassifySessionGrantAuthorityArgs = {
+  manager: Pick<NookVaultManager, 'classify_extension_grant_authority'>
+  payload: Extract<
+    ExtensionSessionRequest,
+    {
+      type: ExtensionSessionMessageType.ClassifyGrantAuthority
+    }
+  >['payload']
+}
+
+export function classifySessionGrantAuthority({
+  manager,
+  payload,
+}: ClassifySessionGrantAuthorityArgs) {
+  return manager.classify_extension_grant_authority(
+    payload.stored_json,
+    payload.vault_store_id,
+  )
+}
+
 export async function handleSessionMessage({
   message,
   context,
@@ -78,6 +98,13 @@ export async function handleSessionMessage({
   } = context
   const sessionGeneration = context.currentGeneration()
   switch (message.type) {
+    case ExtensionSessionMessageType.ClassifyGrantAuthority: {
+      const args: ClassifySessionGrantAuthorityArgs = {
+        manager: await getManager(),
+        payload: message.payload,
+      }
+      return classifySessionGrantAuthority(args)
+    }
     case ExtensionSessionMessageType.Reset: {
       pendingLoginSaveOfferStore.clearAll()
       clearWebsitePasskeyRequests()

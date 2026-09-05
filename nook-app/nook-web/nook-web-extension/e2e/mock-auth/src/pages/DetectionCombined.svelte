@@ -31,7 +31,12 @@
   {#if error}
     <p class="error" role="alert">{error}</p>
   {/if}
-  <form id="signup-form" onsubmit={onSignupSubmit}>
+  <form
+    id="signup-form"
+    method="post"
+    action="/auth/register"
+    onsubmit={onSignupSubmit}
+  >
     <input
       autocomplete="section-signup username"
       name="signup-email"
@@ -44,7 +49,12 @@
     />
     <button type="submit">Create account</button>
   </form>
-  <form id="login-form" onsubmit={onLoginSubmit}>
+  <form
+    id="login-form"
+    method="post"
+    action="/auth/login"
+    onsubmit={onLoginSubmit}
+  >
     <input autocomplete="section-login username" name="email" type="email" />
     <input
       autocomplete="section-login current-password webauthn"

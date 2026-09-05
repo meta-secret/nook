@@ -86,6 +86,7 @@ function sessionMessagePriority(
     case ExtensionSessionMessageType.UnlockPasskey:
     case ExtensionSessionMessageType.UnlockPin:
       return SessionOperationPriority.Interactive
+    case ExtensionSessionMessageType.ClassifyGrantAuthority:
     case ExtensionSessionMessageType.Status:
     case ExtensionSessionMessageType.FinishPasskeySetup:
     case ExtensionSessionMessageType.RecoverPasskey:

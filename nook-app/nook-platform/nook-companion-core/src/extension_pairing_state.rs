@@ -6,8 +6,10 @@
 
 //! Typed extension pairing records shared by browser storage and policy.
 
+mod authority;
 mod legacy;
 
+pub use authority::*;
 use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
