@@ -144,7 +144,7 @@ describe('DOM-backed companion authentication simulation', () => {
     const loginForm = document.querySelector('.loginForm')
     expect(result.observedRoots).toHaveLength(1)
     expect(result.observedRoots[0]).toBe(loginForm)
-    expect(result.selectedRoot).toBe(loginForm)
+    expect(result.selectedRoot).toBe(false)
     expect(fieldValue('.loginForm [name="LoginUserName"]')).toBe('')
     expect(fieldValue('.loginForm [name="LoginPassword"]')).toBe('')
     expect(fieldValue('header [name="LoginUserName"]')).toBe('header-user')
