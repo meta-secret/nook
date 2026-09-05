@@ -1,4 +1,9 @@
 //! Portable local keyring records for independently protected identities.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
 use std::collections::HashSet;
 
@@ -29,7 +34,7 @@ impl LocalIdentityKeyringEntry {
         wrapped_app_key: WrappedDeviceIdentity,
         signing_seed: &str,
     ) -> MultiDeviceResult<Self> {
-        let signing_public_key = signing_public_key(signing_seed)?;
+        let signing_public_key = DeviceSigningPublicKey::derive_from_seed(signing_seed)?;
         let signing_seed_envelope = app_key.seal_utf8(signing_seed)?;
         let entry = Self {
             identity_id,
@@ -96,7 +101,7 @@ impl LocalIdentityKeyringEntry {
                 "local identity keyring entry has no protected signing seed".to_owned(),
             )
         })?;
-        signing_public_key(&seed)
+        DeviceSigningPublicKey::derive_from_seed(&seed)
     }
 
     pub fn protect_signing_seed(
@@ -105,7 +110,7 @@ impl LocalIdentityKeyringEntry {
         signing_seed: &str,
     ) -> MultiDeviceResult<DeviceSigningPublicKey> {
         self.require_matching_app_key(app_key)?;
-        let signing_public_key = signing_public_key(signing_seed)?;
+        let signing_public_key = DeviceSigningPublicKey::derive_from_seed(signing_seed)?;
         self.signing_seed_envelope = Some(app_key.seal_utf8(signing_seed)?);
         Ok(signing_public_key)
     }
@@ -134,21 +139,25 @@ impl LocalIdentityKeyringEntry {
     }
 }
 
-fn signing_public_key(signing_seed: &str) -> MultiDeviceResult<DeviceSigningPublicKey> {
-    let seed = SigningSeedHex::parse(signing_seed)?;
-    let bytes = hex::decode(seed.as_str()).map_err(|_| {
-        MultiDeviceError::InvalidDeviceIdentity("event signing seed is not hexadecimal".to_owned())
-    })?;
-    let seed_bytes: [u8; 32] = bytes.try_into().map_err(|_| {
-        MultiDeviceError::InvalidDeviceIdentity(
-            "event signing seed has the wrong length".to_owned(),
-        )
-    })?;
-    Ok(DeviceSigningPublicKey::from_trusted(hex::encode(
-        SigningKey::from_bytes(&seed_bytes)
-            .verifying_key()
-            .as_bytes(),
-    )))
+impl DeviceSigningPublicKey {
+    fn derive_from_seed(signing_seed: &str) -> MultiDeviceResult<Self> {
+        let seed = SigningSeedHex::parse(signing_seed)?;
+        let bytes = hex::decode(seed.as_str()).map_err(|_| {
+            MultiDeviceError::InvalidDeviceIdentity(
+                "event signing seed is not hexadecimal".to_owned(),
+            )
+        })?;
+        let seed_bytes: [u8; 32] = bytes.try_into().map_err(|_| {
+            MultiDeviceError::InvalidDeviceIdentity(
+                "event signing seed has the wrong length".to_owned(),
+            )
+        })?;
+        Ok(Self::from_trusted(hex::encode(
+            SigningKey::from_bytes(&seed_bytes)
+                .verifying_key()
+                .as_bytes(),
+        )))
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -263,23 +272,95 @@ impl Default for LocalIdentityKeyring {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ValidationError;
 
-    fn entry() -> anyhow::Result<(LocalIdentityKeyringEntry, AppKey, DeviceSigningPublicKey)> {
-        let app_key = AppKey::generate()?;
-        let identity_id = IdentityId::generate()?;
-        let wrapped = crate::wrap_device_identity_with_pin(
-            &app_key.secret_string(),
-            "correct horse battery staple",
+    struct ProtectedEntryFixture {
+        entry: LocalIdentityKeyringEntry,
+        app_key: AppKey,
+        signing_public_key: DeviceSigningPublicKey,
+    }
+
+    impl ProtectedEntryFixture {
+        fn new() -> anyhow::Result<Self> {
+            let app_key = AppKey::generate()?;
+            let identity_id = IdentityId::generate()?;
+            let wrapped = crate::wrap_device_identity_with_pin(
+                &app_key.secret_string(),
+                "correct horse battery staple",
+            )?;
+            let seed = "11".repeat(32);
+            let signing_public_key = DeviceSigningPublicKey::derive_from_seed(&seed)?;
+            let entry =
+                LocalIdentityKeyringEntry::protected(identity_id, &app_key, wrapped, &seed)?;
+            Ok(Self {
+                entry,
+                app_key,
+                signing_public_key,
+            })
+        }
+
+        fn expect_invalid_identity<T>(
+            result: MultiDeviceResult<T>,
+            expected: &str,
+        ) -> anyhow::Result<()> {
+            match result {
+                Err(MultiDeviceError::InvalidDeviceIdentity(message)) => {
+                    assert_eq!(message, expected);
+                    Ok(())
+                }
+                Err(error) => Err(error.into()),
+                Ok(_) => anyhow::bail!("Invalid identity operation unexpectedly succeeded"),
+            }
+        }
+
+        fn expect_invalid_seed<T>(result: MultiDeviceResult<T>) -> anyhow::Result<()> {
+            match result {
+                Err(MultiDeviceError::Validation(ValidationError::SigningSeedInvalid)) => Ok(()),
+                Err(error) => Err(error.into()),
+                Ok(_) => anyhow::bail!("Invalid signing seed unexpectedly succeeded"),
+            }
+        }
+    }
+
+    #[test]
+    fn invalid_seeds_leave_protected_material_unchanged() -> anyhow::Result<()> {
+        let ProtectedEntryFixture {
+            mut entry,
+            app_key,
+            signing_public_key,
+        } = ProtectedEntryFixture::new()?;
+        let original = entry.clone();
+        for seed in [
+            String::new(),
+            "11".repeat(31),
+            "11".repeat(33),
+            "zz".repeat(32),
+        ] {
+            ProtectedEntryFixture::expect_invalid_seed(DeviceSigningPublicKey::derive_from_seed(
+                &seed,
+            ))?;
+            ProtectedEntryFixture::expect_invalid_seed(
+                entry.protect_signing_seed(&app_key, &seed),
+            )?;
+            assert_eq!(entry, original);
+        }
+        let other_key = AppKey::generate()?;
+        ProtectedEntryFixture::expect_invalid_identity(
+            entry.protect_signing_seed(&other_key, "invalid"),
+            "local identity keyring app id does not match the unlocked app key",
         )?;
-        let seed = "11".repeat(32);
-        let signing_public_key = signing_public_key(&seed)?;
-        let entry = LocalIdentityKeyringEntry::protected(identity_id, &app_key, wrapped, &seed)?;
-        Ok((entry, app_key, signing_public_key))
+        assert_eq!(entry, original);
+        assert_eq!(entry.signing_public_key(&app_key)?, signing_public_key);
+        Ok(())
     }
 
     #[test]
     fn protected_entry_opens_only_with_its_app_key() -> anyhow::Result<()> {
-        let (entry, app_key, signing_public_key) = entry()?;
+        let ProtectedEntryFixture {
+            entry,
+            app_key,
+            signing_public_key,
+        } = ProtectedEntryFixture::new()?;
 
         assert_eq!(entry.signing_public_key(&app_key)?, signing_public_key);
         assert!(entry.open_signing_seed(&AppKey::generate()?).is_err());
@@ -288,7 +369,7 @@ mod tests {
 
     #[test]
     fn keyring_rejects_shared_app_keys_and_duplicate_identities() -> anyhow::Result<()> {
-        let (first, _, _) = entry()?;
+        let first = ProtectedEntryFixture::new()?.entry;
         let duplicate_identity = first.clone();
         assert!(
             LocalIdentityKeyring::from_entries(vec![first.clone(), duplicate_identity]).is_err()
@@ -305,7 +386,11 @@ mod tests {
 
     #[test]
     fn keyring_roundtrip_preserves_only_wrapped_private_material() -> anyhow::Result<()> {
-        let (entry, app_key, signing_public_key) = entry()?;
+        let ProtectedEntryFixture {
+            entry,
+            app_key,
+            signing_public_key,
+        } = ProtectedEntryFixture::new()?;
         let keyring = LocalIdentityKeyring::from_entries(vec![entry])?;
         let encoded = serde_json::to_string(&keyring)?;
         let decoded: LocalIdentityKeyring = serde_json::from_str(&encoded)?;
@@ -321,7 +406,11 @@ mod tests {
 
     #[test]
     fn replacing_wrapped_app_key_preserves_protected_signing_seed() -> anyhow::Result<()> {
-        let (mut entry, app_key, signing_public_key) = entry()?;
+        let ProtectedEntryFixture {
+            mut entry,
+            app_key,
+            signing_public_key,
+        } = ProtectedEntryFixture::new()?;
         let replacement = crate::wrap_device_identity_with_pin(
             &app_key.secret_string(),
             "replacement browser protection",
