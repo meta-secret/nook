@@ -5,8 +5,8 @@ use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation
 use crate::i18n_keys;
 use crate::{
     DeviceIdentity, DeviceMode, ReadySentinelGenesis, ReplicationType, SentinelGenesisReadiness,
-    SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelPolicy, SigningIdentity,
-    StoredSecretRecord, VaultArchitecture, VaultType,
+    SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelParticipantCount, SentinelPolicy,
+    SentinelThreshold, SigningIdentity, StoredSecretRecord, VaultArchitecture, VaultType,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -18,8 +18,10 @@ use wasm_bindgen::prelude::wasm_bindgen;
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct StartSentinelGenesisArgs {
     pub label: String,
-    pub participant_count: u8,
-    pub threshold: u8,
+    #[tsify(type = "number")]
+    pub participant_count: SentinelParticipantCount,
+    #[tsify(type = "number")]
+    pub threshold: SentinelThreshold,
 }
 
 /// Portable Sentinel setup phase shared by every host.
@@ -125,8 +127,8 @@ impl StartSentinelGenesisArgs {
         SentinelGenesisSession::start(
             identity,
             signing.signing_key(),
-            self.participant_count.into(),
-            self.threshold.into(),
+            self.participant_count,
+            self.threshold,
             self.label,
         )
     }
@@ -212,6 +214,14 @@ mod tests {
     }
 
     #[test]
+    fn start_args_preserve_numeric_json() -> anyhow::Result<()> {
+        let encoded = r#"{"label":"Owner","participantCount":3,"threshold":2}"#;
+        let args = serde_json::from_str::<StartSentinelGenesisArgs>(encoded)?;
+        assert_eq!(serde_json::to_string(&args)?, encoded);
+        Ok(())
+    }
+
+    #[test]
     fn core_finalization_has_no_full_key_envelope() -> crate::VaultResult<()> {
         assert_eq!(
             SentinelGenesisPhase::CollectingParticipants.translation_key(),
@@ -229,8 +239,8 @@ mod tests {
         let (owner_signing, _) = SigningIdentity::generate()?;
         let session = StartSentinelGenesisArgs {
             label: "Owner".to_owned(),
-            participant_count: 2,
-            threshold: 2,
+            participant_count: 2.into(),
+            threshold: 2.into(),
         }
         .start(&owner, &owner_signing)?;
         assert_eq!(

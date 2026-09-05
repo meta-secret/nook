@@ -623,8 +623,8 @@ mod tests {
         let (signing, _) = SigningIdentity::generate()?;
         let session = nook_core::StartSentinelGenesisArgs {
             label: "Initiator".to_owned(),
-            participant_count: 3,
-            threshold: 2,
+            participant_count: 3.into(),
+            threshold: 2.into(),
         }
         .start(&identity, &signing)?;
         let mut manager = NookVaultManager::new();
