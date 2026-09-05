@@ -585,11 +585,15 @@ task infra:status           # inspect the remote infrastructure stack
 task infra:sccache:check    # remote SeaweedFS S3 anonymous-deny + signed access
 ```
 
-Expensive remote browser/full-suite dispatches and `task pr:validate` refresh
-the target base first and stop immediately when the branch is behind. Merge the
-reported `origin/<base>` into the delivery branch. Gizmo then runs pre-push
-hygiene, pushes, and reruns instead of spending hosted validation on an
-obsolete base.
+Expensive remote browser/full-suite dispatches and the initial
+`task pr:validate` request refresh the target base first and stop immediately
+when the branch is behind. Merge the reported `origin/<base>` into the delivery
+branch before spending hosted validation.
+
+After successful exact-head PR checks, a later advance of `main` does not by
+itself require a rebase or another expensive validation cycle. Re-run
+`task pr:ready PR=<number>` and merge when the PR remains conflict-free and has
+no unhandled review feedback. A later push still invalidates the prior checks.
 
 Routine `task infra:deploy` runs preserve Hive's cluster-rotated Codex
 authentication even if `HIVE_CODEX_AUTH_FILE` remains set. Use the explicit

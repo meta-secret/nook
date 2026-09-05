@@ -19,8 +19,9 @@ Agents waste delivery time when they:
 - delay hosted validation while waiting for review feedback; or
 - cancel in-flight validation solely because non-security review findings arrive.
 
-Moving `main`, unresolved-conversation policy, and exact-head deployment
-requirements are then discovered only at merge time.
+Unresolved-conversation policy, exact-head deployment requirements, and the
+distinction between a new PR head and a later `main` advance are then
+discovered only at merge time.
 
 ## Preferred Pattern
 
@@ -65,7 +66,10 @@ Delivery rules:
   - Current findings and failed checks become one repair batch.
   - Codex is the sole automatic provider. Cursor Bugbot remains inactive.
 - Inspect feedback again at the readiness boundary.
-- A later push invalidates the audit.
+- A later push invalidates the audit for that PR head.
+- A later advance of `main` does not invalidate a successful exact-head audit
+  by itself. The readiness audit still requires a mergeable PR, successful
+  exact-head checks and deployment, and clean review state.
 - Keep PR monitoring in the active task with bounded direct waits. Never create
   a Codex scheduled task, automation, heartbeat, reminder, or recurring
   follow-up to finish delivery later.
@@ -101,8 +105,10 @@ Does not apply to:
 - After when ready: immediate complete validation with concurrent exact-head
   Cloud review collection → one combined repair batch and readiness check →
   squash merge.
-- Before: discover stale-base requirements after a failed merge command.
-- After: `task pr:preflight` / Loom ready reports the blocker before merge.
+- Before: spend another full validation cycle only because `main` advanced
+  after the PR checks passed.
+- After: require a current base before starting expensive validation, then
+  re-run readiness without rebasing when only `main` advanced afterward.
 
 ## Application Checklist
 
@@ -121,6 +127,8 @@ Does not apply to:
 - [ ] Collect exact-head review during hosted validation.
 - [ ] Address current findings and failed checks as one coherent batch.
 - [ ] Inspect and address all feedback already present.
+- [ ] If `main` advanced after successful exact-head checks, re-run readiness
+      without updating the PR branch solely for that base advance.
 - [ ] After every replacement push, obtain fresh exact-head remote evidence.
 - [ ] Promote an evidence-backed durable discovery when justified; no promotion
       is required when no candidate qualifies.
@@ -135,9 +143,12 @@ Does not apply to:
 
 - Run `task loom:test` and `cd agentic-ai/ci-agent && npm test`.
 - The readiness audit must reject:
-  - stale heads;
+  - conflicting or unknown mergeability;
   - missing or failed Nook runs;
   - missing exact-head deployment; and
   - feedback requiring handling.
+- The audit must expose a PR behind `main` as status without rejecting it
+  solely for that reason when the other readiness conditions pass.
+- Initial expensive validation still requires a current base before dispatch.
 - The audit stays read-only.
 - Gizmo performs the squash merge after readiness succeeds.

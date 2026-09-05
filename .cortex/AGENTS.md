@@ -189,9 +189,15 @@ Run hosted validation from a clean, committed non-main branch:
 `HEAD` that differs from the remote branch, and tasks outside the allowlist.
 Runtime-backed selectors and `arc:runtime` must be dispatched alone; compatible
 batches may contain at most eight selectors.
-When a task requires a current base, it also verifies that the branch contains
-the current `origin/main`. A later push invalidates the earlier run as delivery
-evidence; dispatch the task again for the new head.
+When a task requires a current base:
+
+- It verifies that the branch contains the current `origin/main` before
+  dispatch.
+- A later push invalidates the earlier run as delivery evidence.
+- A later advance of `main` does not invalidate successful exact-head PR
+  evidence by itself.
+- Readiness must still confirm mergeability, required checks, deployment, and
+  clean review state.
 
 ## No fallback or speculative recovery
 
