@@ -279,6 +279,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [ ] `vault_sync` — `VaultContentHash` for revision hashes
 - [x] `vault_sync` — `VaultSyncUnixMilliseconds` for successful-sync timestamps
 - [x] `vault diagnostics` — `VaultEncryptedPayloadCount` for event payload counts
+- [x] search catalog — `SecretSearchCatalogChangeCount` for reconciliation outcomes
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
 - [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`
