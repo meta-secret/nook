@@ -217,6 +217,7 @@
     "sentinel_terminal_status": "Статус сессии",
     "sentinel_genesis_phase_inactive": "Неактивно",
     "sentinel_genesis_phase_collecting_participants": "Сбор участников",
+    "sentinel_genesis_phase_awaiting_completion_check": "Проверьте завершение настройки",
     "sentinel_genesis_phase_ready_to_finalize": "Готово к завершению",
     "sentinel_genesis_phase_delivering_shares": "Передача долей",
     "sentinel_genesis_phase_complete": "Завершено",
