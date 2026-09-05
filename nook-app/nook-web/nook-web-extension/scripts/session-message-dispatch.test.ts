@@ -54,7 +54,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         return { kind: 'NoMatchingAuthority' as const }
       },
     }
-    let stagedPayload: { stored_json: string } | undefined
+    const stagedPayloads: { stored_json: string }[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
       decodeProviders,
       handleMessage: async (message) => {
@@ -67,7 +67,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         }
         if (message.type !== ExtensionSessionMessageType.ClassifyGrantAuthority)
           throw new Error('unexpected request')
-        stagedPayload = message.payload
+        stagedPayloads.push(message.payload)
         return classifySessionGrantAuthority({
           manager,
           payload: message.payload,
@@ -109,7 +109,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(await response.promise).toEqual({ kind: 'NoMatchingAuthority' })
     expect(events).toEqual(['block-started', 'block-finished', 'classified'])
     expect(payload.stored_json).toBe('')
-    expect(stagedPayload?.stored_json).toBe('')
+    expect(stagedPayloads).toHaveLength(1)
+    expect(stagedPayloads[0].stored_json).toBe('')
   })
 
   test('accepts explicit default queue state for control commands', async () => {
