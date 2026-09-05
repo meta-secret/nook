@@ -3,6 +3,23 @@ use crate::secret_types::SecretType;
 use crate::vault_ids::{AuthKeyId, DeviceId, SecretId};
 use serde::{Deserialize, Serialize};
 
+/// Number of encrypted payloads carried by one vault event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct VaultEncryptedPayloadCount(usize);
+
+impl From<usize> for VaultEncryptedPayloadCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<VaultEncryptedPayloadCount> for usize {
+    fn from(value: VaultEncryptedPayloadCount) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum VaultKeyAccessDiagnosticStatus {
@@ -114,7 +131,7 @@ pub struct VaultEventPayloadAccessDiagnostic {
     pub event_id: String,
     pub key_epoch: String,
     pub epoch_status: VaultEpochDiagnosticStatus,
-    pub encrypted_payloads: usize,
+    pub encrypted_payloads: VaultEncryptedPayloadCount,
     pub explanation: String,
 }
 
