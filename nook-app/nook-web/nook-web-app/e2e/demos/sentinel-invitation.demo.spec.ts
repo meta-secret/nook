@@ -92,6 +92,29 @@ test('Sentinel creation invites participants instead of standalone join', async 
     await expect(
       participant.getByTestId('sentinel-genesis-share-request-input'),
     ).not.toHaveValue('')
+    await participant.getByTestId('sentinel-genesis-connect-device').click()
+    await expect(participant.getByTestId('passkey-auth-overlay')).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await participant.getByTestId('device-protection-create-new-choice').click()
+    await participant.getByTestId('device-protection-setup-btn').click()
+    const signedResponse = participant.getByTestId(
+      'sentinel-genesis-generated-response',
+    )
+    await expect(signedResponse).toBeVisible({
+      timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
+    })
+    await responseInput.fill(await signedResponse.inputValue())
+    await page
+      .getByTestId('sentinel-genesis-participant-name')
+      .fill('Demo participant')
+    await page.getByTestId('sentinel-genesis-add-participant').click()
+    await expect(page.getByTestId('sentinel-genesis-progress')).toContainText(
+      '2 / 3',
+    )
+    await expect(page.getByTestId('sentinel-genesis-finalize')).toBeDisabled()
+    await demoBeat(page)
+
     await invitationBack.click()
     await expect(
       participant.getByTestId('sentinel-genesis-participant-step'),

@@ -4,71 +4,29 @@
 //! together only after the complete `N`-participant roster has been verified.
 //! Sentinel roots are split with the current extendable SLIP-0039 format.
 
-use super::multi_device::{
-    DeviceIdentity, VaultMember, VaultMetaRecord, build_members_records,
-    create_sentinel_root_share_records_for_recipients, dec_auth_id_from_public_key,
-    device_id_from_public_key, generate_id,
-};
+use super::multi_device::{DeviceIdentity, VaultMetaRecord, device_id_from_public_key};
 mod links;
+mod session;
 pub use super::sentinel_genesis_types::*;
 use super::sentinel_signing;
 use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
-    MultiDeviceResult, StoreId, StoredSecretRecord,
+    MultiDeviceResult, StoredSecretRecord,
 };
-use crate::{SentinelParticipantCount, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
 pub use links::{
     build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
     normalize_sentinel_genesis_participant_payload, normalize_sentinel_genesis_request,
     sentinel_genesis_participant_fingerprint,
 };
-use serde_json::Value;
+pub use session::{
+    ReadySentinelGenesis, SentinelGenesisReadiness, SentinelGenesisRejection,
+    SentinelGenesisSession,
+};
 use sha2::{Digest, Sha256};
 
 const GENESIS_VERSION: SentinelGenesisVersion = SentinelGenesisVersion::CURRENT;
 const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
-
-pub fn start_sentinel_genesis(
-    identity: &DeviceIdentity,
-    signing_key: &SigningKey,
-    participant_count: SentinelParticipantCount,
-    threshold: SentinelThreshold,
-    label: String,
-) -> MultiDeviceResult<SentinelGenesisSession> {
-    let policy = SentinelGenesisPolicy {
-        participant_count,
-        threshold,
-    };
-    policy.validate()?;
-    let session_id = generate_id()?;
-    let signing_public_key = signing_public_key(signing_key);
-    let mut request = SentinelGenesisRequest {
-        version: GENESIS_VERSION,
-        session_id: session_id.clone(),
-        policy,
-        initiator_device_id: identity.device_id().clone(),
-        initiator_signing_public_key: signing_public_key,
-        signature: String::new(),
-    };
-    request.signature = hex::encode(
-        signing_key
-            .sign(&request_signing_bytes(&request)?)
-            .to_bytes(),
-    );
-    let response = respond_to_sentinel_genesis_request(&request, identity, signing_key, label)?;
-    let mut session = SentinelGenesisSession {
-        request,
-        participants: Vec::new(),
-    };
-    add_sentinel_genesis_response(&mut session, response)?;
-    Ok(session)
-}
-
-#[must_use]
-pub fn sentinel_genesis_request(session: &SentinelGenesisSession) -> SentinelGenesisRequest {
-    session.request.clone()
-}
 
 pub fn create_sentinel_genesis_public_key_announcement(
     identity: &DeviceIdentity,
@@ -131,166 +89,6 @@ pub fn respond_to_sentinel_genesis_request(
         session_id: request.session_id.clone(),
         participant,
         signature: hex::encode(signing_key.sign(&bytes).to_bytes()),
-    })
-}
-
-/// Accept a session-bound participant response bound to the active owner invitation.
-/// Standalone `publicKeyAnnouncement` payloads are rejected for remote enrollment.
-pub fn add_sentinel_genesis_participant_payload(
-    session: &mut SentinelGenesisSession,
-    payload_json: &str,
-) -> MultiDeviceResult<()> {
-    let value: serde_json::Value = serde_json::from_str(payload_json)
-        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-    if value.get("kind").and_then(Value::as_str) == Some(PUBLIC_KEY_ANNOUNCEMENT_KIND) {
-        return Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected);
-    }
-    let response: SentinelGenesisParticipantResponse = serde_json::from_str(payload_json)
-        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
-    add_sentinel_genesis_response(session, response)
-}
-
-/// Verify a participant payload, then assign the owner-authored display name.
-/// The label is not part of device identity or the participant fingerprint;
-/// signed keys are always verified before this local roster metadata changes.
-pub fn add_sentinel_genesis_participant_payload_with_label(
-    session: &mut SentinelGenesisSession,
-    payload_json: &str,
-    participant_label: &str,
-) -> MultiDeviceResult<()> {
-    let participant_label = participant_label.trim();
-    if participant_label.chars().count() > 80 {
-        return Err(MultiDeviceError::DeviceNameTooLong);
-    }
-    let participant_index = session.participants.len();
-    add_sentinel_genesis_participant_payload(session, payload_json)?;
-    if !participant_label.is_empty() {
-        participant_label.clone_into(&mut session.participants[participant_index].label);
-    }
-    Ok(())
-}
-
-pub fn add_sentinel_genesis_response(
-    session: &mut SentinelGenesisSession,
-    response: SentinelGenesisParticipantResponse,
-) -> MultiDeviceResult<()> {
-    validate_request(&session.request)?;
-    if response.version != GENESIS_VERSION || response.session_id != session.request.session_id {
-        return Err(MultiDeviceError::InvalidSentinelGenesisSession);
-    }
-    validate_participant(&response.participant, &response.session_id)?;
-    verify_response(&response)?;
-    if session.participants.iter().any(|existing| {
-        existing.device_id == response.participant.device_id
-            || existing.encryption_public_key == response.participant.encryption_public_key
-            || existing.signing_public_key == response.participant.signing_public_key
-    }) {
-        return Err(MultiDeviceError::DuplicateSentinelGenesisParticipant {
-            device_id: response.participant.device_id.to_string(),
-        });
-    }
-    if session.participants.len() >= usize::from(u8::from(session.request.policy.participant_count))
-    {
-        return Err(MultiDeviceError::SentinelGenesisRosterFull);
-    }
-    session.participants.push(response.participant);
-    Ok(())
-}
-
-/// Reject standalone public-key announcements for remote enrollment.
-///
-/// Kept as an explicit fail-closed entry point so callers cannot accidentally
-/// reintroduce announcement-based roster import.
-pub fn add_sentinel_genesis_public_key_announcement(
-    _session: &mut SentinelGenesisSession,
-    _announcement: &SentinelGenesisPublicKeyAnnouncement,
-) -> MultiDeviceResult<()> {
-    Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
-}
-
-#[allow(clippy::needless_pass_by_value)] // Consuming the session prevents issuing twice.
-pub fn finalize_sentinel_genesis_shares(
-    session: SentinelGenesisSession,
-    store_id: &StoreId,
-    initiator_signing_key: &SigningKey,
-) -> MultiDeviceResult<SentinelGenesisIssued> {
-    if !session.is_complete() {
-        return Err(MultiDeviceError::SentinelGenesisIncomplete {
-            required: session.request.policy.participant_count,
-            available: SentinelParticipantCount::try_from(session.participants.len())
-                .map_err(|_| MultiDeviceError::SentinelParticipantCountOverflow)?,
-        });
-    }
-    if signing_public_key(initiator_signing_key) != session.request.initiator_signing_public_key
-        || !session.participants.iter().any(|participant| {
-            participant.device_id == session.request.initiator_device_id
-                && participant.signing_public_key == session.request.initiator_signing_public_key
-        })
-    {
-        return Err(MultiDeviceError::InvalidSentinelGenesisSignature);
-    }
-    let recipients = session
-        .participants
-        .iter()
-        .map(|participant| {
-            (
-                participant.device_id.clone(),
-                participant.encryption_public_key.clone(),
-            )
-        })
-        .collect::<Vec<_>>();
-    let (keys, share_records) = create_sentinel_root_share_records_for_recipients(
-        &recipients,
-        session.request.policy.threshold,
-    )?;
-    // Construction is all-or-nothing: only publish the result after every
-    // record has parsed and every delivery has been signed.
-    let mut deliveries = Vec::with_capacity(share_records.len());
-    for (participant, record) in session.participants.iter().zip(&share_records) {
-        let VaultMetaRecord::SentinelShare(device_id, share) = VaultMetaRecord::classify(record)
-        else {
-            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
-        };
-        if device_id != participant.device_id {
-            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
-        }
-        let mut delivery = SentinelGenesisShareDelivery {
-            version: GENESIS_VERSION,
-            session_id: session.request.session_id.clone(),
-            store_id: store_id.clone(),
-            policy: session.request.policy,
-            device_id,
-            encryption_public_key: participant.encryption_public_key.clone(),
-            share,
-            initiator_signing_public_key: session.request.initiator_signing_public_key.clone(),
-            signature: String::new(),
-        };
-        delivery.signature = hex::encode(
-            initiator_signing_key
-                .sign(&delivery_signing_bytes(&delivery)?)
-                .to_bytes(),
-        );
-        deliveries.push(delivery);
-    }
-    let roster = session
-        .participants
-        .iter()
-        .map(|participant| {
-            Ok(VaultMember {
-                auth_id: dec_auth_id_from_public_key(&participant.encryption_public_key)?,
-                device_id: participant.device_id.clone(),
-                public_key: participant.encryption_public_key.clone(),
-                enrolled_at: String::new(),
-                label: (!participant.label.is_empty()).then(|| participant.label.clone()),
-            })
-        })
-        .collect::<MultiDeviceResult<Vec<_>>>()?;
-    let mut records = build_members_records(&roster, &keys.members_key)?;
-    records.extend(share_records);
-    Ok(SentinelGenesisIssued {
-        records,
-        participants: session.participants,
-        deliveries,
     })
 }
 
@@ -495,30 +293,39 @@ fn announcement_signing_bytes(
 
 #[cfg(test)]
 mod tests {
-    use std::{io, slice};
+    use std::io::Error as IoError;
+    use std::slice;
 
     use super::super::multi_device;
     use super::*;
+    use crate::StoreId;
 
-    fn signing_key() -> anyhow::Result<SigningKey> {
-        let mut seed = [0_u8; 32];
-        getrandom::fill(&mut seed)?;
-        Ok(SigningKey::from_bytes(&seed))
-    }
+    struct Fixture;
+    impl Fixture {
+        fn signing_key() -> anyhow::Result<SigningKey> {
+            let mut seed = [0_u8; 32];
+            getrandom::fill(&mut seed)?;
+            Ok(SigningKey::from_bytes(&seed))
+        }
 
-    fn participant(
-        request: &SentinelGenesisRequest,
-        label: &str,
-    ) -> anyhow::Result<(
-        DeviceIdentity,
-        SigningKey,
-        SentinelGenesisParticipantResponse,
-    )> {
-        let identity = DeviceIdentity::generate()?;
-        let signing = signing_key()?;
-        let response =
-            respond_to_sentinel_genesis_request(request, &identity, &signing, label.to_owned())?;
-        Ok((identity, signing, response))
+        fn participant(
+            request: &SentinelGenesisRequest,
+            label: &str,
+        ) -> anyhow::Result<(
+            DeviceIdentity,
+            SigningKey,
+            SentinelGenesisParticipantResponse,
+        )> {
+            let identity = DeviceIdentity::generate()?;
+            let signing = Self::signing_key()?;
+            let response = respond_to_sentinel_genesis_request(
+                request,
+                &identity,
+                &signing,
+                label.to_owned(),
+            )?;
+            Ok((identity, signing, response))
+        }
     }
 
     #[test]
@@ -571,21 +378,27 @@ mod tests {
     #[test]
     fn standalone_public_key_announcement_is_rejected_for_enrollment() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
         let peer = DeviceIdentity::generate()?;
-        let peer_signing = signing_key()?;
+        let peer_signing = Fixture::signing_key()?;
         let announcement =
             create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())?;
         let payload = serde_json::to_string(&announcement)?;
+        let (session, error) = session
+            .collect_payload(&payload, "")
+            .err()
+            .ok_or_else(|| IoError::other("announcement must be rejected"))?
+            .into_parts();
         assert!(matches!(
-            add_sentinel_genesis_participant_payload(&mut session, &payload),
-            Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
-        ));
-        assert!(matches!(
-            add_sentinel_genesis_public_key_announcement(&mut session, &announcement),
-            Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
+            error,
+            MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected
         ));
         let announcement_link =
             build_sentinel_genesis_participant_response_link(&payload, "https://nook.example/app/");
@@ -600,17 +413,18 @@ mod tests {
     #[test]
     fn owner_can_name_a_verified_session_bound_participant() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
-        let (peer, _, response) = participant(&session.request, "Peer")?;
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
+        let (peer, _, response) = Fixture::participant(session.request(), "Peer")?;
         let payload = serde_json::to_string(&response)?;
 
-        add_sentinel_genesis_participant_payload_with_label(
-            &mut session,
-            &payload,
-            "  Ada's iPhone  ",
-        )?;
+        let session = session.collect_payload(&payload, "  Ada's iPhone  ")?;
 
         assert_eq!(session.participants()[1].label, "Ada's iPhone");
         assert_eq!(
@@ -623,109 +437,119 @@ mod tests {
     #[test]
     fn response_is_session_bound_signed_and_unique() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
-        let (_, _, response) = participant(&session.request, "Peer")?;
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
+        let (_, _, response) = Fixture::participant(session.request(), "Peer")?;
         let duplicate = response.clone();
-        add_sentinel_genesis_response(&mut session, response)?;
-        assert!(session.is_complete());
+        let session = session.collect(response)?;
+        assert_eq!(session.readiness(), SentinelGenesisReadiness::Complete);
+        let (retained, error) = session
+            .collect(duplicate)
+            .err()
+            .ok_or_else(|| IoError::other("duplicate must be rejected"))?
+            .into_parts();
         assert!(matches!(
-            add_sentinel_genesis_response(&mut session, duplicate),
-            Err(MultiDeviceError::DuplicateSentinelGenesisParticipant { .. })
+            error,
+            MultiDeviceError::DuplicateSentinelGenesisParticipant { .. }
         ));
+        assert_eq!(retained.participants().len(), 2);
         Ok(())
     }
 
     #[test]
     fn tampered_response_and_cross_session_response_fail() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let mut first =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
+        let owner_signing = Fixture::signing_key()?;
+        let first = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
         let second_owner = DeviceIdentity::generate()?;
-        let second_signing = signing_key()?;
-        let second = start_sentinel_genesis(
+        let second_signing = Fixture::signing_key()?;
+        let second = SentinelGenesisSession::start(
             &second_owner,
             &second_signing,
             2.into(),
             2.into(),
             "Other".into(),
         )?;
-        let (_, _, mut response) = participant(&first.request, "Peer")?;
+        let (_, _, mut response) = Fixture::participant(first.request(), "Peer")?;
         let cross = response.clone();
         response.participant.label = "Mallory".into();
+        let (first, error) = first
+            .collect(response)
+            .err()
+            .ok_or_else(|| IoError::other("tampered signature must be rejected"))?
+            .into_parts();
         assert!(matches!(
-            add_sentinel_genesis_response(&mut first, response),
-            Err(MultiDeviceError::InvalidSentinelGenesisSignature)
+            error,
+            MultiDeviceError::InvalidSentinelGenesisSignature
         ));
+        let (retained, error) = first
+            .collect(SentinelGenesisParticipantResponse {
+                session_id: second.request().session_id.clone(),
+                ..cross
+            })
+            .err()
+            .ok_or_else(|| IoError::other("cross-session response must be rejected"))?
+            .into_parts();
         assert!(matches!(
-            add_sentinel_genesis_response(
-                &mut first,
-                SentinelGenesisParticipantResponse {
-                    session_id: second.request.session_id,
-                    ..cross
-                }
-            ),
-            Err(MultiDeviceError::InvalidSentinelGenesisSession)
+            error,
+            MultiDeviceError::InvalidSentinelGenesisSession
         ));
-        Ok(())
-    }
-
-    #[test]
-    fn finalize_rejects_deserialized_oversized_roster_without_mutation() -> anyhow::Result<()> {
-        let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let started =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
-        let participant = started
-            .participants()
-            .first()
-            .ok_or_else(|| io::Error::other("started session must include its owner"))?
-            .clone();
-        let mut session: SentinelGenesisSession =
-            serde_json::from_str(&serde_json::to_string(&started)?)?;
-        session.participants = vec![participant; usize::from(u8::MAX) + 1];
-        let snapshot = session.clone();
-
-        let result = finalize_sentinel_genesis_shares(
-            session.clone(),
-            &StoreId::parse("store_AAAAAAAAAAA")?,
-            &owner_signing,
-        );
-        assert!(matches!(
-            result,
-            Err(MultiDeviceError::SentinelParticipantCountOverflow)
-        ));
-        assert_eq!(session, snapshot);
+        assert_eq!(retained.participants().len(), 1);
         Ok(())
     }
 
     #[test]
     fn finalize_is_all_participants_or_nothing_and_deliveries_are_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let incomplete =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
+        let owner_signing = Fixture::signing_key()?;
+        let incomplete = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
         let store_id = StoreId::parse("store_AAAAAAAAAAA")?;
+        let (_, error) = incomplete
+            .prepare(&owner_signing)
+            .err()
+            .ok_or_else(|| IoError::other("incomplete roster must be rejected"))?
+            .into_parts();
         assert!(matches!(
-            finalize_sentinel_genesis_shares(incomplete, &store_id, &owner_signing),
-            Err(MultiDeviceError::SentinelGenesisIncomplete { .. })
+            error,
+            MultiDeviceError::SentinelGenesisIncomplete { .. }
         ));
 
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
-        let (peer, _, response) = participant(&session.request, "Peer")?;
-        add_sentinel_genesis_response(&mut session, response)?;
-        let expected_request = session.request.clone();
-        let issued = finalize_sentinel_genesis_shares(session, &store_id, &owner_signing)?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
+        let (peer, _, response) = Fixture::participant(session.request(), "Peer")?;
+        let session = session.collect(response)?;
+        let expected_request = session.request().clone();
+        let issued = session.prepare(&owner_signing)?.issue(&store_id)?;
         assert_eq!(issued.records.len(), 4);
         assert_eq!(issued.deliveries.len(), 2);
         let peer_delivery = issued
             .deliveries
             .iter()
             .find(|delivery| delivery.device_id == *peer.device_id())
-            .ok_or_else(|| io::Error::other("peer delivery must exist"))?;
+            .ok_or_else(|| IoError::other("peer delivery must exist"))?;
         let accepted =
             accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &peer)?;
         assert!(issued.records.contains(&accepted));
@@ -739,18 +563,21 @@ mod tests {
     #[test]
     fn no_full_key_envelope_and_quorum_is_required() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 3.into(), 2.into(), "Owner".into())?;
-        let (peer_a, _, a) = participant(&session.request, "A")?;
-        let (peer_b, _, b) = participant(&session.request, "B")?;
-        add_sentinel_genesis_response(&mut session, a)?;
-        add_sentinel_genesis_response(&mut session, b)?;
-        let issued = finalize_sentinel_genesis_shares(
-            session,
-            &StoreId::parse("store_AAAAAAAAAAA")?,
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
             &owner_signing,
+            3.into(),
+            2.into(),
+            "Owner".into(),
         )?;
+        let (peer_a, _, a) = Fixture::participant(session.request(), "A")?;
+        let (peer_b, _, b) = Fixture::participant(session.request(), "B")?;
+        let session = session.collect(a)?;
+        let session = session.collect(b)?;
+        let issued = session
+            .prepare(&owner_signing)?
+            .issue(&StoreId::parse("store_AAAAAAAAAAA")?)?;
         assert!(
             issued.records.iter().all(|record| !matches!(
                 VaultMetaRecord::classify(record),
