@@ -2,7 +2,6 @@
 
 use std::fmt;
 
-use super::identity_dek_grant;
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, DeviceSigningPublicKey,
@@ -61,6 +60,15 @@ pub struct IdentityMember {
 }
 
 /// Identity-held DEK envelopes for one vault.
+///
+/// Grant comparison is internal to identity reconciliation:
+/// ```compile_fail,E0624
+/// use nook_auth2::{AppKey, IdentityMember, IdentityVaultDek, IdentityVaultDekEpoch, VaultKeys};
+/// let compare = |grant: &IdentityVaultDek, app: &AppKey, members: &[IdentityMember],
+///                keys: &VaultKeys, epoch: &IdentityVaultDekEpoch| {
+///     grant.already_grants(app, members, keys, epoch)
+/// };
+/// ```
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct IdentityVaultDek {
     pub store_id: StoreId,
@@ -427,13 +435,7 @@ impl IdentityRecord {
                 "reconciling app key is not authorized for this vault".to_owned(),
             ));
         }
-        if identity_dek_grant::already_grants(
-            vault_dek,
-            app_key,
-            &authorized_members,
-            &keys,
-            &next_epoch,
-        ) {
+        if vault_dek.already_grants(app_key, &authorized_members, &keys, &next_epoch) {
             return Ok(());
         }
         let mut rewrapped =
