@@ -331,6 +331,16 @@ target "combined-consumer" {
   output = ["type=cacheonly"]
 }
 
+target "dylint-split" {
+  context    = "."
+  dockerfile = "combined-nightly.Dockerfile"
+  target     = "dylint-split"
+  args = {
+    PRODUCT_SOURCE = "default-product-source"
+  }
+  output = ["type=cacheonly"]
+}
+
 target "hive" {
   context = "."
   dockerfile = "hive.Dockerfile"
