@@ -25,4 +25,15 @@ mod tests {
         assert_eq!(result, ExtensionGrantAuthority::MissingActiveAuthority);
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn generated_decoder_rejects_unknown_authority() {
+        assert!(
+            decode_extension_grant_authority_response(
+                r#"{"kind":"Unknown"}"#.to_owned().into(),
+                "store-test".to_owned().into(),
+            )
+            .is_err()
+        );
+    }
 }
