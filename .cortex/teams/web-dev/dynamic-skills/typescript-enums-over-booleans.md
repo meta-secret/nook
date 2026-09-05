@@ -43,6 +43,9 @@ Enums put the domain meaning into both the type and every value.
 - Match enums and discriminated unions exhaustively so a new case identifies
   every decision point that must change.
 - Put variant-specific data on the discriminated-union member that owns it.
+- Declare the complete discriminated union as a named domain type before using
+  it in a field or parameter. A field must reference `WorkflowSelection`, not
+  embed `AuthenticationWorkflowKind | false`.
 - Do not persist or send a boolean that can be derived from a semantic enum.
 - Use the enum member at constructors, call sites, comparisons, fixtures, and
   protocol boundaries. Do not erase it back to a boolean for convenience.
