@@ -2,6 +2,9 @@
 
 ## Purpose
 
+Apply the repository's primary function-ownership rule to every authored
+TypeScript function.
+
 Keep TypeScript domain models typed by meaning, nested, and enum-driven. A raw
 representation does not carry the metadata that makes a domain value safe to
 use. Treat raw domain primitives, inline unions, raw-string field allow-lists,
@@ -62,8 +65,14 @@ boundary where it is used.
   factory. Keep the brand token and unchecked construction private.
 - Return a domain-specific decode outcome or throw a named domain error class
   when external input cannot become the domain type.
-- Put domain operations in the cohesive type or module that owns the required
-  knowledge. A module is a valid owner when object identity is not meaningful.
+- Put every authored public, private, and nested function on a meaningful
+  class, value object, domain object, fixture, or required framework owner.
+- Use an instance method when the operation depends on owned state.
+- Use a static method for cohesive construction or stateless behavior.
+- Keep component handlers on a Svelte component only when they belong to that
+  component's state or interaction contract.
+- Follow the repository-wide
+  [function ownership rule](../../../shared/dynamic-skills/function-ownership.md).
 - Model state changes as named transitions from one domain state to a named
   next state or outcome.
 - Keep advanced-state construction private to the transition that validates
@@ -92,10 +101,14 @@ boundary where it is used.
 - Do not export a brand token, unchecked constructor, or writable field that
   bypasses validation.
 - Do not put domain behavior in generic `Utils` or `Helpers` containers.
+- Do not introduce an unowned top-level or nested free function.
+- Do not treat a file, module, namespace, or directory as function ownership.
+- Do not create an empty class, interface, namespace, or object only to move a
+  free function.
 - Do not encode a transition by mutating parallel booleans, sentinels, or
   optional fields.
-- Do not force pure cohesive module behavior into a class with artificial
-  identity or lifecycle.
+- Do not invent instance identity or lifecycle when a static operation on the
+  meaningful owner is truthful.
 
 Raw primitives are allowed only in narrow cases.
 
@@ -185,6 +198,8 @@ Does not apply to:
 
 ## Application Checklist
 
+- [ ] Put every authored function on a meaningful owner. Reject module-only,
+      namespace-only, and catch-all utility ownership.
 - [ ] Search the changed scope for raw primitives in domain fields, parameters,
       returns, state, DTOs, collections, tuples, and generic arguments.
 - [ ] Give every scalar domain meaning a generated, branded, opaque, enum, or

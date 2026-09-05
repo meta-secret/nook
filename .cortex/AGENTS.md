@@ -39,6 +39,17 @@ requires an explicit expertise task from Gizmo Prime.
   [graph](teams/web-dev/knowledge-graph.md): TypeScript, Svelte, browser
   behavior, and extension interaction.
 
+## Primary code-structure rule
+
+Every authored function in every implementation language belongs to a
+meaningful owner. This includes public, private, nested, test, callback, and
+adapter functions. A file, module, namespace, or generic utility container is
+not an owner by itself.
+
+Treat a new or changed unowned free function as a P1 finding. Follow
+[function ownership](shared/dynamic-skills/function-ownership.md) for owner
+selection, narrow external boundaries, and language-specific authorities.
+
 Gizmo Prime is the existing root delivery owner. A feature-slice Gizmo is a
 Workbench record, not another coordinator or worker. See the
 [Gizmo contract](gizmo/AGENTS.md).

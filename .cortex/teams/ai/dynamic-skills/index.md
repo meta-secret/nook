@@ -19,6 +19,12 @@ Harness profile directories must not mirror or redefine these cards.
   - Purpose: **P1 hard rule:** prohibit repository-authored Python and use Bun/TypeScript, Rust, and Taskfiles for automation
 - **[source-file-size.md](../../../shared/dynamic-skills/source-file-size.md)**
   - Purpose: **P1 / most critical structure rule:** every authored file, including Rust, has one non-bypassable 1,000-line ceiling; a violation requires architectural review and cohesive decomposition
+- **[function-ownership.md](../../../shared/dynamic-skills/function-ownership.md)**
+  - Purpose: **P1 / primary action-structure rule**
+    - Require every authored function in every implementation language to
+      belong to a meaningful owner.
+    - Reject free functions, module-only ownership, and catch-all utility
+      containers.
 - **[cortex-writer.md](cortex-writer.md)**
   - **Purpose:** **P1 / critical `.cortex` writing rule**
     - Split long dense sentences into short sentences, bullets, and lists.
