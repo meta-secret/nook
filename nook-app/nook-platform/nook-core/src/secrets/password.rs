@@ -180,7 +180,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })?;
-        assert_eq!(min.len(), MIN_PASSWORD_LENGTH.into());
+        assert_eq!(min.len(), usize::from(MIN_PASSWORD_LENGTH));
 
         let max = generate_password(PasswordGenerationOptions {
             length: usize::from(MAX_PASSWORD_LENGTH) as u32,
@@ -189,7 +189,7 @@ mod tests {
             numbers: false,
             symbols: false,
         })?;
-        assert_eq!(max.len(), MAX_PASSWORD_LENGTH.into());
+        assert_eq!(max.len(), usize::from(MAX_PASSWORD_LENGTH));
         Ok(())
     }
 
