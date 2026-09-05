@@ -117,6 +117,7 @@ jobs:
       - name: Connect private ARC BuildKit
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: connection-only
           registry-host: registry.dev.nokey.sh
           # Main writes the trusted shared cache; PRs retain the isolated remote identity.
           registry-username: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NOOK_REGISTRY_USERNAME || secrets.NOOK_REGISTRY_REMOTE_USERNAME }}
@@ -200,6 +201,7 @@ jobs:
       - name: Connect private ARC BuildKit
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: hive
           cache-write: ${{ github.event_name == 'push' && 'true' || 'false' }}
           main-cache-only: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
