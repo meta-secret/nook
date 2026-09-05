@@ -59,7 +59,7 @@ type WorkflowAudit = RequiredPrWorkflow &
   );
 
 type WorkflowAuditRequest = {
-  baseSha: string;
+  baseBranch: string;
   headSha: string;
   octokit: Octokit;
   prNumber: number;
@@ -136,7 +136,7 @@ export async function buildPrAudit(
   ]);
   const changedFiles = files.map((file) => file.filename);
   const requiredWorkflows = await auditWorkflows({
-    baseSha: pr.base.sha,
+    baseBranch: pr.base.ref,
     headSha: pr.head.sha,
     octokit,
     prNumber,
@@ -178,11 +178,6 @@ export async function buildPrAudit(
     reasons.push("pull request has a merge conflict");
   if (mergeability === PullRequestMergeability.Unknown)
     reasons.push("pull request mergeability is unknown");
-  if (comparison.data.behind_by > 0) {
-    reasons.push(
-      `head is behind ${pr.base.ref} by ${comparison.data.behind_by} commit(s)`,
-    );
-  }
   for (const workflow of requiredWorkflows) {
     if (workflow.state === WorkflowAuditState.NotIndexed) {
       reasons.push(
@@ -286,8 +281,7 @@ async function auditWorkflows(
             pullRequests.some(
               (pullRequest) =>
                 pullRequest.number === request.prNumber &&
-                (workflow.workflowFile === "web-research.yml" ||
-                  pullRequest.base.sha === request.baseSha),
+                pullRequest.base.ref === request.baseBranch,
             )
           );
         })
