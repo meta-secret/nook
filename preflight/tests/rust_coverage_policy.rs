@@ -25,7 +25,6 @@ fn every_rust_package_has_an_explicit_coverage_policy() -> anyhow::Result<()> {
         let expected = match package.as_str() {
             "nook-wasm" => 51.0,
             "nook-companion-wasm" => 18.0,
-            "nook-authenticator-domain" => 87.0,
             "hive" => 60.0,
             _ => 90.0,
         };
