@@ -1,7 +1,6 @@
 //! Exact-key classification of untrusted browser pairing storage.
 
 use super::{ExtensionPairingRecord, StoredExtensionPairingGrant};
-use crate::extension_pairing_state as pairing;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tsify::Tsify;
@@ -77,7 +76,7 @@ impl ExtensionGrantAuthorityRequest {
         let Ok(Value::Object(mut entries)) = serde_json::from_str(&self.stored_json.0) else {
             return ExtensionGrantAuthority::InvalidStoredAuthority;
         };
-        let key = pairing::grant_storage_key(&self.vault_store_id.0);
+        let key = StoredExtensionPairingGrant::storage_key_for(&self.vault_store_id.0);
         let Some(value) = entries.remove(&key) else {
             return match self.active_vault {
                 ExtensionActiveVaultScope::Active(active)
@@ -113,7 +112,7 @@ impl ExtensionGrantAuthority {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pairing::{ExtensionConnectScope, ExtensionPairingVaultType};
+    use crate::extension_pairing_state::{ExtensionConnectScope, ExtensionPairingVaultType};
     use serde_json::Map;
     use std::collections::HashMap;
 
@@ -202,7 +201,7 @@ mod tests {
         let grant = Fixture::grant();
         let mut entries = Map::new();
         entries.insert(
-            pairing::grant_storage_key("store-test"),
+            StoredExtensionPairingGrant::storage_key_for("store-test"),
             serde_json::to_value(&grant)?,
         );
         entries.insert("unrelated".to_owned(), Value::Null);
@@ -220,7 +219,10 @@ mod tests {
         let mut incomplete = Fixture::grant();
         incomplete.scopes.clear();
         for grant in [mismatched, incomplete] {
-            let entries = HashMap::from([(pairing::grant_storage_key("store-test"), grant)]);
+            let entries = HashMap::from([(
+                StoredExtensionPairingGrant::storage_key_for("store-test"),
+                grant,
+            )]);
             assert_eq!(
                 Fixture::request(serde_json::to_string(&entries)?).classify(),
                 ExtensionGrantAuthority::InvalidStoredAuthority

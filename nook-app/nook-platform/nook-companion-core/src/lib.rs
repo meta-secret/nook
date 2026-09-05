@@ -123,13 +123,10 @@ pub use extension_pairing_state::{
     ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
     ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
     RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
-    create_pairing_state, grant_storage_key, is_ready_pairing_setup_json,
-    is_stored_pairing_grant_json, migrate_legacy_pairing_state_json, refresh_pairing_grant,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
-    ExtensionPersistenceStoreState, classify_extension_database_names,
-    classify_extension_store_names, matching_extension_store_names,
+    ExtensionPersistenceStoreState,
 };
 pub use extension_session_protocol::{
     ExtensionSessionRequestValidation, ExtensionSessionRequestWire, LoginPickerOpenResponse,

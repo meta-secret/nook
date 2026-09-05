@@ -12,6 +12,9 @@
     clippy::uninlined_format_args
 )]
 
+use nook_companion_core::{
+    ExtensionPairingState, ExtensionReadySetup, StoredExtensionPairingGrant,
+};
 use wasm_bindgen::prelude::wasm_bindgen;
 
 mod account_picker_authorization;
@@ -78,7 +81,7 @@ pub fn extension_persistence_store_names(
 pub fn classify_extension_persistence_databases(
     input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> nook_companion_core::ExtensionPersistenceDatabaseState {
-    nook_companion_core::classify_extension_database_names(input.area, &input.observed_names)
+    input.area.classify_database_names(&input.observed_names)
 }
 
 #[wasm_bindgen]
@@ -87,7 +90,7 @@ pub fn classify_extension_persistence_databases(
 pub fn classify_extension_persistence_stores(
     input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> nook_companion_core::ExtensionPersistenceStoreState {
-    nook_companion_core::classify_extension_store_names(input.area, &input.observed_names)
+    input.area.classify_store_names(&input.observed_names)
 }
 
 #[wasm_bindgen]
@@ -96,7 +99,7 @@ pub fn classify_extension_persistence_stores(
 pub fn matching_extension_persistence_stores(
     input: nook_companion_core::ExtensionPersistenceObservation,
 ) -> Vec<String> {
-    nook_companion_core::matching_extension_store_names(input.area, &input.observed_names)
+    input.area.matching_store_names(&input.observed_names)
 }
 
 #[wasm_bindgen]
@@ -149,7 +152,7 @@ pub fn validate_companion_authentication_outcome_decision(
 #[wasm_bindgen]
 #[must_use]
 pub fn extension_pairing_grant_storage_key(vault_store_id: &str) -> String {
-    nook_companion_core::grant_storage_key(vault_store_id)
+    StoredExtensionPairingGrant::storage_key_for(vault_store_id)
 }
 
 #[wasm_bindgen]
@@ -193,7 +196,7 @@ pub fn is_extension_connect_scope(value: &str) -> bool {
 pub fn create_extension_pairing_state(
     input: nook_companion_core::CreateExtensionPairingStateInput,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    nook_companion_core::create_pairing_state(input)
+    ExtensionPairingState::create(input)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -202,7 +205,7 @@ pub fn create_extension_pairing_state(
 pub fn refresh_extension_pairing_grant(
     input: nook_companion_core::RefreshExtensionPairingGrantInput,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    nook_companion_core::refresh_pairing_grant(input)
+    ExtensionPairingState::refresh_grant(input)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
@@ -260,21 +263,23 @@ pub fn extension_setup_after_pairing_grant_removal(
 
 #[wasm_bindgen]
 #[must_use]
+// Existing browser boolean projection; this outer boundary remains to be migrated.
 pub fn is_stored_extension_pairing_grant_json(value: &str) -> bool {
-    nook_companion_core::is_stored_pairing_grant_json(value)
+    StoredExtensionPairingGrant::validate_json(value).is_ok()
 }
 
 #[wasm_bindgen]
 #[must_use]
+// Existing browser boolean projection; this outer boundary remains to be migrated.
 pub fn is_extension_ready_setup_json(value: &str) -> bool {
-    nook_companion_core::is_ready_pairing_setup_json(value)
+    ExtensionReadySetup::validate_json(value).is_ok()
 }
 
 #[wasm_bindgen]
 pub fn migrate_legacy_extension_pairing_state_json(
     value: &str,
 ) -> Result<nook_companion_core::ExtensionPairingState, wasm_bindgen::JsError> {
-    nook_companion_core::migrate_legacy_pairing_state_json(value)
+    ExtensionPairingState::migrate_legacy_json(value)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 

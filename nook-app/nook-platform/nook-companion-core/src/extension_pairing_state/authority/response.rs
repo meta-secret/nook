@@ -1,6 +1,5 @@
 //! Untrusted offscreen response decoding with requested-vault binding.
-use super::{ExtensionGrantAuthority, PairingVaultId};
-use crate::extension_pairing_state as pairing;
+use super::{ExtensionGrantAuthority, PairingVaultId, StoredExtensionPairingGrant};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tsify::Tsify;
@@ -26,7 +25,7 @@ impl GrantAuthorityResponseJson {
         requested: PairingVaultId,
     ) -> Result<ExtensionGrantAuthority, GrantAuthorityResponseError> {
         let PairingVaultId(requested) = requested;
-        let requested_key = pairing::grant_storage_key(&requested);
+        let requested_key = StoredExtensionPairingGrant::storage_key_for(&requested);
         let Value::Object(mut fields) =
             serde_json::from_str(&self.0).map_err(|_| GrantAuthorityResponseError)?
         else {

@@ -73,6 +73,27 @@ export function isSentinelVault(state: VaultState): boolean {
   }
 }
 
+export function sentinelCeremonyIsVisible(state: VaultState): boolean {
+  if (
+    state.isAuthenticated ||
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked
+  )
+    return false;
+  if (
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares &&
+    !state.sentinelUnlockSession.active &&
+    state.hasManager &&
+    state.requireManager().vaultStoreId === ""
+  )
+    return false;
+  return (
+    state.sentinelCeremonyPrompt ||
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.CeremonyRequired ||
+    state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares ||
+    isSentinelVault(state)
+  );
+}
+
 async function getSentinelUnlockStatus(
   state: VaultState,
 ): Promise<SentinelVaultUnlockState> {
@@ -272,9 +293,17 @@ export async function finalizeSentinelUnlock(state: VaultState): Promise<void> {
     state.startVaultSync();
   } catch (e) {
     state.isAuthenticated = false;
-    if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
+    const status = state.requireManager().sentinel_unlock_session_status();
+    const replacement: UnlockSessionReplacement = { state, status };
+    replaceUnlockSession(replacement);
+    if (!status.active) state.sentinelUnlockRequest = "";
+    state.sentinelUnlockStatus = state
+      .requireManager()
+      .sentinel_unlock_status();
+    if (state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked) {
+      state.sentinelCeremonyPrompt = false;
+    } else if (isSentinelCeremonyRequiredError(runtimeFailure(e))) {
       state.sentinelCeremonyPrompt = true;
-      await refreshSentinelUnlockStatus(state);
       state.errorMsg = "";
       return;
     }
