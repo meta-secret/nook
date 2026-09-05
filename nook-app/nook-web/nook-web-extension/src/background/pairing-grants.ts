@@ -1,6 +1,5 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import {
-  classify_extension_grant_authority,
   create_extension_pairing_state,
   extension_pairing_grant_storage_key,
   extension_setup_after_pairing_grant_removal,
@@ -90,23 +89,6 @@ function transportJson(value: unknown): TransportJsonResult {
 
 function pairingGrantStorageKey(vaultStoreId: string): string {
   return extension_pairing_grant_storage_key(vaultStoreId)
-}
-
-type GrantAuthorityRequest = { stored: unknown; vaultStoreId: string }
-
-function classifyGrantAuthority({
-  stored,
-  vaultStoreId,
-}: GrantAuthorityRequest) {
-  const serialized = transportJson(stored)
-  if (serialized.kind !== TransportJsonResultKind.Serialized) {
-    throw new Error('Pairing storage could not be serialized')
-  }
-  const request: Parameters<typeof classify_extension_grant_authority>[0] = {
-    stored_json: serialized.json,
-    vault_store_id: vaultStoreId,
-  }
-  return classify_extension_grant_authority(request)
 }
 
 function isStoredExtensionPairingGrant(
@@ -209,7 +191,6 @@ function migratedLegacyPairingStorageItems(
 }
 
 export type ExtensionPairingGrantPolicy = {
-  classifyGrantAuthority: typeof classifyGrantAuthority
   pairingGrantStorageKey: typeof pairingGrantStorageKey
   isStoredExtensionPairingGrant: typeof isStoredExtensionPairingGrant
   isExtensionReadySetupState: typeof isExtensionReadySetupState
@@ -224,7 +205,6 @@ export type ExtensionPairingGrantPolicy = {
 
 export const extensionPairingGrantPolicyReady: Promise<ExtensionPairingGrantPolicy> =
   companionWasmReady.then(() => ({
-    classifyGrantAuthority,
     pairingGrantStorageKey,
     isStoredExtensionPairingGrant,
     isExtensionReadySetupState,

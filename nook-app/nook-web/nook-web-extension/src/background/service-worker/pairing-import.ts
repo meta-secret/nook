@@ -1,4 +1,5 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+import { decode_extension_grant_authority_response } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   type ExtensionPairingApprovedMessage,
   isExtensionPairingApprovedMessage,
@@ -285,17 +286,25 @@ export async function importLocalEventLogUpdateWithDependencies({
   try {
     const pairingPolicy = await pairingPolicyReady
     const stored = await loadPairingStorage()
-    const authorityRequest: Parameters<
-      typeof pairingPolicy.classifyGrantAuthority
-    >[0] = {
-      stored,
-      vaultStoreId,
+    const authorityRequest: Parameters<typeof sendSession>[0] = {
+      type: ExtensionSessionMessageType.ClassifyGrantAuthority,
+      payload: {
+        stored_json: JSON.stringify(stored),
+        vault_store_id: vaultStoreId,
+        queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
+      },
     }
-    const authority = pairingPolicy.classifyGrantAuthority(authorityRequest)
+    const authority = decode_extension_grant_authority_response(
+      JSON.stringify(await sendSession(authorityRequest)),
+      vaultStoreId,
+    )
     switch (authority.kind) {
+      case 'Authorized':
+        break
       case 'NoMatchingAuthority':
         return { ok: false, reason: LocalEventLogUpdateFailure.VaultNotPaired }
       case 'InvalidStoredAuthority':
+      case 'MissingActiveAuthority':
         return {
           ok: false,
           reason: LocalEventLogUpdateFailure.EventLogImportFailed,
