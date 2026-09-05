@@ -433,6 +433,11 @@ tasks:
     cmds:
       - task --taskfile agentic-ai/minds/hive/Taskfile.yml cache:publish
 
+  hive:console:image:
+    desc: Publish the exact-source Hive Control Center verification image.
+    cmds:
+      - task --taskfile agentic-ai/minds/hive/Taskfile.yml console:image
+
   hive:image:
     desc: Build the linux/amd64 Hive worker image.
     cmds:

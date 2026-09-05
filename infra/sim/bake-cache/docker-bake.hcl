@@ -69,6 +69,10 @@ variable "HIVE_EXACT_AVAILABLE" {
   default = ""
 }
 
+variable "HIVE_CONSOLE_EXACT_AVAILABLE" {
+  default = ""
+}
+
 variable "NOOK_REGISTRY_CACHE_HOST" {
   default = "registry.dev.nokey.sh:5000"
 }
@@ -157,6 +161,18 @@ hive_cache_from = GHA_CACHE_ENABLED == "" ? [] : HIVE_EXACT_AVAILABLE != "" ? [
 
 hive_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
   "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-v2${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
+] : []
+
+hive_console_cache_from = GHA_CACHE_ENABLED == "" ? [] : HIVE_CONSOLE_EXACT_AVAILABLE != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-console-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache",
+] : GHA_CACHE_FALLBACK_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/nook/buildcache/nook-bake-sim-hive-console-v1:buildcache",
+] : [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-console-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,ignore-error=true",
+]
+
+hive_console_cache_to = GHA_CACHE_WRITE_ENABLED != "" ? [
+  "type=registry,ref=${NOOK_REGISTRY_CACHE_HOST}/${write_cache_repository}/nook-bake-sim-hive-console-v1${GHA_CACHE_SCOPE_SUFFIX}:buildcache,mode=max,timeout=5m",
 ] : []
 
 // Broken PR FALLBACK: git-scope only (documents cold install without Main).
@@ -321,5 +337,14 @@ target "hive" {
   target = "verify"
   cache-from = hive_cache_from
   cache-to = hive_cache_to
+  output = ["type=cacheonly"]
+}
+
+target "hive-console" {
+  context = "."
+  dockerfile = "hive.Dockerfile"
+  target = "console-verify"
+  cache-from = hive_console_cache_from
+  cache-to = hive_console_cache_to
   output = ["type=cacheonly"]
 }

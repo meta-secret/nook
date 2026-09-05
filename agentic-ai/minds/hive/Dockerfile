@@ -130,6 +130,20 @@ COPY hive-console/locales locales
 RUN bun run check \
     && bun run build
 
+# The hosted console check needs Bun, Chromium, and only the console source.
+# Keep it independent from Nook Web's Rust/WASM preparation graph.
+FROM bun AS console-verification
+USER root
+COPY --from=node /usr/local/bin/node /usr/local/bin/node
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends chromium \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /meta-secret/nook/agentic-ai/minds/hive-console
+COPY hive-console/package.json hive-console/bun.lock ./
+RUN bun install --frozen-lockfile
+COPY hive-console/ ./
+
 FROM bun AS console-formatter
 WORKDIR /console
 COPY hive-console/package.json hive-console/bun.lock ./

@@ -356,6 +356,40 @@ tasks:
         "${command[@]}"
         BASH
 
+  console:image:
+    desc: Publish the exact-source Hive Control Center verification image.
+    dir: '{{.HIVE_DIR}}'
+    preconditions:
+      - sh: test -n "${HIVE_CONSOLE_IMAGE:-}"
+        msg: HIVE_CONSOLE_IMAGE is required for console image publication.
+      - sh: test -n "${HIVE_CONSOLE_CACHE_FROM:-}"
+        msg: HIVE_CONSOLE_CACHE_FROM is required for console image publication.
+      - sh: test -n "${HIVE_CONSOLE_CACHE_TO:-}"
+        msg: HIVE_CONSOLE_CACHE_TO is required for console image publication.
+    cmds:
+      - |
+        set -euo pipefail
+        cache_from="$HIVE_CONSOLE_CACHE_FROM"
+        if [ -n "${HIVE_CONSOLE_CACHE_EXACT_FROM:-}" ]; then
+          exact_ref="${HIVE_CONSOLE_CACHE_EXACT_FROM#type=registry,ref=}"
+          exact_ref="${exact_ref%%,*}"
+          if docker buildx imagetools inspect "$exact_ref" >/dev/null 2>&1; then
+            cache_from="$HIVE_CONSOLE_CACHE_EXACT_FROM"
+            echo "Exact Hive console cache available; Main seed suppressed"
+          else
+            echo "Exact Hive console cache absent; trusted Main seed enabled"
+          fi
+        fi
+        docker buildx build \
+          --platform linux/amd64 \
+          --target console-verification \
+          --tag "$HIVE_CONSOLE_IMAGE" \
+          --cache-from "$cache_from" \
+          --cache-to "$HIVE_CONSOLE_CACHE_TO" \
+          --push \
+          --file hive/Dockerfile \
+          .
+
   image:
     desc: Build the linux/amd64 Hive worker image.
     dir: '{{.HIVE_DIR}}'

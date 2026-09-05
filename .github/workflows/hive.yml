@@ -72,6 +72,7 @@ env:
   # Pull requests restore trusted Main and publish only quarantined exact-head
   # graphs. Only Main publishes the shared graph, so parallel PRs cannot evict it.
   HIVE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-linux-amd64-v2:buildcache
+  HIVE_CONSOLE_CACHE_FROM: type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-console-v1:buildcache
 
 concurrency:
   group: hive-${{ github.ref }}
@@ -86,8 +87,9 @@ jobs:
       github.event.pull_request.user.login != 'dependabot[bot]')
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     env:
-      DOCKER_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}
-      DOCKER_E2E_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}
+      HIVE_CONSOLE_IMAGE: registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console:run-${{ github.run_id }}-${{ github.run_attempt }}
+      HIVE_CONSOLE_CACHE_EXACT_FROM: ${{ github.event_name == 'pull_request' && format('type=registry,ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console-v1-git-{0}:buildcache', github.event.pull_request.head.sha) || '' }}
+      HIVE_CONSOLE_CACHE_TO: ${{ github.event_name == 'pull_request' && format('type=registry,ref=registry.dev.nokey.sh/nook/remote-buildcache/nook-hive-console-v1-git-{0}:buildcache,mode=max,timeout=10m', github.event.pull_request.head.sha) || 'type=registry,ref=registry.dev.nokey.sh/nook/buildcache/nook-hive-console-v1:buildcache,mode=max,timeout=10m' }}
       LANG: C.UTF-8
       LC_ALL: C.UTF-8
     steps:
@@ -123,7 +125,7 @@ jobs:
           isolated-cache-write: ${{ github.event_name == 'pull_request' && 'true' || 'false' }}
 
       - name: Publish exact-source Hive console browser image
-        run: task web:e2e:kubernetes-image
+        run: task hive:console:image
 
   console:
     name: Hive Control Center verification
@@ -140,18 +142,18 @@ jobs:
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     defaults:
       run:
-        working-directory: /meta-secret/nook
+        working-directory: /meta-secret/nook/agentic-ai/minds/hive-console
     env:
       PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH: /usr/bin/chromium
     steps:
-      - name: Install Hive Control Center dependencies
-        run: task hive:console:install
-
       - name: Verify Hive Control Center source
-        run: task hive:console:check
+        run: |
+          bun run format:check
+          bun run check
+          bun run build
 
       - name: Verify Hive Control Center journeys
-        run: task hive:console:e2e
+        run: bun run test:e2e
 
   console-untrusted:
     name: Validate untrusted Hive Control Center source

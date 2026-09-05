@@ -920,12 +920,21 @@ unless hive_taskfile.include?("Refusing oversized Hive test export") &&
        hive_taskfile.include?("524288")
   raise "Hive test artifact exports must have a hard size ceiling"
 end
+unless hive_dockerfile.include?("FROM bun AS console-verification") &&
+       hive_dockerfile.include?("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium") &&
+       hive_taskfile.include?("--target console-verification") &&
+       hive_taskfile.include?('HIVE_CONSOLE_CACHE_EXACT_FROM') &&
+       hive_taskfile.include?('HIVE_CONSOLE_CACHE_TO')
+  raise "Hive console verification must own a narrow cached browser image lineage"
+end
 if hive_taskfile.include?("host.docker.internal")
   raise "Hive verification must not depend on Docker Desktop host aliases"
 end
 
 hive_workflow = File.read(File.join(root, ".github/workflows/hive.yml"))
 root_agentic_taskfile = File.read(File.join(root, ".task/agentic-ai.yml"))
+hive_cache_simulation = File.read(File.join(root, "infra/sim/bake-cache/hive.Dockerfile"))
+hive_cache_bake = File.read(File.join(root, "infra/sim/bake-cache/docker-bake.hcl"))
 guest_changed_formatter = root_agentic_taskfile.match(
   /^  hive:guest:format:changed:\n(?<body>.*?)(?=^  hive:guest:format:)/m
 )&.[](:body)
@@ -958,6 +967,21 @@ unless hive_workflow.include?("run: task hive:verify") &&
        !hive_workflow.include?("run: task hive:check") &&
        !hive_workflow.include?("run: task hive:test")
   raise "Hive workflow must use the parallel BuildKit verification join"
+end
+unless hive_workflow.include?("run: task hive:console:image") &&
+       hive_workflow.include?("nook-hive-console-v1-git-") &&
+       hive_workflow.include?("nook/buildcache/nook-hive-console-v1:buildcache") &&
+       !hive_workflow.include?("task web:e2e:kubernetes-image")
+  raise "Hive console CI must not solve the Nook Web Rust/WASM browser graph"
+end
+unless hive_cache_simulation.include?("FROM console-browser AS console-dependencies") &&
+       hive_cache_simulation.include?("FROM console-dependencies AS console-verify") &&
+       hive_cache_simulation.index("bake-sim-hive-console-dependencies") <
+         hive_cache_simulation.index("COPY inputs/leaf.txt /tmp/console-source") &&
+       hive_cache_bake.include?('target "hive-console"') &&
+       hive_cache_bake.include?("nook-bake-sim-hive-console-v1") &&
+       hive_cache_bake.include?("HIVE_CONSOLE_EXACT_AVAILABLE")
+  raise "Hive cache simulation must model source-free console dependencies and exact replay"
 end
 
 puts "Hive Kubernetes manifest contract: ok"
