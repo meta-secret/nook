@@ -657,7 +657,7 @@ mod tests {
             VaultOperation::SentinelSharesIssued {
                 shares: vec![SentinelShareIssuedPayload {
                     device_id: DeviceId::parse("0123456789abcdef")?,
-                    version: 1,
+                    version: crate::SentinelShareVersion::LEGACY,
                     threshold: 2,
                     required_participants: 2,
                     share_index: 1,

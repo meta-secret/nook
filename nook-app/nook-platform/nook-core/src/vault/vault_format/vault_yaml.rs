@@ -2,8 +2,7 @@ use super::vault_unlock_is_keys;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
-    StoredRecordPayload, StoredSecretRecord, VaultArchitecture, VaultUnlock, is_auth_stored_record,
-    is_join_stored_record, is_members_stored_record, is_sentinel_share_stored_record,
+    StoredRecordPayload, StoredSecretRecord, VaultArchitecture, VaultMetaRecord, VaultUnlock,
 };
 use serde::{Deserialize, Serialize};
 
@@ -119,34 +118,17 @@ pub(super) fn partition_yaml_records(
             }
             continue;
         }
-        if is_join_stored_record(record) {
-            vault.joins.push(record.clone());
-        } else if is_members_stored_record(record) {
-            let key_str = record.key.as_str();
-            let pk_id = crate::normalize_auth_key_id(
-                key_str
-                    .strip_prefix(crate::MEMBER_RECORD_PREFIX)
-                    .unwrap_or(key_str),
-            )
-            .map_or_else(
-                |_| {
-                    key_str
-                        .strip_prefix(crate::MEMBER_RECORD_PREFIX)
-                        .unwrap_or(key_str)
-                        .to_owned()
-                },
-                |id| id.to_string(),
-            );
-            vault.members.push(MembersYamlRecord {
-                pk_id,
+        match VaultMetaRecord::classify(record)
+            .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?
+        {
+            VaultMetaRecord::Join(..) => vault.joins.push(record.clone()),
+            VaultMetaRecord::Member(auth_id, _) => vault.members.push(MembersYamlRecord {
+                pk_id: auth_id.to_string(),
                 ciphertext: record.value.as_str().to_owned(),
-            });
-        } else if is_auth_stored_record(record) {
-            vault.auth.push(stored_record_to_auth(record)?);
-        } else if is_sentinel_share_stored_record(record) {
-            vault.sentinel_shares.push(record.clone());
-        } else {
-            vault.secrets.push(record.clone());
+            }),
+            VaultMetaRecord::Auth(..) => vault.auth.push(stored_record_to_auth(record)?),
+            VaultMetaRecord::SentinelShare(..) => vault.sentinel_shares.push(record.clone()),
+            VaultMetaRecord::Secret(..) => vault.secrets.push(record.clone()),
         }
     }
     for secret in &mut vault.secrets {
@@ -270,6 +252,19 @@ mod tests {
     }
 
     #[test]
+    fn invalid_reserved_sentinel_share_never_enters_secret_yaml() {
+        let invalid = StoredSecretRecord {
+            key: sid("sentinel_share:0123456789abcdef"),
+            secret_type: None,
+            value: StoredRecordPayload::from_trusted(r#"{"version":3}"#.to_owned()),
+        };
+        assert!(matches!(
+            partition_yaml_records(&[invalid]),
+            Err(VaultFormatError::InvalidAuthRecord(_))
+        ));
+    }
+
+    #[test]
     fn local_device_wrapper_is_excluded_from_yaml_partition() -> anyhow::Result<()> {
         let credential_id = vec![7u8; 48];
         let user_handle = vec![8u8; 32];
@@ -371,7 +366,9 @@ mod tests {
 
         let parsed = deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed, shares);
-        assert!(parsed.iter().all(crate::is_sentinel_share_stored_record));
+        for record in &parsed {
+            assert!(crate::is_sentinel_share_stored_record(record)?);
+        }
         Ok(())
     }
 

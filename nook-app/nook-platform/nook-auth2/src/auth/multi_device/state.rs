@@ -60,20 +60,18 @@ pub(super) fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyI
     false
 }
 
-#[must_use]
-pub fn is_members_stored_record(record: &StoredSecretRecord) -> bool {
-    matches!(
-        VaultMetaRecord::classify(record),
+pub fn is_members_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
+    Ok(matches!(
+        VaultMetaRecord::classify(record)?,
         VaultMetaRecord::Member(..)
-    )
+    ))
 }
 
-#[must_use]
-pub fn is_vault_meta_record(record: &StoredSecretRecord) -> bool {
-    !matches!(
-        VaultMetaRecord::classify(record),
+pub fn is_vault_meta_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
+    Ok(!matches!(
+        VaultMetaRecord::classify(record)?,
         VaultMetaRecord::Secret(..)
-    )
+    ))
 }
 
 /// Single classification site for the four record kinds that share the
@@ -99,37 +97,36 @@ pub enum VaultMetaRecord {
 }
 
 impl VaultMetaRecord {
-    #[must_use]
-    pub fn classify(record: &StoredSecretRecord) -> Self {
+    pub fn classify(record: &StoredSecretRecord) -> MultiDeviceResult<Self> {
         if let Some(device_id_str) = record
             .key
             .as_str()
             .strip_prefix(SENTINEL_SHARE_RECORD_PREFIX)
-            && let Ok(device_id) = DeviceId::parse(device_id_str)
-            && let Ok(share) = parse_sentinel_share_envelope(record.value.as_str())
         {
-            return Self::SentinelShare(device_id, share);
+            let device_id = DeviceId::parse(device_id_str)?;
+            let share = parse_sentinel_share_envelope(record.value.as_str())?;
+            return Ok(Self::SentinelShare(device_id, share));
         }
         if let Ok(join) = parse_join_request(record.value.as_str()) {
-            return Self::Join(join.device_id.clone(), join);
+            return Ok(Self::Join(join.device_id.clone(), join));
         }
         if let Some(pk_id_str) = record.key.as_str().strip_prefix(MEMBER_RECORD_PREFIX)
             && record.value.as_str().contains("BEGIN AGE ENCRYPTED FILE")
             && let Ok(auth_id) = AuthKeyId::parse(pk_id_str)
         {
-            return Self::Member(auth_id, record.value.clone());
+            return Ok(Self::Member(auth_id, record.value.clone()));
         }
         if is_auth_id(record.key.as_str())
             && let Ok(envelopes) = parse_auth_envelopes(record.value.as_str())
             && let Ok(auth_id) = AuthKeyId::parse(record.key.as_str())
         {
-            return Self::Auth(auth_id, envelopes);
+            return Ok(Self::Auth(auth_id, envelopes));
         }
-        Self::Secret(
+        Ok(Self::Secret(
             record.key.clone(),
             record.secret_type.unwrap_or(SecretType::SecureNote),
             record.value.clone(),
-        )
+        ))
     }
 
     /// Wire-boundary encoding back to the shared `StoredSecretRecord` shape.
@@ -205,18 +202,17 @@ impl VaultMetaState {
             && self.sentinel_participants.is_empty()
     }
 
-    #[must_use]
-    pub fn from_stored_records(records: &[StoredSecretRecord]) -> Self {
+    pub fn from_stored_records(records: &[StoredSecretRecord]) -> MultiDeviceResult<Self> {
         let mut state = Self::default();
         for record in records {
-            state.apply_record(record);
+            state.apply_record(record)?;
         }
-        state
+        Ok(state)
     }
 
     /// Insert or overwrite whichever bucket `record` classifies into.
-    pub fn apply_record(&mut self, record: &StoredSecretRecord) {
-        match VaultMetaRecord::classify(record) {
+    pub fn apply_record(&mut self, record: &StoredSecretRecord) -> MultiDeviceResult<()> {
+        match VaultMetaRecord::classify(record)? {
             VaultMetaRecord::Secret(id, secret_type, payload) => {
                 self.secrets.insert(id, (secret_type, payload));
             }
@@ -233,6 +229,7 @@ impl VaultMetaState {
                 self.sentinel_shares.insert(device_id, share);
             }
         }
+        Ok(())
     }
 
     /// Remove whichever bucket a raw on-disk key refers to (join rows are

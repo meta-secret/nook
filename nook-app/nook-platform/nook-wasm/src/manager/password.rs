@@ -367,10 +367,11 @@ impl NookVaultManager {
             })?
             .clone();
         let keys = nook_core::resolve_keys_from_entry(&entry, &password)?;
+        let meta = VaultMetaState::from_stored_records(&records)?;
 
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         self.vault.unlock = VaultUnlock::Keys;
-        self.vault.meta = VaultMetaState::from_stored_records(&records);
+        self.vault.meta = meta;
         self.ensure_event_log_ready().await?;
         if let Some(identity) = identity.as_ref() {
             let store_id = StoreId::parse(&self.vault.store_id)
@@ -422,11 +423,11 @@ impl NookVaultManager {
             let store = load_local_event_store(&self.vault.store_id).await?;
             let graph = store.load_graph(&self.vault.store_id)?;
             let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
-            self.vault.password_entries = projection.password_entries.clone();
             let user_records: Vec<nook_core::StoredSecretRecord> =
                 projection.live_secrets(&graph).into_values().collect();
-            let mut meta = VaultMetaState::from_stored_records(&user_records);
+            let mut meta = VaultMetaState::from_stored_records(&user_records)?;
             nook_core::materialize_vault_meta_from_graph(&graph, &mut meta)?;
+            self.vault.password_entries = projection.password_entries.clone();
             self.vault.meta = meta;
             return Ok((true, self.vault.meta.to_stored_records()));
         }
@@ -440,8 +441,13 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(content)?;
         let mut records = nook_core::deserialize_stored(content, format)?;
         self.capture_vault_unlock(content)?;
-        records.retain(|record| !nook_core::is_join_stored_record(record));
-        Ok((false, records))
+        let mut retained = Vec::with_capacity(records.len());
+        for record in records {
+            if !nook_core::is_join_stored_record(&record)? {
+                retained.push(record);
+            }
+        }
+        Ok((false, retained))
     }
 
     async fn persist_password_unlock_membership(
@@ -474,15 +480,14 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let signing_pk =
             DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
-        let existing_roster =
-            nook_core::resolve_member_roster(records, &keys.members_key).unwrap_or_default();
+        let existing_roster = nook_core::resolve_member_roster(records, &keys.members_key)?;
         let updated_roster = nook_core::roster_add_member(
             existing_roster,
             nook_core::member_from_identity(identity, &wasm_iso_timestamp()),
         );
         let member_records = nook_core::build_members_records(&updated_roster, &keys.members_key)?;
         for record in &member_records {
-            self.vault.meta.apply_record(record);
+            self.vault.meta.apply_record(record)?;
         }
 
         let operations = match self.vault.architecture.vault_type {
@@ -490,7 +495,7 @@ impl NookVaultManager {
                 let auth_record =
                     nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
                 let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
-                self.vault.meta.apply_record(&auth_record);
+                self.vault.meta.apply_record(&auth_record)?;
                 vec![VaultOperation::JoinApproved {
                     device_id: identity.device_id().clone(),
                     encryption_public_key: identity.public_key().clone(),

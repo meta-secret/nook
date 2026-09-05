@@ -90,7 +90,10 @@ pub fn resolve_member_roster(
     members_key: &SymmetricKey,
 ) -> MultiDeviceResult<Vec<VaultMember>> {
     let mut roster = Vec::new();
-    for record in records.iter().filter(|r| is_members_stored_record(r)) {
+    for record in records {
+        if !is_members_stored_record(record)? {
+            continue;
+        }
         let entry = decrypt_member_entry(
             &AgeArmoredCiphertext::parse(record.value.as_str())?,
             members_key,
@@ -130,9 +133,16 @@ pub fn genesis_members_records(
 pub fn replace_member_records(
     records: &mut Vec<StoredSecretRecord>,
     member_records: Vec<StoredSecretRecord>,
-) {
-    records.retain(|record| !is_members_stored_record(record));
-    records.extend(member_records);
+) -> MultiDeviceResult<()> {
+    let mut replacement = Vec::with_capacity(records.len() + member_records.len());
+    for record in records.iter() {
+        if !is_members_stored_record(record)? {
+            replacement.push(record.clone());
+        }
+    }
+    replacement.extend(member_records);
+    *records = replacement;
+    Ok(())
 }
 
 pub fn rename_vault_member(
@@ -210,7 +220,7 @@ pub fn revoke_vault_member(
     replace_member_records(
         &mut updated,
         build_members_records(&remaining_roster, members_key)?,
-    );
+    )?;
     Ok(updated)
 }
 
@@ -259,7 +269,7 @@ mod tests {
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
-        let join = pending_join_for_device(records, joiner.device_id())
+        let join = pending_join_for_device(records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
@@ -270,7 +280,7 @@ mod tests {
         )?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
-        replace_member_records(records, member_records);
+        replace_member_records(records, member_records)?;
         Ok(())
     }
 
@@ -378,7 +388,7 @@ mod tests {
         let (genesis, records) = genesis_vault(&keys)?;
         let mut member_record = records
             .iter()
-            .find(|record| is_members_stored_record(record))
+            .find(|record| record.key.as_str().starts_with(MEMBER_RECORD_PREFIX))
             .ok_or_else(|| io::Error::other("member record must exist"))?
             .clone();
         let other_identity = DeviceIdentity::generate()?;

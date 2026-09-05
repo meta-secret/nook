@@ -127,8 +127,13 @@ impl NookVaultManager {
         let parsed_members = SymmetricKey::parse(&members_key)?;
 
         let auth_id = SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
-        records.retain(|record| record.key != auth_id);
-        records.retain(|record| !nook_core::is_members_stored_record(record));
+        let mut retained = Vec::with_capacity(records.len());
+        for record in records {
+            if record.key != auth_id && !nook_core::is_members_stored_record(&record)? {
+                retained.push(record);
+            }
+        }
+        let mut records = retained;
         let (auth, members) = nook_core::enroll_device_with_keys(
             &parsed_secrets,
             &parsed_members,
@@ -138,7 +143,7 @@ impl NookVaultManager {
         records.push(auth);
         records.extend(members);
 
-        self.vault.meta = VaultMetaState::from_stored_records(&records);
+        self.vault.meta = VaultMetaState::from_stored_records(&records)?;
         self.persist_vault_change(Vec::new()).await?;
 
         let updated = nook_core::serialize_stored(&records, format)?;
@@ -172,7 +177,7 @@ impl NookVaultManager {
             &requested_at,
             &signing_pk,
         )?;
-        self.vault.meta.apply_record(&record);
+        self.vault.meta.apply_record(&record)?;
         self.persist_vault_change(vec![VaultOperation::JoinRequested {
             device_id: identity.device_id().clone(),
             encryption_public_key: identity.public_key().clone(),
@@ -192,7 +197,7 @@ impl NookVaultManager {
             .validate_session_access(self.vault.architecture.vault_type)?;
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
-        let pending = nook_core::list_join_requests(&records);
+        let pending = nook_core::list_join_requests(&records)?;
         let join_device = DeviceId::parse(&join_device_id)?;
         let join = pending
             .into_iter()
@@ -211,8 +216,8 @@ impl NookVaultManager {
                     &records,
                 )?;
                 self.vault.meta.remove_key(&join_key);
-                self.vault.meta.apply_record(&auth_record);
-                apply_member_records(&mut self.vault.meta, &member_records);
+                self.vault.meta.apply_record(&auth_record)?;
+                apply_member_records(&mut self.vault.meta, &member_records)?;
                 let envelopes: nook_core::AuthEnvelopes =
                     serde_json::from_str(auth_record.value.as_str())
                         .map_err(|e| NookError::Serialization(e.to_string()))?;
@@ -241,7 +246,7 @@ impl NookVaultManager {
                 self.vault
                     .meta
                     .remove_key(&nook_core::join_record_key(&join.device_id));
-                apply_member_records(&mut self.vault.meta, &member_records);
+                apply_member_records(&mut self.vault.meta, &member_records)?;
                 operations.push(VaultOperation::SentinelParticipantEnrolled {
                     device_id: join.device_id.clone(),
                     encryption_public_key: join.public_key.clone(),
@@ -286,7 +291,7 @@ impl NookVaultManager {
         )?;
         let mut shares = Vec::with_capacity(share_records.len());
         for record in &share_records {
-            self.vault.meta.apply_record(record);
+            self.vault.meta.apply_record(record)?;
             let envelope = nook_core::parse_sentinel_share_envelope(record.value.as_str())?;
             let device_id = record
                 .key
@@ -342,8 +347,8 @@ impl NookVaultManager {
             &identity,
             &records,
         )?;
-        self.vault.meta.apply_record(&auth_record);
-        apply_member_records(&mut self.vault.meta, &member_records);
+        self.vault.meta.apply_record(&auth_record)?;
+        apply_member_records(&mut self.vault.meta, &member_records)?;
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         let operations = vec![VaultOperation::JoinApproved {
@@ -380,7 +385,7 @@ impl NookVaultManager {
             return Err(NookError::Database("Join request not found.".to_owned()).into());
         }
         let updated = nook_core::deny_join_request(&records, &join_device);
-        self.vault.meta = VaultMetaState::from_stored_records(&updated);
+        self.vault.meta = VaultMetaState::from_stored_records(&updated)?;
         self.persist_vault_change(vec![VaultOperation::JoinDenied {
             device_id: join_device,
         }])
@@ -398,7 +403,7 @@ impl NookVaultManager {
         let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let member_records =
             nook_core::rename_vault_member(&records, &members_key, &parsed_auth_id, &label)?;
-        apply_member_records(&mut self.vault.meta, &member_records);
+        apply_member_records(&mut self.vault.meta, &member_records)?;
         let roster = nook_core::resolve_member_roster(&records, &members_key)?;
         let device_id = roster
             .iter()
@@ -438,7 +443,7 @@ impl NookVaultManager {
             .then(|| DeviceId::parse(&device_id))
             .transpose()?;
         let updated = nook_core::revoke_vault_member(&records, &members_key, &parsed_auth_id)?;
-        let staged_meta = VaultMetaState::from_stored_records(&updated);
+        let staged_meta = VaultMetaState::from_stored_records(&updated)?;
 
         if is_self {
             let live_meta = mem::replace(&mut self.vault.meta, staged_meta);
@@ -497,9 +502,9 @@ impl NookVaultManager {
             &wasm_iso_timestamp(),
         )?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
-        self.vault.meta.apply_record(&auth);
+        self.vault.meta.apply_record(&auth)?;
         for member in &members {
-            self.vault.meta.apply_record(member);
+            self.vault.meta.apply_record(member)?;
         }
         self.persist_vault_change(Vec::new()).await?;
         self.purge_legacy_plaintext_search_catalog().await?;

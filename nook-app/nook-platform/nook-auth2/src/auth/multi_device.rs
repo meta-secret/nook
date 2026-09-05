@@ -35,7 +35,7 @@ pub use roster::{
 };
 
 pub use sentinel::{
-    OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelShareEnvelope,
+    OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelShareEnvelope, SentinelShareVersion,
     count_sentinel_share_records, create_sentinel_root_share_records_for_recipients,
     create_sentinel_share_records, create_sentinel_share_records_for_recipients,
     is_sentinel_share_stored_record, open_sentinel_share_for_identity,
@@ -114,19 +114,23 @@ pub fn parse_auth_envelopes(value: &str) -> MultiDeviceResult<AuthEnvelopes> {
     serde_json::from_str(value).map_err(MultiDeviceError::AuthEnvelopeJson)
 }
 
-#[must_use]
-pub fn is_join_stored_record(record: &StoredSecretRecord) -> bool {
-    matches!(VaultMetaRecord::classify(record), VaultMetaRecord::Join(..))
+pub fn is_join_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
+    Ok(matches!(
+        VaultMetaRecord::classify(record)?,
+        VaultMetaRecord::Join(..)
+    ))
 }
 
-#[must_use]
-pub fn is_auth_stored_record(record: &StoredSecretRecord) -> bool {
-    matches!(VaultMetaRecord::classify(record), VaultMetaRecord::Auth(..))
+pub fn is_auth_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
+    Ok(matches!(
+        VaultMetaRecord::classify(record)?,
+        VaultMetaRecord::Auth(..)
+    ))
 }
 
 /// Back-compat alias.
 #[must_use]
-pub fn is_dec_stored_record(record: &StoredSecretRecord) -> bool {
+pub fn is_dec_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
     is_auth_stored_record(record)
 }
 
@@ -135,41 +139,54 @@ pub fn parse_join_request(value: &str) -> MultiDeviceResult<JoinRequest> {
     serde_json::from_str(value).map_err(MultiDeviceError::JoinRequestJson)
 }
 
-#[must_use]
-pub fn list_join_requests(records: &[StoredSecretRecord]) -> Vec<JoinRequest> {
-    records
-        .iter()
-        .filter_map(|record| parse_join_request(record.value.as_str()).ok())
-        .collect()
+pub fn list_join_requests(records: &[StoredSecretRecord]) -> MultiDeviceResult<Vec<JoinRequest>> {
+    let mut joins = Vec::new();
+    for record in records {
+        if let VaultMetaRecord::Join(_, join) = VaultMetaRecord::classify(record)? {
+            joins.push(join);
+        }
+    }
+    Ok(joins)
 }
 
 /// Replace in-memory join rows with the latest join rows from a freshly fetched vault file.
-pub fn merge_remote_join_records(state: &mut VaultMetaState, fresh_records: &[StoredSecretRecord]) {
-    state.joins.clear();
+pub fn merge_remote_join_records(
+    state: &mut VaultMetaState,
+    fresh_records: &[StoredSecretRecord],
+) -> MultiDeviceResult<()> {
+    let mut joins = HashMap::new();
     for record in fresh_records {
-        if let VaultMetaRecord::Join(device_id, join) = VaultMetaRecord::classify(record) {
-            state.joins.insert(device_id, join);
+        if let VaultMetaRecord::Join(device_id, join) = VaultMetaRecord::classify(record)? {
+            joins.insert(device_id, join);
         }
     }
+    state.joins = joins;
+    Ok(())
 }
 
-#[must_use]
-pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> bool {
-    records.iter().any(|record| {
-        is_auth_stored_record(record)
-            || is_members_stored_record(record)
-            || is_sentinel_share_stored_record(record)
-            || is_join_stored_record(record)
-    })
+pub fn vault_has_multi_device_records(records: &[StoredSecretRecord]) -> MultiDeviceResult<bool> {
+    let mut has_multi_device_records = false;
+    for record in records {
+        if !matches!(
+            VaultMetaRecord::classify(record)?,
+            VaultMetaRecord::Secret(..)
+        ) {
+            has_multi_device_records = true;
+        }
+    }
+    Ok(has_multi_device_records)
 }
 
-#[must_use]
-pub fn user_stored_records(records: &[StoredSecretRecord]) -> Vec<StoredSecretRecord> {
-    records
-        .iter()
-        .filter(|record| !is_vault_meta_record(record))
-        .cloned()
-        .collect()
+pub fn user_stored_records(
+    records: &[StoredSecretRecord],
+) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
+    let mut user_records = Vec::new();
+    for record in records {
+        if !is_vault_meta_record(record)? {
+            user_records.push(record.clone());
+        }
+    }
+    Ok(user_records)
 }
 
 #[must_use]
@@ -448,7 +465,7 @@ mod tests {
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
-        let join = pending_join_for_device(records, joiner.device_id())
+        let join = pending_join_for_device(records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
@@ -459,7 +476,7 @@ mod tests {
         )?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
-        replace_member_records(records, member_records);
+        replace_member_records(records, member_records)?;
         Ok(())
     }
 
@@ -512,7 +529,7 @@ mod tests {
         records.push(sentinel_record.clone());
         records.push(user_secret.clone());
 
-        let mut state = VaultMetaState::from_stored_records(&records);
+        let mut state = VaultMetaState::from_stored_records(&records)?;
         assert_eq!(state.secrets.len(), 1);
         assert_eq!(state.auth.len(), 1);
         assert_eq!(state.joins.len(), 1);
@@ -529,8 +546,8 @@ mod tests {
         );
 
         let flattened = state.to_stored_records();
-        assert_eq!(VaultMetaState::from_stored_records(&flattened), state);
-        assert_eq!(user_stored_records(&flattened), vec![user_secret.clone()]);
+        assert_eq!(VaultMetaState::from_stored_records(&flattened)?, state);
+        assert_eq!(user_stored_records(&flattened)?, vec![user_secret.clone()]);
 
         state.remove_key(user_secret.key.as_str());
         state.remove_key(genesis.auth_id().as_str());
@@ -540,17 +557,33 @@ mod tests {
         assert!(state.is_empty());
 
         assert!(matches!(
-            VaultMetaRecord::classify(&user_secret),
+            VaultMetaRecord::classify(&user_secret)?,
             VaultMetaRecord::Secret(_, SecretType::Login, _)
         ));
         assert!(matches!(
-            VaultMetaRecord::classify(&join_record),
+            VaultMetaRecord::classify(&join_record)?,
             VaultMetaRecord::Join(_, _)
         ));
         assert!(matches!(
-            VaultMetaRecord::classify(&sentinel_record),
+            VaultMetaRecord::classify(&sentinel_record)?,
             VaultMetaRecord::SentinelShare(_, _)
         ));
+
+        let mut invalid_sentinel = sentinel_record;
+        invalid_sentinel.value = StoredRecordPayload::from_trusted(
+            invalid_sentinel
+                .value
+                .as_str()
+                .replacen("\"version\":1", "\"version\":3", 1),
+        );
+        let before = state.clone();
+        assert!(VaultMetaRecord::classify(&invalid_sentinel).is_err());
+        match state.apply_record(&invalid_sentinel) {
+            Err(_) => {}
+            Ok(()) => return Err(anyhow::anyhow!("invalid share must be rejected")),
+        }
+        assert_eq!(state, before);
+        assert!(VaultMetaState::from_stored_records(&[invalid_sentinel]).is_err());
         Ok(())
     }
 
@@ -565,11 +598,11 @@ mod tests {
             &stale_joiner,
             "2026-06-20T00:00:00Z",
         )?);
-        let mut state = VaultMetaState::from_stored_records(&records);
+        let mut state = VaultMetaState::from_stored_records(&records)?;
 
         let fresh_joiner = DeviceIdentity::generate()?;
         let fresh_records = vec![create_join_request_record(&fresh_joiner, ENROLLED_AT)?];
-        merge_remote_join_records(&mut state, &fresh_records);
+        merge_remote_join_records(&mut state, &fresh_records)?;
 
         assert_eq!(state.secrets.len(), 1);
         assert_eq!(state.auth.len(), 1);
@@ -603,7 +636,7 @@ mod tests {
             create_join_request_record(&joiner, ENROLLED_AT)?,
             corrupt_member_record,
         ];
-        let join = pending_join_for_device(&records, joiner.device_id())
+        let join = pending_join_for_device(&records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join must exist"))?;
 
         let (auth_record, join_key, member_records) = approve_join_request(

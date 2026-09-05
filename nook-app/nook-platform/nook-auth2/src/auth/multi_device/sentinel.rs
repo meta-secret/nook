@@ -2,7 +2,7 @@ use std::collections::BTreeSet;
 
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use hkdf::Hkdf;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use sha2::Sha256;
 use zeroize::Zeroize;
 
@@ -26,7 +26,7 @@ pub fn sentinel_share_record_key(device_id: &DeviceId) -> String {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SentinelShareEnvelope {
-    pub version: u32,
+    pub version: SentinelShareVersion,
     pub threshold: SentinelThreshold,
     pub required_participants: SentinelParticipantCount,
     pub share_index: SentinelShareIndex,
@@ -35,7 +35,7 @@ pub struct SentinelShareEnvelope {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct SentinelSharePlaintext {
-    version: u32,
+    version: SentinelShareVersion,
     threshold: SentinelThreshold,
     required_participants: SentinelParticipantCount,
     share_index: SentinelShareIndex,
@@ -49,7 +49,7 @@ struct SentinelSharePlaintext {
 /// never serialize it directly to JavaScript.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct OpenedSentinelShare {
-    pub version: u32,
+    pub version: SentinelShareVersion,
     pub threshold: SentinelThreshold,
     pub required_participants: SentinelParticipantCount,
     pub share_index: SentinelShareIndex,
@@ -58,13 +58,44 @@ pub struct OpenedSentinelShare {
     pub device_id: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct SentinelShareVersion(u32);
+
+impl SentinelShareVersion {
+    pub const LEGACY: Self = Self(1);
+    pub const CURRENT: Self = Self(2);
+
+    fn parse(value: u32) -> Result<Self, &'static str> {
+        match value {
+            1 => Ok(Self::LEGACY),
+            2 => Ok(Self::CURRENT),
+            _ => Err("unsupported Sentinel share version"),
+        }
+    }
+}
+
+impl From<SentinelShareVersion> for u32 {
+    fn from(value: SentinelShareVersion) -> Self {
+        value.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SentinelShareVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct SentinelVaultKeysPlaintext {
     secrets_key: String,
     members_key: String,
 }
 
-const SENTINEL_ROOT_SHARE_VERSION: u32 = 2;
 const SENTINEL_SECRETS_KEY_INFO: &[u8] = b"nook/sentinel-genesis/v1/secrets-key";
 const SENTINEL_MEMBERS_KEY_INFO: &[u8] = b"nook/sentinel-genesis/v1/members-key";
 
@@ -92,11 +123,11 @@ pub fn parse_sentinel_share_envelope(value: &str) -> MultiDeviceResult<SentinelS
 }
 
 #[must_use]
-pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> bool {
-    matches!(
-        VaultMetaRecord::classify(record),
+pub fn is_sentinel_share_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
+    Ok(matches!(
+        VaultMetaRecord::classify(record)?,
         VaultMetaRecord::SentinelShare(..)
-    )
+    ))
 }
 
 pub fn create_sentinel_share_records(
@@ -136,7 +167,7 @@ pub fn create_sentinel_share_records_for_recipients(
         .zip(shares)
         .map(|((device_id, public_key), share)| {
             let plaintext = SentinelSharePlaintext {
-                version: 1,
+                version: SentinelShareVersion::LEGACY,
                 threshold,
                 required_participants,
                 share_index: share.index.into(),
@@ -145,7 +176,7 @@ pub fn create_sentinel_share_records_for_recipients(
             let json =
                 serde_json::to_vec(&plaintext).map_err(MultiDeviceError::SentinelSharePayload)?;
             let envelope = SentinelShareEnvelope {
-                version: 1,
+                version: SentinelShareVersion::LEGACY,
                 threshold,
                 required_participants,
                 share_index: share.index.into(),
@@ -183,7 +214,7 @@ pub fn create_sentinel_root_share_records_for_recipients(
                 u8::try_from(offset + 1).map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?,
             );
             let plaintext = SentinelSharePlaintext {
-                version: SENTINEL_ROOT_SHARE_VERSION,
+                version: SentinelShareVersion::CURRENT,
                 threshold,
                 required_participants,
                 share_index,
@@ -192,7 +223,7 @@ pub fn create_sentinel_root_share_records_for_recipients(
             let json =
                 serde_json::to_vec(&plaintext).map_err(MultiDeviceError::SentinelSharePayload)?;
             let envelope = SentinelShareEnvelope {
-                version: SENTINEL_ROOT_SHARE_VERSION,
+                version: SentinelShareVersion::CURRENT,
                 threshold,
                 required_participants,
                 share_index,
@@ -204,13 +235,16 @@ pub fn create_sentinel_root_share_records_for_recipients(
     Ok((keys, records))
 }
 
-#[must_use]
-pub fn count_sentinel_share_records(records: &[StoredSecretRecord]) -> SentinelRecordCount {
-    records
-        .iter()
-        .filter(|record| is_sentinel_share_stored_record(record))
-        .count()
-        .into()
+pub fn count_sentinel_share_records(
+    records: &[StoredSecretRecord],
+) -> MultiDeviceResult<SentinelRecordCount> {
+    let mut count = 0;
+    for record in records {
+        if is_sentinel_share_stored_record(record)? {
+            count += 1;
+        }
+    }
+    Ok(count.into())
 }
 
 /// Open this device's encrypted Sentinel share for an in-Rust unlock response.
@@ -225,9 +259,6 @@ pub fn open_sentinel_share_for_identity(
             device_id: identity.device_id().to_string(),
         })?;
     let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
-    if !matches!(envelope.version, 1 | SENTINEL_ROOT_SHARE_VERSION) {
-        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-    }
     let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
     let plaintext: SentinelSharePlaintext =
         serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::SentinelSharePayload)?;
@@ -240,7 +271,7 @@ pub fn open_sentinel_share_for_identity(
     }
     // Reject malformed legacy share encoding early. Current SLIP-0039 shares
     // are fully checksum/digest-validated when quorum reconstruction runs.
-    if plaintext.version == SENTINEL_ROOT_SHARE_VERSION {
+    if plaintext.version == SentinelShareVersion::CURRENT {
         if plaintext.share.split_whitespace().count() != 33 {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
@@ -314,7 +345,7 @@ pub fn reconstruct_sentinel_vault_keys_from_opened(
         if !seen_indexes.insert(contribution.share_index) {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
-        if contribution.version == SENTINEL_ROOT_SHARE_VERSION {
+        if contribution.version == SentinelShareVersion::CURRENT {
             if contribution.share.split_whitespace().count() != 33 {
                 return Err(MultiDeviceError::InvalidSentinelShareEncoding);
             }
@@ -339,7 +370,7 @@ pub fn reconstruct_sentinel_vault_keys_from_opened(
             available: opened.len().into(),
         });
     }
-    if expected_version == Some(SENTINEL_ROOT_SHARE_VERSION) {
+    if expected_version == Some(SentinelShareVersion::CURRENT) {
         let mut root =
             slip39::recover_sentinel_secret(&slip39_mnemonics[..usize::from(u8::from(threshold))])?;
         let keys = derive_sentinel_vault_keys(&root);
@@ -399,13 +430,32 @@ mod tests {
     }
 
     #[test]
+    fn sentinel_share_version_preserves_supported_scalars_and_rejects_others() -> anyhow::Result<()>
+    {
+        for (raw, expected) in [
+            ("1", SentinelShareVersion::LEGACY),
+            ("2", SentinelShareVersion::CURRENT),
+        ] {
+            let version: SentinelShareVersion = serde_json::from_str(raw)?;
+            assert_eq!(version, expected);
+            assert_eq!(serde_json::to_string(&version)?, raw);
+        }
+        for raw in ["0", "3", "4294967296"] {
+            assert!(serde_json::from_str::<SentinelShareVersion>(raw).is_err());
+        }
+        Ok(())
+    }
+
+    #[test]
     fn sentinel_threshold_shares_reconstruct_keys_without_full_device_envelopes()
     -> anyhow::Result<()> {
         let (keys, [first, second, third], records) = sentinel_share_fixture()?;
 
         assert_eq!(records.len(), 3);
-        assert!(records.iter().all(is_sentinel_share_stored_record));
-        assert!(records.iter().all(|record| !is_auth_stored_record(record)));
+        for record in &records {
+            assert!(is_sentinel_share_stored_record(record)?);
+            assert!(!is_auth_stored_record(record)?);
+        }
         assert!(resolve_secrets_key(&records, &first).is_err());
         assert!(reconstruct_sentinel_vault_keys(&records, slice::from_ref(&first)).is_err());
 
@@ -437,9 +487,9 @@ mod tests {
         assert_eq!(reconstructed, keys);
 
         // Share-row enrollment counts as Ready without an auth envelope.
-        assert!(device_is_enrolled(&records, &first));
+        assert!(device_is_enrolled(&records, &first)?);
         assert_eq!(
-            assess_connect_access(&records, &third),
+            assess_connect_access(&records, &third)?,
             ConnectAccessStatus::Ready
         );
         assert!(resolve_secrets_key(&records, &first).is_err());

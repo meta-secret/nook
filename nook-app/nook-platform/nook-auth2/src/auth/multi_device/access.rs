@@ -1,8 +1,6 @@
 use super::{
-    DeviceIdentity, JoinRequest, build_members_records, is_auth_stored_record,
-    is_members_stored_record, is_sentinel_share_stored_record, list_join_requests,
-    member_from_identity, member_stored_key, resolve_member_roster, roster_add_member,
-    sentinel_share_record_key,
+    DeviceIdentity, JoinRequest, VaultMetaState, build_members_records, member_from_identity,
+    resolve_member_roster, roster_add_member,
 };
 use crate::errors::MultiDeviceResult;
 use crate::{DeviceId, StoredSecretRecord, SymmetricKey};
@@ -37,52 +35,36 @@ pub enum ConnectAccessStatus {
     JoinPending,
 }
 
-#[must_use]
 pub fn assess_connect_access(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
-) -> ConnectAccessStatus {
-    if device_is_enrolled(records, identity) {
-        ConnectAccessStatus::Ready
-    } else if pending_join_for_device(records, identity.device_id()).is_some() {
-        ConnectAccessStatus::JoinPending
+) -> MultiDeviceResult<ConnectAccessStatus> {
+    let state = VaultMetaState::from_stored_records(records)?;
+    if state.auth.contains_key(&identity.auth_id())
+        || state.members.contains_key(&identity.auth_id())
+        || state.sentinel_shares.contains_key(identity.device_id())
+    {
+        Ok(ConnectAccessStatus::Ready)
+    } else if state.joins.contains_key(identity.device_id()) {
+        Ok(ConnectAccessStatus::JoinPending)
     } else {
-        ConnectAccessStatus::NeedsEnrollment
+        Ok(ConnectAccessStatus::NeedsEnrollment)
     }
 }
 
-#[must_use]
-pub fn device_is_enrolled(records: &[StoredSecretRecord], identity: &DeviceIdentity) -> bool {
-    let pk_id = identity.auth_id();
-    if records
-        .iter()
-        .any(|record| record.key.as_str() == pk_id.as_str() && is_auth_stored_record(record))
-    {
-        return true;
-    }
-    // Sentinel participants are enrolled via member roster and/or share rows without
-    // a per-device auth envelope.
-    let member_key = member_stored_key(&pk_id);
-    if records
-        .iter()
-        .any(|record| record.key.as_str() == member_key && is_members_stored_record(record))
-    {
-        return true;
-    }
-    let share_key = sentinel_share_record_key(identity.device_id());
-    records
-        .iter()
-        .any(|record| record.key.as_str() == share_key && is_sentinel_share_stored_record(record))
+pub fn device_is_enrolled(
+    records: &[StoredSecretRecord],
+    identity: &DeviceIdentity,
+) -> MultiDeviceResult<bool> {
+    Ok(assess_connect_access(records, identity)? == ConnectAccessStatus::Ready)
 }
 
-#[must_use]
 pub fn pending_join_for_device(
     records: &[StoredSecretRecord],
     device_id: &DeviceId,
-) -> Option<JoinRequest> {
-    list_join_requests(records)
-        .into_iter()
-        .find(|join| join.device_id == *device_id)
+) -> MultiDeviceResult<Option<JoinRequest>> {
+    let mut state = VaultMetaState::from_stored_records(records)?;
+    Ok(state.joins.remove(device_id))
 }
 
 #[cfg(test)]
@@ -120,7 +102,7 @@ mod tests {
         records: &mut Vec<StoredSecretRecord>,
         joiner: &DeviceIdentity,
     ) -> anyhow::Result<()> {
-        let join = pending_join_for_device(records, joiner.device_id())
+        let join = pending_join_for_device(records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
         let (auth_record, join_key, member_records) = approve_join_request(
             &keys.secrets_key,
@@ -131,7 +113,7 @@ mod tests {
         )?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
-        replace_member_records(records, member_records);
+        replace_member_records(records, member_records)?;
         Ok(())
     }
 
@@ -140,9 +122,9 @@ mod tests {
         let keys = generate_vault_keys()?;
         let participant = DeviceIdentity::generate()?;
         let members = genesis_members_records(&participant, &keys.members_key, ENROLLED_AT)?;
-        assert!(device_is_enrolled(&members, &participant));
+        assert!(device_is_enrolled(&members, &participant)?);
         assert_eq!(
-            assess_connect_access(&members, &participant),
+            assess_connect_access(&members, &participant)?,
             ConnectAccessStatus::Ready
         );
         assert!(resolve_secrets_key(&members, &participant).is_err());
@@ -160,15 +142,15 @@ mod tests {
         records.push(create_join_request_record(&pending, ENROLLED_AT)?);
 
         assert_eq!(
-            assess_connect_access(&records, &genesis),
+            assess_connect_access(&records, &genesis)?,
             ConnectAccessStatus::Ready
         );
         assert_eq!(
-            assess_connect_access(&records, &pending),
+            assess_connect_access(&records, &pending)?,
             ConnectAccessStatus::JoinPending
         );
         assert_eq!(
-            assess_connect_access(&records, &stranger),
+            assess_connect_access(&records, &stranger)?,
             ConnectAccessStatus::NeedsEnrollment
         );
         Ok(())
@@ -192,7 +174,7 @@ mod tests {
         else {
             panic!("missing roster member should produce an update");
         };
-        replace_member_records(&mut missing_joiner_roster, repaired);
+        replace_member_records(&mut missing_joiner_roster, repaired)?;
 
         let roster = resolve_member_roster(&missing_joiner_roster, &keys.members_key)?;
         assert_eq!(roster.len(), 2);

@@ -63,7 +63,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
         &device_two,
         "2026-06-21T00:00:00Z",
     )?);
-    let join_two = list_join_requests(&records)
+    let join_two = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_two, join_key, member_records) = approve_join_request(
@@ -75,14 +75,14 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     )?;
     records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_two);
-    replace_member_records(&mut records, member_records);
+    replace_member_records(&mut records, member_records)?;
 
     let device_three = DeviceIdentity::generate()?;
     records.push(create_join_request_record(
         &device_three,
         "2026-06-21T01:00:00Z",
     )?);
-    let join_three = list_join_requests(&records)
+    let join_three = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_three, join_key, member_records) = approve_join_request(
@@ -94,7 +94,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     )?;
     records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_three);
-    replace_member_records(&mut records, member_records);
+    replace_member_records(&mut records, member_records)?;
 
     let yaml = serialize_stored(&records, VaultFormat::Yaml)?;
     let yaml_str = yaml.as_str();
@@ -116,7 +116,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
         assert_eq!(resolved_members, keys.members_key);
         let roster = resolve_member_roster(&loaded, &keys.members_key)?;
         assert_eq!(roster.len(), 3);
-        let user_records = user_stored_records(&loaded);
+        let user_records = user_stored_records(&loaded)?;
         let unlocked = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
         assert_eq!(unlocked.list().len(), 1);
         assert_eq!(unlocked.list()[0].data, api_key("hunter2"));
@@ -201,7 +201,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
     records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z")?);
-    let join = list_join_requests(&records)
+    let join = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
@@ -232,7 +232,7 @@ fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
         &device.auth_id(),
         "Kitchen iPad",
     )?;
-    replace_member_records(&mut records, member_records);
+    replace_member_records(&mut records, member_records)?;
 
     let yaml = serialize_stored(&records, VaultFormat::Yaml)?;
     assert!(!yaml.as_str().contains("Kitchen iPad"));
@@ -249,7 +249,7 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
     records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z")?);
-    let join = list_join_requests(&records)
+    let join = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
@@ -262,7 +262,7 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     )?;
     records.retain(|r| r.key.as_str() != join_key);
     records.push(auth);
-    replace_member_records(&mut records, member_records);
+    replace_member_records(&mut records, member_records)?;
 
     let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id())?;
     let yaml = serialize_stored(&revoked, VaultFormat::Yaml)?;

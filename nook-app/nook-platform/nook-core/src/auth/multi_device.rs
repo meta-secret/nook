@@ -153,12 +153,14 @@ pub fn apply_vault_meta_operation(
             rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
             ..
         } => {
-            state.auth.clear();
-            state.members.clear();
-            state.enrolled_devices.clear();
+            let mut replacement = state.clone();
+            replacement.auth.clear();
+            replacement.members.clear();
+            replacement.enrolled_devices.clear();
             for record in rotated_meta_records {
-                state.apply_record(record);
+                replacement.apply_record(record)?;
             }
+            *state = replacement;
         }
         VaultOperation::VaultImported { .. }
         | VaultOperation::SecretCreated { .. }
@@ -360,7 +362,7 @@ pub fn event_graph_active_device_envelopes(
                     rotated_meta_records: EpochMetadataState::Replace(records),
                     ..
                 } if active.is_some() => {
-                    let checkpoint_meta = VaultMetaState::from_stored_records(records);
+                    let checkpoint_meta = VaultMetaState::from_stored_records(records)?;
                     active = checkpoint_meta.auth.get(&expected_auth_id).cloned();
                 }
                 _ => {}
@@ -775,7 +777,7 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let keys = crate::generate_vault_keys()?;
         let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
-        let mut meta = VaultMetaState::from_stored_records(&[auth]);
+        let mut meta = VaultMetaState::from_stored_records(&[auth])?;
         let secret_id = crate::generate_secret_id()?;
         meta.secrets.insert(
             secret_id.clone(),
@@ -800,7 +802,7 @@ mod tests {
         let keys = crate::generate_vault_keys()?;
         let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
         let envelopes = crate::parse_auth_envelopes(auth.value.as_str())?;
-        let mut meta = VaultMetaState::from_stored_records(&[auth]);
+        let mut meta = VaultMetaState::from_stored_records(&[auth])?;
         apply_vault_meta_operation(
             &mut meta,
             &VaultOperation::JoinApproved {
@@ -829,6 +831,32 @@ mod tests {
         assert!(meta.auth.is_empty());
         assert!(meta.members.is_empty());
         assert!(meta.enrolled_devices.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_checkpoint_sentinel_share_preserves_live_grants() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let keys = crate::generate_vault_keys()?;
+        let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let mut meta = VaultMetaState::from_stored_records(&[auth])?;
+        let before = meta.clone();
+        let invalid = StoredSecretRecord {
+            key: SecretId::from_vault_record("sentinel_share:0123456789abcdef"),
+            secret_type: None,
+            value: StoredRecordPayload::from_trusted(r#"{"version":3}"#.to_owned()),
+        };
+        let operation = VaultOperation::EpochCheckpoint {
+            secrets: Vec::new(),
+            members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            rotated_meta_records: EpochMetadataState::Replace(vec![invalid]),
+            password_entries: EpochPasswordState::LegacyRetain,
+        };
+        match apply_vault_meta_operation(&mut meta, &operation, "2026-08-15T00:00:00Z") {
+            Err(_) => {}
+            Ok(()) => return Err(anyhow::anyhow!("invalid checkpoint must be rejected")),
+        }
+        assert_eq!(meta, before);
         Ok(())
     }
 

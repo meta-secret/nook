@@ -78,7 +78,7 @@ impl NookVaultManager {
         )
         .await?;
         save_auth_providers(&identity, &accepted.provider_snapshot).await?;
-        self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record);
+        self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record)?;
         self.sentinel_genesis_phase = SentinelGenesisPhase::Complete;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         Ok(package.delivery.store_id.to_string())
@@ -128,7 +128,7 @@ impl NookVaultManager {
             &stored.request,
             &identity,
         )?;
-        self.install_accepted_sentinel_delivery(&stored.delivery, &record);
+        self.install_accepted_sentinel_delivery(&stored.delivery, &record)?;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
@@ -439,7 +439,7 @@ impl NookVaultManager {
         )
         .await?;
 
-        self.install_accepted_sentinel_delivery(&delivery, &record);
+        self.install_accepted_sentinel_delivery(&delivery, &record)?;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
@@ -469,7 +469,9 @@ impl NookVaultManager {
         &mut self,
         delivery: &nook_core::SentinelGenesisShareDelivery,
         record: &nook_core::StoredSecretRecord,
-    ) {
+    ) -> Result<(), NookError> {
+        let mut meta = VaultMetaState::default();
+        meta.apply_record(record)?;
         self.vault.reset();
         self.vault.store_id = delivery.store_id.as_str().to_owned();
         self.vault.architecture = VaultArchitecture::sentinel_personal(
@@ -480,7 +482,8 @@ impl NookVaultManager {
                 ready_participants: 1,
             },
         );
-        self.vault.meta.apply_record(record);
+        self.vault.meta = meta;
+        Ok(())
     }
 
     /// Load vault content for sentinel only when session keys already exist;
@@ -502,7 +505,7 @@ impl NookVaultManager {
             let stored_records = nook_core::deserialize_stored(content, format)?;
             let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = SymmetricKey::parse(&self.vault.members_key)?;
-            let meta = VaultMetaState::from_stored_records(&stored_records);
+            let meta = VaultMetaState::from_stored_records(&stored_records)?;
             return Ok(LoadedVault {
                 meta,
                 secrets_key,
@@ -518,10 +521,11 @@ impl NookVaultManager {
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
-        self.capture_vault_unlock(content)?;
         let format = nook_core::detect_stored_format(content)?;
         let stored_records = nook_core::deserialize_stored(content, format)?;
-        self.vault.meta = VaultMetaState::from_stored_records(&stored_records);
+        let meta = VaultMetaState::from_stored_records(&stored_records)?;
+        self.capture_vault_unlock(content)?;
+        self.vault.meta = meta;
         self.ensure_sentinel_architecture_from_shares()?;
         if !self.is_sentinel_session() {
             return Err(MultiDeviceError::InvalidSentinelThreshold.into());
@@ -554,8 +558,7 @@ impl NookVaultManager {
         let required = u8::from(first.required_participants);
         let mut indexes = BTreeSet::new();
         indexes.insert(u8::from(first.share_index));
-        if !matches!(version, 1 | 2)
-            || threshold < 2
+        if threshold < 2
             || threshold > required
             || required > 16
             || u8::from(first.share_index) == 0
@@ -620,6 +623,26 @@ mod tests {
     }
 
     #[test]
+    fn invalid_share_version_preserves_ceremony_session() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
+        let records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
+        let yaml = nook_core::serialize_stored(&records, nook_core::VaultFormat::Yaml)?;
+        let invalid = yaml.as_str().replacen("\"version\":1", "\"version\":3", 1);
+        assert_ne!(invalid, yaml.as_str());
+
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "unchanged".to_owned();
+        match manager.prepare_sentinel_ceremony_session(&invalid) {
+            Err(_) => {}
+            Ok(()) => return Err(anyhow::anyhow!("invalid share must be rejected")),
+        }
+        assert_eq!(manager.vault.store_id, "unchanged");
+        assert!(manager.vault.meta.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn architecture_is_inferred_from_share_envelopes_without_hardcoded_threshold()
     -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -627,7 +650,7 @@ mod tests {
             manager.vault.meta.sentinel_shares.insert(
                 DeviceId::parse(device_id)?,
                 nook_core::SentinelShareEnvelope {
-                    version: 2,
+                    version: nook_core::SentinelShareVersion::CURRENT,
                     threshold: 3.into(),
                     required_participants: 5.into(),
                     share_index: share_index.into(),
@@ -650,7 +673,7 @@ mod tests {
         manager.vault.meta.sentinel_shares.insert(
             DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
-                version: 2,
+                version: nook_core::SentinelShareVersion::CURRENT,
                 threshold: 2.into(),
                 required_participants: 17.into(),
                 share_index: 1.into(),
@@ -681,7 +704,7 @@ mod tests {
         manager.vault.meta.sentinel_shares.insert(
             DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
-                version: 2,
+                version: nook_core::SentinelShareVersion::CURRENT,
                 threshold: 3.into(),
                 required_participants: 5.into(),
                 share_index: 1.into(),

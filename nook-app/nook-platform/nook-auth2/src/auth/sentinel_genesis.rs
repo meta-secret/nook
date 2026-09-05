@@ -247,7 +247,7 @@ pub fn finalize_sentinel_genesis_shares(
     // record has parsed and every delivery has been signed.
     let mut deliveries = Vec::with_capacity(share_records.len());
     for (participant, record) in session.participants.iter().zip(&share_records) {
-        let VaultMetaRecord::SentinelShare(device_id, share) = VaultMetaRecord::classify(record)
+        let VaultMetaRecord::SentinelShare(device_id, share) = VaultMetaRecord::classify(record)?
         else {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         };
@@ -751,13 +751,11 @@ mod tests {
             &StoreId::parse("store_AAAAAAAAAAA")?,
             &owner_signing,
         )?;
-        assert!(
-            issued.records.iter().all(|record| !matches!(
-                VaultMetaRecord::classify(record),
-                VaultMetaRecord::Auth(..)
-            ))
-        );
-        let share_count = multi_device::count_sentinel_share_records(&issued.records);
+        assert!(issued.records.iter().all(|record| !matches!(
+            VaultMetaRecord::classify(record)?,
+            VaultMetaRecord::Auth(..)
+        )));
+        let share_count = multi_device::count_sentinel_share_records(&issued.records)?;
         assert_eq!(usize::from(share_count), 3);
         assert!(
             multi_device::reconstruct_sentinel_vault_keys(&issued.records, slice::from_ref(&owner))
