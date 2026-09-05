@@ -107,6 +107,13 @@ pub struct DeviceKeyProtectionSetup {
 }
 
 impl DeviceKeyProtectionSetup {
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: accepts WebAuthn user-handle and PRF-input ArrayBuffer bytes"
+        )
+    )]
     pub fn new(user_handle: &[u8], prf_input: &[u8]) -> DeviceKeyProtectionResult<Self> {
         let user_handle = validate_prf_input(user_handle)?;
         let prf_input = validate_prf_input(prf_input)?;
@@ -127,17 +134,38 @@ impl DeviceKeyProtectionSetup {
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the WebAuthn user handle as ArrayBuffer bytes"
+        )
+    )]
     pub fn user_handle(&self) -> &[u8] {
         &self.user_handle
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the WebAuthn PRF input as ArrayBuffer bytes"
+        )
+    )]
     pub fn prf_input(&self) -> &[u8] {
         &self.prf_input
     }
 }
 
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: creates the WebAuthn PRF extension input as ArrayBuffer bytes"
+    )
+)]
 pub fn deterministic_passkey_prf_input() -> [u8; PRF_INPUT_LEN] {
     let digest = Sha256::digest(DETERMINISTIC_PRF_INPUT_CONTEXT);
     let mut input = [0u8; PRF_INPUT_LEN];
@@ -145,6 +173,13 @@ pub fn deterministic_passkey_prf_input() -> [u8; PRF_INPUT_LEN] {
     input
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: consumes WebAuthn PRF output and user-handle ArrayBuffer bytes"
+    )
+)]
 pub fn derive_device_identity_from_passkey_prf(
     user_handle: &[u8],
     prf_output: &[u8],
@@ -168,6 +203,13 @@ pub struct PasskeyAssertionRequest {
 }
 
 impl PasskeyAssertionRequest {
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: accepts WebAuthn credential-id and PRF-input ArrayBuffer bytes"
+        )
+    )]
     pub fn new(credential_id: &[u8], prf_input: &[u8]) -> DeviceKeyProtectionResult<Self> {
         validate_credential_id(credential_id)?;
         let prf_input = validate_prf_input(prf_input)?;
@@ -178,11 +220,25 @@ impl PasskeyAssertionRequest {
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the WebAuthn credential id as ArrayBuffer bytes"
+        )
+    )]
     pub fn credential_id(&self) -> &[u8] {
         &self.credential_id
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the WebAuthn PRF input as ArrayBuffer bytes"
+        )
+    )]
     pub fn prf_input(&self) -> &[u8] {
         &self.prf_input
     }
@@ -195,6 +251,13 @@ pub struct PasskeyRecoveryRequest {
 
 impl PasskeyRecoveryRequest {
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: exposes the WebAuthn PRF input as ArrayBuffer bytes"
+        )
+    )]
     pub fn prf_input(&self) -> &[u8] {
         &self.prf_input
     }
@@ -248,9 +311,25 @@ pub enum PasskeyRegistrationResolution {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PasskeyRegistrationPrfOutput<'a> {
     Unavailable,
-    Available(&'a [u8]),
+    Available(
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: carries WebAuthn PRF extension output as ArrayBuffer bytes"
+            )
+        )]
+        &'a [u8],
+    ),
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: resolves WebAuthn registration credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
+    )
+)]
 pub fn resolve_passkey_registration(
     credential_id: &[u8],
     user_handle: &[u8],
@@ -266,6 +345,13 @@ pub fn resolve_passkey_registration(
     )
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: resolves WebAuthn registration byte buffers for the selected browser protection mode"
+    )
+)]
 pub fn resolve_passkey_registration_for_mode(
     credential_id: &[u8],
     user_handle: &[u8],
@@ -290,6 +376,13 @@ pub fn resolve_passkey_registration_for_mode(
     }
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: consumes WebAuthn credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
+    )
+)]
 pub fn finish_passkey_device_identity_for_mode(
     credential_id: &[u8],
     user_handle: &[u8],
@@ -310,6 +403,13 @@ pub fn finish_passkey_device_identity_for_mode(
     }
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: consumes WebAuthn credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
+    )
+)]
 pub fn finish_passkey_device_identity(
     credential_id: &[u8],
     user_handle: &[u8],
@@ -327,6 +427,13 @@ pub fn finish_passkey_device_identity(
     })
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: consumes WebAuthn credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
+    )
+)]
 pub fn finish_passkey_wrapped_device_identity(
     credential_id: &[u8],
     user_handle: &[u8],
@@ -364,6 +471,13 @@ pub fn passkey_recovery_request() -> PasskeyRecoveryRequest {
     }
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: consumes WebAuthn credential, user-handle, and PRF-output ArrayBuffer bytes"
+    )
+)]
 pub fn recover_passkey_device_identity(
     credential_id: &[u8],
     user_handle: &[u8],
@@ -377,6 +491,13 @@ pub fn recover_passkey_device_identity(
     )
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: consumes WebAuthn PRF-output ArrayBuffer bytes"
+    )
+)]
 pub fn unlock_passkey_device_identity(
     stored_device_id: &str,
     record: &WrappedDeviceIdentity,
