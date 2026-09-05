@@ -28,6 +28,33 @@ Keep Rust domain models precise. Use this when a struct has optional fields,
 string tags, sentinel values, or a shared DTO that seems to serve multiple
 workflows.
 
+## Concise Rust paths
+
+Authored Rust keeps meaningful context without spelling a dependency hierarchy
+at each use site.
+
+### Required actions
+
+- Keep every non-`use` path to at most two inline segments.
+- Import the owning module or type when a reference would exceed that limit.
+- Retain useful context such as `auth::Item` or `SecretValue::from_yaml_str`.
+- Use a module-qualified call when a free function needs context.
+- Import `std::str` and write `str::from_utf8(data)` for UTF-8 decoding.
+- Deny `clippy::absolute_paths` as the mechanical baseline.
+- Set `absolute-paths-max-segments = 2` at each applicable Clippy configuration
+  boundary.
+- Review relative and other non-absolute paths semantically because the Clippy
+  lint does not enforce the complete readability rule.
+
+### Prohibited actions
+
+- Do not author a non-`use` path with more than two inline segments.
+- Do not exempt paths rooted at `crate`, `self`, `super`, `std`, `core`, or
+  `alloc`.
+- Do not replace meaningful module context with an imported bare free function.
+- Do not write `std::str::from_utf8(data)`.
+- Do not import `from_utf8` and write the ambiguous `from_utf8(data)` call.
+
 ## Problem Pattern
 
 An `Option<T>` can mean one Rust shape is being reused across different worlds.
