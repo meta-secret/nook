@@ -100,6 +100,13 @@ pub mod mock_passkey {
 
     impl MockPasskeyRegistrationRequest {
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request mirrors WebAuthn user-handle and PRF-input ArrayBuffer bytes"
+            )
+        )]
         pub fn new(
             rp_id: impl Into<String>,
             label: impl Into<String>,
@@ -125,11 +132,25 @@ pub mod mock_passkey {
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request exposes the WebAuthn user handle as ArrayBuffer bytes"
+            )
+        )]
         pub fn user_handle(&self) -> &[u8] {
             &self.user_handle
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request exposes the WebAuthn PRF input as ArrayBuffer bytes"
+            )
+        )]
         pub fn prf_input(&self) -> &[u8] {
             &self.prf_input
         }
@@ -144,6 +165,13 @@ pub mod mock_passkey {
 
     impl MockPasskeyAssertionRequest {
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request accepts WebAuthn PRF-input ArrayBuffer bytes"
+            )
+        )]
         pub fn discoverable(rp_id: impl Into<String>, prf_input: impl Into<Vec<u8>>) -> Self {
             Self {
                 rp_id: rp_id.into(),
@@ -153,6 +181,13 @@ pub mod mock_passkey {
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request accepts WebAuthn credential-id and PRF-input ArrayBuffer bytes"
+            )
+        )]
         pub fn with_allowed_credential(
             rp_id: impl Into<String>,
             credential_id: impl Into<Vec<u8>>,
@@ -166,6 +201,13 @@ pub mod mock_passkey {
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request accepts WebAuthn credential-id and PRF-input ArrayBuffer byte collections"
+            )
+        )]
         pub fn with_allowed_credentials(
             rp_id: impl Into<String>,
             allow_credentials: impl Into<Vec<Vec<u8>>>,
@@ -184,11 +226,25 @@ pub mod mock_passkey {
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request exposes WebAuthn credential ids as ArrayBuffer byte collections"
+            )
+        )]
         pub fn allow_credentials(&self) -> &[Vec<u8>] {
             &self.allow_credentials
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock request exposes the WebAuthn PRF input as ArrayBuffer bytes"
+            )
+        )]
         pub fn prf_input(&self) -> &[u8] {
             &self.prf_input
         }
@@ -203,16 +259,37 @@ pub mod mock_passkey {
 
     impl MockPasskeyRegistration {
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock registration exposes the WebAuthn credential id as ArrayBuffer bytes"
+            )
+        )]
         pub fn credential_id(&self) -> &[u8] {
             &self.credential_id
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock registration exposes the WebAuthn user handle as ArrayBuffer bytes"
+            )
+        )]
         pub fn user_handle(&self) -> &[u8] {
             &self.user_handle
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock registration exposes WebAuthn PRF extension output as ArrayBuffer bytes"
+            )
+        )]
         pub fn prf_output(&self) -> &[u8] {
             &self.prf_output
         }
@@ -228,21 +305,49 @@ pub mod mock_passkey {
 
     impl MockPasskeyAssertion {
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock assertion exposes the WebAuthn credential id as ArrayBuffer bytes"
+            )
+        )]
         pub fn credential_id(&self) -> &[u8] {
             &self.credential_id
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock assertion exposes the WebAuthn user handle as ArrayBuffer bytes"
+            )
+        )]
         pub fn user_handle(&self) -> &[u8] {
             &self.user_handle
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock assertion exposes WebAuthn PRF extension output as ArrayBuffer bytes"
+            )
+        )]
         pub fn prf_output(&self) -> &[u8] {
             &self.prf_output
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock assertion exposes the WebAuthn authenticator-data sign counter scalar"
+            )
+        )]
         pub fn sign_count(&self) -> u32 {
             self.sign_count
         }
@@ -270,16 +375,37 @@ pub mod mock_passkey {
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock credential exposes the WebAuthn credential id as ArrayBuffer bytes"
+            )
+        )]
         pub fn credential_id(&self) -> &[u8] {
             &self.credential_id
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock credential exposes the WebAuthn user handle as ArrayBuffer bytes"
+            )
+        )]
         pub fn user_handle(&self) -> &[u8] {
             &self.user_handle
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock credential exposes the WebAuthn authenticator-data sign counter scalar"
+            )
+        )]
         pub fn sign_count(&self) -> u32 {
             self.sign_count
         }
@@ -359,6 +485,13 @@ pub mod mock_passkey {
         }
 
         #[must_use]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: mock authenticator looks up a WebAuthn credential-id ArrayBuffer"
+            )
+        )]
         pub fn credential(&self, credential_id: &[u8]) -> Option<&StoredMockPasskey> {
             self.credentials.get(credential_id)
         }

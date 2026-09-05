@@ -425,6 +425,13 @@ pub fn device_auth_id_from_public(recipient: &Recipient) -> AuthKeyId {
     AuthKeyId::from_sha256_digest(&digest)
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: encrypts serialized age plaintext bytes"
+    )
+)]
 pub fn encrypt_for_recipient(
     plaintext: &[u8],
     recipient_public: &DevicePublicKey,
