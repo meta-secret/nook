@@ -71,11 +71,7 @@ export type DomAuthenticationSimulationResult =
   }
 
 function renderFixture(fixture: DomAuthenticationFixture): void {
-  const parsed = new DOMParser().parseFromString(fixture.html, 'text/html')
-  const rendered = Array.from(parsed.body.childNodes).map((node) =>
-    document.importNode(node, true),
-  )
-  document.body.replaceChildren(...rendered)
+  document.body.innerHTML = fixture.html
 }
 
 function submissionControlIdentity(event: SubmitEvent): string {

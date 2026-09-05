@@ -71,16 +71,17 @@ describe('DOM-backed companion authentication simulation', () => {
       workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
       credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
       credentialFillRejection: false,
-      implicitSubmissionMethod: 'post',
+      implicitSubmissionMethod: 'absent',
       advanceControl: 'absent',
       credentialSubmissionKind: 'observed',
       filled: true,
       submissionResult: FormSubmissionResult.Submitted,
       submittedControlIdentity: 'login-submit',
     })
+    const loginForm = document.querySelector('.loginForm')
     expect(result.observedRoots).toHaveLength(1)
-    expect(result.observedRoots[0]).toBe(document)
-    expect(result.selectedRoot).toBe(document)
+    expect(result.observedRoots[0]).toBe(loginForm)
+    expect(result.selectedRoot).toBe(loginForm)
     expect(fieldValue('.loginForm [name="LoginUserName"]')).toBe(
       FAKE_CREDENTIALS.username,
     )
@@ -107,7 +108,7 @@ describe('DOM-backed companion authentication simulation', () => {
       kind: DomAuthenticationSimulationOutcomeKind.Login,
       matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
       workflowKind: AuthenticationWorkflowKind.Login,
-      implicitSubmissionMethod: 'post',
+      implicitSubmissionMethod: 'absent',
       advanceControl: 'absent',
       credentialSubmissionKind: 'observed',
       filled: true,
@@ -140,9 +141,10 @@ describe('DOM-backed companion authentication simulation', () => {
       submissionResult: FormSubmissionResult.NotObserved,
       submittedControlIdentity: '',
     })
+    const loginForm = document.querySelector('.loginForm')
     expect(result.observedRoots).toHaveLength(1)
-    expect(result.observedRoots[0]).toBe(document)
-    expect(result.selectedRoot).toBe(document)
+    expect(result.observedRoots[0]).toBe(loginForm)
+    expect(result.selectedRoot).toBe(loginForm)
     expect(fieldValue('.loginForm [name="LoginUserName"]')).toBe('')
     expect(fieldValue('.loginForm [name="LoginPassword"]')).toBe('')
     expect(fieldValue('header [name="LoginUserName"]')).toBe('header-user')
