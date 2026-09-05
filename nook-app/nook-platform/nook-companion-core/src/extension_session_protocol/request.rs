@@ -104,6 +104,14 @@ pub struct EmptyPayload {
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
+#[serde(deny_unknown_fields)]
+pub struct ClassifyGrantAuthorityPayload {
+    stored_json: crate::PairingStorageJson,
+    vault_store_id: crate::PairingVaultId,
+    queue: MessageDefaultQueueDisposition,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct FinishPasskeySetupPayload {
     credential_id: SessionSecretBytes,
@@ -338,6 +346,7 @@ pub struct PasskeyCeremonyPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
 pub enum ExtensionSessionRequest {
+    ClassifyGrantAuthority(ClassifyGrantAuthorityPayload),
     #[serde(rename = "nook:extension-session-reset")]
     Reset(EmptyPayload),
     #[serde(rename = "nook:extension-session-migrate-auth-providers")]
@@ -453,6 +462,7 @@ impl Drop for ExtensionSessionRequestWire {
                 payload.request_json.zeroize();
             }
             ExtensionSessionRequest::Reset(_)
+            | ExtensionSessionRequest::ClassifyGrantAuthority(_)
             | ExtensionSessionRequest::MigrateAuthProviders(_)
             | ExtensionSessionRequest::Status(_)
             | ExtensionSessionRequest::BeginPasskeySetup(_)
@@ -487,6 +497,30 @@ pub fn validate_extension_session_request_json(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn grant_authority_request_rejects_caller_supplied_active_scope() -> anyhow::Result<()> {
+        let request = r#"{"type":"ClassifyGrantAuthority","payload":{"stored_json":"{}","vault_store_id":"store-test","queue":{"kind":"message-default"}}}"#;
+        let decoded: ExtensionSessionRequestWire = serde_json::from_str(request)?;
+        assert!(matches!(
+            &decoded.0,
+            ExtensionSessionRequest::ClassifyGrantAuthority(_)
+        ));
+        let forged = request.replace(
+            r#""stored_json":"{}""#,
+            r#""stored_json":"{}","active_vault":{"kind":"NoActiveVault"}"#,
+        );
+        assert_eq!(
+            validate_extension_session_request_json(&forged),
+            ExtensionSessionRequestValidation::Rejected
+        );
+        let malformed = request.replace(r#""stored_json":"{}""#, r#""stored_json":42"#);
+        assert_eq!(
+            validate_extension_session_request_json(&malformed),
+            ExtensionSessionRequestValidation::Rejected
+        );
+        Ok(())
+    }
 
     #[test]
     fn validates_concrete_provider_and_event_log_elements() {

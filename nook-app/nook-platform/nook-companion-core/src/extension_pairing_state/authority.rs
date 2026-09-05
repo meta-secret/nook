@@ -4,7 +4,10 @@ use super::{ExtensionPairingRecord, StoredExtensionPairingGrant, grant_storage_k
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(Debug, Deserialize, Serialize, Tsify)]
+mod response;
+pub use response::*;
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(transparent)]
 #[tsify(from_wasm_abi)]
 pub struct PairingStorageJson(String);
@@ -15,23 +18,39 @@ impl From<String> for PairingStorageJson {
     }
 }
 
-/// The exact requested identifier, before stored authority is validated.
-#[derive(Debug, Deserialize, Serialize, Tsify)]
+/// An exact pairing identifier, before stored authority is validated.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
 #[serde(transparent)]
 #[tsify(from_wasm_abi)]
-pub struct RequestedPairingVaultId(String);
+pub struct PairingVaultId(String);
 
-impl From<String> for RequestedPairingVaultId {
+impl From<String> for PairingVaultId {
     fn from(value: String) -> Self {
         Self(value)
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[serde(deny_unknown_fields)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ActiveExtensionVault {
+    pub vault_store_id: PairingVaultId,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[serde(tag = "kind", deny_unknown_fields)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum ExtensionActiveVaultScope {
+    NoActiveVault,
+    Active(ActiveExtensionVault),
 }
 
 #[derive(Debug, Deserialize, Serialize, Tsify)]
 #[tsify(from_wasm_abi)]
 pub struct ExtensionGrantAuthorityRequest {
     pub stored_json: PairingStorageJson,
-    pub vault_store_id: RequestedPairingVaultId,
+    pub vault_store_id: PairingVaultId,
+    pub active_vault: ExtensionActiveVaultScope,
 }
 
 /// Validated stored metadata, not proof of current event-log access or unlock.
@@ -46,6 +65,7 @@ pub struct AuthorizedExtensionGrant {
 #[tsify(into_wasm_abi)]
 pub enum ExtensionGrantAuthority {
     NoMatchingAuthority,
+    MissingActiveAuthority,
     InvalidStoredAuthority,
     Authorized(Box<AuthorizedExtensionGrant>),
 }
@@ -59,13 +79,28 @@ impl ExtensionGrantAuthorityRequest {
         };
         let key = grant_storage_key(&self.vault_store_id.0);
         let Some(value) = entries.remove(&key) else {
-            return ExtensionGrantAuthority::NoMatchingAuthority;
+            return match self.active_vault {
+                ExtensionActiveVaultScope::Active(active)
+                    if active.vault_store_id == self.vault_store_id =>
+                {
+                    ExtensionGrantAuthority::MissingActiveAuthority
+                }
+                ExtensionActiveVaultScope::Active(_) | ExtensionActiveVaultScope::NoActiveVault => {
+                    ExtensionGrantAuthority::NoMatchingAuthority
+                }
+            };
         };
+        ExtensionGrantAuthority::from_target_value(value, &key)
+    }
+}
+
+impl ExtensionGrantAuthority {
+    fn from_target_value(value: serde_json::Value, key: &str) -> Self {
         let Ok(grant) = serde_json::from_value::<StoredExtensionPairingGrant>(value) else {
             return ExtensionGrantAuthority::InvalidStoredAuthority;
         };
         let record = ExtensionPairingRecord::Grant(grant);
-        let Ok(()) = record.validate_for_key(&key) else {
+        let Ok(()) = record.validate_for_key(key) else {
             return ExtensionGrantAuthority::InvalidStoredAuthority;
         };
         let ExtensionPairingRecord::Grant(grant) = record else {
@@ -86,6 +121,7 @@ mod tests {
             ExtensionGrantAuthorityRequest {
                 stored_json: stored_json.into(),
                 vault_store_id: "store-test".to_owned().into(),
+                active_vault: ExtensionActiveVaultScope::NoActiveVault,
             }
         }
 
@@ -115,6 +151,23 @@ mod tests {
                 Fixture::request(json.to_owned()).classify(),
                 ExtensionGrantAuthority::NoMatchingAuthority
             );
+        }
+    }
+
+    #[test]
+    fn absent_grant_closes_only_the_exact_active_vault() {
+        for (vault, expected) in [
+            (
+                "store-test",
+                ExtensionGrantAuthority::MissingActiveAuthority,
+            ),
+            ("other-store", ExtensionGrantAuthority::NoMatchingAuthority),
+        ] {
+            let mut request = Fixture::request("{}".to_owned());
+            request.active_vault = ExtensionActiveVaultScope::Active(ActiveExtensionVault {
+                vault_store_id: vault.to_owned().into(),
+            });
+            assert_eq!(request.classify(), expected);
         }
     }
 
@@ -172,6 +225,7 @@ mod tests {
     fn generated_contract_preserves_names_and_authorized_payload() -> anyhow::Result<()> {
         for variant in [
             "NoMatchingAuthority",
+            "MissingActiveAuthority",
             "InvalidStoredAuthority",
             "Authorized",
         ] {
@@ -192,6 +246,17 @@ mod tests {
         let Wire::Authorized { grant: decoded } =
             serde_json::from_str(&serde_json::to_string(&outcome)?)?;
         assert_eq!(decoded, grant);
+        let response = serde_json::to_string(&outcome)?;
+        assert_eq!(
+            GrantAuthorityResponseJson::from(response.clone())
+                .decode("store-test".to_owned().into())?,
+            outcome
+        );
+        assert!(
+            GrantAuthorityResponseJson::from(response)
+                .decode("another-store".to_owned().into())
+                .is_err()
+        );
         Ok(())
     }
 }

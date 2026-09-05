@@ -115,16 +115,17 @@ pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
 };
 pub use extension_pairing_state::{
-    AuthorizedExtensionGrant, CreateExtensionPairingStateInput, EXTENSION_GRANT_KEY_PREFIX,
-    EXTENSION_SETUP_KEY, ExtensionConnectScope, ExtensionGrantAuthority,
-    ExtensionGrantAuthorityRequest, ExtensionPairingEntry, ExtensionPairingGrantApproval,
-    ExtensionPairingGrantRemovalInput, ExtensionPairingRecord, ExtensionPairingState,
-    ExtensionPairingStateError, ExtensionPairingVaultType, ExtensionReadySetup,
-    ExtensionReadySetupStatus, ExtensionSetupAfterRemoval, ImportedExtensionEventLog,
-    PairingStorageJson, RefreshExtensionPairingGrantInput, RequestedPairingVaultId,
-    SelectedExtensionPairingGrant, StoredExtensionPairingGrant, create_pairing_state,
-    grant_storage_key, is_ready_pairing_setup_json, is_stored_pairing_grant_json,
-    migrate_legacy_pairing_state_json, refresh_pairing_grant,
+    ActiveExtensionVault, AuthorizedExtensionGrant, CreateExtensionPairingStateInput,
+    EXTENSION_GRANT_KEY_PREFIX, EXTENSION_SETUP_KEY, ExtensionActiveVaultScope,
+    ExtensionConnectScope, ExtensionGrantAuthority, ExtensionGrantAuthorityRequest,
+    ExtensionPairingEntry, ExtensionPairingGrantApproval, ExtensionPairingGrantRemovalInput,
+    ExtensionPairingRecord, ExtensionPairingState, ExtensionPairingStateError,
+    ExtensionPairingVaultType, ExtensionReadySetup, ExtensionReadySetupStatus,
+    ExtensionSetupAfterRemoval, GrantAuthorityResponseError, GrantAuthorityResponseJson,
+    ImportedExtensionEventLog, PairingStorageJson, PairingVaultId,
+    RefreshExtensionPairingGrantInput, SelectedExtensionPairingGrant, StoredExtensionPairingGrant,
+    create_pairing_state, grant_storage_key, is_ready_pairing_setup_json,
+    is_stored_pairing_grant_json, migrate_legacy_pairing_state_json, refresh_pairing_grant,
 };
 pub use extension_persistence::{
     ExtensionPersistenceArea, ExtensionPersistenceDatabaseState, ExtensionPersistenceObservation,
