@@ -41,6 +41,9 @@ Ordinary PR pushes do not start complete validation.
 Every pushed head gets remote evidence immediately: complete validation when
 ready, or at least one relevant focused task otherwise.
 
+Before spending hosted validation on an expensive focused remote task, verify
+that the branch contains the current `origin/main`.
+
 ## Focused remote tasks
 
 List the allowlisted catalog:
@@ -173,6 +176,10 @@ task pr:validate PR=<number>
 
 Use `FULL_E2E=1` when the change needs the Main-equivalent browser suites.
 
+Before the initial complete PR validation dispatch, verify that the branch
+contains the current `origin/main`. Do not spend hosted validation on a stale
+base.
+
 Complete validation:
 
 - binds every result to the exact PR head;
@@ -182,6 +189,9 @@ Complete validation:
   exact-head Codex review without waiting;
 - proves preview deployment when required; and
 - becomes stale after any later push.
+
+A new PR head or an explicit base-ref retarget invalidates prior remote
+evidence.
 
 Focused task success never replaces complete validation.
 
@@ -201,16 +211,19 @@ infrastructure evidence. Replay the unchanged head before changing product code.
 ## Merge boundary
 
 A PR is ready only when `task pr:ready PR=<number>` succeeds for the current
-head.
+head. This command is the final read-only gate.
 
 Readiness requires:
 
-- a current base;
 - successful required exact-head checks;
 - successful required deployment;
-- mergeability;
-- no unresolved actionable review thread; and
+- GitHub reports the PR as mergeable;
+- no unresolved actionable review thread or unhandled feedback; and
 - a clean Cortex session directory.
+
+Merge-time readiness does not require a current base. A later advance of
+`main` may leave the PR behind without invalidating successful exact-head
+evidence or requiring a rebase or restart solely for freshness.
 
 Gizmo then squash-merges the PR.
 
