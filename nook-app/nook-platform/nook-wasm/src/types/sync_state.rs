@@ -324,8 +324,10 @@ impl NookLocalFolderHealth {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[test]
     fn javascript_timestamp_validation_rejects_lossy_values() {
@@ -354,5 +356,57 @@ mod tests {
             NookLocalFolderHealth::healthy().state(),
             NookLocalFolderHealthState::Healthy
         );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn sync_state_wrappers_project_values_and_reject_missing_data() {
+        let never = NookVaultLastSync::never_synced();
+        assert!(never.synced_at_unix_milliseconds().is_err());
+        let synced = NookVaultLastSync::synced(42.0).unwrap();
+        assert_eq!(synced.state(), NookVaultLastSyncState::Synced);
+        assert_eq!(synced.synced_at_unix_milliseconds().unwrap(), 42.0);
+
+        let idle = NookManualProviderSync::idle();
+        assert_eq!(idle.state(), NookManualProviderSyncState::Idle);
+        assert!(idle.provider_id().is_err());
+        let running = NookManualProviderSync::running("provider-1".into());
+        assert_eq!(running.provider_id().unwrap(), "provider-1");
+
+        let clear = NookSyncConflictReview::clear();
+        assert_eq!(clear.state(), NookSyncConflictReviewState::Clear);
+        assert!(clear.provider_id().is_err());
+        let conflict = NookPendingSyncConflict::for_testing_content("GitHub".into(), 2, 3);
+        let review = NookSyncConflictReview::requires_decision(conflict);
+        assert_eq!(
+            review.state(),
+            NookSyncConflictReviewState::RequiresDecision
+        );
+        assert_eq!(review.provider_id().unwrap(), "__test_provider__");
+        assert!(!review.is_pending_provider().unwrap());
+        assert_eq!(review.provider_label().unwrap(), "GitHub");
+        assert_eq!(review.local_yaml().unwrap(), "");
+        assert_eq!(review.remote_yaml().unwrap(), "remote-vault");
+        assert_eq!(review.mode().unwrap(), "");
+        assert_eq!(review.pat().unwrap(), "");
+        assert_eq!(review.repo().unwrap(), "");
+        assert_eq!(review.content_local_version().unwrap(), 2);
+        assert_eq!(review.content_remote_version().unwrap(), 3);
+        assert!(review.local_store_id().is_err());
+        assert!(review.remote_store_id().is_err());
+
+        let healthy = NookLocalFolderHealth::healthy();
+        assert!(healthy.provider_id().is_err());
+        let multiple = NookLocalFolderHealth::multiple_vaults(
+            "provider-1".into(),
+            "Folder".into(),
+            vec!["store-a".into(), "store-b".into()],
+            "Choose a vault".into(),
+        );
+        assert_eq!(multiple.state(), NookLocalFolderHealthState::MultipleVaults);
+        assert_eq!(multiple.provider_id().unwrap(), "provider-1");
+        assert_eq!(multiple.provider_label().unwrap(), "Folder");
+        assert_eq!(multiple.store_ids().unwrap(), vec!["store-a", "store-b"]);
+        assert_eq!(multiple.message().unwrap(), "Choose a vault");
     }
 }

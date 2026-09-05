@@ -691,3 +691,50 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
 pub fn read_vault_version(yaml: &str) -> u64 {
     nook_core::read_vault_version(yaml).map_or(0, Into::into)
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod projection_tests {
+    use super::*;
+    use crate::NookVaultSyncResult;
+    use crate::types::NookVaultSyncAccessState;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn vault_policy_helpers_project_intents_and_reject_invalid_content() {
+        assert!(vault_connect_intent_permits_empty_remote_genesis("create-new").unwrap());
+        assert!(vault_connect_intent_permits_empty_remote_genesis("add-sync-provider").unwrap());
+        assert!(!vault_connect_intent_permits_empty_remote_genesis("open-existing").unwrap());
+        assert!(vault_connect_intent_permits_empty_remote_genesis("unknown").is_err());
+
+        assert_eq!(read_vault_version("not yaml"), 0);
+        assert!(validate_vault_content_for_application("not yaml").is_err());
+        assert!(validate_extension_pairing_vault_type("unknown").is_err());
+        assert!(compare_vault_sync("not yaml", "also not yaml").is_err());
+        assert_eq!(configured_vault_application_name(), "unified-development");
+        assert!(!configured_vault_application_is_simple());
+        assert!(!configured_vault_application_is_sentinel());
+        assert!(configured_vault_application_supports_extension());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn vault_sync_result_wrappers_project_empty_and_assessed_states() {
+        let unchanged = NookVaultSyncResult::unchanged();
+        assert!(!unchanged.changed());
+        assert_eq!(
+            unchanged.access_state(),
+            NookVaultSyncAccessState::NotAssessed
+        );
+        assert!(unchanged.access_status().is_err());
+        assert!(unchanged.secrets().is_empty());
+        assert!(unchanged.pending_joins().is_empty());
+        assert!(unchanged.vault_members().is_empty());
+
+        let assessed = NookVaultSyncResult::with_access_status(nook_core::VaultAccessStatus::Ready);
+        assert!(assessed.changed());
+        assert_eq!(assessed.access_state(), NookVaultSyncAccessState::Assessed);
+        assert!(assessed.access_status().is_ok());
+    }
+}

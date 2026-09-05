@@ -385,3 +385,89 @@ mod wasm_tests {
         assert_eq!(attachment.content_base64, "cmVjb3ZlcnkgY29kZXM=");
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn secret_form_builders_preserve_each_typed_variant() {
+        assert!(matches!(
+            NookSecretFormFields::login("url".into(), "user".into(), "pass".into(), "notes".into())
+                .inner,
+            SecretFormFields::Login(_)
+        ));
+        assert!(matches!(
+            NookSecretFormFields::api_key("url".into(), "key".into(), "2030".into()).inner,
+            SecretFormFields::ApiKey(_)
+        ));
+        assert!(matches!(
+            NookSecretFormFields::seed_phrase("backup".into(), "words".into()).inner,
+            SecretFormFields::SeedPhrase(_)
+        ));
+        assert!(matches!(
+            NookSecretFormFields::secure_note("title".into(), "note".into()).inner,
+            SecretFormFields::SecureNote(_)
+        ));
+        assert!(matches!(
+            NookSecretFormFields::authenticator(
+                "issuer".into(),
+                "account".into(),
+                "url".into(),
+                "secret".into(),
+                "SHA1".into(),
+                "6".into(),
+                "30".into(),
+                "backup".into(),
+            )
+            .inner,
+            SecretFormFields::Authenticator(_)
+        ));
+        assert!(matches!(
+            NookSecretFormFields::credit_card(
+                "title".into(),
+                "Alice".into(),
+                "4111".into(),
+                "01".into(),
+                "2030".into(),
+                "123".into(),
+                "notes".into(),
+            )
+            .inner,
+            SecretFormFields::CreditCard(_)
+        ));
+    }
+
+    #[test]
+    fn secret_page_import_and_totp_wrappers_project_values() {
+        let mut page = NookSecretPage::from_core(nook_core::SecretPage {
+            records: Vec::new(),
+            total: 3.into(),
+            offset: 1.into(),
+            limit: 2.into(),
+        })
+        .unwrap();
+        assert_eq!(page.total(), 3);
+        assert_eq!(page.offset(), 1);
+        assert_eq!(page.limit(), 2);
+        assert!(page.take_items().is_empty());
+
+        let result = NookImportResult::new(2, 1, 3);
+        assert_eq!(result.imported(), 2);
+        assert_eq!(result.skipped_unsupported(), 1);
+        assert_eq!(result.skipped_duplicates(), 3);
+
+        let totp = NookTotpCode::from_core(
+            nook_core::TotpCode {
+                code: "123456".into(),
+                seconds_remaining: 17.into(),
+                period: nook_core::TotpPeriod::default(),
+            },
+            100,
+        );
+        assert_eq!(totp.code(), "123456");
+        assert_eq!(totp.seconds_remaining(), 17);
+        assert_eq!(totp.period(), 30);
+        assert_eq!(totp.expires_at_unix_seconds(), 117.0);
+    }
+}
