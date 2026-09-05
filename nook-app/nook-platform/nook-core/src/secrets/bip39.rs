@@ -18,6 +18,22 @@ impl From<Bip39MnemonicWordCount> for u32 {
     }
 }
 
+/// Maximum number of matching BIP-39 word suggestions to return.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bip39WordSuggestionLimit(usize);
+
+impl From<usize> for Bip39WordSuggestionLimit {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Bip39WordSuggestionLimit> for usize {
+    fn from(value: Bip39WordSuggestionLimit) -> Self {
+        value.0
+    }
+}
+
 /// Validates a normalized English BIP-39 mnemonic (12 or 24 words).
 pub fn validate_bip39_mnemonic(mnemonic: &str) -> ValidationResult<()> {
     let normalized = mnemonic.trim();
@@ -45,7 +61,8 @@ pub fn is_known_bip39_word(word: &str) -> bool {
 }
 
 #[must_use]
-pub fn suggest_bip39_words(prefix: &str, limit: usize) -> Vec<&'static str> {
+pub fn suggest_bip39_words(prefix: &str, limit: Bip39WordSuggestionLimit) -> Vec<&'static str> {
+    let limit = usize::from(limit);
     let needle = prefix.trim().to_lowercase();
     if needle.is_empty() || limit == 0 {
         return Vec::new();
@@ -143,11 +160,11 @@ mod tests {
     #[test]
     fn suggests_words_by_prefix() {
         assert_eq!(
-            suggest_bip39_words("ab", 4),
+            suggest_bip39_words("ab", 4.into()),
             vec!["abandon", "ability", "able", "about"]
         );
-        assert_eq!(suggest_bip39_words("zoo", 8), vec!["zoo"]);
-        assert!(suggest_bip39_words("missing", 8).is_empty());
+        assert_eq!(suggest_bip39_words("zoo", 8.into()), vec!["zoo"]);
+        assert!(suggest_bip39_words("missing", 8.into()).is_empty());
     }
 
     #[test]
