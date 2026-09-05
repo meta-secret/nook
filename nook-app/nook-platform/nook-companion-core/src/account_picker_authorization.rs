@@ -86,10 +86,11 @@ impl AccountPickerAuthorizationTransition {
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let active = state::ActiveAuthorization::new("opening".to_owned());
+/// use state::{ActiveAuthorization, CleanupEvidence, CleanupCompletion};
+/// let active = ActiveAuthorization::new("opening".to_owned());
 /// let cleaning = active.begin_cleanup("cleanup".to_owned());
-/// let completed = cleaning.complete_cleanup("cleanup", state::CleanupEvidence::Partial);
-/// assert!(matches!(completed, Ok(state::CleanupCompletion::Activated(active))
+/// let completed = cleaning.complete_cleanup("cleanup", CleanupEvidence::Partial);
+/// assert!(matches!(completed, Ok(CleanupCompletion::Activated(active))
 ///     if active.is_current("cleanup")));
 /// ```
 ///
@@ -99,10 +100,11 @@ impl AccountPickerAuthorizationTransition {
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let cleaning = state::ActiveAuthorization::new("opening".to_owned())
+/// use state::{ActiveAuthorization, CleanupEvidence};
+/// let cleaning = ActiveAuthorization::new("opening".to_owned())
 ///     .begin_cleanup("cleanup".to_owned());
-/// let completed = cleaning.complete_cleanup("cleanup", state::CleanupEvidence::Partial);
-/// cleaning.complete_cleanup("cleanup", state::CleanupEvidence::Partial);
+/// let completed = cleaning.complete_cleanup("cleanup", CleanupEvidence::Partial);
+/// cleaning.complete_cleanup("cleanup", CleanupEvidence::Partial);
 /// ```
 ///
 /// An active phase cannot complete cleanup.
@@ -111,8 +113,9 @@ impl AccountPickerAuthorizationTransition {
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let active = state::ActiveAuthorization::new("opening".to_owned());
-/// active.complete_cleanup("opening", state::CleanupEvidence::Partial);
+/// use state::{ActiveAuthorization, CleanupEvidence};
+/// let active = ActiveAuthorization::new("opening".to_owned());
+/// active.complete_cleanup("opening", CleanupEvidence::Partial);
 /// ```
 ///
 /// A cleaning phase cannot authorize a current account-picker operation.
@@ -121,7 +124,8 @@ impl AccountPickerAuthorizationTransition {
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let cleaning = state::ActiveAuthorization::new("opening".to_owned())
+/// use state::{ActiveAuthorization};
+/// let cleaning = ActiveAuthorization::new("opening".to_owned())
 ///     .begin_cleanup("cleanup".to_owned());
 /// cleaning.is_current("cleanup");
 /// ```
@@ -132,7 +136,8 @@ impl AccountPickerAuthorizationTransition {
 /// # mod state {
 /// # include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/account_picker_authorization/state.rs"));
 /// # }
-/// let cleaning = state::ActiveAuthorization::new("opening".to_owned())
+/// use state::{ActiveAuthorization};
+/// let cleaning = ActiveAuthorization::new("opening".to_owned())
 ///     .begin_cleanup("cleanup".to_owned());
 /// let forged = state::CleaningAuthorization {
 ///     epoch: "another-epoch".to_owned(),
