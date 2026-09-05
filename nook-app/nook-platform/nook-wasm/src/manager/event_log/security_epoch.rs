@@ -1,3 +1,8 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 use super::{
     BuiltVaultEvent, NookError, NookVaultManager, VaultOperation, load_local_event_store,
     members_checkpoint_hash_from_roster, rewrapped_vault_meta_records_for_epoch, save_key_epoch,
@@ -36,6 +41,10 @@ struct PreparedSecurityEpochExecution {
     checkpoint: nook_core::IdentityVaultEventId,
 }
 
+struct CommittedSecurityEpochExecution {
+    execution: PreparedSecurityEpochExecution,
+}
+
 pub(in crate::manager) enum SecurityEpochRotationFailure {
     BeforeCommit(NookError),
     AfterCommit(NookError),
@@ -57,30 +66,32 @@ impl SecurityEpochRotationFailure {
     }
 }
 
-fn rewrap_password_entries(
-    entries: &[nook_core::PasswordUnlockEntry],
-    new_keys: &nook_core::VaultKeys,
-    trigger: &VaultOperation,
-) -> Result<Vec<nook_core::PasswordUnlockEntry>, NookError> {
-    let mut entries = entries.to_vec();
-    match trigger {
-        VaultOperation::PasswordRotated { entry_id, envelope } => {
-            let entry = entries
-                .iter_mut()
-                .find(|entry| entry.id == entry_id.as_str())
-                .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
-            entry.envelope.clone_from(envelope);
+impl PreparedEpochRotation {
+    fn rewrap_password_entries(
+        entries: &[nook_core::PasswordUnlockEntry],
+        new_keys: &nook_core::VaultKeys,
+        trigger: &VaultOperation,
+    ) -> Result<Vec<nook_core::PasswordUnlockEntry>, NookError> {
+        let mut entries = entries.to_vec();
+        match trigger {
+            VaultOperation::PasswordRotated { entry_id, envelope } => {
+                let entry = entries
+                    .iter_mut()
+                    .find(|entry| entry.id == entry_id.as_str())
+                    .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?;
+                entry.envelope.clone_from(envelope);
+            }
+            VaultOperation::PasswordRemoved { entry_id } => {
+                entries.retain(|entry| entry.id != entry_id.as_str());
+            }
+            _ => {}
         }
-        VaultOperation::PasswordRemoved { entry_id } => {
-            entries.retain(|entry| entry.id != entry_id.as_str());
+        for entry in &mut entries {
+            entry.envelope = nook_core::rewrap_password_envelope(&entry.envelope, new_keys)
+                .map_err(|error| NookError::Database(error.to_string()))?;
         }
-        _ => {}
+        Ok(entries)
     }
-    for entry in &mut entries {
-        entry.envelope = nook_core::rewrap_password_envelope(&entry.envelope, new_keys)
-            .map_err(|error| NookError::Database(error.to_string()))?;
-    }
-    Ok(entries)
 }
 
 #[derive(Deserialize, Serialize)]
@@ -99,20 +110,21 @@ impl Drop for SecurityEpochRecoveryPlan {
     }
 }
 
-fn built_event_from_yaml(yaml: &str) -> Result<BuiltVaultEvent, NookError> {
-    let bytes = yaml.as_bytes().to_vec();
-    let event = nook_core::parse_event_storage_bytes(&bytes)?;
-    Ok(BuiltVaultEvent { event, bytes })
+impl SecurityEpochRecoveryPlan {
+    fn built_event_from_yaml(yaml: &str) -> Result<BuiltVaultEvent, NookError> {
+        let bytes = yaml.as_bytes().to_vec();
+        let event = nook_core::parse_event_storage_bytes(&bytes)?;
+        Ok(BuiltVaultEvent { event, bytes })
+    }
 }
 
-fn projection_advanced_past(
-    projection: &nook_core::VaultProjection,
-    planned_epoch: &nook_core::EventId,
-) -> bool {
-    matches!(
-        &projection.epoch,
-        ProjectionEpoch::Current(nook_core::KeyEpoch(epoch)) if epoch != planned_epoch
-    )
+impl CommittedSecurityEpochExecution {
+    fn projection_advanced_past(&self, projection: &nook_core::VaultProjection) -> bool {
+        matches!(
+            &projection.epoch,
+            ProjectionEpoch::Current(nook_core::KeyEpoch(epoch)) if epoch != &self.execution.trigger_event_id
+        )
+    }
 }
 
 impl NookVaultManager {
@@ -151,18 +163,19 @@ impl NookVaultManager {
             rotated_meta_records,
         })
     }
+}
 
-    fn rotation_frontier_matches(
-        prepared: &PreparedEpochRotation,
-        parents: &[nook_core::EventId],
-    ) -> bool {
+impl PreparedEpochRotation {
+    fn rotation_frontier_matches(&self, parents: &[nook_core::EventId]) -> bool {
         match parents {
-            [] => prepared.previous_checkpoint == prepared.previous_key_epoch,
-            [parent] => parent.as_str() == prepared.previous_checkpoint.as_str(),
+            [] => self.previous_checkpoint == self.previous_key_epoch,
+            [parent] => parent.as_str() == self.previous_checkpoint.as_str(),
             _ => false,
         }
     }
+}
 
+impl NookVaultManager {
     async fn persist_security_epoch_recovery_plan(
         &mut self,
         prepared: PreparedEpochRotation,
@@ -177,13 +190,16 @@ impl NookVaultManager {
             .into_iter()
             .map(|parent| EventId::parse(&parent))
             .collect::<Result<Vec<_>, _>>()?;
-        if !Self::rotation_frontier_matches(&prepared, &parents) {
+        if !prepared.rotation_frontier_matches(&parents) {
             return Err(NookError::Database(
                 "Vault changed while preparing security epoch rotation; retry.".to_owned(),
             ));
         }
-        let password_entries =
-            rewrap_password_entries(password_entries, &prepared.new_keys, &trigger)?;
+        let password_entries = PreparedEpochRotation::rewrap_password_entries(
+            password_entries,
+            &prepared.new_keys,
+            &trigger,
+        )?;
         let previous_epoch = EventId::parse(prepared.previous_key_epoch.as_str())?;
         let trigger_event = self
             .build_vault_operations_event(vec![trigger], parents, previous_epoch)
@@ -239,25 +255,36 @@ impl NookVaultManager {
         plan_envelope: &nook_core::AgeArmoredCiphertext,
         persisted_key_epoch: Option<nook_core::IdentityVaultEventId>,
     ) -> Result<(), SecurityEpochRotationFailure> {
-        let execution = Self::prepare_security_epoch_execution(
-            &self.vault.store_id,
-            plan,
-            persisted_key_epoch.as_ref(),
-        )
-        .map_err(SecurityEpochRotationFailure::before)?;
+        let execution = plan
+            .prepare_execution(&self.vault.store_id, persisted_key_epoch.as_ref())
+            .map_err(SecurityEpochRotationFailure::before)?;
+        let committed = execution.commit(self, plan_envelope).await?;
+        if let Err(error) = committed.complete(self).await {
+            return Err(self.fail_closed_after_committed_security_epoch(error));
+        }
+        Ok(())
+    }
+}
+
+impl PreparedSecurityEpochExecution {
+    async fn commit(
+        self,
+        manager: &mut NookVaultManager,
+        plan_envelope: &nook_core::AgeArmoredCiphertext,
+    ) -> Result<CommittedSecurityEpochExecution, SecurityEpochRotationFailure> {
         let saved_heads = event_db::save_security_epoch_event_pair(
-            &self.vault.store_id,
-            &execution.trigger_event.event,
-            &execution.trigger_event.bytes,
-            &execution.checkpoint_event.event,
-            &execution.checkpoint_event.bytes,
+            &manager.vault.store_id,
+            &self.trigger_event.event,
+            &self.trigger_event.bytes,
+            &self.checkpoint_event.event,
+            &self.checkpoint_event.bytes,
         )
         .await;
-        self.event_log.heads = match saved_heads {
+        manager.event_log.heads = match saved_heads {
             Ok(heads) => heads,
             Err(error) => {
                 identity_record::abort_prepared_identity_reconciliation(
-                    &execution.store_id,
+                    &self.store_id,
                     plan_envelope,
                 )
                 .await
@@ -269,22 +296,18 @@ impl NookVaultManager {
                 ));
             }
         };
-        if let Err(error) = self
-            .complete_committed_security_epoch_recovery(execution)
-            .await
-        {
-            return Err(self.fail_closed_after_committed_security_epoch(error));
-        }
-        Ok(())
+        Ok(CommittedSecurityEpochExecution { execution: self })
     }
+}
 
-    fn prepare_security_epoch_execution(
+impl SecurityEpochRecoveryPlan {
+    fn prepare_execution(
+        self,
         store_id: &str,
-        plan: SecurityEpochRecoveryPlan,
         persisted_key_epoch: Option<&nook_core::IdentityVaultEventId>,
     ) -> Result<PreparedSecurityEpochExecution, NookError> {
         let store_id = StoreId::parse(store_id)?;
-        let trigger_event = built_event_from_yaml(&plan.trigger_event_yaml)?;
+        let trigger_event = Self::built_event_from_yaml(&self.trigger_event_yaml)?;
         let trigger_event_id = trigger_event.event.id()?;
         let key_epoch = IdentityVaultEventId::parse(trigger_event_id.as_str())?;
         if persisted_key_epoch.is_some_and(|persisted| persisted != &key_epoch) {
@@ -292,11 +315,11 @@ impl NookVaultManager {
                 "Persisted security epoch does not match its recovery plan.".to_owned(),
             ));
         }
-        let checkpoint_event = built_event_from_yaml(&plan.checkpoint_event_yaml)?;
+        let checkpoint_event = Self::built_event_from_yaml(&self.checkpoint_event_yaml)?;
         let checkpoint_id = checkpoint_event.event.id()?;
         let checkpoint = IdentityVaultEventId::parse(checkpoint_id.as_str())?;
         Ok(PreparedSecurityEpochExecution {
-            plan,
+            plan: self,
             store_id,
             trigger_event,
             trigger_event_id,
@@ -306,11 +329,14 @@ impl NookVaultManager {
             checkpoint,
         })
     }
+}
 
-    async fn complete_committed_security_epoch_recovery(
-        &mut self,
-        execution: PreparedSecurityEpochExecution,
-    ) -> Result<(), NookError> {
+impl CommittedSecurityEpochExecution {
+    async fn complete(self, manager: &mut NookVaultManager) -> Result<(), NookError> {
+        let local = load_local_event_store(&manager.vault.store_id).await?;
+        let graph = local.load_graph(&manager.vault.store_id)?;
+        let projection = nook_core::project_vault(&graph, &manager.vault.store_id)?;
+        let advanced = self.projection_advanced_past(&projection);
         let PreparedSecurityEpochExecution {
             plan,
             store_id,
@@ -320,11 +346,8 @@ impl NookVaultManager {
             checkpoint_event,
             checkpoint_id,
             checkpoint,
-        } = execution;
-        let local = load_local_event_store(&self.vault.store_id).await?;
-        let graph = local.load_graph(&self.vault.store_id)?;
-        let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
-        if projection_advanced_past(&projection, &trigger_event_id) {
+        } = self.execution;
+        if advanced {
             identity_record::commit_identity_reconciliation_epoch(&store_id, &key_epoch).await?;
             identity_record::commit_identity_reconciliation_checkpoint(
                 &store_id,
@@ -332,40 +355,44 @@ impl NookVaultManager {
                 &checkpoint,
             )
             .await?;
-            nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-            self.adopt_projected_security_epoch(&projection).await?;
-            self.apply_event_projection_to_session().await?;
-            self.persist_projection_cache().await?;
-            let identity = self.device_identity()?;
-            self.ensure_identity_after_connect(&identity).await?;
+            nook_core::materialize_vault_meta_from_graph(&graph, &mut manager.vault.meta)?;
+            manager.adopt_projected_security_epoch(&projection).await?;
+            manager.apply_event_projection_to_session().await?;
+            manager.persist_projection_cache().await?;
+            let identity = manager.device_identity()?;
+            manager.ensure_identity_after_connect(&identity).await?;
             return Ok(());
         }
         identity_record::commit_identity_reconciliation_epoch(&store_id, &key_epoch).await?;
-        self.event_log.key_epoch = trigger_event_id.as_str().to_owned();
-        save_key_epoch(&self.vault.store_id, &self.event_log.key_epoch).await?;
+        manager.event_log.key_epoch = trigger_event_id.as_str().to_owned();
+        save_key_epoch(&manager.vault.store_id, &manager.event_log.key_epoch).await?;
 
         let new_keys = nook_core::VaultKeys {
             secrets_key: SymmetricKey::parse(&plan.new_secrets_key)?,
             members_key: SymmetricKey::parse(&plan.new_members_key)?,
         };
-        self.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
-        self.apply_event_projection_to_session().await?;
-        self.queue_event_outbox_for_current_provider(&checkpoint_id, &checkpoint_event.bytes)
+        manager.apply_vault_keys(new_keys.secrets_key.as_str(), new_keys.members_key.as_str())?;
+        manager.apply_event_projection_to_session().await?;
+        manager
+            .queue_event_outbox_for_current_provider(&checkpoint_id, &checkpoint_event.bytes)
             .await?;
-        self.queue_event_outbox_for_current_provider(&trigger_event_id, &trigger_event.bytes)
+        manager
+            .queue_event_outbox_for_current_provider(&trigger_event_id, &trigger_event.bytes)
             .await?;
-        self.persist_projection_cache().await?;
+        manager.persist_projection_cache().await?;
         identity_record::commit_identity_reconciliation_checkpoint(
             &store_id,
             &key_epoch,
             &checkpoint,
         )
         .await?;
-        let identity = self.device_identity()?;
-        self.ensure_identity_after_connect(&identity).await?;
+        let identity = manager.device_identity()?;
+        manager.ensure_identity_after_connect(&identity).await?;
         Ok(())
     }
+}
 
+impl NookVaultManager {
     pub(in crate::manager) async fn resume_pending_security_epoch_rotation(
         &mut self,
         identity: &nook_core::DeviceIdentity,
@@ -486,17 +513,89 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::PasswordEntryId;
+    use nook_core::{
+        IsoTimestamp, PasswordEntryId, SigningIdentity, VaultEvent, VaultEventBody,
+        VaultEventSchemaVersion,
+    };
+    use std::slice;
+
+    impl SecurityEpochRecoveryPlan {
+        fn fixture() -> anyhow::Result<Self> {
+            let signing = SigningIdentity::generate()?.0;
+            let event = VaultEvent::sign(
+                VaultEventBody {
+                    schema_version: VaultEventSchemaVersion::CURRENT,
+                    store_id: StoreId::parse("store_epochstate1")?,
+                    actor_id: signing.actor_id()?,
+                    actor_signing_public_key: signing.public_key(),
+                    parents: Vec::new(),
+                    created_at: IsoTimestamp::parse("2026-08-15T00:00:00Z")?,
+                    key_epoch: EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?,
+                    operations: vec![VaultOperation::VaultCleared],
+                },
+                signing.signing_key(),
+            )?;
+            let yaml = String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?)?;
+            Ok(Self {
+                new_secrets_key: String::new(),
+                new_members_key: String::new(),
+                trigger_event_yaml: yaml.clone(),
+                checkpoint_event_yaml: yaml,
+            })
+        }
+    }
+
+    #[test]
+    fn preparation_rejects_persisted_epoch_before_decoding_checkpoint() -> anyhow::Result<()> {
+        let mut plan = SecurityEpochRecoveryPlan::fixture()?;
+        plan.checkpoint_event_yaml = "invalid checkpoint".to_owned();
+        let persisted = IdentityVaultEventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        match plan.prepare_execution("store_epochstate1", Some(&persisted)) {
+            Err(NookError::Database(message)) => {
+                assert_eq!(
+                    message,
+                    "Persisted security epoch does not match its recovery plan."
+                );
+            }
+            Err(error) => return Err(error.into()),
+            Ok(_) => anyhow::bail!("Mismatched persisted epoch was accepted"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rotation_frontier_requires_the_captured_checkpoint() -> anyhow::Result<()> {
+        let epoch = IdentityVaultEventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let other = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let mut prepared = PreparedEpochRotation {
+            previous_key_epoch: epoch.clone(),
+            previous_checkpoint: epoch,
+            new_keys: nook_core::generate_vault_keys()?,
+            secrets: Vec::new(),
+            members_checkpoint_hash: nook_core::Sha256Hex::from_trusted("00".repeat(32)),
+            rotated_meta_records: Vec::new(),
+        };
+        assert!(prepared.rotation_frontier_matches(&[]));
+        assert!(!prepared.rotation_frontier_matches(slice::from_ref(&other)));
+        prepared.previous_checkpoint = IdentityVaultEventId::parse(other.as_str())?;
+        assert!(!prepared.rotation_frontier_matches(&[]));
+        assert!(prepared.rotation_frontier_matches(slice::from_ref(&other)));
+        assert!(!prepared.rotation_frontier_matches(&[other.clone(), other]));
+        Ok(())
+    }
 
     #[test]
     fn detects_a_verified_epoch_after_the_prepared_epoch() -> anyhow::Result<()> {
-        let planned = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let committed = CommittedSecurityEpochExecution {
+            execution: SecurityEpochRecoveryPlan::fixture()?
+                .prepare_execution("store_epochstate1", None)?,
+        };
         let latest = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let projection = nook_core::VaultProjection {
             epoch: ProjectionEpoch::Current(nook_core::KeyEpoch(latest)),
             ..Default::default()
         };
-        assert!(projection_advanced_past(&projection, &planned));
+        assert!(committed.projection_advanced_past(&projection));
         Ok(())
     }
 
@@ -509,7 +608,7 @@ mod tests {
         }))?;
         let envelope =
             nook_core::attach_password_envelope_with_work_factor(&keys, "updated", 10.into())?;
-        let entries = rewrap_password_entries(
+        let entries = PreparedEpochRotation::rewrap_password_entries(
             &[legacy],
             &keys,
             &VaultOperation::PasswordRotated {
