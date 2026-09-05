@@ -323,7 +323,7 @@ mod tests {
 
     fn password_envelope(ciphertext: &str) -> PasswordEnvelope {
         PasswordEnvelope {
-            version: 1,
+            version: crate::PasswordEnvelopeVersion::LEGACY,
             kdf: "scrypt".to_owned(),
             work_factor: 10.into(),
             recipient: String::new(),

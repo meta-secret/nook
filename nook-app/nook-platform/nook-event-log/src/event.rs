@@ -713,7 +713,7 @@ mod tests {
                 label: "Recovery".to_owned(),
                 created_at: IsoTimestamp::from_trusted("2026-06-28T00:00:01Z".to_owned()),
                 envelope: PasswordEnvelope {
-                    version: 1,
+                    version: crate::PasswordEnvelopeVersion::LEGACY,
                     kdf: "scrypt".to_owned(),
                     work_factor: 18.into(),
                     recipient: String::new(),
