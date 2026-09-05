@@ -18,7 +18,6 @@ use super::multi_device::{
     DeviceIdentity, OpenedSentinelShare, VaultKeys, device_id_from_public_key, generate_id,
     reconstruct_sentinel_vault_keys_from_opened,
 };
-use super::sentinel_signing;
 use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     MultiDeviceError, MultiDeviceResult, StoreId, StoredSecretRecord,
@@ -256,7 +255,7 @@ impl SentinelUnlockSession {
             policy,
             requester_device_id: requester_identity.device_id().clone(),
             requester_encryption_public_key: requester_identity.public_key(),
-            requester_signing_public_key: sentinel_signing::signing_public_key(
+            requester_signing_public_key: DeviceSigningPublicKey::from_signing_key(
                 requester_signing_key,
             ),
             signature: String::new(),
@@ -427,8 +426,7 @@ impl SentinelUnlockRequest {
         {
             return Err(MultiDeviceError::InvalidSentinelUnlockSession);
         }
-        sentinel_signing::verify_signature(
-            &self.requester_signing_public_key,
+        self.requester_signing_public_key.verify_signature(
             &self.signature,
             &self.signing_bytes()?,
             || MultiDeviceError::InvalidSentinelUnlockSignature,
@@ -585,7 +583,7 @@ mod tests {
         let request = session.request();
         let session = Fixture::collect(session, fixture.response(&request, 0)?)?;
         let response = request
-            .check(&sentinel_signing::signing_public_key(
+            .check(&DeviceSigningPublicKey::from_signing_key(
                 &fixture.requester_signing,
             ))?
             .respond(
@@ -611,7 +609,7 @@ mod tests {
         let mut tampered_request = first_request.clone();
         tampered_request.policy.threshold = 3.into();
         assert!(matches!(
-            tampered_request.check(&sentinel_signing::signing_public_key(
+            tampered_request.check(&DeviceSigningPublicKey::from_signing_key(
                 &fixture.requester_signing
             )),
             Err(MultiDeviceError::InvalidSentinelUnlockSignature)
@@ -654,7 +652,7 @@ mod tests {
         let request = session.request();
 
         assert!(matches!(
-            request.check(&sentinel_signing::signing_public_key(
+            request.check(&DeviceSigningPublicKey::from_signing_key(
                 &fixture.requester_signing
             )),
             Err(MultiDeviceError::InvalidSentinelUnlockPayload)
@@ -666,7 +664,7 @@ mod tests {
     {
         let fixture = Fixture::new()?;
         let request = fixture.session()?.request();
-        let wrong_key = sentinel_signing::signing_public_key(&Fixture::signing_key(92));
+        let wrong_key = DeviceSigningPublicKey::from_signing_key(&Fixture::signing_key(92));
         let mut invalid_policy = request.clone();
         invalid_policy.policy.threshold = 1.into();
         assert!(matches!(
@@ -690,7 +688,7 @@ mod tests {
     fn checked_response_still_requires_the_participants_local_share() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
         let request = fixture.session()?.request();
-        let checked = request.check(&sentinel_signing::signing_public_key(
+        let checked = request.check(&DeviceSigningPublicKey::from_signing_key(
             &fixture.requester_signing,
         ))?;
         let stranger = DeviceIdentity::generate()?;
@@ -717,7 +715,7 @@ mod tests {
         )?;
         let checked = session
             .request()
-            .check(&sentinel_signing::signing_public_key(
+            .check(&DeviceSigningPublicKey::from_signing_key(
                 &fixture.requester_signing,
             ))?;
         assert!(matches!(
@@ -852,7 +850,7 @@ mod tests {
         ) -> anyhow::Result<SentinelUnlockResponse> {
             Ok(request
                 .clone()
-                .check(&sentinel_signing::signing_public_key(
+                .check(&DeviceSigningPublicKey::from_signing_key(
                     &self.requester_signing,
                 ))?
                 .respond(
