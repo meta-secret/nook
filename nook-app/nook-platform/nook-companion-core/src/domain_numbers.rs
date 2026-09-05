@@ -44,12 +44,9 @@ impl From<u32> for AuthenticationOutcomeTimeoutMilliseconds {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
 #[tsify(type = "number")]
-pub struct AuthenticationFieldCount(u32);
+pub struct AuthenticationFieldCount(pub(crate) u32);
 
 impl AuthenticationFieldCount {
-    pub(crate) const fn from_raw(value: u32) -> Self {
-        Self(value)
-    }
     pub(crate) const fn raw(self) -> u32 {
         self.0
     }
@@ -115,12 +112,9 @@ impl From<u32> for AuthenticationSavedLoginAccountCount {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
 #[tsify(type = "number")]
-pub struct AuthenticationWorkflowCurrentStep(u8);
+pub struct AuthenticationWorkflowCurrentStep(pub(crate) u8);
 
 impl AuthenticationWorkflowCurrentStep {
-    pub(crate) const fn from_raw(value: u8) -> Self {
-        Self(value)
-    }
     pub(crate) const fn raw(self) -> u8 {
         self.0
     }
@@ -141,12 +135,9 @@ impl From<AuthenticationWorkflowCurrentStep> for u8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
 #[tsify(type = "number")]
-pub struct AuthenticationWorkflowTotalSteps(u8);
+pub struct AuthenticationWorkflowTotalSteps(pub(crate) u8);
 
 impl AuthenticationWorkflowTotalSteps {
-    pub(crate) const fn from_raw(value: u8) -> Self {
-        Self(value)
-    }
     pub(crate) const fn raw(self) -> u8 {
         self.0
     }
@@ -167,12 +158,9 @@ impl From<AuthenticationWorkflowTotalSteps> for u8 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(transparent)]
 #[tsify(type = "number")]
-pub struct AuthenticationWorkflowObservationIndex(u32);
+pub struct AuthenticationWorkflowObservationIndex(pub(crate) u32);
 
 impl AuthenticationWorkflowObservationIndex {
-    pub(crate) const fn from_raw(value: u32) -> Self {
-        Self(value)
-    }
     pub(crate) const fn raw(self) -> u32 {
         self.0
     }

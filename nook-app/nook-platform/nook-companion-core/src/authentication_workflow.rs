@@ -157,7 +157,7 @@ pub struct AuthenticationPageObservation {
 impl AuthenticationPageObservation {
     #[must_use]
     pub const fn password_field_count(self) -> AuthenticationFieldCount {
-        AuthenticationFieldCount::from_raw(
+        AuthenticationFieldCount(
             self.current_password_field_count
                 .raw()
                 .saturating_add(self.new_password_field_count.raw())
@@ -239,11 +239,11 @@ impl AuthenticationWorkflowSnapshot {
             kind,
             stage,
             action,
-            current_step: AuthenticationWorkflowCurrentStep::from_raw(current_step),
-            total_steps: AuthenticationWorkflowTotalSteps::from_raw(total_steps),
+            current_step: AuthenticationWorkflowCurrentStep(current_step),
+            total_steps: AuthenticationWorkflowTotalSteps(total_steps),
             approval_requirement: AuthenticationApprovalRequirement::for_action(action),
             saved_login_capability: AuthenticationSavedLoginCapability::Unavailable,
-            observation_index: AuthenticationWorkflowObservationIndex::from_raw(0),
+            observation_index: AuthenticationWorkflowObservationIndex(0),
         }
     }
 

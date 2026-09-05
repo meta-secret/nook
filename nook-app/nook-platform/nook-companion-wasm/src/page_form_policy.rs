@@ -424,7 +424,7 @@ mod tests {
 
         let mut signup =
             login_advance_observation("https://login.example.test/auth/passkey", "Use passkey");
-        signup.new_password_field_count = 1;
+        signup.new_password_field_count = 1.into();
         let signup_candidate =
             nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
                 signup,

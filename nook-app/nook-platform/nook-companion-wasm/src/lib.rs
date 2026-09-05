@@ -476,7 +476,7 @@ mod tests {
         let input = nook_companion_core::AuthenticationPageObservations {
             observations: vec![nook_companion_core::AuthenticationPageObservation {
                 one_time_code_field_count:
-                    nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+                    (nook_companion_core::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into(),
                 ..Default::default()
             }],
         };

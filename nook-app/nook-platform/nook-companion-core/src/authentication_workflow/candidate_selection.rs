@@ -150,9 +150,8 @@ pub fn classify_authentication_workflow_candidates(
         else {
             continue;
         };
-        candidate.observation_index = super::AuthenticationWorkflowObservationIndex::from_raw(
-            u32::try_from(index).unwrap_or(u32::MAX),
-        );
+        candidate.observation_index =
+            super::AuthenticationWorkflowObservationIndex(u32::try_from(index).unwrap_or(u32::MAX));
         let replace = match selected {
             AuthenticationWorkflowMatch::NoMatch => true,
             AuthenticationWorkflowMatch::Rejected => false,

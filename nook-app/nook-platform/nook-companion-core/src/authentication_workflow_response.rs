@@ -32,13 +32,11 @@ impl AuthenticationWorkflowSnapshotWire {
             kind: self.kind,
             stage: self.stage,
             action: self.action,
-            current_step: AuthenticationWorkflowCurrentStep::from_raw(self.current_step),
-            total_steps: AuthenticationWorkflowTotalSteps::from_raw(self.total_steps),
+            current_step: AuthenticationWorkflowCurrentStep(self.current_step),
+            total_steps: AuthenticationWorkflowTotalSteps(self.total_steps),
             approval_requirement: self.approval_requirement,
             saved_login_capability: self.saved_login_capability,
-            observation_index: AuthenticationWorkflowObservationIndex::from_raw(
-                self.observation_index,
-            ),
+            observation_index: AuthenticationWorkflowObservationIndex(self.observation_index),
         };
         if snapshot.matches_classifier_contract() {
             Some(snapshot)
