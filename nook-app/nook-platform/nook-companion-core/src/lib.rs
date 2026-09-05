@@ -138,7 +138,7 @@ pub use extension_session_status_response::{
 pub use extension_vault_event::{EXTENSION_VAULT_EVENT_TYPESCRIPT, ExtensionVaultEventPayload};
 pub use generated_password_response::{
     GeneratedPasswordResponse, GeneratedPasswordResponseDecodeError, GeneratedPasswordResponseKind,
-    GeneratedPasswordResponseWire, decode_generated_password_response,
+    GeneratedPasswordResponseWire,
 };
 pub use oauth_origin_policy::{
     BrowserOAuthProvider, OAuthOriginSupport, OAuthOriginUnsupportedReason,
