@@ -589,7 +589,7 @@ tasks:
       GITHUB_REPOSITORY: '{{.PR_GITHUB_REPOSITORY}}'
       PR_NUMBER: '{{.PR}}'
       REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
-      REVIEW_WAIT_SECONDS: '{{default "600" .REVIEW_WAIT_SECONDS}}'
+      REVIEW_WAIT_SECONDS: '{{default "0" .REVIEW_WAIT_SECONDS}}'
     cmds:
       - node '{{.CI_AGENT_DIR}}/dist/main/main.js' '{{.CI_AGENT_CMD}}'
 
@@ -626,7 +626,7 @@ tasks:
           REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
 
   pr:review:stabilize:
-    desc: Collect exact-head Cloud review after hosted validation dispatch, allowing a bounded timeout (PR=<number>, REVIEW_WAIT_SECONDS defaults to 600, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
+    desc: Inspect one bounded feedback snapshot by default, or collect exact-head Cloud review for an explicit positive timeout after hosted validation dispatch (PR=<number>, REVIEW_WAIT_SECONDS defaults to 0, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
     requires:
       vars: [PR]
     cmds:
@@ -635,7 +635,7 @@ tasks:
           PR: '{{.PR}}'
           CI_AGENT_CMD: pr-review-stabilize
           REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
-          REVIEW_WAIT_SECONDS: '{{default "600" .REVIEW_WAIT_SECONDS}}'
+          REVIEW_WAIT_SECONDS: '{{default "0" .REVIEW_WAIT_SECONDS}}'
 
   pr:review-local:
     desc: Run an advisory local Codex review against origin/main; unavailable Codex access skips without blocking delivery.
