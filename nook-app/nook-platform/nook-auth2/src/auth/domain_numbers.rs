@@ -120,10 +120,8 @@ impl From<SentinelParticipantCount> for u8 {
         value.0
     }
 }
-impl TryFrom<usize> for SentinelParticipantCount {
-    type Error = TryFromIntError;
-
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
+impl SentinelParticipantCount {
+    pub(crate) fn try_from_len(value: usize) -> Result<Self, TryFromIntError> {
         u8::try_from(value).map(Self)
     }
 }

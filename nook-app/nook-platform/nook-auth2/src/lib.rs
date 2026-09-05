@@ -1,3 +1,8 @@
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,

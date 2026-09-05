@@ -276,7 +276,7 @@ impl SentinelGenesisSession {
         if self.readiness() != SentinelGenesisReadiness::Complete {
             return Err(MultiDeviceError::SentinelGenesisIncomplete {
                 required: self.request.policy.participant_count,
-                available: SentinelParticipantCount::try_from(self.participants.len())
+                available: SentinelParticipantCount::try_from_len(self.participants.len())
                     .map_err(|_| MultiDeviceError::SentinelParticipantCountOverflow)?,
             });
         }
