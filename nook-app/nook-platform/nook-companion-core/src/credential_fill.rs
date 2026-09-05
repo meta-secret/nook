@@ -821,7 +821,7 @@ mod tests {
         assert_eq!(u32::from(field::Index::THREE), 3);
         assert_eq!(
             u32::from(field::Count::MAXIMUM),
-            MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
         );
         assert_eq!(
             serde_json::to_string(&observation)?,
