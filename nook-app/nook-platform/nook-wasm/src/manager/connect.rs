@@ -233,7 +233,7 @@ impl NookVaultManager {
                 let status = VaultAccessStatus::from(nook_core::assess_connect_access(
                     &self.stored_records_snapshot(),
                     &identity,
-                ));
+                )?);
                 let _ = self
                     .status
                     .tx
@@ -270,7 +270,7 @@ impl NookVaultManager {
             VaultAccessStatus::from(nook_core::assess_connect_access(
                 &self.stored_records_snapshot(),
                 &identity,
-            ))
+            )?)
         } else {
             access_status_for_vault_content(&content, &identity)?
         };
@@ -649,7 +649,7 @@ impl NookVaultManager {
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
         let records = self.stored_records_snapshot();
-        match nook_core::assess_connect_access(&records, identity) {
+        match nook_core::assess_connect_access(&records, identity)? {
             ConnectAccessStatus::Ready => {}
             ConnectAccessStatus::JoinPending => {
                 return Err(NookError::Database(
@@ -763,7 +763,7 @@ impl NookVaultManager {
         self.prepare_genesis_vault_keys(keys)?;
         if self.vault.architecture.vault_type == VaultType::Simple {
             for record in nook_core::identity_vault_genesis_records(identity, keys, "genesis")? {
-                self.vault.meta.apply_record(&record);
+                self.vault.meta.apply_record(&record)?;
             }
         }
         Ok(())
@@ -789,7 +789,7 @@ impl NookVaultManager {
             VaultType::Simple => {
                 let genesis =
                     nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
-                self.vault.meta.apply_record(&genesis);
+                self.vault.meta.apply_record(&genesis)?;
             }
             VaultType::Sentinel => {
                 // Sentinel genesis keeps vault keys in session memory only. Shares
@@ -797,7 +797,7 @@ impl NookVaultManager {
             }
         }
         for member in nook_core::genesis_members_records(identity, &keys.members_key, "genesis")? {
-            self.vault.meta.apply_record(&member);
+            self.vault.meta.apply_record(&member)?;
         }
         Ok(())
     }
@@ -815,7 +815,7 @@ impl NookVaultManager {
     pub async fn initialize_empty(&mut self) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("INITIALIZE_START".to_owned());
         self.vault.meta.secrets.clear();
-        if self.needs_genesis_persist() {
+        if self.needs_genesis_persist()? {
             let identity = self.device_identity()?;
             let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = SymmetricKey::parse(&self.vault.members_key)?;
@@ -823,14 +823,14 @@ impl NookVaultManager {
                 VaultType::Simple => {
                     let genesis =
                         nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
-                    self.vault.meta.apply_record(&genesis);
+                    self.vault.meta.apply_record(&genesis)?;
                 }
                 VaultType::Sentinel => {
                     // Sentinel never writes per-device auth envelopes.
                 }
             }
             for member in nook_core::genesis_members_records(&identity, &members_key, "genesis")? {
-                self.vault.meta.apply_record(&member);
+                self.vault.meta.apply_record(&member)?;
             }
         }
         if self.vault.store_id.is_empty() {
