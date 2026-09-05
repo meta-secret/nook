@@ -50,6 +50,20 @@ Treat a new or changed unowned free function as a P1 finding. Follow
 [function ownership](shared/dynamic-skills/function-ownership.md) for owner
 selection, narrow external boundaries, and language-specific authorities.
 
+### Domain APIs
+
+Every authored domain and application API follows
+[domain API integrity](shared/dynamic-skills/domain-api-integrity.md). Require
+named domain types, concrete values, one-parameter request APIs, validated
+capabilities, typed failures, exhaustive states, and explicit schema evolution.
+Treat a violation as a P1 finding.
+
+### Secrets
+
+Every secret-bearing value follows the security-owned
+[secret lifecycle](teams/security/dynamic-skills/secret-lifecycle.md). Treat an
+unowned lifetime, plaintext persistence, or sensitive log as a P1 finding.
+
 Gizmo Prime is the existing root delivery owner. A feature-slice Gizmo is a
 Workbench record, not another coordinator or worker. See the
 [Gizmo contract](gizmo/AGENTS.md).
