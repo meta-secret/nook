@@ -456,7 +456,13 @@ mod tests {
                 CompletionStep::AccessResult,
             ] {
                 let mut manager = fixture.manager();
-                // A real signed event makes the projection stage reachable.
+                // A signed genesis root needs VaultImported before its Sentinel operations.
+                let mut operations = vec![nook_core::VaultOperation::VaultImported {
+                    source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+                    secrets: Vec::new(),
+                    password_entries: Vec::new(),
+                }];
+                operations.extend(nook_core::sentinel_genesis_operations(&fixture.output));
                 let epoch = nook_core::EventId::from_sha256_hex(
                     nook_core::sha256_hex(fixture.output.store_id.as_str().as_bytes()).as_str(),
                 )?;
@@ -469,11 +475,12 @@ mod tests {
                     created_at: &nook_core::IsoTimestamp::from_trusted(
                         "2026-09-04T00:00:00Z".to_owned(),
                     ),
-                    operations: nook_core::sentinel_genesis_operations(&fixture.output),
+                    operations,
                 })?;
+                let event_id = event.validate_envelope(&fixture.output.store_id)?;
                 event_db::save_event_bytes(
                     fixture.output.store_id.as_str(),
-                    event.id()?.as_str(),
+                    event_id.as_str(),
                     &bytes,
                 )
                 .await?;
