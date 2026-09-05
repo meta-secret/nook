@@ -253,6 +253,8 @@ export type LocalEventLogUpdateResult =
   | { ok: false; reason: LocalEventLogUpdateFailure }
 
 type LocalEventLogUpdateDependencies = {
+  ensureSession: typeof ensureExtensionSessionDocument
+  persistPairingStorage: typeof setPairingStorage
   loadPairingStorage: typeof getPairingStorage
   pairingPolicyReady: typeof extensionPairingGrantPolicyReady
   importEventLog: typeof importExtensionEventLog
@@ -266,6 +268,8 @@ export function importLocalEventLogUpdate(
     typeof importLocalEventLogUpdateWithDependencies
   >[0] = {
     ...request,
+    ensureSession: ensureExtensionSessionDocument,
+    persistPairingStorage: setPairingStorage,
     loadPairingStorage: getPairingStorage,
     pairingPolicyReady: extensionPairingGrantPolicyReady,
     importEventLog: importExtensionEventLog,
@@ -277,6 +281,8 @@ export function importLocalEventLogUpdate(
 export async function importLocalEventLogUpdateWithDependencies({
   vaultStoreId,
   eventLogRecords,
+  ensureSession,
+  persistPairingStorage,
   loadPairingStorage,
   pairingPolicyReady,
   importEventLog,
@@ -286,6 +292,7 @@ export async function importLocalEventLogUpdateWithDependencies({
   try {
     const pairingPolicy = await pairingPolicyReady
     const stored = await loadPairingStorage()
+    await ensureSession()
     const authorityRequest: Parameters<typeof sendSession>[0] = {
       type: ExtensionSessionMessageType.ClassifyGrantAuthority,
       payload: {
@@ -349,8 +356,7 @@ export async function importLocalEventLogUpdateWithDependencies({
     >[0] = { grant, imported, select }
     const pairingItems =
       pairingPolicy.extensionStoredPairingGrantStorageItems(pairingItemsArgs)
-    await setPairingStorage(pairingItems)
-    await ensureExtensionSessionDocument()
+    await persistPairingStorage(pairingItems)
     const nookTypedArgs0_4: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-update-vault',
       payload: {

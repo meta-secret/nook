@@ -40,6 +40,61 @@ const storedGrant: StoredExtensionPairingGrant = {
 }
 
 describe('extension pairing grant transport', () => {
+  test.each(['created', 'failed'] as const)(
+    'ensures a closed receiver before classification: %s',
+    async (receiver) => {
+      const policy = await extensionPairingGrantPolicyReady
+      const key = policy.pairingGrantStorageKey(storedGrant.vaultStoreId)
+      const events: string[] = []
+      const response = await importLocalEventLogUpdateWithDependencies({
+        vaultStoreId: storedGrant.vaultStoreId,
+        eventLogRecords: [],
+        loadPairingStorage: async () => ({ [key]: storedGrant }),
+        pairingPolicyReady: extensionPairingGrantPolicyReady,
+        ensureSession: async () => {
+          events.push('ensure')
+          if (receiver === 'failed') throw new Error('receiver unavailable')
+        },
+        importEventLog: async () => {
+          events.push('import')
+          return {
+            vaultStoreId: storedGrant.vaultStoreId,
+            accessGranted: true,
+            eventCount: 1,
+            heads: ['event-1'],
+          }
+        },
+        persistPairingStorage: async () => {
+          events.push('persist')
+        },
+        sendSession: async (message) => {
+          if (
+            message.type === ExtensionSessionMessageType.ClassifyGrantAuthority
+          ) {
+            expect(events).toEqual(['ensure'])
+            events.push('classify')
+            return { kind: 'Authorized', grant: storedGrant }
+          }
+          expect(message.type).toBe(ExtensionSessionMessageType.UpdateVault)
+          events.push('update')
+          return { ok: true }
+        },
+      })
+      expect(events).toEqual(
+        receiver === 'created'
+          ? ['ensure', 'classify', 'import', 'persist', 'update']
+          : ['ensure'],
+      )
+      expect(response).toEqual(
+        receiver === 'created'
+          ? { ok: true, eventCount: 1 }
+          : {
+              ok: false,
+              reason: LocalEventLogUpdateFailure.EventLogImportFailed,
+            },
+      )
+    },
+  )
   test('rejects malformed and wrong-target manager responses', async () => {
     await extensionPairingGrantPolicyReady
     for (const response of [
@@ -163,6 +218,8 @@ describe('extension pairing grant transport', () => {
         },
       )
       const response = await importLocalEventLogUpdateWithDependencies({
+        ensureSession: async () => {},
+        persistPairingStorage: unusedOperation,
         vaultStoreId: 'unpaired-vault',
         eventLogRecords: [],
         loadPairingStorage,
