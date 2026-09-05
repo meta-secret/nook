@@ -1,4 +1,9 @@
 //! Append-only replica bytes and durable per-provider outbox bookkeeping.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -10,11 +15,13 @@ pub enum ReplicaInsertStatus {
     Conflict,
 }
 
-fn classify_immutable_insert(existing: Option<&[u8]>, incoming: &[u8]) -> ReplicaInsertStatus {
-    match existing {
-        Some(bytes) if bytes == incoming => ReplicaInsertStatus::Duplicate,
-        Some(_) => ReplicaInsertStatus::Conflict,
-        None => ReplicaInsertStatus::Inserted,
+impl ReplicaInsertStatus {
+    fn classify(existing: Option<&[u8]>, incoming: &[u8]) -> Self {
+        match existing {
+            Some(bytes) if bytes == incoming => Self::Duplicate,
+            Some(_) => Self::Conflict,
+            None => Self::Inserted,
+        }
     }
 }
 
@@ -69,7 +76,7 @@ where
         )
     )]
     pub fn put_event(&mut self, event_id: Id, storage_bytes: Vec<u8>) -> ReplicaInsertStatus {
-        let status = classify_immutable_insert(
+        let status = ReplicaInsertStatus::classify(
             self.events.get(&event_id).map(Vec::as_slice),
             &storage_bytes,
         );
@@ -115,7 +122,8 @@ where
         bytes: Vec<u8>,
     ) -> ReplicaInsertStatus {
         let entries = self.outbox.entry(provider_id.to_owned()).or_default();
-        let status = classify_immutable_insert(entries.get(&event_id).map(Vec::as_slice), &bytes);
+        let status =
+            ReplicaInsertStatus::classify(entries.get(&event_id).map(Vec::as_slice), &bytes);
         if status == ReplicaInsertStatus::Inserted {
             entries.insert(event_id, bytes);
         }
@@ -193,6 +201,37 @@ mod tests {
     use super::*;
     use proptest::collection;
     use proptest::prelude::*;
+
+    #[test]
+    fn empty_payload_is_present_and_immutable_after_insertion() {
+        let mut store = ReplicaStore::new();
+        assert_eq!(
+            store.put_event(1_u8, Vec::new()),
+            ReplicaInsertStatus::Inserted
+        );
+        assert_eq!(
+            store.put_event(1_u8, Vec::new()),
+            ReplicaInsertStatus::Duplicate
+        );
+        assert_eq!(
+            store.put_event(1_u8, vec![1]),
+            ReplicaInsertStatus::Conflict
+        );
+        assert_eq!(store.get_bytes(&1), Some([].as_slice()));
+        assert_eq!(
+            store.queue_outbox("drive", 1_u8, Vec::new()),
+            ReplicaInsertStatus::Inserted
+        );
+        assert_eq!(
+            store.queue_outbox("drive", 1_u8, Vec::new()),
+            ReplicaInsertStatus::Duplicate
+        );
+        assert_eq!(
+            store.queue_outbox("drive", 1_u8, vec![1]),
+            ReplicaInsertStatus::Conflict
+        );
+        assert_eq!(store.pending_outbox("drive"), vec![(1, Vec::new())]);
+    }
 
     #[test]
     fn outbox_is_idempotent_per_provider_and_event() {
@@ -286,58 +325,51 @@ mod tests {
 mod loom_tests {
     use std::panic;
 
-    use loom::sync::{self, Arc, Mutex};
+    use super::{ReplicaInsertStatus, ReplicaStore};
+    use loom::sync::{Arc, Mutex};
     use loom::thread;
-
-    fn lock_store(
-        store: &Mutex<super::ReplicaStore<u8>>,
-    ) -> sync::MutexGuard<'_, super::ReplicaStore<u8>> {
-        match store.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        }
-    }
-
-    fn join_writer(
-        writer: thread::JoinHandle<super::ReplicaInsertStatus>,
-    ) -> super::ReplicaInsertStatus {
-        match writer.join() {
-            Ok(status) => status,
-            Err(payload) => panic::resume_unwind(payload),
-        }
-    }
 
     #[test]
     fn serialized_replica_inserts_preserve_immutable_first_writer() {
         loom::model(|| {
-            let store = Arc::new(Mutex::new(super::ReplicaStore::new()));
+            let store = Arc::new(Mutex::new(ReplicaStore::new()));
             let first = Arc::clone(&store);
             let second = Arc::clone(&store);
 
             let first_writer = thread::spawn(move || {
-                let mut guard = lock_store(&first);
+                let mut guard = match first.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
                 guard.put_event(1_u8, vec![1])
             });
             let second_writer = thread::spawn(move || {
-                let mut guard = lock_store(&second);
+                let mut guard = match second.lock() {
+                    Ok(guard) => guard,
+                    Err(poisoned) => poisoned.into_inner(),
+                };
                 guard.put_event(1_u8, vec![2])
             });
 
-            let first_status = join_writer(first_writer);
-            let second_status = join_writer(second_writer);
-            let guard = lock_store(&store);
+            let first_status = match first_writer.join() {
+                Ok(status) => status,
+                Err(payload) => panic::resume_unwind(payload),
+            };
+            let second_status = match second_writer.join() {
+                Ok(status) => status,
+                Err(payload) => panic::resume_unwind(payload),
+            };
+            let guard = match store.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => poisoned.into_inner(),
+            };
 
             assert_ne!(first_status, second_status);
             assert!(
                 matches!(
                     (first_status, second_status),
-                    (
-                        super::ReplicaInsertStatus::Inserted,
-                        super::ReplicaInsertStatus::Conflict
-                    ) | (
-                        super::ReplicaInsertStatus::Conflict,
-                        super::ReplicaInsertStatus::Inserted
-                    )
+                    (ReplicaInsertStatus::Inserted, ReplicaInsertStatus::Conflict)
+                        | (ReplicaInsertStatus::Conflict, ReplicaInsertStatus::Inserted)
                 ),
                 "one serialized writer inserts and the other observes a conflict"
             );
@@ -348,6 +380,8 @@ mod loom_tests {
 
 #[cfg(kani)]
 mod kani_proofs {
+    use super::ReplicaInsertStatus;
+
     #[kani::proof]
     fn immutable_insert_status_covers_every_existing_state() {
         let has_existing = kani::any::<bool>();
@@ -356,15 +390,15 @@ mod kani_proofs {
         let incoming = [if same_payload { 7 } else { 9 }];
         let existing = has_existing.then_some(existing.as_slice());
         let expected_status = if !has_existing {
-            super::ReplicaInsertStatus::Inserted
+            ReplicaInsertStatus::Inserted
         } else if same_payload {
-            super::ReplicaInsertStatus::Duplicate
+            ReplicaInsertStatus::Duplicate
         } else {
-            super::ReplicaInsertStatus::Conflict
+            ReplicaInsertStatus::Conflict
         };
 
         assert_eq!(
-            super::classify_immutable_insert(existing, &incoming),
+            ReplicaInsertStatus::classify(existing, &incoming),
             expected_status
         );
     }
