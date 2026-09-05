@@ -41,8 +41,8 @@ const fn classifier_tuple_matches_contract(snapshot: AuthenticationWorkflowSnaps
             snapshot.kind,
             snapshot.stage,
             snapshot.action,
-            snapshot.current_step,
-            snapshot.total_steps,
+            snapshot.current_step.raw(),
+            snapshot.total_steps.raw(),
         ),
         (
             AuthenticationWorkflowKind::Login,
@@ -134,12 +134,13 @@ impl AuthenticationWorkflowSnapshot {
     /// Whether this snapshot is one of the complete tuples emitted by the classifier.
     #[must_use]
     pub const fn matches_classifier_contract(self) -> bool {
-        if self.current_step == 0
-            || self.total_steps == 0
-            || self.current_step > self.total_steps
+        if self.current_step.raw() == 0
+            || self.total_steps.raw() == 0
+            || self.current_step.raw() > self.total_steps.raw()
             || !self.approval_requirement_matches_action()
             || !saved_login_capability_matches_contract(self)
-            || self.observation_index >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
+            || self.observation_index.raw()
+                >= MAX_AUTHENTICATION_WORKFLOW_OBSERVATION_INDEX_EXCLUSIVE
         {
             return false;
         }
@@ -165,11 +166,11 @@ mod tests {
             kind: AuthenticationWorkflowKind::Login,
             stage: AuthenticationWorkflowStage::Credentials,
             action: AuthenticationWorkflowAction::ContinueWithNook,
-            current_step: 1,
-            total_steps: 3,
+            current_step: 1.into(),
+            total_steps: 3.into(),
             approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
             saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
-            observation_index: 0,
+            observation_index: 0.into(),
         };
         assert_eq!(
             valid.saved_login_capability(),
@@ -221,16 +222,22 @@ mod tests {
                                         for passkey_control_present in [false, true] {
                                             for matching_passkey_account_count in [0, 1] {
                                                 let observation = AuthenticationPageObservation {
-                                                    username_field_count,
-                                                    current_password_field_count,
-                                                    new_password_field_count,
-                                                    generic_password_field_count,
-                                                    one_time_code_field_count,
+                                                    username_field_count: username_field_count
+                                                        .into(),
+                                                    current_password_field_count:
+                                                        current_password_field_count.into(),
+                                                    new_password_field_count:
+                                                        new_password_field_count.into(),
+                                                    generic_password_field_count:
+                                                        generic_password_field_count.into(),
+                                                    one_time_code_field_count:
+                                                        one_time_code_field_count.into(),
                                                     manual_checkpoint_present,
                                                     authenticator_setup_hint,
                                                     backup_codes_hint,
                                                     passkey_control_present,
-                                                    matching_passkey_account_count,
+                                                    matching_passkey_account_count:
+                                                        matching_passkey_account_count.into(),
                                                 };
                                                 if let AuthenticationWorkflowMatch::Matched(
                                                     snapshot,
@@ -300,8 +307,8 @@ mod tests {
                                 kind,
                                 stage,
                                 action,
-                                current_step,
-                                total_steps,
+                                current_step: current_step.into(),
+                                total_steps: total_steps.into(),
                                 approval_requirement: AuthenticationApprovalRequirement::for_action(
                                     action,
                                 ),
@@ -317,7 +324,7 @@ mod tests {
                                 } else {
                                     AuthenticationSavedLoginCapability::Unavailable
                                 },
-                                observation_index: 0,
+                                observation_index: 0.into(),
                             };
                             if !accepted.matches_classifier_contract() {
                                 continue;
@@ -339,7 +346,7 @@ mod tests {
                                     classify_authentication_workflow_candidates(&observations)
                                         .snapshot()?;
                                 let mut expected = accepted;
-                                expected.observation_index = u32::try_from(index)?;
+                                expected.observation_index = u32::try_from(index)?.into();
                                 assert_eq!(produced, expected);
                                 assert!(produced.matches_classifier_contract());
                             }
@@ -362,15 +369,15 @@ mod tests {
             kind: AuthenticationWorkflowKind::Login,
             stage: AuthenticationWorkflowStage::Credentials,
             action: AuthenticationWorkflowAction::ContinueWithNook,
-            current_step: 1,
-            total_steps: 3,
+            current_step: 1.into(),
+            total_steps: 3.into(),
             approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
             saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
-            observation_index: maximum_exclusive - 1,
+            observation_index: (maximum_exclusive - 1).into(),
         };
         assert!(snapshot.matches_classifier_contract());
 
-        snapshot.observation_index = maximum_exclusive;
+        snapshot.observation_index = maximum_exclusive.into();
         assert!(!snapshot.matches_classifier_contract());
         Ok(())
     }

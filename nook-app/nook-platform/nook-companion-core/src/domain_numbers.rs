@@ -1,4 +1,4 @@
-//! Numeric domains owned by companion authentication outcome evidence.
+//! Numeric domains owned by portable companion behavior.
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -36,6 +36,189 @@ impl AuthenticationOutcomeTimeoutMilliseconds {
 }
 
 impl From<u32> for AuthenticationOutcomeTimeoutMilliseconds {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct AuthenticationFieldCount(u32);
+
+impl AuthenticationFieldCount {
+    pub(crate) const fn from_raw(value: u32) -> Self {
+        Self(value)
+    }
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for AuthenticationFieldCount {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct AuthenticationSemanticSubmitControlCount(u32);
+
+impl AuthenticationSemanticSubmitControlCount {
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for AuthenticationSemanticSubmitControlCount {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct AuthenticationPasskeyAccountCount(u32);
+
+impl AuthenticationPasskeyAccountCount {
+    pub(crate) const ZERO: Self = Self(0);
+
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for AuthenticationPasskeyAccountCount {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct AuthenticationSavedLoginAccountCount(u32);
+
+impl AuthenticationSavedLoginAccountCount {
+    pub const ZERO: Self = Self(0);
+}
+
+impl From<u32> for AuthenticationSavedLoginAccountCount {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct AuthenticationWorkflowCurrentStep(u8);
+
+impl AuthenticationWorkflowCurrentStep {
+    pub(crate) const fn from_raw(value: u8) -> Self {
+        Self(value)
+    }
+    pub(crate) const fn raw(self) -> u8 {
+        self.0
+    }
+}
+
+impl From<u8> for AuthenticationWorkflowCurrentStep {
+    fn from(value: u8) -> Self {
+        Self(value)
+    }
+}
+
+impl From<AuthenticationWorkflowCurrentStep> for u8 {
+    fn from(value: AuthenticationWorkflowCurrentStep) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct AuthenticationWorkflowTotalSteps(u8);
+
+impl AuthenticationWorkflowTotalSteps {
+    pub(crate) const fn from_raw(value: u8) -> Self {
+        Self(value)
+    }
+    pub(crate) const fn raw(self) -> u8 {
+        self.0
+    }
+}
+
+impl From<u8> for AuthenticationWorkflowTotalSteps {
+    fn from(value: u8) -> Self {
+        Self(value)
+    }
+}
+
+impl From<AuthenticationWorkflowTotalSteps> for u8 {
+    fn from(value: AuthenticationWorkflowTotalSteps) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct AuthenticationWorkflowObservationIndex(u32);
+
+impl AuthenticationWorkflowObservationIndex {
+    pub(crate) const fn from_raw(value: u32) -> Self {
+        Self(value)
+    }
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for AuthenticationWorkflowObservationIndex {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<AuthenticationWorkflowObservationIndex> for u32 {
+    fn from(value: AuthenticationWorkflowObservationIndex) -> Self {
+        value.0
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct ExtensionSyncProviderCount(u32);
+
+impl ExtensionSyncProviderCount {
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for ExtensionSyncProviderCount {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(transparent)]
+#[tsify(type = "number")]
+pub struct ExtensionEventCount(u32);
+
+impl ExtensionEventCount {
+    pub(crate) const fn raw(self) -> u32 {
+        self.0
+    }
+}
+
+impl From<u32> for ExtensionEventCount {
     fn from(value: u32) -> Self {
         Self(value)
     }

@@ -210,7 +210,7 @@ pub fn authentication_passkey_control_evidence_is_safe(
 pub fn authentication_form_observation_priority(
     observation: nook_companion_core::AuthenticationPageObservation,
 ) -> u8 {
-    nook_companion_core::authentication_form_observation_priority(observation)
+    nook_companion_core::authentication_form_observation_priority(observation).into()
 }
 
 #[wasm_bindgen]
@@ -226,7 +226,7 @@ pub fn authentication_form_observation_priority(
 pub fn authentication_page_observation_facts_priority(
     facts: nook_companion_core::AuthenticationPageObservationFacts,
 ) -> u8 {
-    nook_companion_core::authentication_page_observation_facts_priority(facts)
+    nook_companion_core::authentication_page_observation_facts_priority(facts).into()
 }
 
 #[wasm_bindgen]
@@ -331,7 +331,7 @@ mod tests {
             true,
         ));
         let login = nook_companion_core::AuthenticationPageObservation {
-            current_password_field_count: 1,
+            current_password_field_count: 1.into(),
             ..Default::default()
         };
         assert_eq!(authentication_form_observation_priority(login), 4);
@@ -343,9 +343,9 @@ mod tests {
         );
         let login_facts = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {
-                username_field_count: 1,
-                current_password_field_count: 1,
-                actionable_password_field_count: 1,
+                username_field_count: 1.into(),
+                current_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
                 ..Default::default()
             },
             detailed_advance_control:
@@ -369,10 +369,10 @@ mod tests {
             ownership: nook_companion_core::PageControlOwnership::OwnedForm,
             semantics: nook_companion_core::PageControlSemantics::SemanticSubmit,
             authentication_username: nook_companion_core::AuthenticationUsernameEvidence::Explicit,
-            password_field_count: 1,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 1,
+            password_field_count: 1.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 1.into(),
             source_origin: "https://login.example.test".to_owned(),
             form_identity: "login-form".to_owned(),
             destination_identity: destination.to_owned(),

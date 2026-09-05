@@ -4,7 +4,9 @@
 //! observations plus an unlocked vault match count. Proposals never perform
 //! `WebAuthn` create/assert; the existing page ceremony owns consent and crypto.
 
-use crate::authentication_workflow::AuthenticationWorkflowKind;
+use crate::{
+    AuthenticationPasskeyAccountCount, authentication_workflow::AuthenticationWorkflowKind,
+};
 
 /// Eligibility outcome for a Pilot passkey CTA.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -12,7 +14,9 @@ pub enum WebsitePasskeyProposal {
     /// No passkey CTA; keep the base workflow action.
     None,
     /// Vault has confident RP matches; propose Use passkey.
-    UsePasskey { account_count: u32 },
+    UsePasskey {
+        account_count: AuthenticationPasskeyAccountCount,
+    },
     /// Page exposes a passkey control and no vault matches; propose Create.
     CreatePasskey,
 }
@@ -37,7 +41,7 @@ pub const fn propose_website_passkey(
     workflow_kind: AuthenticationWorkflowKind,
     manual_checkpoint_present: bool,
     passkey_control_present: bool,
-    matching_passkey_account_count: u32,
+    matching_passkey_account_count: AuthenticationPasskeyAccountCount,
 ) -> WebsitePasskeyProposal {
     if manual_checkpoint_present {
         return WebsitePasskeyProposal::None;
@@ -51,7 +55,7 @@ pub const fn propose_website_passkey(
             return WebsitePasskeyProposal::None;
         }
     }
-    if matching_passkey_account_count > 0 {
+    if matching_passkey_account_count.raw() > 0 {
         return WebsitePasskeyProposal::UsePasskey {
             account_count: matching_passkey_account_count,
         };
@@ -70,11 +74,15 @@ mod tests {
     fn proposes_use_when_vault_has_confident_matches() {
         assert_eq!(
             propose_website_passkey(AuthenticationWorkflowKind::Login, false, false, 2),
-            WebsitePasskeyProposal::UsePasskey { account_count: 2 }
+            WebsitePasskeyProposal::UsePasskey {
+                account_count: 2.into()
+            }
         );
         assert_eq!(
             propose_website_passkey(AuthenticationWorkflowKind::Signup, false, true, 1),
-            WebsitePasskeyProposal::UsePasskey { account_count: 1 }
+            WebsitePasskeyProposal::UsePasskey {
+                account_count: 1.into()
+            }
         );
     }
 

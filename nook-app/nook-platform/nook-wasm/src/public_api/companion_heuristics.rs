@@ -135,7 +135,7 @@ pub fn looks_like_login_advance_control_label(label: &str) -> bool {
 pub fn authentication_form_observation_priority(
     observation: &NookAuthenticationPageObservation,
 ) -> u8 {
-    nook_core::authentication_form_observation_priority(observation.to_core())
+    nook_core::authentication_form_observation_priority(observation.to_core()).into()
 }
 
 #[wasm_bindgen]

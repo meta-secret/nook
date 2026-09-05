@@ -21,8 +21,14 @@ impl AuthenticationFormObservationPriority {
     const ONE_TIME_CODE: Self = Self(5);
 
     #[must_use]
-    pub const fn value(self) -> u8 {
+    pub(crate) const fn value(self) -> u8 {
         self.0
+    }
+}
+
+impl From<AuthenticationFormObservationPriority> for u8 {
+    fn from(value: AuthenticationFormObservationPriority) -> Self {
+        value.value()
     }
 }
 
@@ -54,13 +60,13 @@ impl AuthenticationPageObservation {
     /// Rank one browser form observation before the host applies its bounded scan.
     #[must_use]
     pub const fn form_priority(self) -> AuthenticationFormObservationPriority {
-        if self.one_time_code_field_count > 0 {
+        if self.one_time_code_field_count.raw() > 0 {
             AuthenticationFormObservationPriority::ONE_TIME_CODE
-        } else if self.current_password_field_count > 0 {
+        } else if self.current_password_field_count.raw() > 0 {
             AuthenticationFormObservationPriority::CURRENT_PASSWORD
-        } else if self.generic_password_field_count == 1 {
+        } else if self.generic_password_field_count.raw() == 1 {
             AuthenticationFormObservationPriority::GENERIC_PASSWORD
-        } else if self.password_field_count() > 0 {
+        } else if self.password_field_count().raw() > 0 {
             AuthenticationFormObservationPriority::PASSWORD_FORM
         } else {
             AuthenticationFormObservationPriority::USERNAME_OR_PASSKEY_ONLY
@@ -124,8 +130,8 @@ enum AuthenticationWorkflowCandidatePriority {
 #[must_use]
 pub const fn authentication_form_observation_priority(
     observation: AuthenticationPageObservation,
-) -> u8 {
-    observation.form_priority().value()
+) -> AuthenticationFormObservationPriority {
+    observation.form_priority()
 }
 
 /// Select the highest-priority valid workflow candidate in observation order.
@@ -144,7 +150,9 @@ pub fn classify_authentication_workflow_candidates(
         else {
             continue;
         };
-        candidate.observation_index = u32::try_from(index).unwrap_or(u32::MAX);
+        candidate.observation_index = super::AuthenticationWorkflowObservationIndex::from_raw(
+            u32::try_from(index).unwrap_or(u32::MAX),
+        );
         let replace = match selected {
             AuthenticationWorkflowMatch::NoMatch => true,
             AuthenticationWorkflowMatch::Rejected => false,
@@ -186,7 +194,7 @@ mod tests {
     #[test]
     fn signup_help_outranks_manual_passkey_login_takeover() -> anyhow::Result<()> {
         let signup = AuthenticationPageObservation {
-            new_password_field_count: 1,
+            new_password_field_count: 1.into(),
             ..Default::default()
         };
         let manual_login = AuthenticationPageObservation {
@@ -204,7 +212,7 @@ mod tests {
                 snapshot.action,
                 AuthenticationWorkflowAction::GeneratePassword
             );
-            assert_eq!(snapshot.observation_index, expected_index);
+            assert_eq!(u32::from(snapshot.observation_index), expected_index);
         }
         Ok(())
     }
@@ -212,13 +220,13 @@ mod tests {
     #[test]
     fn active_otp_verification_outranks_page_wide_enrollment_copy() -> anyhow::Result<()> {
         let otp = AuthenticationPageObservation {
-            one_time_code_field_count: 1,
+            one_time_code_field_count: 1.into(),
             authenticator_setup_hint: true,
             backup_codes_hint: true,
             ..Default::default()
         };
         let recovery = AuthenticationPageObservation {
-            username_field_count: 1,
+            username_field_count: 1.into(),
             authenticator_setup_hint: true,
             backup_codes_hint: true,
             ..Default::default()
@@ -226,7 +234,7 @@ mod tests {
         let snapshot = classify_authentication_workflow_candidates(&[recovery, otp]).snapshot()?;
         assert_eq!(snapshot.kind, AuthenticationWorkflowKind::TotpEnrollment);
         assert_eq!(snapshot.action, AuthenticationWorkflowAction::FillTotp);
-        assert_eq!(snapshot.observation_index, 1);
+        assert_eq!(u32::from(snapshot.observation_index), 1);
         Ok(())
     }
 }

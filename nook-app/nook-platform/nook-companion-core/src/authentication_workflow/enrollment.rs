@@ -11,9 +11,9 @@ pub(super) const fn classify_enrollment_workflow(
         && (observation.authenticator_setup_hint || observation.backup_codes_hint)
     {
         let current_step =
-            if observation.backup_codes_hint && observation.one_time_code_field_count == 0 {
+            if observation.backup_codes_hint && observation.one_time_code_field_count.raw() == 0 {
                 4
-            } else if observation.one_time_code_field_count > 0 {
+            } else if observation.one_time_code_field_count.raw() > 0 {
                 3
             } else {
                 2
@@ -26,7 +26,7 @@ pub(super) const fn classify_enrollment_workflow(
             5,
         ));
     }
-    if observation.backup_codes_hint && observation.one_time_code_field_count == 0 {
+    if observation.backup_codes_hint && observation.one_time_code_field_count.raw() == 0 {
         return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
             AuthenticationWorkflowKind::TotpEnrollment,
             AuthenticationWorkflowStage::Recovery,
@@ -36,7 +36,7 @@ pub(super) const fn classify_enrollment_workflow(
         ));
     }
     if observation.authenticator_setup_hint {
-        if observation.one_time_code_field_count > 0 {
+        if observation.one_time_code_field_count.raw() > 0 {
             return AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot::new(
                 AuthenticationWorkflowKind::TotpEnrollment,
                 AuthenticationWorkflowStage::Verification,

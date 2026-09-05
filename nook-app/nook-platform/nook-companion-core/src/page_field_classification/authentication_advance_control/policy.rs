@@ -39,7 +39,7 @@ pub(super) fn has_unconditional_veto_identity(
             observation.authentication_username,
             AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
         )
-        && observation.password_field_count > 0
+        && observation.password_field_count.raw() > 0
         && looks_like_explicit_authentication_advance_control_label(&observation.label)
         && !label_names_external_authentication_provider(&observation.label)
         && control_destination_indicates_generic_oauth_authorization_route(
@@ -71,9 +71,9 @@ pub(super) fn has_semantic_submit_ceremony(
     let username_only_authentication_context =
         identity_indicates_explicit_authentication_route(&observation.form_identity)
             || identity_indicates_explicit_authentication_route(positive_destination_identity);
-    observation.password_field_count > 0
-        || observation.new_password_field_count > 0
-        || observation.one_time_code_field_count > 0
+    observation.password_field_count.raw() > 0
+        || observation.new_password_field_count.raw() > 0
+        || observation.one_time_code_field_count.raw() > 0
         || ((matches!(
             observation.authentication_username,
             AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -91,7 +91,7 @@ pub(super) fn accepts_authentication_advance(
     let accepted_semantic_submit = authentication_scope_owns_control
         && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
         && semantic_submit_ceremony_present
-        && (observation.semantic_submit_control_count == 1
+        && (observation.semantic_submit_control_count.raw() == 1
             || looks_like_login_advance_control_label(&observation.label)
             || looks_like_explicit_authentication_advance_control_label(&observation.label));
     let accepted_scoped_activation = authentication_scope_owns_control
@@ -109,7 +109,7 @@ pub(super) fn one_time_code_control_lacks_authentication_context(
     observation: &AuthenticationAdvanceControlObservation,
     positive_destination_identity: &str,
 ) -> bool {
-    observation.one_time_code_field_count > 0
+    observation.one_time_code_field_count.raw() > 0
         && !one_time_code_control_has_authentication_context(
             observation.authentication_username,
             &observation.form_identity,

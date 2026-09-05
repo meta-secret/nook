@@ -14,16 +14,17 @@ pub fn authentication_page_observations_are_valid(
         && observations.len() <= MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
         && observations.iter().all(|observation| {
             [
-                observation.username_field_count,
-                observation.current_password_field_count,
-                observation.new_password_field_count,
-                observation.generic_password_field_count,
-                observation.one_time_code_field_count,
-                observation.matching_passkey_account_count,
+                observation.username_field_count.raw(),
+                observation.current_password_field_count.raw(),
+                observation.new_password_field_count.raw(),
+                observation.generic_password_field_count.raw(),
+                observation.one_time_code_field_count.raw(),
+                observation.matching_passkey_account_count.raw(),
             ]
             .into_iter()
             .all(|count| count <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT)
-                && observation.password_field_count() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+                && observation.password_field_count().raw()
+                    <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
         })
 }
 
@@ -38,14 +39,14 @@ mod tests {
     #[test]
     fn validates_bounded_authentication_observation_envelopes() {
         let valid = [AuthenticationPageObservation {
-            username_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+            username_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT.into(),
             ..Default::default()
         }];
         assert!(authentication_page_observations_are_valid(&valid));
         assert!(!authentication_page_observations_are_valid(&[]));
 
         let excessive_count = [AuthenticationPageObservation {
-            current_password_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
+            current_password_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into(),
             ..Default::default()
         }];
         assert!(!authentication_page_observations_are_valid(
@@ -53,8 +54,8 @@ mod tests {
         ));
 
         let combined_password_overflow = [AuthenticationPageObservation {
-            current_password_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2,
-            generic_password_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2 + 1,
+            current_password_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2).into(),
+            generic_password_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT / 2 + 1).into(),
             ..Default::default()
         }];
         assert!(!authentication_page_observations_are_valid(
@@ -73,8 +74,8 @@ mod tests {
     #[test]
     fn classifier_rejects_observations_outside_the_portable_envelope() {
         let excessive_field_count = [AuthenticationPageObservation {
-            username_field_count: MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1,
-            current_password_field_count: 1,
+            username_field_count: (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into(),
+            current_password_field_count: 1.into(),
             ..Default::default()
         }];
         let rejected = classify_authentication_workflow_candidates(&excessive_field_count);
@@ -86,8 +87,8 @@ mod tests {
 
         let excessive_pages = vec![
             AuthenticationPageObservation {
-                username_field_count: 1,
-                current_password_field_count: 1,
+                username_field_count: 1.into(),
+                current_password_field_count: 1.into(),
                 ..Default::default()
             };
             MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1

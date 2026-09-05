@@ -21,6 +21,13 @@ pub enum AuthenticatorPickerOpenAvailableWire {
     Ready {
         ok: bool,
         request_id: String,
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "serialization boundary: decodes the finite JavaScript picker deadline timestamp"
+            )
+        )]
         expires_at: f64,
     },
     Locked {
@@ -71,6 +78,13 @@ pub enum AuthenticatorPickerOpenResponse {
     Ready {
         kind: AuthenticatorPickerOpenResponseKind,
         request_id: String,
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: returns the picker deadline timestamp as a JavaScript number"
+            )
+        )]
         expires_at: f64,
     },
     Locked {
