@@ -208,7 +208,7 @@ mod tests {
         )?;
 
         let old_id = SecretId::from_vault_record("secret_old0000001");
-        let mut state = VaultMetaState::from_stored_records(slice::from_ref(&auth));
+        let mut state = VaultMetaState::from_stored_records(slice::from_ref(&auth))?;
         state.secrets.insert(
             old_id.clone(),
             (

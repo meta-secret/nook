@@ -544,7 +544,7 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let keys = nook_core::generate_vault_keys()?;
         let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
-        let meta = VaultMetaState::from_stored_records(&[auth]);
+        let meta = VaultMetaState::from_stored_records(&[auth])?;
 
         let resolved = NookVaultManager::projected_epoch_keys(&meta, &identity)?;
 

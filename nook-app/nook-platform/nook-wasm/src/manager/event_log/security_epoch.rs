@@ -132,11 +132,7 @@ impl NookVaultManager {
         let old_secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let old_members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let records_snapshot = self.stored_records_snapshot();
-        let user_records = records_snapshot
-            .iter()
-            .filter(|record| !nook_core::is_vault_meta_record(record))
-            .cloned()
-            .collect::<Vec<_>>();
+        let user_records = nook_core::user_stored_records(&records_snapshot)?;
         let (new_keys, secrets) =
             nook_core::rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
         let members_checkpoint_hash = members_checkpoint_hash_from_roster(

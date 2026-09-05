@@ -82,9 +82,10 @@ impl<'a> PendingUnlockCompletion<'a> {
         )?;
         let keys = quorum.finalize()?;
         let records = self.manager.stored_records_snapshot();
+        let meta = VaultMetaState::from_stored_records(&records)?;
         self.manager
             .apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
-        self.manager.vault.meta = VaultMetaState::from_stored_records(&records);
+        self.manager.vault.meta = meta;
         #[cfg(test)]
         self.checkpoint
             .before(self.manager, CompletionStep::EventLogRead)
@@ -270,16 +271,16 @@ mod tests {
             Ok(session)
         }
 
-        fn manager(&self) -> NookVaultManager {
+        fn manager(&self) -> anyhow::Result<NookVaultManager> {
             let mut manager = NookVaultManager::new();
             manager.vault.store_id = self.output.store_id.to_string();
             manager.vault.architecture = self.output.architecture.clone();
-            manager.vault.meta = VaultMetaState::from_stored_records(&self.output.stored_records);
+            manager.vault.meta = VaultMetaState::from_stored_records(&self.output.stored_records)?;
             manager.device.identity_private_key = self.identity.secret_string().as_str().to_owned();
             manager.storage.access_token = "configured-test-provider".to_owned();
             manager.event_log.signing_seed = "ephemeral-test-seed".to_owned();
             manager.sync_outbox.access_token = "pending-test-token".to_owned();
-            manager
+            Ok(manager)
         }
 
         fn assert_reset(&self, manager: &NookVaultManager) {
@@ -315,7 +316,7 @@ mod tests {
     #[test]
     fn partial_key_installation_is_reset() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
-        let mut manager = fixture.manager();
+        let mut manager = fixture.manager()?;
         {
             let completion = PendingUnlockCompletion::new(&mut manager);
             Fixture::require_invalid_key(
@@ -337,7 +338,7 @@ mod tests {
     #[test]
     fn dropping_polled_completion_resets_installed_keys() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
-        let mut manager = fixture.manager();
+        let mut manager = fixture.manager()?;
         let quorum = fixture
             .ready_session(&fixture.output.stored_records)?
             .into_quorum(&fixture.identity)
@@ -359,7 +360,7 @@ mod tests {
     #[test]
     fn failure_after_reconstruction_resets_installed_keys() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
-        let mut manager = fixture.manager();
+        let mut manager = fixture.manager()?;
         let quorum = fixture
             .ready_session(&fixture.output.stored_records)?
             .into_quorum(&fixture.identity)
@@ -382,7 +383,7 @@ mod tests {
     fn current_context_mismatch_is_terminal_before_key_installation() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
         for mismatch in 0..4 {
-            let mut manager = fixture.manager();
+            let mut manager = fixture.manager()?;
             match mismatch {
                 0 => manager.vault.store_id = nook_core::generate_store_id()?.to_string(),
                 1 => manager.vault.architecture = VaultArchitecture::default(),
@@ -427,7 +428,7 @@ mod tests {
         #[wasm_bindgen_test]
         async fn invalid_json_and_below_quorum_preserve_the_session() -> anyhow::Result<()> {
             let fixture = Fixture::new()?;
-            let mut manager = fixture.manager();
+            let mut manager = fixture.manager()?;
             let session = fixture.session(&fixture.output.stored_records)?;
             let request = session.request();
             manager.sentinel_unlock = CeremonyState::Active(session);
@@ -450,7 +451,7 @@ mod tests {
         #[wasm_bindgen_test]
         async fn reconstruction_failure_consumes_and_resets_the_ceremony() -> anyhow::Result<()> {
             let fixture = Fixture::new()?;
-            let mut manager = fixture.manager();
+            let mut manager = fixture.manager()?;
             // Valid contributions cannot finalize against an absent original share set.
             manager.sentinel_unlock = CeremonyState::Active(fixture.ready_session(&[])?);
             assert!(manager.finalize_sentinel_unlock().await.is_err());
@@ -468,7 +469,7 @@ mod tests {
                 CompletionStep::CatalogPurge,
                 CompletionStep::AccessResult,
             ] {
-                let mut manager = fixture.manager();
+                let mut manager = fixture.manager()?;
                 // A signed genesis root needs VaultImported before its Sentinel operations.
                 let mut operations = vec![VaultOperation::VaultImported {
                     source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
@@ -516,7 +517,7 @@ mod tests {
                 fixture.assert_reset(&manager);
                 event_db::clear_local_event_store(fixture.output.store_id.as_str()).await?;
             }
-            let mut manager = fixture.manager();
+            let mut manager = fixture.manager()?;
             manager.sentinel_unlock =
                 CeremonyState::Active(fixture.ready_session(&fixture.output.stored_records)?);
             let records = manager
