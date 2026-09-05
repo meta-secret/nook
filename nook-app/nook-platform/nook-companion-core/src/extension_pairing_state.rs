@@ -12,6 +12,7 @@ mod legacy;
 pub use authority::*;
 use std::collections::{HashMap, HashSet};
 
+use crate::{ExtensionEventCount, ExtensionSyncProviderCount};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -78,8 +79,8 @@ pub struct StoredExtensionPairingGrant {
     pub vault_name: String,
     pub approved_at: String,
     pub scopes: Vec<ExtensionConnectScope>,
-    pub sync_provider_count: u32,
-    pub event_count: u32,
+    pub sync_provider_count: ExtensionSyncProviderCount,
+    pub event_count: ExtensionEventCount,
     pub event_log_heads: Vec<String>,
     pub last_local_sync_at: String,
 }
@@ -97,7 +98,7 @@ pub struct ExtensionPairingGrantApproval {
     pub vault_name: String,
     pub approved_at: String,
     pub scopes: Vec<ExtensionConnectScope>,
-    pub sync_provider_count: u32,
+    pub sync_provider_count: ExtensionSyncProviderCount,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
@@ -105,7 +106,7 @@ pub struct ExtensionPairingGrantApproval {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct ImportedExtensionEventLog {
     pub vault_store_id: String,
-    pub event_count: u32,
+    pub event_count: ExtensionEventCount,
     pub heads: Vec<String>,
     pub access_granted: bool,
 }
@@ -147,8 +148,8 @@ pub struct ExtensionReadySetup {
     pub paired_vaults: Vec<String>,
     pub selected_vault_store_id: String,
     pub selected_vault_name: String,
-    pub sync_provider_count: u32,
-    pub event_count: u32,
+    pub sync_provider_count: ExtensionSyncProviderCount,
+    pub event_count: ExtensionEventCount,
     pub event_log_heads: Vec<String>,
     pub last_local_sync_at: String,
 }
@@ -225,7 +226,7 @@ impl ExtensionPairingRecord {
                     || grant.vault_name.trim().is_empty()
                     || grant.approved_at.trim().is_empty()
                     || grant.scopes.is_empty()
-                    || grant.event_count == 0
+                    || grant.event_count.raw() == 0
                     || grant.event_log_heads.is_empty()
                     || grant
                         .event_log_heads
@@ -246,7 +247,7 @@ impl ExtensionPairingRecord {
                         .any(|vault| vault.trim().is_empty())
                     || setup.selected_vault_store_id.trim().is_empty()
                     || setup.selected_vault_name.trim().is_empty()
-                    || setup.event_count == 0
+                    || setup.event_count.raw() == 0
                     || setup.event_log_heads.is_empty()
                     || setup
                         .event_log_heads
@@ -535,11 +536,11 @@ mod tests {
                 vault_name: "Personal".to_owned(),
                 approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
-                sync_provider_count: 1,
+                sync_provider_count: 1.into(),
             },
             imported: ImportedExtensionEventLog {
                 vault_store_id: "store-test".to_owned(),
-                event_count: 2,
+                event_count: 2.into(),
                 heads: vec!["event-2".to_owned()],
                 access_granted: true,
             },
@@ -566,11 +567,11 @@ mod tests {
                 vault_name: "Personal".to_owned(),
                 approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
-                sync_provider_count: 1,
+                sync_provider_count: 1.into(),
             },
             imported: ImportedExtensionEventLog {
                 vault_store_id: "store-other".to_owned(),
-                event_count: 2,
+                event_count: 2.into(),
                 heads: vec!["event-2".to_owned()],
                 access_granted: true,
             },
@@ -591,7 +592,7 @@ mod tests {
             .selected_grant()
             .ok_or_else(|| anyhow::anyhow!("selected refresh must include setup state"))?;
 
-        assert_eq!(refreshed.event_count, 4);
+        assert_eq!(refreshed.event_count, ExtensionEventCount::from(4));
         assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
         assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
         assert_eq!(state.first_grant(), Some(refreshed));
@@ -608,7 +609,7 @@ mod tests {
             .first_grant()
             .ok_or_else(|| anyhow::anyhow!("refresh must include the updated grant"))?;
 
-        assert_eq!(refreshed.event_count, 4);
+        assert_eq!(refreshed.event_count, ExtensionEventCount::from(4));
         assert_eq!(refreshed.event_log_heads, vec!["event-4"]);
         assert_eq!(refreshed.last_local_sync_at, "2026-07-25T00:00:04.000Z");
         assert_eq!(state.selected_grant(), None);
@@ -720,7 +721,7 @@ mod tests {
                 Err(ExtensionPairingStateError::InvalidSetup)
             );
         }
-        setup.event_count = 0;
+        setup.event_count = 0.into();
         assert_eq!(
             ExtensionReadySetup::validate_json(&serde_json::to_string(&setup)?),
             Err(ExtensionPairingStateError::InvalidSetup)
@@ -742,8 +743,8 @@ mod tests {
                 vault_name: "Personal".to_owned(),
                 approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
-                sync_provider_count: 1,
-                event_count: 2,
+                sync_provider_count: 1.into(),
+                event_count: 2.into(),
                 event_log_heads: vec!["event-2".to_owned()],
                 last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
             }
@@ -751,14 +752,14 @@ mod tests {
 
         fn refresh_input(selection: PairingSelection) -> RefreshExtensionPairingGrantInput {
             let mut existing = Self::grant();
-            existing.event_count = 2;
+            existing.event_count = 2.into();
             existing.event_log_heads = vec!["event-2".to_owned()];
             existing.last_local_sync_at = "2026-07-25T00:00:01.000Z".to_owned();
             RefreshExtensionPairingGrantInput {
                 grant: existing,
                 imported: ImportedExtensionEventLog {
                     vault_store_id: "store-test".to_owned(),
-                    event_count: 4,
+                    event_count: 4.into(),
                     heads: vec!["event-4".to_owned()],
                     access_granted: true,
                 },

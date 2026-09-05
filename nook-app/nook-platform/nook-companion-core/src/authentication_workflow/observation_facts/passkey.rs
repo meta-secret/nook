@@ -126,10 +126,10 @@ mod tests {
             ownership: PageControlOwnership::LocallyScoped,
             semantics: PageControlSemantics::Activation,
             authentication_username: AuthenticationUsernameEvidence::Explicit,
-            password_field_count: 0,
-            new_password_field_count: 0,
-            one_time_code_field_count: 0,
-            semantic_submit_control_count: 0,
+            password_field_count: 0.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 0.into(),
             source_origin: "https://login.example.test".to_owned(),
             form_identity: "login-form".to_owned(),
             destination_identity: "https://login.example.test/auth/login".to_owned(),
@@ -164,7 +164,7 @@ mod tests {
 
         let mut get_submitter = passkey_control("Use passkey");
         get_submitter.submission_method = PageControlSubmissionMethod::Get;
-        get_submitter.password_field_count = 1;
+        get_submitter.password_field_count = 1.into();
         assert!(!authentication_passkey_control_candidate_is_safe(
             &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(get_submitter)
         ));
@@ -301,7 +301,7 @@ mod tests {
     #[test]
     fn new_password_passkey_ceremonies_require_explicit_login_assertion_routes() {
         let mut signup = passkey_control("Use passkey");
-        signup.new_password_field_count = 1;
+        signup.new_password_field_count = 1.into();
         signup.form_identity = "auth-form".to_owned();
         signup.destination_identity = "https://login.example.test/auth/passkey".to_owned();
         assert!(!authentication_passkey_control_candidate_is_safe(
@@ -316,7 +316,7 @@ mod tests {
         ));
 
         let mut assertion = passkey_control("Use passkey");
-        assertion.new_password_field_count = 1;
+        assertion.new_password_field_count = 1.into();
         assertion.destination_identity = "https://login.example.test/webauthn/login".to_owned();
         assert!(authentication_passkey_control_candidate_is_safe(
             &AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(assertion)

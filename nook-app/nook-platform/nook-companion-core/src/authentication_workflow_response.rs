@@ -5,6 +5,10 @@ use crate::authentication_workflow::{
     AuthenticationWorkflowAction, AuthenticationWorkflowKind, AuthenticationWorkflowSnapshot,
     AuthenticationWorkflowStage,
 };
+use crate::{
+    AuthenticationSavedLoginAccountCount, AuthenticationWorkflowCurrentStep,
+    AuthenticationWorkflowObservationIndex, AuthenticationWorkflowTotalSteps,
+};
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -28,11 +32,11 @@ impl AuthenticationWorkflowSnapshotWire {
             kind: self.kind,
             stage: self.stage,
             action: self.action,
-            current_step: self.current_step,
-            total_steps: self.total_steps,
+            current_step: AuthenticationWorkflowCurrentStep(self.current_step),
+            total_steps: AuthenticationWorkflowTotalSteps(self.total_steps),
             approval_requirement: self.approval_requirement,
             saved_login_capability: self.saved_login_capability,
-            observation_index: self.observation_index,
+            observation_index: AuthenticationWorkflowObservationIndex(self.observation_index),
         };
         if snapshot.matches_classifier_contract() {
             Some(snapshot)
@@ -130,7 +134,9 @@ pub enum WebsiteLoginMatchAvailabilityWire {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi)]
 pub enum WebsiteLoginMatchAvailability {
-    Ready { count: u32 },
+    Ready {
+        count: AuthenticationSavedLoginAccountCount,
+    },
     Locked,
     Unavailable,
 }
@@ -215,7 +221,9 @@ pub fn decode_authentication_workflow_runtime_response(
                 kind: WebsiteLoginMatchAvailabilityKind::Ready,
                 count,
             },
-        ) => WebsiteLoginMatchAvailability::Ready { count },
+        ) => WebsiteLoginMatchAvailability::Ready {
+            count: count.into(),
+        },
         WebsiteLoginMatchAvailabilityWire::WithoutCount(
             WebsiteLoginMatchAvailabilityWithoutCountWire {
                 kind: WebsiteLoginMatchAvailabilityKind::Locked,
@@ -233,7 +241,9 @@ pub fn decode_authentication_workflow_runtime_response(
     };
     let login_matches_match_workflow = match (login_matches, &workflow) {
         (
-            WebsiteLoginMatchAvailability::Ready { count: 0 }
+            WebsiteLoginMatchAvailability::Ready {
+                count: AuthenticationSavedLoginAccountCount::ZERO,
+            }
             | WebsiteLoginMatchAvailability::Unavailable,
             _,
         ) => true,
