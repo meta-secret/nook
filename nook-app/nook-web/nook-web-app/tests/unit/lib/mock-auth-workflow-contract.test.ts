@@ -2,6 +2,7 @@ import { cleanup, render } from '@testing-library/svelte'
 import { afterEach, expect, test } from 'vitest'
 import PlainLogin from '../../../../nook-web-extension/e2e/mock-auth/src/pages/PlainLogin.svelte'
 import TotpLogin from '../../../../nook-web-extension/e2e/mock-auth/src/pages/TotpLogin.svelte'
+import TotpEnrollVerify from '../../../../nook-web-extension/e2e/mock-auth/src/pages/TotpEnrollVerify.svelte'
 import DetectionLogin from '../../../../nook-web-extension/e2e/mock-auth/src/pages/DetectionLogin.svelte'
 import DetectionOtp from '../../../../nook-web-extension/e2e/mock-auth/src/pages/DetectionOtp.svelte'
 import DetectionSignup from '../../../../nook-web-extension/e2e/mock-auth/src/pages/DetectionSignup.svelte'
@@ -15,6 +16,13 @@ import { classifiedAuthenticationWorkflowObservations } from '../../../../nook-w
 import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
 
 afterEach(cleanup)
+
+test('does not treat authenticator enrollment verification as a login challenge', () => {
+  render(TotpEnrollVerify)
+  expect(classifyRenderedScenario()).toBe(
+    CompanionAuthenticationWorkflowMatchKind.NoMatch,
+  )
+})
 
 function classifyRenderedScenario(): CompanionAuthenticationWorkflowMatchKind {
   const observations = classifiedAuthenticationWorkflowObservations({

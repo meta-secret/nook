@@ -381,29 +381,6 @@ test.describe('Browser 2FA enrollment', () => {
         { issuer: 'Mock Auth', account: 'alice-2fa@nook.test' },
       ])
 
-      await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
-      await expect(
-        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
-      ).toBeVisible({ timeout: 10_000 })
-      await expect(
-        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
-      ).toHaveValue('')
-      const verificationPickerPromise = paired.context.waitForEvent('page')
-      await widget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      const verificationPicker = await verificationPickerPromise
-      await verificationPicker.waitForURL(/intent=authenticator-picker/)
-      await verificationPicker
-        .getByRole('button', { name: /Mock Auth/ })
-        .click()
-      await expect(
-        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
-      ).toHaveValue(/^\d{6}$/, { timeout: 15_000 })
-
-      await enrollPage.getByRole('button', { name: 'Verify' }).click()
-      await expect(enrollPage.getByTestId('mock-auth-success')).toHaveText(
-        'Authentication complete',
-        { timeout: 20_000 },
-      )
       await expect
         .poll(async () => listExtensionAuthenticators(paired.context), {
           timeout: 15_000,
@@ -464,25 +441,6 @@ test.describe('Browser 2FA enrollment', () => {
       await expect(
         enrollWidget.getByText('Authenticator saved to your vault.'),
       ).toBeVisible({ timeout: 20_000 })
-      await enrollPage.getByTestId('mock-auth-enroll-continue-verify').click()
-      await expect(
-        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
-      ).toHaveValue('')
-      const verificationPickerPromise = paired.context.waitForEvent('page')
-      await enrollWidget.getByRole('button', { name: 'Fill 2FA code' }).click()
-      const verificationPicker = await verificationPickerPromise
-      await verificationPicker.waitForURL(/intent=authenticator-picker/)
-      await verificationPicker
-        .getByRole('button', { name: /Mock Auth/ })
-        .click()
-      await expect(
-        enrollPage.getByTestId('mock-auth-enroll-otp-input'),
-      ).toHaveValue(/^\d{6}$/, { timeout: 15_000 })
-      await enrollPage.getByRole('button', { name: 'Verify' }).click()
-      await expect(enrollPage.getByTestId('mock-auth-success')).toHaveText(
-        'Authentication complete',
-        { timeout: 20_000 },
-      )
       await expect
         .poll(async () => listExtensionAuthenticators(paired.context), {
           timeout: 15_000,
