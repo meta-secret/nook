@@ -216,10 +216,11 @@ mod tests {
                 .identities()
                 .is_empty()
         );
-        identity_record::clear_pending_simple_genesis(SimpleGenesisCompletion::Staged {
+        SimpleGenesisCompletion::Staged {
             pending: &pending,
             signing_seed: "staged-signing-seed",
-        })
+        }
+        .clear_pending()
         .await?;
         let published = identity_record::load_identity_directory().await?;
         let identity = published
@@ -293,10 +294,11 @@ mod tests {
         })
         .await?;
 
-        identity_record::clear_pending_simple_genesis(SimpleGenesisCompletion::Staged {
+        SimpleGenesisCompletion::Staged {
             pending: &pending,
             signing_seed: "staged-signing-seed",
-        })
+        }
+        .clear_pending()
         .await?;
         let current = identity_record::load_identity_directory().await?;
         assert_eq!(current.identities().len(), 2);
@@ -408,10 +410,11 @@ mod tests {
         )
         .await?;
 
-        identity_record::clear_pending_simple_genesis(SimpleGenesisCompletion::Staged {
+        SimpleGenesisCompletion::Staged {
             pending: &pending,
             signing_seed: "staged-signing-seed",
-        })
+        }
+        .clear_pending()
         .await?;
 
         let published = identity_record::load_identity_directory().await?;
@@ -477,10 +480,11 @@ mod tests {
         )
         .await?;
 
-        identity_record::clear_pending_simple_genesis(SimpleGenesisCompletion::Staged {
+        SimpleGenesisCompletion::Staged {
             pending: &pending,
             signing_seed: "staged-signing-seed",
-        })
+        }
+        .clear_pending()
         .await?;
 
         let published = identity_record::load_identity_directory().await?;
@@ -553,12 +557,12 @@ mod tests {
         )
         .await?;
 
-        let result =
-            identity_record::clear_pending_simple_genesis(SimpleGenesisCompletion::Staged {
-                pending: &pending,
-                signing_seed: "candidate-overlap-seed",
-            })
-            .await;
+        let result = SimpleGenesisCompletion::Staged {
+            pending: &pending,
+            signing_seed: "candidate-overlap-seed",
+        }
+        .clear_pending()
+        .await;
 
         assert!(matches!(
             result,

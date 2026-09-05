@@ -14,7 +14,6 @@ mod reconciliation;
 mod recovery;
 pub(crate) mod simple_genesis;
 mod staged_genesis;
-pub(crate) use genesis_cleanup::clear_pending_simple_genesis;
 pub(crate) use genesis_flow::SimpleGenesisCompletion;
 pub(crate) use handoff::{
     ExistingVaultImportCommit, IdentityHandoffCommit, commit_authenticated_identity_handoff,
@@ -896,10 +895,11 @@ mod tests {
         assert_eq!(migrated.identities().len(), 1);
         assert_eq!(staged.base_directory.identities().len(), 1);
         assert_eq!(staged.directory.identities().len(), 1);
-        clear_pending_simple_genesis(SimpleGenesisCompletion::Staged {
+        SimpleGenesisCompletion::Staged {
             pending: &normalized,
             signing_seed: "staged-migration-signing-seed",
-        })
+        }
+        .clear_pending()
         .await?;
         let published = load_identity_directory().await?;
         assert!(
