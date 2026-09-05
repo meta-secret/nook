@@ -1,3 +1,8 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
 use nook_core::{AgeArmoredCiphertext, SecretValue, SymmetricKey, VaultOperation};
@@ -11,22 +16,35 @@ type ImportVersions = HashMap<
     Vec<(nook_core::StoredSecretRecord, nook_core::SecretFingerprint)>,
 >;
 
-fn group_import_fingerprints(
-    dedup_state: Vec<(
-        nook_core::StoredSecretRecord,
-        nook_core::SecretFingerprint,
-        nook_core::SecretFingerprint,
-    )>,
-    incoming_count: usize,
-) -> ImportVersions {
-    let mut by_identity = HashMap::with_capacity(dedup_state.len() + incoming_count);
-    for (record, identity_fingerprint, fingerprint) in dedup_state {
+struct CoalescedSecretImport<'a> {
+    items: Vec<SecretValue>,
+    duplicates: usize,
+    secrets_key: &'a SymmetricKey,
+}
+
+struct PreparedSecretImport {
+    operations: Vec<VaultOperation>,
+    skipped_duplicates: usize,
+}
+
+impl CoalescedSecretImport<'_> {
+    fn group_import_fingerprints(
+        dedup_state: Vec<(
+            nook_core::StoredSecretRecord,
+            nook_core::SecretFingerprint,
+            nook_core::SecretFingerprint,
+        )>,
+        incoming_count: usize,
+    ) -> ImportVersions {
+        let mut by_identity = HashMap::with_capacity(dedup_state.len() + incoming_count);
+        for (record, identity_fingerprint, fingerprint) in dedup_state {
+            by_identity
+                .entry(identity_fingerprint)
+                .or_insert_with(Vec::new)
+                .push((record, fingerprint));
+        }
         by_identity
-            .entry(identity_fingerprint)
-            .or_insert_with(Vec::new)
-            .push((record, fingerprint));
     }
-    by_identity
 }
 
 enum ImportItemOutcome {
@@ -34,99 +52,143 @@ enum ImportItemOutcome {
     Operation(nook_core::VaultOperation),
 }
 
-fn coalesce_import_items(
-    items: Vec<nook_core::SecretValue>,
-    secrets_key: &nook_core::SymmetricKey,
-) -> Result<(Vec<nook_core::SecretValue>, usize), NookError> {
-    let mut coalesced: Vec<nook_core::SecretValue> = Vec::with_capacity(items.len());
-    let mut indexes: HashMap<nook_core::SecretFingerprint, usize> =
-        HashMap::with_capacity(items.len());
-    let mut duplicates = 0;
-    for mut value in items {
-        let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
-        if let Some(index) = indexes.get(&fingerprint).copied() {
-            let enriched = nook_core::enrich_secret(&coalesced[index], &value);
-            coalesced[index].zeroize_plaintext();
-            value.zeroize_plaintext();
-            coalesced[index] = enriched;
-            duplicates += 1;
-        } else {
-            indexes.insert(fingerprint, coalesced.len());
-            coalesced.push(value);
+impl<'a> CoalescedSecretImport<'a> {
+    fn new(
+        items: Vec<nook_core::SecretValue>,
+        secrets_key: &'a SymmetricKey,
+    ) -> Result<Self, NookError> {
+        let mut coalesced: Vec<nook_core::SecretValue> = Vec::with_capacity(items.len());
+        let mut indexes: HashMap<nook_core::SecretFingerprint, usize> =
+            HashMap::with_capacity(items.len());
+        let mut duplicates = 0;
+        for mut value in items {
+            let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
+            if let Some(index) = indexes.get(&fingerprint).copied() {
+                let enriched = nook_core::enrich_secret(&coalesced[index], &value);
+                coalesced[index].zeroize_plaintext();
+                value.zeroize_plaintext();
+                coalesced[index] = enriched;
+                duplicates += 1;
+            } else {
+                indexes.insert(fingerprint, coalesced.len());
+                coalesced.push(value);
+            }
         }
-    }
-    Ok((coalesced, duplicates))
-}
-
-fn reconcile_import_item(
-    mut value: nook_core::SecretValue,
-    existing_by_identity: &ImportVersions,
-    seen_versions: &mut HashSet<nook_core::SecretFingerprint>,
-    crypto: &nook_core::VaultCrypto,
-    secrets_key: &nook_core::SymmetricKey,
-) -> Result<ImportItemOutcome, NookError> {
-    let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key)?;
-    let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
-    if let Some((record, _)) = existing_by_identity
-        .get(&identity_fingerprint)
-        .and_then(|records| {
-            records
-                .iter()
-                .find(|(_, existing)| existing == &fingerprint)
+        Ok(Self {
+            items: coalesced,
+            duplicates,
+            secrets_key,
         })
-    {
-        let secret_type = record.secret_type.ok_or_else(|| {
-            NookError::Database(format!("Secret {} is missing its type.", record.key))
-        })?;
-        let ciphertext = AgeArmoredCiphertext::parse(record.value.as_str())?;
-        let mut plaintext = crypto.decrypt_value(&ciphertext)?;
-        let mut existing = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
-        plaintext.zeroize_plaintext();
-        let mut enriched = nook_core::enrich_secret(&existing, &value);
-        let outcome = if enriched == existing {
-            ImportItemOutcome::Duplicate
-        } else {
-            let mut yaml = enriched.to_yaml()?;
-            let ciphertext = crypto.encrypt_value(yaml.as_str())?;
-            yaml.zeroize_plaintext();
-            let new_id = nook_core::generate_secret_id()?;
-            ImportItemOutcome::Operation(VaultOperation::SecretReplaced {
-                old_id: record.key.clone(),
-                new_secret: nook_core::encrypted_secret_from_armored(
-                    &new_id,
+    }
+
+    fn reconcile_import_item(
+        mut value: nook_core::SecretValue,
+        existing_by_identity: &ImportVersions,
+        seen_versions: &mut HashSet<nook_core::SecretFingerprint>,
+        crypto: &nook_core::VaultCrypto,
+        secrets_key: &nook_core::SymmetricKey,
+    ) -> Result<ImportItemOutcome, NookError> {
+        let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key)?;
+        let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
+        if let Some((record, _)) =
+            existing_by_identity
+                .get(&identity_fingerprint)
+                .and_then(|records| {
+                    records
+                        .iter()
+                        .find(|(_, existing)| existing == &fingerprint)
+                })
+        {
+            let secret_type = record.secret_type.ok_or_else(|| {
+                NookError::Database(format!("Secret {} is missing its type.", record.key))
+            })?;
+            let ciphertext = AgeArmoredCiphertext::parse(record.value.as_str())?;
+            let mut plaintext = crypto.decrypt_value(&ciphertext)?;
+            let mut existing = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
+            plaintext.zeroize_plaintext();
+            let mut enriched = nook_core::enrich_secret(&existing, &value);
+            let outcome = if enriched == existing {
+                ImportItemOutcome::Duplicate
+            } else {
+                let mut yaml = enriched.to_yaml()?;
+                let ciphertext = crypto.encrypt_value(yaml.as_str())?;
+                yaml.zeroize_plaintext();
+                let new_id = nook_core::generate_secret_id()?;
+                ImportItemOutcome::Operation(VaultOperation::SecretReplaced {
+                    old_id: record.key.clone(),
+                    new_secret: nook_core::encrypted_secret_from_armored(
+                        &new_id,
+                        secret_type,
+                        ciphertext.as_str(),
+                        identity_fingerprint,
+                        fingerprint,
+                    ),
+                })
+            };
+            existing.zeroize_plaintext();
+            enriched.zeroize_plaintext();
+            value.zeroize_plaintext();
+            return Ok(outcome);
+        }
+        if !seen_versions.insert(fingerprint.clone()) {
+            value.zeroize_plaintext();
+            return Ok(ImportItemOutcome::Duplicate);
+        }
+        let mut yaml = value.to_yaml()?;
+        let secret_type = value.secret_type();
+        let ciphertext = crypto.encrypt_value(yaml.as_str())?;
+        yaml.zeroize_plaintext();
+        value.zeroize_plaintext();
+        let id = nook_core::generate_secret_id()?;
+        Ok(ImportItemOutcome::Operation(
+            VaultOperation::SecretCreated {
+                secret: nook_core::encrypted_secret_from_armored(
+                    &id,
                     secret_type,
                     ciphertext.as_str(),
                     identity_fingerprint,
                     fingerprint,
                 ),
-            })
-        };
-        existing.zeroize_plaintext();
-        enriched.zeroize_plaintext();
-        value.zeroize_plaintext();
-        return Ok(outcome);
+            },
+        ))
     }
-    if !seen_versions.insert(fingerprint.clone()) {
-        value.zeroize_plaintext();
-        return Ok(ImportItemOutcome::Duplicate);
+
+    fn prepare(
+        self,
+        dedup_state: Vec<(
+            nook_core::StoredSecretRecord,
+            nook_core::SecretFingerprint,
+            nook_core::SecretFingerprint,
+        )>,
+        crypto: &nook_core::VaultCrypto,
+    ) -> Result<PreparedSecretImport, NookError> {
+        let existing_by_identity = Self::group_import_fingerprints(dedup_state, self.items.len());
+        let mut seen_versions = existing_by_identity
+            .values()
+            .flatten()
+            .map(|(_, fingerprint)| fingerprint.clone())
+            .collect::<HashSet<_>>();
+        let mut skipped_duplicates = self.duplicates;
+        let mut operations = Vec::with_capacity(self.items.len());
+
+        for value in self.items {
+            match Self::reconcile_import_item(
+                value,
+                &existing_by_identity,
+                &mut seen_versions,
+                crypto,
+                self.secrets_key,
+            )? {
+                ImportItemOutcome::Duplicate => skipped_duplicates += 1,
+                ImportItemOutcome::Operation(operation) => operations.push(operation),
+            }
+        }
+
+        Ok(PreparedSecretImport {
+            operations,
+            skipped_duplicates,
+        })
     }
-    let mut yaml = value.to_yaml()?;
-    let secret_type = value.secret_type();
-    let ciphertext = crypto.encrypt_value(yaml.as_str())?;
-    yaml.zeroize_plaintext();
-    value.zeroize_plaintext();
-    let id = nook_core::generate_secret_id()?;
-    Ok(ImportItemOutcome::Operation(
-        VaultOperation::SecretCreated {
-            secret: nook_core::encrypted_secret_from_armored(
-                &id,
-                secret_type,
-                ciphertext.as_str(),
-                identity_fingerprint,
-                fingerprint,
-            ),
-        },
-    ))
 }
 
 #[derive(Clone, Copy)]
@@ -211,31 +273,25 @@ impl NookVaultManager {
         }
 
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
-        let (items, within_batch_duplicates) = coalesce_import_items(items, &secrets_key)?;
+        let coalesced = CoalescedSecretImport::new(items, &secrets_key)?;
         let dedup_state = self.live_secret_dedup_state().await?;
         let crypto = self.vault.crypto.get()?;
-        let existing_by_identity = group_import_fingerprints(dedup_state, items.len());
-        let mut seen_versions = existing_by_identity
-            .values()
-            .flatten()
-            .map(|(_, fingerprint)| fingerprint.clone())
-            .collect::<HashSet<_>>();
-        let mut skipped_duplicates = within_batch_duplicates;
-        let mut operations = Vec::with_capacity(items.len());
+        let prepared = coalesced.prepare(dedup_state, crypto)?;
+        prepared.commit(self, source, skipped_unsupported).await
+    }
+}
 
-        for value in items {
-            match reconcile_import_item(
-                value,
-                &existing_by_identity,
-                &mut seen_versions,
-                crypto,
-                &secrets_key,
-            )? {
-                ImportItemOutcome::Duplicate => skipped_duplicates += 1,
-                ImportItemOutcome::Operation(operation) => operations.push(operation),
-            }
-        }
-
+impl PreparedSecretImport {
+    async fn commit(
+        self,
+        manager: &mut NookVaultManager,
+        source: SecretImportSource,
+        skipped_unsupported: usize,
+    ) -> Result<NookImportResult, JsError> {
+        let Self {
+            operations,
+            skipped_duplicates,
+        } = self;
         let imported = operations
             .iter()
             .filter(|operation| {
@@ -246,9 +302,9 @@ impl NookVaultManager {
             })
             .count();
         if !operations.is_empty() {
-            self.append_vault_operations(operations).await?;
+            manager.append_vault_operations(operations).await?;
         }
-        let _ = self.status.tx.send("READY".to_owned());
+        let _ = manager.status.tx.send("READY".to_owned());
         tracing::info!(
             scope = "wasm-secrets",
             action = source.action(),
@@ -492,9 +548,113 @@ impl NookVaultManager {
 #[allow(clippy::items_after_test_module)]
 mod import_tests {
     use super::*;
+    use nook_core::{
+        SecretFingerprint, SecureNoteSecret, StoredRecordPayload, StoredSecretRecord, VaultCrypto,
+    };
 
-    fn key() -> anyhow::Result<nook_core::SymmetricKey> {
-        Ok(SymmetricKey::parse(&"ab".repeat(32))?)
+    struct ImportFixture {
+        key: SymmetricKey,
+        crypto: VaultCrypto,
+        record: StoredSecretRecord,
+        identity: SecretFingerprint,
+        version: SecretFingerprint,
+    }
+
+    impl ImportFixture {
+        fn value(note: &str) -> SecretValue {
+            SecretValue::SecureNote(SecureNoteSecret {
+                title: "Recovery".to_owned(),
+                note: note.to_owned(),
+            })
+        }
+
+        fn new() -> anyhow::Result<Self> {
+            let key = SymmetricKey::parse(&"ab".repeat(32))?;
+            let crypto = VaultCrypto::new(&key)?;
+            let mut value = Self::value("same note\n\n## LastPass\n- group: Personal");
+            let identity = nook_core::secret_identity_fingerprint(&value, &key)?;
+            let version = nook_core::secret_fingerprint(&value, &key)?;
+            let mut yaml = value.to_yaml()?;
+            let encrypted = crypto.encrypt_value(yaml.as_str())?;
+            yaml.zeroize_plaintext();
+            let record = StoredSecretRecord {
+                key: nook_core::generate_secret_id()?,
+                secret_type: Some(value.secret_type()),
+                value: StoredRecordPayload::from_age_armored(encrypted),
+            };
+            value.zeroize_plaintext();
+            Ok(Self {
+                key,
+                crypto,
+                record,
+                identity,
+                version,
+            })
+        }
+
+        fn prepare(&self, note: &str) -> Result<PreparedSecretImport, NookError> {
+            CoalescedSecretImport::new(vec![Self::value(note)], &self.key)?.prepare(
+                vec![(
+                    self.record.clone(),
+                    self.identity.clone(),
+                    self.version.clone(),
+                )],
+                &self.crypto,
+            )
+        }
+    }
+
+    #[test]
+    fn exact_existing_duplicate_prepares_no_operations() -> anyhow::Result<()> {
+        let fixture = ImportFixture::new()?;
+        let prepared = fixture.prepare("same note\n\n## LastPass\n- group: Personal")?;
+        assert_eq!(prepared.skipped_duplicates, 1);
+        assert!(prepared.operations.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn metadata_enrichment_prepares_an_encrypted_replacement() -> anyhow::Result<()> {
+        let fixture = ImportFixture::new()?;
+        let prepared = fixture.prepare("same note\n\n## Proton Pass\n- vault: Personal")?;
+        assert_eq!(prepared.skipped_duplicates, 0);
+        let [VaultOperation::SecretReplaced { old_id, new_secret }] =
+            prepared.operations.as_slice()
+        else {
+            anyhow::bail!("Expected exactly one replacement");
+        };
+        assert_eq!(old_id, &fixture.record.key);
+        assert_ne!(old_id, &new_secret.id);
+        let ciphertext = AgeArmoredCiphertext::parse(new_secret.ciphertext.as_str())?;
+        let mut plaintext = fixture.crypto.decrypt_value(&ciphertext)?;
+        let mut value = SecretValue::from_yaml_str(new_secret.secret_type, plaintext.as_str())?;
+        plaintext.zeroize_plaintext();
+        let SecretValue::SecureNote(note) = &value else {
+            anyhow::bail!("Replacement changed secret type");
+        };
+        assert!(note.note.contains("## LastPass"));
+        assert!(note.note.contains("## Proton Pass"));
+        value.zeroize_plaintext();
+        Ok(())
+    }
+
+    #[test]
+    fn malformed_existing_record_rejects_preparation() -> anyhow::Result<()> {
+        let mut fixture = ImportFixture::new()?;
+        fixture.record.secret_type = None;
+        let original = fixture.record.clone();
+        match fixture.prepare("same note\n\n## LastPass\n- group: Personal") {
+            Err(NookError::Database(message)) => {
+                assert_eq!(
+                    message,
+                    format!("Secret {} is missing its type.", original.key)
+                );
+            }
+            Err(error) => return Err(error.into()),
+            Ok(_) => anyhow::bail!("Malformed existing record produced a prepared import"),
+        }
+        assert_eq!(fixture.record, original);
+        Ok(())
     }
 
     #[test]
@@ -510,7 +670,10 @@ mod import_tests {
             }),
         ];
 
-        let (items, duplicates) = coalesce_import_items(items, &key()?)?;
+        let key = SymmetricKey::parse(&"ab".repeat(32))?;
+        let CoalescedSecretImport {
+            items, duplicates, ..
+        } = CoalescedSecretImport::new(items, &key)?;
         assert_eq!(duplicates, 1);
         assert_eq!(items.len(), 1);
         let SecretValue::SecureNote(note) = &items[0] else {
@@ -533,6 +696,10 @@ mod prepared_page_tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn default_page_restores_crypto_from_the_cached_projection() -> Result<(), JsError> {
         let identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();

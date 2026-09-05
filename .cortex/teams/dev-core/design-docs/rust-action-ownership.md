@@ -6,6 +6,9 @@ Rust action graphs must express legal sequencing through types.
 This is the highest-priority Rust modeling policy for new or changed action flows.
 Rollout proceeds through focused migrations rather than a repository-wide rewrite.
 
+This document is Rust's language-specific application of the repository-wide
+[function ownership rule](../../../shared/dynamic-skills/function-ownership.md).
+
 Domain newtypes explain what a value means. An owning type explains where an
 operation belongs. Typestate additionally limits which operations are available
 at each stage. These mechanisms complement one another.

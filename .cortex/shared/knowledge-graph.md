@@ -29,6 +29,7 @@ These catalogs route cross-team lookup without transferring ownership.
 
 These rules apply across two or more implementation teams.
 
+- [Function ownership](dynamic-skills/function-ownership.md)
 - [Prefer popular libraries](dynamic-skills/prefer-popular-libraries.md)
 - [Source file size](dynamic-skills/source-file-size.md)
 - [Testing pyramid and regression coverage](dynamic-skills/testing-pyramid-and-regression.md)
