@@ -93,12 +93,17 @@ node_deps_start = rust_product.index("FROM wasm-coverage-toolchain AS builder-wa
 node_source_join = rust_product.index("FROM builder-wasm-node-deps AS builder-wasm-handoff")
 node_coverage_execution = rust_product.index("nook-sccache-report wasm-node-test-and-coverage")
 node_coverage_clean = rust_product.index('llvm-cov clean --workspace', node_deps_start)
+node_coverage_environment = rust_product.index('llvm-cov show-env --sh)', node_deps_start)
+node_browser_coverage_environment = rust_product.index(
+  'llvm-cov show-env --sh --target wasm32-unknown-unknown',
+  node_deps_start
+)
 node_coverage_prewarm = rust_product.index(
-  "llvm-cov --no-run --release -p nook-wasm --no-report",
+  'test --release -p nook-wasm --no-run',
   node_deps_start
 )
 node_browser_coverage_prewarm = rust_product.index(
-  "llvm-cov --no-run --no-clean --target wasm32-unknown-unknown",
+  'test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run',
   node_deps_start
 )
 unless !docker_setup_cache_script.include?("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE") &&
@@ -109,10 +114,16 @@ unless !docker_setup_cache_script.include?("GHA_CACHE_EXACT_RUST_WASM_NODE_AVAIL
        node_deps_start && node_source_join && node_coverage_execution &&
        rust_product.index("apt-get install -y --no-install-recommends clang unzip", node_deps_start) < node_source_join &&
        rust_product.index("bunx playwright@${PLAYWRIGHT_VERSION} install-deps chromium", node_deps_start) < node_source_join &&
-       node_coverage_clean && node_coverage_prewarm && node_browser_coverage_prewarm &&
-       node_coverage_clean < node_coverage_prewarm && node_coverage_prewarm < node_source_join &&
+       node_coverage_clean && node_coverage_environment && node_browser_coverage_environment &&
+       node_coverage_prewarm && node_browser_coverage_prewarm &&
+       node_coverage_clean < node_coverage_environment && node_coverage_environment < node_coverage_prewarm &&
+       node_coverage_prewarm < node_browser_coverage_environment &&
+       node_browser_coverage_environment < node_browser_coverage_prewarm &&
        node_browser_coverage_prewarm < node_source_join &&
+       rust_product[node_deps_start...node_source_join].scan("CARGO_TARGET_DIR=target/llvm-cov-target").length == 4 &&
+       !rust_product[node_deps_start...node_source_join].include?("RUSTC_WRAPPER=") &&
        !rust_product[node_deps_start...node_source_join].include?("llvm-cov test") &&
+       !rust_product[node_deps_start...node_source_join].include?("llvm-cov --no-run") &&
        node_source_join < node_coverage_execution
   raise "WASM Node must reuse source-free dependency caches, never a terminal source cache"
 end

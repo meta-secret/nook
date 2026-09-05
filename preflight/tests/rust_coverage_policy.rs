@@ -111,14 +111,22 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(
         wasm_node_deps
             .split_once("llvm-cov clean --workspace")
-            .is_some_and(
-                |(_, later)| later.contains("llvm-cov --no-run --release -p nook-wasm --no-report")
-            )
+            .is_some_and(|(_, later)| later.contains("llvm-cov show-env --sh"))
     );
+    assert!(wasm_node_deps.contains("llvm-cov show-env --sh --target wasm32-unknown-unknown"));
+    assert_eq!(
+        wasm_node_deps
+            .matches("CARGO_TARGET_DIR=target/llvm-cov-target")
+            .count(),
+        4
+    );
+    assert!(wasm_node_deps.contains("test --release -p nook-wasm --no-run"));
     assert!(wasm_node_deps.contains(
-        "llvm-cov --no-run --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests"
+        "test --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests --no-run"
     ));
     assert!(!wasm_node_deps.contains("llvm-cov test"));
+    assert!(!wasm_node_deps.contains("llvm-cov --no-run"));
+    assert!(!wasm_node_deps.contains("RUSTC_WRAPPER="));
     let wasm_coverage_stage = product
         .split_once("FROM builder-wasm-node-deps AS builder-wasm-handoff")
         .and_then(|(_, remainder)| {
