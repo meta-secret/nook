@@ -3,6 +3,21 @@
 use crate::errors::{ValidationError, ValidationResult};
 use bip39::{Language, Mnemonic};
 
+/// A supported BIP-39 mnemonic word count inferred from normalized input.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bip39MnemonicWordCount(u32);
+
+impl Bip39MnemonicWordCount {
+    pub const WORDS_12: Self = Self(12);
+    pub const WORDS_24: Self = Self(24);
+}
+
+impl From<Bip39MnemonicWordCount> for u32 {
+    fn from(value: Bip39MnemonicWordCount) -> Self {
+        value.0
+    }
+}
+
 /// Validates a normalized English BIP-39 mnemonic (12 or 24 words).
 pub fn validate_bip39_mnemonic(mnemonic: &str) -> ValidationResult<()> {
     let normalized = mnemonic.trim();
@@ -69,10 +84,10 @@ pub fn join_bip39_words(words: &[String]) -> String {
 }
 
 #[must_use]
-pub fn infer_bip39_mnemonic_length(text: &str) -> Option<u32> {
+pub fn infer_bip39_mnemonic_length(text: &str) -> Option<Bip39MnemonicWordCount> {
     match parse_bip39_words(text).len() {
-        12 => Some(12),
-        24 => Some(24),
+        12 => Some(Bip39MnemonicWordCount::WORDS_12),
+        24 => Some(Bip39MnemonicWordCount::WORDS_24),
         _ => None,
     }
 }
@@ -168,13 +183,13 @@ mod tests {
             "abandon ability able about above absent absorb abstract absurd abuse access accident",
         )
         .ok_or_else(|| io::Error::other("12-word mnemonic length must be recognized"))?;
-        assert_eq!(twelve_word_length, 12);
+        assert_eq!(u32::from(twelve_word_length), 12);
         let twenty_four_word_length = infer_bip39_mnemonic_length(
             "abandon ability able about above absent absorb abstract absurd abuse access accident \
              account accuse achieve acid acoustic acquire across act action actor actress actual",
         )
         .ok_or_else(|| io::Error::other("24-word mnemonic length must be recognized"))?;
-        assert_eq!(twenty_four_word_length, 24);
+        assert_eq!(u32::from(twenty_four_word_length), 24);
         assert_eq!(infer_bip39_mnemonic_length("abandon ability"), None);
         Ok(())
     }
