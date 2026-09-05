@@ -188,7 +188,8 @@ impl WebsiteLoginOptions {
         Ok(match self {
             WebsiteLoginOptions::Ready { accounts, .. } => WebsiteLoginMatchAvailability::Ready {
                 count: u32::try_from(accounts.len())
-                    .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?,
+                    .map_err(|_| WebsiteLoginOptionsDecodeError::Malformed)?
+                    .into(),
             },
             WebsiteLoginOptions::Locked { .. } => WebsiteLoginMatchAvailability::Locked,
             WebsiteLoginOptions::Unavailable { .. } | WebsiteLoginOptions::Rejected { .. } => {
@@ -236,7 +237,7 @@ mod tests {
         for (serialized, expected) in [
             (
                 r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.com","websiteHost":"example.com"}]}"#,
-                WebsiteLoginMatchAvailability::Ready { count: 1 },
+                WebsiteLoginMatchAvailability::Ready { count: 1.into() },
             ),
             (
                 r#"{"ok":true,"status":"locked"}"#,
@@ -271,13 +272,13 @@ mod tests {
         );
         assert_eq!(
             empty.into_match_availability()?,
-            WebsiteLoginMatchAvailability::Ready { count: 0 }
+            WebsiteLoginMatchAvailability::Ready { count: 0.into() }
         );
         let blank_presentation = r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch","accounts":[{"vaultStoreId":"vault","vaultName":"","secretId":"secret","username":"","websiteUrl":"","websiteHost":""}]}"#;
         let response = WebsiteLoginOptions::from_json(blank_presentation)?;
         assert_eq!(
             response.into_match_availability()?,
-            WebsiteLoginMatchAvailability::Ready { count: 1 }
+            WebsiteLoginMatchAvailability::Ready { count: 1.into() }
         );
         for invalid in [
             blank_presentation.replace("\"epoch\"", "\" \""),

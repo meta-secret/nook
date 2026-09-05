@@ -17,6 +17,13 @@ pub enum LoginPickerOpenAvailableWire {
         ok: bool,
         request_id: String,
         #[serde(deserialize_with = "deserialize_finite_f64")]
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "serialization boundary: decodes the finite JavaScript login-picker deadline timestamp"
+            )
+        )]
         expires_at: f64,
     },
     Locked {
@@ -53,6 +60,13 @@ pub enum LoginPickerOpenResponse {
     Ready {
         kind: LoginPickerOpenResponseKind,
         request_id: String,
+        #[cfg_attr(
+            dylint_lib = "nook_domain_api",
+            expect(
+                raw_numeric_public_api,
+                reason = "FFI boundary: returns the login-picker deadline timestamp as a JavaScript number"
+            )
+        )]
         expires_at: f64,
     },
     Locked {

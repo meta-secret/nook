@@ -164,6 +164,12 @@ pub use nook_companion_core::{
     normalize_simple_vault_base_url, page_has_backup_code_hint, propose_website_passkey,
     sentinel_vault_match_patterns, simple_vault_match_pattern, simple_vault_url,
 };
+pub use nook_companion_core::{
+    AuthenticationFieldCount, AuthenticationPasskeyAccountCount,
+    AuthenticationSavedLoginAccountCount, AuthenticationSemanticSubmitControlCount,
+    AuthenticationWorkflowCurrentStep, AuthenticationWorkflowObservationIndex,
+    AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
+};
 pub use onepassword_import::{
     OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
 };

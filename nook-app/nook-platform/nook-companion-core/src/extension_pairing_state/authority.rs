@@ -144,8 +144,8 @@ mod tests {
                 vault_name: "Personal".to_owned(),
                 approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
-                sync_provider_count: 1,
-                event_count: 2,
+                sync_provider_count: 1.into(),
+                event_count: 2.into(),
                 event_log_heads: vec!["event-2".to_owned()],
                 last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
             }

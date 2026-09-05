@@ -113,8 +113,8 @@ impl ExtensionPairingState {
                         vault_name: grant.vault_name,
                         approved_at: grant.approved_at,
                         scopes: grant.scopes,
-                        sync_provider_count: grant.sync_provider_count,
-                        event_count: setup.event_count,
+                        sync_provider_count: grant.sync_provider_count.into(),
+                        event_count: setup.event_count.into(),
                         event_log_heads: setup.event_log_heads.clone(),
                         last_local_sync_at: setup.last_local_sync_at.clone(),
                     }
@@ -135,7 +135,7 @@ impl ExtensionPairingState {
             });
         }
         let selected = selected.ok_or(ExtensionPairingStateError::InvalidLegacyState)?;
-        if setup.sync_provider_count != selected.sync_provider_count {
+        if setup.sync_provider_count != selected.sync_provider_count.raw() {
             return Err(ExtensionPairingStateError::InvalidLegacyState);
         }
         let migrated_vault_names: HashSet<_> = entries
@@ -179,7 +179,7 @@ mod tests {
             .ok_or_else(|| anyhow::anyhow!("migrated state must select its grant"))?;
 
         assert_eq!(selected.vault_store_id, "store-test");
-        assert_eq!(selected.event_count, 2);
+        assert_eq!(selected.event_count, crate::ExtensionEventCount::from(2));
         assert_eq!(selected.event_log_heads, vec!["event-2"]);
         assert_eq!(selected.last_local_sync_at, "2026-07-25T00:00:01.000Z");
         migrated.validate()?;
@@ -194,7 +194,7 @@ mod tests {
         let mut team = Fixture::grant();
         team.vault_store_id = "store-team".to_owned();
         team.vault_name = "Team".to_owned();
-        team.event_count = 7;
+        team.event_count = 7.into();
         team.event_log_heads = vec!["event-team-7".to_owned()];
         records.insert(
             StoredExtensionPairingGrant::storage_key_for(&team.vault_store_id),
@@ -300,8 +300,8 @@ mod tests {
                 vault_name: "Personal".to_owned(),
                 approved_at: "2026-07-25T00:00:00.000Z".to_owned(),
                 scopes: vec![ExtensionConnectScope::PasswordFilling],
-                sync_provider_count: 1,
-                event_count: 2,
+                sync_provider_count: 1.into(),
+                event_count: 2.into(),
                 event_log_heads: vec!["event-2".to_owned()],
                 last_local_sync_at: "2026-07-25T00:00:01.000Z".to_owned(),
             }

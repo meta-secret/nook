@@ -401,8 +401,8 @@ pub(crate) fn authentication_passkey_control_is_safe(
     ) else {
         return false;
     };
-    let has_authentication_context = observation.password_field_count > 0
-        || observation.one_time_code_field_count > 0
+    let has_authentication_context = observation.password_field_count.raw() > 0
+        || observation.one_time_code_field_count.raw() > 0
         || matches!(
             observation.authentication_username,
             AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -432,7 +432,7 @@ fn passkey_new_password_ceremony_lacks_assertion_state(
     observation: &AuthenticationAdvanceControlObservation,
     destination: &CanonicalControlDestination,
 ) -> bool {
-    observation.new_password_field_count > 0
+    observation.new_password_field_count.raw() > 0
         && !form_identity::identity_indicates_explicit_login_route(&destination.path_identity)
         && !form_identity::identity_indicates_explicit_login_route(&destination.route_identity)
 }
