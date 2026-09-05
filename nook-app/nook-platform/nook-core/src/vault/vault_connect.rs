@@ -226,8 +226,8 @@ pub fn apply_member_records(state: &mut VaultMetaState, member_records: &[Stored
 
 /// Read unlock metadata from vault YAML without decrypting secrets.
 pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultContentMetadata> {
-    let unlock = crate::read_vault_unlock(content).unwrap_or(VaultUnlock::Keys);
-    let password_entries = crate::read_vault_password_entries(content).unwrap_or_default();
+    let unlock = crate::read_vault_unlock(content)?;
+    let password_entries = crate::read_vault_password_entries(content)?;
     let store_id = match crate::read_vault_store_id(content)? {
         VaultStoreIdentity::Assigned(store_id) => store_id,
         VaultStoreIdentity::Unassigned => {
@@ -306,6 +306,20 @@ mod tests {
     fn empty_content_requires_genesis() -> VaultResult<()> {
         assert!(content_requires_genesis("", false)?);
         assert!(content_requires_genesis("  ", false)?);
+        Ok(())
+    }
+
+    #[test]
+    fn capture_rejects_unsupported_password_envelope_version() -> anyhow::Result<()> {
+        let content = "schema_version: 1\nstore_id: store_testtoken11\npassword_entries:\n  - id: pwdentry001\n    label: Recovery\n    created_at: 2026-06-23T00:00:00Z\n    envelope:\n      version: 3\n      kdf: scrypt\n      work_factor: 18\n      ciphertext: invalid\n";
+        let error = capture_vault_unlock_from_content(content)
+            .err()
+            .ok_or_else(|| anyhow::anyhow!("vault metadata capture must reject version 3"))?;
+
+        assert!(matches!(
+            error,
+            VaultError::VaultFormat(VaultFormatError::YamlParseUnlock(_))
+        ));
         Ok(())
     }
 

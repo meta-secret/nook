@@ -479,7 +479,7 @@ mod tests {
 
     fn password_envelope() -> PasswordEnvelope {
         PasswordEnvelope {
-            version: 1,
+            version: crate::PasswordEnvelopeVersion::LEGACY,
             kdf: "scrypt".to_owned(),
             work_factor: 15.into(),
             recipient: String::new(),

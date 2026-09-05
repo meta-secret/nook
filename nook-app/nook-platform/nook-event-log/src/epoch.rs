@@ -189,7 +189,7 @@ mod tests {
             operation_starts_epoch(&VaultOperation::PasswordRotated {
                 entry_id: crate::PasswordEntryId::from_trusted("pwdentry001".to_owned()),
                 envelope: crate::PasswordEnvelope {
-                    version: 1,
+                    version: crate::PasswordEnvelopeVersion::LEGACY,
                     kdf: "scrypt".to_owned(),
                     work_factor: 10.into(),
                     recipient: String::new(),
