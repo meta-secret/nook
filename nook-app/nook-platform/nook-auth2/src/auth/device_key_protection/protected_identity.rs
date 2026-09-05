@@ -63,6 +63,13 @@ pub struct PinWrappedDeviceIdentity {
 }
 
 impl WrappedDeviceIdentity {
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: decodes the persisted WebAuthn credential id into ArrayBuffer bytes"
+        )
+    )]
     pub fn credential_id_bytes(&self) -> DeviceKeyProtectionResult<Vec<u8>> {
         match self {
             Self::PasskeyDerived(record) => decode_field("credentialId", &record.credential_id),
@@ -73,6 +80,13 @@ impl WrappedDeviceIdentity {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: decodes the persisted WebAuthn user handle into ArrayBuffer bytes"
+        )
+    )]
     pub fn user_handle_bytes(&self) -> DeviceKeyProtectionResult<Vec<u8>> {
         match self {
             Self::PasskeyDerived(record) => decode_field("userHandle", &record.user_handle),
@@ -81,6 +95,13 @@ impl WrappedDeviceIdentity {
         }
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: decodes the persisted WebAuthn PRF input into ArrayBuffer bytes"
+        )
+    )]
     pub fn prf_input_bytes(&self) -> DeviceKeyProtectionResult<Vec<u8>> {
         match self {
             Self::PasskeyDerived(record) => decode_field("prfInput", &record.prf_input),
@@ -110,6 +131,13 @@ impl WrappedDeviceIdentity {
     }
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: records WebAuthn credential-id, user-handle, and PRF-input ArrayBuffer bytes"
+    )
+)]
 pub fn passkey_derived_device_identity_record(
     credential_id: &[u8],
     user_handle: &[u8],
@@ -128,6 +156,13 @@ pub fn passkey_derived_device_identity_record(
     ))
 }
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: records WebAuthn credential-id, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
+    )
+)]
 pub fn passkey_wrapped_device_identity_record(
     credential_id: &[u8],
     user_handle: &[u8],
