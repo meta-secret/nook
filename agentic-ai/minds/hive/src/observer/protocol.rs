@@ -1,5 +1,7 @@
 use super::*;
 use serde::{Deserialize, Serialize};
+use std::io;
+use tokio::time as async_time;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ObserverCopy {
@@ -202,8 +204,8 @@ impl ObserverCoordinatorStore {
         let stream = loop {
             match UnixStream::connect(path).await {
                 Ok(stream) => break stream,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    tokio::time::sleep(Duration::from_millis(250)).await;
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    async_time::sleep(Duration::from_millis(250)).await;
                 }
                 Err(error) => {
                     return Err(error).with_hive_context(|| {
@@ -227,7 +229,7 @@ impl ObserverCoordinatorStore {
         channel.get_mut().flush().await?;
         let mut response = String::new();
         if channel.read_line(&mut response).await? == 0 {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "Hive observer coordinator closed its private channel",
             ));
         }
@@ -249,7 +251,7 @@ impl ObserverStore for ObserverCoordinatorStore {
         {
             ObserverResponse::Snapshot(snapshot) => Ok(snapshot),
             response => {
-                return Err(crate::error::HiveError::message(format!(
+                return Err(crate::HiveError::message(format!(
                     "unexpected observer coordinator response: {response:?}"
                 )));
             }
@@ -270,7 +272,7 @@ impl ObserverStore for ObserverCoordinatorStore {
         {
             ObserverResponse::Task(task) => Ok(task),
             response => {
-                return Err(crate::error::HiveError::message(format!(
+                return Err(crate::HiveError::message(format!(
                     "unexpected observer coordinator response: {response:?}"
                 )));
             }

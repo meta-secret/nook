@@ -1,7 +1,11 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
+use std::sync;
 use std::time::Duration;
+use tokio::fs as async_fs;
+use tokio::signal::unix as unix_signal;
+use tokio::time as async_time;
 
 use crate::HiveContext;
 use codex::Arg0DispatchPaths;
@@ -64,7 +68,7 @@ impl<S: TaskStore> Worker<S> {
         let external_auth = BrokerExternalAuth::connect(&self.config.auth_socket).await?;
         let lifecycle_marker = self.config.workspace.join(".hive-task-finished");
         if lifecycle_marker.exists() {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "refusing to reuse a Pod that already finished a Hive task",
             ));
         }
@@ -73,9 +77,8 @@ impl<S: TaskStore> Worker<S> {
             .register_agent(&self.config.agent_id, &self.config.pod_name)
             .await?;
         prepare_worker_auth_and_readiness(&external_auth, &self.config.workspace).await?;
-        let mut terminate =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .hive_context("failed to install the worker termination handler")?;
+        let mut terminate = unix_signal::signal(unix_signal::SignalKind::terminate())
+            .hive_context("failed to install the worker termination handler")?;
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         tokio::spawn(async move {
             if terminate.recv().await.is_some() {
@@ -86,11 +89,11 @@ impl<S: TaskStore> Worker<S> {
         let task = loop {
             if let Err(error) = external_auth.validate().await {
                 let _ =
-                    tokio::fs::remove_file(self.config.workspace.join(".hive-worker-ready")).await;
-                tokio::fs::write(&lifecycle_marker, b"auth-channel-unavailable")
+                    async_fs::remove_file(self.config.workspace.join(".hive-worker-ready")).await;
+                async_fs::write(&lifecycle_marker, b"auth-channel-unavailable")
                     .await
                     .hive_context("mark failed auth channel for Pod replacement")?;
-                return Err(crate::error::HiveError::message(format!(
+                return Err(crate::HiveError::message(format!(
                     "Hive auth channel failed before a task claim; replacing the Pod without \
                      consuming an attempt: {error}"
                 )));
@@ -121,19 +124,19 @@ impl<S: TaskStore> Worker<S> {
                     mark_interrupted(&lifecycle_marker).await?;
                     return Ok(());
                 }
-                () = tokio::time::sleep(Duration::from_secs(wait)) => {}
+                () = async_time::sleep(Duration::from_secs(wait)) => {}
             }
         };
         let result = self.execute(&task, external_auth, shutdown_rx).await;
         if let Err(error) = result {
             if matches!(error, crate::HiveError::WorkerBlocked) {
-                tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                async_fs::write(&lifecycle_marker, task.id.as_str())
                     .await
                     .hive_context("failed to mark the blocked Pod for replacement")?;
                 return Ok(());
             }
             if matches!(error, crate::HiveError::WorkerInterrupted) {
-                tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                async_fs::write(&lifecycle_marker, task.id.as_str())
                     .await
                     .hive_context("failed to mark the interrupted Pod for replacement")?;
                 return Ok(());
@@ -145,11 +148,11 @@ impl<S: TaskStore> Worker<S> {
                     .await
                     .hive_context("failed to acknowledge task cancellation")?;
                 if !acknowledged {
-                    return Err(crate::error::HiveError::message(
+                    return Err(crate::HiveError::message(
                         "task cancellation acknowledgement was rejected because the lease is stale",
                     ));
                 }
-                tokio::fs::write(&lifecycle_marker, task.id.as_str())
+                async_fs::write(&lifecycle_marker, task.id.as_str())
                     .await
                     .hive_context("failed to mark the cancelled Pod for replacement")?;
                 return Ok(());
@@ -159,14 +162,14 @@ impl<S: TaskStore> Worker<S> {
                 .store
                 .fail(&task, &self.config.agent_id, &message)
                 .await;
-            tokio::fs::write(&lifecycle_marker, task.id.as_str())
+            async_fs::write(&lifecycle_marker, task.id.as_str())
                 .await
                 .hive_context("failed to mark the Pod for replacement")?;
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "Hive task failed; bounded details were persisted in Neo4j",
             ));
         }
-        tokio::fs::write(&lifecycle_marker, task.id.as_str())
+        async_fs::write(&lifecycle_marker, task.id.as_str())
             .await
             .hive_context("failed to mark the Pod for replacement")?;
         Ok(())
@@ -175,7 +178,7 @@ impl<S: TaskStore> Worker<S> {
     async fn execute(
         &self,
         task: &ClaimedTask,
-        external_auth: std::sync::Arc<BrokerExternalAuth>,
+        external_auth: sync::Arc<BrokerExternalAuth>,
         shutdown: watch::Receiver<bool>,
     ) -> crate::HiveResult<()> {
         let (stop_tx, stop_rx) = watch::channel(false);
@@ -188,7 +191,7 @@ impl<S: TaskStore> Worker<S> {
             stop_rx,
         ));
 
-        let execution = tokio::time::timeout(
+        let execution = async_time::timeout(
             Duration::from_secs(self.config.task_timeout_seconds),
             async {
                 let (activity_tx, activity_rx) = mpsc::unbounded_channel();
@@ -237,7 +240,7 @@ impl<S: TaskStore> Worker<S> {
                                 "Codex returned an invalid dependency resolution result",
                             )?;
                         if !matches!(result, TerminalResult::Completed { .. }) {
-                            return Err(crate::error::HiveError::message(
+                            return Err(crate::HiveError::message(
                                 "Codex could not integrate dependency artifacts",
                             ));
                         }
@@ -270,7 +273,7 @@ impl<S: TaskStore> Worker<S> {
                     }
                     if let TerminalResult::Failed { summary, .. } = &result {
                         if task.kind != "blocker" {
-                            return Err(crate::error::HiveError::message(
+                            return Err(crate::HiveError::message(
                                 "only a blocker dependency leaf may return failed",
                             ));
                         }
@@ -281,12 +284,12 @@ impl<S: TaskStore> Worker<S> {
                     let obsolete = completion_is_obsolete(task, &result);
                     if obsolete {
                         if task.owning_repairs.is_empty() {
-                            return Err(crate::error::HiveError::message(
+                            return Err(crate::HiveError::message(
                                 "obsolete blocker retirement requires active owning Main repairs",
                             ));
                         }
                         if !result.changed_files().is_empty() {
-                            return Err(crate::error::HiveError::message(
+                            return Err(crate::HiveError::message(
                                 "obsolete blocker retirement cannot report changed files",
                             ));
                         }
@@ -316,7 +319,7 @@ impl<S: TaskStore> Worker<S> {
                     )
                     .await?;
                     if obsolete && !matches!(artifact, CompletionArtifact::NotProduced) {
-                        return Err(crate::error::HiveError::message(
+                        return Err(crate::HiveError::message(
                             "obsolete blocker retirement cannot persist a patch artifact",
                         ));
                     }
@@ -399,7 +402,7 @@ impl<S: TaskStore> Worker<S> {
                 if !completion_committed {
                     heartbeat_result.hive_context("lease heartbeat failed")?;
                 }
-                execution.map_err(|_| crate::error::HiveError::message("task timed out"))??
+                execution.map_err(|_| crate::HiveError::message("task timed out"))??
             }
             heartbeat_result = &mut heartbeat => {
                 let heartbeat_result = heartbeat_result
@@ -414,7 +417,7 @@ impl<S: TaskStore> Worker<S> {
                     return Err(WorkerCancellationRequested.into());
                 }
                 heartbeat_result?;
-                return Err(crate::error::HiveError::message("lease heartbeat stopped before task execution"));
+                return Err(crate::HiveError::message("lease heartbeat stopped before task execution"));
             }
             shutdown = shutdown_requested(shutdown) => {
                 shutdown?;
@@ -429,7 +432,7 @@ impl<S: TaskStore> Worker<S> {
                     .await
                     .hive_context("failed to release the task during termination")?;
                 if !released {
-                    return Err(crate::error::HiveError::message("task release was rejected because the lease is stale"));
+                    return Err(crate::HiveError::message("task release was rejected because the lease is stale"));
                 }
                 return Err(WorkerInterrupted.into());
             }
@@ -568,6 +571,10 @@ mod tests {
     };
     use crate::store::TaskStore;
     use crate::store::tests::{MemoryStore, task};
+    use std::fs;
+    use std::io;
+    use std::process;
+    use tokio::sync::mpsc;
 
     #[test]
     fn persisted_results_are_utf8_safe_and_bounded() {
@@ -765,8 +772,8 @@ mod tests {
     -> crate::HiveResult<()> {
         let _git_process_guard = crate::GIT_PROCESS_TEST_LOCK.lock().await;
         let repository = tempfile::tempdir()?;
-        let run_git = |arguments: &[&str]| -> std::io::Result<()> {
-            let status = std::process::Command::new("git")
+        let run_git = |arguments: &[&str]| -> io::Result<()> {
+            let status = process::Command::new("git")
                 .args(arguments)
                 .current_dir(repository.path())
                 .status()?;
@@ -774,7 +781,7 @@ mod tests {
             Ok(())
         };
         run_git(&["init", "--quiet"])?;
-        std::fs::write(repository.path().join("repair.txt"), "published\n")?;
+        fs::write(repository.path().join("repair.txt"), "published\n")?;
         run_git(&["add", "repair.txt"])?;
         run_git(&[
             "-c",
@@ -786,7 +793,7 @@ mod tests {
             "-m",
             "published repair",
         ])?;
-        let baseline = std::process::Command::new("git")
+        let baseline = process::Command::new("git")
             .args(["rev-parse", "HEAD"])
             .current_dir(repository.path())
             .output()?;
@@ -824,7 +831,7 @@ mod tests {
         store.enqueue(&task("activity-task", Vec::new())?).await?;
         let agent = AgentId::new("activity-agent")?;
         let claimed = store.claim(&agent, 300).await?.into_claimed()?;
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, receiver) = mpsc::unbounded_channel();
         assert!(
             sender
                 .send(TaskActivity {
@@ -862,7 +869,7 @@ mod tests {
                 )
                 .await?
         );
-        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let (sender, receiver) = mpsc::unbounded_channel();
         assert!(
             sender
                 .send(TaskActivity {

@@ -1,6 +1,9 @@
+use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::fs as async_fs;
+use tokio::time as async_time;
 
 use crate::HiveContext;
 use async_trait::async_trait;
@@ -85,8 +88,8 @@ impl CoordinatorTaskStore {
         let stream = loop {
             match UnixStream::connect(path).await {
                 Ok(stream) => break stream,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    tokio::time::sleep(Duration::from_millis(250)).await;
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                    async_time::sleep(Duration::from_millis(250)).await;
                 }
                 Err(error) => {
                     return Err(error).with_hive_context(|| {
@@ -125,7 +128,7 @@ impl CoordinatorTaskStore {
             .await
             .hive_context("read coordinator response")?;
         if bytes == 0 {
-            return Err(crate::error::HiveError::message(
+            return Err(crate::HiveError::message(
                 "Hive coordinator closed its private channel",
             ));
         }
@@ -138,7 +141,7 @@ impl CoordinatorTaskStore {
     async fn unit(&self, request: Request) -> crate::HiveResult<()> {
         match self.request(request).await? {
             Response::Unit => Ok(()),
-            response => Err(crate::error::HiveError::message(format!(
+            response => Err(crate::HiveError::message(format!(
                 "unexpected coordinator response: {response:?}"
             ))),
         }
@@ -147,7 +150,7 @@ impl CoordinatorTaskStore {
     async fn accepted(&self, request: Request) -> crate::HiveResult<bool> {
         match self.request(request).await? {
             Response::Accepted(accepted) => Ok(accepted),
-            response => Err(crate::error::HiveError::message(format!(
+            response => Err(crate::HiveError::message(format!(
                 "unexpected coordinator response: {response:?}"
             ))),
         }
@@ -169,7 +172,7 @@ impl TaskStore for CoordinatorTaskStore {
     }
 
     async fn enqueue(&self, _task: &EnqueueTask) -> crate::HiveResult<()> {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "workers are not authorized to enqueue tasks",
         ));
     }
@@ -179,13 +182,13 @@ impl TaskStore for CoordinatorTaskStore {
         _source_commit: &str,
         _kind: &str,
     ) -> crate::HiveResult<Option<TaskId>> {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "workers are not authorized to inspect delivery tasks",
         ));
     }
 
     async fn cancel(&self, _task_id: &TaskId, _reason: &str) -> crate::HiveResult<bool> {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "workers are not authorized to cancel tasks",
         ));
     }
@@ -194,13 +197,13 @@ impl TaskStore for CoordinatorTaskStore {
         &self,
         _task_id: &TaskId,
     ) -> crate::HiveResult<Vec<CancellationTarget>> {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "workers are not authorized to inspect cancellation targets",
         ));
     }
 
     async fn finalize_cancellation(&self, _task_id: &TaskId) -> crate::HiveResult<bool> {
-        return Err(crate::error::HiveError::message(
+        return Err(crate::HiveError::message(
             "workers are not authorized to finalize cancellation",
         ));
     }
@@ -231,7 +234,7 @@ impl TaskStore for CoordinatorTaskStore {
         {
             Response::Claim(task) => Ok(task),
             response => {
-                return Err(crate::error::HiveError::message(format!(
+                return Err(crate::HiveError::message(format!(
                     "unexpected coordinator response: {response:?}"
                 )));
             }
@@ -327,7 +330,7 @@ impl TaskStore for CoordinatorTaskStore {
 
 pub async fn run_coordinator<S: TaskStore>(socket: PathBuf, store: S) -> crate::HiveResult<()> {
     if let Some(parent) = socket.parent() {
-        tokio::fs::create_dir_all(parent)
+        async_fs::create_dir_all(parent)
             .await
             .with_hive_context(|| {
                 format!("create coordinator socket directory {}", parent.display())
@@ -437,9 +440,9 @@ async fn handle_request<S: TaskStore>(store: &S, request: Request) -> crate::Hiv
 }
 
 async fn remove_socket_if_present(path: &Path) -> crate::HiveResult<()> {
-    match tokio::fs::remove_file(path).await {
+    match async_fs::remove_file(path).await {
         Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(error) => {
             Err(error).with_hive_context(|| format!("remove stale socket {}", path.display()))
         }
