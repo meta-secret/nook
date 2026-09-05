@@ -336,9 +336,18 @@ mod tests {
     async fn journal_read_error_preserves_collector_and_completion_uncertainty()
     -> anyhow::Result<()> {
         let mut fixture = Fixture::new().await?;
-        let request = fixture.manager.sentinel_genesis_request_json()?;
+        let request = fixture
+            .manager
+            .sentinel_genesis_request_json()
+            .map_err(|_| anyhow::anyhow!("initial ceremony request unavailable"))?;
         fixture.reject_failed_journal_read()?;
-        assert_eq!(fixture.manager.sentinel_genesis_request_json()?, request);
+        assert_eq!(
+            fixture
+                .manager
+                .sentinel_genesis_request_json()
+                .map_err(|_| anyhow::anyhow!("retained ceremony request unavailable"))?,
+            request
+        );
         assert_eq!(
             fixture.manager.sentinel_genesis_status().phase(),
             SentinelGenesisPhase::CollectingParticipants
@@ -373,7 +382,8 @@ mod tests {
         fixture
             .manager
             .start_sentinel_genesis(Fixture::args())
-            .await?;
+            .await
+            .map_err(|_| anyhow::anyhow!("explicit start after confirmed absence failed"))?;
         assert_eq!(
             fixture.manager.sentinel_genesis_status().phase(),
             SentinelGenesisPhase::CollectingParticipants
