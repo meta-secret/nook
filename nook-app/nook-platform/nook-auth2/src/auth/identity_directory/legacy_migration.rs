@@ -288,7 +288,7 @@ mod tests {
         ] {
             match record.merge_legacy_member(incoming) {
                 Err(MultiDeviceError::InvalidDeviceIdentity(message)) => {
-                    assert_eq!(message, expected)
+                    assert_eq!(message, expected);
                 }
                 _ => anyhow::bail!("expected conflicting legacy member rejection"),
             }
