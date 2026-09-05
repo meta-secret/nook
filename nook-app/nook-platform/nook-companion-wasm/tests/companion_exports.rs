@@ -40,7 +40,13 @@ fn backup_and_persistence_collection_exports_preserve_core_results() {
     let area = ExtensionPersistenceArea::EventLog;
     assert_eq!(
         extension_persistence_store_names(area),
-        vec!["events".to_owned()]
+        vec![
+            "vault".to_owned(),
+            "events".to_owned(),
+            "projections".to_owned(),
+            "provider_receipts".to_owned(),
+            "outbox".to_owned(),
+        ]
     );
     assert_eq!(
         matching_extension_persistence_stores(ExtensionPersistenceObservation {
