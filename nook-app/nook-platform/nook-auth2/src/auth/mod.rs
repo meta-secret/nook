@@ -18,9 +18,10 @@ pub mod sentinel_unlock;
 mod slip39;
 
 pub use domain_numbers::{
-    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, MockPasskeyCredentialCount,
-    PasswordWorkFactor, SentinelParticipantCount, SentinelRecordCount, SentinelShareCount,
-    SentinelShareIndex, SentinelThreshold,
+    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
+    MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor,
+    SentinelParticipantCount, SentinelRecordCount, SentinelShareCount, SentinelShareIndex,
+    SentinelThreshold,
 };
 
 #[cfg(any(test, feature = "mock-passkey"))]

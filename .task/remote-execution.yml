@@ -59,12 +59,13 @@ tasks:
       - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
-    desc: Trigger required PR validation immediately and request concurrent exact-head Codex review (PR=<number>, FULL_E2E=1 for a Main-fix browser gate, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
+    desc: Trigger required PR validation immediately and optionally request concurrent exact-head Codex review (PR=<number>, CODEX_REVIEW=1 only for a final coherent head, FULL_E2E=1 for a Main-fix browser gate, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
     requires:
       vars: [PR]
     env:
       REQUESTED_PR: '{{.PR}}'
       REQUEST_FULL_E2E: '{{default "0" .FULL_E2E}}'
+      REQUEST_CODEX_REVIEW: '{{default "0" .CODEX_REVIEW}}'
       REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default "0" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
@@ -83,6 +84,10 @@ tasks:
         esac
         if [ "$REQUEST_FULL_E2E" != "0" ] && [ "$REQUEST_FULL_E2E" != "1" ]; then
           echo "FULL_E2E must be 0 or 1." >&2
+          exit 2
+        fi
+        if [ "$REQUEST_CODEX_REVIEW" != "0" ] && [ "$REQUEST_CODEX_REVIEW" != "1" ]; then
+          echo "CODEX_REVIEW must be 0 or 1." >&2
           exit 2
         fi
         if [ "$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED" != "0" ] && [ "$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED" != "1" ]; then
@@ -122,18 +127,21 @@ tasks:
           gh pr edit "$REQUESTED_PR" --remove-label "$validation_label"
         fi
         gh pr edit "$REQUESTED_PR" --add-label "$validation_label"
-        review_request_state="not-requested"
+        review_request_state="disabled"
         review_request_output=""
-        if review_request_output="$(task pr:review \
-          PR="$REQUESTED_PR" \
-          REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED")"; then
-          printf '%s\n' "$review_request_output"
-          if printf '%s\n' "$review_request_output" | grep -Fq '"state": "requested"'; then
-            review_request_state="requested"
+        if [ "$REQUEST_CODEX_REVIEW" = "1" ]; then
+          review_request_state="not-requested"
+          if review_request_output="$(task pr:review \
+            PR="$REQUESTED_PR" \
+            REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED="$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED")"; then
+            printf '%s\n' "$review_request_output"
+            if printf '%s\n' "$review_request_output" | grep -Fq '"state": "requested"'; then
+              review_request_state="requested"
+            fi
+          else
+            printf '%s\n' "$review_request_output"
+            echo "::warning::Hosted validation is active, but the exact-head review request did not complete. Keep this validation running; collect or retry review separately without restarting validation." >&2
           fi
-        else
-          printf '%s\n' "$review_request_output"
-          echo "::warning::Hosted validation is active, but the exact-head review request did not complete. Keep this validation running; collect or retry review separately without restarting validation." >&2
         fi
         dispatched_pr_state="$(gh pr view "$REQUESTED_PR" --json headRefOid,baseRefName --jq '.headRefOid + "|" + .baseRefName')"
         dispatched_pr_sha="${dispatched_pr_state%%|*}"
@@ -183,4 +191,4 @@ tasks:
           echo "PR #$REQUESTED_PR changed head or base while validation was dispatched; removed $validation_label from the replacement state." >&2
           exit 2
         fi
-        echo "Triggered PR validation for $pr_sha with label $validation_label. Exact-head review request state: $review_request_state."
+        echo "Triggered PR validation for $pr_sha with label $validation_label. Codex review opt-in: $REQUEST_CODEX_REVIEW. Exact-head review request state: $review_request_state."
