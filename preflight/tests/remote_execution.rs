@@ -84,7 +84,7 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
 }
 
 #[test]
-fn complete_validation_dispatches_before_review_collection() -> Result<()> {
+fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
     let agentic_tasks = read_fallible(".task/agentic-ai.yml")?;
     let direct_validation = read_fallible(".task/remote-execution.yml")?;
     let readme = read_fallible("README.md")?;
@@ -94,9 +94,12 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
     let validation_label_position = direct_validation
         .find("gh pr edit \"$REQUESTED_PR\" --add-label \"$validation_label\"")
         .context("direct validation must apply its label")?;
+    let review_opt_in_position = direct_validation
+        .find("if [ \"$REQUEST_CODEX_REVIEW\" = \"1\" ]; then")
+        .context("direct validation must gate review behind an explicit opt-in")?;
     let review_request_position = direct_validation
         .find("if review_request_output=\"$(task pr:review \\")
-        .context("direct validation must request concurrent exact-head review")?;
+        .context("opted-in validation must request exact-head review")?;
     let dispatched_head_position = direct_validation
         .find("dispatched_pr_state=\"$(gh pr view \"$REQUESTED_PR\" --json headRefOid,baseRefName")
         .context("direct validation must recheck the head and base after label dispatch")?;
@@ -105,9 +108,10 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
         .context("direct validation must recheck base freshness after label dispatch")?;
     assert!(
         current_base_position < validation_label_position
-            && validation_label_position < review_request_position
+            && validation_label_position < review_opt_in_position
+            && review_opt_in_position < review_request_position
             && review_request_position < dispatched_head_position,
-        "complete validation must dispatch before requesting review and then reject a head change"
+        "complete validation must dispatch before an opted-in review and then reject a head change"
     );
     assert!(
         dispatched_head_position < dispatched_base_position,
@@ -122,7 +126,7 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
         "pr:review:stabilize:",
         "CI_AGENT_CMD: pr-review-stabilize",
         "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED: '{{default \"0\" .REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED}}'",
-        "REVIEW_WAIT_SECONDS: '{{default \"600\" .REVIEW_WAIT_SECONDS}}'",
+        "REVIEW_WAIT_SECONDS: '{{default \"0\" .REVIEW_WAIT_SECONDS}}'",
     ] {
         assert!(
             agentic_tasks.contains(required),
@@ -135,9 +139,13 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
         "complete validation must not wait for review before dispatch"
     );
     for required in [
+        "REQUEST_CODEX_REVIEW: '{{default \"0\" .CODEX_REVIEW}}'",
+        "CODEX_REVIEW must be 0 or 1.",
+        "review_request_state=\"disabled\"",
         "review_request_state=\"not-requested\"",
         "grep -Fq '\"state\": \"requested\"'",
         "Keep this validation running; collect or retry review separately without restarting validation.",
+        "Codex review opt-in: $REQUEST_CODEX_REVIEW.",
         "Exact-head review request state: $review_request_state.",
         "REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=\"$REQUEST_REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED\"",
     ] {
@@ -148,7 +156,7 @@ fn complete_validation_dispatches_before_review_collection() -> Result<()> {
     }
     assert!(
         readme.contains(
-            "task pr:review:stabilize PR=410 # bounded Codex collection after hosted validation dispatch"
+            "task pr:review:stabilize PR=410 # one bounded feedback snapshot after validation dispatch"
         ),
         "public command catalog must place review stabilization after hosted dispatch"
     );
