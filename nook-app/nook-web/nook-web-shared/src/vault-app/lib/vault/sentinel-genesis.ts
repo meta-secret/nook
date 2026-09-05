@@ -138,7 +138,11 @@ export async function start({
     };
     applyStatus(applyStatusArgs);
   } catch (error) {
-    state.sentinelGenesisPhase = state.requireManager().sentinelGenesisPhase;
+    const statusUpdate: SentinelGenesisStatusUpdate = {
+      state,
+      status: state.requireManager().sentinel_genesis_status(),
+    };
+    applyStatus(statusUpdate);
     state.errorMsg =
       error instanceof Error
         ? error.message
@@ -279,6 +283,11 @@ export async function finalize(state: VaultState): Promise<void> {
     };
     applyFinalizeResult(applyFinalizeResultArgs);
   } catch (error) {
+    const statusUpdate: SentinelGenesisStatusUpdate = {
+      state,
+      status: state.requireManager().sentinel_genesis_status(),
+    };
+    applyStatus(statusUpdate);
     state.errorMsg =
       error instanceof Error
         ? error.message

@@ -7,10 +7,11 @@ use crate::storage::indexed_db::{
 };
 use crate::{NookError, NookSentinelGenesisFinalizeResult};
 use nook_core::{
-    SentinelGenesisPhase, VaultMetaState, VaultNameRef, VaultStoreIdentityRef, VaultUnlock,
-    VaultVersionWrite,
+    SentinelGenesisOutput, SentinelGenesisPhase, SigningIdentity, VaultMetaState, VaultNameRef,
+    VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
 };
 use serde::{Deserialize, Serialize};
+use std::mem;
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -53,21 +54,69 @@ impl NookVaultManager {
     pub async fn finalize_sentinel_genesis(
         &mut self,
     ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
-        if let Some(pending_json) = load_sentinel_genesis_finalization_pending().await? {
+        let pending = load_sentinel_genesis_finalization_pending().await;
+        if let Some(pending_json) = self.observe_sentinel_genesis_journal(pending)? {
             let pending: PendingSentinelGenesisFinalization =
                 serde_json::from_str(&pending_json)
                     .map_err(|error| NookError::Serialization(error.to_string()))?;
             return self.complete_sentinel_genesis_finalization(pending).await;
         }
 
+        if matches!(self.sentinel_genesis, CeremonyState::Inactive) {
+            if self.sentinel_genesis_phase == SentinelGenesisPhase::AwaitingCompletionCheck {
+                self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
+            }
+            return Err(JsError::new("No Sentinel genesis ceremony is active."));
+        }
         let signing = self.ensure_signing_identity().await?;
-        let session = self
-            .sentinel_genesis
-            .get("No Sentinel genesis ceremony is active.")?
-            .clone();
-        let genesis_request = session.request.clone();
-        let participants = session.participants().to_vec();
-        let output = nook_core::finalize_sentinel_genesis(session, &signing)?;
+        self.issue_sentinel_genesis(
+            &signing,
+            #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+            IssuanceCheckpoint::Live,
+        )
+        .await
+    }
+}
+
+impl NookVaultManager {
+    pub(super) fn observe_sentinel_genesis_journal(
+        &mut self,
+        pending: Result<Option<String>, NookError>,
+    ) -> Result<Option<String>, NookError> {
+        let pending = pending?;
+        if pending.is_some() {
+            self.sentinel_genesis = CeremonyState::Inactive;
+            self.sentinel_genesis_phase = SentinelGenesisPhase::AwaitingCompletionCheck;
+        }
+        Ok(pending)
+    }
+
+    async fn issue_sentinel_genesis(
+        &mut self,
+        signing: &SigningIdentity,
+        #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+        checkpoint: IssuanceCheckpoint,
+    ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
+        let session = match mem::replace(&mut self.sentinel_genesis, CeremonyState::Inactive) {
+            CeremonyState::Active(session) => session,
+            CeremonyState::Inactive => {
+                return Err(JsError::new("No Sentinel genesis ceremony is active."));
+            }
+        };
+        let genesis_request = session.request().clone();
+        let ready = match session.prepare(signing.signing_key()) {
+            Ok(ready) => ready,
+            Err(rejected) => {
+                let (session, error) = rejected.into_parts();
+                self.sentinel_genesis_phase = SentinelGenesisPhase::from_session(&session);
+                self.sentinel_genesis = CeremonyState::Active(session);
+                return Err(error.into());
+            }
+        };
+        // Issuance is terminal for this collecting owner, including future Drop.
+        self.sentinel_genesis_phase = SentinelGenesisPhase::Inactive;
+        let output = SentinelGenesisOutput::from_ready(ready)?;
+        let participants = output.participants;
         let store_id = output.store_id.as_str().to_owned();
         let vault_name = self.vault.vault_name.clone();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
@@ -95,8 +144,12 @@ impl NookVaultManager {
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         // This public/encrypted plan is the commit marker. Every subsequent
         // write is idempotent and a retry resumes this exact store/root.
+        #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+        checkpoint.before_save().await;
+        self.sentinel_genesis_phase = SentinelGenesisPhase::AwaitingCompletionCheck;
         save_sentinel_genesis_finalization_pending(&pending_json).await?;
-        self.sentinel_genesis = CeremonyState::Inactive;
+        #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+        checkpoint.after_save()?;
         self.complete_sentinel_genesis_finalization(pending).await
     }
 }
@@ -156,5 +209,341 @@ impl NookVaultManager {
             &pending.participants,
             &pending.deliveries,
         )?)
+    }
+}
+
+// A narrow test checkpoint surrounds the existing journal write; production
+// performs exactly the original write and completion operations.
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+enum IssuanceCheckpoint {
+    Live,
+    BeforeSavePending,
+    AfterSaveFailure,
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+impl IssuanceCheckpoint {
+    async fn before_save(&self) {
+        use std::future;
+        if matches!(self, Self::BeforeSavePending) {
+            future::pending::<()>().await;
+        }
+    }
+    fn after_save(self) -> Result<(), NookError> {
+        match self {
+            Self::AfterSaveFailure => Err(NookError::Database(
+                "injected failure after genesis journal persistence".to_owned(),
+            )),
+            Self::Live | Self::BeforeSavePending => Ok(()),
+        }
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod tests {
+    use super::*;
+    use crate::storage::{event_db, indexed_db};
+    use js_sys::Error as BrowserError;
+    use nook_core::{DeviceIdentity, StartSentinelGenesisArgs};
+    use std::future::Future;
+    use std::task::{Context, Poll, Waker};
+    use wasm_bindgen::convert::TryFromJsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    struct Fixture {
+        manager: NookVaultManager,
+        signer: SigningIdentity,
+    }
+    impl Fixture {
+        async fn new() -> anyhow::Result<Self> {
+            clear_sentinel_genesis_finalization_pending().await?;
+            let identity = DeviceIdentity::generate()?;
+            let mut manager = NookVaultManager::new();
+            manager.device.identity_private_key = identity.secret_string().as_str().to_owned();
+            let signer = manager.ensure_signing_identity().await?;
+            let session = Self::args().start(&identity, &signer)?;
+            manager.sentinel_genesis_phase = SentinelGenesisPhase::from_session(&session);
+            manager.sentinel_genesis = CeremonyState::Active(session);
+            manager.assign_vault_name("Genesis fixture");
+            Ok(Self { manager, signer })
+        }
+        fn require_finalization_failure(
+            result: Result<NookSentinelGenesisFinalizeResult, JsError>,
+            expected: &str,
+        ) -> anyhow::Result<()> {
+            let error = match result {
+                Err(error) => error,
+                Ok(_) => return Err(anyhow::anyhow!("expected finalization failure")),
+            };
+            let error = BrowserError::try_from_js_value(error.into())
+                .map_err(|_| anyhow::anyhow!("browser error type unavailable"))?;
+            assert_eq!(String::from(error.message()), expected);
+            Ok(())
+        }
+        fn reject_failed_journal_read(&mut self) -> anyhow::Result<()> {
+            let result = self
+                .manager
+                .observe_sentinel_genesis_journal(Err(NookError::Database(
+                    "injected journal read failure".to_owned(),
+                )));
+            match result {
+                Err(NookError::Database(message)) => {
+                    assert_eq!(message, "injected journal read failure");
+                    Ok(())
+                }
+                Err(error) => Err(error.into()),
+                Ok(_) => Err(anyhow::anyhow!("failed read must not become absence")),
+            }
+        }
+        fn args() -> StartSentinelGenesisArgs {
+            StartSentinelGenesisArgs {
+                label: "Owner".to_owned(),
+                participant_count: 2,
+                threshold: 2,
+            }
+        }
+        fn complete_roster(&mut self) -> anyhow::Result<()> {
+            let session =
+                match mem::replace(&mut self.manager.sentinel_genesis, CeremonyState::Inactive) {
+                    CeremonyState::Active(session) => session,
+                    CeremonyState::Inactive => {
+                        return Err(anyhow::anyhow!("fixture session missing"));
+                    }
+                };
+            let peer = DeviceIdentity::generate()?;
+            let peer_signer = SigningIdentity::generate()?.0;
+            let response = nook_core::respond_to_sentinel_genesis_request(
+                session.request(),
+                &peer,
+                &peer_signer,
+                "Peer".to_owned(),
+            )?;
+            let session = session.collect(response)?;
+            self.manager.sentinel_genesis_phase = SentinelGenesisPhase::from_session(&session);
+            self.manager.sentinel_genesis = CeremonyState::Active(session);
+            Ok(())
+        }
+        fn assert_consumed(&self, phase: SentinelGenesisPhase) {
+            assert!(matches!(
+                self.manager.sentinel_genesis,
+                CeremonyState::Inactive
+            ));
+            assert_eq!(self.manager.sentinel_genesis_status().phase(), phase);
+            assert!(!self.manager.vault.crypto.is_unlocked());
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn journal_read_error_preserves_collector_and_completion_uncertainty()
+    -> anyhow::Result<()> {
+        let mut fixture = Fixture::new().await?;
+        let request = fixture
+            .manager
+            .sentinel_genesis_request_json()
+            .map_err(|_| anyhow::anyhow!("initial ceremony request unavailable"))?;
+        fixture.reject_failed_journal_read()?;
+        assert_eq!(
+            fixture
+                .manager
+                .sentinel_genesis_request_json()
+                .map_err(|_| anyhow::anyhow!("retained ceremony request unavailable"))?,
+            request
+        );
+        assert_eq!(
+            fixture.manager.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::CollectingParticipants
+        );
+        fixture.manager.sentinel_genesis = CeremonyState::Inactive;
+        fixture.manager.sentinel_genesis_phase = SentinelGenesisPhase::AwaitingCompletionCheck;
+        fixture.reject_failed_journal_read()?;
+        fixture.assert_consumed(SentinelGenesisPhase::AwaitingCompletionCheck);
+        assert!(
+            load_sentinel_genesis_finalization_pending()
+                .await?
+                .is_none()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn confirmed_journal_absence_allows_only_a_new_explicit_start() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new().await?;
+        fixture.manager.sentinel_genesis = CeremonyState::Inactive;
+        fixture.manager.sentinel_genesis_phase = SentinelGenesisPhase::AwaitingCompletionCheck;
+        Fixture::require_finalization_failure(
+            fixture.manager.finalize_sentinel_genesis().await,
+            "No Sentinel genesis ceremony is active.",
+        )?;
+        fixture.assert_consumed(SentinelGenesisPhase::Inactive);
+        assert!(
+            load_sentinel_genesis_finalization_pending()
+                .await?
+                .is_none()
+        );
+        fixture
+            .manager
+            .start_sentinel_genesis(Fixture::args())
+            .await
+            .map_err(|_| anyhow::anyhow!("explicit start after confirmed absence failed"))?;
+        assert_eq!(
+            fixture.manager.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::CollectingParticipants
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn preparation_rejection_preserves_session_and_phase() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new().await?;
+        let wrong = SigningIdentity::generate()?.0;
+        assert!(
+            fixture
+                .manager
+                .issue_sentinel_genesis(&wrong, IssuanceCheckpoint::Live)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            fixture.manager.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::CollectingParticipants
+        );
+        fixture.complete_roster()?;
+        assert!(
+            fixture
+                .manager
+                .issue_sentinel_genesis(&wrong, IssuanceCheckpoint::Live)
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            fixture.manager.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::ReadyToFinalize
+        );
+        assert!(matches!(
+            fixture.manager.sentinel_genesis,
+            CeremonyState::Active(_)
+        ));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn dropping_issued_future_cannot_restore_the_roster() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new().await?;
+        fixture.complete_roster()?;
+        let mut future = Box::pin(
+            fixture
+                .manager
+                .issue_sentinel_genesis(&fixture.signer, IssuanceCheckpoint::BeforeSavePending),
+        );
+        assert!(matches!(
+            future
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop())),
+            Poll::Pending
+        ));
+        drop(future);
+        fixture.assert_consumed(SentinelGenesisPhase::Inactive);
+        assert!(
+            load_sentinel_genesis_finalization_pending()
+                .await?
+                .is_none()
+        );
+        assert!(
+            fixture
+                .manager
+                .issue_sentinel_genesis(&fixture.signer, IssuanceCheckpoint::Live)
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn uncertain_write_keeps_exact_output_blocks_start_and_resumes() -> anyhow::Result<()> {
+        let mut fixture = Fixture::new().await?;
+        fixture.complete_roster()?;
+        let failed = fixture
+            .manager
+            .issue_sentinel_genesis(&fixture.signer, IssuanceCheckpoint::AfterSaveFailure)
+            .await;
+        Fixture::require_finalization_failure(
+            failed,
+            "Database error: injected failure after genesis journal persistence",
+        )?;
+        fixture.assert_consumed(SentinelGenesisPhase::AwaitingCompletionCheck);
+        let journal = load_sentinel_genesis_finalization_pending()
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("issued output must remain durable"))?;
+        let pending: PendingSentinelGenesisFinalization = serde_json::from_str(&journal)?;
+        let stale = Fixture::args().start(&fixture.manager.device_identity()?, &fixture.signer)?;
+        fixture.manager.sentinel_genesis = CeremonyState::Active(stale);
+        fixture.manager.sentinel_genesis_phase = SentinelGenesisPhase::CollectingParticipants;
+        assert!(
+            fixture
+                .manager
+                .start_sentinel_genesis(Fixture::args())
+                .await
+                .is_err()
+        );
+        fixture.assert_consumed(SentinelGenesisPhase::AwaitingCompletionCheck);
+        let mut reloaded = NookVaultManager::new();
+        assert!(
+            reloaded
+                .start_sentinel_genesis(Fixture::args())
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            reloaded.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::AwaitingCompletionCheck
+        );
+        assert_eq!(
+            load_sentinel_genesis_finalization_pending().await?,
+            Some(journal)
+        );
+        // There is no collecting capability: this public entry must read the journal.
+        let result = fixture
+            .manager
+            .finalize_sentinel_genesis()
+            .await
+            .map_err(|_| anyhow::anyhow!("durable genesis completion failed"))?;
+        assert_eq!(result.store_id(), pending.store_id);
+        assert_eq!(fixture.manager.vault.store_id, pending.store_id);
+        let expected = nook_core::deserialize_stored(
+            &pending.yaml,
+            nook_core::detect_stored_format(&pending.yaml)?,
+        )?;
+        let actual = fixture.manager.stored_records_snapshot();
+        assert_eq!(actual.len(), expected.len());
+        assert!(expected.iter().all(|record| actual.contains(record)));
+        assert_eq!(
+            fixture.manager.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::DeliveringShares
+        );
+        assert!(!fixture.manager.vault.crypto.is_unlocked());
+        assert!(
+            load_sentinel_genesis_finalization_pending()
+                .await?
+                .is_none()
+        );
+        Fixture::require_finalization_failure(
+            fixture.manager.finalize_sentinel_genesis().await,
+            "No Sentinel genesis ceremony is active.",
+        )?;
+        assert_eq!(
+            fixture.manager.sentinel_genesis_status().phase(),
+            SentinelGenesisPhase::DeliveringShares
+        );
+        event_db::clear_local_event_store(&pending.store_id).await?;
+        let stored = indexed_db::load_sentinel_genesis_share_delivery(
+            &pending.store_id,
+            fixture.manager.device_identity()?.device_id().as_str(),
+        )
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("own delivery missing"))?;
+        let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored)?;
+        assert_eq!(stored.request, pending.request);
+        assert!(pending.deliveries.contains(&stored.delivery));
+        Ok(())
     }
 }
