@@ -17,25 +17,28 @@
     const submitter = event.submitter
     const submittedControlIdentity =
       submitter instanceof HTMLElement ? submitter.id : ''
+    const username = fieldValue('fieldset.loginForm [name="LoginUserName"]')
+    const password = fieldValue('#main-password')
     sessionStorage.setItem(
       SUBMISSION_EVIDENCE_KEY,
       JSON.stringify({
         submittedControlIdentity,
-        headerUsername: fieldValue('#header-username'),
-        headerPassword: fieldValue('#header-password'),
-        search: fieldValue('#account-search'),
-        newsletter: fieldValue('#newsletter-email'),
-        loginUsername: fieldValue('fieldset.loginForm [name="LoginUserName"]'),
-        loginPassword: fieldValue('#main-password'),
+        headerUsernameUnchanged:
+          fieldValue('#header-username') === 'header-user',
+        headerPasswordUnchanged:
+          fieldValue('#header-password') === 'header-password',
+        searchUnchanged: fieldValue('#account-search') === 'account help',
+        newsletterUnchanged:
+          fieldValue('#newsletter-email') === 'reader@example.test',
+        loginCredentialsMatched:
+          username === 'alice@nook.test' &&
+          password === 'extension-fill-password',
       }),
     )
     if (submittedControlIdentity !== 'login-submit') {
       error = 'Unexpected form control submitted.'
       return
     }
-
-    const username = fieldValue('fieldset.loginForm [name="LoginUserName"]')
-    const password = fieldValue('#main-password')
     if (completePlainLogin(username, password) === PlainLoginResult.Invalid) {
       error = 'Invalid username or password.'
     }

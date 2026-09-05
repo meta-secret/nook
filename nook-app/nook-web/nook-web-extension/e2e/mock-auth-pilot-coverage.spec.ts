@@ -337,12 +337,11 @@ async function expectPilotNamecheapShellSuccess({
   )
   const expectedEvidence = JSON.stringify({
     submittedControlIdentity: 'login-submit',
-    headerUsername: 'header-user',
-    headerPassword: 'header-password',
-    search: 'account help',
-    newsletter: 'reader@example.test',
-    loginUsername: 'alice@nook.test',
-    loginPassword: 'extension-fill-password',
+    headerUsernameUnchanged: true,
+    headerPasswordUnchanged: true,
+    searchUnchanged: true,
+    newsletterUnchanged: true,
+    loginCredentialsMatched: true,
   })
   await expect
     .poll(() =>
