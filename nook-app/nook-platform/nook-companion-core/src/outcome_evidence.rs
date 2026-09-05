@@ -8,8 +8,11 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
+use crate::{AuthenticationOutcomeElapsedMilliseconds, AuthenticationOutcomeTimeoutMilliseconds};
+
 /// Default wall-clock budget while waiting for success evidence after submit.
-pub const DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS: u32 = 8_000;
+pub const DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS: AuthenticationOutcomeTimeoutMilliseconds =
+    AuthenticationOutcomeTimeoutMilliseconds::from_raw(8_000);
 
 /// Bounded, non-secret observation collected after an authentication act.
 ///
@@ -33,7 +36,7 @@ pub struct AuthenticationOutcomeObservation {
     /// Observation was collected from an iframe document.
     pub in_iframe: bool,
     /// Milliseconds since the authentication act (submit/fill).
-    pub elapsed_ms: u32,
+    pub elapsed_ms: AuthenticationOutcomeElapsedMilliseconds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -41,7 +44,7 @@ pub struct AuthenticationOutcomeObservation {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationOutcomeClassification {
     pub observation: AuthenticationOutcomeObservation,
-    pub timeout_ms: u32,
+    pub timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
@@ -79,7 +82,10 @@ impl<'de> Deserialize<'de> for AuthenticationOutcomeDecision {
 
 impl AuthenticationOutcomeDecision {
     #[must_use]
-    pub const fn classify(observation: AuthenticationOutcomeObservation, timeout_ms: u32) -> Self {
+    pub const fn classify(
+        observation: AuthenticationOutcomeObservation,
+        timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
+    ) -> Self {
         let verdict = classify_authentication_outcome(observation, timeout_ms);
         Self {
             verdict,
@@ -150,7 +156,7 @@ impl<'de> Deserialize<'de> for AuthenticationOutcomeVerdict {
 #[must_use]
 pub const fn classify_authentication_outcome(
     observation: AuthenticationOutcomeObservation,
-    timeout_ms: u32,
+    timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
 ) -> AuthenticationOutcomeVerdict {
     if observation.success_marker_present && observation.error_marker_present {
         return AuthenticationOutcomeVerdict::Conflicting;
@@ -173,7 +179,7 @@ pub const fn classify_authentication_outcome(
         observation.in_iframe,
     );
 
-    if observation.elapsed_ms >= timeout_ms {
+    if observation.elapsed_ms.raw() >= timeout_ms.raw() {
         return AuthenticationOutcomeVerdict::Timeout;
     }
 
@@ -239,7 +245,7 @@ mod tests {
         let observation = AuthenticationOutcomeObservation {
             navigated_away_from_auth_path: true,
             auth_fields_present: false,
-            elapsed_ms: 500,
+            elapsed_ms: 500.into(),
             ..base()
         };
         assert_eq!(
@@ -254,7 +260,7 @@ mod tests {
             success_marker_present: true,
             auth_fields_present: false,
             navigated_away_from_auth_path: true,
-            elapsed_ms: 300,
+            elapsed_ms: 300.into(),
             ..base()
         };
         assert_eq!(
@@ -279,7 +285,7 @@ mod tests {
         let observation = AuthenticationOutcomeObservation {
             error_marker_present: true,
             auth_fields_present: true,
-            elapsed_ms: 200,
+            elapsed_ms: 200.into(),
             ..base()
         };
         assert_eq!(
@@ -294,7 +300,7 @@ mod tests {
         let observation = AuthenticationOutcomeObservation {
             success_marker_present: true,
             error_marker_present: true,
-            elapsed_ms: 100,
+            elapsed_ms: 100.into(),
             ..base()
         };
         assert_eq!(
@@ -308,7 +314,7 @@ mod tests {
         let observation = AuthenticationOutcomeObservation {
             same_document_mutation: true,
             auth_fields_present: false,
-            elapsed_ms: 400,
+            elapsed_ms: 400.into(),
             ..base()
         };
         assert_eq!(
@@ -323,7 +329,7 @@ mod tests {
             same_document_mutation: true,
             success_marker_present: true,
             auth_fields_present: false,
-            elapsed_ms: 250,
+            elapsed_ms: 250.into(),
             ..base()
         };
         assert_eq!(
@@ -338,7 +344,7 @@ mod tests {
             in_iframe: true,
             navigated_away_from_auth_path: true,
             auth_fields_present: false,
-            elapsed_ms: 300,
+            elapsed_ms: 300.into(),
             ..base()
         };
         assert_eq!(
@@ -349,7 +355,7 @@ mod tests {
         let with_marker = AuthenticationOutcomeObservation {
             in_iframe: true,
             success_marker_present: true,
-            elapsed_ms: 300,
+            elapsed_ms: 300.into(),
             ..base()
         };
         assert_eq!(
@@ -363,7 +369,7 @@ mod tests {
         let observation = AuthenticationOutcomeObservation {
             navigated_away_from_auth_path: true,
             auth_fields_present: false,
-            elapsed_ms: DEFAULT_OUTCOME_EVIDENCE_TIMEOUT_MS,
+            elapsed_ms: 8_000.into(),
             ..base()
         };
         assert_eq!(
@@ -379,7 +385,7 @@ mod tests {
             navigated_away_from_auth_path: true,
             auth_fields_present: false,
             same_document_mutation: false,
-            elapsed_ms: 1_200,
+            elapsed_ms: 1_200.into(),
             ..base()
         };
         assert_eq!(
