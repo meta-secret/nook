@@ -1,3 +1,5 @@
+#![cfg(not(target_arch = "wasm32"))]
+
 use nook_wasm::{NookClientRunMode, NookRuntimeConfig, NookVaultClientPolicy};
 
 #[test]
