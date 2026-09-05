@@ -268,6 +268,8 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `identity` — `IdentityControlEpoch`
 - [x] `password_envelope` — `PasswordCharacterCount` for password policy bounds
 - [x] password generation — `PasswordCharacterCount` for requested length
+- [x] passkey secrets — validated `PasskeySecretVersion`
+- [x] authenticator codes — validated `TotpPeriod`
 - [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
 - [ ] `multi_device` — `SentinelShareVersion`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`

@@ -175,7 +175,7 @@ impl AuthenticatorSecret {
         Ok(TotpCode {
             code,
             seconds_remaining: period - (unix_seconds % period),
-            period,
+            period: self.period,
         })
     }
 
@@ -324,7 +324,7 @@ pub fn authenticator_setup_key_changed(
 pub struct TotpCode {
     pub code: String,
     pub seconds_remaining: u64,
-    pub period: u64,
+    pub period: TotpPeriod,
 }
 
 fn normalize_base32(value: &str) -> String {
@@ -553,6 +553,7 @@ mod tests {
         let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59)?;
         let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)?.current_code(59)?;
         assert_eq!(from_uri.code, from_secret.code);
+        assert_eq!(from_uri.period, TotpPeriod::default());
         Ok(())
     }
 
