@@ -425,8 +425,8 @@ mod tests {
         )
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn field_index_factories_match_the_core_constants() {
         for (field_index, expected) in [
             (CredentialFillFieldIndex::zero(), field::Index::ZERO),
@@ -438,8 +438,8 @@ mod tests {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn classifier_returns_an_owned_observation_from_borrowed_inputs()
     -> Result<(), wasm_bindgen::JsError> {
         let field_index = CredentialFillFieldIndex::two();
@@ -474,8 +474,8 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn classifier_returns_typed_ignored_for_an_unrelated_input() {
         let field_index = CredentialFillFieldIndex::three();
         let page_field = NookPageInputFieldObservation::new(
@@ -535,8 +535,8 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn rejected_result_exposes_the_typed_core_rejection() -> Result<(), wasm_bindgen::JsError> {
         let field_index = CredentialFillFieldIndex::zero();
         let observation = CredentialFillObservation::credential(
@@ -559,8 +559,8 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn observation_overflow_is_typed_terminal_and_keeps_the_input_borrowed()
     -> Result<(), wasm_bindgen::JsError> {
         let observation = field(field::Index::ZERO, &CredentialFillFieldRole::username());

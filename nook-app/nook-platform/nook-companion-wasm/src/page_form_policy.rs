@@ -239,7 +239,8 @@ pub fn parse_page_input_type(value: &str) -> nook_companion_core::PageInputType 
 mod tests {
     use super::*;
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn page_form_wasm_exports_match_core_policy() {
         let otp = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Text,
@@ -381,7 +382,8 @@ mod tests {
         }
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_advance_control_wasm_export_accepts_and_rejects_observations() {
         assert!(authentication_advance_control_is_safe(
             login_advance_observation("https://login.example.test/auth/login", "Sign in",)
@@ -391,7 +393,8 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_passkey_control_wasm_export_accepts_and_rejects_candidates() {
         let accepted =
             nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
@@ -429,5 +432,41 @@ mod tests {
         assert!(!authentication_passkey_control_candidate_is_safe(
             signup_candidate
         ));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn remaining_page_policy_wrappers_preserve_core_classification() {
+        assert_eq!(expand_identity_text("SignInForm2"), "sign in form 2");
+
+        let login_context = NookLoginContextObservation::new(
+            "checkout".to_owned(),
+            vec!["account-login".to_owned()],
+            "Submit".to_owned(),
+            "/cart".to_owned(),
+        );
+        assert!(has_login_context(&login_context));
+
+        assert!(looks_like_passkey_control_label("Sign in with passkey"));
+        assert!(!looks_like_passkey_control_label("Remove passkey"));
+        assert!(looks_like_passkey_enrollment_or_management_label(
+            "Add passkey"
+        ));
+        assert!(looks_like_manual_checkpoint_label("Accept privacy policy"));
+        assert!(looks_like_email_verification_body(
+            "Check your email to continue"
+        ));
+
+        let safe_passkey =
+            nook_companion_core::AuthenticationDetailedPasskeyControlObservation::ExplicitlyMarked(
+                login_advance_observation("https://login.example.test/auth/passkey", "Use passkey"),
+            );
+        assert!(authentication_passkey_control_evidence_is_safe(
+            safe_passkey
+        ));
+        assert_eq!(
+            parse_page_input_type(" PASSWORD "),
+            nook_companion_core::PageInputType::Password
+        );
     }
 }

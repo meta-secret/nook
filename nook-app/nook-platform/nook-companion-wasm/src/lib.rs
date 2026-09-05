@@ -450,7 +450,8 @@ pub fn belongs_to_sentinel_vault(
 mod tests {
     use super::*;
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn backup_code_wasm_exports_match_core_policy() {
         let text = [
             "Save your backup codes",
@@ -465,8 +466,9 @@ mod tests {
         );
     }
 
-    #[test]
-    fn oauth_origin_and_vault_host_wasm_exports_match_core_policy() {
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn oauth_origin_and_vault_host_wasm_exports_match_core_policy() -> Result<(), String> {
         let supported = resolve_oauth_origin_support(
             nook_companion_core::BrowserOAuthProvider::GoogleDrive,
             "https://simple.nokey.sh",
@@ -477,13 +479,14 @@ mod tests {
 
         assert!(is_simple_vault_hostname("simple.dev.nokey.sh"));
         assert!(is_sentinel_vault_hostname("sentinel.nokey.sh"));
-        match normalize_simple_vault_base_url("https://simple.nokey.sh") {
-            Ok(normalized) => assert_eq!(normalized, "https://simple.nokey.sh/"),
-            Err(error) => panic!("normalize failed: {error:?}"),
-        }
+        let normalized = normalize_simple_vault_base_url("https://simple.nokey.sh")
+            .map_err(|error| format!("normalize failed: {error:?}"))?;
+        assert_eq!(normalized, "https://simple.nokey.sh/");
+        Ok(())
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn extension_persistence_wasm_exports_match_core_policy() {
         let area = nook_companion_core::ExtensionPersistenceArea::Pairing;
         assert_eq!(extension_persistence_database_name(area), "nook_extension");
@@ -505,7 +508,8 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn workflow_wasm_export_rejects_unbounded_observations() {
         let input = nook_companion_core::AuthenticationPageObservations {
             observations: vec![nook_companion_core::AuthenticationPageObservation {
@@ -522,7 +526,8 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn detailed_workflow_wasm_export_rejects_unbounded_handler_facts() {
         let input = nook_companion_core::AuthenticationPageObservationFactsBatch {
             observations: vec![nook_companion_core::AuthenticationPageObservationFacts {
@@ -542,7 +547,8 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn username_evidence_exports_preserve_core_classification_and_ordering() {
         let field = NookPageInputFieldObservation::new(
             nook_companion_core::PageInputType::Email,
@@ -571,7 +577,8 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn saved_login_capability_export_rejects_impossible_snapshots() {
         let valid = nook_companion_core::AuthenticationWorkflowSnapshot {
             kind: nook_companion_core::AuthenticationWorkflowKind::Login,
@@ -622,7 +629,8 @@ mod tests {
         );
     }
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn backup_code_classifier_bridge_preserves_typed_variants() {
         assert_eq!(
             classify_authentication_backup_codes_observation("Use a backup code instead", false),
@@ -637,17 +645,19 @@ mod tests {
         );
     }
 
-    #[test]
-    fn enrollment_match_bridge_preserves_selected_recovery_action() {
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn enrollment_match_bridge_preserves_selected_recovery_action() -> Result<(), String> {
         let nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot) =
             authentication_enrollment_workflow_match(true, "Save these recovery codes", false)
         else {
-            panic!("expected a selected enrollment workflow");
+            return Err("expected a selected enrollment workflow".to_owned());
         };
         assert_eq!(
             snapshot.action,
             nook_companion_core::AuthenticationWorkflowAction::SaveBackupCodes
         );
+        Ok(())
     }
 }
 

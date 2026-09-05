@@ -86,7 +86,8 @@ mod tests {
     use super::{AccountPickerAuthorizationLifecycle, CleanupEvidence, CleanupTransitionOutcome};
     use nook_companion_core::CleanupTransitionError;
 
-    #[test]
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn wrapper_returns_the_successor_after_activation_and_rejection() {
         let active = AccountPickerAuthorizationLifecycle::new("opening".to_owned());
         let started = active.begin_cleanup("cleanup".to_owned());
@@ -110,5 +111,32 @@ mod tests {
             CleanupTransitionOutcome::Rejected(CleanupTransitionError::NotCleaning)
         );
         assert!(rejected.into_lifecycle().is_current("cleanup"));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn wrapper_preserves_final_cleanup_and_release_lifecycle() {
+        let active = AccountPickerAuthorizationLifecycle::new("opening".to_owned());
+        let started = active.begin_cleanup("cleanup".to_owned());
+        let cleaning = started.into_lifecycle();
+        assert!(cleaning.is_final_cleanup("cleanup", CleanupEvidence::Partial));
+
+        let released = cleaning.release_cleanup("cleanup");
+        assert_eq!(released.outcome(), CleanupTransitionOutcome::Released);
+        let cleaning = released.into_lifecycle();
+        assert_eq!(cleaning.snapshot(), "cleanup");
+        assert!(!cleaning.is_final_cleanup("cleanup", CleanupEvidence::Partial));
+        assert!(!cleaning.is_final_cleanup("cleanup", CleanupEvidence::Full));
+
+        let restarted = cleaning.begin_cleanup("ignored".to_owned());
+        assert_eq!(restarted.outcome(), CleanupTransitionOutcome::Started);
+        let cleaning = restarted.into_lifecycle();
+        assert_eq!(cleaning.snapshot(), "cleanup");
+        assert!(!cleaning.is_final_cleanup("cleanup", CleanupEvidence::Partial));
+        assert!(cleaning.is_final_cleanup("cleanup", CleanupEvidence::Full));
+
+        let completed = cleaning.complete_cleanup("cleanup", CleanupEvidence::Full);
+        assert_eq!(completed.outcome(), CleanupTransitionOutcome::Activated);
+        assert!(completed.into_lifecycle().is_current("cleanup"));
     }
 }
