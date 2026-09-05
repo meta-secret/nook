@@ -90,4 +90,16 @@ mod tests {
         ));
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn bridge_rejects_an_empty_observation_binding() {
+        assert!(
+            super::bind_authentication_page_observation_facts(
+                AuthenticationPageObservationFactsBatch {
+                    observations: Vec::new(),
+                }
+            )
+            .is_err()
+        );
+    }
 }
