@@ -315,7 +315,7 @@ mod tests {
                         URL_SAFE_NO_PAD.encode([10_u8; 77]),
                     )?,
                 },
-                signature_count: 0,
+                signature_count: 0.into(),
                 discoverable: true,
                 backup_eligible: true,
                 backup_state: false,
