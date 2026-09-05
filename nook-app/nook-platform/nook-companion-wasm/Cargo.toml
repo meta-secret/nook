@@ -3,6 +3,7 @@ name = "nook-companion-wasm"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+autotests = false
 description = "Tiny WASM package for auth-companion heuristics and host policy."
 repository.workspace = true
 

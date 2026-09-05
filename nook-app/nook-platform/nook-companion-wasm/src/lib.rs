@@ -921,3 +921,7 @@ mod wasm_tests {
         Ok(())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32"))]
+#[path = "../tests/companion_exports.rs"]
+mod companion_exports_tests;

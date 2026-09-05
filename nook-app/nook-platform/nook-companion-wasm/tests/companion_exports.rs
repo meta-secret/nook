@@ -1,7 +1,7 @@
 #![cfg(target_arch = "wasm32")]
 
+use crate::*;
 use nook_companion_core::{ExtensionPersistenceArea, ExtensionPersistenceObservation};
-use nook_companion_wasm::*;
 use wasm_bindgen_test::wasm_bindgen_test;
 
 fn js_error(error: impl std::fmt::Display) -> wasm_bindgen::JsError {
