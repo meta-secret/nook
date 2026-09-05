@@ -210,18 +210,15 @@ pub use website_login_save::{
 
 pub use nook_auth2::{
     DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
-    MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor, SentinelGenesisIssued,
-    SentinelGenesisParticipant, SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
-    SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest, SentinelGenesisSession,
+    MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor, ReadySentinelGenesis,
+    SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,
+    SentinelGenesisPolicy, SentinelGenesisPublicKeyAnnouncement, SentinelGenesisReadiness,
+    SentinelGenesisRejection, SentinelGenesisRequest, SentinelGenesisSession,
     SentinelGenesisShareDelivery, SentinelGenesisVersion, SentinelParticipantCount,
     SentinelRecordCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold,
-    accept_sentinel_genesis_share_delivery, add_sentinel_genesis_participant_payload,
-    add_sentinel_genesis_participant_payload_with_label,
-    add_sentinel_genesis_public_key_announcement, add_sentinel_genesis_response,
-    build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
-    finalize_sentinel_genesis_shares, normalize_sentinel_genesis_participant_payload,
+    accept_sentinel_genesis_share_delivery, build_sentinel_genesis_participant_response_link,
+    build_sentinel_genesis_request_link, normalize_sentinel_genesis_participant_payload,
     normalize_sentinel_genesis_request, sentinel_genesis_participant_fingerprint,
-    sentinel_genesis_request,
 };
 
 pub use multi_device::{
@@ -410,8 +407,8 @@ pub use vault_search_catalog::{
 };
 pub use vault_sentinel_genesis::{
     SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
-    create_sentinel_genesis_public_key_announcement, finalize_sentinel_genesis,
-    respond_to_sentinel_genesis_request, sentinel_genesis_operations, start_sentinel_genesis,
+    create_sentinel_genesis_public_key_announcement, respond_to_sentinel_genesis_request,
+    sentinel_genesis_operations,
 };
 pub use vault_sentinel_unlock::SentinelUnlockSigning;
 pub use vault_session::{

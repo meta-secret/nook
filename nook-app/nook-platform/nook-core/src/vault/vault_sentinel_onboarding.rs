@@ -164,7 +164,7 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, OAuthFileConfigData, OauthFilePreset, SigningIdentity, StorageProviderData,
-        StorageProviderType, finalize_sentinel_genesis_shares, start_sentinel_genesis,
+        StorageProviderType,
     };
 
     fn provider_snapshot(store_id: &str) -> AuthProvidersSnapshotData {
@@ -198,26 +198,24 @@ mod tests {
         let member = DeviceIdentity::generate()?;
         let owner_signing = SigningIdentity::generate()?.0;
         let member_signing = SigningIdentity::generate()?.0;
-        let mut session = start_sentinel_genesis(
-            &owner,
-            &owner_signing,
-            crate::StartSentinelGenesisArgs {
-                label: "Owner".to_owned(),
-                participant_count: 2,
-                threshold: 2,
-            },
-        )?;
+        let session = crate::StartSentinelGenesisArgs {
+            label: "Owner".to_owned(),
+            participant_count: 2,
+            threshold: 2,
+        }
+        .start(&owner, &owner_signing)?;
         let response = crate::respond_to_sentinel_genesis_request(
-            &session.request,
+            session.request(),
             &member,
             &member_signing,
             "Member".to_owned(),
         )?;
-        crate::add_sentinel_genesis_response(&mut session, response)?;
-        let request = session.request.clone();
+        let session = session.collect(response)?;
+        let request = session.request().clone();
         let store_id = crate::generate_store_id()?;
-        let issued =
-            finalize_sentinel_genesis_shares(session, &store_id, owner_signing.signing_key())?;
+        let issued = session
+            .prepare(owner_signing.signing_key())?
+            .issue(&store_id)?;
         let delivery = issued
             .deliveries
             .into_iter()

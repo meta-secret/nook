@@ -148,44 +148,52 @@ mod tests {
     use super::*;
     use crate::auth::multi_device::DeviceIdentity;
     use crate::auth::sentinel_genesis::{
-        add_sentinel_genesis_participant_payload, create_sentinel_genesis_public_key_announcement,
-        respond_to_sentinel_genesis_request, start_sentinel_genesis,
+        SentinelGenesisReadiness, SentinelGenesisSession,
+        create_sentinel_genesis_public_key_announcement, respond_to_sentinel_genesis_request,
     };
     use ed25519_dalek::SigningKey;
 
-    fn signing_key() -> anyhow::Result<SigningKey> {
-        let mut seed = [0_u8; 32];
-        getrandom::fill(&mut seed)?;
-        Ok(SigningKey::from_bytes(&seed))
-    }
+    struct Fixture;
+    impl Fixture {
+        fn signing_key() -> anyhow::Result<SigningKey> {
+            let mut seed = [0_u8; 32];
+            getrandom::fill(&mut seed)?;
+            Ok(SigningKey::from_bytes(&seed))
+        }
 
-    fn participant(
-        request: &SentinelGenesisRequest,
-        label: &str,
-    ) -> anyhow::Result<SentinelGenesisParticipantResponse> {
-        let identity = DeviceIdentity::generate()?;
-        let signing = signing_key()?;
-        Ok(respond_to_sentinel_genesis_request(
-            request,
-            &identity,
-            &signing,
-            label.to_owned(),
-        )?)
+        fn participant(
+            request: &SentinelGenesisRequest,
+            label: &str,
+        ) -> anyhow::Result<SentinelGenesisParticipantResponse> {
+            let identity = DeviceIdentity::generate()?;
+            let signing = Self::signing_key()?;
+            Ok(respond_to_sentinel_genesis_request(
+                request,
+                &identity,
+                &signing,
+                label.to_owned(),
+            )?)
+        }
     }
 
     #[test]
     fn request_link_round_trips_as_canonical_validated_json() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let session =
-            start_sentinel_genesis(&owner, &owner_signing, 3.into(), 2.into(), "Owner".into())?;
-        let request_json = serde_json::to_string(&session.request)?;
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            3.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
+        let request_json = serde_json::to_string(session.request())?;
 
         let link = build_sentinel_genesis_request_link(&request_json, "https://nook.example/app/")?;
         assert!(link.starts_with("https://nook.example/app/#sentinel-request="));
-        assert!(!link.contains(&session.request.session_id.to_string()));
+        assert!(!link.contains(&session.request().session_id.to_string()));
         assert_eq!(normalize_sentinel_genesis_request(&link)?, request_json);
-        let mut tampered = session.request.clone();
+        let mut tampered = session.request().clone();
         tampered.policy.threshold = 3.into();
         assert!(normalize_sentinel_genesis_request(&serde_json::to_string(&tampered)?).is_err());
         assert!(normalize_sentinel_genesis_request("not-a-request").is_err());
@@ -195,10 +203,15 @@ mod tests {
     #[test]
     fn request_link_preserves_a_canonical_route_without_a_trailing_slash() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let session =
-            start_sentinel_genesis(&owner, &owner_signing, 3.into(), 2.into(), "Owner".into())?;
-        let request_json = serde_json::to_string(&session.request)?;
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            3.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
+        let request_json = serde_json::to_string(session.request())?;
 
         let link =
             build_sentinel_genesis_request_link(&request_json, "https://nook.example/vault")?;
@@ -211,10 +224,15 @@ mod tests {
     #[test]
     fn participant_response_link_round_trips_and_remains_session_verified() -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let mut session =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
-        let response = participant(&session.request, "Peer")?;
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
+        let response = Fixture::participant(session.request(), "Peer")?;
         let response_json = serde_json::to_string(&response)?;
 
         let link = build_sentinel_genesis_participant_response_link(
@@ -225,8 +243,8 @@ mod tests {
         assert!(!link.contains(&response.signature));
         let normalized = normalize_sentinel_genesis_participant_payload(&link)?;
         assert_eq!(normalized, response_json);
-        add_sentinel_genesis_participant_payload(&mut session, &normalized)?;
-        assert!(session.is_complete());
+        let session = session.collect_payload(&normalized, "")?;
+        assert_eq!(session.readiness(), SentinelGenesisReadiness::Complete);
         assert!(normalize_sentinel_genesis_participant_payload("not-a-response").is_err());
         Ok(())
     }
@@ -235,10 +253,15 @@ mod tests {
     fn participant_response_link_preserves_a_canonical_route_without_a_trailing_slash()
     -> anyhow::Result<()> {
         let owner = DeviceIdentity::generate()?;
-        let owner_signing = signing_key()?;
-        let session =
-            start_sentinel_genesis(&owner, &owner_signing, 2.into(), 2.into(), "Owner".into())?;
-        let response = participant(&session.request, "Peer")?;
+        let owner_signing = Fixture::signing_key()?;
+        let session = SentinelGenesisSession::start(
+            &owner,
+            &owner_signing,
+            2.into(),
+            2.into(),
+            "Owner".into(),
+        )?;
+        let response = Fixture::participant(session.request(), "Peer")?;
         let response_json = serde_json::to_string(&response)?;
 
         let link = build_sentinel_genesis_participant_response_link(
@@ -257,7 +280,7 @@ mod tests {
     #[test]
     fn local_announcement_fingerprint_remains_readable_but_not_enrollable() -> anyhow::Result<()> {
         let peer = DeviceIdentity::generate()?;
-        let peer_signing = signing_key()?;
+        let peer_signing = Fixture::signing_key()?;
         let announcement =
             create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())?;
         let payload = serde_json::to_string(&announcement)?;
