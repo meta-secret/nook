@@ -2,8 +2,89 @@
 
 ## Purpose
 
-Keep TypeScript domain models nested and enum-driven. Treat raw-string field
-allow-lists and hand-rolled `Result` / `Maybe` utilities as forbidden.
+Keep TypeScript domain models typed by meaning, nested, and enum-driven. A raw
+representation does not carry the metadata that makes a domain value safe to
+use. Treat raw domain primitives, inline unions, raw-string field allow-lists,
+and hand-rolled `Result` / `Maybe` utilities as forbidden.
+
+This is the TypeScript form of Rust's domain-newtype rule. A domain type must
+make its meaning visible at the declaration, field, parameter, return, and
+boundary where it is used.
+
+## Domain Type Rule
+
+### Required actions
+
+- Define a named domain type for every authored domain, application, workflow,
+  lifecycle, policy, mode, command, configuration, persistence, and
+  owned-contract value.
+- Use the generated Rust/WASM enum or newtype for portable product and
+  security vocabulary. Do not declare a TypeScript mirror.
+- Use a cohesive TypeScript enum for a browser, lifecycle, or presentation
+  vocabulary owned by TypeScript.
+- Use a branded or opaque type for a scalar with one domain meaning.
+
+  ```ts
+  declare const WorkflowIdBrand: unique symbol;
+  type WorkflowId = string & {
+    readonly [WorkflowIdBrand]: "WorkflowId";
+  };
+  ```
+
+- Use a named interface or value object for a domain aggregate.
+- Declare every legal alternative as a named discriminated union before using
+  it in another domain type.
+- Keep the named union separate from its containing field.
+
+  ```ts
+  enum WorkflowSelectionState {
+    Matched = "matched",
+    Unavailable = "unavailable",
+  }
+
+  type WorkflowSelection =
+    | {
+        readonly state: WorkflowSelectionState.Matched;
+        readonly kind: AuthenticationWorkflowKind;
+      }
+    | { readonly state: WorkflowSelectionState.Unavailable };
+
+  interface AuthenticationWorkflowView {
+    readonly selection: WorkflowSelection;
+  }
+  ```
+
+- Normalize a raw external representation into the named domain type at the
+  narrowest boundary.
+- Preserve the named type through domain calls, state, storage, and WASM
+  adapters.
+
+### Prohibited actions
+
+- Do not expose raw primitive values when they carry domain meaning.
+  - This includes `string`, `number`, `boolean`, and other primitives.
+  - This applies to reachable fields, parameters, returns, DTOs, state,
+    collections, tuples, and generic arguments.
+- Do not use an inline union at a domain boundary. This includes fields,
+  parameters, returns, arrays, promises, and generic arguments.
+- Do not write `readonly workflowKind: AuthenticationWorkflowKind | false`.
+  The absence or availability state must be a member of a named union such as
+  `WorkflowSelection`.
+- Do not use `false`, `true`, `null`, `undefined`, empty strings, zero, or
+  sentinel numbers as unnamed domain states.
+- Do not treat `type WorkflowId = string` as a safe newtype. A plain alias does
+  not stop two string-backed domain values from being exchanged.
+- Do not unwrap a domain type merely to pass its primitive representation
+  through another application layer.
+
+Raw primitives are allowed only in narrow cases.
+
+- Keep them in private implementation storage.
+- Keep them for plaintext user content whose representation is its meaning.
+- Keep them for locale plumbing.
+- Keep them at a required external, serialization, database, or host boundary.
+- Convert them to named domain types immediately when application behavior
+  begins.
 
 ## Forbidden Patterns
 
@@ -59,6 +140,8 @@ Same-prefix names almost always mean a separate object was flattened. Generic
   `Result<string>`.
 - Optional request fields that mean a named state become domain unions
   (`RemoteTask.Specified` / `RemoteTask.Omitted`), never `Maybe<string>`.
+- Domain unions are declared as named types and referenced by name. Do not
+  embed a union in a field declaration.
 
 ## Scope
 
@@ -82,6 +165,15 @@ Does not apply to:
 
 ## Application Checklist
 
+- [ ] Search the changed scope for raw primitives in domain fields, parameters,
+      returns, state, DTOs, collections, tuples, and generic arguments.
+- [ ] Give every scalar domain meaning a generated, branded, opaque, enum, or
+      value-object type.
+- [ ] Declare every domain union separately and use its name in containing
+      fields.
+- [ ] Reject primitive sentinels such as `false`, `undefined`, `null`, empty
+      strings, and zero when they stand for a domain state.
+- [ ] Normalize raw external values immediately at the boundary.
 - [ ] Search for `new Set(['...'])` field allow-lists and replace with field
       enums.
 - [ ] Search for TypeScript `Result` / `Maybe` / `Present` / `Absent` utilities
