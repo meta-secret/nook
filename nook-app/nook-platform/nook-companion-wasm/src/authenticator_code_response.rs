@@ -11,8 +11,6 @@ pub fn decode_authenticator_code_response(
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
-    use std::fmt;
-
     use serde::{Deserialize, Serialize};
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -38,21 +36,15 @@ mod tests {
             code: "123456",
             expires_at,
         })
-        .map_err(AuthenticatorCodeFixture::js_error)?;
-        let wire =
-            serde_wasm_bindgen::from_value(input).map_err(AuthenticatorCodeFixture::js_error)?;
+        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        let wire = serde_wasm_bindgen::from_value(input)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
         let response = super::decode_authenticator_code_response(wire)?;
-        let output =
-            serde_wasm_bindgen::to_value(&response).map_err(AuthenticatorCodeFixture::js_error)?;
-        let result: AuthenticatorCodeResult =
-            serde_wasm_bindgen::from_value(output).map_err(AuthenticatorCodeFixture::js_error)?;
+        let output = serde_wasm_bindgen::to_value(&response)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        let result: AuthenticatorCodeResult = serde_wasm_bindgen::from_value(output)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
         assert_eq!(result.expires_at, expires_at);
         Ok(())
-    }
-
-    impl AuthenticatorCodeFixture {
-        fn js_error(error: impl fmt::Display) -> wasm_bindgen::JsError {
-            wasm_bindgen::JsError::new(&error.to_string())
-        }
     }
 }
