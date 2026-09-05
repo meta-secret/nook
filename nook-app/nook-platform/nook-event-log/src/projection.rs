@@ -14,8 +14,6 @@ use nook_auth2::StoredSecretRecord;
 use nook_auth2::{SecretId, StoreId};
 use std::collections::BTreeMap;
 
-use operation_application::apply_operation;
-
 /// One live or tombstoned secret in the encrypted projection.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProjectedSecret {
@@ -157,12 +155,7 @@ pub fn project_vault(graph: &EventGraph, store_id: &str) -> EventResult<VaultPro
             ) {
                 security_reason.get_or_insert(EpochRotationReason::ConcurrentVaultMutation);
             }
-            apply_operation(
-                &mut projection,
-                &event_id,
-                operation,
-                &mut replacements_by_old,
-            );
+            projection.apply_operation(&event_id, operation, &mut replacements_by_old);
         }
         if let Some(reason) = security_reason {
             security_events.insert(event_id.clone(), reason);
