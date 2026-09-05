@@ -439,14 +439,14 @@ impl NookVaultManager {
             ));
         }
         let format = nook_core::detect_stored_format(content)?;
-        let mut records = nook_core::deserialize_stored(content, format)?;
-        self.capture_vault_unlock(content)?;
+        let records = nook_core::deserialize_stored(content, format)?;
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
             if !nook_core::is_join_stored_record(&record)? {
                 retained.push(record);
             }
         }
+        self.capture_vault_unlock(content)?;
         Ok((false, retained))
     }
 
@@ -607,14 +607,16 @@ mod metadata_tests {
         manager.vault.vault_name = VaultNameState::Named("Existing".to_owned());
         manager.vault.password_entries = vec![entry.clone()];
 
-        match manager.load_password_unlock_records(&content, false).await {
-            Err(_) => {}
-            Ok(_) => return Err(anyhow::anyhow!("password load accepted version 3")),
-        }
-        match manager.hydrate_listed_password_entries(&content).await {
-            Err(_) => {}
-            Ok(()) => return Err(anyhow::anyhow!("password hydration accepted version 3")),
-        }
+        let password_load = manager.load_password_unlock_records(&content, false).await;
+        anyhow::ensure!(password_load.is_err(), "password load accepted version 3");
+        let hydration = manager.hydrate_listed_password_entries(&content).await;
+        anyhow::ensure!(hydration.is_err(), "password hydration accepted version 3");
+        let mut malformed = content.replacen("version: 3", "version: 2", 1);
+        malformed += "sentinel_shares:\n- key: sentinel_share:0123456789abcdef\n  value: invalid\n";
+        let result = manager
+            .load_password_unlock_records(&malformed, false)
+            .await;
+        anyhow::ensure!(result.is_err(), "password load accepted invalid share");
         assert_eq!(manager.vault.store_id, "store_existing11");
         assert!(matches!(
             &manager.vault.vault_name,

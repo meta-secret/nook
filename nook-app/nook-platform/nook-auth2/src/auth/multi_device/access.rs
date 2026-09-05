@@ -1,6 +1,6 @@
 use super::{
-    DeviceIdentity, JoinRequest, VaultMetaState, build_members_records, member_from_identity,
-    resolve_member_roster, roster_add_member,
+    DeviceIdentity, JoinRequest, VaultMetaState, build_members_records, list_join_requests,
+    member_from_identity, resolve_member_roster, roster_add_member,
 };
 use crate::errors::MultiDeviceResult;
 use crate::{DeviceId, StoredSecretRecord, SymmetricKey};
@@ -63,8 +63,8 @@ pub fn pending_join_for_device(
     records: &[StoredSecretRecord],
     device_id: &DeviceId,
 ) -> MultiDeviceResult<Option<JoinRequest>> {
-    let mut state = VaultMetaState::from_stored_records(records)?;
-    Ok(state.joins.remove(device_id))
+    list_join_requests(records)
+        .map(|joins| joins.into_iter().find(|join| join.device_id == *device_id))
 }
 
 #[cfg(test)]
