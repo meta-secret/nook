@@ -303,9 +303,9 @@ impl NookVaultManager {
             shares.push(nook_core::SentinelShareIssuedPayload {
                 device_id: DeviceId::parse(device_id)?,
                 version: envelope.version,
-                threshold: envelope.threshold.into(),
-                required_participants: envelope.required_participants.into(),
-                share_index: envelope.share_index.into(),
+                threshold: envelope.threshold,
+                required_participants: envelope.required_participants,
+                share_index: envelope.share_index,
                 ciphertext: envelope.ciphertext,
             });
         }

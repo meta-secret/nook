@@ -25,11 +25,25 @@ impl LocalEventStore {
         Self::default()
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "database boundary: stores immutable event representation bytes"
+        )
+    )]
     pub fn put_event(&mut self, event_id: EventId, storage_bytes: Vec<u8>) {
         let _ = self.replica.put_event(event_id, storage_bytes);
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "database boundary: returns immutable event representation bytes"
+        )
+    )]
     pub fn get_bytes(&self, event_id: &EventId) -> Option<&[u8]> {
         self.replica.get_bytes(event_id)
     }
@@ -39,15 +53,36 @@ impl LocalEventStore {
         self.replica.event_ids()
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "database boundary: queues immutable event representation bytes for provider delivery"
+        )
+    )]
     pub fn queue_outbox(&mut self, provider_id: &str, event_id: EventId, bytes: Vec<u8>) {
         let _ = self.replica.queue_outbox(provider_id, event_id, bytes);
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "database boundary: releases immutable event representation bytes from the provider outbox"
+        )
+    )]
     pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &EventId) -> Option<Vec<u8>> {
         self.replica.dequeue_outbox(provider_id, event_id)
     }
 
     #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "database boundary: snapshots immutable event representation bytes in a provider outbox"
+        )
+    )]
     pub fn pending_outbox(&self, provider_id: &str) -> Vec<(EventId, Vec<u8>)> {
         self.replica.pending_outbox(provider_id)
     }
@@ -94,6 +129,13 @@ impl LocalEventStore {
 }
 
 /// Merge remote event ids into the local store (commutative set union).
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: validates and merges immutable remote event representation bytes"
+    )
+)]
 pub fn union_remote_events(
     local: &mut LocalEventStore,
     remote_events: &[(EventId, Vec<u8>)],
@@ -150,6 +192,13 @@ pub fn union_remote_events(
 }
 
 /// Set-union remote events and return updated causal head ids.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: validates and merges immutable remote event bytes before projecting heads"
+    )
+)]
 pub fn union_remote_events_and_heads(
     local: &mut LocalEventStore,
     remote_events: &[(EventId, Vec<u8>)],
@@ -167,6 +216,13 @@ pub fn union_remote_events_and_heads(
 /// Validate a remote event's content-addressed id and test whether it belongs to
 /// the active vault. Providers may physically contain events for multiple
 /// vaults; those unrelated events must not poison this vault's projection.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: validates immutable remote event bytes before checking vault ownership"
+    )
+)]
 pub fn remote_event_belongs_to_store(
     event_id: &EventId,
     bytes: &[u8],
@@ -177,6 +233,13 @@ pub fn remote_event_belongs_to_store(
 
 /// Validate a remote event's content-addressed id and actor signature, then
 /// return the store id declared by the signed body.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: validates immutable remote event bytes before reading the signed store id"
+    )
+)]
 pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> EventResult<StoreId> {
     let event = parse_remote_event_storage_bytes(bytes)?;
     if event.id()? != *event_id {
@@ -186,7 +249,7 @@ pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> EventResult<St
     }
     if !event.body.schema_version.is_supported() {
         return Err(EventError::UnsupportedSchemaVersion {
-            version: event.body.schema_version.get(),
+            version: event.body.schema_version,
         });
     }
     event.validate_actor_signature()?;
@@ -198,6 +261,13 @@ pub fn remote_event_store_id(event_id: &EventId, bytes: &[u8]) -> EventResult<St
 /// Providers should fail closed when they contain another logical vault. An
 /// empty active `store_id` means the device may adopt a single provider vault,
 /// but multiple provider vaults are ambiguous and must not be auto-merged.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: classifies immutable remote event representation byte collections"
+    )
+)]
 pub fn classify_remote_event_log(
     remote_events: &[(EventId, Vec<u8>)],
     active_store_id: Option<&str>,

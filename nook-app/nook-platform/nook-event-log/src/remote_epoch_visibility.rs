@@ -120,6 +120,13 @@ fn publish_priority(event: &VaultEvent) -> u8 {
 /// Order provider writes so a checkpoint becomes visible before its trigger.
 /// An observer may temporarily see an orphan checkpoint, which is quarantined;
 /// it never sees an appendable epoch trigger without its checkpoint.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: orders immutable remote event storage byte records for visibility"
+    )
+)]
 pub fn order_remote_events_for_visibility(events: &mut [(EventId, Vec<u8>)]) -> EventResult<()> {
     let mut priorities = BTreeMap::new();
     for (event_id, bytes) in events.iter() {
