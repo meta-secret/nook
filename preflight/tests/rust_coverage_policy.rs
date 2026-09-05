@@ -87,27 +87,47 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(product.contains(".package_lines_percent[\"nook-companion-wasm\"]"));
     assert!(product.contains("llvm-cov clean --workspace"));
     assert!(product
-        .split_once("llvm-cov test --release -p nook-wasm --no-report")
+        .split_once("llvm-cov test --no-clean --release -p nook-wasm --no-report")
         .and_then(|(_, later)| later.split_once("llvm-cov test --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests \\\n    && nook-sccache-report wasm-node-test-and-coverage"))
         .is_some_and(|(_, later)| later.contains("--features browser-wasm-tests --fail-under-lines \"$nook_wasm_floor\"")));
     assert!(product.contains("CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=true"));
     assert!(product.contains(
         "WASM_BINDGEN_TEST_TIMEOUT=60 CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER=\"$runner\""
     ));
-    assert_eq!(product.matches("--features browser-wasm-tests").count(), 2);
+    assert_eq!(product.matches("--features browser-wasm-tests").count(), 3);
     assert!(product.contains(".package_lines_percent[\"nook-wasm\"]"));
     assert!(product.contains("--fail-under-lines \"$nook_wasm_floor\""));
+    let wasm_node_deps = product
+        .split_once("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")
+        .and_then(|(_, remainder)| {
+            remainder
+                .split_once("# Source overlay for bulk native leaves")
+                .map(|(stage, _)| stage)
+        })
+        .context("WASM Node dependencies must be a bounded source-free stage")?;
+    assert!(wasm_node_deps.contains("apt-get install -y --no-install-recommends clang"));
+    assert!(wasm_node_deps.contains("https://bun.sh/install"));
+    assert!(wasm_node_deps.contains("sha256sum -c -"));
+    assert!(
+        wasm_node_deps
+            .split_once("llvm-cov clean --workspace")
+            .is_some_and(
+                |(_, later)| later.contains("llvm-cov --no-run --release -p nook-wasm --no-report")
+            )
+    );
+    assert!(wasm_node_deps.contains(
+        "llvm-cov --no-run --no-clean --target wasm32-unknown-unknown --release -p nook-wasm --features browser-wasm-tests"
+    ));
+    assert!(!wasm_node_deps.contains("llvm-cov test"));
     let wasm_coverage_stage = product
-        .split_once("FROM builder-wasm-tests AS builder-wasm-handoff")
+        .split_once("FROM builder-wasm-node-deps AS builder-wasm-handoff")
         .and_then(|(_, remainder)| {
             remainder
                 .split_once("FROM scratch AS wasm-export")
                 .map(|(stage, _)| stage)
         })
         .context("builder-wasm must be a bounded product image stage")?;
-    assert!(wasm_coverage_stage.contains("apt-get install -y --no-install-recommends clang"));
     assert!(wasm_coverage_stage.contains("native=82 browser=147"));
-    assert!(wasm_coverage_stage.contains("sha256sum -c -"));
     assert!(wasm_coverage_stage.contains(
         "CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS=\"-Zno-profiler-runtime -Clink-args=--no-gc-sections --cfg=wasm_bindgen_unstable_test_coverage\""
     ));
@@ -115,7 +135,8 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
         .split_once("\nFROM builder-wasm-handoff AS builder-wasm")
         .context("sealed handoff and secret-free browser validation stages")?;
     assert!(!handoff.contains("bun.sh/install"));
-    assert!(browser.contains("https://bun.sh/install") && !browser.contains("--mount=type=secret"));
+    assert!(browser.contains("wasm-pack test --node --release nook-wasm"));
+    assert!(!browser.contains("bun.sh/install") && !browser.contains("--mount=type=secret"));
     assert!(product.contains("--from=builder-wasm-handoff /opt/nook/wasm-handoff"));
     assert!(product.contains("--from=builder-wasm /opt/nook/wasm-coverage-passed"));
     assert!(product.contains("FROM builder-wasm-handoff AS nook-rust"));
