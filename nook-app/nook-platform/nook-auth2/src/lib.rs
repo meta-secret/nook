@@ -21,9 +21,9 @@ mod records;
 mod wire;
 
 pub use auth::device_key_protection::{
-    DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyRecoveryRequest, PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution,
-    WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
+    DeviceKeyProtectionSetup, DeviceKeyProtectionVersion, PasskeyAssertionRequest,
+    PasskeyDeviceIdentityMaterial, PasskeyRecoveryRequest, PasskeyRegistrationPrfOutput,
+    PasskeyRegistrationResolution, WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
     deterministic_passkey_prf_input, finish_passkey_device_identity,
     finish_passkey_device_identity_for_mode, finish_passkey_wrapped_device_identity,
     parse_wrapped_device_identity, passkey_assertion_request,
@@ -103,8 +103,9 @@ pub use auth::password_envelope::{
 pub use auth::sentinel_genesis::{
     SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,
     SentinelGenesisPolicy, SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest,
-    SentinelGenesisSession, SentinelGenesisShareDelivery, accept_sentinel_genesis_share_delivery,
-    add_sentinel_genesis_participant_payload, add_sentinel_genesis_participant_payload_with_label,
+    SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelGenesisVersion,
+    accept_sentinel_genesis_share_delivery, add_sentinel_genesis_participant_payload,
+    add_sentinel_genesis_participant_payload_with_label,
     add_sentinel_genesis_public_key_announcement, add_sentinel_genesis_response,
     build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
     create_sentinel_genesis_public_key_announcement, finalize_sentinel_genesis_shares,
@@ -115,7 +116,7 @@ pub use auth::sentinel_genesis::{
 pub use auth::sentinel_unlock::{
     CheckedSentinelUnlockRequest, SentinelUnlockPolicy, SentinelUnlockQuorum,
     SentinelUnlockReadiness, SentinelUnlockRejection, SentinelUnlockRequest,
-    SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus,
+    SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
 };
 pub use crypto::vault_crypto::VaultCrypto;
 pub use errors::{

@@ -260,7 +260,11 @@ Reachable external reexports and inherited methods must pass before staged crate
 
 - [ ] `VaultEventSession` — `store_id: StoreId`, `heads: Vec<EventId>`, `key_epoch: KeyEpoch`
 - [ ] `VaultProjection` maps — `BTreeMap<SecretId, …>` instead of `String` keys
+- [x] `device_key_protection` — validated `DeviceKeyProtectionVersion`
+- [x] `sentinel_genesis` — validated `SentinelGenesisVersion`
+- [x] `sentinel_unlock` — validated `SentinelUnlockVersion`
 - [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
+- [ ] `multi_device` — `SentinelShareVersion`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`
 - [ ] `vault_sync` — `VaultContentHash` for revision hashes
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`

@@ -76,13 +76,13 @@ pub use credit_card::CreditCardSecret;
 pub use dashlane_import::{DashlaneImportError, DashlaneImportPlan, plan_dashlane_import};
 pub use database::Database;
 pub use device_key_protection::{
-    DeviceKeyProtectionSetup, PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial,
-    PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistrationPrfOutput,
-    PasskeyRegistrationResolution, WrappedDeviceIdentity, derive_device_identity_from_passkey_prf,
-    deterministic_passkey_prf_input, finish_passkey_device_identity,
-    finish_passkey_device_identity_for_mode, finish_passkey_wrapped_device_identity,
-    parse_wrapped_device_identity, passkey_assertion_request,
-    passkey_derived_device_identity_record, passkey_recovery_request,
+    DeviceKeyProtectionSetup, DeviceKeyProtectionVersion, PasskeyAssertionRequest,
+    PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyRecoveryRequest,
+    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WrappedDeviceIdentity,
+    derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
+    finish_passkey_device_identity, finish_passkey_device_identity_for_mode,
+    finish_passkey_wrapped_device_identity, parse_wrapped_device_identity,
+    passkey_assertion_request, passkey_derived_device_identity_record, passkey_recovery_request,
     passkey_wrapped_device_identity_record, recover_passkey_device_identity,
     resolve_passkey_registration, resolve_passkey_registration_for_mode,
     serialize_wrapped_device_identity, unlock_passkey_device_identity,
@@ -126,7 +126,7 @@ pub use nook_app_common::{
 pub use nook_auth2::{
     LOCAL_IDENTITY_KEYRING_VERSION, LocalIdentityKeyring, LocalIdentityKeyringEntry,
     SentinelUnlockPolicy, SentinelUnlockQuorum, SentinelUnlockReadiness, SentinelUnlockRejection,
-    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus,
+    SentinelUnlockRequest, SentinelUnlockResponse, SentinelUnlockSession, SentinelUnlockStatus, SentinelUnlockVersion,
 };
 #[cfg(feature = "mock-passkey")]
 pub use nook_auth2::{
@@ -214,8 +214,8 @@ pub use nook_auth2::{
     PasswordWorkFactor, SentinelGenesisIssued, SentinelGenesisParticipant,
     SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
     SentinelGenesisPublicKeyAnnouncement, SentinelGenesisRequest, SentinelGenesisSession,
-    SentinelGenesisShareDelivery, SentinelParticipantCount, SentinelRecordCount,
-    SentinelShareCount, SentinelShareIndex, SentinelThreshold,
+    SentinelGenesisShareDelivery, SentinelGenesisVersion, SentinelParticipantCount,
+    SentinelRecordCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold,
     accept_sentinel_genesis_share_delivery, add_sentinel_genesis_participant_payload,
     add_sentinel_genesis_participant_payload_with_label,
     add_sentinel_genesis_public_key_announcement, add_sentinel_genesis_response,

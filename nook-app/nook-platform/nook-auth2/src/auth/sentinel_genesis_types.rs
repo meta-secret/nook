@@ -4,7 +4,37 @@ use crate::{
     MultiDeviceResult, StoreId, StoredSecretRecord,
 };
 use crate::{SentinelParticipantCount, SentinelThreshold};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
+
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct SentinelGenesisVersion(u32);
+
+impl SentinelGenesisVersion {
+    pub const CURRENT: Self = Self(1);
+
+    fn parse(value: u32) -> Result<Self, &'static str> {
+        match value {
+            1 => Ok(Self::CURRENT),
+            _ => Err("unsupported Sentinel genesis version"),
+        }
+    }
+}
+
+impl From<SentinelGenesisVersion> for u32 {
+    fn from(value: SentinelGenesisVersion) -> Self {
+        value.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SentinelGenesisVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,7 +59,7 @@ impl SentinelGenesisPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelGenesisRequest {
-    pub version: u32,
+    pub version: SentinelGenesisVersion,
     pub session_id: CompactToken,
     pub policy: SentinelGenesisPolicy,
     pub initiator_device_id: DeviceId,
@@ -50,7 +80,7 @@ pub struct SentinelGenesisParticipant {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelGenesisParticipantResponse {
-    pub version: u32,
+    pub version: SentinelGenesisVersion,
     pub session_id: CompactToken,
     pub participant: SentinelGenesisParticipant,
     pub signature: String,
@@ -62,7 +92,7 @@ pub struct SentinelGenesisParticipantResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SentinelGenesisPublicKeyAnnouncement {
     pub kind: String,
-    pub version: u32,
+    pub version: SentinelGenesisVersion,
     pub device_id: DeviceId,
     pub encryption_public_key: DevicePublicKey,
     pub signing_public_key: DeviceSigningPublicKey,
@@ -98,7 +128,7 @@ impl SentinelGenesisSession {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelGenesisShareDelivery {
-    pub version: u32,
+    pub version: SentinelGenesisVersion,
     pub session_id: CompactToken,
     pub store_id: StoreId,
     pub policy: SentinelGenesisPolicy,

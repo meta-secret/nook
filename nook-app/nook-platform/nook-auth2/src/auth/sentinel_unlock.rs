@@ -25,10 +25,40 @@ use crate::{
 };
 use crate::{SentinelParticipantCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold};
 use ed25519_dalek::{Signer, SigningKey};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::collections::BTreeSet;
 
-const UNLOCK_VERSION: u32 = 1;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(transparent)]
+pub struct SentinelUnlockVersion(u32);
+
+impl SentinelUnlockVersion {
+    pub const CURRENT: Self = Self(1);
+
+    fn parse(value: u32) -> Result<Self, &'static str> {
+        match value {
+            1 => Ok(Self::CURRENT),
+            _ => Err("unsupported Sentinel unlock version"),
+        }
+    }
+}
+
+impl From<SentinelUnlockVersion> for u32 {
+    fn from(value: SentinelUnlockVersion) -> Self {
+        value.0
+    }
+}
+
+impl<'de> Deserialize<'de> for SentinelUnlockVersion {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+    }
+}
+
+const UNLOCK_VERSION: SentinelUnlockVersion = SentinelUnlockVersion::CURRENT;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -53,7 +83,7 @@ impl SentinelUnlockPolicy {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelUnlockRequest {
-    pub version: u32,
+    pub version: SentinelUnlockVersion,
     pub session_id: CompactToken,
     pub store_id: StoreId,
     pub policy: SentinelUnlockPolicy,
@@ -66,7 +96,7 @@ pub struct SentinelUnlockRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SentinelUnlockResponse {
-    pub version: u32,
+    pub version: SentinelUnlockVersion,
     pub session_id: CompactToken,
     pub store_id: StoreId,
     pub policy: SentinelUnlockPolicy,
@@ -139,7 +169,7 @@ pub struct SentinelUnlockSession {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct SentinelUnlockContribution {
-    version: u32,
+    version: SentinelUnlockVersion,
     session_id: CompactToken,
     store_id: StoreId,
     policy: SentinelUnlockPolicy,
@@ -435,6 +465,16 @@ mod tests {
         policy: SentinelUnlockPolicy,
     }
 
+    #[test]
+    fn sentinel_unlock_version_validates_serde_input() -> anyhow::Result<()> {
+        assert_eq!(
+            serde_json::from_str::<SentinelUnlockVersion>("1")?,
+            SentinelUnlockVersion::CURRENT
+        );
+        assert!(serde_json::from_str::<SentinelUnlockVersion>("2").is_err());
+        assert!(serde_json::from_str::<SentinelUnlockVersion>("4294967296").is_err());
+        Ok(())
+    }
     #[test]
     fn signed_two_of_three_responses_unlock_without_exposing_mnemonics() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
