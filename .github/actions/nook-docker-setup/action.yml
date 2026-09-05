@@ -2,6 +2,12 @@ name: Nook Docker setup
 description: Task, Buildx, and authenticated registry BuildKit cache setup.
 
 inputs:
+  cache-selection:
+    description: >-
+      Closed cache probe set: general probes every shared Bake lineage, hive probes
+      only the Hive lineage, and connection-only performs no registry cache probes.
+    required: false
+    default: general
   cache-write:
     description: Allow this workflow source to update the shared hosted BuildKit cache refs.
     required: false
@@ -145,6 +151,14 @@ runs:
         pr_number="${{ github.event.pull_request.number }}"
         event_name="${{ github.event_name }}"
         git_ref="${{ github.ref }}"
+        cache_selection="${{ inputs.cache-selection }}"
+        case "$cache_selection" in
+          general|hive|connection-only) ;;
+          *)
+            echo "cache-selection must be general, hive, or connection-only (got: ${cache_selection:-empty})" >&2
+            exit 1
+            ;;
+        esac
         test -n "$NOOK_SELECTED_BUILDER"
         echo "NOOK_PR_BUILDX_BUILDER=$NOOK_SELECTED_BUILDER" >> "$GITHUB_ENV"
         echo "GHA_CACHE_ENABLED=1" >> "$GITHUB_ENV"
@@ -213,24 +227,16 @@ runs:
             exit 1
           fi
           scope_suffix="-git-$scope_sha"
-          hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
+          case "$cache_selection" in
+            general|hive)
+              hive_remote_ref="type=registry,ref=${{ inputs.registry-host }}/nook/remote-buildcache/nook-hive-linux-amd64-v2$scope_suffix:buildcache"
+              ;;
+          esac
           echo "Isolated cache writes use $scope_suffix with trusted Main fallback"
         fi
         echo "GHA_CACHE_SCOPE_SUFFIX=$scope_suffix" >> "$GITHUB_ENV"
         echo "GHA_CACHE_FALLBACK_ENABLED=$fallback_enabled" >> "$GITHUB_ENV"
         echo "GHA_CACHE_SEED_SCOPE_SUFFIX=" >> "$GITHUB_ENV"
-        # Use the same worktree-content fingerprint as local sealed formatting.
-        # Bake cache wiring and source files do not rotate this dependency scope.
-        rust_deps_fingerprint="$(
-          NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
-            bash "${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh"
-        )"
-        if [[ ! "$rust_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
-          echo "Could not fingerprint the hosted Rust dependency graph" >&2
-          exit 1
-        fi
-        echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
-        echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
 
         # cache-from entries are merged, not ordered. Importing exact and Main
         # together can select Main's parent and orphan an exact source leaf.
@@ -296,26 +302,41 @@ runs:
           echo "$env_name=$available" >> "$GITHUB_ENV"
         }
 
-        wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
-        if [ -n "$scope_suffix" ]; then
-          wasm_deps_exact_scope="nook-rust-wasm-deps-v6$scope_suffix"
+        if [ "$cache_selection" = "general" ]; then
+          # Use the same worktree-content fingerprint as local sealed formatting.
+          # Bake cache wiring and source files do not rotate this dependency scope.
+          rust_deps_fingerprint="$(
+            NOOK_RUST_DEPS_FINGERPRINT_ROOT="$GITHUB_WORKSPACE" \
+              bash "${{ github.action_path }}/../../scripts/rust-deps-cache-fingerprint.sh"
+          )"
+          if [[ ! "$rust_deps_fingerprint" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "Could not fingerprint the hosted Rust dependency graph" >&2
+            exit 1
+          fi
+          echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
+          echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
+
+          wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
+          if [ -n "$scope_suffix" ]; then
+            wasm_deps_exact_scope="nook-rust-wasm-deps-v6$scope_suffix"
+          fi
+          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
+          publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
+          publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v2$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
+          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
+          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
         fi
-        publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
-        publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
-        publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
-        publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_NODE_AVAILABLE "nook-rust-wasm-node-v2$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
-        publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
-        echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
 
         if [ -n "$hive_remote_ref" ]; then
           hive_ref="${hive_remote_ref#type=registry,ref=}"
