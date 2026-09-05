@@ -1,8 +1,8 @@
 //! Password-encrypted enrollment envelopes and their browser deep links.
 
 use super::{
-    DecryptedEnrollmentPayload, EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIssueInput,
-    EnrollmentProviderPayload, validate_provider,
+    EnrollmentCodeEnvelope, EnrollmentEntryLabel, EnrollmentIssueInput, EnrollmentProviderPayload,
+    validate_provider,
 };
 use crate::errors::{EnrollmentError, EnrollmentResult};
 use aes_gcm::{
@@ -13,6 +13,9 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use getrandom::fill;
 use pbkdf2::{pbkdf2_hmac, sha2::Sha256};
 use percent_encoding::{AsciiSet, CONTROLS, percent_decode_str, utf8_percent_encode};
+
+mod admission;
+pub use admission::CheckedEnrollmentEnvelope;
 
 const PBKDF2_ITERATIONS: u32 = 210_000;
 const SALT_LEN: usize = 16;
@@ -107,55 +110,6 @@ pub fn encrypt_enrollment_payload(
     Ok(base64_url_encode(&encoded))
 }
 
-pub fn decrypt_enrollment_payload(
-    code: &str,
-    password: &str,
-) -> EnrollmentResult<DecryptedEnrollmentPayload> {
-    let envelope = parse_enrollment_envelope(code)?;
-    let password = password.trim();
-    if password.is_empty() {
-        return Err(EnrollmentError::DecryptPasswordRequired);
-    }
-
-    let salt = base64_url_decode(&envelope.salt)?;
-    let iv = decode_fixed::<IV_LEN>(&envelope.iv)?;
-    let ciphertext = base64_url_decode(&envelope.ct)?;
-    let key = derive_enrollment_key(password, &salt, envelope.iterations.into());
-    let cipher = Aes256Gcm::new(&Array(key));
-    let plaintext = cipher
-        .decrypt(&Array(iv), ciphertext.as_slice())
-        .map_err(|_| EnrollmentError::WrongPassword)?;
-    let provider_payload: EnrollmentProviderPayload =
-        serde_json::from_slice(&plaintext).map_err(|_| EnrollmentError::WrongPassword)?;
-    let EnrollmentProviderPayload {
-        provider,
-        vault_name,
-    } = provider_payload;
-    validate_provider(&provider)?;
-    if vault_name.trim().is_empty() {
-        return Err(EnrollmentError::WrongPassword);
-    }
-
-    Ok(DecryptedEnrollmentPayload {
-        provider,
-        vault_name,
-        entry_id: envelope.entry_id,
-        issued_at: envelope.issued_at,
-    })
-}
-
-pub fn parse_enrollment_envelope(code: &str) -> EnrollmentResult<EnrollmentCodeEnvelope> {
-    let cleaned = code.trim();
-    if cleaned.is_empty() {
-        return Err(EnrollmentError::InvalidCode);
-    }
-    let bytes = base64_url_decode(cleaned)?;
-    let envelope: EnrollmentCodeEnvelope =
-        serde_json::from_slice(&bytes).map_err(|_| EnrollmentError::InvalidCode)?;
-    validate_envelope(&envelope)?;
-    Ok(envelope)
-}
-
 /// Deep link scanned from a QR code — opens the browser and carries the raw
 /// enrollment code in the hash. The browser supplies `base_url`.
 #[must_use]
@@ -197,52 +151,30 @@ pub fn normalize_enrollment_code(input: &str) -> String {
 }
 
 pub fn peek_enrollment_entry_id(code: &str) -> EnrollmentResult<String> {
-    Ok(parse_enrollment_envelope(code)?.entry_id)
+    Ok(CheckedEnrollmentEnvelope::parse(code)?
+        .envelope()
+        .entry_id
+        .clone())
 }
 
 pub fn peek_enrollment_entry_label(code: &str) -> EnrollmentResult<EnrollmentEntryLabel> {
-    Ok(parse_enrollment_envelope(code)?.entry_label)
+    Ok(CheckedEnrollmentEnvelope::parse(code)?
+        .envelope()
+        .entry_label
+        .clone())
 }
 
 pub fn peek_enrollment_issued_at(code: &str) -> EnrollmentResult<String> {
-    Ok(parse_enrollment_envelope(code)?.issued_at)
-}
-
-fn validate_envelope(envelope: &EnrollmentCodeEnvelope) -> EnrollmentResult<()> {
-    if envelope.kdf != ENROLLMENT_KDF || envelope.cipher != ENROLLMENT_CIPHER {
-        return Err(EnrollmentError::UnsupportedEncryptionParameters);
-    }
-    if u32::from(envelope.iterations) == 0 {
-        return Err(EnrollmentError::MissingKdfParameters);
-    }
-    if envelope.entry_id.is_empty() {
-        return Err(EnrollmentError::MissingEntryId);
-    }
-    if matches!(&envelope.entry_label, EnrollmentEntryLabel::Labeled(label) if label.is_empty()) {
-        return Err(EnrollmentError::InvalidEntryLabel);
-    }
-    for (field, value) in [
-        ("salt", envelope.salt.as_str()),
-        ("iv", envelope.iv.as_str()),
-        ("ct", envelope.ct.as_str()),
-        ("issued_at", envelope.issued_at.as_str()),
-    ] {
-        if value.is_empty() {
-            return Err(EnrollmentError::MissingField { field });
-        }
-    }
-    Ok(())
+    Ok(CheckedEnrollmentEnvelope::parse(code)?
+        .envelope()
+        .issued_at
+        .clone())
 }
 
 fn derive_enrollment_key(password: &str, salt: &[u8], iterations: u32) -> [u8; KEY_LEN] {
     let mut key = [0u8; KEY_LEN];
     pbkdf2_hmac::<Sha256>(password.as_bytes(), salt, iterations, &mut key);
     key
-}
-
-fn decode_fixed<const N: usize>(encoded: &str) -> EnrollmentResult<[u8; N]> {
-    let bytes = base64_url_decode(encoded)?;
-    bytes.try_into().map_err(|_| EnrollmentError::InvalidCode)
 }
 
 fn base64_url_encode(bytes: &[u8]) -> String {
@@ -278,21 +210,27 @@ mod tests {
     use crate::auth::enrollment::{EnrollmentProvider, PersonalEnrollmentProvider};
     use serde_json::json;
 
-    fn github_payload() -> EnrollmentIssueInput {
-        EnrollmentIssueInput {
-            provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
-                "github_pat_11AAAAbbbbCCCC".to_owned(),
-                "team-vault".to_owned(),
-            )),
-            vault_name: "Team vault".to_owned(),
-            entry_id: "entry-1".to_owned(),
-            issued_at: "2026-06-23T12:00:00Z".to_owned(),
+    impl EnrollmentIssueInput {
+        fn github_fixture() -> Self {
+            Self {
+                provider: EnrollmentProvider::personal(PersonalEnrollmentProvider::github(
+                    "github_pat_11AAAAbbbbCCCC".to_owned(),
+                    "team-vault".to_owned(),
+                )),
+                vault_name: "Team vault".to_owned(),
+                entry_id: "entry-1".to_owned(),
+                issued_at: "2026-06-23T12:00:00Z".to_owned(),
+            }
         }
     }
 
     #[test]
     fn encrypts_provider_credentials_and_peeks_outer_fields() -> anyhow::Result<()> {
-        let code = encrypt_enrollment_payload(&github_payload(), "vault-pass-99", "Work laptop")?;
+        let code = encrypt_enrollment_payload(
+            &EnrollmentIssueInput::github_fixture(),
+            "vault-pass-99",
+            "Work laptop",
+        )?;
         assert_eq!(peek_enrollment_entry_id(&code)?, "entry-1");
         assert_eq!(
             peek_enrollment_entry_label(&code)?,
@@ -300,8 +238,9 @@ mod tests {
         );
         assert_eq!(peek_enrollment_issued_at(&code)?, "2026-06-23T12:00:00Z");
 
-        let envelope = parse_enrollment_envelope(&code)?;
-        let serialized = serde_json::to_string(&envelope)?;
+        let checked = CheckedEnrollmentEnvelope::parse(&code)?;
+        let envelope = checked.envelope();
+        let serialized = serde_json::to_string(envelope)?;
         assert!(!serialized.contains("vault-pass-99"));
         assert!(!serialized.contains("github_pat_11AAAAbbbbCCCC"));
         assert!(!serialized.contains("Team vault"));
@@ -325,9 +264,11 @@ mod tests {
 
     #[test]
     fn decrypts_roundtrip_payload() -> anyhow::Result<()> {
-        let input = github_payload();
+        let input = EnrollmentIssueInput::github_fixture();
         let code = encrypt_enrollment_payload(&input, "vault-pass-99", "")?;
-        let decrypted = decrypt_enrollment_payload(&code, "vault-pass-99")?;
+        let checked = CheckedEnrollmentEnvelope::parse(&format!("  {code}  "))?;
+        assert_eq!(checked.envelope().entry_id, input.entry_id);
+        let decrypted = checked.decrypt("  vault-pass-99  ")?;
         assert_eq!(decrypted.provider, input.provider);
         assert_eq!(decrypted.vault_name, "Team vault");
         assert_eq!(decrypted.entry_id, input.entry_id);
@@ -337,8 +278,10 @@ mod tests {
 
     #[test]
     fn rejects_wrong_password() -> anyhow::Result<()> {
-        let code = encrypt_enrollment_payload(&github_payload(), "hunter2", "")?;
-        let err = decrypt_enrollment_payload(&code, "wrong-pass")
+        let code =
+            encrypt_enrollment_payload(&EnrollmentIssueInput::github_fixture(), "hunter2", "")?;
+        let err = CheckedEnrollmentEnvelope::parse(&code)?
+            .decrypt("wrong-pass")
             .err()
             .ok_or_else(|| anyhow::anyhow!("enrollment test should reject invalid input"))?;
         assert_eq!(
@@ -353,7 +296,8 @@ mod tests {
         let malformed = base64_url_encode(
             serde_json::to_vec(&json!({"provider": {"type": "local"}}))?.as_slice(),
         );
-        let err = decrypt_enrollment_payload(&malformed, "pw")
+        let err = CheckedEnrollmentEnvelope::parse(&malformed)
+            .and_then(|checked| checked.decrypt("pw"))
             .err()
             .ok_or_else(|| anyhow::anyhow!("enrollment test should reject invalid input"))?;
         assert_eq!(err.to_string(), "Invalid enrollment code.");
