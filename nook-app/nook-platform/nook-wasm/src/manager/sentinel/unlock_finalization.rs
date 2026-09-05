@@ -176,7 +176,10 @@ impl CompletionCheckpoint {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use nook_core::{DeviceMode, SentinelUnlockSigning, SigningIdentity};
+    use nook_core::{
+        DeviceMode, SentinelUnlockSigning, SentinelVaultUnlockState, SigningIdentity,
+        VaultArchitecture,
+    };
     use std::future::Future;
     use std::task::{Context, Poll, Waker};
 
@@ -317,7 +320,7 @@ mod tests {
         fixture.assert_reset(&manager);
         assert_eq!(
             manager.sentinel_unlock_status(),
-            nook_core::SentinelVaultUnlockState::AwaitingShares
+            SentinelVaultUnlockState::AwaitingShares
         );
         Ok(())
     }
@@ -373,9 +376,9 @@ mod tests {
             let mut manager = fixture.manager();
             match mismatch {
                 0 => manager.vault.store_id = nook_core::generate_store_id()?.to_string(),
-                1 => manager.vault.architecture = nook_core::VaultArchitecture::default(),
+                1 => manager.vault.architecture = VaultArchitecture::default(),
                 2 => {
-                    manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
+                    manager.vault.architecture = VaultArchitecture::sentinel_personal(
                         DeviceMode::Standard,
                         nook_core::SentinelPolicy {
                             threshold: 3,
@@ -409,6 +412,7 @@ mod tests {
     mod browser {
         use super::*;
         use crate::storage::event_db;
+        use nook_core::{EventId, IsoTimestamp, Sha256Hex, VaultOperation};
         use wasm_bindgen_test::wasm_bindgen_test;
 
         #[wasm_bindgen_test]
@@ -457,13 +461,13 @@ mod tests {
             ] {
                 let mut manager = fixture.manager();
                 // A signed genesis root needs VaultImported before its Sentinel operations.
-                let mut operations = vec![nook_core::VaultOperation::VaultImported {
-                    source_content_hash: nook_core::Sha256Hex::from_trusted("0".repeat(64)),
+                let mut operations = vec![VaultOperation::VaultImported {
+                    source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 }];
                 operations.extend(nook_core::sentinel_genesis_operations(&fixture.output));
-                let epoch = nook_core::EventId::from_sha256_hex(
+                let epoch = EventId::from_sha256_hex(
                     nook_core::sha256_hex(fixture.output.store_id.as_str().as_bytes()).as_str(),
                 )?;
                 let (event, bytes) = nook_core::build_signed_event(nook_core::AppendEventInput {
@@ -472,9 +476,7 @@ mod tests {
                     signing_identity: &fixture.signer,
                     parents: Vec::new(),
                     key_epoch: &epoch,
-                    created_at: &nook_core::IsoTimestamp::from_trusted(
-                        "2026-09-04T00:00:00Z".to_owned(),
-                    ),
+                    created_at: &IsoTimestamp::from_trusted("2026-09-04T00:00:00Z".to_owned()),
                     operations,
                 })?;
                 let event_id = event.validate_envelope(&fixture.output.store_id)?;

@@ -770,7 +770,7 @@ mod tests {
         let mut session = fixture.session()?;
         let request = session.request();
         let mut response = fixture.response(&request, 0)?;
-        response.ciphertext = crate::AgeArmoredCiphertext::from_trusted("invalid".to_owned());
+        response.ciphertext = AgeArmoredCiphertext::from_trusted("invalid".to_owned());
         response.signature = hex::encode(
             Fixture::signing_key(1)
                 .sign(&response.signing_bytes()?)

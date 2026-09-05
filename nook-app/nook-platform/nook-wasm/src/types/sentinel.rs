@@ -1,6 +1,8 @@
 use super::{NookVaultArchitecture, wasm_bindgen};
 use crate::NookError;
-use nook_core::{MultiDeviceError, RemoteEventLogClassification, SentinelGenesisPhase};
+use nook_core::{
+    MultiDeviceError, RemoteEventLogClassification, SentinelGenesisPhase, SentinelUnlockReadiness,
+};
 use std::mem;
 use wasm_bindgen::JsError;
 
@@ -33,7 +35,7 @@ impl NookSentinelUnlockSessionStatus {
                 )
             })?,
             threshold: status.threshold.into(),
-            ready: matches!(status.readiness, nook_core::SentinelUnlockReadiness::Ready),
+            ready: matches!(status.readiness, SentinelUnlockReadiness::Ready),
         })
     }
 
