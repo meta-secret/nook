@@ -51,7 +51,7 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() -> anyhow::Resul
         .collect::<Vec<_>>();
     assert_eq!(
         registry_writers.len(),
-        13,
+        12,
         "the Rust Bake family must keep the complete writer inventory explicit"
     );
     assert!(
@@ -75,7 +75,6 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() -> anyhow::Resul
         "nook-rust-wasm-deps-input-v3",
         "nook-rust-native-source-v4",
         "nook-rust-wasm-source-v3",
-        "nook-rust-wasm-node-v2",
     ];
     for current in &active_refs {
         assert!(
@@ -97,6 +96,7 @@ fn rust_cache_lineage_uses_one_rotated_forced_zstd_generation() -> anyhow::Resul
         "nook-rust-native-source-v3",
         "nook-rust-wasm-source-v2",
         "nook-rust-wasm-node-v1",
+        "nook-rust-wasm-node-v2",
     ] {
         assert!(
             !contract.contains(retired),
@@ -243,7 +243,7 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
     );
     assert_eq!(
         bake.matches("GHA_CACHE_WRITE_ENABLED != \"\" ?").count(),
-        15,
+        14,
         "every hosted cache exporter must honor the read-only workflow mode"
     );
     assert_rust_cache_export_hardening(&bake);
@@ -256,8 +256,11 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
             && rust_bake
                 .matches("cache-to   = rust_wasm_source_cache_to")
                 .count()
-                == 5 && rust_bake.contains("cache-to   = rust_wasm_node_cache_to"),
-        "WASM leaves and the independent Node consumer must persist non-overlapping source-sensitive caches"
+                == 5
+            && bake_target_body(rust_bake.as_str(), "builder-wasm")
+                .contains("cache-from = rust_wasm_deps_cache_from")
+            && !bake_target_assigns_cache_to(rust_bake.as_str(), "builder-wasm"),
+        "WASM leaves persist source caches while Node verification restores only portable dependencies"
     );
     let core_bake = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
     let core_deps = bake_target_body(core_bake.as_str(), "builder-core-deps");
@@ -760,7 +763,13 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-clippy")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-build")
             && wasm_dockerfile.contains("FROM builder-wasm-source AS builder-wasm-tests")
-            && wasm_dockerfile.contains("FROM builder-wasm-tests AS builder-wasm")
+            && wasm_dockerfile
+                .contains("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")
+            && wasm_dockerfile
+                .contains("FROM builder-wasm-node-deps AS builder-wasm-handoff")
+            && wasm_dockerfile.contains(
+                "COPY --from=builder-wasm-tests /meta-secret/nook/nook-app/nook-platform/",
+            )
             && wasm_dockerfile.contains("wasm-source-app-common")
             && wasm_dockerfile.contains("wasm-source-core")
             && wasm_dockerfile.contains("wasm-source-wasm")
@@ -777,7 +786,7 @@ fn assert_release_wasm_cache_contract(root: &Path) {
             && wasm_dockerfile.contains("COPY --from=builder-wasm-build")
             && wasm_dockerfile.contains("touch nook-app-common/src/i18n.rs")
             && wasm_dockerfile.contains("COPY --from=builder-debug /opt/nook/coverage /coverage"),
-        "native verification, WASM clippy, package export, and release-test compilation must run as sibling branches, preserve locale rebuilds, and join only small outputs before release-profile Node tests"
+        "native verification and WASM source gates must remain siblings while Node tooling precedes the real-source join and release-profile tests"
     );
     let dependency_dockerfile = read(
         root,
