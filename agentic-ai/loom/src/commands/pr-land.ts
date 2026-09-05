@@ -24,7 +24,8 @@ export type PrLandReport = {
 };
 
 export const PR_LAND_VALIDATE_NEXT_STEP =
-  'watch repository-owned checks and collect or stabilize exact-head review concurrently; after both settle, run a prLand.ready request';
+  'watch repository-owned checks and collect the opted-in exact-head review concurrently; after both settle, run a prLand.ready request';
+export const PR_LAND_CODEX_REVIEW_ARG = 'CODEX_REVIEW=1';
 
 export async function runPrLandStatus(
   request: PrLandPrRequest,
@@ -142,7 +143,11 @@ async function validate(args: PrLandValidateArgs): Promise<PrLandReport> {
     }
   }
 
-  const validateArgs = ['pr:validate', `PR=${request.prNumber}`];
+  const validateArgs = [
+    'pr:validate',
+    `PR=${request.prNumber}`,
+    PR_LAND_CODEX_REVIEW_ARG,
+  ];
   if (request.runFullE2e) {
     validateArgs.push('FULL_E2E=1');
   }
