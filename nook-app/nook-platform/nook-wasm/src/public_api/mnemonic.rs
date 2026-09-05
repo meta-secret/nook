@@ -38,7 +38,7 @@ pub fn is_known_bip39_word(word: &str) -> bool {
     )
 )]
 pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
-    nook_core::suggest_bip39_words(prefix, limit as usize)
+    nook_core::suggest_bip39_words(prefix, (limit as usize).into())
         .into_iter()
         .map(str::to_owned)
         .collect()
