@@ -107,7 +107,7 @@ describe('DOM-backed companion authentication simulation', () => {
       kind: DomAuthenticationSimulationOutcomeKind.Login,
       matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
       workflowKind: AuthenticationWorkflowKind.Login,
-      implicitSubmissionMethod: 'absent',
+      implicitSubmissionMethod: 'post',
       advanceControl: 'absent',
       credentialSubmissionKind: 'observed',
       filled: true,
@@ -133,7 +133,7 @@ describe('DOM-backed companion authentication simulation', () => {
 
     expect(result).toMatchObject({
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
-      implicitSubmissionMethod: 'post',
+      implicitSubmissionMethod: 'absent',
       advanceControl: 'absent',
       credentialSubmissionKind: 'absent',
       filled: false,
