@@ -333,7 +333,7 @@ impl NookVaultManager {
     }
 
     pub(crate) fn pending_joins(&self) -> Result<Vec<NookJoinRequest>, NookError> {
-        Ok(pending_joins_to_vec(&self.stored_records_snapshot()))
+        pending_joins_to_vec(&self.stored_records_snapshot())
     }
 
     pub(crate) fn vault_members(&self) -> Result<Vec<NookVaultMember>, NookError> {
@@ -478,7 +478,7 @@ impl NookVaultManager {
             identity,
             &SymmetricKey::parse(&members_key)?,
         )? {
-            nook_core::apply_member_records(&mut self.vault.meta, &member_records);
+            nook_core::apply_member_records(&mut self.vault.meta, &member_records)?;
         }
         Ok(())
     }
@@ -509,8 +509,10 @@ impl NookVaultManager {
         self.vault.meta.to_stored_records()
     }
 
-    pub(in crate::manager) fn needs_genesis_persist(&self) -> bool {
-        !nook_core::vault_has_multi_device_records(&self.stored_records_snapshot())
+    pub(in crate::manager) fn needs_genesis_persist(&self) -> Result<bool, NookError> {
+        Ok(!nook_core::vault_has_multi_device_records(
+            &self.stored_records_snapshot(),
+        )?)
     }
 
     pub(in crate::manager) async fn prepare_storage(

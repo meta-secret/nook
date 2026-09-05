@@ -856,7 +856,7 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
     assert_eq!(local_vaults.len(), 2);
 
     let stranger = DeviceIdentity::generate()?;
-    let status = nook_core::assess_connect_access(&importer.stored_records_snapshot(), &stranger);
+    let status = nook_core::assess_connect_access(&importer.stored_records_snapshot(), &stranger)?;
     assert_eq!(status, ConnectAccessStatus::NeedsEnrollment);
     Ok(())
 }

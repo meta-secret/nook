@@ -162,13 +162,14 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(&pending.yaml)?;
         let records = nook_core::deserialize_stored(&pending.yaml, format)?;
         pending.architecture.validate_records(&records)?;
+        let meta = VaultMetaState::from_stored_records(&records)?;
 
         save_to_indexed_db(&pending.yaml).await?;
         self.vault.reset();
         self.vault.store_id.clone_from(&pending.store_id);
         self.vault.vault_name.clone_from(&pending.vault_name);
         self.vault.architecture = pending.architecture.clone();
-        self.vault.meta = VaultMetaState::from_stored_records(&records);
+        self.vault.meta = meta;
         self.vault.last_synced_content.clone_from(&pending.yaml);
         self.event_log.reset();
         self.ensure_sentinel_genesis_event(&pending.participants, &pending.deliveries)

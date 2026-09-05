@@ -137,15 +137,15 @@ fn key_access_status(
     records: &[StoredSecretRecord],
     identity: &DeviceIdentity,
     projection: ProjectionDiagnosticInput<'_>,
-) -> VaultKeyAccessDiagnosticStatus {
+) -> VaultResult<VaultKeyAccessDiagnosticStatus> {
     if matches!(
         projection,
         ProjectionDiagnosticInput::Available(projection) if projection.unresolved_schema
     ) {
-        return VaultKeyAccessDiagnosticStatus::UnsupportedEpoch;
+        return Ok(VaultKeyAccessDiagnosticStatus::UnsupportedEpoch);
     }
-    if pending_join_for_device(records, identity.device_id()).is_some() {
-        return VaultKeyAccessDiagnosticStatus::JoinPending;
+    if pending_join_for_device(records, identity.device_id())?.is_some() {
+        return Ok(VaultKeyAccessDiagnosticStatus::JoinPending);
     }
     let auth_id = identity.auth_id();
     let auth_rows: Vec<&StoredSecretRecord> = records
@@ -156,21 +156,21 @@ fn key_access_status(
         .iter()
         .find(|record| record.key.as_str() == auth_id.as_str())
     else {
-        return if auth_rows.is_empty() {
+        return Ok(if auth_rows.is_empty() {
             VaultKeyAccessDiagnosticStatus::AuthRowMissing
         } else {
             VaultKeyAccessDiagnosticStatus::DeviceIdentityMismatch
-        };
+        });
     };
     if parse_auth_envelopes(auth_record.value.as_str()).is_err() {
-        return VaultKeyAccessDiagnosticStatus::CorruptCiphertext;
+        return Ok(VaultKeyAccessDiagnosticStatus::CorruptCiphertext);
     }
     if resolve_secrets_key(records, identity).is_err()
         || resolve_members_key(records, identity).is_err()
     {
-        return VaultKeyAccessDiagnosticStatus::EnvelopeDecryptFailed;
+        return Ok(VaultKeyAccessDiagnosticStatus::EnvelopeDecryptFailed);
     }
-    VaultKeyAccessDiagnosticStatus::EnrolledDecryptable
+    Ok(VaultKeyAccessDiagnosticStatus::EnrolledDecryptable)
 }
 
 fn record_status_from_key_status(
@@ -282,7 +282,7 @@ fn diagnose_secret_records(
     key_status: VaultKeyAccessDiagnosticStatus,
     secrets_key: &ResolvedSecretsKey,
     epoch_index: &EpochIndex,
-) -> Vec<VaultSecretAccessDiagnostic> {
+) -> VaultResult<Vec<VaultSecretAccessDiagnostic>> {
     let crypto = match secrets_key {
         ResolvedSecretsKey::Unavailable => None,
         ResolvedSecretsKey::Available(key) => VaultCrypto::new(key).ok(),
@@ -290,7 +290,7 @@ fn diagnose_secret_records(
     let mut secrets = Vec::new();
     for record in records {
         let VaultMetaRecord::Secret(secret_id, secret_type, payload) =
-            VaultMetaRecord::classify(record)
+            VaultMetaRecord::classify(record)?
         else {
             continue;
         };
@@ -323,7 +323,7 @@ fn diagnose_secret_records(
         });
     }
     secrets.sort_by(|left, right| left.secret_id.cmp(&right.secret_id));
-    secrets
+    Ok(secrets)
 }
 
 fn epoch_history_diagnostics(
@@ -405,7 +405,7 @@ pub fn diagnose_vault_access(
         projection,
         ProjectionDiagnosticInput::Available(projection) if projection.unresolved_schema
     );
-    let key_status = key_access_status(records, identity, projection);
+    let key_status = key_access_status(records, identity, projection)?;
     let key_access = VaultKeyAccessDiagnostic {
         status: key_status,
         device_id: identity.device_id().clone(),
@@ -433,7 +433,7 @@ pub fn diagnose_vault_access(
         auth_key_ids: auth_key_ids(records),
         current_epoch,
         epoch_history: epoch_history_diagnostics(projection),
-        secrets: diagnose_secret_records(records, key_status, &secrets_key, &epoch_index),
+        secrets: diagnose_secret_records(records, key_status, &secrets_key, &epoch_index)?,
         events: diagnose_event_payloads(events, &epoch_index, projection_unresolved)?,
         warnings: Vec::new(),
     })

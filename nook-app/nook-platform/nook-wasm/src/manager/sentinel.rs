@@ -14,7 +14,7 @@ use std::mem;
 mod genesis_finalization;
 mod unlock_finalization;
 
-use super::{CeremonyState, NookVaultManager, VaultCryptoState};
+use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::auth_providers::save_auth_providers;
@@ -79,7 +79,7 @@ impl NookVaultManager {
         )
         .await?;
         save_auth_providers(&identity, &accepted.provider_snapshot).await?;
-        self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record);
+        self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record)?;
         self.sentinel_genesis_phase = SentinelGenesisPhase::Complete;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         Ok(package.delivery.store_id.to_string())
@@ -129,7 +129,7 @@ impl NookVaultManager {
             &stored.request,
             &identity,
         )?;
-        self.install_accepted_sentinel_delivery(&stored.delivery, &record);
+        self.install_accepted_sentinel_delivery(&stored.delivery, &record)?;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
     }
@@ -445,7 +445,7 @@ impl NookVaultManager {
         )
         .await?;
 
-        self.install_accepted_sentinel_delivery(&delivery, &record);
+        self.install_accepted_sentinel_delivery(&delivery, &record)?;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
@@ -475,7 +475,9 @@ impl NookVaultManager {
         &mut self,
         delivery: &nook_core::SentinelGenesisShareDelivery,
         record: &nook_core::StoredSecretRecord,
-    ) {
+    ) -> Result<(), NookError> {
+        let mut meta = VaultMetaState::default();
+        meta.apply_record(record)?;
         self.vault.reset();
         self.vault.store_id = delivery.store_id.as_str().to_owned();
         self.vault.architecture = VaultArchitecture::sentinel_personal(
@@ -486,7 +488,8 @@ impl NookVaultManager {
                 ready_participants: 1,
             },
         );
-        self.vault.meta.apply_record(record);
+        self.vault.meta = meta;
+        Ok(())
     }
 
     /// Load vault content for sentinel only when session keys already exist;
@@ -508,7 +511,7 @@ impl NookVaultManager {
             let stored_records = nook_core::deserialize_stored(content, format)?;
             let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = SymmetricKey::parse(&self.vault.members_key)?;
-            let meta = VaultMetaState::from_stored_records(&stored_records);
+            let meta = VaultMetaState::from_stored_records(&stored_records)?;
             return Ok(LoadedVault {
                 meta,
                 secrets_key,
@@ -524,14 +527,27 @@ impl NookVaultManager {
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
-        self.capture_vault_unlock(content)?;
         let format = nook_core::detect_stored_format(content)?;
         let stored_records = nook_core::deserialize_stored(content, format)?;
-        self.vault.meta = VaultMetaState::from_stored_records(&stored_records);
-        self.ensure_sentinel_architecture_from_shares()?;
-        if !self.is_sentinel_session() {
+        let meta = VaultMetaState::from_stored_records(&stored_records)?;
+        let metadata = nook_core::capture_vault_unlock_from_content(content)?;
+        self.application
+            .validate_session_access(metadata.architecture.vault_type)?;
+        let mut architecture = metadata.architecture;
+        if let Some(policy) = Self::sentinel_policy_from_shares(&meta)? {
+            architecture.vault_type = VaultType::Sentinel;
+            architecture.sentinel = SentinelConfiguration::Enabled(policy);
+        }
+        if architecture.vault_type != VaultType::Sentinel {
             return Err(MultiDeviceError::InvalidSentinelThreshold.into());
         }
+        self.vault.unlock = metadata.unlock;
+        self.vault.password_entries = metadata.password_entries;
+        self.vault.store_id = metadata.store_id;
+        self.vault.vault_name = VaultNameState::Named(metadata.vault_name);
+        self.vault.vault_version = metadata.version;
+        self.vault.architecture = architecture;
+        self.vault.meta = meta;
         self.vault.secrets_key.clear();
         self.vault.members_key.clear();
         self.vault.crypto = VaultCryptoState::Locked;
@@ -548,10 +564,20 @@ impl NookVaultManager {
     pub(in crate::manager) fn ensure_sentinel_architecture_from_shares(
         &mut self,
     ) -> Result<(), NookError> {
-        if self.vault.meta.sentinel_shares.is_empty() {
-            return Ok(());
+        if let Some(policy) = Self::sentinel_policy_from_shares(&self.vault.meta)? {
+            self.vault.architecture.vault_type = VaultType::Sentinel;
+            self.vault.architecture.sentinel = SentinelConfiguration::Enabled(policy);
         }
-        let mut shares = self.vault.meta.sentinel_shares.values();
+        Ok(())
+    }
+
+    fn sentinel_policy_from_shares(
+        meta: &VaultMetaState,
+    ) -> Result<Option<nook_core::SentinelPolicy>, NookError> {
+        if meta.sentinel_shares.is_empty() {
+            return Ok(None);
+        }
+        let mut shares = meta.sentinel_shares.values();
         let first = shares
             .next()
             .ok_or(MultiDeviceError::InvalidSentinelShareEncoding)?;
@@ -560,8 +586,7 @@ impl NookVaultManager {
         let required = u8::from(first.required_participants);
         let mut indexes = BTreeSet::new();
         indexes.insert(u8::from(first.share_index));
-        if !matches!(version, 1 | 2)
-            || threshold < 2
+        if threshold < 2
             || threshold > required
             || required > 16
             || u8::from(first.share_index) == 0
@@ -577,16 +602,13 @@ impl NookVaultManager {
         {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding.into());
         }
-        let share_count = u8::try_from(self.vault.meta.sentinel_shares.len())
+        let share_count = u8::try_from(meta.sentinel_shares.len())
             .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
-        self.vault.architecture.vault_type = VaultType::Sentinel;
-        self.vault.architecture.sentinel =
-            SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
-                threshold,
-                required_participants: required,
-                ready_participants: share_count,
-            });
-        Ok(())
+        Ok(Some(nook_core::SentinelPolicy {
+            threshold,
+            required_participants: required,
+            ready_participants: share_count,
+        }))
     }
 }
 
@@ -623,6 +645,42 @@ mod tests {
     }
 
     #[test]
+    fn invalid_share_version_preserves_ceremony_session() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
+        let records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
+        let architecture = VaultArchitecture::sentinel_personal(
+            DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2,
+                required_participants: 2,
+                ready_participants: 2,
+            },
+        );
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            &records,
+            &nook_core::VaultUnlock::Keys,
+            &[],
+            nook_core::VaultStoreIdentityRef::Assigned("store_AAAAAAAAAAA"),
+            nook_core::VaultNameRef::Unnamed,
+            nook_core::VaultVersionWrite::Initial,
+            &architecture,
+        )?;
+        let invalid = yaml.as_str().replacen("\"version\":1", "\"version\":3", 1);
+        assert_ne!(invalid, yaml.as_str());
+
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "unchanged".to_owned();
+        match manager.prepare_sentinel_ceremony_session(&invalid) {
+            Err(_) => {}
+            Ok(()) => return Err(anyhow::anyhow!("invalid share must be rejected")),
+        }
+        assert_eq!(manager.vault.store_id, "unchanged");
+        assert!(manager.vault.meta.is_empty());
+        Ok(())
+    }
+
+    #[test]
     fn architecture_is_inferred_from_share_envelopes_without_hardcoded_threshold()
     -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -630,7 +688,7 @@ mod tests {
             manager.vault.meta.sentinel_shares.insert(
                 DeviceId::parse(device_id)?,
                 nook_core::SentinelShareEnvelope {
-                    version: 2,
+                    version: nook_core::SentinelShareVersion::CURRENT,
                     threshold: 3.into(),
                     required_participants: 5.into(),
                     share_index: share_index.into(),
@@ -653,7 +711,7 @@ mod tests {
         manager.vault.meta.sentinel_shares.insert(
             DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
-                version: 2,
+                version: nook_core::SentinelShareVersion::CURRENT,
                 threshold: 2.into(),
                 required_participants: 17.into(),
                 share_index: 1.into(),
@@ -684,7 +742,7 @@ mod tests {
         manager.vault.meta.sentinel_shares.insert(
             DeviceId::parse("0123456789abcdef")?,
             nook_core::SentinelShareEnvelope {
-                version: 2,
+                version: nook_core::SentinelShareVersion::CURRENT,
                 threshold: 3.into(),
                 required_participants: 5.into(),
                 share_index: 1.into(),

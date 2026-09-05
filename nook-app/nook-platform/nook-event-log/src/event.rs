@@ -8,7 +8,7 @@ use crate::canonical::{
 };
 use crate::signing::SigningIdentity;
 use crate::{EventError, EventResult};
-use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint};
+use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelShareVersion};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
@@ -66,7 +66,7 @@ impl EncryptedSecretPayload {
 #[serde(rename_all = "snake_case")]
 pub struct SentinelShareIssuedPayload {
     pub device_id: DeviceId,
-    pub version: u32,
+    pub version: SentinelShareVersion,
     pub threshold: u8,
     pub required_participants: u8,
     pub share_index: u8,
