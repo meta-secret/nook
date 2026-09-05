@@ -346,6 +346,7 @@ pub struct PasskeyCeremonyPayload {
 #[derive(Debug, Clone, PartialEq, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, tag = "type", content = "payload")]
 pub enum ExtensionSessionRequest {
+    #[serde(rename = "nook:extension-session-classify-grant-authority")]
     ClassifyGrantAuthority(ClassifyGrantAuthorityPayload),
     #[serde(rename = "nook:extension-session-reset")]
     Reset(EmptyPayload),
@@ -500,7 +501,11 @@ mod tests {
 
     #[test]
     fn grant_authority_request_rejects_caller_supplied_active_scope() -> anyhow::Result<()> {
-        let request = r#"{"type":"ClassifyGrantAuthority","payload":{"stored_json":"{}","vault_store_id":"store-test","queue":{"kind":"message-default"}}}"#;
+        let request = r#"{"type":"nook:extension-session-classify-grant-authority","payload":{"stored_json":"{}","vault_store_id":"store-test","queue":{"kind":"message-default"}}}"#;
+        assert!(
+            ExtensionSessionRequest::DECL
+                .contains("nook:extension-session-classify-grant-authority")
+        );
         let decoded: ExtensionSessionRequestWire = serde_json::from_str(request)?;
         assert!(matches!(
             &decoded.0,
