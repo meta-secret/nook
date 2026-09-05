@@ -1,5 +1,6 @@
 //! Passkey-PRF device-key wrapping errors.
 
+use crate::DeviceKeyProtectionVersion;
 use thiserror::Error;
 
 pub type DeviceKeyProtectionResult<T> = Result<T, DeviceKeyProtectionError>;
@@ -25,7 +26,7 @@ pub enum DeviceKeyProtectionError {
     PinTooShort,
 
     #[error("Unsupported device-key protection version: {0}.")]
-    UnsupportedVersion(u32),
+    UnsupportedVersion(DeviceKeyProtectionVersion),
 
     #[error("Unsupported device-key protection parameters.")]
     UnsupportedParameters,
