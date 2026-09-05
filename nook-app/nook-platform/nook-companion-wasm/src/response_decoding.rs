@@ -141,3 +141,241 @@ pub fn decode_authenticator_preview_response(
     AuthenticatorPreviewResponse::from_wire(response)
         .map_err(|error| JsError::new(&error.to_string()))
 }
+
+#[cfg(all(test, target_arch = "wasm32"))]
+mod wasm_tests {
+    use serde::{Serialize, de::DeserializeOwned};
+    use wasm_bindgen::JsValue;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::*;
+
+    fn js_error(error: impl std::fmt::Display) -> JsError {
+        JsError::new(&error.to_string())
+    }
+
+    fn wire<T: DeserializeOwned>(serialized: &str) -> Result<T, JsError> {
+        serde_json::from_str(serialized).map_err(js_error)
+    }
+
+    fn js_value(serialized: &str) -> Result<JsValue, JsError> {
+        let value: serde_json::Value = serde_json::from_str(serialized).map_err(js_error)?;
+        value
+            .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
+            .map_err(js_error)
+    }
+
+    #[wasm_bindgen_test]
+    fn session_request_and_status_decoders_preserve_typed_states() -> Result<(), JsError> {
+        let request = wire(
+            r#"{"type":"nook:extension-session-status","payload":{"queue":{"kind":"message-default"}}}"#,
+        )?;
+        assert_eq!(
+            validate_extension_session_request(request),
+            nook_companion_core::ExtensionSessionRequestValidation::Accepted
+        );
+
+        for (serialized, expected) in [
+            (
+                r#"{"ok":false,"status":6}"#,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unavailable,
+            ),
+            (
+                r#"{"ok":true,"status":4}"#,
+                nook_companion_core::ExtensionSessionStatusAvailability::Locked,
+            ),
+            (
+                r#"{"ok":true,"status":6,"device":{"deviceId":"device","devicePublicKey":"public","deviceSigningPublicKey":"signing"}}"#,
+                nook_companion_core::ExtensionSessionStatusAvailability::Unlocked,
+            ),
+        ] {
+            assert_eq!(
+                decode_extension_session_status_response(wire(serialized)?),
+                expected
+            );
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn website_login_and_passkey_decoders_reject_incomplete_identity() -> Result<(), JsError> {
+        let options = decode_website_login_options(wire(
+            r#"{"ok":true,"status":"ready","authorizationGeneration":"epoch-1","accounts":[{"vaultStoreId":"vault","vaultName":"Personal","secretId":"secret","username":"alice","websiteUrl":"https://example.test","websiteHost":"example.test"}]}"#,
+        )?)?;
+        assert!(matches!(
+            options,
+            nook_companion_core::WebsiteLoginOptions::Ready { accounts, .. }
+                if accounts.len() == 1
+        ));
+        assert!(
+            decode_website_login_options(wire(
+                r#"{"ok":true,"status":"ready","authorizationGeneration":" ","accounts":[]}"#,
+            )?)
+            .is_err()
+        );
+
+        let accounts = decode_website_passkey_account_list(js_value(
+            r#"{"ok":true,"accounts":[{"credentialId":"credential","userName":"alice@example.test","userDisplayName":"Alice"}]}"#,
+        )?);
+        assert!(matches!(
+            accounts,
+            nook_companion_core::WebsitePasskeyAccountList::Ready { accounts, .. }
+                if accounts.len() == 1
+        ));
+        assert_eq!(
+            decode_website_passkey_account_list(js_value(
+                r#"{"ok":true,"accounts":[{"credentialId":" ","userName":"alice@example.test","userDisplayName":"Alice"}]}"#,
+            )?),
+            nook_companion_core::WebsitePasskeyAccountList::invalid()
+        );
+        assert_eq!(
+            decode_website_passkey_account_list(JsValue::from_str("not-an-object")),
+            nook_companion_core::WebsitePasskeyAccountList::invalid()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn login_save_decoders_preserve_closed_success_and_rejection_states() -> Result<(), JsError> {
+        let offer = wire(
+            r#"{"kind":"offer-available","offer":{"offerId":"offer","decision":0,"vaultStoreId":"vault","vaultName":"Personal"}}"#,
+        )?;
+        assert!(matches!(
+            decode_website_login_save_offer_response(offer)?,
+            nook_companion_core::WebsiteLoginSaveOfferResponse::OfferAvailable { .. }
+        ));
+        assert!(
+            decode_website_login_save_offer_response(wire(r#"{"kind":"rejected","reason":" "}"#)?)
+                .is_err()
+        );
+
+        assert!(matches!(
+            decode_website_login_save_pending_response(wire(
+                r#"{"ok":true,"state":"unavailable"}"#
+            )?)?,
+            nook_companion_core::WebsiteLoginSavePendingResponse::Available(_)
+        ));
+        assert!(
+            decode_website_login_save_pending_response(wire(r#"{"ok":false,"reason":" "}"#)?)
+                .is_err()
+        );
+
+        assert!(matches!(
+            decode_website_login_save_action_response(wire(r#"{"kind":"completed"}"#)?)?,
+            nook_companion_core::WebsiteLoginSaveActionResponse::Completed {}
+        ));
+        assert!(
+            decode_website_login_save_action_response(wire(r#"{"kind":"rejected","reason":" "}"#)?)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn picker_and_outcome_decoders_preserve_success_and_failure() -> Result<(), JsError> {
+        assert!(matches!(
+            decode_login_picker_open_response(wire(
+                r#"{"ok":true,"status":"ready","requestId":"request","expiresAt":42}"#
+            )?)?,
+            nook_companion_core::LoginPickerOpenResponse::Ready { request_id, .. }
+                if request_id == "request"
+        ));
+        assert!(
+            decode_login_picker_open_response(wire(
+                r#"{"ok":true,"status":"ready","requestId":" ","expiresAt":42}"#
+            )?)
+            .is_err()
+        );
+
+        assert!(matches!(
+            decode_authenticator_picker_open_response(wire(
+                r#"{"ok":false,"reason":"picker-failed"}"#
+            )?)?,
+            nook_companion_core::AuthenticatorPickerOpenResponse::Rejected { reason, .. }
+                if reason == "picker-failed"
+        ));
+        assert!(
+            decode_authenticator_picker_open_response(wire(r#"{"ok":false,"reason":" "}"#)?)
+                .is_err()
+        );
+
+        assert!(matches!(
+            decode_authentication_outcome_response(wire(
+                r#"{"ok":true,"verdict":{"verdict":0,"allowsCredentialCommit":true}}"#
+            )?)?,
+            nook_companion_core::AuthenticationOutcomeResponse::Completed { .. }
+        ));
+        assert!(
+            decode_authentication_outcome_response(wire(r#"{"ok":false,"reason":" "}"#)?).is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn authenticator_mutation_decoders_reject_incomplete_outcomes() -> Result<(), JsError> {
+        assert!(matches!(
+            decode_authenticator_backup_attach_response(wire(r#"{"ok":true}"#)?)?,
+            nook_companion_core::AuthenticatorBackupAttachResponse::Completed { .. }
+        ));
+        assert!(decode_authenticator_backup_attach_response(wire(r#"{"ok":false}"#)?).is_err());
+
+        assert!(matches!(
+            decode_authenticator_enrollment_stage_response(wire(
+                r#"{"ok":true,"stageId":"stage-1"}"#
+            )?)?,
+            nook_companion_core::AuthenticatorEnrollmentStageResponse::Staged { stage_id, .. }
+                if stage_id == "stage-1"
+        ));
+        assert!(
+            decode_authenticator_enrollment_stage_response(wire(r#"{"ok":true,"stageId":" "}"#)?)
+                .is_err()
+        );
+
+        assert!(matches!(
+            decode_authenticator_enrollment_confirm_response(wire(
+                r#"{"ok":true,"secretId":"secret-1"}"#
+            )?)?,
+            nook_companion_core::AuthenticatorEnrollmentConfirmResponse::Completed {
+                secret_id,
+                ..
+            } if secret_id == "secret-1"
+        ));
+        assert!(
+            decode_authenticator_enrollment_confirm_response(wire(
+                r#"{"ok":true,"secretId":" "}"#
+            )?)
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn authenticator_read_decoders_preserve_available_and_invalid_states() -> Result<(), JsError> {
+        assert!(matches!(
+            decode_generated_password_response(wire(
+                r#"{"ok":true,"password":"correct horse battery staple"}"#
+            )?)?,
+            nook_companion_core::GeneratedPasswordResponse::Generated { .. }
+        ));
+        assert!(decode_generated_password_response(wire(r#"{"ok":true,"password":""}"#)?).is_err());
+
+        assert!(matches!(
+            decode_authenticator_options_response(wire(r#"{"ok":true,"status":"unavailable"}"#)?)?,
+            nook_companion_core::AuthenticatorOptionsResponse::Unavailable { .. }
+        ));
+        assert!(
+            decode_authenticator_options_response(wire(r#"{"ok":false,"status":"unavailable"}"#)?)
+                .is_err()
+        );
+
+        assert!(matches!(
+            decode_authenticator_preview_response(wire(r#"{"ok":true,"status":"unavailable"}"#)?)?,
+            nook_companion_core::AuthenticatorPreviewResponse::Unavailable { .. }
+        ));
+        assert!(
+            decode_authenticator_preview_response(wire(r#"{"ok":false,"status":"unavailable"}"#)?)
+                .is_err()
+        );
+        Ok(())
+    }
+}
