@@ -13,11 +13,7 @@ use crate::{NookError, storage::open_nook_database};
 
 mod cleanup;
 
-pub(crate) use cleanup::{
-    LocalIdentityRecovery, PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
-    complete_identity_recovery_cleanup, has_pending_identity_recovery_cleanup,
-};
-use cleanup::{load_pending_recovery_cleanup, write_pending_recovery_cleanup};
+pub(crate) use cleanup::{LocalIdentityRecovery, PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY};
 
 struct RecoveryState {
     directory: nook_core::IdentityDirectory,
@@ -376,7 +372,7 @@ async fn reset_identity_and_device_for_recovery(
     let store = transaction
         .store("vault")
         .map_err(|error| NookError::IndexedDb(format!("Identity reset store error: {error:?}")))?;
-    if let Some(recovery) = load_pending_recovery_cleanup(&store).await? {
+    if let Some(recovery) = LocalIdentityRecovery::load_pending(&store).await? {
         // The identity transaction has already committed. Resume its recorded
         // cleanup target even after reload, when the retired app ID is no
         // longer available to the UI and another surviving identity is selected.
@@ -405,7 +401,7 @@ async fn reset_identity_and_device_for_recovery(
         state.clear_reconciliation,
     )
     .await?;
-    write_pending_recovery_cleanup(&store, &recovery).await?;
+    recovery.write_pending(&store).await?;
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Identity reset completion error: {error:?}"))
     })?;
@@ -479,7 +475,7 @@ mod tests {
                 .await?
                 .is_none()
         );
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         clear_identity_directory_for_test().await
     }
 
@@ -526,7 +522,7 @@ mod tests {
                 .await
                 .is_err()
         );
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         idb_delete_key("vault_registry").await?;
         clear_identity_directory_for_test().await
     }
@@ -553,7 +549,7 @@ mod tests {
         assert!(idb_get_string(&marker).await?.is_none());
         let recovered = load_identity_directory().await?;
         assert!(recovered.retired_app_ids().is_empty());
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         idb_delete_key("vault_registry").await?;
         clear_identity_directory_for_test().await
     }
@@ -626,7 +622,7 @@ mod tests {
             Some("companion-access-evidence".to_owned())
         );
 
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         idb_delete_key(&unrelated_marker).await?;
         idb_delete_key(device_access::DEVICE_ACCESS_PROFILE_KEY).await?;
         keyring::clear_keyring_for_test().await?;
@@ -682,7 +678,7 @@ mod tests {
             first.identity.identity_id,
             directory.identities()[0].identity_id
         );
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         keyring::clear_keyring_for_test().await?;
         clear_identity_directory_for_test().await
     }
@@ -722,7 +718,7 @@ mod tests {
         assert!(directory.identities().is_empty());
         assert!(directory.retired_app_ids().contains(first_key.app_id()));
         assert!(directory.retired_app_ids().contains(second_key.app_id()));
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         keyring::clear_keyring_for_test().await?;
         clear_identity_directory_for_test().await
     }
@@ -762,7 +758,7 @@ mod tests {
         assert!(directory.identities().is_empty());
         assert!(directory.retired_app_ids().contains(first_key.app_id()));
         assert!(directory.retired_app_ids().contains(second_key.app_id()));
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         keyring::clear_keyring_for_test().await?;
         clear_identity_directory_for_test().await
     }
@@ -851,7 +847,7 @@ mod tests {
             .await?
             .ok_or_else(|| NookError::IndexedDb("Pending Simple genesis was erased".to_owned()))?;
         assert_eq!(preserved.identity_id, first.identity.identity_id);
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         keyring::clear_keyring_for_test().await?;
         clear_identity_directory_for_test().await
     }
@@ -892,7 +888,7 @@ mod tests {
         assert_eq!(recovered_directory.selection(), &IdentitySelection::Empty);
         assert_eq!(recovered_directory.identities().len(), 1);
         assert_eq!(recovered_directory.identities()[0].identity_id, identity_id);
-        complete_identity_recovery_cleanup(&recovery).await?;
+        recovery.complete().await?;
         let replacement_key = AppKey::generate().map_err(map_domain_error)?;
         let replacement_wrapped = nook_core::wrap_device_identity_with_pin(
             &replacement_key.secret_string(),
