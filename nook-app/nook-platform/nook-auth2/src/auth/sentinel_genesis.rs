@@ -8,7 +8,6 @@ use super::multi_device::{DeviceIdentity, VaultMetaRecord, device_id_from_public
 mod links;
 mod session;
 pub use super::sentinel_genesis_types::*;
-use super::sentinel_signing;
 use crate::{
     CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MultiDeviceError,
     MultiDeviceResult, StoredSecretRecord,
@@ -202,7 +201,7 @@ fn delivery_signing_bytes(delivery: &SentinelGenesisShareDelivery) -> MultiDevic
 }
 
 fn signing_public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
-    sentinel_signing::signing_public_key(signing_key)
+    DeviceSigningPublicKey::from_signing_key(signing_key)
 }
 
 fn verify_signature(
@@ -210,7 +209,7 @@ fn verify_signature(
     signature: &str,
     bytes: &[u8],
 ) -> MultiDeviceResult<()> {
-    sentinel_signing::verify_signature(public_key, signature, bytes, || {
+    public_key.verify_signature(signature, bytes, || {
         MultiDeviceError::InvalidSentinelGenesisSignature
     })
 }
