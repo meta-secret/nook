@@ -113,6 +113,13 @@ impl ExtensionGrantAuthority {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::collections::HashMap;
+
+    #[derive(Deserialize)]
+    #[serde(tag = "kind")]
+    enum Wire {
+        Authorized { grant: StoredExtensionPairingGrant },
+    }
 
     struct Fixture;
 
@@ -211,8 +218,7 @@ mod tests {
         let mut incomplete = Fixture::grant();
         incomplete.scopes.clear();
         for grant in [mismatched, incomplete] {
-            let entries =
-                std::collections::HashMap::from([(grant_storage_key("store-test"), grant)]);
+            let entries = HashMap::from([(grant_storage_key("store-test"), grant)]);
             assert_eq!(
                 Fixture::request(serde_json::to_string(&entries)?).classify(),
                 ExtensionGrantAuthority::InvalidStoredAuthority
@@ -234,11 +240,6 @@ mod tests {
         assert!(ExtensionGrantAuthorityRequest::DECL.contains("stored_json"));
         assert!(ExtensionGrantAuthorityRequest::DECL.contains("vault_store_id"));
         assert!(AuthorizedExtensionGrant::DECL.contains("grant: StoredExtensionPairingGrant"));
-        #[derive(Deserialize)]
-        #[serde(tag = "kind")]
-        enum Wire {
-            Authorized { grant: StoredExtensionPairingGrant },
-        }
         let grant = Fixture::grant();
         let outcome = ExtensionGrantAuthority::Authorized(Box::new(AuthorizedExtensionGrant {
             grant: grant.clone(),
