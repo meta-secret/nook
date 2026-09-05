@@ -7,7 +7,7 @@ pub fn decode_extension_grant_authority_response(
     requested: nook_companion_core::PairingVaultId,
 ) -> Result<ExtensionGrantAuthority, wasm_bindgen::JsError> {
     response
-        .decode(&requested)
+        .decode(requested)
         .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
 }
 
