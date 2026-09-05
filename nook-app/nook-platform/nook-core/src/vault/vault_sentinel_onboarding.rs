@@ -237,8 +237,8 @@ mod tests {
         let member_signing = SigningIdentity::generate()?.0;
         let session = crate::StartSentinelGenesisArgs {
             label: "Owner".to_owned(),
-            participant_count: 2,
-            threshold: 2,
+            participant_count: 2.into(),
+            threshold: 2.into(),
         }
         .start(&owner, &owner_signing)?;
         let response = crate::respond_to_sentinel_genesis_request(
