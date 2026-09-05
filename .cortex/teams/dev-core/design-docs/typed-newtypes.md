@@ -272,6 +272,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] passkey secrets — `PasskeySignatureCount`
 - [x] seed phrases — `Bip39MnemonicWordCount` for inferred supported lengths
 - [x] seed phrases — `Bip39WordSuggestionLimit` for completion result bounds
+- [x] seed phrases — `Bip39WordSequenceExpectedCount` for membership checks
 - [x] authenticator codes — validated `TotpPeriod`
 - [x] authenticator codes — `TotpRemainingSeconds`
 - [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
