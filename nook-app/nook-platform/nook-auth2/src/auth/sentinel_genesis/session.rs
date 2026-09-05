@@ -99,6 +99,7 @@ pub struct SentinelGenesisRejection {
     error: MultiDeviceError,
 }
 impl SentinelGenesisRejection {
+    #[must_use]
     pub fn into_parts(self) -> (SentinelGenesisSession, MultiDeviceError) {
         (*self.session, self.error)
     }
@@ -184,12 +185,15 @@ impl SentinelGenesisSession {
             .collect(response)
             .map_err(|rejected| rejected.into_parts().1)
     }
+    #[must_use]
     pub fn request(&self) -> &SentinelGenesisRequest {
         &self.request
     }
+    #[must_use]
     pub fn participants(&self) -> &[SentinelGenesisParticipant] {
         &self.participants
     }
+    #[must_use]
     pub fn readiness(&self) -> SentinelGenesisReadiness {
         if self.participants.len() == usize::from(u8::from(self.request.policy.participant_count)) {
             SentinelGenesisReadiness::Complete
