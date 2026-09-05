@@ -4,7 +4,7 @@ use p256::SecretKey;
 
 use crate::{
     PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose,
-    PasskeySecret,
+    PasskeySecret, PasskeySignatureCount,
 };
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ciborium::value::{Integer, Value};
@@ -393,7 +393,7 @@ pub fn create_website_passkey(
             private_key_pkcs8: private_key,
             public_key_cose: public_key,
         },
-        signature_count: 0,
+        signature_count: PasskeySignatureCount::ZERO,
         discoverable: true,
         backup_eligible: true,
         backup_state: true,
@@ -458,11 +458,11 @@ pub fn assert_website_passkey(
         .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
     let next_count = credential
         .signature_count
-        .checked_add(1)
+        .checked_increment()
         .ok_or(PasskeyAuthenticatorError::SignatureCounterExhausted)?;
     let authenticator_data = assertion_authenticator_data(
         &credential.rp_id,
-        next_count,
+        u32::from(next_count),
         request.user_verification_required,
     );
     let mut signed_bytes = authenticator_data.clone();
@@ -569,7 +569,7 @@ mod tests {
         };
         let assertion =
             assert_website_passkey(&request, slice::from_ref(&registration.credential))?;
-        assert_eq!(assertion.updated_credential.signature_count, 1);
+        assert_eq!(u32::from(assertion.updated_credential.signature_count), 1);
         let auth_data = URL_SAFE_NO_PAD.decode(&assertion.authenticator_data)?;
         let client_data = URL_SAFE_NO_PAD.decode(&assertion.client_data_json)?;
         let mut signed = auth_data;
@@ -629,9 +629,9 @@ mod tests {
     fn concurrent_counter_variants_resume_from_the_highest_counter() -> anyhow::Result<()> {
         let registration = create_website_passkey(&registration_request(), &[])?;
         let mut older = registration.credential.clone();
-        older.signature_count = 2;
+        older.signature_count = 2.into();
         let mut newer = registration.credential;
-        newer.signature_count = 7;
+        newer.signature_count = 7.into();
         let request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
             challenge: challenge(11),
@@ -644,7 +644,7 @@ mod tests {
 
         let assertion = assert_website_passkey(&request, &[older, newer])?;
 
-        assert_eq!(assertion.updated_credential.signature_count, 8);
+        assert_eq!(u32::from(assertion.updated_credential.signature_count), 8);
         Ok(())
     }
 
@@ -694,7 +694,7 @@ mod tests {
         );
 
         let mut exhausted = credential;
-        exhausted.signature_count = u32::MAX;
+        exhausted.signature_count = u32::MAX.into();
         assertion_request.allow_credentials = vec![PasskeyCredentialDescriptor {
             id: exhausted.credential_id.clone(),
         }];

@@ -80,6 +80,37 @@ impl<'de> Deserialize<'de> for PasskeySecretVersion {
 }
 
 pub const PASSKEY_SECRET_VERSION: PasskeySecretVersion = PasskeySecretVersion::CURRENT;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PasskeySignatureCount(u32);
+
+impl PasskeySignatureCount {
+    pub const ZERO: Self = Self(0);
+
+    pub(crate) fn checked_increment(self) -> Option<Self> {
+        self.0.checked_add(1).map(Self)
+    }
+}
+
+impl From<u32> for PasskeySignatureCount {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<PasskeySignatureCount> for u32 {
+    fn from(value: PasskeySignatureCount) -> Self {
+        value.0
+    }
+}
+
+impl Zeroize for PasskeySignatureCount {
+    fn zeroize(&mut self) {
+        self.0.zeroize();
+    }
+}
+
 const PASSKEY_CREDENTIAL_ID_MAX_LEN: usize = 1023;
 const PASSKEY_USER_HANDLE_MAX_LEN: usize = 64;
 const PASSKEY_PRIVATE_KEY_MAX_LEN: usize = 4096;
@@ -226,7 +257,7 @@ pub struct PasskeySecret {
     pub user_name: String,
     pub user_display_name: String,
     pub key: PasskeyCredentialKey,
-    pub signature_count: u32,
+    pub signature_count: PasskeySignatureCount,
     pub discoverable: bool,
     pub backup_eligible: bool,
     pub backup_state: bool,
@@ -554,7 +585,7 @@ mod tests {
             user_verification_required: true,
         };
         let mut passkey = crate::create_website_passkey(&request, &[])?.credential;
-        passkey.signature_count = 4;
+        passkey.signature_count = 4.into();
         Ok(passkey)
     }
 
@@ -566,6 +597,7 @@ mod tests {
 
         assert_eq!(decoded, value);
         assert!(yaml.as_str().contains("version: 1"));
+        assert!(yaml.as_str().contains("signatureCount: 4"));
         assert!(yaml.as_str().contains("rpId: accounts.example.com"));
         Ok(())
     }
