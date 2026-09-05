@@ -1,5 +1,11 @@
 //! Typed runtime response boundary for backup-code attachment.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -58,24 +64,27 @@ pub enum AuthenticatorBackupAttachResponse {
 #[error("authenticator backup attach response is malformed")]
 pub struct AuthenticatorBackupAttachResponseDecodeError;
 
-pub fn decode_authenticator_backup_attach_response(
-    wire: AuthenticatorBackupAttachResponseWire,
-) -> Result<AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError> {
-    match wire {
-        AuthenticatorBackupAttachResponseWire::Completed(
-            AuthenticatorBackupAttachCompletedWire { ok: true },
-        ) => Ok(AuthenticatorBackupAttachResponse::Completed {
-            kind: AuthenticatorBackupAttachResponseKind::Completed,
-        }),
-        AuthenticatorBackupAttachResponseWire::Rejected(
-            AuthenticatorBackupAttachRejectedWire { ok: false, reason },
-        ) if !reason.trim().is_empty() => Ok(AuthenticatorBackupAttachResponse::Rejected {
-            kind: AuthenticatorBackupAttachResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticatorBackupAttachResponseWire::Completed(_)
-        | AuthenticatorBackupAttachResponseWire::Rejected(_) => {
-            Err(AuthenticatorBackupAttachResponseDecodeError)
+impl AuthenticatorBackupAttachResponse {
+    pub fn from_wire(
+        wire: AuthenticatorBackupAttachResponseWire,
+    ) -> Result<AuthenticatorBackupAttachResponse, AuthenticatorBackupAttachResponseDecodeError>
+    {
+        match wire {
+            AuthenticatorBackupAttachResponseWire::Completed(
+                AuthenticatorBackupAttachCompletedWire { ok: true },
+            ) => Ok(AuthenticatorBackupAttachResponse::Completed {
+                kind: AuthenticatorBackupAttachResponseKind::Completed,
+            }),
+            AuthenticatorBackupAttachResponseWire::Rejected(
+                AuthenticatorBackupAttachRejectedWire { ok: false, reason },
+            ) if !reason.trim().is_empty() => Ok(AuthenticatorBackupAttachResponse::Rejected {
+                kind: AuthenticatorBackupAttachResponseKind::Rejected,
+                reason,
+            }),
+            AuthenticatorBackupAttachResponseWire::Completed(_)
+            | AuthenticatorBackupAttachResponseWire::Rejected(_) => {
+                Err(AuthenticatorBackupAttachResponseDecodeError)
+            }
         }
     }
 }
@@ -87,7 +96,7 @@ mod tests {
     #[test]
     fn decodes_completed_and_rejected_backup_attachment() {
         assert_eq!(
-            decode_authenticator_backup_attach_response(
+            AuthenticatorBackupAttachResponse::from_wire(
                 AuthenticatorBackupAttachResponseWire::Completed(
                     AuthenticatorBackupAttachCompletedWire { ok: true },
                 ),
@@ -97,7 +106,7 @@ mod tests {
             })
         );
         assert_eq!(
-            decode_authenticator_backup_attach_response(
+            AuthenticatorBackupAttachResponse::from_wire(
                 AuthenticatorBackupAttachResponseWire::Rejected(
                     AuthenticatorBackupAttachRejectedWire {
                         ok: false,
@@ -132,7 +141,7 @@ mod tests {
             ),
         ] {
             assert_eq!(
-                decode_authenticator_backup_attach_response(malformed),
+                AuthenticatorBackupAttachResponse::from_wire(malformed),
                 Err(AuthenticatorBackupAttachResponseDecodeError)
             );
         }
