@@ -1,5 +1,6 @@
 //! Signed vault event-log errors.
 
+use crate::canonical::EventId;
 use nook_auth2::ValidationError;
 use thiserror::Error;
 
@@ -9,6 +10,9 @@ pub type EventResult<T> = Result<T, EventError>;
 
 #[derive(Debug, Error)]
 pub enum EventError {
+    #[error("local event {event_id} was quarantined: {reason}")]
+    LocalAppendQuarantined { event_id: EventId, reason: String },
+
     #[error(transparent)]
     Validation(#[from] ValidationError),
 
