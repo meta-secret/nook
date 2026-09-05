@@ -440,7 +440,7 @@ jobs:
           required=false
           while IFS= read -r -d '' path; do
             case "$path" in
-              nook-app/nook-web/nook-web-shared/src/extension/password-form-* |\
+              nook-app/nook-web/nook-web-shared/src/extension/password-form* |\
               nook-app/nook-web/nook-web-extension/src/content/autofill.ts |\
               nook-app/nook-web/nook-web-extension/src/content/autofill/* |\
               nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte |\

@@ -600,7 +600,7 @@ prWorkflow.requireAll([
   "auth-sensitive-e2e-required: ${{ steps.auth-sensitive-e2e-contract.outputs.required }}",
   "name: Detect authentication-sensitive browser changes",
   "steps.auth-sensitive-e2e-contract.outputs.required == 'true' &&\n          github.event.pull_request.head.repo.full_name == github.repository &&\n          github.event.pull_request.user.login != 'dependabot[bot]'",
-  "nook-app/nook-web/nook-web-shared/src/extension/password-form-*",
+  "nook-app/nook-web/nook-web-shared/src/extension/password-form*",
   "nook-app/nook-web/nook-web-extension/src/content/autofill.ts",
   "nook-app/nook-web/nook-web-extension/src/content/autofill/*",
   "nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte",
