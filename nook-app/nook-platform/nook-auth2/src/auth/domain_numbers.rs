@@ -5,6 +5,52 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PasswordCharacterCount(pub(crate) usize);
+impl PasswordCharacterCount {
+    pub const VAULT_MINIMUM: Self = Self(5);
+    pub const RECOMMENDED_MINIMUM: Self = Self(8);
+    pub const GENERATOR_MAXIMUM: Self = Self(128);
+}
+impl From<usize> for PasswordCharacterCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+impl From<PasswordCharacterCount> for usize {
+    fn from(value: PasswordCharacterCount) -> Self {
+        value.0
+    }
+}
+impl Display for PasswordCharacterCount {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct IdentityControlEpoch(pub(crate) u64);
+impl IdentityControlEpoch {
+    pub const INITIAL: Self = Self(1);
+
+    #[must_use]
+    pub const fn next(self) -> Self {
+        Self(self.0.saturating_add(1))
+    }
+}
+impl From<u64> for IdentityControlEpoch {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+impl From<IdentityControlEpoch> for u64 {
+    fn from(value: IdentityControlEpoch) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct MockPasskeyCredentialCount(pub(crate) usize);
@@ -150,5 +196,22 @@ impl From<SentinelThreshold> for u8 {
 impl Display for SentinelThreshold {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn password_count_and_control_epoch_preserve_scalar_wires() -> anyhow::Result<()> {
+        let count = PasswordCharacterCount::RECOMMENDED_MINIMUM;
+        let epoch = IdentityControlEpoch::INITIAL.next();
+        assert_eq!(serde_json::to_string(&count)?, "8");
+        assert_eq!(serde_json::from_str::<PasswordCharacterCount>("8")?, count);
+        assert_eq!(serde_json::to_string(&epoch)?, "2");
+        assert_eq!(serde_json::from_str::<IdentityControlEpoch>("2")?, epoch);
+        assert_eq!(IdentityControlEpoch::from(u64::MAX).next(), u64::MAX.into());
+        Ok(())
     }
 }

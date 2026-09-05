@@ -18,6 +18,7 @@ import type * as SessionRuntimeMessages from './session-runtime-messages'
 import type * as AccountPickers from './account-pickers'
 import { AccountPickerCleanupMarkerStatus } from './account-pickers'
 import type * as AuthenticatorOperations from './authenticator-operations'
+import { CleanupEvidence } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ChromeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -146,7 +147,11 @@ async function clearAuthorizationState({
     releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
     throw new Error('authorization cleanup failed')
   }
-  await completeAccountPickerAuthorizationCleanup(authorizationGeneration, true)
+  const outcome = await completeAccountPickerAuthorizationCleanup(
+    authorizationGeneration,
+    CleanupEvidence.Full,
+  )
+  if ('error' in outcome) throw new Error('authorization cleanup rejected')
 }
 
 export async function recoverInterruptedAuthorizationCleanup(
@@ -167,10 +172,12 @@ export async function recoverInterruptedAuthorizationCleanup(
     throw new Error('authorization cleanup marker lookup failed')
   }
   if (!lookup.pending) {
-    await dependencies.completeAccountPickerAuthorizationCleanup(
-      cleanup.authorizationGeneration,
-      false,
-    )
+    const outcome =
+      await dependencies.completeAccountPickerAuthorizationCleanup(
+        cleanup.authorizationGeneration,
+        CleanupEvidence.Partial,
+      )
+    if ('error' in outcome) throw new Error('authorization cleanup rejected')
     return
   }
   const cleanupArgs: ClearAuthorizationStateArgs = {
@@ -349,10 +356,12 @@ export function routeExtensionLifecycleMessage({
             rebindStagedAuthenticatorEnrollmentsAuthorization(
               cleanupStart.authorizationGeneration,
             )
-            await completeAccountPickerAuthorizationCleanup(
+            const outcome = await completeAccountPickerAuthorizationCleanup(
               cleanupStart.authorizationGeneration,
-              false,
+              CleanupEvidence.Partial,
             )
+            // Preserve the import outcome without refreshing a rejected generation.
+            if ('error' in outcome) return response
             if (response.ok) await refreshAuthenticationSurfaces()
           }
           return response

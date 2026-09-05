@@ -1,5 +1,11 @@
 //! Typed runtime response boundary for generated authenticator codes.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -28,6 +34,11 @@ impl AuthenticatorCodeExpiryEpochMilliseconds {
 pub struct AuthenticatorCodeSecret(String);
 
 impl AuthenticatorCodeSecret {
+    fn is_valid(&self) -> bool {
+        let code = self.as_str();
+        (6..=8).contains(&code.len()) && code.bytes().all(|byte| byte.is_ascii_digit())
+    }
+
     fn as_str(&self) -> &str {
         &self.0
     }
@@ -104,34 +115,33 @@ pub enum AuthenticatorCodeResponse {
 #[error("authenticator code response is malformed")]
 pub struct AuthenticatorCodeResponseDecodeError;
 
-fn is_totp_code(code: &str) -> bool {
-    (6..=8).contains(&code.len()) && code.bytes().all(|byte| byte.is_ascii_digit())
-}
-
-pub fn decode_authenticator_code_response(
-    wire: AuthenticatorCodeResponseWire,
-) -> Result<AuthenticatorCodeResponse, AuthenticatorCodeResponseDecodeError> {
-    match wire {
-        AuthenticatorCodeResponseWire::Ready(AuthenticatorCodeReadyWire {
-            ok: true,
-            code,
-            expires_at,
-        }) if is_totp_code(code.as_str()) && expires_at.is_valid() => {
-            Ok(AuthenticatorCodeResponse::Ready {
-                kind: AuthenticatorCodeResponseKind::Ready,
+impl AuthenticatorCodeResponse {
+    pub fn from_wire(
+        wire: AuthenticatorCodeResponseWire,
+    ) -> Result<AuthenticatorCodeResponse, AuthenticatorCodeResponseDecodeError> {
+        match wire {
+            AuthenticatorCodeResponseWire::Ready(AuthenticatorCodeReadyWire {
+                ok: true,
                 code,
                 expires_at,
-            })
-        }
-        AuthenticatorCodeResponseWire::Rejected(AuthenticatorCodeRejectedWire {
-            ok: false,
-            reason,
-        }) if !reason.trim().is_empty() => Ok(AuthenticatorCodeResponse::Rejected {
-            kind: AuthenticatorCodeResponseKind::Rejected,
-            reason,
-        }),
-        AuthenticatorCodeResponseWire::Ready(_) | AuthenticatorCodeResponseWire::Rejected(_) => {
-            Err(AuthenticatorCodeResponseDecodeError)
+            }) if code.is_valid() && expires_at.is_valid() => {
+                Ok(AuthenticatorCodeResponse::Ready {
+                    kind: AuthenticatorCodeResponseKind::Ready,
+                    code,
+                    expires_at,
+                })
+            }
+            AuthenticatorCodeResponseWire::Rejected(AuthenticatorCodeRejectedWire {
+                ok: false,
+                reason,
+            }) if !reason.trim().is_empty() => Ok(AuthenticatorCodeResponse::Rejected {
+                kind: AuthenticatorCodeResponseKind::Rejected,
+                reason,
+            }),
+            AuthenticatorCodeResponseWire::Ready(_)
+            | AuthenticatorCodeResponseWire::Rejected(_) => {
+                Err(AuthenticatorCodeResponseDecodeError)
+            }
         }
     }
 }
@@ -149,7 +159,7 @@ mod tests {
                 expires_at: AuthenticatorCodeExpiryEpochMilliseconds(1_725_000_030_000.0),
             });
             assert!(matches!(
-                decode_authenticator_code_response(wire),
+                AuthenticatorCodeResponse::from_wire(wire),
                 Ok(AuthenticatorCodeResponse::Ready { expires_at, .. })
                     if expires_at == AuthenticatorCodeExpiryEpochMilliseconds(1_725_000_030_000.0)
             ));
@@ -170,7 +180,7 @@ mod tests {
             r#"{"ok":true,"code":"123456","expiresAt":9007199254740992}"#,
         ] {
             let wire = serde_json::from_str::<AuthenticatorCodeResponseWire>(serialized)?;
-            assert!(decode_authenticator_code_response(wire).is_err());
+            assert!(AuthenticatorCodeResponse::from_wire(wire).is_err());
         }
         assert!(
             serde_json::from_str::<AuthenticatorCodeResponseWire>(
