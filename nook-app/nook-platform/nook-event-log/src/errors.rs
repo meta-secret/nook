@@ -3,6 +3,8 @@
 use nook_auth2::ValidationError;
 use thiserror::Error;
 
+use crate::event::VaultEventSchemaVersion;
+
 pub type EventResult<T> = Result<T, EventError>;
 
 #[derive(Debug, Error)]
@@ -64,7 +66,7 @@ pub enum EventError {
     UnauthorizedActor { actor_id: String },
 
     #[error("unsupported event schema version {version}")]
-    UnsupportedSchemaVersion { version: u32 },
+    UnsupportedSchemaVersion { version: VaultEventSchemaVersion },
 
     #[error("current epoch checkpoint must include {field}")]
     MissingEpochCheckpointReplacement { field: &'static str },

@@ -1,3 +1,8 @@
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
@@ -46,6 +51,7 @@ pub use event::{
 };
 pub use fingerprint::SecretFingerprint;
 pub use graph::{EventGraph, EventInsertStatus, EventPendingReason};
+pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
     SecretReplacementConflict, SecurityConflict, VaultProjection,
@@ -63,8 +69,9 @@ pub use store::{
 pub use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, PasswordEnvelope,
-    PasswordEnvelopeVersion, PasswordUnlockEntry, SecretId, SecretType, SentinelShareVersion,
-    Sha256Hex, SigningSeedHex, StoreId, StoredRecordPayload, StoredSecretRecord,
+    PasswordEnvelopeVersion, PasswordUnlockEntry, SecretId, SecretType, SentinelParticipantCount,
+    SentinelShareIndex, SentinelShareVersion, SentinelThreshold, Sha256Hex, SigningSeedHex,
+    StoreId, StoredRecordPayload, StoredSecretRecord,
 };
 
 #[cfg(test)]
