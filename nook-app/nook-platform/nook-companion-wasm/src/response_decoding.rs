@@ -3,8 +3,8 @@
 use nook_companion_core::{
     AuthenticatorBackupAttachResponse, AuthenticatorEnrollmentConfirmResponse,
     AuthenticatorEnrollmentStageResponse, AuthenticatorOptionsResponse,
-    AuthenticatorPickerOpenResponse, AuthenticatorPreviewResponse, WebsiteLoginOptions,
-    WebsitePasskeyAccountList,
+    AuthenticatorPickerOpenResponse, AuthenticatorPreviewResponse, GeneratedPasswordResponse,
+    WebsiteLoginOptions, WebsitePasskeyAccountList,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -122,9 +122,8 @@ pub fn decode_authenticator_enrollment_confirm_response(
 #[wasm_bindgen]
 pub fn decode_generated_password_response(
     response: nook_companion_core::GeneratedPasswordResponseWire,
-) -> Result<nook_companion_core::GeneratedPasswordResponse, wasm_bindgen::JsError> {
-    nook_companion_core::decode_generated_password_response(response)
-        .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))
+) -> Result<nook_companion_core::GeneratedPasswordResponse, JsError> {
+    GeneratedPasswordResponse::from_wire(response).map_err(|error| JsError::new(&error.to_string()))
 }
 
 #[wasm_bindgen]
