@@ -254,7 +254,7 @@
                 {vault.t(I18N_KEYS.LoginSentinelTerminalParticipantOne)}
               </p>
             </div>
-          {:else if status === SentinelGenesisPhase.CollectingParticipants || status === SentinelGenesisPhase.ReadyToFinalize}
+          {:else if status !== SentinelGenesisPhase.Inactive && status !== SentinelGenesisPhase.AwaitingCompletionCheck}
             <div
               class="mt-7 space-y-5 border border-[#4f7a46] bg-[#081008] p-5"
               data-testid="sentinel-genesis-ceremony-step"
