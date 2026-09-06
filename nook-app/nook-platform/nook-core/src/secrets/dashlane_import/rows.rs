@@ -4,10 +4,13 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! CSV schema admission and conversion bound to the original reader.
-use super::super::import_support::{self, MAX_CSV_BYTES};
+use super::super::import_support::{
+    CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    MAX_CSV_BYTES, SourceLabelMetadata,
+};
 use super::{DashlaneImportError, DashlaneImportPlan};
 use crate::{AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
-use csv::{Reader, StringRecord};
+use csv::StringRecord;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DashlaneCsvKind {
     Credentials,
@@ -27,7 +30,7 @@ impl<'a> DashlaneCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(DashlaneImportError::CsvTooLarge);
         }
-        let mut reader = import_support::csv_reader(self.text);
+        let mut reader = CsvImportReader::new(self.text);
         let headers = reader.headers()?.clone();
         let headers = NormalizedDashlaneHeaders::from_record(&headers);
         let kind = match self.selection {
@@ -53,16 +56,15 @@ impl<'a> DashlaneCsvInput<'a> {
 /// use nook_core::dashlane_import::rows::CheckedDashlaneCsv;
 /// ```
 pub(super) struct CheckedDashlaneCsv<'a> {
-    reader: Reader<&'a [u8]>,
+    reader: CsvImportReader<'a>,
     columns: DashlaneColumns,
 }
 impl CheckedDashlaneCsv<'_> {
-    pub(super) fn collect(mut self) -> Result<DashlaneImportPlan, DashlaneImportError> {
-        let collection = import_support::collect_csv_records(
-            &mut self.reader,
-            DashlaneImportError::TooManyRecords,
-            |record| self.columns.convert(record),
-        )?;
+    pub(super) fn collect(self) -> Result<DashlaneImportPlan, DashlaneImportError> {
+        let collection = self.reader.collect(CsvImportConversion {
+            too_many_records: DashlaneImportError::TooManyRecords,
+            convert: |record: &StringRecord| self.columns.convert(record),
+        })?;
         Ok(DashlaneImportPlan {
             items: collection.items,
             source_count: collection.source_count.into(),
@@ -92,12 +94,12 @@ impl NormalizedDashlaneHeaders {
         Self {
             values: headers
                 .iter()
-                .map(import_support::normalized_csv_header)
+                .map(|header| CsvHeader::new(header).normalized())
                 .collect(),
         }
     }
     fn required(&self, name: &'static str) -> Result<usize, DashlaneImportError> {
-        let expected = import_support::normalized_csv_header(name);
+        let expected = CsvHeader::new(name).normalized();
         self.values
             .iter()
             .position(|header| header == &expected)
@@ -105,7 +107,7 @@ impl NormalizedDashlaneHeaders {
     }
     fn optional(&self, names: &[&str]) -> Option<usize> {
         names.iter().find_map(|name| {
-            let expected = import_support::normalized_csv_header(name);
+            let expected = CsvHeader::new(name).normalized();
             self.values.iter().position(|header| header == &expected)
         })
     }
@@ -179,16 +181,17 @@ impl CredentialColumns {
         })
     }
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
-        let username = import_support::csv_field(record, self.username);
-        let username2 = import_support::optional_csv_field(record, self.username2);
-        let username3 = import_support::optional_csv_field(record, self.username3);
-        let title = import_support::optional_csv_field(record, self.title);
-        let password = import_support::csv_password_field(record, self.password);
-        let mut notes = import_support::optional_csv_field(record, self.note);
-        let url = import_support::optional_csv_field(record, self.url);
-        let category = import_support::optional_csv_field(record, self.category);
-        let otp_secret = import_support::optional_csv_field(record, self.otp_secret);
-        let otp_url = import_support::optional_csv_field(record, self.otp_url);
+        let csv_fields = CsvRecordFields::new(record);
+        let username = csv_fields.trimmed(self.username);
+        let username2 = csv_fields.optional(self.username2);
+        let username3 = csv_fields.optional(self.username3);
+        let title = csv_fields.optional(self.title);
+        let password = csv_fields.password(self.password);
+        let mut notes = csv_fields.optional(self.note);
+        let url = csv_fields.optional(self.url);
+        let category = csv_fields.optional(self.category);
+        let otp_secret = csv_fields.optional(self.otp_secret);
+        let otp_url = csv_fields.optional(self.otp_url);
 
         if title.is_empty()
             && url.is_empty()
@@ -204,7 +207,13 @@ impl CredentialColumns {
         let website_url = if url.is_empty() { title.clone() } else { url };
 
         let mut metadata = Vec::new();
-        if let Some(entry) = import_support::source_label_metadata("title", &title, &website_url) {
+        if let Some(entry) = (SourceLabelMetadata {
+            key: "title",
+            label: &title,
+            website_url: &website_url,
+        })
+        .entry()
+        {
             metadata.push(entry);
         }
         if !category.trim().is_empty() {
@@ -275,8 +284,9 @@ impl SecureNoteColumns {
         })
     }
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
-        let title = import_support::csv_field(record, self.title);
-        let note = import_support::csv_field(record, self.note);
+        let csv_fields = CsvRecordFields::new(record);
+        let title = csv_fields.trimmed(self.title);
+        let note = csv_fields.trimmed(self.note);
         if title.is_empty() {
             return (Vec::new(), 1);
         }
@@ -299,15 +309,15 @@ impl PaymentColumns {
         })
     }
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
-        let kind = import_support::csv_field(record, self.kind);
+        let csv_fields = CsvRecordFields::new(record);
+        let kind = csv_fields.trimmed(self.kind);
         if kind.trim().eq_ignore_ascii_case("credit_card") {
-            let account_name = import_support::optional_csv_field(record, self.account_name);
-            let account_holder = import_support::optional_csv_field(record, self.account_holder);
-            let number = import_support::optional_csv_field(record, self.cc_number);
-            let code = import_support::optional_csv_field(record, self.code);
-            let expiration_month =
-                import_support::optional_csv_field(record, self.expiration_month);
-            let expiration_year = import_support::optional_csv_field(record, self.expiration_year);
+            let account_name = csv_fields.optional(self.account_name);
+            let account_holder = csv_fields.optional(self.account_holder);
+            let number = csv_fields.optional(self.cc_number);
+            let code = csv_fields.optional(self.code);
+            let expiration_month = csv_fields.optional(self.expiration_month);
+            let expiration_year = csv_fields.optional(self.expiration_year);
             let title = if account_name.is_empty() {
                 "Credit card".to_owned()
             } else {
@@ -346,7 +356,11 @@ struct DashlaneNotes<'a> {
 }
 impl DashlaneNotes<'_> {
     fn append(self, metadata: impl IntoIterator<Item = (String, String)>) {
-        import_support::append_import_metadata(self.notes, "Dashlane", metadata);
+        ImportMetadata {
+            heading: "Dashlane",
+            entries: metadata,
+        }
+        .append_to(self.notes);
     }
 }
 

@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Keeper header aliases and ordered custom-field schema.
-use super::super::import_support;
+use super::super::import_support::CsvHeader;
 use super::KeeperImportError;
 use csv::StringRecord;
 use std::{collections, iter};
@@ -50,7 +50,7 @@ impl<'a> KeeperHeaders<'a> {
             record,
             normalized: record
                 .iter()
-                .map(import_support::normalized_csv_header)
+                .map(|header| CsvHeader::new(header).normalized())
                 .collect(),
         }
     }
@@ -60,7 +60,7 @@ impl<'a> KeeperHeaders<'a> {
         iter::once(name)
             .chain(aliases.iter().copied())
             .find_map(|candidate| {
-                let expected = import_support::normalized_csv_header(candidate);
+                let expected = CsvHeader::new(candidate).normalized();
                 self.normalized
                     .iter()
                     .position(|header| header == &expected)
@@ -69,7 +69,7 @@ impl<'a> KeeperHeaders<'a> {
     }
     fn optional(&self, names: &[&str]) -> Option<usize> {
         names.iter().find_map(|name| {
-            let expected = import_support::normalized_csv_header(name);
+            let expected = CsvHeader::new(name).normalized();
             self.normalized
                 .iter()
                 .position(|header| header == &expected)
@@ -146,7 +146,7 @@ impl<'a> KeeperHeaders<'a> {
                 }
                 continue;
             }
-            let normalized_header = import_support::normalized_csv_header(raw);
+            let normalized_header = CsvHeader::new(raw).normalized();
             if normalized_header == "customfields" {
                 blob = Some(index);
                 continue;
