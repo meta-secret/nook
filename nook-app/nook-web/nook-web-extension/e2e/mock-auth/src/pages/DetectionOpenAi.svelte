@@ -20,7 +20,22 @@
 
   function submitterIdentity(event: SubmitEvent): string {
     const { submitter } = event
-    return submitter ? submitter.getAttribute('value') || '' : ''
+    if (submitter) return submitter.getAttribute('value') || ''
+
+    // The extension mediates a page-world submit event from its isolated
+    // world. Some browser versions cannot carry the cross-realm submitter
+    // through the synthetic event, so preserve native implicit-submit
+    // semantics only when this form has one unambiguous submit control.
+    const form = event.currentTarget
+    if (!(form instanceof HTMLFormElement)) return ''
+    const submitControls = Array.from(
+      form.querySelectorAll<HTMLButtonElement>(
+        'button[type="submit"], button:not([type])',
+      ),
+    ).filter((control) => control.form === form)
+    return submitControls.length === 1
+      ? submitControls[0].getAttribute('value') || ''
+      : ''
   }
 
   function submitChatGpt(event: SubmitEvent): void {
