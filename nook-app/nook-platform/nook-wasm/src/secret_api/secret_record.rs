@@ -329,3 +329,171 @@ impl NookSecretRecord {
         }
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::{
+        ApiKeySecret, AuthenticatorSecret, CreditCardSecret, FileAttachmentByteCount,
+        FileAttachmentSecret, LoginSecret, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
+        PasskeyPublicKeyCose, PasskeySecret, PasskeySecretVersion, PasskeySignatureCount, SecretId,
+        SecretRecord, SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret, TotpAlgorithm,
+        TotpDigits, TotpPeriod, TotpSecret,
+    };
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn record(secret_type: SecretType, data: SecretValue) -> NookSecretRecord {
+        NookSecretRecord::from_record(SecretRecord {
+            id: SecretId::from_vault_record("record-1"),
+            secret_type,
+            data,
+        })
+    }
+
+    #[wasm_bindgen_test]
+    fn login_and_api_key_projections_expose_typed_fields() {
+        let login = record(
+            SecretType::Login,
+            SecretValue::Login(LoginSecret {
+                website_url: "https://example.test/login".into(),
+                username: "alice".into(),
+                password: "password".into(),
+                notes: "login notes".into(),
+            }),
+        );
+        assert_eq!(login.id(), "record-1");
+        assert_eq!(login.secret_type(), SecretType::Login);
+        assert_eq!(login.website_url(), "https://example.test/login");
+        assert_eq!(login.username(), "alice");
+        assert_eq!(login.password(), "password");
+        assert_eq!(login.notes(), "login notes");
+        assert_eq!(login.api_key(), "");
+        assert!(login.matches_search("alice"));
+
+        let api_key = record(
+            SecretType::ApiKey,
+            SecretValue::ApiKey(ApiKeySecret {
+                website_url: "https://api.example.test".into(),
+                key: "api-key".into(),
+                expires_at: "2030-01-01".into(),
+            }),
+        );
+        assert_eq!(api_key.secret_type(), SecretType::ApiKey);
+        assert_eq!(api_key.website_url(), "https://api.example.test");
+        assert_eq!(api_key.api_key(), "api-key");
+        assert_eq!(api_key.expires_at(), "2030-01-01");
+        assert_eq!(api_key.username(), "");
+        assert_eq!(api_key.password(), "");
+    }
+
+    #[wasm_bindgen_test]
+    fn seed_note_card_and_attachment_projections_expose_typed_fields() {
+        let seed = record(
+            SecretType::SeedPhrase,
+            SecretValue::SeedPhrase(SeedPhraseSecret {
+                name: "Recovery".into(),
+                seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".into(),
+            }),
+        );
+        assert_eq!(seed.name(), "Recovery");
+        assert!(seed.seed().starts_with("abandon"));
+
+        let note = record(
+            SecretType::SecureNote,
+            SecretValue::SecureNote(SecureNoteSecret {
+                title: "Private note".into(),
+                note: "contents".into(),
+            }),
+        );
+        assert_eq!(note.title(), "Private note");
+        assert_eq!(note.note(), "contents");
+        assert_eq!(note.summary(), "Private note");
+
+        let card = record(
+            SecretType::CreditCard,
+            SecretValue::CreditCard(CreditCardSecret {
+                title: "Travel card".into(),
+                cardholder_name: "Alice".into(),
+                number: "4111111111111111".into(),
+                expiration_month: "12".into(),
+                expiration_year: "2030".into(),
+                cvv: "123".into(),
+                notes: "card notes".into(),
+            }),
+        );
+        assert_eq!(card.title(), "Travel card");
+        assert_eq!(card.cardholder_name(), "Alice");
+        assert_eq!(card.card_number(), "4111111111111111");
+        assert_eq!(card.last4(), "1111");
+        assert_eq!(card.expiration_month(), "12");
+        assert_eq!(card.expiration_year(), "2030");
+        assert_eq!(card.cvv(), "123");
+        assert_eq!(card.notes(), "card notes");
+
+        let attachment = record(
+            SecretType::FileAttachment,
+            SecretValue::FileAttachment(FileAttachmentSecret {
+                title: "Export".into(),
+                file_name: "export.json".into(),
+                mime_type: "application/json".into(),
+                size_bytes: FileAttachmentByteCount::from(42),
+                content_base64: "e30=".into(),
+            }),
+        );
+        assert_eq!(attachment.title(), "Export");
+        assert_eq!(attachment.file_name(), "export.json");
+        assert_eq!(attachment.mime_type(), "application/json");
+        assert_eq!(attachment.size_bytes(), 42);
+        assert_eq!(attachment.content_base64(), "e30=");
+    }
+
+    #[wasm_bindgen_test]
+    fn passkey_and_authenticator_projections_expose_typed_fields() {
+        let passkey = record(
+            SecretType::Passkey,
+            SecretValue::Passkey(PasskeySecret {
+                version: PasskeySecretVersion::CURRENT,
+                rp_id: "example.test".into(),
+                rp_name: "Example".into(),
+                credential_id: "credential".into(),
+                user_handle: "handle".into(),
+                user_name: "alice".into(),
+                user_display_name: "Alice".into(),
+                key: PasskeyCredentialKey::Es256 {
+                    private_key_pkcs8: PasskeyPrivateKeyPkcs8::parse("AQ").unwrap(),
+                    public_key_cose: PasskeyPublicKeyCose::parse("Ag").unwrap(),
+                },
+                signature_count: PasskeySignatureCount::ZERO,
+                discoverable: true,
+                backup_eligible: false,
+                backup_state: false,
+            }),
+        );
+        assert_eq!(passkey.rp_id(), "example.test");
+        assert_eq!(passkey.passkey_user_name(), "alice");
+        assert_eq!(passkey.passkey_user_display_name(), "Alice");
+
+        let authenticator = record(
+            SecretType::Authenticator,
+            SecretValue::Authenticator(AuthenticatorSecret {
+                issuer: "Example".into(),
+                account: "alice".into(),
+                website_url: "https://example.test".into(),
+                secret: TotpSecret::parse("JBSWY3DPEHPK3PXP").unwrap(),
+                algorithm: TotpAlgorithm::Sha1,
+                digits: TotpDigits::Six,
+                period: TotpPeriod::try_from(30).unwrap(),
+                backup_codes: vec!["A1B2-C3D4".into()],
+            }),
+        );
+        assert_eq!(authenticator.issuer(), "Example");
+        assert_eq!(authenticator.account(), "alice");
+        assert_eq!(authenticator.totp_secret(), "JBSWY3DPEHPK3PXP");
+        assert_eq!(authenticator.algorithm(), "SHA1");
+        assert_eq!(authenticator.digits(), 6);
+        assert_eq!(authenticator.period(), 30);
+        assert_eq!(authenticator.backup_codes(), vec!["A1B2-C3D4"]);
+    }
+}

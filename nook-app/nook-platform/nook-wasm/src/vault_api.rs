@@ -737,4 +737,129 @@ mod projection_tests {
         assert_eq!(assessed.access_state(), NookVaultSyncAccessState::Assessed);
         assert!(assessed.access_status().is_ok());
     }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn provider_setup_and_outcome_wrappers_project_all_states() {
+        assert_eq!(
+            existing_provider_save_setup(),
+            nook_core::ProviderSaveSetup::Existing
+        );
+        assert_eq!(
+            new_provider_save_setup(nook_core::StorageProviderType::Github),
+            nook_core::ProviderSaveSetup::New(nook_core::StorageProviderType::Github)
+        );
+        assert_eq!(
+            inactive_provider_login_setup(),
+            nook_core::ActiveProviderLoginSetup::Inactive
+        );
+        assert_eq!(
+            active_provider_login_setup(nook_core::StorageProviderType::OauthFile),
+            nook_core::ActiveProviderLoginSetup::Active(nook_core::StorageProviderType::OauthFile)
+        );
+
+        let duplicate = NookProviderSaveOutcome(nook_core::ProviderSaveOutcome::Duplicate);
+        assert_eq!(duplicate.state(), NookProviderSaveOutcomeState::Duplicate);
+        assert!(duplicate.snapshot().is_err());
+        assert!(duplicate.oauth_file().is_err());
+
+        let local_required =
+            NookProviderSaveOutcome(nook_core::ProviderSaveOutcome::LocalFolderRequired);
+        assert_eq!(
+            local_required.state(),
+            NookProviderSaveOutcomeState::LocalFolderRequired
+        );
+        assert!(local_required.snapshot().is_err());
+        assert!(local_required.oauth_file().is_err());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn duplicate_provider_and_local_vault_wrappers_project_empty_and_present_states() {
+        let provider = nook_core::StorageProviderData::github(
+            "provider-1",
+            "GitHub",
+            "pat",
+            "owner/repo",
+            "2026-01-01T00:00:00Z",
+        );
+        let snapshot = nook_core::AuthProvidersSnapshotData {
+            providers: vec![provider.clone()],
+            ..Default::default()
+        };
+
+        let duplicate = find_duplicate_sync_provider(snapshot.clone(), provider.clone());
+        assert_eq!(duplicate.state(), NookDuplicateSyncProviderState::Duplicate);
+        assert_eq!(duplicate.provider().unwrap().id, "provider-1");
+
+        let unique =
+            find_duplicate_sync_provider_excluding(snapshot, provider.clone(), "provider-1");
+        assert_eq!(unique.state(), NookDuplicateSyncProviderState::Unique);
+        assert!(unique.provider().is_err());
+
+        let empty = NookActiveVaultSelection(None);
+        assert_eq!(empty.state(), NookActiveVaultSelectionState::NotSelected);
+        assert!(empty.store_id().is_err());
+        let selected = NookActiveVaultSelection(Some("store-1".into()));
+        assert_eq!(selected.state(), NookActiveVaultSelectionState::Selected);
+        assert_eq!(selected.store_id().unwrap(), "store-1");
+
+        let never = NookLocalVaultEntry {
+            store_id: "store-1".into(),
+            label: "  ".into(),
+            last_unlocked_at: None,
+        };
+        assert_eq!(never.store_id(), "store-1");
+        assert_eq!(never.label(), "  ");
+        assert_eq!(never.display_label("Fallback"), "Fallback");
+        assert_eq!(
+            never.unlock_state(),
+            NookLocalVaultUnlockState::NeverUnlocked
+        );
+        assert!(never.last_unlocked_at().is_err());
+
+        let unlocked = NookLocalVaultEntry {
+            store_id: "store-2".into(),
+            label: " Vault ".into(),
+            last_unlocked_at: Some(nook_core::IsoTimestamp::from_trusted(
+                "2026-01-01T00:00:00Z".into(),
+            )),
+        };
+        assert_eq!(unlocked.display_label("Fallback"), "Vault");
+        assert_eq!(unlocked.unlock_state(), NookLocalVaultUnlockState::Unlocked);
+        assert_eq!(unlocked.last_unlocked_at().unwrap(), "2026-01-01T00:00:00Z");
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn vault_projection_helpers_cover_sync_actions_and_invalid_inputs() {
+        assert_eq!(simple_vault_app_url(""), "https://simple.nokey.sh/");
+        assert_eq!(
+            simple_vault_app_url(" https://example.test/// "),
+            "https://example.test/"
+        );
+        assert!(vault_connect_intent_permits_empty_remote_genesis("create-new").unwrap());
+        assert!(!vault_connect_intent_permits_empty_remote_genesis("open-existing").unwrap());
+        assert!(vault_connect_intent_permits_empty_remote_genesis("bad").is_err());
+        assert_eq!(read_vault_version("not yaml"), 0);
+        assert!(compare_vault_sync("not yaml", "also not yaml").is_err());
+        assert!(
+            seal_auth_providers_for_device_public_key(
+                "not a public key",
+                nook_core::AuthProvidersSnapshotData::default()
+            )
+            .is_err()
+        );
+        assert!(validate_vault_content_for_application("not yaml").is_err());
+        assert!(validate_extension_pairing_vault_type("not-a-vault").is_err());
+
+        assert_eq!(configured_vault_application_name(), "unified-development");
+        assert_eq!(
+            configured_vault_application(),
+            nook_core::VaultApplication::UnifiedDevelopment
+        );
+        assert!(!configured_vault_application_is_simple());
+        assert!(!configured_vault_application_is_sentinel());
+        assert!(configured_vault_application_supports_extension());
+    }
 }
