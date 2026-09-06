@@ -11,7 +11,7 @@ use crate::{
     AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
     LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord, VaultCrypto,
     VaultMetaState, VaultOperation, VaultProjection, build_members_records, build_signed_event,
-    project_vault, reencrypt_user_secrets_for_epoch, resolve_member_roster, sha256_hex,
+    project_vault, reencrypt_user_secrets_for_epoch, resolve_member_roster,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
