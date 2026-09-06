@@ -193,3 +193,59 @@ pub fn resolve_translation_catalog(locale: &str, wasm_catalog_json: &str) -> Str
 pub fn default_translation_catalog(locale: &str) -> String {
     nook_core::resolve_translation_catalog(locale, None)
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn localization_adapters_project_locales_and_catalog_operations() {
+        assert_eq!(parse_app_locale("en"), NookAppLocaleParse::English);
+        assert_eq!(parse_app_locale("ru"), NookAppLocaleParse::Russian);
+        assert_eq!(parse_app_locale("xx"), NookAppLocaleParse::Unsupported);
+        assert_eq!(
+            resolve_app_locale_from_tag("en-US"),
+            NookAppLocaleParse::English
+        );
+        assert_eq!(
+            resolve_app_locale_from_tag("ru-RU"),
+            NookAppLocaleParse::Russian
+        );
+        assert_eq!(
+            resolve_app_locale_from_tags(vec!["xx".into(), "ru".into()]),
+            "ru"
+        );
+        assert_eq!(
+            supported_app_locale_code(NookAppLocaleParse::English).unwrap(),
+            "en"
+        );
+        assert_eq!(
+            supported_app_locale_code(NookAppLocaleParse::Russian).unwrap(),
+            "ru"
+        );
+        assert!(supported_app_locale_code(NookAppLocaleParse::Unsupported).is_err());
+
+        let catalog = get_translation_catalog("en");
+        assert!(!catalog.is_empty());
+        assert!(lookup_translation(&catalog, "missing.translation.key").is_err());
+        assert!(!translate_key("en", "missing.translation.key").is_empty());
+        assert!(!translate_from_catalog(&catalog, "en", "missing.translation.key").is_empty());
+        assert!(
+            !translate_with_replacements(
+                &catalog,
+                "en",
+                "missing.translation.key",
+                vec!["name".into()],
+                vec!["Alice".into()],
+            )
+            .is_empty()
+        );
+        assert!(!resolve_error_message(&catalog, "en", "unknown error").is_empty());
+        assert!(merge_translation_catalogs("{}", "{}").is_ok());
+        assert!(!resolve_translation_catalog("en", &catalog).is_empty());
+        assert!(!default_translation_catalog("en").is_empty());
+    }
+}
