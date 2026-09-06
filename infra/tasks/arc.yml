@@ -334,17 +334,23 @@ tasks:
         # concurrent BuildKit solves exhaust that per-user kernel quota.
         keyring_maxkeys=20000
         keyring_maxbytes=2000000
+        inotify_max_user_instances=8000
+        inotify_max_user_watches=10485760
         keyring_config_next="$(mktemp)"
         trap 'rm -f "$keyring_config_next"' EXIT
         printf '%s\n' \
           "kernel.keys.maxkeys=$keyring_maxkeys" \
-          "kernel.keys.maxbytes=$keyring_maxbytes" > "$keyring_config_next"
+          "kernel.keys.maxbytes=$keyring_maxbytes" \
+          "fs.inotify.max_user_instances=$inotify_max_user_instances" \
+          "fs.inotify.max_user_watches=$inotify_max_user_watches" > "$keyring_config_next"
         sudo -n install -m 0644 "$keyring_config_next" "$keyring_config"
         rm -f "$keyring_config_next"
         trap - EXIT
         sudo -n sysctl -p "$keyring_config" >/dev/null
         test "$(cat /proc/sys/kernel/keys/maxkeys)" -ge "$keyring_maxkeys"
         test "$(cat /proc/sys/kernel/keys/maxbytes)" -ge "$keyring_maxbytes"
+        test "$(cat /proc/sys/fs/inotify/max_user_instances)" -ge "$inotify_max_user_instances"
+        test "$(cat /proc/sys/fs/inotify/max_user_watches)" -ge "$inotify_max_user_watches"
         sudo -n install -d -o 1000 -g 1000 -m 0700 "$state_dir"
         filesystem_bytes="$(df --output=size -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
         available_bytes="$(df --output=avail -B1 "$state_dir" | tail -n 1 | tr -d ' ')"
