@@ -105,7 +105,7 @@ Batch rules:
 ARC cache rules:
 
 - Register the node-local BuildKit Service as a remote Buildx builder.
-- Keep one retained 64 GiB BuildKit shard on every qualified node.
+- Keep one retained 128 GiB BuildKit shard on every qualified node.
 - Route each runner only to its local shard.
 - Let concurrent jobs share BuildKit's content-addressed store.
 - Import an exact Zot ref alone when it exists.

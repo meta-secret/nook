@@ -170,7 +170,7 @@ Use this workflow for quality, CI, and deployment changes.
     - E2e uses `127.0.0.1:5173` inside each container — no host `-p 5173`.
 
     #### BuildKit cache
-    - Every ARC build node owns one retained 64 GiB rootless BuildKit shard.
+    - Every ARC build node owns one retained 128 GiB rootless BuildKit shard.
     - The node-local Service keeps runner traffic on the selected node.
     - Private Zot is the portable cache boundary for cross-node and hosted
       recovery.

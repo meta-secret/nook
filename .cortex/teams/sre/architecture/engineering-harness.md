@@ -310,7 +310,7 @@ legacy registered `nook` runner is not used.
 ### BuildKit Caching Through `registry.dev.nokey.sh`
 
 - Local Task Bake restores and publishes shared layers when remote registry credentials exist under `~/.nook/`.
-- Every qualified node owns one retained 64 GiB rootless BuildKit shard.
+- Every qualified node owns one retained 128 GiB rootless BuildKit shard.
 - The node-local Service routes each runner only to the shard on its own node.
 - BuildKit requests 4 CPU and 8 GiB. It has no CPU or memory limits. During
   large parallel web and Rust builds, it may share all resources available on

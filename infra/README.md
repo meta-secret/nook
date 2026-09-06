@@ -11,7 +11,7 @@ This directory owns Nook's stateful server infrastructure:
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
 - Pinned Actions Runner Controller scale sets run trusted jobs in disposable
-  ordinary Pods. Each qualified node owns one retained 64 GiB rootless BuildKit
+  ordinary Pods. Each qualified node owns one retained 128 GiB rootless BuildKit
   shard. The node-local Service keeps a runner on its selected shard. There is
   no Docker daemon, Podman, DinD, Sysbox, host runtime socket, runner host path,
   privileged runner, or Kata runtime.
@@ -25,8 +25,9 @@ This directory owns Nook's stateful server infrastructure:
   job containers through ARC's Kubernetes lifecycle hooks. These jobs become
   ordinary short-lived Pods and never receive a Docker daemon or runtime socket.
 - Kubernetes prefers either Rise-S worker, then the home 7950X3D node, then
-  KS-6. Topology spreading expands the burst envelope across both primary
-  NVMe workers without concentrating the queue on one machine.
+  KS-6. A hostname skew of two fills both primary NVMe workers first. A
+  five-job burst prefers two jobs per primary and one on the secondary node.
+  KS-6 remains the last overflow choice.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. SeaweedFS
 and private `nook/**` Zot repositories require generated credentials. Zot's
