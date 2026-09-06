@@ -329,4 +329,20 @@ mod tests {
             "Passkey create ceremony failed (SecurityError: This is an invalid domain.)."
         );
     }
+
+    #[test]
+    fn ceremony_error_message_covers_partial_and_missing_browser_details() {
+        assert_eq!(
+            credential_ceremony_error_message("get", Some("AbortError"), None),
+            "Passkey get ceremony failed (AbortError)."
+        );
+        assert_eq!(
+            credential_ceremony_error_message("create", None, Some("cancelled")),
+            "Passkey create ceremony failed (cancelled)."
+        );
+        assert_eq!(
+            credential_ceremony_error_message("get", None, None),
+            "Passkey get ceremony failed (unknown browser error)."
+        );
+    }
 }
