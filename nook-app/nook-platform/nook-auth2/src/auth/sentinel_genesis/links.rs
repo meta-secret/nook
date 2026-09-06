@@ -236,7 +236,7 @@ mod tests {
         );
         match fixture.session.collect_payload(&json, "") {
             Err(error) => assert!(matches!(
-                error.error,
+                error.into_parts().1,
                 MultiDeviceError::InvalidSentinelGenesisSignature
             )),
             Ok(_) => anyhow::bail!("normalization must not replace signature admission"),
