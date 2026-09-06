@@ -690,7 +690,7 @@ mod browser_tests {
         StorageProviderData::github(
             "provider-1",
             "GitHub",
-            "ghp_test",
+            "ghp_1234567890ABCDEF",
             "work-vault",
             "2026-01-01T00:00:00Z",
         )
