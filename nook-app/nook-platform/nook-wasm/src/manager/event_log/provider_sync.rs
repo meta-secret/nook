@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::storage::event_db;
+use crate::storage::event_db::{RemoteEventUnion, VaultEventPersistence};
 use nook_core::{
     CheckedRemoteEvent, EventStorageBytes, MultiDeviceError, ProjectionEpoch, RemoteEventBatch,
     RemoteEventWrites, StorageMode, VaultCrypto, VaultType,
@@ -432,8 +432,11 @@ impl NookVaultManager {
             .iter()
             .map(|(event_id, bytes)| (event_id.clone(), bytes.clone().into()))
             .collect::<Vec<_>>();
-        let (heads, persisted) =
-            event_db::save_verified_remote_events(&self.vault.store_id, &storage_records).await?;
+        let (heads, persisted) = VaultEventPersistence::new(&self.vault.store_id)
+            .union_remote(RemoteEventUnion {
+                events: &storage_records,
+            })
+            .await?;
         *local = persisted;
         self.event_log.heads = heads.clone();
         let graph = local.load_graph(&self.vault.store_id)?;

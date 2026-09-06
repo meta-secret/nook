@@ -22,9 +22,9 @@ use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
 use crate::storage::drive_events::DriveEventStore;
 use crate::storage::event_db::{
-    append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
-    load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_heads,
-    save_key_epoch, save_signing_seed, save_verified_event, set_event_log_mode,
+    EventAppend, VaultEventPersistence, append_outbox_index, is_event_log_mode, load_heads,
+    load_key_epoch, load_local_event_store, load_outbox, load_signing_seed, queue_outbox_entry,
+    remove_outbox_entry, save_heads, save_key_epoch, save_signing_seed, set_event_log_mode,
 };
 use crate::storage::github_events::GitHubEventStore;
 use crate::storage::icloud::ICloudEventStore;
@@ -330,7 +330,12 @@ impl NookVaultManager {
         // Keep validation, the event write, the index update, and derived heads
         // in the same transaction as security-epoch commits. Otherwise another
         // tab can commit a new epoch between validation and this write.
-        self.event_log.heads = save_verified_event(&self.vault.store_id, &event, &bytes).await?;
+        self.event_log.heads = VaultEventPersistence::new(&self.vault.store_id)
+            .append(EventAppend {
+                event: &event,
+                bytes: &bytes,
+            })
+            .await?;
         if self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok() {
             self.apply_event_projection_to_session().await?;
         } else {

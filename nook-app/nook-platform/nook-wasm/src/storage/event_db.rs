@@ -5,7 +5,7 @@ mod security_epoch;
 use rexie::TransactionMode;
 
 pub(crate) use security_epoch::{
-    save_security_epoch_event_pair, save_verified_event, save_verified_remote_events,
+    EpochPairAppend, EventAppend, RemoteEventUnion, VaultEventPersistence,
 };
 
 use std::collections::HashSet;
