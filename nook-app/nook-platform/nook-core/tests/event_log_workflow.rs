@@ -19,7 +19,7 @@ use nook_core::{
     AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
     SecretFingerprint, SecretId, SecretType, SecretValue, SecureNoteSecret, StoreId, SymmetricKey,
     VaultOperation, VaultResult, VaultSecurityEpochRotationInput, build_signed_event,
-    encrypted_secret_from_armored, secret_fingerprint, secret_identity_fingerprint,
+    encrypted_secret_from_armored,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -221,8 +221,8 @@ fn append_secure_note(
         note: note.to_owned(),
     });
     let secrets_key = SymmetricKey::parse(&device.secrets_key)?;
-    let identity_fingerprint = secret_identity_fingerprint(&value, &secrets_key)?;
-    let fingerprint = secret_fingerprint(&value, &secrets_key)?;
+    let identity_fingerprint = value.identity_fingerprint(&secrets_key)?;
+    let fingerprint = value.fingerprint(&secrets_key)?;
     let yaml = value.to_yaml()?;
     let ciphertext = device.crypto.encrypt_value(yaml.as_str())?;
     device.append_signed(vec![VaultOperation::SecretCreated {

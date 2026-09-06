@@ -72,9 +72,9 @@ impl<'a> CoalescedSecretImport<'a> {
             HashMap::with_capacity(items.len());
         let mut duplicates = 0;
         for mut value in items {
-            let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
+            let fingerprint = value.fingerprint(secrets_key)?;
             if let Some(index) = indexes.get(&fingerprint).copied() {
-                let enriched = nook_core::enrich_secret(&coalesced[index], &value);
+                let enriched = coalesced[index].enriched_with(&value);
                 coalesced[index].zeroize_plaintext();
                 value.zeroize_plaintext();
                 coalesced[index] = enriched;
@@ -98,8 +98,8 @@ impl<'a> CoalescedSecretImport<'a> {
         crypto: &nook_core::VaultCrypto,
         secrets_key: &nook_core::SymmetricKey,
     ) -> Result<ImportItemOutcome, NookError> {
-        let identity_fingerprint = nook_core::secret_identity_fingerprint(&value, secrets_key)?;
-        let fingerprint = nook_core::secret_fingerprint(&value, secrets_key)?;
+        let identity_fingerprint = value.identity_fingerprint(secrets_key)?;
+        let fingerprint = value.fingerprint(secrets_key)?;
         if let Some((record, _)) =
             existing_by_identity
                 .get(&identity_fingerprint)
@@ -116,7 +116,7 @@ impl<'a> CoalescedSecretImport<'a> {
             let mut plaintext = crypto.decrypt_value(&ciphertext)?;
             let mut existing = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
             plaintext.zeroize_plaintext();
-            let mut enriched = nook_core::enrich_secret(&existing, &value);
+            let mut enriched = existing.enriched_with(&value);
             let outcome = if enriched == existing {
                 ImportItemOutcome::Duplicate
             } else {
@@ -592,8 +592,8 @@ mod import_tests {
             let key = SymmetricKey::parse(&"ab".repeat(32))?;
             let crypto = VaultCrypto::new(&key)?;
             let mut value = Self::value("same note\n\n## LastPass\n- group: Personal");
-            let identity = nook_core::secret_identity_fingerprint(&value, &key)?;
-            let version = nook_core::secret_fingerprint(&value, &key)?;
+            let identity = value.identity_fingerprint(&key)?;
+            let version = value.fingerprint(&key)?;
             let mut yaml = value.to_yaml()?;
             let encrypted = crypto.encrypt_value(yaml.as_str())?;
             yaml.zeroize_plaintext();
