@@ -122,6 +122,7 @@ mod browser_tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.vault.last_synced_content = "stale local projection".to_owned();
 
         let result = manager
             .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
