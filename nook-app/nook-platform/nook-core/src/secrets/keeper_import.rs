@@ -9,7 +9,7 @@ mod records;
 use super::import_support::{CsvImportConversion, CsvImportReader, MAX_CSV_BYTES};
 use crate::SecretValue;
 use columns::{KeeperColumns, KeeperHeaders};
-use csv::Reader;
+use csv::StringRecord;
 use records::KeeperRecord;
 use thiserror::Error;
 #[derive(Debug, Error)]
