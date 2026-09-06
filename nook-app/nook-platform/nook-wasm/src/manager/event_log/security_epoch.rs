@@ -723,11 +723,12 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[allow(
+    #[expect(
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
-    fn wasm_security_epoch_guards_cover_safe_noop_and_projection_paths() -> anyhow::Result<()> {
+    async fn wasm_security_epoch_guards_cover_safe_noop_and_projection_paths() -> anyhow::Result<()>
+    {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
         let committed = CommittedSecurityEpochExecution {
             execution: plan.prepare_execution("store_epochstate1", None)?,

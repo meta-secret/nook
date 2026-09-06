@@ -628,7 +628,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[allow(
+    #[expect(
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
@@ -774,11 +774,11 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[allow(
+    #[expect(
         unowned_function,
         reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
-    fn wasm_projected_epoch_keys_reject_an_unknown_device() -> anyhow::Result<()> {
+    async fn wasm_projected_epoch_keys_reject_an_unknown_device() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let error = NookVaultManager::projected_epoch_keys(&VaultMetaState::default(), &identity)
             .expect_err("missing auth envelope must fail closed");
@@ -791,12 +791,15 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    #[allow(
+    #[expect(
         unowned_function,
-        non_local_effect_before_unhandled_error,
-        reason = "framework boundary test records and inspects the typed provider rejection"
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
     )]
-    fn wasm_provider_classification_errors_preserve_store_details() -> anyhow::Result<()> {
+    #[allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes and then inspects the stored provider issue"
+    )]
+    async fn wasm_provider_classification_errors_preserve_store_details() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         let different = RemoteEventLogClassification::DifferentStore {
             local_store_id: "store_local12345".to_owned(),
