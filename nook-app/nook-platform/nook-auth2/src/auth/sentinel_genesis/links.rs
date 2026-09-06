@@ -132,7 +132,7 @@ impl SentinelGenesisLinkInput<'_> {
             return Ok(trimmed.to_owned());
         }
 
-        let encoded = self
+        let encoded = (SentinelGenesisLinkInput { input: trimmed })
             .extract(kind)
             .ok_or(MultiDeviceError::InvalidSentinelGenesisPayload)?;
         let decoded = percent_encoding::percent_decode_str(encoded)
@@ -255,6 +255,14 @@ mod tests {
             (SentinelGenesisLinkInput { input: &full }).canonical_response()?,
             json
         );
+        let padded_full = format!(" \n{full}\t ");
+        assert_eq!(
+            (SentinelGenesisLinkInput {
+                input: &padded_full
+            })
+            .canonical_response()?,
+            json
+        );
         let conflicting =
             format!("https://nook.example/?sentinel-response={encoded}#sentinel-response=invalid");
         assert!(matches!(
@@ -358,6 +366,14 @@ mod tests {
         assert!(!link.contains(&session.request().session_id.to_string()));
         assert_eq!(
             (SentinelGenesisLinkInput { input: &link }).canonical_request()?,
+            request_json
+        );
+        let padded_link = format!(" \n{link}\t ");
+        assert_eq!(
+            (SentinelGenesisLinkInput {
+                input: &padded_link
+            })
+            .canonical_request()?,
             request_json
         );
         let mut tampered = session.request().clone();
