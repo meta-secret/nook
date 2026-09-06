@@ -702,7 +702,7 @@ mod tests {
         let prepared = plan.prepare_execution("store_epochstate1", Some(&persisted))?;
 
         assert_eq!(prepared.store_id.as_str(), "store_epochstate1");
-        assert_eq!(prepared.trigger_event_id, persisted);
+        assert_eq!(prepared.trigger_event_id.as_str(), persisted.as_str());
         assert_eq!(
             prepared.key_epoch.as_str(),
             prepared.trigger_event_id.as_str()

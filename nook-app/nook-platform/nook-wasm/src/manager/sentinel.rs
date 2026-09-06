@@ -810,7 +810,8 @@ mod tests {
             nook_core::VaultNameRef::Unnamed,
             nook_core::VaultVersionWrite::Initial,
             &VaultArchitecture::simple_personal(DeviceMode::Standard),
-        )?;
+        )?
+        .into_inner();
         let mut manager = NookVaultManager::new();
 
         assert!(matches!(
