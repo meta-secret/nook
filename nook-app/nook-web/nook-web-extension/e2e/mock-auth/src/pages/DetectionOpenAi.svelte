@@ -18,6 +18,13 @@
     alternativeActivationCount += 1
   }
 
+  function submittedEmail(): string {
+    return (
+      document.querySelector<HTMLInputElement>('form input[name="email"]')
+        ?.value || email
+    )
+  }
+
   function submitterIdentity(
     event: SubmitEvent,
     fallbackIdentity: string,
@@ -40,7 +47,7 @@
     event.preventDefault()
     const submission: ChatGptAuthMockSubmission = {
       submitter: submitterIdentity(event, 'chatgpt-continue'),
-      email,
+      email: submittedEmail(),
       alternativeActivationCount,
       authorizationTarget: OpenAiAuthMockScenario.authorizationTarget(
         location.href,
@@ -59,7 +66,7 @@
     const submittedControlIdentity = submitterIdentity(event, 'openai-continue')
     const submission: OpenAiAuthMockSubmission = {
       submitter: submittedControlIdentity,
-      email,
+      email: submittedEmail(),
       alternativeActivationCount,
     }
     const transition = OpenAiAuthMockScenario.submitOpenAi(submission)
