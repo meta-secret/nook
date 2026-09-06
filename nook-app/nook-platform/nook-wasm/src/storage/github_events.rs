@@ -254,4 +254,28 @@ mod tests {
             None
         );
     }
+
+    #[test]
+    fn tree_path_filter_rejects_invalid_digests_and_accepts_case_insensitive_yaml() {
+        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+        assert_eq!(
+            GitHubEventStore::event_id_from_tree_path(&format!("{EVENT_LOG_ROOT}/{digest}.YaMl")),
+            Some(format!("sha256u:{digest}"))
+        );
+        assert_eq!(
+            GitHubEventStore::event_id_from_tree_path(&format!(
+                "{EVENT_LOG_ROOT}/{}!.yaml",
+                &digest[..42]
+            )),
+            None
+        );
+        assert_eq!(
+            GitHubEventStore::event_id_from_tree_path(&format!(
+                "{EVENT_LOG_ROOT}/{}.yaml.bak",
+                digest
+            )),
+            None
+        );
+        assert!(!GitHubEventStore::is_sha256_base64url_digest("short"));
+    }
 }

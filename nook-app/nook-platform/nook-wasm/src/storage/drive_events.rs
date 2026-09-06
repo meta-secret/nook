@@ -484,4 +484,19 @@ mod tests {
             None
         );
     }
+
+    #[test]
+    fn digest_filter_rejects_wrong_length_and_non_base64url_bytes() {
+        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+        assert!(DriveEventStore::is_sha256_base64url_digest(digest));
+        assert!(!DriveEventStore::is_sha256_base64url_digest("short"));
+        assert!(!DriveEventStore::is_sha256_base64url_digest(&format!(
+            "{}!",
+            &digest[..42]
+        )));
+        assert_eq!(
+            DriveEventStore::drive_listed_event_id(&format!("{digest}.json"), Some("ignored")),
+            None
+        );
+    }
 }
