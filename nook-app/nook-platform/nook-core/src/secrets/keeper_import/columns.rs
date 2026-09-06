@@ -112,6 +112,19 @@ impl<'a> KeeperHeaders<'a> {
         .flatten()
         .collect::<collections::HashSet<_>>();
 
+        Ok(KeeperColumns {
+            folder,
+            title,
+            login,
+            password,
+            website,
+            notes,
+            shared_folder,
+            custom_fields: self.custom_columns(&known),
+        })
+    }
+
+    fn custom_columns(&self, known: &collections::HashSet<usize>) -> Vec<CustomFieldColumn> {
         let mut paired = collections::BTreeMap::<usize, KeeperCustomPairColumns>::new();
         let mut named = Vec::new();
         let mut blob = None;
@@ -175,16 +188,7 @@ impl<'a> KeeperHeaders<'a> {
             }
         }
 
-        Ok(KeeperColumns {
-            folder,
-            title,
-            login,
-            password,
-            website,
-            notes,
-            shared_folder,
-            custom_fields,
-        })
+        custom_fields
     }
 }
 #[derive(Default)]
