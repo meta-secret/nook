@@ -1,20 +1,15 @@
-//! Google Authenticator migration QR conversion into Nook authenticator items.
-
-use std::{fmt, mem};
-
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use percent_encoding::percent_decode_str;
-use prost::Message;
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+//! Complete Google Authenticator migration batches into typed TOTP items.
+mod batch;
+mod parameters;
+use crate::SecretValue;
+use batch::ParsedMigrationBatch;
+use std::fmt;
 use thiserror::Error;
-use zeroize::{Zeroize, Zeroizing};
-
-use crate::{AuthenticatorSecret, SecretValue, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
-
-const MAX_QR_CODES: usize = 100;
-const MAX_URI_BYTES: usize = 16 * 1024;
-const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
-const MAX_ITEMS: usize = 10_000;
-
 /// Number of QR codes expected in a Google Authenticator migration batch.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct GoogleAuthenticatorMigrationQrCodeCount(usize);
@@ -35,75 +30,6 @@ impl fmt::Display for GoogleAuthenticatorMigrationQrCodeCount {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(formatter)
     }
-}
-
-#[derive(Clone, PartialEq, Message)]
-struct MigrationPayload {
-    #[prost(message, repeated, tag = "1")]
-    otp_parameters: Vec<OtpParameters>,
-    #[prost(int32, tag = "2")]
-    version: i32,
-    #[prost(int32, tag = "3")]
-    batch_size: i32,
-    #[prost(int32, tag = "4")]
-    batch_index: i32,
-    #[prost(int32, tag = "5")]
-    batch_id: i32,
-}
-
-#[derive(Clone, PartialEq, Message)]
-struct OtpParameters {
-    #[prost(bytes = "vec", tag = "1")]
-    secret: Vec<u8>,
-    #[prost(string, tag = "2")]
-    name: String,
-    #[prost(string, tag = "3")]
-    issuer: String,
-    #[prost(enumeration = "MigrationAlgorithm", tag = "4")]
-    algorithm: i32,
-    #[prost(enumeration = "MigrationDigits", tag = "5")]
-    digits: i32,
-    #[prost(enumeration = "MigrationOtpType", tag = "6")]
-    otp_type: i32,
-    #[prost(int64, tag = "7")]
-    counter: i64,
-}
-
-impl Zeroize for OtpParameters {
-    fn zeroize(&mut self) {
-        self.secret.zeroize();
-        self.name.zeroize();
-        self.issuer.zeroize();
-    }
-}
-
-impl Drop for OtpParameters {
-    fn drop(&mut self) {
-        self.zeroize();
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]
-enum MigrationAlgorithm {
-    Unspecified = 0,
-    Sha1 = 1,
-    Sha256 = 2,
-    Sha512 = 3,
-    Md5 = 4,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]
-enum MigrationDigits {
-    Unspecified = 0,
-    Six = 1,
-    Eight = 2,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, prost::Enumeration)]
-enum MigrationOtpType {
-    Unspecified = 0,
-    Hotp = 1,
-    Totp = 2,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -139,270 +65,120 @@ pub struct GoogleAuthenticatorImportPlan {
     pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
-struct ParsedPart {
-    payload: MigrationPayload,
-    batch_size: usize,
-    batch_index: usize,
+/// Original QR strings remain borrowed until consuming admission finishes.
+/// ```
+/// use nook_core::{GoogleAuthenticatorMigrationInput, GoogleAuthenticatorImportError};
+/// assert_eq!(GoogleAuthenticatorMigrationInput::from_uris(&[]).plan(), Err(GoogleAuthenticatorImportError::Empty));
+/// ```
+/// ```compile_fail,E0502
+/// use nook_core::GoogleAuthenticatorMigrationInput;
+/// let mut uris = Vec::new();
+/// let input = GoogleAuthenticatorMigrationInput::from_uris(&uris);
+/// uris.clear();
+/// let _ = input.plan();
+/// ```
+/// ```compile_fail,E0382
+/// use nook_core::GoogleAuthenticatorMigrationInput;
+/// let input = GoogleAuthenticatorMigrationInput::from_uris(&[]);
+/// let _ = input.plan();
+/// let _ = input.plan();
+/// ```
+/// ```compile_fail,E0599
+/// use nook_core::GoogleAuthenticatorMigrationInput;
+/// let input = GoogleAuthenticatorMigrationInput::from_uris(&[]);
+/// let duplicate = input.clone();
+/// ```
+pub struct GoogleAuthenticatorMigrationInput<'a> {
+    uris: &'a [String],
 }
-
-fn parse_uri(uri: &str) -> Result<ParsedPart, GoogleAuthenticatorImportError> {
-    if uri.len() > MAX_URI_BYTES {
-        return Err(GoogleAuthenticatorImportError::UriTooLarge);
+impl<'a> GoogleAuthenticatorMigrationInput<'a> {
+    #[must_use]
+    pub fn from_uris(uris: &'a [String]) -> Self {
+        Self { uris }
     }
-    let query = uri
-        .trim()
-        .strip_prefix("otpauth-migration://offline?")
-        .ok_or(GoogleAuthenticatorImportError::InvalidUri)?;
-    let data = query
-        .split('&')
-        .find_map(|pair| pair.strip_prefix("data="))
-        .ok_or(GoogleAuthenticatorImportError::InvalidUri)?;
-    let data = Zeroizing::new(
-        percent_decode_str(data)
-            .decode_utf8()
-            .map_err(|_| GoogleAuthenticatorImportError::InvalidPayload)?
-            .into_owned(),
-    );
-    let decoded = Zeroizing::new(
-        BASE64
-            .decode(data)
-            .map_err(|_| GoogleAuthenticatorImportError::InvalidPayload)?,
-    );
-    if decoded.len() > MAX_PAYLOAD_BYTES {
-        return Err(GoogleAuthenticatorImportError::PayloadTooLarge);
+    pub fn plan(self) -> Result<GoogleAuthenticatorImportPlan, GoogleAuthenticatorImportError> {
+        Ok(ParsedMigrationBatch::parse(self.uris)?.complete()?.plan())
     }
-    let payload = MigrationPayload::decode(decoded.as_slice())
-        .map_err(|_| GoogleAuthenticatorImportError::InvalidPayload)?;
-    let batch_size = match payload.batch_size {
-        0 => 1,
-        value if value > 0 => {
-            usize::try_from(value).map_err(|_| GoogleAuthenticatorImportError::InvalidPayload)?
-        }
-        _ => return Err(GoogleAuthenticatorImportError::InvalidPayload),
-    };
-    let batch_index = usize::try_from(payload.batch_index)
-        .map_err(|_| GoogleAuthenticatorImportError::InvalidPayload)?;
-    if batch_size > MAX_QR_CODES || batch_index >= batch_size {
-        return Err(GoogleAuthenticatorImportError::InvalidPayload);
-    }
-    Ok(ParsedPart {
-        payload,
-        batch_size,
-        batch_index,
-    })
 }
+#[cfg(test)]
+pub(super) mod tests {
+    use std::slice;
 
-fn validate_batch(parts: &mut [ParsedPart]) -> Result<(), GoogleAuthenticatorImportError> {
-    let expected_size = parts[0].batch_size;
-    let expected_id = parts[0].payload.batch_id;
-    let expected_version = parts[0].payload.version;
-    if parts.iter().any(|part| {
-        part.batch_size != expected_size
-            || part.payload.batch_id != expected_id
-            || part.payload.version != expected_version
-    }) {
-        return Err(GoogleAuthenticatorImportError::MixedBatches);
-    }
-    parts.sort_unstable_by_key(|part| part.batch_index);
-    if parts
-        .windows(2)
-        .any(|pair| pair[0].batch_index == pair[1].batch_index)
-    {
-        return Err(GoogleAuthenticatorImportError::DuplicateBatchPart);
-    }
-    if parts.len() != expected_size
-        || parts
-            .iter()
-            .enumerate()
-            .any(|(index, part)| index != part.batch_index)
-    {
-        return Err(GoogleAuthenticatorImportError::IncompleteBatch(
-            expected_size.into(),
-        ));
-    }
-    Ok(())
-}
+    use super::batch::MigrationPayload;
+    use super::parameters::{MigrationAlgorithm, MigrationDigits, MigrationOtpType, OtpParameters};
+    use super::{GoogleAuthenticatorImportError, GoogleAuthenticatorMigrationInput};
+    use crate::{SecretValue, TotpAlgorithm, TotpDigits};
+    use base64::{Engine, engine::general_purpose::STANDARD as BASE64};
+    use prost::Message;
+    use zeroize::Zeroize;
 
-fn base32_encode(bytes: &[u8]) -> String {
-    const ALPHABET: &[u8; 32] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-    let mut output = String::with_capacity(bytes.len().div_ceil(5) * 8);
-    let mut buffer = 0_u16;
-    let mut bits = 0_u8;
-    for byte in bytes {
-        buffer = (buffer << 8) | u16::from(*byte);
-        bits += 8;
-        while bits >= 5 {
-            bits -= 5;
-            output.push(char::from(ALPHABET[usize::from((buffer >> bits) & 0x1f)]));
-        }
+    pub(super) struct MigrationParameterFixture<'a> {
+        pub(super) secret_byte: u8,
+        pub(super) name: &'a str,
+        pub(super) issuer: &'a str,
+        pub(super) algorithm: MigrationAlgorithm,
+        pub(super) digits: MigrationDigits,
+        pub(super) otp_type: MigrationOtpType,
     }
-    if bits > 0 {
-        output.push(char::from(
-            ALPHABET[usize::from((buffer << (5 - bits)) & 0x1f)],
-        ));
-    }
-    output
-}
-
-fn account_and_issuer(name: &str, issuer: &str) -> (String, String) {
-    let name = name.trim();
-    let issuer = issuer.trim();
-    if !issuer.is_empty() {
-        let account = name
-            .strip_prefix(issuer)
-            .and_then(|rest| rest.strip_prefix(':'))
-            .unwrap_or(name)
-            .trim();
-        return (account.to_owned(), issuer.to_owned());
-    }
-    if let Some((label_issuer, account)) = name.split_once(':')
-        && !label_issuer.trim().is_empty()
-    {
-        return (account.trim().to_owned(), label_issuer.trim().to_owned());
-    }
-    (name.to_owned(), name.to_owned())
-}
-
-fn convert_parameter(mut parameter: OtpParameters) -> Result<SecretValue, ()> {
-    let secret_bytes = Zeroizing::new(mem::take(&mut parameter.secret));
-    let name = Zeroizing::new(mem::take(&mut parameter.name));
-    let issuer = Zeroizing::new(mem::take(&mut parameter.issuer));
-    if MigrationOtpType::try_from(parameter.otp_type).ok() != Some(MigrationOtpType::Totp) {
-        return Err(());
-    }
-    let algorithm = match MigrationAlgorithm::try_from(parameter.algorithm).ok() {
-        Some(MigrationAlgorithm::Sha1) => TotpAlgorithm::Sha1,
-        Some(MigrationAlgorithm::Sha256) => TotpAlgorithm::Sha256,
-        Some(MigrationAlgorithm::Sha512) => TotpAlgorithm::Sha512,
-        _ => return Err(()),
-    };
-    let digits = match MigrationDigits::try_from(parameter.digits).ok() {
-        Some(MigrationDigits::Unspecified | MigrationDigits::Six) => TotpDigits::try_from(6),
-        Some(MigrationDigits::Eight) => TotpDigits::try_from(8),
-        None => return Err(()),
-    }
-    .map_err(|_| ())?;
-    let (account, issuer) = account_and_issuer(&name, &issuer);
-    let encoded_secret = Zeroizing::new(base32_encode(&secret_bytes));
-    let mut authenticator = AuthenticatorSecret {
-        issuer,
-        account,
-        website_url: String::new(),
-        secret: TotpSecret::parse(&encoded_secret).map_err(|_| ())?,
-        algorithm,
-        digits,
-        period: TotpPeriod::try_from(30).map_err(|_| ())?,
-        backup_codes: Vec::new(),
-    };
-    authenticator.apply_inferred_website_url_if_empty();
-    authenticator.normalize().map_err(|_| ())?;
-    Ok(SecretValue::Authenticator(authenticator))
-}
-
-/// Parse one complete Google Authenticator migration QR batch entirely in memory.
-pub fn plan_google_authenticator_import(
-    migration_uris: &[String],
-) -> Result<GoogleAuthenticatorImportPlan, GoogleAuthenticatorImportError> {
-    if migration_uris.is_empty() {
-        return Err(GoogleAuthenticatorImportError::Empty);
-    }
-    if migration_uris.len() > MAX_QR_CODES {
-        return Err(GoogleAuthenticatorImportError::TooManyQrCodes);
-    }
-    let mut parts = migration_uris
-        .iter()
-        .map(|uri| parse_uri(uri))
-        .collect::<Result<Vec<_>, _>>()?;
-    validate_batch(&mut parts)?;
-    let source_count = parts
-        .iter()
-        .map(|part| part.payload.otp_parameters.len())
-        .sum::<usize>();
-    if source_count == 0 {
-        return Err(GoogleAuthenticatorImportError::InvalidPayload);
-    }
-    if source_count > MAX_ITEMS {
-        return Err(GoogleAuthenticatorImportError::TooManyItems);
-    }
-    let mut items = Vec::with_capacity(source_count);
-    let mut skipped_unsupported = 0;
-    for part in parts {
-        for parameter in part.payload.otp_parameters {
-            match convert_parameter(parameter) {
-                Ok(item) => items.push(item),
-                Err(()) => skipped_unsupported += 1,
+    impl MigrationParameterFixture<'_> {
+        pub(super) fn build(self) -> OtpParameters {
+            OtpParameters {
+                secret: vec![self.secret_byte; 20],
+                name: self.name.to_owned(),
+                issuer: self.issuer.to_owned(),
+                algorithm: self.algorithm as i32,
+                digits: self.digits as i32,
+                otp_type: self.otp_type as i32,
+                counter: 0,
             }
         }
     }
-    Ok(GoogleAuthenticatorImportPlan {
-        items,
-        source_count: source_count.into(),
-        skipped_unsupported: skipped_unsupported.into(),
-    })
-}
-
-#[cfg(test)]
-mod tests {
-    use std::slice;
-
-    use super::*;
-
-    fn parameter(
-        secret_byte: u8,
-        name: &str,
-        issuer: &str,
-        algorithm: MigrationAlgorithm,
-        digits: MigrationDigits,
-        otp_type: MigrationOtpType,
-    ) -> OtpParameters {
-        OtpParameters {
-            secret: vec![secret_byte; 20],
-            name: name.to_owned(),
-            issuer: issuer.to_owned(),
-            algorithm: algorithm as i32,
-            digits: digits as i32,
-            otp_type: otp_type as i32,
-            counter: 0,
+    pub(super) struct MigrationPayloadFixture {
+        pub(super) otp_parameters: Vec<OtpParameters>,
+        pub(super) batch_size: i32,
+        pub(super) batch_index: i32,
+        pub(super) batch_id: i32,
+    }
+    impl MigrationPayloadFixture {
+        pub(super) fn build(self) -> MigrationPayload {
+            MigrationPayload {
+                otp_parameters: self.otp_parameters,
+                version: 1,
+                batch_size: self.batch_size,
+                batch_index: self.batch_index,
+                batch_id: self.batch_id,
+            }
         }
     }
-
-    fn uri(payload: &MigrationPayload) -> String {
-        let encoded = BASE64.encode(payload.encode_to_vec());
-        let data =
-            percent_encoding::utf8_percent_encode(&encoded, percent_encoding::NON_ALPHANUMERIC);
-        format!("otpauth-migration://offline?data={data}")
-    }
-
-    fn payload(
-        otp_parameters: Vec<OtpParameters>,
-        batch_size: i32,
-        batch_index: i32,
-        batch_id: i32,
-    ) -> MigrationPayload {
-        MigrationPayload {
-            otp_parameters,
-            version: 1,
-            batch_size,
-            batch_index,
-            batch_id,
+    impl MigrationPayload {
+        pub(super) fn uri(&self) -> String {
+            let encoded = Engine::encode(&BASE64, self.encode_to_vec());
+            let data =
+                percent_encoding::utf8_percent_encode(&encoded, percent_encoding::NON_ALPHANUMERIC);
+            format!("otpauth-migration://offline?data={data}")
         }
     }
-
     #[test]
     fn imports_supported_totp_settings_and_normalizes_labels() -> anyhow::Result<()> {
-        let plan = plan_google_authenticator_import(&[uri(&payload(
-            vec![parameter(
-                0x41,
-                "Example:alice@example.com",
-                "Example",
-                MigrationAlgorithm::Sha256,
-                MigrationDigits::Eight,
-                MigrationOtpType::Totp,
-            )],
-            1,
-            0,
-            17,
-        ))])?;
+        let plan = GoogleAuthenticatorMigrationInput::from_uris(&[MigrationPayloadFixture {
+            otp_parameters: vec![
+                MigrationParameterFixture {
+                    secret_byte: 0x41,
+                    name: "Example:alice@example.com",
+                    issuer: "Example",
+                    algorithm: MigrationAlgorithm::Sha256,
+                    digits: MigrationDigits::Eight,
+                    otp_type: MigrationOtpType::Totp,
+                }
+                .build(),
+            ],
+            batch_size: 1,
+            batch_index: 0,
+            batch_id: 17,
+        }
+        .build()
+        .uri()])
+        .plan()?;
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
@@ -426,7 +202,8 @@ mod tests {
             "NjE5NGJjMTczNzcyNzc5ODc5MxACGAEgAA%3D%3D"
         );
 
-        let plan = plan_google_authenticator_import(&[migration_uri.to_owned()])?;
+        let plan =
+            GoogleAuthenticatorMigrationInput::from_uris(&[migration_uri.to_owned()]).plan()?;
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
@@ -436,34 +213,44 @@ mod tests {
 
     #[test]
     fn imports_a_complete_out_of_order_batch() -> anyhow::Result<()> {
-        let first = uri(&payload(
-            vec![parameter(
-                1,
-                "first@example.com",
-                "First",
-                MigrationAlgorithm::Sha1,
-                MigrationDigits::Six,
-                MigrationOtpType::Totp,
-            )],
-            2,
-            0,
-            91,
-        ));
-        let second = uri(&payload(
-            vec![parameter(
-                2,
-                "second@example.com",
-                "Second",
-                MigrationAlgorithm::Sha512,
-                MigrationDigits::Six,
-                MigrationOtpType::Totp,
-            )],
-            2,
-            1,
-            91,
-        ));
+        let first = MigrationPayloadFixture {
+            otp_parameters: vec![
+                MigrationParameterFixture {
+                    secret_byte: 1,
+                    name: "first@example.com",
+                    issuer: "First",
+                    algorithm: MigrationAlgorithm::Sha1,
+                    digits: MigrationDigits::Six,
+                    otp_type: MigrationOtpType::Totp,
+                }
+                .build(),
+            ],
+            batch_size: 2,
+            batch_index: 0,
+            batch_id: 91,
+        }
+        .build()
+        .uri();
+        let second = MigrationPayloadFixture {
+            otp_parameters: vec![
+                MigrationParameterFixture {
+                    secret_byte: 2,
+                    name: "second@example.com",
+                    issuer: "Second",
+                    algorithm: MigrationAlgorithm::Sha512,
+                    digits: MigrationDigits::Six,
+                    otp_type: MigrationOtpType::Totp,
+                }
+                .build(),
+            ],
+            batch_size: 2,
+            batch_index: 1,
+            batch_id: 91,
+        }
+        .build()
+        .uri();
 
-        let plan = plan_google_authenticator_import(&[second, first])?;
+        let plan = GoogleAuthenticatorMigrationInput::from_uris(&[second, first]).plan()?;
 
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(plan.items.len(), 2);
@@ -476,32 +263,47 @@ mod tests {
 
     #[test]
     fn rejects_incomplete_duplicate_and_mixed_batches() {
-        let first = uri(&payload(Vec::new(), 2, 0, 10));
-        let other = uri(&payload(Vec::new(), 2, 1, 11));
+        let first = MigrationPayloadFixture {
+            otp_parameters: Vec::new(),
+            batch_size: 2,
+            batch_index: 0,
+            batch_id: 10,
+        }
+        .build()
+        .uri();
+        let other = MigrationPayloadFixture {
+            otp_parameters: Vec::new(),
+            batch_size: 2,
+            batch_index: 1,
+            batch_id: 11,
+        }
+        .build()
+        .uri();
         assert_eq!(
-            plan_google_authenticator_import(slice::from_ref(&first)),
+            GoogleAuthenticatorMigrationInput::from_uris(slice::from_ref(&first)).plan(),
             Err(GoogleAuthenticatorImportError::IncompleteBatch(2.into()))
         );
         assert_eq!(
-            plan_google_authenticator_import(&[first.clone(), first.clone()]),
+            GoogleAuthenticatorMigrationInput::from_uris(&[first.clone(), first.clone()]).plan(),
             Err(GoogleAuthenticatorImportError::DuplicateBatchPart)
         );
         assert_eq!(
-            plan_google_authenticator_import(&[first, other]),
+            GoogleAuthenticatorMigrationInput::from_uris(&[first, other]).plan(),
             Err(GoogleAuthenticatorImportError::MixedBatches)
         );
     }
 
     #[test]
     fn parsed_parameters_zeroize_all_sensitive_fields() {
-        let mut value = parameter(
-            9,
-            "Example:alice@example.com",
-            "Example",
-            MigrationAlgorithm::Sha1,
-            MigrationDigits::Six,
-            MigrationOtpType::Totp,
-        );
+        let mut value = MigrationParameterFixture {
+            secret_byte: 9,
+            name: "Example:alice@example.com",
+            issuer: "Example",
+            algorithm: MigrationAlgorithm::Sha1,
+            digits: MigrationDigits::Six,
+            otp_type: MigrationOtpType::Totp,
+        }
+        .build();
 
         value.zeroize();
 
@@ -512,35 +314,46 @@ mod tests {
 
     #[test]
     fn skips_hotp_md5_and_invalid_secret_entries() -> anyhow::Result<()> {
-        let mut short_secret = parameter(
-            5,
-            "short",
-            "Unsupported",
-            MigrationAlgorithm::Sha1,
-            MigrationDigits::Six,
-            MigrationOtpType::Totp,
-        );
+        let mut short_secret = MigrationParameterFixture {
+            secret_byte: 5,
+            name: "short",
+            issuer: "Unsupported",
+            algorithm: MigrationAlgorithm::Sha1,
+            digits: MigrationDigits::Six,
+            otp_type: MigrationOtpType::Totp,
+        }
+        .build();
         short_secret.secret = vec![5; 2];
         let entries = vec![
-            parameter(
-                3,
-                "hotp",
-                "Unsupported",
-                MigrationAlgorithm::Sha1,
-                MigrationDigits::Six,
-                MigrationOtpType::Hotp,
-            ),
-            parameter(
-                4,
-                "md5",
-                "Unsupported",
-                MigrationAlgorithm::Md5,
-                MigrationDigits::Six,
-                MigrationOtpType::Totp,
-            ),
+            MigrationParameterFixture {
+                secret_byte: 3,
+                name: "hotp",
+                issuer: "Unsupported",
+                algorithm: MigrationAlgorithm::Sha1,
+                digits: MigrationDigits::Six,
+                otp_type: MigrationOtpType::Hotp,
+            }
+            .build(),
+            MigrationParameterFixture {
+                secret_byte: 4,
+                name: "md5",
+                issuer: "Unsupported",
+                algorithm: MigrationAlgorithm::Md5,
+                digits: MigrationDigits::Six,
+                otp_type: MigrationOtpType::Totp,
+            }
+            .build(),
             short_secret,
         ];
-        let plan = plan_google_authenticator_import(&[uri(&payload(entries, 1, 0, 12))])?;
+        let plan = GoogleAuthenticatorMigrationInput::from_uris(&[MigrationPayloadFixture {
+            otp_parameters: entries,
+            batch_size: 1,
+            batch_index: 0,
+            batch_id: 12,
+        }
+        .build()
+        .uri()])
+        .plan()?;
         assert!(plan.items.is_empty());
         assert_eq!(usize::from(plan.source_count), 3);
         assert_eq!(usize::from(plan.skipped_unsupported), 3);
@@ -550,13 +363,15 @@ mod tests {
     #[test]
     fn rejects_non_migration_and_malformed_payloads() {
         assert_eq!(
-            plan_google_authenticator_import(&["otpauth://totp/example".to_owned()]),
+            GoogleAuthenticatorMigrationInput::from_uris(&["otpauth://totp/example".to_owned()])
+                .plan(),
             Err(GoogleAuthenticatorImportError::InvalidUri)
         );
         assert_eq!(
-            plan_google_authenticator_import(&[
+            GoogleAuthenticatorMigrationInput::from_uris(&[
                 "otpauth-migration://offline?data=not-base64".to_owned()
-            ]),
+            ])
+            .plan(),
             Err(GoogleAuthenticatorImportError::InvalidPayload)
         );
     }
