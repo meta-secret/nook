@@ -5,6 +5,7 @@ const isHostedSmoke = process.env.NOOK_EXTENSION_E2E_HOSTED === 'true'
 
 export default defineConfig({
   testDir: 'e2e',
+  testIgnore: '**/mock-auth/src/**/*.test.ts',
   forbidOnly: isCi,
   retries: isHostedSmoke ? 0 : isCi ? 2 : 0,
   // The full smoke owns several headed pages and persistent contexts. Hosted
