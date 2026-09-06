@@ -2,6 +2,8 @@ import { describe, expect, test } from 'vitest'
 
 import {
   X_AUTH_MOCK_USERNAME,
+  X_AUTH_MOCK_LOGIN_PATH,
+  X_AUTH_MOCK_ONBOARDING_PATH,
   XAuthMockScenario,
   XAuthMockTransitionKind,
   type XAuthMockSubmission,
@@ -20,6 +22,11 @@ describe('X authentication mock', () => {
     expect(XAuthMockScenario.transition(implicitSubmission)).toBe(
       XAuthMockTransitionKind.Completed,
     )
+  })
+
+  test('redirects the public login route to the observed onboarding route', () => {
+    expect(X_AUTH_MOCK_LOGIN_PATH).toBe('/i/flow/login')
+    expect(X_AUTH_MOCK_ONBOARDING_PATH).toBe('/i/jf/onboarding/web?mode=login')
   })
 
   test.each([

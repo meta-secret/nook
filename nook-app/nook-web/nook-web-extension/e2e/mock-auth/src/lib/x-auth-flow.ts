@@ -1,4 +1,6 @@
 export const X_AUTH_MOCK_USERNAME = 'alice@nook.test'
+export const X_AUTH_MOCK_LOGIN_PATH = '/i/flow/login'
+export const X_AUTH_MOCK_ONBOARDING_PATH = '/i/jf/onboarding/web?mode=login'
 
 export enum XAuthMockTransitionKind {
   Completed = 'completed',

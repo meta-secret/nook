@@ -331,7 +331,10 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       )
 
       const page = await paired.context.newPage()
-      await page.goto(`${mockAuth.origin}/i/jf/onboarding/web?mode=login`)
+      await page.goto(`${mockAuth.origin}/i/flow/login`)
+      await expect(page).toHaveURL(
+        `${mockAuth.origin}/i/jf/onboarding/web?mode=login`,
+      )
       await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
         'x-identifier',
       )
