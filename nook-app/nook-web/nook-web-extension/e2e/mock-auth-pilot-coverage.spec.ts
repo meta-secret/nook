@@ -219,6 +219,89 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('fills the owned GitHub login without touching its decoys or alternatives', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock GitHub auth vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      const page = await paired.context.newPage()
+      await page.goto(`${mockAuth.origin}/github/login`)
+      await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+        'github-owned-login',
+      )
+      const form = page.locator('form')
+      await expect(form).toHaveAttribute('data-turbo', 'false')
+      await expect(form).toHaveAttribute('accept-charset', 'UTF-8')
+      await expect(page.locator('#login_field')).toHaveAttribute(
+        'autocomplete',
+        'username',
+      )
+      await expect(page.locator('#password')).toHaveAttribute(
+        'autocomplete',
+        'current-password',
+      )
+      const honeypot = page.locator('[name="required_field_mock_auth"]')
+      await expect(honeypot).toHaveValue('')
+      await expect(honeypot).toHaveAttribute('class', 'form-control')
+      await expect(honeypot).not.toHaveAttribute('autocomplete')
+      await expect(honeypot).not.toHaveAttribute('tabindex')
+      await expect(honeypot).not.toHaveAttribute('aria-hidden')
+      await expect(form.locator('#forgot-password')).toHaveAttribute(
+        'href',
+        '/password_reset',
+      )
+      const submit = form.locator('[name="commit"]')
+      await expect(submit).toHaveAttribute('data-disable-with', 'Signing in…')
+      await expect(submit).toHaveAttribute('data-signin-label', 'Sign in')
+      await expect(submit).toHaveAttribute(
+        'data-sso-label',
+        'Sign in with your identity provider',
+      )
+      await expect(
+        page.getByRole('button', { name: 'Sign in with a passkey' }),
+      ).toBeEnabled()
+
+      const widget = page.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
+      const expectedEvidence = JSON.stringify({
+        submittedControlIdentity: 'commit:Sign in',
+        credentialsMatched: true,
+        honeypotUnchanged: true,
+        metadataUnchanged: true,
+        alternativesUntouched: true,
+      })
+      await expect
+        .poll(() =>
+          page.evaluate(
+            (key) => sessionStorage.getItem(key) || '',
+            'github-submission-evidence',
+          ),
+        )
+        .toBe(expectedEvidence)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('fills both Apple steps inside the exact cross-origin authorization frame', async ({
     browserName,
   }, testInfo) => {
