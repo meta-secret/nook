@@ -973,7 +973,10 @@ mod browser_tests {
             github_enrollment.provider_type(),
             StorageProviderType::Github
         );
-        assert_eq!(github_enrollment.github_pat().unwrap(), "ghp_test");
+        assert_eq!(
+            github_enrollment.github_pat().unwrap(),
+            "ghp_1234567890ABCDEF"
+        );
         assert_eq!(github_enrollment.github_repo().unwrap(), "work-vault");
         let shared = enrollment_shared_provider_for_architecture(
             shared_oauth_provider(),
