@@ -6,6 +6,11 @@
 //!   with a clear short-circuit when the vault is in password mode.
 //! - `initialize_empty` / `initialize_genesis_vault` — bootstrap a new
 //!   vault file with this device as the genesis member.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
 use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultNameState};
@@ -23,13 +28,15 @@ use nook_core::{
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
-fn is_sentinel_ceremony_required(err: &NookError) -> bool {
-    match err {
-        NookError::Encryption(message) | NookError::Database(message) => {
-            message.contains("opened-share ceremony")
-                || message.contains("SentinelCeremonyRequired")
+impl NookError {
+    fn requires_sentinel_ceremony(&self) -> bool {
+        match self {
+            Self::Encryption(message) | Self::Database(message) => {
+                message.contains("opened-share ceremony")
+                    || message.contains("SentinelCeremonyRequired")
+            }
+            _ => false,
         }
-        _ => false,
     }
 }
 
@@ -44,7 +51,50 @@ mod tests {
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    struct CeremonyErrorScenario {
+        error: NookError,
+        expected: bool,
+    }
+
+    impl CeremonyErrorScenario {
+        fn verify(self) {
+            assert_eq!(self.error.requires_sentinel_ceremony(), self.expected);
+        }
+    }
+
+    #[test]
+    fn ceremony_error_classification_preserves_variants_and_case_sensitive_markers() {
+        let variants: [fn(String) -> NookError; 2] = [NookError::Encryption, NookError::Database];
+        for variant in variants {
+            for (message, expected) in [
+                ("requires opened-share ceremony now", true),
+                ("cause: SentinelCeremonyRequired", true),
+                ("ordinary database failure", false),
+                ("Opened-share ceremony", false),
+                ("sentinelceremonyrequired", false),
+                ("", false),
+            ] {
+                CeremonyErrorScenario {
+                    error: variant(message.to_owned()),
+                    expected,
+                }
+                .verify();
+            }
+        }
+        for marker in ["opened-share ceremony", "SentinelCeremonyRequired"] {
+            CeremonyErrorScenario {
+                error: NookError::Serialization(marker.to_owned()),
+                expected: false,
+            }
+            .verify();
+        }
+    }
+
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn rejected_provider_assessment_restores_local_storage_and_clears_outbox()
     -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
@@ -72,6 +122,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn remote_store_discovery_drops_stale_vault_session_state() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = "store_stale12345".to_owned();
@@ -88,6 +142,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn verified_connect_finalizes_paired_identity_handoff() -> Result<(), JsError> {
         identity_record::clear_identity_directory_for_test().await?;
         let authorizer = AppKey::generate()?;
@@ -139,6 +197,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn paired_identity_handoff_rejects_a_different_connected_vault() -> Result<(), JsError> {
         let extension = AppKey::generate()?;
         let staged_store_id = nook_core::generate_store_id()?;
@@ -172,6 +234,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn paired_session_unlock_clears_pending_without_enrolling() -> Result<(), JsError> {
         let extension = AppKey::generate()?;
         let store_id = nook_core::generate_store_id()?;
@@ -580,7 +646,7 @@ impl NookVaultManager {
                     self.apply_event_projection_to_session().await?;
                     Ok(())
                 }
-                Err(err) if is_sentinel_ceremony_required(&err) => {
+                Err(err) if err.requires_sentinel_ceremony() => {
                     self.prepare_sentinel_ceremony_session(&cache)?;
                     Err(err.into())
                 }
@@ -678,7 +744,7 @@ impl NookVaultManager {
                 let _ = self.status.tx.send("DECRYPT_SUCCESS".to_owned());
                 Ok(())
             }
-            Err(err) if is_sentinel_ceremony_required(&err) => {
+            Err(err) if err.requires_sentinel_ceremony() => {
                 self.prepare_sentinel_ceremony_session(&projection)?;
                 Err(err)
             }
