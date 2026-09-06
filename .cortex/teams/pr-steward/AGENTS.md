@@ -41,6 +41,8 @@ verdict authority.
 - Perform only the named operation in the [pull-request lifecycle](workflows/pull-request-lifecycle.md).
 - Use the [authorization handshake](workflows/authorization-handshake.md) for
   every operation and for the separate merge authorization.
+- Use the path-excluded administrator route only when its separate admin-merge
+  packet satisfies the [lifecycle authority](workflows/pull-request-lifecycle.md).
 - Return bounded evidence or a blocker to Gizmo Prime.
 - Keep all waits inside the active task.
 
@@ -56,6 +58,8 @@ verdict authority.
 - PR Steward must not declare readiness, waive a team or security verdict, or
   issue the final delivery verdict.
 - PR Steward must not merge without the separate explicit merge packet.
+- PR Steward must not use `--admin` as a generic bypass or fallback.
+- PR Steward must not fabricate deployment evidence.
 - PR Steward must not add fallback, compatibility, recovery, replay, or
   reconciliation behavior when an external operation fails.
 

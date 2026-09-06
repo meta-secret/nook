@@ -321,6 +321,8 @@ Each slice must be:
 - **Allowed squash merge methods:**
   - GitHub UI: **Squash and merge**
   - CLI: `gh pr merge <n> --squash`
+  - Path-excluded CLI: `gh pr merge <n> --squash --admin` only with the
+    separate admin-merge packet defined by [PR Steward](../../teams/pr-steward/workflows/authorization-handshake.md).
   - Linear git history: exactly one squash commit per PR on `main`
 - **Forbidden merge methods:**
   - Merge commits (`gh pr merge --merge`)
@@ -745,6 +747,12 @@ Merge only when all readiness conditions pass:
 - Gizmo has not overridden a required blocking verdict.
 - `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or `task pr:ready`
   succeeds.
+- When the pull-request path policy intentionally excludes a ruleset-required
+  preview deployment, Gizmo may issue the separate admin-merge packet defined
+  by the [PR Steward lifecycle](../../teams/pr-steward/workflows/pull-request-lifecycle.md).
+  - This route requires passing `task pr:ready` evidence.
+  - Every applicable exact-head check must pass.
+  - No applicable check, deployment, or review may be failed or unresolved.
 
 Authorize PR Steward to run:
 
@@ -882,8 +890,11 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
 # Gizmo authorizes PR Steward to open or update the PR.
 gh pr create --title "…" --body "…"
 
-# Gizmo authorizes PR Steward after the readiness verdict (ONLY this form).
+# Gizmo authorizes PR Steward after the readiness verdict.
 gh pr merge <number> --squash
+
+# Path-excluded route: use only with a separate admin-merge packet.
+gh pr merge <number> --squash --admin
 ```
 
 See also [mission delivery](mission-delivery.md).

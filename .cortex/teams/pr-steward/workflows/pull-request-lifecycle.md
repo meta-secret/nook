@@ -43,6 +43,17 @@ PR Steward returns observable evidence or a bounded blocker.
 7. **Execute authorized merge.** Recheck the separate merge packet and run
    `gh pr merge <number> --squash` only when every named remote precondition
    still matches.
+   - For the path-excluded route, run
+     `gh pr merge <number> --squash --admin` only with a separate admin-merge
+     packet.
+   - This is the established path-excluded merge route. It is not a fallback
+     or a generic bypass.
+   - The packet must prove that the pull-request path policy intentionally
+     excludes the ruleset-required preview deployment.
+   - The packet must include passing exact-head checks and
+     `task pr:ready PR=<number>` evidence.
+   - Do not use this route when an applicable check, deployment, or review is
+     failed or unresolved.
 8. **Verify the remote result.** Confirm the pull request is merged and return
    the resulting commit, URL, run identifiers, and observed head.
 
@@ -52,8 +63,11 @@ PR Steward returns observable evidence or a bounded blocker.
 - A stale head or identity mismatch is a blocker for the named operation.
 - An unavailable remote result is a blocker for the named operation.
 - A failed required check is a blocker for the named operation.
-- A missing deployment is a blocker for the named operation.
+- A missing applicable deployment is a blocker for the named operation.
 - An unresolved review thread is a blocker for the named operation.
+- Missing ruleset-required preview deployment needs path-policy evidence before
+  the path-excluded route can be considered.
+- A path-excluded admin merge needs a passing `task pr:ready` result.
 - Report the smallest useful evidence for the blocker.
 - Do not invent a retry, broaden the operation, or create a fallback path.
 - Gizmo decides whether to route a correction, issue a fresh packet, or stop.
@@ -65,3 +79,5 @@ PR Steward returns observable evidence or a bounded blocker.
 - Review and check observations were returned without technical adjudication.
 - Bounded waits stayed inside the active task.
 - A merge result is a verified squash merge when merge was authorized.
+- An administrator merge used the path-excluded route only with its separate
+  Gizmo packet and exact-head evidence.
