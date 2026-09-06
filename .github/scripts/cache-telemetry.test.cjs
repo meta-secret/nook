@@ -6,9 +6,11 @@ const {
   cacheBackendFromEnvironment,
   extractSccacheReports,
   historyLogRef,
+  mapWithConcurrency,
   normalizeBuildRecord,
   parseJsonObjects,
   parseRawJsonProgress,
+  selectBuildRecords,
   summarizeBuildkit,
   summarizeSccache,
   validateTelemetryRecord,
@@ -41,6 +43,48 @@ test('uses the trailing build ID for Buildx history log lookup', () => {
     'xeiy59tjr9khjv8n8iqfhtscp',
   )
   assert.equal(historyLogRef('plain-ref'), 'plain-ref')
+})
+
+test('selects a deterministic bounded set of finalized Buildx records', () => {
+  const record = (ref, completedAt, startedAt = completedAt) => ({
+    ref,
+    completed_at: completedAt,
+    started_at: startedAt,
+  })
+  const selection = selectBuildRecords(
+    [
+      record('older', '2026-09-06T01:00:00Z'),
+      record('same-b', '2026-09-06T03:00:00Z', '2026-09-06T02:00:00Z'),
+      record('same-a', '2026-09-06T03:00:00Z', '2026-09-06T02:00:00Z'),
+      record('newer', '2026-09-06T04:00:00Z'),
+      { ref: 'still-running', started_at: '2026-09-06T05:00:00Z' },
+    ],
+    3,
+  )
+
+  assert.deepEqual(
+    selection.records.map(({ ref }) => ref),
+    ['newer', 'same-a', 'same-b'],
+  )
+  assert.deepEqual(selection.warnings, [
+    'buildx_records_unfinished_skipped:1',
+    'buildx_records_truncated:3/4',
+  ])
+})
+
+test('maps history logs concurrently while preserving record order', async () => {
+  let active = 0
+  let maximumActive = 0
+  const results = await mapWithConcurrency([0, 1, 2, 3, 4, 5], 3, async (value) => {
+    active += 1
+    maximumActive = Math.max(maximumActive, active)
+    await new Promise((resolve) => setImmediate(resolve))
+    active -= 1
+    return value * 2
+  })
+
+  assert.equal(maximumActive, 3)
+  assert.deepEqual(results, [0, 2, 4, 6, 8, 10])
 })
 
 test('accepts raw Buildx progress JSON from either process stream', () => {
