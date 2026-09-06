@@ -554,7 +554,7 @@ impl NookVaultManager {
                 passkey_browser::prf_output(&credential, true)?.map(Zeroizing::new);
             let create_prf_output = create_prf_output
                 .as_deref()
-                .map(|output| WebAuthnPrfOutput::try_from(output.to_vec()))
+                .map(|output| WebAuthnPrfOutput::try_from(output.clone()))
                 .transpose()?;
             let resolution = nook_core::resolve_passkey_registration_for_mode(
                 &credential_id,
