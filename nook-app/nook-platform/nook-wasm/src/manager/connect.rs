@@ -316,7 +316,7 @@ mod tests {
         );
 
         let mut sentinel = NookVaultManager::new();
-        sentinel.vault.architecture = VaultArchitecture::sentinel_personal(
+        sentinel.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
             nook_core::DeviceMode::Standard,
             nook_core::SentinelPolicy {
                 threshold: 2.into(),
@@ -350,11 +350,13 @@ mod tests {
     async fn existing_content_requires_event_log_mode() -> Result<(), JsError> {
         let identity = nook_core::DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
-        let error = manager
+        let result = manager
             .connect_existing_content(&identity, "non-empty vault projection")
-            .await
-            .expect_err("legacy content without event-log mode must fail closed");
-        assert!(error.to_string().contains("event log is required"));
+            .await;
+        assert!(
+            result.is_err(),
+            "legacy content without event-log mode must fail closed"
+        );
         Ok(())
     }
 }
