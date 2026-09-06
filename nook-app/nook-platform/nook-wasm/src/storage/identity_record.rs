@@ -19,9 +19,8 @@ pub(crate) use handoff::{ExistingVaultImportCommit, IdentityHandoffCommit};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use keyring::{LOCAL_IDENTITY_KEYRING_KEY, clear_keyring_for_test};
 pub(crate) use keyring::{
-    ProtectedLocalIdentitySave, load_entry_for_app_id, load_keyring,
-    load_or_create_signing_seed_for_app_key, load_selected_entry, select_local_identity,
-    selected_legacy_signer_requires_authorization,
+    LocalIdentitySigner, ProtectedLocalIdentitySave, load_entry_for_app_id, load_keyring,
+    load_selected_entry, select_local_identity, selected_legacy_signer_requires_authorization,
 };
 
 pub(crate) struct LocalIdentityProjection {
@@ -423,9 +422,15 @@ pub(crate) async fn save_protected_local_identity(
         .store("vault")
         .map_err(|error| NookError::IndexedDb(format!("Identity setup store error: {error:?}")))?;
     let mut directory = load_directory_for_write(&store).await?;
-    let identity =
-        keyring::save_existing_protected_identity(&store, &mut directory, app_key, record, label)
-            .await?;
+    let identity = keyring::ProtectedIdentityPublication {
+        store: &store,
+        directory: &mut directory,
+        app_key,
+        wrapped_app_key: record,
+        label,
+    }
+    .save_existing()
+    .await?;
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Identity setup completion error: {error:?}"))
     })?;
@@ -446,14 +451,14 @@ pub(crate) async fn save_new_protected_local_identity(
         NookError::IndexedDb(format!("Identity creation store error: {error:?}"))
     })?;
     let mut directory = load_directory_for_write(&store).await?;
-    let identity = keyring::save_new_protected_identity(
-        &store,
-        &mut directory,
+    let identity = keyring::ProtectedIdentityPublication {
+        store: &store,
+        directory: &mut directory,
         app_key,
-        record,
-        prior_app_key,
+        wrapped_app_key: record,
         label,
-    )
+    }
+    .save_new(prior_app_key)
     .await?;
     transaction.done().await.map_err(|error| {
         NookError::IndexedDb(format!("Identity creation completion error: {error:?}"))
