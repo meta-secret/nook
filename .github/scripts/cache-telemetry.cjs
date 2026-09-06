@@ -400,6 +400,31 @@ async function collectTelemetry({
   }
 }
 
+function buildUnavailableTelemetry({
+  warning,
+  job = '',
+  runId = '',
+  runAttempt,
+  environment = process.env,
+}) {
+  return {
+    schema_version: 1,
+    github: {
+      run_id: String(runId),
+      run_attempt: nonNegativeInteger(runAttempt, 1),
+      job: String(job),
+    },
+    cache_backend: cacheBackendFromEnvironment(environment),
+    sccache: summarizeSccache([]),
+    buildkit: summarizeBuildkit([]),
+    buildkit_records: [],
+    collection: {
+      complete: false,
+      warnings: [String(warning)],
+    },
+  }
+}
+
 function writeJson(filename, value) {
   fs.mkdirSync(path.dirname(filename), { recursive: true })
   fs.writeFileSync(
@@ -452,6 +477,18 @@ async function main(arguments_ = process.argv.slice(2)) {
     writeJson(output, { schema_version: 1, refs, warnings })
     return
   }
+  if (command === 'unavailable') {
+    const record = buildUnavailableTelemetry({
+      warning: argumentValue(arguments_, '--warning'),
+      job: process.env.GITHUB_JOB,
+      runId: process.env.GITHUB_RUN_ID,
+      runAttempt: process.env.GITHUB_RUN_ATTEMPT,
+    })
+    validateTelemetryRecord(record)
+    writeJson(output, record)
+    appendJobSummary(record)
+    return
+  }
   if (command !== 'collect') throw new Error('expected start or collect')
 
   const baseline = JSON.parse(
@@ -478,6 +515,7 @@ if (require.main === module) {
 }
 
 module.exports = {
+  buildUnavailableTelemetry,
   cacheBackendFromEnvironment,
   extractSccacheReports,
   historyLogRef,
