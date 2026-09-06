@@ -779,3 +779,97 @@ mod tests {
         assert_eq!(test_prod.resolve_vault_sync_interval_ms("250"), 250);
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn policy_adapter_executes_sync_connection_and_projection_paths_in_wasm() {
+        let policy = NookVaultClientPolicy::new();
+        for state in [
+            nook_core::RemoteVaultRecoveryState::None,
+            nook_core::RemoteVaultRecoveryState::PromptMissingOnly,
+            nook_core::RemoteVaultRecoveryState::PromptWithCache,
+            nook_core::RemoteVaultRecoveryState::ConnectFromCache,
+            nook_core::RemoteVaultRecoveryState::ConnectFresh,
+        ] {
+            let _ = policy.remote_recovery_prompt_visible(state);
+            let _ = policy.remote_recovery_prompt_has_cache(state);
+            let _ = policy.remote_recovery_connect_confirmed(state);
+        }
+        let _ = policy.manual_sync_has_target(true, 1);
+        let _ = policy.manual_sync_has_target(false, 0);
+        let _ = policy.edit_block_reason(1, true, false);
+        let _ = policy.edit_block_reason(0, false, true);
+        let _ = policy.edits_blocked(1, false, false);
+        let _ = policy.edits_blocked(0, false, true);
+        let _ = policy.edit_block_message(1, true, false, "{}", "en");
+        let _ = policy.is_sync_activity_visible(true, false, false, false);
+        let _ = policy.should_use_join_provider_for_connect(
+            false,
+            1,
+            nook_core::JoinEnrollmentState::Pending,
+        );
+        let _ = policy.should_sync_from_providers(false, true, true, true, true, true, 1);
+        let _ = policy.vault_sync_timer_start_decision(
+            true,
+            false,
+            nook_core::JoinEnrollmentState::NeedsRequest,
+            true,
+        );
+        let _ = policy.vault_sync_timer_tick_decision(
+            false,
+            false,
+            false,
+            false,
+            true,
+            nook_core::JoinEnrollmentState::Pending,
+            true,
+            1,
+        );
+        for freshness in [
+            nook_core::ProviderSyncFreshness::Scheduled,
+            nook_core::ProviderSyncFreshness::Forced,
+        ] {
+            let _ = policy.vault_storage_sync_decision(
+                false, freshness, false, false, false, false, true, 1, true, true,
+            );
+        }
+        let _ = policy.should_auto_unlock(false, true, 1, 1, false, false);
+        let _ = policy.existing_vault_identity_recovery_required(true, false, false);
+        let _ = policy.should_show_login_vault_picker(false, 2, false, false, false, true);
+        for status in [
+            nook_core::VaultAccessStatus::RemoteMissing,
+            nook_core::VaultAccessStatus::NeedsEnrollment,
+            nook_core::VaultAccessStatus::Ready,
+            nook_core::VaultAccessStatus::JoinPending,
+        ] {
+            let _ = policy.remote_vault_assess_decision(status, true, false);
+            let _ = policy.vault_connect_probe_decision(status, false, 1);
+            let _ = policy.vault_connect_gate_decision(status, 1);
+            let _ = policy.vault_connect_password_lookup_required(status);
+            let _ = policy.unauthenticated_sync_decision(
+                true,
+                true,
+                status,
+                nook_core::JoinEnrollmentState::None,
+                false,
+            );
+        }
+        let _ = policy.should_auto_connect_after_approval(false, false, false, false, false);
+        let _ = policy.normalized_secret_page_offset(10, 20, 5);
+        for (selected, id, verifying) in [
+            (false, "", false),
+            (true, "store-1", false),
+            (true, "store-1", true),
+        ] {
+            let decision = policy.vault_switch_target("store-2", selected, id, verifying);
+            let _ = decision.state();
+            let _ = decision.target();
+        }
+    }
+}

@@ -168,3 +168,114 @@ impl From<nook_core::DeviceKeyProtectionError> for NookError {
         NookError::Decryption(err.to_string())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::{
+        DatabaseError, DeviceKeyProtectionError, EventError, MultiDeviceError, PasswordError,
+        SecretId, SecretPayloadError, SessionError, ValidationError, VaultCryptoError,
+        VaultEpochError, VaultFormatError, VaultSyncError,
+    };
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn error_adapters_project_boundary_categories_in_wasm() {
+        let secret_id = SecretId::from_vault_record("secret");
+        let mapped = NookError::from(nook_core::VaultError::Validation(
+            ValidationError::GithubPatEmpty,
+        ));
+        assert!(matches!(mapped, NookError::GitHub(_)));
+        let mapped = NookError::from(nook_core::VaultError::Validation(
+            ValidationError::OauthAccessTokenEmpty,
+        ));
+        assert!(matches!(mapped, NookError::Database(_)));
+        let mapped = NookError::from(nook_core::VaultError::Event(
+            EventError::SigningSeedGeneration("seed".into()),
+        ));
+        assert!(matches!(mapped, NookError::Encryption(_)));
+        let mapped = NookError::from(nook_core::VaultError::Event(EventError::ParseStoredEvent(
+            "event".into(),
+        )));
+        assert!(matches!(mapped, NookError::Database(_)));
+        let _ = NookError::from(nook_core::VaultError::Enrollment(
+            nook_core::EnrollmentError::InvalidCode,
+        ));
+        let _ = NookError::from(nook_core::VaultError::VaultCrypto(
+            VaultCryptoError::EncryptSetup("setup".into()),
+        ));
+        let _ = NookError::from(nook_core::VaultError::VaultFormat(
+            VaultFormatError::UnrecognizedFormat {
+                first_line: "bad".into(),
+            },
+        ));
+        let _ = NookError::from(nook_core::VaultError::SecretPayload(
+            SecretPayloadError::UnknownSecretType {
+                value: "bad".into(),
+            },
+        ));
+        let _ = NookError::from(nook_core::VaultError::Password(
+            PasswordError::NoCharacterSet,
+        ));
+        let _ = NookError::from(nook_core::VaultError::MultiDevice(
+            MultiDeviceError::IdentityLabelEmpty,
+        ));
+        let _ = NookError::from(nook_core::VaultError::Database(
+            DatabaseError::MissingSecretType {
+                key: secret_id.clone(),
+            },
+        ));
+        let _ = NookError::from(nook_core::VaultError::Session(
+            SessionError::EmptyProjectionCache,
+        ));
+        let _ = NookError::from(nook_core::VaultError::VaultSync(
+            VaultSyncError::MissingStoreId,
+        ));
+        let _ = NookError::from(nook_core::VaultError::VaultEpoch(
+            VaultEpochError::MissingSecretType {
+                key: "secret".into(),
+            },
+        ));
+        let _ = NookError::from(nook_core::VaultError::Age(
+            nook_core::AgeCryptoError::Encrypt("recipient".into()),
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::MultiDeviceError::IdentityLabelEmpty),
+            NookError::Encryption(_)
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::VaultFormatError::YamlMissingSections),
+            NookError::Decryption(_)
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::VaultCryptoError::Encrypt("x".into())),
+            NookError::Encryption(_)
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::SecretPayloadError::UnknownSecretType { value: "x".into() }),
+            NookError::Database(_)
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::SessionError::ReplacementIdUnchanged),
+            NookError::Database(_)
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::VaultSyncError::RemoteChangedDuringWrite),
+            NookError::Database(_)
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::PasswordError::NoCharacterSet),
+            NookError::Encryption(_)
+        ));
+        assert!(matches!(
+            NookError::from(nook_core::VaultEpochError::MissingSecretType { key: "x".into() }),
+            NookError::Database(_)
+        ));
+        assert!(matches!(
+            NookError::from(DeviceKeyProtectionError::CredentialIdEmpty),
+            NookError::Decryption(_)
+        ));
+    }
+}

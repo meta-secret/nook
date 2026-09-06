@@ -802,4 +802,72 @@ mod browser_tests {
         );
         indexed_db::clear_vault_db().await
     }
+
+    #[wasm_bindgen_test]
+    fn device_access_projection_wrappers_cover_unknown_and_known_states() {
+        let unknown = NookDeviceAccessText::from_string(String::new());
+        assert_eq!(unknown.kind(), NookDeviceAccessTextKind::Unknown);
+        assert!(unknown.value().is_err());
+        let known = NookDeviceAccessText::from_option(Some("label".into()));
+        assert_eq!(known.kind(), NookDeviceAccessTextKind::Known);
+        assert_eq!(known.value().unwrap(), "label");
+
+        let created_unknown =
+            NookPasskeyTimestampEvidence::from_created(PasskeyCreatedAtEvidence::Unavailable);
+        assert_eq!(
+            created_unknown.kind(),
+            NookPasskeyTimestampEvidenceKind::Unavailable
+        );
+        assert!(created_unknown.value().is_err());
+        let timestamp =
+            nook_core::IsoTimestamp::from_trusted("2026-09-01T00:00:00.000Z".to_owned());
+        let created_known =
+            NookPasskeyTimestampEvidence::from_created(PasskeyCreatedAtEvidence::Known {
+                timestamp: timestamp.clone(),
+            });
+        assert_eq!(
+            created_known.kind(),
+            NookPasskeyTimestampEvidenceKind::Known
+        );
+        assert_eq!(created_known.value().unwrap(), timestamp.to_string());
+        let not_observed =
+            NookPasskeyTimestampEvidence::from_last_used(PasskeyLastUsedAtEvidence::NotYetObserved);
+        assert_eq!(
+            not_observed.kind(),
+            NookPasskeyTimestampEvidenceKind::NotYetObserved
+        );
+        assert!(not_observed.value().is_err());
+        for attachment in [
+            PasskeyAuthenticatorAttachment::Unknown,
+            PasskeyAuthenticatorAttachment::Platform,
+            PasskeyAuthenticatorAttachment::CrossPlatform,
+        ] {
+            let _ = attachment_state(attachment);
+        }
+        for backup in [
+            PasskeyBackupState::Unknown,
+            PasskeyBackupState::NotEligible,
+            PasskeyBackupState::Eligible,
+            PasskeyBackupState::BackedUp,
+        ] {
+            let _ = backup_state(backup);
+        }
+
+        let unsorted = vec![
+            indexed_db::VaultRegistryEntry {
+                store_id: "invalid-store".into(),
+                label: "Zulu".into(),
+                last_unlocked_at: None,
+            },
+            indexed_db::VaultRegistryEntry {
+                store_id: "invalid-store-2".into(),
+                label: "Alpha".into(),
+                last_unlocked_at: Some(timestamp),
+            },
+        ];
+        let rows = vault_access_rows(unsorted, &[], None);
+        assert_eq!(rows.len(), 2);
+        assert_eq!(rows[0].label(), "Alpha");
+        assert_eq!(rows[1].access_state(), NookDeviceVaultAccessState::Unknown);
+    }
 }

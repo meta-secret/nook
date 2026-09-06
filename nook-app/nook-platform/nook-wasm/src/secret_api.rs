@@ -663,3 +663,62 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_projection_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn secret_adapters_project_filters_names_and_backup_code_modes_in_wasm() {
+        for filter in [
+            NookSecretTypeFilter::All,
+            NookSecretTypeFilter::Login,
+            NookSecretTypeFilter::ApiKey,
+            NookSecretTypeFilter::SeedPhrase,
+            NookSecretTypeFilter::SecureNote,
+            NookSecretTypeFilter::Passkey,
+            NookSecretTypeFilter::Authenticator,
+            NookSecretTypeFilter::CreditCard,
+            NookSecretTypeFilter::FileAttachment,
+        ] {
+            let _ = filter.to_core();
+        }
+        for secret_type in [
+            SecretType::Login,
+            SecretType::ApiKey,
+            SecretType::SeedPhrase,
+            SecretType::SecureNote,
+            SecretType::Passkey,
+            SecretType::Authenticator,
+            SecretType::CreditCard,
+            SecretType::FileAttachment,
+        ] {
+            assert!(!secret_type_name(secret_type).is_empty());
+        }
+        assert_eq!(
+            normalize_backup_codes(vec!["ABCD-1234".into(), "EFGH 5678".into()]).unwrap(),
+            vec!["ABCD-1234", "EFGH 5678"]
+        );
+        assert_eq!(
+            apply_backup_codes(vec!["OLD-0000".into()], vec!["NEW-1111".into()], "replace")
+                .unwrap(),
+            vec!["NEW-1111"]
+        );
+        assert_eq!(
+            apply_backup_codes(
+                vec!["OLD-0000".into()],
+                vec!["NEW-1111".into(), "OLD-0000".into()],
+                "merge"
+            )
+            .unwrap(),
+            vec!["OLD-0000", "NEW-1111"]
+        );
+        assert!(apply_backup_codes(Vec::new(), Vec::new(), "append").is_err());
+        assert!(authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "JBSWY3DPEHPK3PXY").unwrap());
+        assert!(!authenticator_setup_key_changed("JBSWY3DPEHPK3PXP", "JBSWY3DPEHPK3PXP").unwrap());
+        assert!(preview_otpauth_uri("otpauth://totp/example:alice?secret=bad").is_err());
+    }
+}
