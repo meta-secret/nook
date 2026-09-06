@@ -153,6 +153,9 @@ impl AuthenticationCeremonyObservationFacts {
             return false;
         }
         let context = &self.authentication_context;
+        if !context.form_identity.is_empty() {
+            return false;
+        }
         let Some(destination) =
             canonicalize_control_destination(&context.source_origin, &context.destination_identity)
         else {
@@ -390,6 +393,29 @@ mod tests {
             let mut ceremony = AuthenticationCeremonyObservationFacts::x_identifier_get();
             ceremony.authentication_context.authentication_username = evidence;
             assert!(!ceremony.has_safe_implicit_submission(fields));
+        }
+    }
+
+    #[test]
+    fn login_mode_fallback_requires_an_empty_form_identity() {
+        let fields = AuthenticationFieldObservationFacts::identifier_only();
+        for form_identity in [
+            "signup",
+            "reset-password",
+            "google-login",
+            "continue-with-passkey",
+            "forgot-password",
+            "help",
+            "delete-account",
+            "account-settings",
+            " ",
+        ] {
+            let mut ceremony = AuthenticationCeremonyObservationFacts::x_identifier_get();
+            ceremony.authentication_context.form_identity = form_identity.to_owned();
+            assert!(
+                !ceremony.has_safe_implicit_submission(fields),
+                "{form_identity}"
+            );
         }
     }
 }
