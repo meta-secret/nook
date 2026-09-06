@@ -373,12 +373,16 @@ mod tests {
     }
 
     #[test]
-    fn ceremony_state_requires_an_active_session() {
-        let inactive: CeremonyState<u8> = CeremonyState::Inactive;
-        assert!(inactive.get("ceremony is inactive").is_err());
-
+    fn ceremony_state_returns_active_sessions() {
         let active = CeremonyState::Active(7_u8);
         assert_eq!(active.get("unused").expect("active ceremony"), &7);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn ceremony_state_rejects_an_inactive_session() {
+        let inactive: CeremonyState<u8> = CeremonyState::Inactive;
+        assert!(inactive.get("ceremony is inactive").is_err());
     }
 
     #[test]
@@ -490,9 +494,15 @@ mod tests {
     }
 
     #[test]
-    fn sync_issue_result_exposes_clear_state_without_an_issue() {
+    fn sync_issue_result_exposes_clear_state() {
         let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
         assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn clear_sync_issue_result_rejects_issue_access() {
+        let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
         assert!(result.issue().is_err());
     }
 }
