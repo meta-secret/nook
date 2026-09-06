@@ -523,6 +523,67 @@ mod metadata_tests {
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    #[test]
+    fn password_listing_and_verification_reject_unknown_or_wrong_credentials() -> anyhow::Result<()>
+    {
+        let keys = nook_core::generate_vault_keys()?;
+        let entry = nook_core::create_password_entry_with_work_factor(
+            &keys,
+            "pwdentry001",
+            "Recovery",
+            "2026-09-06T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
+        )?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.password_entries = vec![entry.clone()];
+
+        let summaries = manager
+            .list_vault_password_entries()
+            .map_err(|_| anyhow::anyhow!("password listing failed"))?;
+        assert_eq!(summaries.len(), 1);
+        assert_eq!(summaries[0].id(), entry.id);
+        assert_eq!(summaries[0].label(), "Recovery");
+        assert_eq!(summaries[0].created_at(), "2026-09-06T00:00:00Z");
+        assert!(manager.verify_vault_password(&entry.id, "correct horse battery staple"));
+        assert!(!manager.verify_vault_password(&entry.id, "wrong password"));
+        assert!(!manager.verify_vault_password("pwdentry002", "correct horse battery staple"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn sentinel_password_mutations_fail_closed_without_session_changes() -> anyhow::Result<()>
+    {
+        let mut manager = NookVaultManager::new();
+        manager.vault.architecture.vault_type = VaultType::Sentinel;
+        let before = manager.vault.password_entries.clone();
+
+        assert!(
+            manager
+                .add_vault_password_for_e2e("Recovery".to_owned(), "password".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .update_vault_password_entry_for_e2e(
+                    "pwdentry001".to_owned(),
+                    "password".to_owned()
+                )
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .remove_vault_password_entry("pwdentry001".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(manager.remove_vault_password().await.is_err());
+        assert_eq!(manager.vault.password_entries, before);
+        Ok(())
+    }
+
     #[wasm_bindgen_test]
     async fn password_provider_switch_preserves_active_vault_metadata() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;

@@ -210,4 +210,10 @@ mod tests {
 
         assert!(validate_entries(&entries).is_err());
     }
+
+    #[test]
+    fn accepts_an_empty_pairing_state() {
+        let entries = HashMap::new();
+        assert!(validate_entries(&entries).is_ok());
+    }
 }
