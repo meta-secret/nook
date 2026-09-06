@@ -74,7 +74,6 @@ impl NookVaultManager {
 
 #[cfg(test)]
 mod tests {
-    use super::NookVaultManager;
     use crate::manager::session::DeviceSessionState;
 
     #[test]

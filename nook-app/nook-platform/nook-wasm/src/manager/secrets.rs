@@ -633,18 +633,25 @@ mod projection_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn empty_secret_session_exposes_safe_helpers() -> anyhow::Result<()> {
+    fn empty_secret_session_exposes_safe_helpers() {
         let mut manager = NookVaultManager::new();
         assert!(manager.filter_secrets("fixture").is_err());
-        assert!(manager.generate_secret_id()?.starts_with("secret_"));
-        assert_eq!(manager.generate_id()?.len(), 11);
-        manager.status.tx.send("FIRST".to_owned())?;
-        manager.status.tx.send("SECOND".to_owned())?;
+        assert!(
+            manager
+                .generate_secret_id()
+                .is_ok_and(|secret_id| secret_id.starts_with("secret_"))
+        );
+        assert!(
+            manager
+                .generate_id()
+                .is_ok_and(|generated_id| generated_id.len() == 11)
+        );
+        assert!(manager.status.tx.send("FIRST".to_owned()).is_ok());
+        assert!(manager.status.tx.send("SECOND".to_owned()).is_ok());
         assert_eq!(
             manager.drain_status_log(),
             vec!["FIRST".to_owned(), "SECOND".to_owned()]
         );
         assert!(manager.drain_status_log().is_empty());
-        Ok(())
     }
 }
