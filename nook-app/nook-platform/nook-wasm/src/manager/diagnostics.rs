@@ -85,3 +85,18 @@ impl NookVaultManager {
         Ok(NookVaultAccessReport::from_core(report)?)
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn diagnostics_reject_missing_staged_vault_and_device_authorization() {
+        let mut manager = NookVaultManager::new();
+        assert!(manager.vault_recovery_options().await.is_err());
+        assert!(manager.vault_access_diagnostics().await.is_err());
+    }
+}

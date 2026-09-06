@@ -93,3 +93,24 @@ impl NookVaultManager {
         Err(NookError::Database("Vault event log is required.".to_owned()).into())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn sync_rejects_an_unknown_storage_mode_before_touching_session() {
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "store_sync_fixture".to_owned();
+        assert!(
+            manager
+                .sync_vault_from_storage("unknown".to_owned(), String::new(), String::new())
+                .await
+                .is_err()
+        );
+        assert_eq!(manager.vault.store_id, "store_sync_fixture");
+    }
+}
