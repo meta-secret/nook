@@ -469,9 +469,14 @@ impl NookVaultManager {
         name: String,
     ) -> Result<(), JsError> {
         AppId::parse(&app_id)?;
-        device_access::set_passkey_name_for_app_id(&app_id, &credential_fingerprint, &name)
-            .await
-            .map_err(Into::into)
+        device_access::AppPasskeyNameUpdate {
+            app_id: &app_id,
+            credential_fingerprint: &credential_fingerprint,
+            name: &name,
+        }
+        .apply()
+        .await
+        .map_err(Into::into)
     }
 
     /// Return the product device-protection mode persisted during device setup.
@@ -595,13 +600,14 @@ impl NookVaultManager {
             let device_id = self.save_passkey_material(&material).await?;
             let credential_fingerprint =
                 nook_core::passkey_credential_identifier(credential_id.as_ref());
-            let _ = device_access::record_passkey_created_for_app_id(
-                &device_id,
-                &credential_fingerprint,
-                &passkey_label,
+            let _ = device_access::AppPasskeyCreation {
+                app_id: &device_id,
+                credential_fingerprint: &credential_fingerprint,
+                nook_name: &passkey_label,
                 observation,
                 ceremony,
-            )
+            }
+            .apply()
             .await;
             let updated_label =
                 passkey_browser::passkey_label_with_device_id(&passkey_label, &device_id);
@@ -704,11 +710,12 @@ impl NookVaultManager {
         )
         .await?;
         let app_id = self.device.public_app_id();
-        let _ = device_access::record_passkey_used_for_app_id(
-            &app_id,
-            &credential_fingerprint,
+        let _ = device_access::AppPasskeyUse {
+            app_id: &app_id,
+            credential_fingerprint: &credential_fingerprint,
             observation,
-        )
+        }
+        .apply()
         .await;
         Ok(())
     }
@@ -799,11 +806,12 @@ impl NookVaultManager {
         let prf_output = passkey_browser::require_prf_output(&credential)?;
         self.unlock_device_identity(prf_output).await?;
         let app_id = self.device.public_app_id();
-        let _ = device_access::record_passkey_used_for_app_id(
-            &app_id,
-            &credential_fingerprint,
+        let _ = device_access::AppPasskeyUse {
+            app_id: &app_id,
+            credential_fingerprint: &credential_fingerprint,
             observation,
-        )
+        }
+        .apply()
         .await;
         Ok(())
     }

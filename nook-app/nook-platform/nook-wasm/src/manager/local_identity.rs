@@ -1,7 +1,8 @@
 //! Local identity creation, selection, and session adoption.
 
+use crate::storage::device_access::DeviceAccessProfileKey;
 use crate::storage::identity_record::LocalIdentitySigner;
-use crate::storage::{auth_providers, device_access, identity_record, indexed_db};
+use crate::storage::{auth_providers, identity_record, indexed_db};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
 use nook_core::{AppId, IdentityId, i18n_keys};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -356,7 +357,7 @@ impl NookVaultManager {
                     Some(self.device_identity()?)
                 };
                 auth_providers::migrate_legacy_auth_providers_for_selected_identity().await?;
-                device_access::migrate_legacy_device_access_profile_for_selected_identity().await?;
+                DeviceAccessProfileKey::selected().await?.migrate().await?;
                 identity_record::save_new_protected_local_identity(
                     &app_key,
                     record,

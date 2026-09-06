@@ -26,7 +26,12 @@ impl VerifiedVaultAccessFlow {
         };
         // Dashboard metadata is descriptive and must not turn a successful,
         // cryptographically verified unlock or enrollment into a failure.
-        let _ = device_access::record_verified_vault_access(device_id, &store_id).await;
+        let _ = device_access::VerifiedVaultAccessUpdate {
+            device_id,
+            store_id: &store_id,
+        }
+        .apply()
+        .await;
         Ok(value)
     }
 }
@@ -34,6 +39,7 @@ impl VerifiedVaultAccessFlow {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::device_access::DeviceAccessProfileKey;
     use nook_core::DeviceId;
     use wasm_bindgen_test::*;
 
@@ -48,7 +54,7 @@ mod tests {
             VerifiedVaultAccessFlow::EnrollAndConnect,
             VerifiedVaultAccessFlow::EnrollWithKeys,
         ] {
-            device_access::delete_device_access_profile().await?;
+            DeviceAccessProfileKey::clear_companion().await?;
             let failure = flow
                 .complete::<()>(
                     Err(NookError::Database(
@@ -60,7 +66,8 @@ mod tests {
                 .await;
             assert!(failure.is_err());
             assert!(
-                device_access::load_companion_device_access_profile()
+                DeviceAccessProfileKey::companion()
+                    .load()
                     .await?
                     .verified_vaults
                     .is_empty()
@@ -70,7 +77,7 @@ mod tests {
                 .await?;
             // This unregistered device records into the companion profile,
             // independently of a protected identity selected by another test.
-            let profile = device_access::load_companion_device_access_profile().await?;
+            let profile = DeviceAccessProfileKey::companion().load().await?;
             assert_eq!(profile.verified_vaults.len(), 1);
             assert_eq!(profile.verified_vaults[0].device_id, device_id);
             assert_eq!(
@@ -79,7 +86,7 @@ mod tests {
             );
         }
 
-        device_access::delete_device_access_profile().await?;
+        DeviceAccessProfileKey::clear_companion().await?;
         Ok(())
     }
 }
