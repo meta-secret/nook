@@ -159,6 +159,65 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manager::device_protection::PendingExtensionIdentityHandoff;
+    use nook_core::{AppKey, SigningIdentity};
+
+    fn staged_handoff(
+        enrollment: PendingExtensionIdentityEnrollment,
+    ) -> Result<PendingExtensionIdentityHandoff, NookError> {
+        let (signing, signing_seed) = SigningIdentity::generate()?;
+        Ok(PendingExtensionIdentityHandoff {
+            enrollment,
+            authorizer_signing: None,
+            signing_public_key: signing.public_key(),
+            handoff_signing_seed: signing_seed.as_str().to_owned(),
+            persist_signing_seed: false,
+            previous_session_signing_seed: String::new(),
+        })
+    }
+
+    #[test]
+    fn handoff_state_helpers_cover_each_enrollment_shape() -> Result<(), NookError> {
+        let mut manager = NookVaultManager::new();
+        assert!(!manager.defers_identity_reconciliation_until_handoff());
+        assert!(manager.pending_vault_creation_handoff().is_none());
+        assert!(manager.pending_existing_vault_import().is_none());
+
+        manager.device.pending_extension_handoff = Some(staged_handoff(
+            PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None },
+        )?);
+        assert!(manager.defers_identity_reconciliation_until_handoff());
+        assert!(manager.pending_vault_creation_handoff().is_some());
+        assert!(manager.pending_existing_vault_import().is_none());
+
+        let paired_store = nook_core::generate_store_id()?;
+        manager.device.pending_extension_handoff = Some(staged_handoff(
+            PendingExtensionIdentityEnrollment::PairedVault {
+                authorizer: AppKey::generate()?,
+                store_id: paired_store,
+            },
+        )?);
+        assert!(manager.defers_identity_reconciliation_until_handoff());
+        assert!(manager.pending_vault_creation_handoff().is_none());
+
+        let unlock_store = nook_core::generate_store_id()?;
+        manager.device.pending_extension_handoff = Some(staged_handoff(
+            PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
+                store_id: unlock_store,
+            },
+        )?);
+        assert!(manager.defers_identity_reconciliation_until_handoff());
+
+        let import_store = nook_core::generate_store_id()?;
+        manager.device.pending_extension_handoff = Some(staged_handoff(
+            PendingExtensionIdentityEnrollment::ExistingVaultImport {
+                store_id: import_store.clone(),
+            },
+        )?);
+        assert!(manager.defers_identity_reconciliation_until_handoff());
+        assert_eq!(manager.pending_existing_vault_import(), Some(import_store));
+        Ok(())
+    }
 
     #[test]
     fn adopts_transactional_handoff_keys_into_live_session() -> Result<(), NookError> {
