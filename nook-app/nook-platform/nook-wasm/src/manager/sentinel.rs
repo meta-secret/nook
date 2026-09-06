@@ -890,4 +890,62 @@ mod browser_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn ceremony_projection_and_delivery_completion_are_fail_closed() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
+        let session = nook_core::StartSentinelGenesisArgs {
+            label: "Initiator".to_owned(),
+            participant_count: 2.into(),
+            threshold: 2.into(),
+        }
+        .start(&identity, &signing)?;
+        let mut manager = NookVaultManager::new();
+        manager.sentinel_genesis = CeremonyState::Active(session);
+        assert!(!manager.sentinel_genesis_request_json()?.is_empty());
+        assert!(manager.complete_sentinel_genesis_delivery().is_err());
+        manager.sentinel_genesis_phase = SentinelGenesisPhase::DeliveringShares;
+        assert_eq!(
+            manager.complete_sentinel_genesis_delivery()?,
+            SentinelGenesisPhase::Complete
+        );
+        assert_eq!(
+            manager.sentinel_genesis_phase(),
+            SentinelGenesisPhase::Complete
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn malformed_ceremony_payloads_do_not_discard_active_sessions() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let (signing, _) = SigningIdentity::generate()?;
+        let session = nook_core::StartSentinelGenesisArgs {
+            label: "Initiator".to_owned(),
+            participant_count: 2.into(),
+            threshold: 2.into(),
+        }
+        .start(&identity, &signing)?;
+        let mut manager = NookVaultManager::new();
+        manager.sentinel_genesis = CeremonyState::Active(session);
+        assert!(
+            manager
+                .add_sentinel_genesis_participant_response("{}", "Participant")
+                .is_err()
+        );
+        assert!(manager.sentinel_genesis_request_json().is_ok());
+        assert!(
+            manager
+                .remember_sentinel_genesis_request("not json")
+                .is_err()
+        );
+        assert!(manager.sentinel_genesis_request_json().is_ok());
+        assert!(
+            manager
+                .create_sentinel_onboarding_package("{}", "{}", Default::default())
+                .is_err()
+        );
+        Ok(())
+    }
 }
