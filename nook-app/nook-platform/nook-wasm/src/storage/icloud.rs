@@ -785,4 +785,92 @@ mod tests {
         assert_eq!(CloudKitErrorBody::truncate_chars("é水😀x", 3), "é水😀...");
         assert_eq!(CloudKitErrorBody::truncate_chars("é水😀", 3), "é水😀");
     }
+
+    #[test]
+    fn icloud_helpers_cover_digest_scope_query_and_record_projection() -> anyhow::Result<()> {
+        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+        assert!(ICloudEventStore::is_sha256_base64url_digest(digest));
+        assert!(!ICloudEventStore::is_sha256_base64url_digest("short"));
+        assert!(!ICloudEventStore::is_sha256_base64url_digest(&format!(
+            "{}!",
+            &digest[..42]
+        )));
+
+        let private = ICloudEventTarget::Private;
+        assert_eq!(ICloudEventStore::icloud_zone_id(&private), None);
+        let shared = SharedTargetFixture::new(ICloudShareRole::Participant)?.0;
+        let zone = ICloudEventStore::icloud_zone_id(&shared)
+            .ok_or_else(|| anyhow::anyhow!("missing shared zone"))?;
+        assert_eq!(zone["zoneName"], "shared-zone");
+        assert_eq!(zone["ownerRecordName"], "owner-record");
+        let zoned = ICloudEventStore::with_icloud_zone(serde_json::json!({"query": {}}), &shared);
+        assert_eq!(zoned["zoneID"], zone);
+        assert!(
+            !ICloudEventStore::with_icloud_zone(serde_json::json!({}), &private)
+                .as_object()
+                .unwrap()
+                .contains_key("zoneID")
+        );
+
+        let query = ICloudEventStore::icloud_auth_query("  web-token  ");
+        assert_eq!(query[0].0, "ckAPIToken");
+        assert_eq!(query[1].1, "web-token");
+        assert_eq!(ICloudEventStore::web_auth_token_len("  web-token  "), 9);
+
+        let event_id = EventId::parse(&format!("sha256u:{digest}"))?;
+        let record_name = ICloudEventStore::icloud_event_record_name(&event_id);
+        assert_eq!(record_name, format!("nook-event-{digest}"));
+        let record = ICloudRecord {
+            record_name: record_name.clone(),
+            fields: Some(collections::HashMap::from([(
+                ICLOUD_CONTENT_FIELD.to_owned(),
+                ICloudFieldValue {
+                    value: Some("encrypted".to_owned()),
+                },
+            )])),
+        };
+        assert_eq!(record.content().as_deref(), Some("encrypted"));
+        assert_eq!(
+            record.field(ICLOUD_CONTENT_FIELD).as_deref(),
+            Some("encrypted")
+        );
+        assert_eq!(record.event_id().as_deref(), Some(event_id.as_str()));
+
+        let fallback = ICloudRecord {
+            record_name,
+            fields: None,
+        };
+        assert_eq!(fallback.event_id().as_deref(), Some(event_id.as_str()));
+        let invalid = ICloudRecord {
+            record_name: "nook-event-not-an-event".to_owned(),
+            fields: None,
+        };
+        assert_eq!(invalid.event_id(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn icloud_error_and_redaction_helpers_cover_empty_and_repeated_values() {
+        let empty = ICloudEventStore::icloud_error(reqwest::StatusCode::NOT_FOUND, "");
+        assert!(
+            matches!(empty, NookError::ICloud(message) if message == "CloudKit API responded with status 404 Not Found")
+        );
+        let with_body = ICloudEventStore::icloud_error(reqwest::StatusCode::BAD_REQUEST, "bad");
+        assert!(matches!(with_body, NookError::ICloud(message) if message.ends_with(" — bad")));
+        assert_eq!(
+            CloudKitErrorBody::redact_query_param_values(
+                "ckWebAuthToken=one&x=1 ckWebAuthToken=two",
+                "ckWebAuthToken",
+            ),
+            "ckWebAuthToken=[redacted]&x=1 ckWebAuthToken=[redacted]"
+        );
+        assert_eq!(
+            CloudKitErrorBody {
+                body: "plain body",
+                web_auth_token: "   ",
+            }
+            .sanitize(),
+            "plain body"
+        );
+    }
 }

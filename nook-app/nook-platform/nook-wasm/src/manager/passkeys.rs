@@ -45,7 +45,10 @@ fn passkey_error_code(error: &nook_core::PasskeyAuthenticatorError) -> &'static 
 #[cfg(test)]
 mod tests {
     use super::{NookVaultManager, passkey_error_code};
-    use nook_core::{PasskeyAuthenticatorError, VaultArchitecture};
+    use crate::manager::VaultCryptoState;
+    use nook_core::{
+        PasskeyAuthenticatorError, SecretType, StoredRecordPayload, VaultArchitecture,
+    };
 
     #[test]
     fn randomness_failure_has_a_distinct_browser_error_code() {
@@ -123,6 +126,50 @@ mod tests {
             },
         );
         assert!(ready.ensure_passkey_extension_capability().is_err());
+        ready.vault.architecture = VaultArchitecture::default();
+        ready.application = nook_core::VaultApplication::Simple;
+        assert!(ready.ensure_passkey_extension_capability().is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn passkey_crypto_round_trip_decrypts_only_passkey_records() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+
+        let request: nook_core::PasskeyRegistrationRequest =
+            serde_json::from_value(serde_json::json!({
+                "origin": "https://login.example.com",
+                "challenge": "BwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwcHBwc",
+                "relyingParty": {"id": "example.com", "name": "Example"},
+                "user": {"id": "dXNlci0xMjM", "name": "alice@example.com", "displayName": "Alice"},
+                "algorithms": [-257, -7],
+                "excludeCredentials": [],
+                "residentKeyRequired": true,
+                "userVerificationRequired": true
+            }))?;
+        let registration = request
+            .prepare(&[])
+            .map_err(|error| anyhow::anyhow!("prepare failed: {error:?}"))?
+            .generate()
+            .map_err(|error| anyhow::anyhow!("generate failed: {error:?}"))?;
+        let id = nook_core::generate_secret_id()?;
+        let encrypted = manager.encrypt_passkey_secret(&id, &registration.credential)?;
+        manager.vault.meta.apply_record(&encrypted.to_stored())?;
+        manager.vault.meta.secrets.insert(
+            nook_core::generate_secret_id()?,
+            (
+                SecretType::SecureNote,
+                StoredRecordPayload::from_trusted("not decrypted".to_owned()),
+            ),
+        );
+
+        let decrypted = manager.decrypt_passkeys()?;
+        assert_eq!(decrypted.rows.len(), 1);
+        assert_eq!(decrypted.rows[0].1.rp_id, "example.com");
         Ok(())
     }
 }
@@ -142,6 +189,8 @@ mod browser_tests {
 
         let inactive = Function::new_no_args("return false;");
         assert!(ensure_ceremony_active(&inactive).is_err());
+        let throwing = Function::new_no_args("throw new Error('boom');");
+        assert!(ensure_ceremony_active(&throwing).is_err());
         Ok(())
     }
 
