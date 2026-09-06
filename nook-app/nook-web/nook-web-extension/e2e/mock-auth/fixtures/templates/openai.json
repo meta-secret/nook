@@ -1,0 +1,23 @@
+{
+  "id": "openai",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "id": "email",
+          "autocomplete": "email",
+          "placeholder": "Email address",
+          "aria-label": "Email address"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "name": "intent",
+        "label": "Continue"
+      }
+    }
+  ]
+}

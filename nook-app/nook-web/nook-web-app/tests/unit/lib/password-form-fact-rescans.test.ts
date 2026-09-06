@@ -375,6 +375,44 @@ describe('authentication fact rescans', () => {
     })
   })
 
+  test('transports GET only for one identifier field approved by Rust', () => {
+    document.body.innerHTML = `
+      <form id="login" method="get" action="/auth/login">
+        <input id="email" type="email" autocomplete="username" />
+        <button type="submit">Continue</button>
+      </form>
+    `
+    const identifier = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(identifier.fields.usernameFieldCount).toBe(1)
+    expect(identifier.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ submissionMethod: 'get' }],
+    })
+    expect(identifier.credentialSubmission).toMatchObject({
+      kind: 'observed',
+      facts: { method: 'get' },
+    })
+
+    document
+      .querySelector('form')
+      ?.insertAdjacentHTML(
+        'afterbegin',
+        '<input type="email" autocomplete="username" />',
+      )
+    const ambiguous = authenticationPageObservationFacts({
+      observation: observedAuthenticationWorkflow(),
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(ambiguous.fields.usernameFieldCount).toBe(2)
+    expect(ambiguous.detailedAdvanceControl).toEqual({ kind: 'absent' })
+    expect(ambiguous.credentialSubmission).toEqual({ kind: 'absent' })
+  })
+
   test('rescans after a submit input value property assignment', () => {
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login">

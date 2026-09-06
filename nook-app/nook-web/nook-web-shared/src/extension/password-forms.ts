@@ -302,11 +302,11 @@ function transportableControlObservation(
   request: PageControlObservationRequest,
 ): AuthenticationAdvanceControlObservation[] {
   const observation = pageControlObservation(request);
-  if (
-    observation.submissionMethod === PageControlSubmissionMethod.Get ||
-    observation.submissionMethod === PageControlSubmissionMethod.Dialog
-  )
-    return [];
+  if (observation.submissionMethod === PageControlSubmissionMethod.Dialog) return [];
+  if (observation.submissionMethod === PageControlSubmissionMethod.Get &&
+    (request.observation.summary.usernameFieldCount !== 1 ||
+      !authentication_advance_control_is_safe(observation))
+  ) return [];
   return authenticationFactStringsAreTransportable([
     observation.sourceOrigin,
     observation.formIdentity,

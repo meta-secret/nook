@@ -2210,9 +2210,9 @@
     "template": "enterprise-sso-email"
   },
   "openai-platform": {
-    "loginUrl": "https://www.openai.com/login",
-    "source": "research",
-    "template": "email-first"
+    "loginUrl": "https://chatgpt.com/auth/login?",
+    "source": "capture",
+    "template": "openai"
   },
   "opsgenie": {
     "loginUrl": "https://www.opsgenie.com/login",

@@ -219,6 +219,103 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('fills ChatGPT GET and OpenAI POST identifier forms', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const chatGpt = await startMockAuthServer()
+    const openAi = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock OpenAI auth vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        chatGpt.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+      await saveVaultLogin(
+        paired.vaultPage,
+        openAi.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      const page = await paired.context.newPage()
+      const authOrigin = encodeURIComponent(openAi.origin)
+      await page.goto(`${chatGpt.origin}/auth/login?auth_origin=${authOrigin}`)
+      await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+        'chatgpt-identifier',
+      )
+      const chatGptForm = page.locator('form[action="/auth/login"]')
+      await expect(chatGptForm).toHaveAttribute('method', 'get')
+      await expect(page.locator('input[type="password"]')).toHaveCount(0)
+
+      const widget = page.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page).toHaveURL(`${openAi.origin}/log-in-or-create-account`)
+
+      await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+        'openai-identifier',
+      )
+
+      const identifierForm = page.locator('#openai-identifier-form')
+      const socialForm = page.locator('#openai-social-form')
+      await expect(identifierForm.locator('#email')).toHaveAttribute(
+        'autocomplete',
+        'email',
+      )
+      await expect(
+        identifierForm.getByRole('button', { name: 'Continue with phone' }),
+      ).toBeEnabled()
+      await expect(socialForm).toBeHidden()
+      await expect(
+        identifierForm.locator(
+          'button[name="intent"][form="openai-social-form"]',
+        ),
+      ).toHaveCount(3)
+      expect(
+        await identifierForm
+          .locator('button[name="intent"][form="openai-social-form"]')
+          .evaluateAll((buttons) =>
+            buttons.every(
+              (button) =>
+                (button as HTMLButtonElement).form?.id === 'openai-social-form',
+            ),
+          ),
+      ).toBe(true)
+      await expect(page.locator('input[type="password"]')).toHaveCount(0)
+
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
+      const expectedEvidence = JSON.stringify({
+        submittedControlIdentity: 'openai-continue',
+        emailMatched: true,
+        phoneUntouched: true,
+        socialFormUntouched: true,
+      })
+      await expect
+        .poll(() =>
+          page.evaluate(
+            (key) => sessionStorage.getItem(key) || '',
+            'openai-submission-evidence',
+          ),
+        )
+        .toBe(expectedEvidence)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await Promise.all([chatGpt.close(), openAi.close()])
+    }
+  })
+
   test('fills the owned GitHub login without touching its decoys or alternatives', async ({
     browserName,
   }, testInfo) => {
