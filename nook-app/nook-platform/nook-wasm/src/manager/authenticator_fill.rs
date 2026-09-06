@@ -132,6 +132,46 @@ mod wasm_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn authenticator_code_reveals_totp_and_rejects_other_secret_types() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let mut manager = NookVaultManager::new();
+        insert_secret(
+            &mut manager,
+            &crypto,
+            "secret_SMypl8K0w9a",
+            SecretValue::Authenticator(AuthenticatorSecret::from_otpauth_uri(
+                "otpauth://totp/Alpha:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Alpha",
+            )?),
+        )?;
+        insert_secret(
+            &mut manager,
+            &crypto,
+            "secret_SMypl8K0w9b",
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
+                title: "note".to_owned(),
+                note: "not a totp".to_owned(),
+            }),
+        )?;
+        manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+
+        let code = manager.authenticator_code_for_fill("secret_SMypl8K0w9a", 1_700_000_000)?;
+        assert_eq!(code.code().len(), 6);
+        assert!(code.expires_at_unix_seconds() > 1_700_000_000.0);
+        assert!(
+            manager
+                .authenticator_code_for_fill("secret_SMypl8K0w9b", 1_700_000_000)
+                .is_err()
+        );
+        assert!(
+            manager
+                .authenticator_code_for_fill("secret_SMypl8K0w9c", 1_700_000_000)
+                .is_err()
+        );
+        Ok(())
+    }
 }
 
 #[wasm_bindgen]

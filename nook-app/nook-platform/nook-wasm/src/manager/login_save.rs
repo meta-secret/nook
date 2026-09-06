@@ -139,6 +139,140 @@ impl NookVaultManager {
     }
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use crate::manager::VaultCryptoState;
+    use nook_core::{
+        LoginSecret, SecretId, SecretType, SecretValue, StoredRecordPayload, VaultCrypto,
+    };
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn insert_login(
+        manager: &mut NookVaultManager,
+        crypto: &VaultCrypto,
+        id: &str,
+        username: &str,
+        password: &str,
+    ) -> anyhow::Result<()> {
+        let value = SecretValue::Login(LoginSecret {
+            website_url: "https://example.com/login".to_owned(),
+            username: username.to_owned(),
+            password: password.to_owned(),
+            notes: String::new(),
+        });
+        let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+        manager.vault.meta.secrets.insert(
+            SecretId::from_vault_record(id),
+            (
+                SecretType::Login,
+                StoredRecordPayload::from_age_armored(ciphertext),
+            ),
+        );
+        Ok(())
+    }
+
+    fn manager_with_login(username: &str, password: &str) -> anyhow::Result<NookVaultManager> {
+        let keys = nook_core::generate_vault_keys()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let mut manager = NookVaultManager::new();
+        insert_login(
+            &mut manager,
+            &crypto,
+            "secret_existing_login",
+            username,
+            password,
+        )?;
+        manager.vault.crypto = VaultCryptoState::Unlocked(crypto);
+        Ok(manager)
+    }
+
+    #[wasm_bindgen_test]
+    fn save_plans_cover_create_update_already_saved_and_invalid() -> anyhow::Result<()> {
+        let mut empty = NookVaultManager::new();
+        let keys = nook_core::generate_vault_keys()?;
+        empty.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
+        assert_eq!(
+            empty
+                .plan_matching_login_save("https://example.com", "alice", "new")?
+                .decision(),
+            NookWebsiteLoginSaveDecision::Create
+        );
+        assert_eq!(
+            empty
+                .plan_matching_login_save("", "alice", "new")?
+                .decision(),
+            NookWebsiteLoginSaveDecision::Invalid
+        );
+        assert_eq!(
+            empty
+                .plan_matching_login_save("https://example.com", "", "new")?
+                .decision(),
+            NookWebsiteLoginSaveDecision::Invalid
+        );
+
+        let mut existing = manager_with_login("alice", "old")?;
+        let update = existing.plan_matching_login_save("https://example.com", "alice", "new")?;
+        assert_eq!(update.decision(), NookWebsiteLoginSaveDecision::Update);
+        assert_eq!(
+            update.secret_id().ok().as_deref(),
+            Some("secret_existing_login")
+        );
+        let already = existing.plan_matching_login_save("https://example.com", "alice", "old")?;
+        assert_eq!(
+            already.decision(),
+            NookWebsiteLoginSaveDecision::AlreadySaved
+        );
+        assert_eq!(
+            already.secret_id().ok().as_deref(),
+            Some("secret_existing_login")
+        );
+        assert_eq!(
+            existing
+                .plan_matching_login_save("https://other.example", "alice", "new")?
+                .decision(),
+            NookWebsiteLoginSaveDecision::Create
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn save_commit_rejects_invalid_targets_before_storage() -> anyhow::Result<()> {
+        let mut manager = manager_with_login("alice", "old")?;
+        assert!(
+            manager
+                .commit_matching_login_save("https://example.com", "", "new", None)
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .commit_matching_login_save("https://example.com", "alice", "new", Some("wrong"))
+                .await
+                .is_err()
+        );
+
+        let keys = nook_core::generate_vault_keys()?;
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let mut empty = NookVaultManager::new();
+        empty.vault.crypto = VaultCryptoState::Unlocked(crypto);
+        assert!(
+            empty
+                .commit_matching_login_save(
+                    "https://example.com",
+                    "alice",
+                    "new",
+                    Some("unexpected")
+                )
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     #[wasm_bindgen]
