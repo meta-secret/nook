@@ -109,8 +109,8 @@ pub(super) struct KeeperRecord<'a> {
 }
 impl KeeperRecord<'_> {
     pub(super) fn convert(self) -> Option<SecretValue> {
-        let csv_fields = CsvRecordFields::new(record);
         let record = self.record;
+        let csv_fields = CsvRecordFields::new(record);
         let columns = self.columns;
         let title = csv_fields.trimmed(columns.title);
         let login = csv_fields.trimmed(columns.login);
