@@ -81,6 +81,15 @@ impl AuthenticationControlIdentity<'_> {
                 || matches!(segment, "verify" | "challenge" | "callback")
                 || is_version(segment)
         };
+        // Apple embeds its exact first-party authorization route in a
+        // cross-origin iframe. It is a login destination, not an external
+        // provider selector; canonical destination policy separately retains
+        // the exact same-origin binding.
+        let is_apple_identity_authorization_signin =
+            segments
+                .iter()
+                .map(String::as_str)
+                .eq(["appleauth", "auth", "authorize", "signin"]);
         let has_unknown_login_route_segment =
             segments.iter().enumerate().any(|(index, segment)| {
                 let tails = &segments[index + 1..];
@@ -104,7 +113,7 @@ impl AuthenticationControlIdentity<'_> {
                 })
             })
             || contains_any_word(&route, &["provider", "idp"])
-            || has_unknown_login_route_segment
+            || (has_unknown_login_route_segment && !is_apple_identity_authorization_signin)
             || ((contains_any_word(&route, &["x"]) || contains_any_word(&fragment, &["x"]))
                 && contains_any_word(&route, &["login", "log in", "signin", "sign in"]))
     }

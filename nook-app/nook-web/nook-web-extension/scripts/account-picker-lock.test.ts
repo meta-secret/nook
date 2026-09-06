@@ -40,6 +40,101 @@ class AuthorizationStorageFixture {
 }
 
 describe('account picker authorization cleanup', () => {
+  test('binds picker delivery to the requesting frame and defaults omitted frame ids to top', async () => {
+    const { AccountPickerPageTarget } =
+      await import('../src/background/service-worker/account-pickers')
+    const deliveries: Array<{ tabId: number; frameId: number }> = []
+    globalThis.chrome = {
+      tabs: {
+        sendMessage: (tabId, _message, options) => {
+          deliveries.push({ tabId, frameId: options.frameId })
+          return Promise.resolve({ ok: options.frameId === 7 })
+        },
+      },
+    } as typeof chrome
+
+    expect(AccountPickerPageTarget.senderFrameId({ frameId: 7 })).toBe(7)
+    expect(AccountPickerPageTarget.senderFrameId({})).toBe(0)
+    const expectedSender: Parameters<
+      typeof AccountPickerPageTarget.matchesSender
+    >[0] = {
+      tabId: 42,
+      frameId: 7,
+      sender: { tab: { id: 42 }, frameId: 7 },
+    }
+    const wrongFrameSender: Parameters<
+      typeof AccountPickerPageTarget.matchesSender
+    >[0] = {
+      ...expectedSender,
+      sender: { tab: { id: 42 }, frameId: 3 },
+    }
+    expect(AccountPickerPageTarget.matchesSender(expectedSender)).toBe(true)
+    expect(AccountPickerPageTarget.matchesSender(wrongFrameSender)).toBe(false)
+    const requestedFrame: Parameters<typeof AccountPickerPageTarget.send>[0] = {
+      tabId: 42,
+      frameId: 7,
+      message: { type: 'selected' },
+    }
+    const wrongFrame: Parameters<typeof AccountPickerPageTarget.send>[0] = {
+      tabId: 42,
+      frameId: 3,
+      message: { type: 'selected' },
+    }
+
+    await expect(AccountPickerPageTarget.send(requestedFrame)).resolves.toEqual(
+      { ok: true },
+    )
+    await expect(AccountPickerPageTarget.send(wrongFrame)).resolves.toEqual({
+      ok: false,
+    })
+    expect(deliveries).toEqual([
+      { tabId: 42, frameId: 7 },
+      { tabId: 42, frameId: 3 },
+    ])
+  })
+
+  test('rehydrates only picker records carrying a validated frame target', async () => {
+    const { persistedAccountPickerCleanupPlan } =
+      await import('../src/background/service-worker/account-pickers')
+    const stored = {
+      'nook.extension.login-picker.framed': {
+        requestId: 'framed',
+        origin: 'https://idmsa.apple.test',
+        tabId: 42,
+        frameId: 7,
+        allowedVaultStoreIds: ['vault-1'],
+        expiresAt: Date.now() + 60_000,
+      },
+      'nook.extension.login-picker.legacy-unframed': {
+        requestId: 'legacy-unframed',
+        origin: 'https://idmsa.apple.test',
+        tabId: 42,
+        allowedVaultStoreIds: ['vault-1'],
+        expiresAt: Date.now() + 60_000,
+      },
+    }
+
+    expect(persistedAccountPickerCleanupPlan(stored)).toEqual({
+      storageKeys: [
+        'nook.extension.login-picker.framed',
+        'nook.extension.login-picker.legacy-unframed',
+      ],
+      cancellations: [
+        {
+          tabId: 42,
+          frameId: 7,
+          message: {
+            type: 'nook:website-login-canceled',
+            payload: {
+              origin: 'https://idmsa.apple.test',
+              requestId: 'framed',
+            },
+          },
+        },
+      ],
+    })
+  })
+
   test('shares initialization and successor handles across overlapping cleanups', async () => {
     const accountPickers =
       await import('../src/background/service-worker/account-pickers')

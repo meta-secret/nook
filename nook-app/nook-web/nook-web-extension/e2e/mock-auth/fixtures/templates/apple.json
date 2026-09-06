@@ -8,9 +8,25 @@
           "type": "text",
           "name": "accountName",
           "id": "account_name_text_field",
-          "autocomplete": "username",
-          "placeholder": "Apple ID",
-          "aria-label": "Apple ID or email"
+          "autocomplete": "username webauthn",
+          "placeholder": "Email or Phone Number",
+          "aria-label": "Email or Phone Number"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue"
+      }
+    },
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "accountName",
+          "id": "account_name_text_field",
+          "autocomplete": "username webauthn",
+          "placeholder": "Email or Phone Number",
+          "aria-label": "Email or Phone Number"
         },
         {
           "type": "password",
