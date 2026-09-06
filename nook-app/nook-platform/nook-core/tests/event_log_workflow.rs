@@ -535,11 +535,11 @@ fn out_of_order_delivery_becomes_applicable() -> VaultResult<()> {
         child_event_with_genesis(&device, "secret_outoforder1", "cipher-child")?;
 
     let mut store = LocalEventStore::new();
-    store.put_event(child_id.clone(), child_bytes);
+    store.put_event(child_id.clone(), child_bytes.into());
     let graph = store.load_graph(device.store_id())?;
     assert!(!graph.pending_events().is_empty());
 
-    store.put_event(genesis_head.clone(), genesis_bytes);
+    store.put_event(genesis_head.clone(), genesis_bytes.into());
     let graph = store.load_graph(device.store_id())?;
     assert!(graph.pending_events().is_empty());
     assert_eq!(graph.applicable_events().len(), 2);
