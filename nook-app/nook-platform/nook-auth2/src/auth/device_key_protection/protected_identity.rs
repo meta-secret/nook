@@ -399,12 +399,7 @@ fn decode_fixed<const N: usize>(
 mod tests {
     use super::*;
     use crate::{
-        DeviceIdentity,
-        auth::device_key_protection::{
-            derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
-            finish_passkey_wrapped_device_identity, recover_passkey_device_identity,
-            unlock_passkey_device_identity,
-        },
+        DeviceIdentity, PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
     };
 
     #[test]
@@ -442,7 +437,7 @@ mod tests {
     fn passkey_derived_record_stores_only_recovery_metadata() -> anyhow::Result<()> {
         let credential_id = WebAuthnCredentialId::try_from(vec![7u8; 48])?;
         let user_handle = WebAuthnUserHandle::try_from(vec![8u8; 32])?;
-        let prf_input = deterministic_passkey_prf_input();
+        let prf_input = WebAuthnPrfInput::deterministic();
         let record =
             passkey_derived_device_identity_record(&credential_id, &user_handle, &prf_input)?;
         let json = serialize_wrapped_device_identity(&record)?;
@@ -465,14 +460,15 @@ mod tests {
     fn anti_hacker_record_wraps_random_identity_locally() -> anyhow::Result<()> {
         let credential_id = WebAuthnCredentialId::try_from(vec![7u8; 48])?;
         let user_handle = WebAuthnUserHandle::try_from(vec![8u8; 32])?;
-        let prf_input = deterministic_passkey_prf_input();
+        let prf_input = WebAuthnPrfInput::deterministic();
         let prf_output = WebAuthnPrfOutput::try_from(vec![10u8; 32])?;
-        let material = finish_passkey_wrapped_device_identity(
-            &credential_id,
-            &user_handle,
-            &prf_input,
-            &prf_output,
-        )?;
+        let material = PasskeyRegistration::new(PasskeyRegistrationInput {
+            credential_id: &credential_id,
+            user_handle: &user_handle,
+            prf_input: &prf_input,
+            mode: PasskeyDeviceProtectionMode::AntiHacker,
+        })
+        .complete(&prf_output)?;
         let json = serialize_wrapped_device_identity(material.record())?;
         let parsed = parse_wrapped_device_identity(&json)?;
         let record = passkey_wrapped_record(&parsed)?;
@@ -491,7 +487,7 @@ mod tests {
         assert!(!json.contains("AGE-SECRET-KEY-"));
         assert_ne!(
             material.identity_secret(),
-            &derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?
+            &user_handle.derive_identity(&prf_output)?
         );
         Ok(())
     }
@@ -500,25 +496,39 @@ mod tests {
     fn anti_hacker_unlock_requires_local_wrapper_and_matching_prf() -> anyhow::Result<()> {
         let credential_id = WebAuthnCredentialId::try_from(vec![7u8; 48])?;
         let user_handle = WebAuthnUserHandle::try_from(vec![8u8; 32])?;
-        let prf_input = deterministic_passkey_prf_input();
+        let prf_input = WebAuthnPrfInput::deterministic();
         let prf_output = WebAuthnPrfOutput::try_from(vec![10u8; 32])?;
-        let material = finish_passkey_wrapped_device_identity(
-            &credential_id,
-            &user_handle,
-            &prf_input,
-            &prf_output,
-        )?;
+        let material = PasskeyRegistration::new(PasskeyRegistrationInput {
+            credential_id: &credential_id,
+            user_handle: &user_handle,
+            prf_input: &prf_input,
+            mode: PasskeyDeviceProtectionMode::AntiHacker,
+        })
+        .complete(&prf_output)?;
 
-        let unlocked =
-            unlock_passkey_device_identity(material.device_id(), material.record(), &prf_output)?;
+        let unlocked = material
+            .record()
+            .unlock_passkey(&crate::PasskeyIdentityUnlock {
+                stored_device_id: material.device_id(),
+                prf_output: &prf_output,
+            })?;
         assert_eq!(&unlocked, material.identity_secret());
         let wrong_output = WebAuthnPrfOutput::try_from(vec![11u8; 32])?;
         assert!(
-            unlock_passkey_device_identity(material.device_id(), material.record(), &wrong_output)
+            (material.record())
+                .unlock_passkey(&crate::PasskeyIdentityUnlock {
+                    stored_device_id: material.device_id(),
+                    prf_output: &wrong_output
+                })
                 .is_err()
         );
 
-        let recovered = recover_passkey_device_identity(&credential_id, &user_handle, &prf_output)?;
+        let recovered =
+            PasskeyRecoveryRequest::deterministic().recover(&crate::PasskeyRecoveryInput {
+                credential_id: &credential_id,
+                user_handle: &user_handle,
+                prf_output: &prf_output,
+            })?;
         assert_ne!(recovered.device_id(), material.device_id());
         Ok(())
     }
