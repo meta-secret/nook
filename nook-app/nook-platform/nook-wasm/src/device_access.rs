@@ -1,5 +1,6 @@
 //! Read-only dashboard projection for browser device and vault access metadata.
 
+use crate::storage::device_access::DeviceAccessProfileKey;
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
 use nook_core::{
@@ -438,11 +439,14 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
         }
     };
     let profile = if session_uses_companion {
-        device_access::load_companion_device_access_profile().await?
+        DeviceAccessProfileKey::companion().load().await?
     } else if device_id.is_empty() {
         DeviceAccessProfile::default()
     } else {
-        device_access::load_device_access_profile_for_app_id(&device_id).await?
+        DeviceAccessProfileKey::for_app_id(&device_id)
+            .await?
+            .load()
+            .await?
     };
     let passkey = if session_uses_companion {
         PasskeyAccessProfile::default()
@@ -503,7 +507,9 @@ pub(crate) async fn device_vault_access_for_identity(
         if identity.has_app_id(app_id) {
             profiles.push(LocalAccessProfile {
                 app_id: app_id.as_str().to_owned(),
-                profile: device_access::load_device_access_profile_for_app_id(app_id.as_str())
+                profile: DeviceAccessProfileKey::for_app_id(app_id.as_str())
+                    .await?
+                    .load()
                     .await?,
             });
         }
@@ -514,7 +520,7 @@ pub(crate) async fn device_vault_access_for_identity(
     {
         profiles.push(LocalAccessProfile {
             app_id: session_app_id.as_str().to_owned(),
-            profile: device_access::load_companion_device_access_profile().await?,
+            profile: DeviceAccessProfileKey::companion().load().await?,
         });
     }
     Ok(vault_access_rows(
@@ -569,9 +575,13 @@ pub async fn set_device_access_passkey_provider_label(
     credential_fingerprint: String,
     label: String,
 ) -> Result<(), wasm_bindgen::JsError> {
-    device_access::set_passkey_provider_label(&credential_fingerprint, &label)
-        .await
-        .map_err(Into::into)
+    device_access::PasskeyProviderLabelUpdate {
+        credential_fingerprint: &credential_fingerprint,
+        label: &label,
+    }
+    .apply()
+    .await
+    .map_err(Into::into)
 }
 
 fn attachment_state(
@@ -772,7 +782,12 @@ mod browser_tests {
             .generate_vault_dek(store_id.clone())
             .map_err(|error| NookError::Database(error.to_string()))?;
         indexed_db::save_vault_blob(store_id.as_str(), "encrypted-vault").await?;
-        device_access::record_verified_vault_access(&companion_id, &store_id).await?;
+        device_access::VerifiedVaultAccessUpdate {
+            device_id: &companion_id,
+            store_id: &store_id,
+        }
+        .apply()
+        .await?;
 
         let snapshot =
             device_access_snapshot_for_session_with_protected(companion_id.as_str(), true, None)
