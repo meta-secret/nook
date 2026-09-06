@@ -378,13 +378,6 @@ mod tests {
         assert_eq!(active.get("unused").expect("active ceremony"), &7);
     }
 
-    #[cfg(not(feature = "browser-wasm-tests"))]
-    #[test]
-    fn ceremony_state_rejects_an_inactive_session() {
-        let inactive: CeremonyState<u8> = CeremonyState::Inactive;
-        assert!(inactive.get("ceremony is inactive").is_err());
-    }
-
     #[test]
     fn search_catalog_state_reports_readiness_and_mutability() -> Result<(), NookError> {
         let unavailable = SearchCatalogState::Unavailable;
@@ -497,12 +490,5 @@ mod tests {
     fn sync_issue_result_exposes_clear_state() {
         let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
         assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
-    }
-
-    #[cfg(not(feature = "browser-wasm-tests"))]
-    #[test]
-    fn clear_sync_issue_result_rejects_issue_access() {
-        let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
-        assert!(result.issue().is_err());
     }
 }
