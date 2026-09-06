@@ -12,35 +12,14 @@
   let email = $state('')
   let alternativeActivationCount = $state(0)
   let error = $state('')
-  let chatGptForm: HTMLFormElement | undefined
-  let openAiForm: HTMLFormElement | undefined
 
   function activateAlternative(event: Event): void {
     event.preventDefault()
     alternativeActivationCount += 1
   }
 
-  function submittedForm(
-    event: SubmitEvent,
-    fallbackForm: HTMLFormElement | undefined,
-  ): HTMLFormElement | undefined {
-    return [fallbackForm, event.currentTarget, event.target].find(
-      (candidate): candidate is HTMLFormElement => {
-        if (
-          !candidate ||
-          typeof (candidate as { querySelectorAll?: unknown })
-            .querySelectorAll !== 'function'
-        ) {
-          return false
-        }
-        return (candidate as { tagName?: unknown }).tagName === 'FORM'
-      },
-    )
-  }
-
   function submitterIdentity(
     event: SubmitEvent,
-    fallbackForm: HTMLFormElement | undefined,
     fallbackIdentity: string,
   ): string {
     const { submitter } = event
@@ -51,22 +30,16 @@
 
     // The extension mediates a page-world submit event from its isolated
     // world. Some browser versions cannot carry the cross-realm submitter
-    // through the synthetic event, so preserve native implicit-submit
-    // semantics only when this form has one unambiguous submit control.
-    const form = submittedForm(event, fallbackForm)
-    if (!form) return fallbackForm ? fallbackIdentity : ''
-    const submitControls = Array.from(
-      form.querySelectorAll<HTMLButtonElement>(
-        'button[type="submit"], button:not([type])',
-      ),
-    ).filter((control) => !control.hasAttribute('form'))
-    return submitControls.length === 1 || fallbackForm ? fallbackIdentity : ''
+    // through that synthetic event. The handler is attached only to the
+    // identifier form, whose declared submit value is therefore the safe
+    // deterministic fallback; DOM tests separately enforce its ownership.
+    return fallbackIdentity
   }
 
   function submitChatGpt(event: SubmitEvent): void {
     event.preventDefault()
     const submission: ChatGptAuthMockSubmission = {
-      submitter: submitterIdentity(event, chatGptForm, 'chatgpt-continue'),
+      submitter: submitterIdentity(event, 'chatgpt-continue'),
       email,
       alternativeActivationCount,
       authorizationTarget: OpenAiAuthMockScenario.authorizationTarget(
@@ -83,11 +56,7 @@
 
   function submitOpenAi(event: SubmitEvent): void {
     event.preventDefault()
-    const submittedControlIdentity = submitterIdentity(
-      event,
-      openAiForm,
-      'openai-continue',
-    )
+    const submittedControlIdentity = submitterIdentity(event, 'openai-continue')
     const submission: OpenAiAuthMockSubmission = {
       submitter: submittedControlIdentity,
       email,
@@ -117,12 +86,7 @@
     <h1>Log in or sign up</h1>
     <p data-testid="mock-auth-scenario">chatgpt-identifier</p>
     {#if error}<p role="alert">{error}</p>{/if}
-    <form
-      bind:this={chatGptForm}
-      method="get"
-      action="/auth/login"
-      onsubmit={submitChatGpt}
-    >
+    <form method="get" action="/auth/login" onsubmit={submitChatGpt}>
       <button type="button" onclick={activateAlternative}
         >Continue with Google</button
       >
@@ -160,7 +124,6 @@
     ></form>
     <form
       id="openai-identifier-form"
-      bind:this={openAiForm}
       method="post"
       action="/log-in-or-create-account"
       onsubmit={submitOpenAi}
