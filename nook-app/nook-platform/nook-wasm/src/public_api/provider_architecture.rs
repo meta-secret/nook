@@ -76,6 +76,7 @@ pub fn parse_icloud_shared_storage_target(
 }
 
 #[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
 pub fn set_google_drive_provider_mode(
     config: nook_core::OAuthFileConfigData,
     mode: nook_core::GoogleDriveMode,
@@ -84,6 +85,7 @@ pub fn set_google_drive_provider_mode(
 }
 
 #[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
 pub fn set_icloud_provider_mode(
     config: nook_core::OAuthFileConfigData,
     mode: nook_core::ICloudMode,
