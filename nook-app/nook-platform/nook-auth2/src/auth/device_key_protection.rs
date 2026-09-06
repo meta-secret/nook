@@ -173,6 +173,7 @@ pub struct PasskeyAssertionRequest {
 }
 
 impl PasskeyAssertionRequest {
+    #[must_use]
     pub fn new(credential_id: WebAuthnCredentialId, prf_input: WebAuthnPrfInput) -> Self {
         Self {
             credential_id,

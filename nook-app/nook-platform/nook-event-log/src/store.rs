@@ -330,7 +330,7 @@ mod tests {
         VaultEvent::sign(body, signing_key)
     }
 
-    fn remote_record(event: &VaultEvent) -> EventResult<(EventId, Vec<u8>)> {
+    fn remote_record(event: &VaultEvent) -> EventResult<(EventId, EventStorageBytes)> {
         Ok((event.id()?, serialize_event_storage_yaml(event)?))
     }
 
@@ -363,7 +363,7 @@ mod tests {
     fn outbox_queue_and_dequeue() -> EventResult<()> {
         let mut local = LocalEventStore::new();
         let id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
-        let bytes = b"event-bytes".to_vec().into();
+        let bytes = EventStorageBytes::from(b"event-bytes".to_vec());
         local.queue_outbox("github", id.clone(), bytes.clone());
         assert_eq!(local.pending_outbox("github").len(), 1);
         let dequeued = local
@@ -669,7 +669,7 @@ mod tests {
         let remote_id = remote.id()?;
         let remote_bytes = serialize_event_storage_yaml(&remote)?;
         let existing_id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
-        let existing_bytes = b"not event yaml".to_vec().into();
+        let existing_bytes = EventStorageBytes::from(b"not event yaml".to_vec());
 
         let mut local = LocalEventStore::new();
         local.put_event(existing_id.clone(), existing_bytes.clone());

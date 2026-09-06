@@ -5,7 +5,10 @@
 //! adapter that replays core event-log operations into auth metadata state.
 
 use crate::{EpochMetadataState, MemberLabel};
-use nook_auth2::{MultiDeviceError, encrypt_for_recipient as encrypt_for_auth_recipient};
+use nook_auth2::{
+    AgeArmoredCiphertext, DevicePublicKey, MultiDeviceError,
+    encrypt_for_recipient as encrypt_for_auth_recipient,
+};
 
 pub use nook_auth2::multi_device_api::*;
 
