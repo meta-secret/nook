@@ -516,6 +516,7 @@ mod tests {
         VaultEventSchemaVersion,
     };
     use std::slice;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     impl SecurityEpochRecoveryPlan {
         fn fixture() -> anyhow::Result<Self> {
@@ -719,5 +720,49 @@ mod tests {
         assert!(manager.vault.secrets_key.is_empty());
         assert!(manager.vault.members_key.is_empty());
         assert!(manager.event_log.key_epoch.is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    #[allow(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    fn wasm_security_epoch_guards_cover_safe_noop_and_projection_paths() -> anyhow::Result<()> {
+        let plan = SecurityEpochRecoveryPlan::fixture()?;
+        let committed = CommittedSecurityEpochExecution {
+            execution: plan.prepare_execution("store_epochstate1", None)?,
+        };
+        let trigger = committed.execution.trigger_event_id.clone();
+        assert!(!committed.projection_advanced_past(&nook_core::VaultProjection::default()));
+        let same = nook_core::VaultProjection {
+            epoch: ProjectionEpoch::Current(nook_core::KeyEpoch(trigger.clone())),
+            ..Default::default()
+        };
+        assert!(!committed.projection_advanced_past(&same));
+        let later = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let advanced = nook_core::VaultProjection {
+            epoch: ProjectionEpoch::Current(nook_core::KeyEpoch(later)),
+            ..Default::default()
+        };
+        assert!(committed.projection_advanced_past(&advanced));
+
+        let keys = nook_core::generate_vault_keys()?;
+        let entries = PreparedEpochRotation::rewrap_password_entries(
+            &[],
+            &keys,
+            &VaultOperation::VaultCleared,
+        )?;
+        assert!(entries.is_empty());
+        assert!(matches!(
+            SecurityEpochRotationFailure::before(NookError::Database("before".to_owned()))
+                .into_error(),
+            NookError::Database(message) if message == "before"
+        ));
+        assert!(matches!(
+            SecurityEpochRotationFailure::after(NookError::Database("after".to_owned()))
+                .into_error(),
+            NookError::Database(message) if message == "after"
+        ));
+        Ok(())
     }
 }
