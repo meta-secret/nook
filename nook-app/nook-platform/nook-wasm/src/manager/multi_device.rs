@@ -508,6 +508,45 @@ mod browser_tests {
         assert!(manager.ensure_vault_roster_hydrated_js().await.is_ok());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    fn sentinel_share_quorum_branches_are_deterministic() -> anyhow::Result<()> {
+        let first = nook_core::DeviceIdentity::generate()?;
+        let second = nook_core::DeviceIdentity::generate()?;
+        let third = nook_core::DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
+            nook_core::DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 0.into(),
+            },
+        );
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.members_key = keys.members_key.to_string();
+        let one = vec![nook_core::member_from_identity(
+            &first,
+            "2026-09-06T00:00:00Z",
+        )];
+        assert!(manager.maybe_issue_sentinel_shares(&one)?.is_none());
+
+        let quorum = vec![
+            nook_core::member_from_identity(&first, "2026-09-06T00:00:00Z"),
+            nook_core::member_from_identity(&second, "2026-09-06T00:00:00Z"),
+        ];
+        assert!(manager.maybe_issue_sentinel_shares(&quorum)?.is_some());
+        assert!(manager.maybe_issue_sentinel_shares(&quorum)?.is_none());
+
+        let overflow = vec![
+            quorum[0].clone(),
+            quorum[1].clone(),
+            nook_core::member_from_identity(&third, "2026-09-06T00:00:00Z"),
+        ];
+        assert!(manager.maybe_issue_sentinel_shares(&overflow).is_err());
+        Ok(())
+    }
 }
 
 impl NookVaultManager {

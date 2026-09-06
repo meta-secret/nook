@@ -772,4 +772,78 @@ mod tests {
         assert!(issue.is_multiple_stores());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn wasm_projected_epoch_keys_reject_an_unknown_device() -> anyhow::Result<()> {
+        let identity = DeviceIdentity::generate()?;
+        let error = NookVaultManager::projected_epoch_keys(&VaultMetaState::default(), &identity)
+            .expect_err("missing auth envelope must fail closed");
+        assert!(matches!(
+            error,
+            NookError::Database(message)
+                if message == "The current security epoch no longer authorizes this device."
+        ));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    #[allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes and then inspects the stored provider issue"
+    )]
+    async fn wasm_provider_classification_errors_preserve_store_details() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        let different = RemoteEventLogClassification::DifferentStore {
+            local_store_id: "store_local12345".to_owned(),
+            remote_store_id: "store_remote1234".to_owned(),
+        };
+        let error = manager
+            .guard_remote_event_log_classification("Drive", &different)
+            .expect_err("different stores must be rejected");
+        assert!(matches!(
+            error,
+            NookError::Database(message)
+                if message.contains("Drive")
+                    && message.contains("store_local12345")
+                    && message.contains("store_remote1234")
+        ));
+
+        let multiple = RemoteEventLogClassification::MultipleStores {
+            store_ids: vec!["store_first1234".to_owned(), "store_second12".to_owned()],
+        };
+        let error = manager
+            .guard_remote_event_log_classification("GitHub", &multiple)
+            .expect_err("multiple stores must be rejected");
+        assert!(matches!(
+            error,
+            NookError::Database(message)
+                if message.contains("GitHub")
+                    && message.contains("store_first1234")
+                    && message.contains("store_second12")
+        ));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn wasm_before_genesis_projection_is_a_safe_noop() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "store_projection_noop".to_owned();
+        manager
+            .persist_projected_key_epoch(&nook_core::VaultProjection::default())
+            .await?;
+        assert!(manager.event_log.key_epoch.is_empty());
+        Ok(())
+    }
 }
