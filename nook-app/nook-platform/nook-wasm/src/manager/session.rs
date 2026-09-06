@@ -350,3 +350,145 @@ impl NookVaultManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vault_crypto_state_distinguishes_locked_and_unlocked_sessions() -> Result<(), NookError> {
+        let locked = VaultCryptoState::Locked;
+        assert!(!locked.is_unlocked());
+        assert!(matches!(
+            locked.get(),
+            Err(NookError::Encryption(message))
+                if message == "Vault crypto not initialized."
+        ));
+
+        let keys = nook_core::generate_vault_keys()?;
+        let unlocked = VaultCryptoState::Unlocked(nook_core::VaultCrypto::new(&keys.secrets_key)?);
+        assert!(unlocked.is_unlocked());
+        assert!(unlocked.get().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn ceremony_state_returns_active_sessions() {
+        let active = CeremonyState::Active(7_u8);
+        assert_eq!(active.get("unused").expect("active ceremony"), &7);
+    }
+
+    #[test]
+    fn search_catalog_state_reports_readiness_and_mutability() -> Result<(), NookError> {
+        let unavailable = SearchCatalogState::Unavailable;
+        assert!(!unavailable.is_ready());
+        assert!(matches!(
+            unavailable.get(),
+            Err(NookError::Database(message))
+                if message == "Secret search catalog is unavailable."
+        ));
+
+        let mut ready = SearchCatalogState::Ready(nook_core::SecretSearchCatalog::default());
+        assert!(ready.is_ready());
+        assert!(ready.get().is_ok());
+        assert!(ready.get_mut().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn vault_session_reset_clears_sensitive_and_derived_state() {
+        let mut state = VaultSessionState::default();
+        state.secrets_key = "secrets".to_owned();
+        state.members_key = "members".to_owned();
+        state.last_synced_content = "content".to_owned();
+        state.password_entries.push(nook_core::PasswordUnlockEntry {
+            id: "password-entry".to_owned(),
+            label: "Backup".to_owned(),
+            created_at: "2026-09-06T00:00:00Z".to_owned(),
+            envelope: nook_core::PasswordEnvelope {
+                version: nook_core::PasswordEnvelopeVersion::LEGACY,
+                kdf: "argon2id".to_owned(),
+                work_factor: 3.into(),
+                recipient: String::new(),
+                wrapped_keys: String::new(),
+                ciphertext: "AGE-ENCRYPTED-KEYS".to_owned(),
+            },
+        });
+        state.store_id = "store_12345678".to_owned();
+        state.vault_name = VaultNameState::Named("Vault".to_owned());
+        state.vault_version = 4;
+        state.search_catalog = SearchCatalogState::Ready(nook_core::SecretSearchCatalog::default());
+        state.search_catalog_store_id = "catalog-store".to_owned();
+        state.search_catalog_dirty = false;
+        state.search_catalog_pending_bucket_mask = 0x42;
+        state.reset();
+
+        assert!(state.secrets_key.is_empty());
+        assert!(state.members_key.is_empty());
+        assert!(matches!(state.crypto, VaultCryptoState::Locked));
+        assert!(state.last_synced_content.is_empty());
+        assert!(matches!(state.unlock, VaultUnlock::Keys));
+        assert!(state.password_entries.is_empty());
+        assert!(state.store_id.is_empty());
+        assert!(matches!(state.vault_name, VaultNameState::Unnamed));
+        assert_eq!(state.vault_version, 0);
+        assert!(!state.search_catalog.is_ready());
+        assert!(state.search_catalog_store_id.is_empty());
+        assert!(state.search_catalog_dirty);
+        assert_eq!(state.search_catalog_pending_bucket_mask, 0);
+    }
+
+    #[test]
+    fn session_helpers_trim_public_ids_and_reset_outbox_state() {
+        let mut device = DeviceSessionState {
+            id: "  app-id  ".to_owned(),
+            ..DeviceSessionState::default()
+        };
+        assert_eq!(device.public_app_id(), "app-id");
+        device.id.clear();
+        assert!(device.public_app_id().is_empty());
+
+        let mut outbox = SyncOutboxState {
+            provider_id: "provider".to_owned(),
+            storage_mode: StorageMode::Github,
+            access_token: "token".to_owned(),
+            repo_arg: "owner/repo".to_owned(),
+        };
+        outbox.reset();
+        assert!(outbox.provider_id.is_empty());
+        assert!(matches!(outbox.storage_mode, StorageMode::Local));
+        assert!(outbox.access_token.is_empty());
+        assert!(outbox.repo_arg.is_empty());
+    }
+
+    #[test]
+    fn status_channel_round_trips_messages() {
+        let channel = StatusChannel::new();
+        channel
+            .tx
+            .send("ready".to_owned())
+            .expect("receiver exists");
+        assert_eq!(channel.rx.recv().expect("message exists"), "ready");
+    }
+
+    #[test]
+    fn event_log_reset_zeroizes_and_disables_state() {
+        let mut state = EventLogSessionState {
+            enabled: true,
+            signing_seed: "signing".to_owned(),
+            key_epoch: "epoch".to_owned(),
+            heads: vec!["head".to_owned()],
+        };
+        state.reset();
+        assert!(!state.enabled);
+        assert!(state.signing_seed.is_empty());
+        assert!(state.key_epoch.is_empty());
+        assert!(state.heads.is_empty());
+    }
+
+    #[test]
+    fn sync_issue_result_exposes_clear_state() {
+        let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
+        assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
+    }
+}
