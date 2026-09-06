@@ -19,6 +19,7 @@ pub use authenticator::{
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationImplicitSubmitActuationObservation,
 };
 pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{

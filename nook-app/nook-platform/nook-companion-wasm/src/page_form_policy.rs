@@ -174,6 +174,15 @@ pub fn can_activate_authentication_route_control(
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
+pub fn authentication_implicit_submit_actuation_is_safe(
+    observation: nook_companion_core::AuthenticationImplicitSubmitActuationObservation,
+) -> bool {
+    observation.is_safe()
+}
+
+#[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
 pub fn authentication_advance_control_is_safe(
     observation: nook_companion_core::AuthenticationAdvanceControlObservation,
 ) -> bool {
@@ -432,6 +441,52 @@ mod tests {
             crate::companion_authentication_workflow_match_kind(workflow),
             crate::CompanionAuthenticationWorkflowMatchKind::Matched
         );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn implicit_submit_actuation_wasm_export_preserves_exact_policy() {
+        let mut observation =
+            nook_companion_core::AuthenticationImplicitSubmitActuationObservation {
+                fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                    username_field_count: 1.into(),
+                    ..Default::default()
+                },
+                ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
+                    authentication_context:
+                        nook_companion_core::AuthenticationCeremonyContextObservation {
+                            authentication_username:
+                                nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+                            source_origin: "https://x.com".to_owned(),
+                            form_identity: String::new(),
+                            destination_identity:
+                                "https://x.com/i/jf/onboarding/web?mode=login".to_owned(),
+                        },
+                    advance_control: nook_companion_core::AuthenticationAdvanceControlEvidence::ImplicitSubmission,
+                    implicit_submission_method:
+                        nook_companion_core::PageControlSubmissionMethod::Get,
+                    ..Default::default()
+                },
+                control_label: String::new(),
+                control_machine_identity: String::new(),
+            };
+        assert!(authentication_implicit_submit_actuation_is_safe(
+            observation.clone()
+        ));
+
+        observation.ceremony.authentication_context.form_identity = "signup".to_owned();
+        assert!(!authentication_implicit_submit_actuation_is_safe(
+            observation.clone()
+        ));
+        observation
+            .ceremony
+            .authentication_context
+            .form_identity
+            .clear();
+        observation.control_label = "Continue with Google".to_owned();
+        assert!(!authentication_implicit_submit_actuation_is_safe(
+            observation
+        ));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

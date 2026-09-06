@@ -132,6 +132,35 @@ pub struct AuthenticationCeremonyObservationFacts {
     pub implicit_submission_method: PageControlSubmissionMethod,
 }
 
+/// Final browser-actuation facts for an implicit authentication form submission.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct AuthenticationImplicitSubmitActuationObservation {
+    pub fields: AuthenticationFieldObservationFacts,
+    pub ceremony: AuthenticationCeremonyObservationFacts,
+    pub control_label: String,
+    pub control_machine_identity: String,
+}
+
+impl AuthenticationImplicitSubmitActuationObservation {
+    /// Whether final actuation may use the exact identifier-only login-mode GET exception.
+    #[must_use]
+    pub fn is_safe(&self) -> bool {
+        self.fields.is_bounded()
+            && self.ceremony.is_bounded()
+            && matches!(
+                self.ceremony.advance_control,
+                AuthenticationAdvanceControlEvidence::ImplicitSubmission
+            )
+            && self.control_label.is_empty()
+            && self.control_machine_identity.is_empty()
+            && self
+                .ceremony
+                .has_safe_identifier_only_login_mode_get(self.fields)
+    }
+}
+
 impl AuthenticationCeremonyObservationFacts {
     fn has_safe_identifier_only_login_mode_get(
         &self,
@@ -287,6 +316,17 @@ mod tests {
         }
     }
 
+    impl AuthenticationImplicitSubmitActuationObservation {
+        fn x_identifier_get() -> Self {
+            Self {
+                fields: AuthenticationFieldObservationFacts::identifier_only(),
+                ceremony: AuthenticationCeremonyObservationFacts::x_identifier_get(),
+                control_label: String::new(),
+                control_machine_identity: String::new(),
+            }
+        }
+    }
+
     #[test]
     fn exact_login_mode_query_admits_identifier_only_implicit_get() {
         assert!(
@@ -416,6 +456,133 @@ mod tests {
                 !ceremony.has_safe_implicit_submission(fields),
                 "{form_identity}"
             );
+        }
+    }
+
+    #[test]
+    fn implicit_actuation_accepts_the_exact_bounded_login_mode_get() {
+        assert!(AuthenticationImplicitSubmitActuationObservation::x_identifier_get().is_safe());
+    }
+
+    #[test]
+    fn implicit_actuation_rejects_conflicting_form_and_control_identity() {
+        for form_identity in [
+            "signup",
+            "reset-password",
+            "google-login",
+            "continue-with-passkey",
+            "forgot-password",
+            "help",
+            "delete-account",
+            "account-settings",
+            " ",
+        ] {
+            let mut observation =
+                AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+            observation.ceremony.authentication_context.form_identity = form_identity.to_owned();
+            assert!(!observation.is_safe(), "{form_identity}");
+        }
+
+        let mut concrete = AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+        concrete.ceremony.advance_control = AuthenticationAdvanceControlEvidence::Present;
+        assert!(!concrete.is_safe());
+
+        let mut provider = AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+        provider.control_label = "Continue with Google".to_owned();
+        assert!(!provider.is_safe());
+
+        let mut machine = AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+        machine.control_machine_identity = "provider=google".to_owned();
+        assert!(!machine.is_safe());
+    }
+
+    #[test]
+    fn implicit_actuation_rejects_inexact_or_unsafe_destinations() {
+        for destination in [
+            "https://x.com/i/jf/onboarding/web",
+            "https://x.com/i/jf/onboarding/web?mode=signin",
+            "https://x.com/i/jf/onboarding/web?Mode=login",
+            "https://x.com/i/jf/onboarding/web?next=mode=login",
+            "https://x.com/i/jf/onboarding/web?mode=login&next=/home",
+            "https://x.com/i/jf/onboarding/web?mode=login&mode=login",
+            "https://x.com/i/jf/onboarding/web?mode=login&mode=signup",
+            "https://x.com/i/jf/onboarding/web?mode=login#authentication",
+            "https://other.example/i/jf/onboarding/web?mode=login",
+            "https://x.com/search?mode=login",
+            "https://x.com/account/delete?mode=login",
+            "https://x.com/account/recover?mode=login",
+            "https://x.com/i/jf/onboarding/web?mode=login&provider=google",
+        ] {
+            let mut observation =
+                AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+            observation
+                .ceremony
+                .authentication_context
+                .destination_identity = destination.to_owned();
+            assert!(!observation.is_safe(), "{destination}");
+        }
+    }
+
+    #[test]
+    fn implicit_actuation_rejects_unsafe_methods_and_field_shapes() {
+        for fields in [
+            AuthenticationFieldObservationFacts {
+                username_field_count: 0.into(),
+                ..AuthenticationFieldObservationFacts::identifier_only()
+            },
+            AuthenticationFieldObservationFacts {
+                username_field_count: 2.into(),
+                ..AuthenticationFieldObservationFacts::identifier_only()
+            },
+            AuthenticationFieldObservationFacts {
+                current_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
+                ..AuthenticationFieldObservationFacts::identifier_only()
+            },
+            AuthenticationFieldObservationFacts {
+                generic_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
+                ..AuthenticationFieldObservationFacts::identifier_only()
+            },
+            AuthenticationFieldObservationFacts {
+                new_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
+                ..AuthenticationFieldObservationFacts::identifier_only()
+            },
+            AuthenticationFieldObservationFacts {
+                one_time_code_field_count: 1.into(),
+                ..AuthenticationFieldObservationFacts::identifier_only()
+            },
+        ] {
+            let mut observation =
+                AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+            observation.fields = fields;
+            assert!(!observation.is_safe());
+        }
+
+        for method in [
+            PageControlSubmissionMethod::Absent,
+            PageControlSubmissionMethod::Post,
+            PageControlSubmissionMethod::Dialog,
+        ] {
+            let mut observation =
+                AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+            observation.ceremony.implicit_submission_method = method;
+            assert!(!observation.is_safe());
+        }
+
+        for evidence in [
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+        ] {
+            let mut observation =
+                AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
+            observation
+                .ceremony
+                .authentication_context
+                .authentication_username = evidence;
+            assert!(!observation.is_safe());
         }
     }
 }
