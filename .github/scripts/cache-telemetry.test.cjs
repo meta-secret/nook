@@ -2,6 +2,7 @@ const assert = require('node:assert/strict')
 const test = require('node:test')
 
 const {
+  buildUnavailableTelemetry,
   cacheBackendFromEnvironment,
   extractSccacheReports,
   historyLogRef,
@@ -10,7 +11,29 @@ const {
   parseRawJsonProgress,
   summarizeBuildkit,
   summarizeSccache,
+  validateTelemetryRecord,
 } = require('./cache-telemetry.cjs')
+
+test('preserves a valid incomplete record when collection is unavailable', () => {
+  const record = buildUnavailableTelemetry({
+    warning: 'collection_timeout:30s',
+    job: 'wasm-node-test',
+    runId: '34018947778',
+    runAttempt: '1',
+    environment: {
+      NOOK_SCCACHE_BACKEND: 'remote',
+      NOOK_SCCACHE_BACKEND_REASON: 'persistent_service',
+    },
+  })
+
+  validateTelemetryRecord(record, { runId: '34018947778', runAttempt: 1 })
+  assert.deepEqual(record.collection, {
+    complete: false,
+    warnings: ['collection_timeout:30s'],
+  })
+  assert.equal(record.github.job, 'wasm-node-test')
+  assert.equal(record.cache_backend.kind, 'remote')
+})
 
 test('uses the trailing build ID for Buildx history log lookup', () => {
   assert.equal(
