@@ -125,10 +125,12 @@ describe('canonical Cortex team authority', () => {
     }
   });
 
-  test('rejects removal of either autonomous mission invariant', async () => {
+  test('rejects removal of any autonomous mission or delivery invariant', async () => {
     const invariants = [
       'Routine uncertainty, implementation breadth, validation failures, and\n  delivery sequencing are not blockers or reasons to ask the user.',
-      'Continue implementation, validation, repair, and authorized delivery until\n  the user-selected terminal state is reached.',
+      'Continue implementation, validation, repair, and authorized delivery until\n  complete delivery or an explicitly requested intermediate stop is reached.',
+      'An implementation request defaults to complete delivery.',
+      'Silence about\nmerge is not an intermediate selection.',
     ] as const;
     for (const invariant of invariants) {
       const fixtureRoot = await autonomyDriftFixture(invariant);

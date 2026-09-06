@@ -409,7 +409,7 @@ temporary notes optional and requires cleanup before readiness.
 - Routine uncertainty, implementation breadth, validation failures, and
   delivery sequencing are not blockers or reasons to ask the user.
 - Continue implementation, validation, repair, and authorized delivery until
-  the user-selected terminal state is reached.
+  complete delivery or an explicitly requested intermediate stop is reached.
 - Team Agents report missing authority, cross-team dependencies, and
   non-inferable material decisions to Gizmo through the active harness.
 - Gizmo Prime alone asks the user when safe progress still requires new
@@ -425,9 +425,12 @@ temporary notes optional and requires cleanup before readiness.
 
 ## Delivery and validation
 
-An implementation request continues through the user-selected terminal state.
-Unless the user selects an intermediate handoff, Gizmo owns pull-request
-policy, authorization, readiness and merge verdicts, and Workbench completion.
+An implementation request defaults to complete delivery. Completion includes
+pull-request creation, exact-head readiness, squash merge, remote merge-state
+verification, and Workbench closeout. Only an explicit user instruction such
+as `do not merge` or `stop at PR` selects an intermediate handoff. Silence about
+merge is not an intermediate selection. Gizmo owns pull-request policy,
+authorization, readiness and merge verdicts, and Workbench completion.
 PR Steward performs the authorized pull-request creation, exact-head evidence,
 remote verification, and merge mechanics. A worker commit is task completion,
 not mission completion.

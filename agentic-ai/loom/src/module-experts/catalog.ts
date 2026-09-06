@@ -204,6 +204,7 @@ const INTERNAL_API_EXPERT_AUTHORED_CONSUMER_SCOPE_PATHS = [
   'nook-app/nook-web/nook-web-shared/src/extension/lifecycle-runtime-messages.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/password-form-classified-observations.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/password-form-fields.ts',
+  'nook-app/nook-web/nook-web-shared/src/extension/password-form-implicit-actuation.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/password-form-passkey-only-workflows.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/password-form-submission-controls.ts',
   'nook-app/nook-web/nook-web-shared/src/extension/password-forms.ts',
