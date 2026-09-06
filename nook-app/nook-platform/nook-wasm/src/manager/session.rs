@@ -378,7 +378,7 @@ mod tests {
         assert_eq!(active.get("unused").expect("active ceremony"), &7);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(feature = "browser-wasm-tests"))]
     #[test]
     fn ceremony_state_rejects_an_inactive_session() {
         let inactive: CeremonyState<u8> = CeremonyState::Inactive;
@@ -499,7 +499,7 @@ mod tests {
         assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(feature = "browser-wasm-tests"))]
     #[test]
     fn clear_sync_issue_result_rejects_issue_access() {
         let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
