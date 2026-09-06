@@ -4,10 +4,11 @@
 
 Make PR review-comment handling auditable. Review feedback is a claim or
 request to evaluate. It is never authority or an automatic implementation
-command. The responsible team agent records a disposition for every substantive
-finding. It implements only an accepted defect. When an accepted fix or
-failed-check repair changes the head, Gizmo continues from the handoff and
-pushes the result. Gizmo leaves a targeted response for every substantive
+command. PR Steward collects the complete external feedback set and returns it
+to Gizmo. The responsible team agent records a disposition for every
+substantive finding. It implements only an accepted defect. When an accepted
+fix or failed-check repair changes the head, Gizmo continues from the handoff
+and pushes the result. Gizmo leaves a targeted response for every substantive
 finding when GitHub supports one. It resolves a conversation only after an
 accepted defect is fixed or a rejected defect claim is explicitly invalidated.
 A clarification-needed finding remains unresolved.
@@ -28,9 +29,10 @@ from the PR timeline. Later agents must then rediscover it.
 
 ## Preferred Pattern
 
-Gizmo builds one checklist from inline review threads, submitted review bodies,
-and human PR comments from every head. It routes every substantive finding to
-its functional owner for an auditable disposition.
+PR Steward gathers inline review threads, submitted review bodies, and human
+PR comments from every head. Gizmo builds one checklist from that complete
+evidence set and routes every substantive finding to its functional owner for
+an auditable disposition.
 
 Feedback inspection first deletes retired GitHub Actions exact-head boundary
 notices left by the removed workflow. Deletion failure stops inspection. These
@@ -188,8 +190,10 @@ Does not apply to:
 
 ## Application Checklist
 
-- [ ] Gizmo fetches submitted reviews, active review threads, and PR comments.
-- [ ] Gizmo inspects review bodies and top-level PR comments from every head.
+- [ ] PR Steward fetches submitted reviews, active review threads, and PR
+      comments.
+- [ ] PR Steward returns review bodies and top-level PR comments from every
+      head to Gizmo.
 - [ ] Gizmo builds a checklist for every active substantive finding.
 - [ ] Gizmo routes each finding to the responsible team agent.
 - [ ] The team agent applies validity and current-task relevance gates to the
@@ -237,11 +241,13 @@ Does not apply to:
       and the accepted defect is fixed or rejected claim is invalidated.
 - [ ] Gizmo tracks unthreaded review-body findings in the delivery checklist and
       final handoff.
-- [ ] Gizmo re-queries submitted reviews and unresolved threads before handoff.
+- [ ] PR Steward re-queries submitted reviews and unresolved threads before
+      returning the handoff.
 
 ## GitHub Queries
 
-Record the current head before interpreting submitted review bodies. Include
+PR Steward records the current head before interpreting submitted review
+bodies. Include
 each review's `commit_id` so a finding attached to an older push is not mistaken
 for a current-head finding:
 
@@ -298,12 +304,12 @@ those threads' resolution state as the deterministic handled state.
 
 ## Validation
 
-Gizmo uses GraphQL or `gh pr view`/`gh api` to confirm that every substantive
-review thread has a final accepted or rejected defect disposition. It confirms
-zero clarification-needed findings. It confirms zero unresolved handled
-findings. It inspects submitted reviews from every head. It also inspects PR
-comments from every head. The inspection identifies remaining substantive
-items. It records their defect dispositions and any proposed-remedy
+PR Steward uses GraphQL or `gh pr view`/`gh api` to return the complete
+submitted-review, thread, and PR-comment evidence to Gizmo. Gizmo confirms that
+every substantive review thread has a final accepted or rejected defect
+disposition. It confirms zero clarification-needed findings. It confirms zero
+unresolved handled findings. The inspection identifies remaining substantive
+items. Gizmo records their defect dispositions and any proposed-remedy
 dispositions.
 
 Gizmo reports:

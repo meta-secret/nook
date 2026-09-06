@@ -17,7 +17,7 @@ function request() {
       },
       {
         id: 'second',
-        team: DelegationVisualizationTeam.Security,
+        team: DelegationVisualizationTeam.PrSteward,
         description: 'second task',
         dependencies: ['first'],
       },

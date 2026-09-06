@@ -7,8 +7,8 @@ rules belong to Gizmo's linked authorities.
 ## Mandatory context selection
 
 1. Read the [root context router](knowledge-graph.md).
-2. Classify the work as Gizmo delivery control, AI, development core, security,
-   SRE, web development, or shared ownership.
+2. Classify the work as Gizmo delivery control, PR Steward operations, AI,
+   development core, security, SRE, web development, or shared ownership.
 3. Load exactly one owning `AGENTS.md` and knowledge graph.
 4. Open only the documents and headings needed for the assigned work.
 5. Stop loading Cortex when the task can be executed safely.
@@ -21,8 +21,12 @@ requires an explicit expertise task from Gizmo Prime.
 ## Context routes
 
 - [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
-  shared-branch sequencing, review coordination, GitHub and Workbench state,
-  readiness, and merge.
+  shared-branch sequencing, PR policy and authorization, review finding
+  disposition, and Workbench state.
+- [PR Steward](teams/pr-steward/AGENTS.md) owns explicitly authorized
+  mechanical pull-request operations and returns evidence to Gizmo. Its
+  [knowledge graph](teams/pr-steward/knowledge-graph.md) is a separate
+  operational Team Agent context, not a functional engineering authority.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -84,11 +88,21 @@ Workbench record, not another coordinator or worker. See the
 - **Parent and worker ownership**
   - Parent-owned Gizmo control operations remain with Gizmo Prime:
     - planning and shared-branch sequencing;
-    - Git, pull-request, Workbench, and review coordination;
-    - validation, readiness, and merge.
+    - PR policy, authorization packets, and review-finding disposition;
+    - functional-team routing and shared-branch ownership;
+    - Workbench completion and the final delivery verdict.
+  - PR Steward owns only explicitly authorized external mechanics:
+    - pull-request creation and metadata updates;
+    - review and comment collection;
+    - exact-head validation retriggers and bounded waits;
+    - readiness evidence collection; and
+    - authorized squash merge and remote merge verification.
+  - PR Steward must never decide readiness or merge without Gizmo's explicit
+    authorization packet.
   - Team workers implement and test their assigned changes in the current
     shared checkout.
-  - Gizmo Prime controls write sequencing and external delivery state.
+  - Gizmo Prime controls write sequencing and authorization. PR Steward may
+    mutate external pull-request state only within the named packet.
   - Only one write-capable Team Agent runs at a time.
   - Read-only Team Agents may run concurrently when their evidence scopes are
     safe to inspect while the writer runs.
@@ -124,7 +138,9 @@ Workbench record, not another coordinator or worker. See the
       - It accepts only declared Rust dependency files.
       - It verifies PR number, base, head ref, and remote SHA before
         publication.
-  - Gizmo owns review, validation, readiness, and merge for the returned head.
+  - Gizmo owns review policy, technical dispositions, readiness and merge
+    verdicts for the returned head. PR Steward performs only the authorized
+    external observations and mutations.
 - **Repository constraints**
   - The source-size limit is a non-bypassable hard rule.
   - Every authored source file stays at or below the **1,000-line delivery
@@ -152,7 +168,9 @@ Workbench record, not another coordinator or worker. See the
     handoffs above.
   - Those publishers are not ordinary delegation transport.
 - **Parent and worker ownership**
-  - Parent-owned control operations do not create Team Agent work.
+  - Parent-owned policy and control decisions do not create functional Team
+    Agent work. The bounded PR Steward operation is the sole operational
+    exception and remains a child of Gizmo Prime.
 - **Validation and delivery**
   - Gizmo Prime, Team Agents, and subagents must not run product compilation or
     full repository validation locally, whether directly or through a Task
@@ -333,7 +351,8 @@ and do not rename, reorder, or remove its time, PR, actor, or action fields.
   - `DEV-CORE` for Development core;
   - `SECURITY` for Security;
   - `SRE` for SRE;
-  - `WEB-DEV` for Web development; and
+  - `WEB-DEV` for Web development;
+  - `PR-STEWARD` for the PR Steward operational Team Agent; and
   - `SKILL` for an actively executing skill.
   - Use the Team Agent's team token, not `Team Agent` or a personal name.
   - Use `SKILL` only for an activity performed by a skill.
@@ -408,9 +427,10 @@ temporary notes optional and requires cleanup before readiness.
 
 An implementation request continues through the user-selected terminal state.
 Unless the user selects an intermediate handoff, Gizmo owns pull-request
-creation, exact-head evidence, readiness, merge, remote verification, and
-Workbench completion. A worker commit is task completion, not mission
-completion.
+policy, authorization, readiness and merge verdicts, and Workbench completion.
+PR Steward performs the authorized pull-request creation, exact-head evidence,
+remote verification, and merge mechanics. A worker commit is task completion,
+not mission completion.
 
 ### Scheduled-task and PR scope
 

@@ -7,8 +7,8 @@ import {
 import type { TaskResourcePatternPair } from '../agent-workflow/domain.ts';
 import { resourceClaimMatchesPath } from '../module-delivery/resource-claims.ts';
 import type { ResourcePathMatchRequest } from '../module-delivery/resource-claims.ts';
-import { teamAuthority } from './catalog.ts';
-import type { TeamKey } from './catalog.ts';
+import { teamAgentProfile } from './catalog.ts';
+import type { TeamAgentKey } from './catalog.ts';
 
 export const CORTEX_AUTHORING_SKILL_PATHS = [
   '.cortex/teams/ai/dynamic-skills/cortex-writer.md',
@@ -20,14 +20,14 @@ const CORTEX_RESOURCE_CLAIM = '.cortex/**';
 
 export type TeamTaskContextRequest = {
   readonly repositoryRoot: string;
-  readonly team: TeamKey;
+  readonly team: TeamAgentKey;
   readonly readClaims: readonly string[];
   readonly writeClaims: readonly string[];
   readonly selectedSkillPaths: readonly string[];
 };
 
 export type TeamTaskContext = {
-  readonly team: TeamKey;
+  readonly team: TeamAgentKey;
   readonly contextPaths: readonly string[];
   readonly skillPaths: readonly string[];
 };
@@ -67,7 +67,7 @@ export function resolveTeamTaskContext(
 export function composeTeamTaskContextPaths(
   request: TeamTaskContextPathRequest,
 ): TeamTaskContext {
-  const authority = teamAuthority(request.team);
+  const authority = teamAgentProfile(request.team);
   if (!authority) throw new Error(`Unknown team authority: ${request.team}`);
   const automaticSkills = writesCortex(request.writeClaims)
     ? CORTEX_AUTHORING_SKILL_PATHS

@@ -23,8 +23,10 @@ handoff.
 The no-local-review rule applies to the two trusted GitHub Actions publishers
 named in the root [team worker contract](../../AGENTS.md#team-worker-contract).
 Neither bounded editor has independent Git or external delivery authority.
-Each publisher returns the exact published head to Gizmo, which owns review,
-validation, readiness, and merge.
+Each publisher returns the exact published head to Gizmo. Gizmo owns review
+policy, technical dispositions, readiness and merge verdicts. PR Steward
+performs the explicitly authorized external review, validation, readiness-
+evidence, and merge mechanics.
 
 ### Ordinary worker handoff
 

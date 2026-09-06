@@ -19,8 +19,11 @@ import type {
   AuditTeamAuthoritiesRequest,
 } from '../../src/team-agents/audit.ts';
 import {
+  GIZMO_OWNED_AGENT_CATALOG,
+  GizmoOwnedAgentKey,
   TEAM_AUTHORITY_CATALOG,
   TeamKey,
+  gizmoOwnedAgentProfile,
   teamAuthority,
 } from '../../src/team-agents/catalog.ts';
 import type { TeamAuthority } from '../../src/team-agents/catalog.ts';
@@ -51,6 +54,29 @@ describe('canonical Cortex team authority', () => {
     expect(report.findings).toEqual([]);
     expect(report.authorityCount).toBe(5);
     expect(report.auditOk).toBe(true);
+  });
+
+  test('keeps PR Steward outside the five functional authorities', () => {
+    expect(TEAM_AUTHORITY_CATALOG).toHaveLength(5);
+    expect(GIZMO_OWNED_AGENT_CATALOG).toEqual([
+      {
+        key: GizmoOwnedAgentKey.PrSteward,
+        identity: 'PR Steward',
+        description:
+          'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
+        model: 'gpt-5.6-luna',
+        reasoningEffort: 'xhigh',
+        contextPaths: [
+          '.cortex/teams/pr-steward/AGENTS.md',
+          '.cortex/teams/pr-steward/knowledge-graph.md',
+        ],
+        capabilityBoundary:
+          'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
+      },
+    ]);
+    expect(gizmoOwnedAgentProfile(GizmoOwnedAgentKey.PrSteward)).toEqual(
+      GIZMO_OWNED_AGENT_CATALOG[0]!,
+    );
   });
 
   test('rejects stable-key, identity, context, and capability drift', () => {
