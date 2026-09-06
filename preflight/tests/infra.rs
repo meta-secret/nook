@@ -287,6 +287,19 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "all four BuildKit PVs must carry the operational status label"
     );
     assert!(buildkit.contains("--oci-worker-no-process-sandbox"));
+    for contract in [
+        "[worker.oci]",
+        "gc = true",
+        "reservedSpace = \"4GB\"",
+        "maxUsedSpace = \"56GB\"",
+        "minFreeSpace = \"8GB\"",
+    ] {
+        assert!(
+            buildkit.contains(contract),
+            "ARC BuildKit GC configuration is missing: {contract}"
+        );
+    }
+    assert!(!buildkit.contains("--oci-worker-gc-keepstorage"));
     assert!(
         pull_request_workflow
             .contains("github.event.pull_request.head.repo.full_name == github.repository")
@@ -303,6 +316,19 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     assert!(tasks.contains("disable --now nook-arc-buildkit-cloner.service"));
     assert!(tasks.contains("$legacy_image_next"));
     assert!(buildkit.contains("storage: 64Gi"));
+    for contract in [
+        "inotify_max_user_instances=8000",
+        "inotify_max_user_watches=10485760",
+        "fs.inotify.max_user_instances=$inotify_max_user_instances",
+        "fs.inotify.max_user_watches=$inotify_max_user_watches",
+        "cat /proc/sys/fs/inotify/max_user_instances",
+        "cat /proc/sys/fs/inotify/max_user_watches",
+    ] {
+        assert!(
+            tasks.contains(contract),
+            "ARC build hosts must converge inotify limits: {contract}"
+        );
+    }
 
     for contract in [
         "arc:controller-build:prepare:",
