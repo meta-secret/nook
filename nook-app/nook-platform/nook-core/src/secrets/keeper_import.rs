@@ -6,10 +6,10 @@
 //! Keeper CSV schema admission into typed plaintext secrets.
 mod columns;
 mod records;
-use super::import_support::{self, MAX_CSV_BYTES};
+use super::import_support::{CsvImportConversion, CsvImportReader, MAX_CSV_BYTES};
 use crate::SecretValue;
 use columns::{KeeperColumns, KeeperHeaders};
-use csv::Reader;
+use csv::StringRecord;
 use records::KeeperRecord;
 use thiserror::Error;
 #[derive(Debug, Error)]
@@ -71,7 +71,7 @@ impl<'a> KeeperCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(KeeperImportError::CsvTooLarge);
         }
-        let mut reader = import_support::csv_reader(self.text);
+        let mut reader = CsvImportReader::new(self.text);
         let columns = KeeperHeaders::new(reader.headers()?).admit()?;
         Ok(CheckedKeeperCsv { reader, columns })
     }
@@ -81,15 +81,14 @@ impl<'a> KeeperCsvInput<'a> {
 /// use nook_core::keeper_import::CheckedKeeperCsv;
 /// ```
 struct CheckedKeeperCsv<'a> {
-    reader: Reader<&'a [u8]>,
+    reader: CsvImportReader<'a>,
     columns: KeeperColumns,
 }
 impl CheckedKeeperCsv<'_> {
-    fn collect(mut self) -> Result<KeeperImportPlan, KeeperImportError> {
-        let collection = import_support::collect_csv_records(
-            &mut self.reader,
-            KeeperImportError::TooManyRecords,
-            |record| match (KeeperRecord {
+    fn collect(self) -> Result<KeeperImportPlan, KeeperImportError> {
+        let collection = self.reader.collect(CsvImportConversion {
+            too_many_records: KeeperImportError::TooManyRecords,
+            convert: |record: &StringRecord| match (KeeperRecord {
                 record,
                 columns: &self.columns,
             })
@@ -98,7 +97,7 @@ impl CheckedKeeperCsv<'_> {
                 Some(item) => (vec![item], 0),
                 None => (Vec::new(), 1),
             },
-        )?;
+        })?;
         Ok(KeeperImportPlan {
             items: collection.items,
             source_count: collection.source_count.into(),

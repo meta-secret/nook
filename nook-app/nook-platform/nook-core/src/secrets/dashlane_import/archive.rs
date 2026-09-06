@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Archive traversal and per-entry byte bounds for Dashlane exports.
-use super::super::import_support::{self, MAX_CSV_BYTES};
+use super::super::import_support::{CsvHeader, MAX_CSV_BYTES};
 use super::rows::{DashlaneCsvInput, DashlaneCsvKind, DashlaneCsvSelection};
 use super::{DashlaneImportError, DashlaneImportPlan};
 use std::io::{Cursor, Read};
@@ -93,7 +93,7 @@ impl DashlaneEntryName<'_> {
                 .is_some_and(|(_, extension)| extension.eq_ignore_ascii_case("csv"))
     }
     fn normalized(&self) -> String {
-        import_support::normalized_csv_header(self.basename().trim_end_matches(".csv"))
+        CsvHeader::new(self.basename().trim_end_matches(".csv")).normalized()
     }
     fn kind(&self) -> Option<DashlaneCsvKind> {
         let base = self.normalized();

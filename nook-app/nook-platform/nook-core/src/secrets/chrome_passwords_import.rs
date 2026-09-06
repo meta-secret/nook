@@ -8,10 +8,13 @@
 
 use std::iter;
 
-use csv::{Reader, StringRecord};
+use csv::StringRecord;
 use thiserror::Error;
 
-use super::import_support;
+use super::import_support::{
+    self, CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    SourceLabelMetadata,
+};
 use crate::{LoginSecret, SecretValue};
 
 #[derive(Debug, Error)]
@@ -71,7 +74,7 @@ impl ChromePasswordsHeaders {
         Self {
             normalized: headers
                 .iter()
-                .map(import_support::normalized_csv_header)
+                .map(|header| CsvHeader::new(header).normalized())
                 .collect(),
         }
     }
@@ -79,7 +82,7 @@ impl ChromePasswordsHeaders {
         iter::once(column.name())
             .chain(column.aliases().iter().copied())
             .find_map(|candidate| {
-                let expected = import_support::normalized_csv_header(candidate);
+                let expected = CsvHeader::new(candidate).normalized();
                 self.normalized
                     .iter()
                     .position(|header| header == &expected)
@@ -88,7 +91,7 @@ impl ChromePasswordsHeaders {
     }
     fn optional(&self, names: &[&str]) -> Option<usize> {
         names.iter().find_map(|name| {
-            let expected = import_support::normalized_csv_header(name);
+            let expected = CsvHeader::new(name).normalized();
             self.normalized
                 .iter()
                 .position(|header| header == &expected)
@@ -111,21 +114,30 @@ struct BrowserPasswordLabel<'a> {
 }
 impl BrowserPasswordLabel<'_> {
     fn append_to(&self, notes: &mut String) {
-        if let Some(entry) =
-            import_support::source_label_metadata("name", self.name, self.website_url)
+        if let Some(entry) = (SourceLabelMetadata {
+            key: "name",
+            label: self.name,
+            website_url: self.website_url,
+        })
+        .entry()
         {
-            import_support::append_import_metadata(notes, "Browser password manager", [entry]);
+            ImportMetadata {
+                heading: "Browser password manager",
+                entries: [entry],
+            }
+            .append_to(notes);
         }
     }
 }
 
 impl ChromePasswordColumns {
     fn convert(&self, record: &StringRecord) -> Option<SecretValue> {
-        let name = import_support::optional_csv_field(record, self.name);
-        let url = import_support::csv_field(record, self.url);
-        let username = import_support::csv_field(record, self.username);
-        let password = import_support::csv_password_field(record, self.password);
-        let mut notes = import_support::optional_csv_field(record, self.note);
+        let csv_fields = CsvRecordFields::new(record);
+        let name = csv_fields.optional(self.name);
+        let url = csv_fields.trimmed(self.url);
+        let username = csv_fields.trimmed(self.username);
+        let password = csv_fields.password(self.password);
+        let mut notes = csv_fields.optional(self.note);
 
         if password.is_empty() {
             return None;
@@ -213,25 +225,24 @@ impl<'a> ChromePasswordsCsvInput<'a> {
             return Err(ChromePasswordsImportError::CsvTooLarge);
         }
 
-        let mut reader = import_support::csv_reader(self.text);
+        let mut reader = CsvImportReader::new(self.text);
         let columns = ChromePasswordsHeaders::new(reader.headers()?).admit()?;
         Ok(CheckedChromePasswordsCsv { reader, columns })
     }
 }
 struct CheckedChromePasswordsCsv<'a> {
-    reader: Reader<&'a [u8]>,
+    reader: CsvImportReader<'a>,
     columns: ChromePasswordColumns,
 }
 impl CheckedChromePasswordsCsv<'_> {
-    fn collect(mut self) -> Result<ChromePasswordsImportPlan, ChromePasswordsImportError> {
-        let collection = import_support::collect_csv_records(
-            &mut self.reader,
-            ChromePasswordsImportError::TooManyRecords,
-            |record| match self.columns.convert(record) {
+    fn collect(self) -> Result<ChromePasswordsImportPlan, ChromePasswordsImportError> {
+        let collection = self.reader.collect(CsvImportConversion {
+            too_many_records: ChromePasswordsImportError::TooManyRecords,
+            convert: |record: &StringRecord| match self.columns.convert(record) {
                 Some(item) => (vec![item], 0),
                 None => (Vec::new(), 1),
             },
-        )?;
+        })?;
 
         Ok(ChromePasswordsImportPlan {
             items: collection.items,

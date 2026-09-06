@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Ordered vault item conversion and dynamic field interpretation.
-use super::super::import_support;
+use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{OnePasswordImportError, OnePasswordImportPlan};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
@@ -181,11 +181,11 @@ struct OnePasswordNotes<'a> {
 }
 impl OnePasswordNotes<'_> {
     fn append(self, metadata: impl IntoIterator<Item = (String, String)>) {
-        import_support::append_import_metadata(
-            self.notes,
-            "1Password",
-            iter::once(("format".to_owned(), "1PUX".to_owned())).chain(metadata),
-        );
+        ImportMetadata {
+            heading: "1Password",
+            entries: iter::once(("format".to_owned(), "1PUX".to_owned())).chain(metadata),
+        }
+        .append_to(self.notes);
     }
 }
 impl OnePasswordField {
@@ -396,11 +396,13 @@ impl OnePasswordVaultItem<'_> {
             primary_url: website_url.as_str(),
             policy: OnePasswordMetadataPolicy::OmitCredentials,
         });
-        if let Some(title) = import_support::source_label_metadata(
-            "title",
-            &item.overview.title,
-            website_url.as_str(),
-        ) {
+        if let Some(title) = (SourceLabelMetadata {
+            key: "title",
+            label: &item.overview.title,
+            website_url: website_url.as_str(),
+        })
+        .entry()
+        {
             metadata.insert(0, title);
         }
         OnePasswordNotes { notes: &mut notes }.append(metadata);

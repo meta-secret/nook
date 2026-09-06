@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Decoded Proton Pass vaults and ordered item metadata conversion.
-use super::super::import_support;
+use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{ProtonPassImportError, ProtonPassImportPlan};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
@@ -116,7 +116,11 @@ struct ProtonPassNotes<'a> {
 }
 impl ProtonPassNotes<'_> {
     fn append(self, metadata: impl IntoIterator<Item = (String, String)>) {
-        import_support::append_import_metadata(self.notes, "Proton Pass", metadata);
+        ImportMetadata {
+            heading: "Proton Pass",
+            entries: metadata,
+        }
+        .append_to(self.notes);
     }
 }
 struct ProtonPassMetadataSelection<'a> {
@@ -214,11 +218,13 @@ impl ProtonPassVaultItem<'_> {
             primary_url: website_url.as_str(),
             username,
         });
-        if let Some(name) = import_support::source_label_metadata(
-            "name",
-            &item.data.metadata.name,
-            website_url.as_str(),
-        ) {
+        if let Some(name) = (SourceLabelMetadata {
+            key: "name",
+            label: &item.data.metadata.name,
+            website_url: website_url.as_str(),
+        })
+        .entry()
+        {
             metadata.insert(0, name);
         }
         ProtonPassNotes { notes: &mut notes }.append(metadata);

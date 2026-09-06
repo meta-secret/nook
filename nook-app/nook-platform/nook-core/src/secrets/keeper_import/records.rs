@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Keeper record classification and exact ordered metadata.
-use super::super::import_support;
+use super::super::import_support::{CsvRecordFields, ImportMetadata, SourceLabelMetadata};
 use super::columns::{CustomFieldColumn, KeeperColumns};
 use crate::{LoginSecret, SecretValue, SecureNoteSecret};
 use csv::StringRecord;
@@ -13,11 +13,12 @@ struct KeeperCustomFields<'a> {
 }
 impl KeeperCustomFields<'_> {
     fn collect(&self, record: &StringRecord) -> Vec<(String, String)> {
+        let csv_fields = CsvRecordFields::new(record);
         let mut fields = Vec::new();
         for column in self.columns {
             match column {
                 CustomFieldColumn::Named { name, value_index } => {
-                    let value = import_support::csv_field(record, *value_index);
+                    let value = csv_fields.trimmed(*value_index);
                     if !value.is_empty() {
                         fields.push((name.clone(), value));
                     }
@@ -26,14 +27,14 @@ impl KeeperCustomFields<'_> {
                     name_index,
                     value_index,
                 } => {
-                    let name = import_support::csv_field(record, *name_index);
-                    let value = import_support::csv_field(record, *value_index);
+                    let name = csv_fields.trimmed(*name_index);
+                    let value = csv_fields.trimmed(*value_index);
                     if !name.is_empty() && !value.is_empty() {
                         fields.push((name, value));
                     }
                 }
                 CustomFieldColumn::Blob { index } => {
-                    let blob = import_support::csv_field(record, *index);
+                    let blob = csv_fields.trimmed(*index);
                     for line in blob.lines() {
                         let line = line.trim();
                         if line.is_empty() {
@@ -72,7 +73,13 @@ impl KeeperMetadata<'_> {
             custom_fields,
         } = self;
         let mut metadata = Vec::new();
-        if let Some(entry) = import_support::source_label_metadata("title", title, website_url) {
+        if let Some(entry) = (SourceLabelMetadata {
+            key: "title",
+            label: title,
+            website_url,
+        })
+        .entry()
+        {
             metadata.push(entry);
         }
         if !folder.trim().is_empty() {
@@ -89,7 +96,11 @@ impl KeeperMetadata<'_> {
             };
             metadata.push((key, value.clone()));
         }
-        import_support::append_import_metadata(notes, "Keeper", metadata);
+        ImportMetadata {
+            heading: "Keeper",
+            entries: metadata,
+        }
+        .append_to(notes);
     }
 }
 pub(super) struct KeeperRecord<'a> {
@@ -99,14 +110,15 @@ pub(super) struct KeeperRecord<'a> {
 impl KeeperRecord<'_> {
     pub(super) fn convert(self) -> Option<SecretValue> {
         let record = self.record;
+        let csv_fields = CsvRecordFields::new(record);
         let columns = self.columns;
-        let title = import_support::csv_field(record, columns.title);
-        let login = import_support::csv_field(record, columns.login);
-        let password = import_support::csv_password_field(record, columns.password);
-        let website = import_support::csv_field(record, columns.website);
-        let mut notes = import_support::csv_field(record, columns.notes);
-        let folder = import_support::optional_csv_field(record, columns.folder);
-        let shared_folder = import_support::optional_csv_field(record, columns.shared_folder);
+        let title = csv_fields.trimmed(columns.title);
+        let login = csv_fields.trimmed(columns.login);
+        let password = csv_fields.password(columns.password);
+        let website = csv_fields.trimmed(columns.website);
+        let mut notes = csv_fields.trimmed(columns.notes);
+        let folder = csv_fields.optional(columns.folder);
+        let shared_folder = csv_fields.optional(columns.shared_folder);
         let custom_fields = KeeperCustomFields {
             columns: &columns.custom_fields,
         }
