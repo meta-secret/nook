@@ -7,9 +7,9 @@
 use crate::AuthenticatorSecret;
 use crate::CreditCardSecret;
 use crate::SecretId;
+use crate::bip39;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
-use crate::{bip39, passkey_authenticator};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use std::fmt;
@@ -140,11 +140,10 @@ impl PasskeyPrivateKeyPkcs8 {
 
     fn validate(&self) -> SecretPayloadResult<()> {
         validate_base64url_field("ES256 private key", &self.0, 1, PASSKEY_PRIVATE_KEY_MAX_LEN)?;
-        passkey_authenticator::validate_es256_credential_key(self, None).map_err(|error| {
-            SecretPayloadError::InvalidPasskey {
+        self.validate_es256(None)
+            .map_err(|error| SecretPayloadError::InvalidPasskey {
                 reason: error.to_string(),
-            }
-        })
+            })
     }
 
     pub(crate) fn encoded(&self) -> &str {
@@ -222,13 +221,11 @@ impl PasskeyCredentialKey {
             } => {
                 private_key_pkcs8.validate()?;
                 public_key_cose.validate()?;
-                passkey_authenticator::validate_es256_credential_key(
-                    private_key_pkcs8,
-                    Some(public_key_cose),
-                )
-                .map_err(|error| SecretPayloadError::InvalidPasskey {
-                    reason: error.to_string(),
-                })
+                private_key_pkcs8
+                    .validate_es256(Some(public_key_cose))
+                    .map_err(|error| SecretPayloadError::InvalidPasskey {
+                        reason: error.to_string(),
+                    })
             }
         }
     }
@@ -584,7 +581,10 @@ mod tests {
             resident_key_required: true,
             user_verification_required: true,
         };
-        let mut passkey = crate::create_website_passkey(&request, &[])?.credential;
+        let mut passkey = request
+            .prepare(&[])
+            .and_then(crate::CheckedPasskeyRegistration::generate)?
+            .credential;
         passkey.signature_count = 4.into();
         Ok(passkey)
     }

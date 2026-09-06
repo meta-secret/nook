@@ -334,9 +334,9 @@ pub fn enrich_secret(existing: &SecretValue, incoming: &SecretValue) -> SecretVa
 mod tests {
     use super::*;
     use crate::{
-        AuthenticatorSecret, LoginSecret, PasskeyRegistrationRequest, PasskeyRelyingParty,
-        PasskeyUser, SecureNoteSecret, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret,
-        create_website_passkey,
+        AuthenticatorSecret, CheckedPasskeyRegistration, LoginSecret, PasskeyRegistrationRequest,
+        PasskeyRelyingParty, PasskeyUser, SecureNoteSecret, TotpAlgorithm, TotpDigits, TotpPeriod,
+        TotpSecret,
     };
     use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 
@@ -588,26 +588,25 @@ mod tests {
     #[test]
     fn passkey_identity_is_stable_while_counter_updates_create_new_versions() -> anyhow::Result<()>
     {
-        let registration = create_website_passkey(
-            &PasskeyRegistrationRequest {
-                origin: "https://login.example.com".to_owned(),
-                challenge: URL_SAFE_NO_PAD.encode([7_u8; 32]),
-                relying_party: PasskeyRelyingParty {
-                    id: "example.com".to_owned(),
-                    name: "Example".to_owned(),
-                },
-                user: PasskeyUser {
-                    id: URL_SAFE_NO_PAD.encode([8_u8; 16]),
-                    name: "alice@example.com".to_owned(),
-                    display_name: "Alice".to_owned(),
-                },
-                algorithms: vec![-7],
-                exclude_credentials: Vec::new(),
-                resident_key_required: true,
-                user_verification_required: true,
+        let registration = (PasskeyRegistrationRequest {
+            origin: "https://login.example.com".to_owned(),
+            challenge: URL_SAFE_NO_PAD.encode([7_u8; 32]),
+            relying_party: PasskeyRelyingParty {
+                id: "example.com".to_owned(),
+                name: "Example".to_owned(),
             },
-            &[],
-        )?;
+            user: PasskeyUser {
+                id: URL_SAFE_NO_PAD.encode([8_u8; 16]),
+                name: "alice@example.com".to_owned(),
+                display_name: "Alice".to_owned(),
+            },
+            algorithms: vec![-7],
+            exclude_credentials: Vec::new(),
+            resident_key_required: true,
+            user_verification_required: true,
+        })
+        .prepare(&[])
+        .and_then(CheckedPasskeyRegistration::generate)?;
         let first = SecretValue::Passkey(registration.credential);
         let mut updated = first.clone();
         let SecretValue::Passkey(updated_passkey) = &mut updated else {
