@@ -80,7 +80,7 @@ pub use chrome_passwords_import::{
     ChromePasswordsImportError, ChromePasswordsImportPlan, plan_chrome_passwords_import,
 };
 pub use credit_card::CreditCardSecret;
-pub use dashlane_import::{DashlaneImportError, DashlaneImportPlan, plan_dashlane_import};
+pub use dashlane_import::{DashlaneExport, DashlaneImportError, DashlaneImportPlan};
 pub use database::Database;
 pub use device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,

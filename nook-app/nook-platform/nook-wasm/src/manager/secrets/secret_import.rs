@@ -5,6 +5,7 @@
 )]
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
+use nook_core::DashlaneExport;
 use nook_core::{
     AgeArmoredCiphertext, SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey,
     VaultOperation,
@@ -489,7 +490,8 @@ impl NookVaultManager {
         export: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
         let export = Zeroizing::new(export);
-        let plan = nook_core::plan_dashlane_import(export.as_slice())
+        let plan = DashlaneExport::from_bytes(export.as_slice())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(export);
         self.commit_secret_import(
