@@ -182,7 +182,6 @@ pub use passkey_authenticator::{
     PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser,
 };
 pub use proton_pass_import::{ProtonPassImportError, ProtonPassImportInput, ProtonPassImportPlan};
-pub use secret_fingerprint::{enrich_secret, secret_fingerprint, secret_identity_fingerprint};
 pub use secret_types::{
     ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentByteCount, FileAttachmentSecret,
     LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,

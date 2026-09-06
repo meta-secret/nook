@@ -1,360 +1,188 @@
 //! Vault-keyed identity and secret-version fingerprints for import reconciliation.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
-use crate::PasskeyCredentialKey;
-
-use hmac::{Hmac, KeyInit, Mac};
-use sha2::Sha256;
-
+mod canonical;
+mod metadata;
 use crate::{LoginSecret, SecretValue, SecureNoteSecret, SymmetricKey};
-use nook_auth2::{ValidationError, ValidationResult};
+use canonical::{FingerprintKind, FingerprintRequest};
+use metadata::{ImportMetadataPolicy, ProviderNotes};
+use nook_auth2::ValidationResult;
 pub use nook_event_log::SecretFingerprint;
-
-const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
-const VERSION_DOMAIN: &[u8] = b"nook/secret-version/v1\0";
-const IDENTITY_FINGERPRINT_SCHEME: &str = "hmac-sha256:v1:";
-const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
-
-struct ImportMetadataMarker {
-    heading: &'static str,
-    key_prefixes: &'static [&'static str],
-}
-
-const BITWARDEN_METADATA: ImportMetadataMarker = ImportMetadataMarker {
-    heading: "## Bitwarden",
-    key_prefixes: &["totp:", "uri[", "field.", "field["],
-};
-const ONEPASSWORD_METADATA: ImportMetadataMarker = ImportMetadataMarker {
-    heading: "## 1Password",
-    key_prefixes: &[
-        "format: 1PUX",
-        "vault:",
-        "state:",
-        "tags:",
-        "url.",
-        "url[",
-        "field[",
-    ],
-};
-const LASTPASS_METADATA: ImportMetadataMarker = ImportMetadataMarker {
-    heading: "## LastPass",
-    key_prefixes: &["group:", "favorite:", "totp:"],
-};
-const PROTON_PASS_METADATA: ImportMetadataMarker = ImportMetadataMarker {
-    heading: "## Proton Pass",
-    key_prefixes: &[
-        "vault:",
-        "state:",
-        "pinned:",
-        "email:",
-        "totp:",
-        "url[",
-        "field.",
-        "field[",
-        "passkeys_skipped:",
-        "attachments_skipped:",
-    ],
-};
-const BROWSER_METADATA: ImportMetadataMarker = ImportMetadataMarker {
-    heading: "## Browser password manager",
-    key_prefixes: &["name:"],
-};
-const APPLE_PASSWORDS_METADATA: ImportMetadataMarker = ImportMetadataMarker {
-    heading: "## Apple Passwords",
-    key_prefixes: &["title:"],
-};
-
-const IMPORT_METADATA_MARKERS: [&ImportMetadataMarker; 4] = [
-    &BITWARDEN_METADATA,
-    &ONEPASSWORD_METADATA,
-    &LASTPASS_METADATA,
-    &PROTON_PASS_METADATA,
-];
-const LOGIN_IMPORT_METADATA_MARKERS: [&ImportMetadataMarker; 6] = [
-    &BITWARDEN_METADATA,
-    &ONEPASSWORD_METADATA,
-    &LASTPASS_METADATA,
-    &PROTON_PASS_METADATA,
-    &BROWSER_METADATA,
-    &APPLE_PASSWORDS_METADATA,
-];
-
-fn normalized_text(value: &str) -> String {
-    value.replace("\r\n", "\n").trim().to_owned()
-}
-
-fn is_generated_metadata_bullet(marker: &ImportMetadataMarker, bullet: &str) -> bool {
-    let is_dotted_onepassword_field = marker.heading == "## 1Password"
-        && bullet
-            .split_once(':')
-            .is_some_and(|(key, _)| key.contains('.'));
-    is_dotted_onepassword_field
-        || marker
-            .key_prefixes
-            .iter()
-            .any(|prefix| bullet.starts_with(prefix))
-}
-
-fn metadata_section_index(normalized: &str, marker: &ImportMetadataMarker) -> Option<usize> {
-    normalized
-        .match_indices(marker.heading)
-        .find_map(|(index, _)| {
-            if index != 0 && !normalized[..index].ends_with("\n\n") {
-                return None;
+impl SecretValue {
+    /// Compute the logical item identity without its password or provider metadata.
+    pub fn identity_fingerprint(
+        &self,
+        secrets_key: &SymmetricKey,
+    ) -> ValidationResult<SecretFingerprint> {
+        FingerprintRequest {
+            value: self,
+            secrets_key,
+        }
+        .prepare(FingerprintKind::Identity)
+        .finish()
+    }
+    /// Compute one secret-value version, bound to its logical item identity.
+    ///
+    /// ```
+    /// use nook_core::{LoginSecret, SecretValue, SymmetricKey};
+    /// let value = SecretValue::Login(LoginSecret {
+    ///     website_url: "https://example.com".to_owned(),
+    ///     username: "alice".to_owned(), password: "secret".to_owned(),
+    ///     notes: String::new(),
+    /// });
+    /// let key = SymmetricKey::parse(&"a".repeat(64))?;
+    /// let identity = value.identity_fingerprint(&key)?;
+    /// let version = value.fingerprint(&key)?;
+    /// assert_ne!(identity, version);
+    /// # Ok::<(), nook_core::ValidationError>(())
+    /// ```
+    /// Canonical operation fields are private implementation evidence.
+    /// ```compile_fail,E0603
+    /// use nook_core::secret_fingerprint::canonical::CanonicalSecretFingerprint;
+    /// ```
+    pub fn fingerprint(&self, secrets_key: &SymmetricKey) -> ValidationResult<SecretFingerprint> {
+        FingerprintRequest {
+            value: self,
+            secrets_key,
+        }
+        .prepare(FingerprintKind::Version)
+        .finish()
+    }
+    /// Enrich an existing matching version with another provider's fields.
+    /// The caller retains responsibility for deciding that the versions match.
+    #[must_use]
+    pub fn enriched_with(&self, incoming: &Self) -> Self {
+        match (self, incoming) {
+            (SecretValue::Login(existing), SecretValue::Login(incoming)) => {
+                SecretValue::Login(LoginSecret {
+                    website_url: existing.website_url.clone(),
+                    username: existing.username.clone(),
+                    password: existing.password.clone(),
+                    notes: (ProviderNotes {
+                        text: &existing.notes,
+                        policy: ImportMetadataPolicy::Login,
+                    })
+                    .merge(&incoming.notes),
+                })
             }
-            let metadata = normalized[index + marker.heading.len()..].strip_prefix('\n')?;
-            let first_bullet = metadata.strip_prefix("- ")?.lines().next()?;
-            is_generated_metadata_bullet(marker, first_bullet).then_some(index)
-        })
-}
-
-fn provider_neutral_notes(value: &str, markers: &[&ImportMetadataMarker]) -> String {
-    let normalized = normalized_text(value);
-    let marker_index = markers
-        .iter()
-        .filter_map(|marker| metadata_section_index(&normalized, marker))
-        .min();
-    marker_index.map_or(normalized.clone(), |index| {
-        normalized[..index].trim_end().to_owned()
-    })
-}
-
-fn append_field(bytes: &mut Vec<u8>, value: &str) {
-    bytes.extend_from_slice(value.len().to_string().as_bytes());
-    bytes.push(b':');
-    bytes.extend_from_slice(value.as_bytes());
-    bytes.push(0);
-}
-
-fn canonical_identity(value: &SecretValue) -> Vec<u8> {
-    let mut bytes = Vec::new();
-    match value {
-        SecretValue::Login(login) => {
-            append_field(&mut bytes, "login");
-            append_field(&mut bytes, normalized_text(&login.website_url).as_str());
-            append_field(&mut bytes, normalized_text(&login.username).as_str());
-        }
-        SecretValue::ApiKey(api_key) => {
-            append_field(&mut bytes, "api-key");
-            append_field(&mut bytes, normalized_text(&api_key.website_url).as_str());
-        }
-        SecretValue::SeedPhrase(seed_phrase) => {
-            append_field(&mut bytes, "seed-phrase");
-            append_field(&mut bytes, normalized_text(&seed_phrase.name).as_str());
-        }
-        SecretValue::SecureNote(note) => {
-            append_field(&mut bytes, "secure-note");
-            append_field(&mut bytes, normalized_text(&note.title).as_str());
-        }
-        SecretValue::Passkey(passkey) => {
-            append_field(&mut bytes, "passkey");
-            append_field(&mut bytes, passkey.rp_id.as_str());
-            append_field(&mut bytes, passkey.credential_id.as_str());
-        }
-        SecretValue::Authenticator(authenticator) => {
-            append_field(&mut bytes, "authenticator");
-            append_field(&mut bytes, normalized_text(&authenticator.issuer).as_str());
-            append_field(&mut bytes, normalized_text(&authenticator.account).as_str());
-        }
-        SecretValue::CreditCard(card) => {
-            append_field(&mut bytes, "credit-card");
-            append_field(&mut bytes, normalized_text(&card.title).as_str());
-            append_field(&mut bytes, normalized_text(&card.cardholder_name).as_str());
-            append_field(&mut bytes, card.last4().as_str());
-        }
-        SecretValue::FileAttachment(file) => {
-            append_field(&mut bytes, "file-attachment");
-            append_field(&mut bytes, normalized_text(&file.title).as_str());
-            append_field(&mut bytes, normalized_text(&file.file_name).as_str());
-            append_field(&mut bytes, normalized_text(&file.mime_type).as_str());
-            append_field(&mut bytes, u64::from(file.size_bytes).to_string().as_str());
-        }
-    }
-    bytes
-}
-
-fn canonical_secret_version(value: &SecretValue) -> Vec<u8> {
-    let mut bytes = canonical_identity(value);
-    match value {
-        SecretValue::Login(login) => append_field(&mut bytes, login.password.as_str()),
-        SecretValue::ApiKey(api_key) => append_field(&mut bytes, api_key.key.as_str()),
-        SecretValue::SeedPhrase(seed_phrase) => append_field(
-            &mut bytes,
-            seed_phrase
-                .seed
-                .split_whitespace()
-                .collect::<Vec<_>>()
-                .join(" ")
-                .as_str(),
-        ),
-        SecretValue::SecureNote(note) => {
-            append_field(
-                &mut bytes,
-                provider_neutral_notes(&note.note, &IMPORT_METADATA_MARKERS).as_str(),
-            );
-        }
-        SecretValue::Passkey(passkey) => {
-            append_field(&mut bytes, passkey.user_handle.as_str());
-            let PasskeyCredentialKey::Es256 {
-                public_key_cose, ..
-            } = &passkey.key;
-            append_field(&mut bytes, public_key_cose.encoded());
-            append_field(
-                &mut bytes,
-                u32::from(passkey.signature_count).to_string().as_str(),
-            );
-            append_field(&mut bytes, if passkey.discoverable { "1" } else { "0" });
-            append_field(&mut bytes, if passkey.backup_eligible { "1" } else { "0" });
-            append_field(&mut bytes, if passkey.backup_state { "1" } else { "0" });
-        }
-        SecretValue::Authenticator(authenticator) => {
-            append_field(&mut bytes, authenticator.secret.as_str());
-            append_field(&mut bytes, authenticator.algorithm.as_str());
-            append_field(&mut bytes, authenticator.digits.to_string().as_str());
-            append_field(&mut bytes, authenticator.period.to_string().as_str());
-            let mut backup_codes = authenticator
-                .backup_codes
-                .iter()
-                .map(|code| normalized_text(code))
-                .collect::<Vec<_>>();
-            backup_codes.sort();
-            for code in backup_codes {
-                append_field(&mut bytes, code.as_str());
+            (SecretValue::SecureNote(existing), SecretValue::SecureNote(incoming)) => {
+                SecretValue::SecureNote(SecureNoteSecret {
+                    title: existing.title.clone(),
+                    note: (ProviderNotes {
+                        text: &existing.note,
+                        policy: ImportMetadataPolicy::General,
+                    })
+                    .merge(&incoming.note),
+                })
             }
-        }
-        SecretValue::CreditCard(card) => {
-            append_field(&mut bytes, card.number.as_str());
-            append_field(&mut bytes, card.expiration_month.as_str());
-            append_field(&mut bytes, card.expiration_year.as_str());
-            append_field(&mut bytes, card.cvv.as_str());
-            append_field(
-                &mut bytes,
-                provider_neutral_notes(&card.notes, &IMPORT_METADATA_MARKERS).as_str(),
-            );
-        }
-        SecretValue::FileAttachment(file) => {
-            append_field(&mut bytes, file.content_base64.as_str());
-        }
-    }
-    bytes
-}
-
-fn fingerprint(
-    domain: &[u8],
-    canonical: &[u8],
-    scheme: &str,
-    secrets_key: &SymmetricKey,
-) -> ValidationResult<SecretFingerprint> {
-    let mut mac = Hmac::<Sha256>::new_from_slice(secrets_key.as_str().as_bytes())
-        .map_err(|_| ValidationError::SecretFingerprintKeyInvalid)?;
-    mac.update(domain);
-    mac.update(canonical);
-    Ok(SecretFingerprint::from_trusted(format!(
-        "{scheme}{}",
-        hex::encode(mac.finalize().into_bytes())
-    )))
-}
-
-/// Compute the logical item identity without its password or provider metadata.
-pub fn secret_identity_fingerprint(
-    value: &SecretValue,
-    secrets_key: &SymmetricKey,
-) -> ValidationResult<SecretFingerprint> {
-    fingerprint(
-        IDENTITY_DOMAIN,
-        &canonical_identity(value),
-        IDENTITY_FINGERPRINT_SCHEME,
-        secrets_key,
-    )
-}
-
-/// Compute one secret-value version, bound to its logical item identity.
-pub fn secret_fingerprint(
-    value: &SecretValue,
-    secrets_key: &SymmetricKey,
-) -> ValidationResult<SecretFingerprint> {
-    fingerprint(
-        VERSION_DOMAIN,
-        &canonical_secret_version(value),
-        SECRET_VERSION_FINGERPRINT_SCHEME,
-        secrets_key,
-    )
-}
-
-fn merge_notes(existing: &str, incoming: &str, markers: &[&ImportMetadataMarker]) -> String {
-    let existing = normalized_text(existing);
-    let incoming = normalized_text(incoming);
-    if incoming.is_empty() || existing == incoming || existing.contains(&incoming) {
-        existing
-    } else if existing.is_empty() || incoming.contains(&existing) {
-        incoming
-    } else {
-        let existing_base = provider_neutral_notes(&existing, markers);
-        let incoming_base = provider_neutral_notes(&incoming, markers);
-        if existing_base == incoming_base {
-            let incoming_metadata = incoming[incoming_base.len()..].trim();
-            if incoming_metadata.is_empty() || existing.contains(incoming_metadata) {
-                existing
-            } else {
-                format!("{existing}\n\n{incoming_metadata}")
-            }
-        } else {
-            format!("{existing}\n\n{incoming}")
+            _ => self.clone(),
         }
     }
 }
-
-/// Enrich an existing matching secret version with fields carried by another provider.
-#[must_use]
-pub fn enrich_secret(existing: &SecretValue, incoming: &SecretValue) -> SecretValue {
-    match (existing, incoming) {
-        (SecretValue::Login(existing), SecretValue::Login(incoming)) => {
-            SecretValue::Login(LoginSecret {
-                website_url: existing.website_url.clone(),
-                username: existing.username.clone(),
-                password: existing.password.clone(),
-                notes: merge_notes(
-                    &existing.notes,
-                    &incoming.notes,
-                    &LOGIN_IMPORT_METADATA_MARKERS,
-                ),
-            })
-        }
-        (SecretValue::SecureNote(existing), SecretValue::SecureNote(incoming)) => {
-            SecretValue::SecureNote(SecureNoteSecret {
-                title: existing.title.clone(),
-                note: merge_notes(&existing.note, &incoming.note, &IMPORT_METADATA_MARKERS),
-            })
-        }
-        _ => existing.clone(),
-    }
-}
-
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
-    use super::*;
+    use super::SecretFingerprint;
+    use crate::SymmetricKey;
     use crate::{
         AuthenticatorSecret, CheckedPasskeyRegistration, LoginSecret, PasskeyRegistrationRequest,
-        PasskeyRelyingParty, PasskeyUser, SecureNoteSecret, TotpAlgorithm, TotpDigits, TotpPeriod,
-        TotpSecret,
+        PasskeyRelyingParty, PasskeyUser, SecretValue, SecureNoteSecret, TotpAlgorithm, TotpDigits,
+        TotpPeriod, TotpSecret,
     };
-    use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
+    use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 
-    fn key(byte: char) -> anyhow::Result<SymmetricKey> {
-        Ok(SymmetricKey::parse(&byte.to_string().repeat(64))?)
+    #[test]
+    fn enrichment_keeps_existing_credentials_without_claiming_a_match() {
+        let existing = SecretValue::Login(LoginSecret {
+            website_url: "existing".to_owned(),
+            username: "alice".to_owned(),
+            password: "original".to_owned(),
+            notes: "first".to_owned(),
+        });
+        let incoming = SecretValue::Login(LoginSecret {
+            website_url: "different".to_owned(),
+            username: "bob".to_owned(),
+            password: "different".to_owned(),
+            notes: "second".to_owned(),
+        });
+        assert_eq!(
+            existing.enriched_with(&incoming),
+            SecretValue::Login(LoginSecret {
+                website_url: "existing".to_owned(),
+                username: "alice".to_owned(),
+                password: "original".to_owned(),
+                notes: "first\n\nsecond".to_owned(),
+            })
+        );
+        assert!(matches!(existing, SecretValue::Login(login) if login.notes == "first"));
+        assert!(matches!(incoming, SecretValue::Login(login) if login.notes == "second"));
     }
 
-    fn authenticator(secret: &str, backup_codes: &[&str]) -> anyhow::Result<SecretValue> {
-        Ok(SecretValue::Authenticator(AuthenticatorSecret {
-            issuer: "Example".to_owned(),
-            account: "alice@example.com".to_owned(),
+    #[test]
+    fn unsupported_enrichment_pairs_return_the_existing_value_unchanged() {
+        let existing = SecretValue::SecureNote(SecureNoteSecret {
+            title: "original".to_owned(),
+            note: "first".to_owned(),
+        });
+        let incoming = SecretValue::Login(LoginSecret {
             website_url: String::new(),
-            secret: TotpSecret::parse(secret)?,
-            algorithm: TotpAlgorithm::Sha1,
-            digits: TotpDigits::try_from(6)?,
-            period: TotpPeriod::try_from(30)?,
-            backup_codes: backup_codes.iter().map(ToString::to_string).collect(),
-        }))
+            username: String::new(),
+            password: "password".to_owned(),
+            notes: "second".to_owned(),
+        });
+        assert_eq!(existing.enriched_with(&incoming), existing);
+        assert_eq!(incoming.enriched_with(&existing), incoming);
+    }
+
+    #[test]
+    fn secure_note_enrichment_preserves_the_existing_title() {
+        let existing = SecretValue::SecureNote(SecureNoteSecret {
+            title: "original".to_owned(),
+            note: "first".to_owned(),
+        });
+        let incoming = SecretValue::SecureNote(SecureNoteSecret {
+            title: "incoming".to_owned(),
+            note: "second".to_owned(),
+        });
+        assert_eq!(
+            existing.enriched_with(&incoming),
+            SecretValue::SecureNote(SecureNoteSecret {
+                title: "original".to_owned(),
+                note: "first\n\nsecond".to_owned(),
+            })
+        );
+    }
+
+    struct FingerprintKeyFixture {
+        byte: char,
+    }
+    impl FingerprintKeyFixture {
+        fn key(&self) -> anyhow::Result<SymmetricKey> {
+            Ok(SymmetricKey::parse(&self.byte.to_string().repeat(64))?)
+        }
+    }
+
+    struct AuthenticatorFixture<'a> {
+        secret: &'a str,
+        backup_codes: &'a [&'a str],
+    }
+    impl AuthenticatorFixture<'_> {
+        fn value(&self) -> anyhow::Result<SecretValue> {
+            Ok(SecretValue::Authenticator(AuthenticatorSecret {
+                issuer: "Example".to_owned(),
+                account: "alice@example.com".to_owned(),
+                website_url: String::new(),
+                secret: TotpSecret::parse(self.secret)?,
+                algorithm: TotpAlgorithm::Sha1,
+                digits: TotpDigits::try_from(6)?,
+                period: TotpPeriod::try_from(30)?,
+                backup_codes: self.backup_codes.iter().map(ToString::to_string).collect(),
+            }))
+        }
     }
 
     #[test]
@@ -366,19 +194,24 @@ mod tests {
             notes: "personal".to_owned(),
         });
         assert_eq!(
-            secret_fingerprint(&value, &key('a')?),
-            secret_fingerprint(&value, &key('a')?)
+            value.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            value.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         assert_ne!(
-            secret_fingerprint(&value, &key('a')?),
-            secret_fingerprint(&value, &key('b')?)
+            value.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            value.fingerprint(&(FingerprintKeyFixture { byte: 'b' }).key()?)
         );
         assert!(
-            secret_identity_fingerprint(&value, &key('a')?)?
+            (value)
+                .identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)?
                 .as_str()
-                .starts_with(IDENTITY_FINGERPRINT_SCHEME)
+                .starts_with("hmac-sha256:v1:")
         );
-        assert!(secret_fingerprint(&value, &key('a')?)?.is_current_secret_version());
+        assert!(
+            (value)
+                .fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)?
+                .is_current_secret_version()
+        );
         assert!(
             !SecretFingerprint::from_trusted(format!("hmac-sha256:v1:{}", "ab".repeat(32)))
                 .is_current_secret_version()
@@ -401,8 +234,8 @@ mod tests {
             notes: "shared note\n\n## 1Password\n- vault: Personal".to_owned(),
         });
         assert_eq!(
-            secret_identity_fingerprint(&bitwarden, &key('a')?),
-            secret_identity_fingerprint(&onepassword, &key('a')?)
+            bitwarden.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            onepassword.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -410,24 +243,20 @@ mod tests {
     #[test]
     fn different_passwords_are_different_versions() -> anyhow::Result<()> {
         assert_ne!(
-            secret_fingerprint(
-                &SecretValue::Login(LoginSecret {
-                    website_url: "https://example.com".to_owned(),
-                    username: "alice".to_owned(),
-                    password: "old".to_owned(),
-                    notes: String::new(),
-                }),
-                &key('a')?
-            ),
-            secret_fingerprint(
-                &SecretValue::Login(LoginSecret {
-                    website_url: "https://example.com".to_owned(),
-                    username: "alice".to_owned(),
-                    password: "new".to_owned(),
-                    notes: String::new(),
-                }),
-                &key('a')?
-            )
+            (SecretValue::Login(LoginSecret {
+                website_url: "https://example.com".to_owned(),
+                username: "alice".to_owned(),
+                password: "old".to_owned(),
+                notes: String::new(),
+            }))
+            .fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            (SecretValue::Login(LoginSecret {
+                website_url: "https://example.com".to_owned(),
+                username: "alice".to_owned(),
+                password: "new".to_owned(),
+                notes: String::new(),
+            }))
+            .fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -448,8 +277,8 @@ mod tests {
         });
 
         assert_eq!(
-            secret_fingerprint(&chrome, &key('a')?),
-            secret_fingerprint(&apple, &key('a')?)
+            chrome.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            apple.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -465,8 +294,8 @@ mod tests {
             note: "second".to_owned(),
         });
         assert_ne!(
-            secret_fingerprint(&first, &key('a')?),
-            secret_fingerprint(&second, &key('a')?)
+            first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            second.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -483,8 +312,8 @@ mod tests {
         });
 
         assert_ne!(
-            secret_fingerprint(&first, &key('a')?),
-            secret_fingerprint(&second, &key('a')?)
+            first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            second.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -497,20 +326,21 @@ mod tests {
             "## LastPass\n- group: Personal",
             "## Proton Pass\n- vault: Personal",
         ];
-        let expected = secret_fingerprint(
-            &SecretValue::SecureNote(SecureNoteSecret {
-                title: "Recovery".to_owned(),
-                note: format!("same note\n\n{}", providers[0]),
-            }),
-            &key('a')?,
-        );
+        let expected = (SecretValue::SecureNote(SecureNoteSecret {
+            title: "Recovery".to_owned(),
+            note: format!("same note\n\n{}", providers[0]),
+        }))
+        .fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?);
 
         for metadata in providers {
             let note = SecretValue::SecureNote(SecureNoteSecret {
                 title: "Recovery".to_owned(),
                 note: format!("same note\n\n{metadata}"),
             });
-            assert_eq!(secret_fingerprint(&note, &key('a')?), expected);
+            assert_eq!(
+                note.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+                expected
+            );
         }
         Ok(())
     }
@@ -528,8 +358,8 @@ mod tests {
             });
 
             assert_ne!(
-                secret_fingerprint(&first, &key('a')?),
-                secret_fingerprint(&second, &key('a')?)
+                first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+                second.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
             );
         }
         Ok(())
@@ -549,23 +379,31 @@ mod tests {
         });
 
         assert_eq!(
-            secret_fingerprint(&first, &key('a')?),
-            secret_fingerprint(&second, &key('a')?)
+            first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            second.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
 
     #[test]
     fn authenticator_identity_excludes_secret_material() -> anyhow::Result<()> {
-        let first = authenticator("JBSWY3DPEHPK3PXP", &["alpha"])?;
-        let second = authenticator("KRSXG5DSNFXGOIDB", &["beta"])?;
+        let first = (AuthenticatorFixture {
+            secret: "JBSWY3DPEHPK3PXP",
+            backup_codes: &["alpha"],
+        })
+        .value()?;
+        let second = (AuthenticatorFixture {
+            secret: "KRSXG5DSNFXGOIDB",
+            backup_codes: &["beta"],
+        })
+        .value()?;
         assert_eq!(
-            secret_identity_fingerprint(&first, &key('a')?),
-            secret_identity_fingerprint(&second, &key('a')?)
+            first.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            second.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         assert_ne!(
-            secret_fingerprint(&first, &key('a')?),
-            secret_fingerprint(&second, &key('a')?)
+            first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            second.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -573,14 +411,18 @@ mod tests {
     #[test]
     fn authenticator_backup_code_order_does_not_create_a_new_version() -> anyhow::Result<()> {
         assert_eq!(
-            secret_fingerprint(
-                &authenticator("JBSWY3DPEHPK3PXP", &["alpha", "beta"])?,
-                &key('a')?
-            ),
-            secret_fingerprint(
-                &authenticator("JBSWY3DPEHPK3PXP", &["beta", "alpha"])?,
-                &key('a')?
-            )
+            ((AuthenticatorFixture {
+                secret: "JBSWY3DPEHPK3PXP",
+                backup_codes: &["alpha", "beta"]
+            })
+            .value()?)
+            .fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            ((AuthenticatorFixture {
+                secret: "JBSWY3DPEHPK3PXP",
+                backup_codes: &["beta", "alpha"]
+            })
+            .value()?)
+            .fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -590,13 +432,13 @@ mod tests {
     {
         let registration = (PasskeyRegistrationRequest {
             origin: "https://login.example.com".to_owned(),
-            challenge: URL_SAFE_NO_PAD.encode([7_u8; 32]),
+            challenge: Engine::encode(&URL_SAFE_NO_PAD, [7_u8; 32]),
             relying_party: PasskeyRelyingParty {
                 id: "example.com".to_owned(),
                 name: "Example".to_owned(),
             },
             user: PasskeyUser {
-                id: URL_SAFE_NO_PAD.encode([8_u8; 16]),
+                id: Engine::encode(&URL_SAFE_NO_PAD, [8_u8; 16]),
                 name: "alice@example.com".to_owned(),
                 display_name: "Alice".to_owned(),
             },
@@ -615,12 +457,12 @@ mod tests {
         updated_passkey.signature_count = 1.into();
 
         assert_eq!(
-            secret_identity_fingerprint(&first, &key('a')?),
-            secret_identity_fingerprint(&updated, &key('a')?)
+            first.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            updated.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         assert_ne!(
-            secret_fingerprint(&first, &key('a')?),
-            secret_fingerprint(&updated, &key('a')?)
+            first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
+            updated.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
         );
         Ok(())
     }
@@ -639,13 +481,13 @@ mod tests {
             password: "secret".to_owned(),
             notes: "note\n\n## 1Password\n- Security.TOTP: abc".to_owned(),
         });
-        let SecretValue::Login(merged) = enrich_secret(&existing, &incoming) else {
+        let SecretValue::Login(merged) = existing.enriched_with(&incoming) else {
             panic!("expected login");
         };
         assert!(merged.notes.contains("field.PIN: 1234"));
         assert!(merged.notes.contains("Security.TOTP: abc"));
         assert_eq!(merged.notes.matches("note").count(), 1);
-        let merged_again = enrich_secret(&SecretValue::Login(merged.clone()), &incoming);
+        let merged_again = (SecretValue::Login(merged.clone())).enriched_with(&incoming);
         assert_eq!(merged_again, SecretValue::Login(merged));
         Ok(())
     }

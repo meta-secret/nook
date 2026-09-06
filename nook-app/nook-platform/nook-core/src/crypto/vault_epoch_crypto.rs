@@ -30,8 +30,8 @@ pub fn reencrypt_user_secrets_for_epoch(
         let armored = AgeArmoredCiphertext::from_trusted_armored(record.value.as_str().to_owned());
         let mut plaintext = old_crypto.decrypt_value(&armored)?;
         let mut value = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
-        let identity_fingerprint = crate::secret_identity_fingerprint(&value, new_secrets_key)?;
-        let fingerprint = crate::secret_fingerprint(&value, new_secrets_key)?;
+        let identity_fingerprint = value.identity_fingerprint(new_secrets_key)?;
+        let fingerprint = value.fingerprint(new_secrets_key)?;
         let ciphertext = new_crypto.encrypt_value(&plaintext)?;
         plaintext.zeroize_plaintext();
         value.zeroize_plaintext();

@@ -14,7 +14,7 @@ use nook_core::{
     VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
     VaultUnlock, encrypted_secret_from_armored, generate_store_id, generate_vault_keys,
     genesis_auth_record, genesis_members_records, hydrate_keys_from_projection_yaml,
-    secret_fingerprint, secret_identity_fingerprint, serialize_stored_yaml_with_unlock,
+    serialize_stored_yaml_with_unlock,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -112,8 +112,8 @@ impl EventLogDevice {
             notes: notes.to_owned(),
         });
         let secrets_key = SymmetricKey::parse(&self.secrets_key)?;
-        let identity = secret_identity_fingerprint(&value, &secrets_key)?;
-        let version = secret_fingerprint(&value, &secrets_key)?;
+        let identity = value.identity_fingerprint(&secrets_key)?;
+        let version = value.fingerprint(&secrets_key)?;
         let ciphertext = self.crypto.encrypt_value(value.to_yaml()?.as_str())?;
         self.append_signed(vec![VaultOperation::SecretCreated {
             secret: encrypted_secret_from_armored(
