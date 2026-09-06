@@ -1,20 +1,14 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 //! Authentication advance-control classification from browser-observed facts.
 
-use super::control_identity::{
-    looks_like_alternate_authentication_route_control_label,
-    looks_like_auxiliary_authentication_control_label,
-    looks_like_one_time_code_resend_control_label,
-    looks_like_password_recovery_route_control_label, looks_like_registration_route_control_label,
-};
-use super::destination_identity::canonicalize_control_destination;
-use super::form_identity::{
-    control_destination_indicates_non_authentication_route,
-    control_destination_indicates_password_recovery_route,
-    control_destination_indicates_password_update_route,
-    control_destination_indicates_registration_route,
-    form_identity_indicates_non_authentication_account_management,
-    identity_indicates_explicit_authentication_route,
-};
+use super::control_identity::AuthenticationControlIdentity;
+use super::destination_identity::{CanonicalControlDestination, canonicalize_control_destination};
+use super::form_identity::AuthenticationRouteIdentity;
 use super::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
     looks_like_non_authentication_submit_control_label,
@@ -25,10 +19,6 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod policy;
-use policy::{
-    accepts_authentication_advance, has_positive_login_identity, has_semantic_submit_ceremony,
-    has_unconditional_veto_identity, one_time_code_control_lacks_authentication_context,
-};
 
 /// Whether a browser-observed control can currently receive user activation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -71,6 +61,35 @@ pub enum PageControlSubmissionMethod {
 }
 
 /// Browser-collected structure for one possible authentication advance control.
+///
+/// Classification keeps the report reusable; checked policy entry remains internal.
+///
+/// ```
+/// use nook_companion_core::{AuthenticationAdvanceControlObservation,
+///     AuthenticationAdvanceControlDecision};
+/// let classify = |report: &AuthenticationAdvanceControlObservation| {
+///     let first = report.classify();
+///     assert_eq!(first, report.classify());
+///     first
+/// };
+/// let _: fn(&AuthenticationAdvanceControlObservation) -> AuthenticationAdvanceControlDecision = classify;
+/// ```
+///
+/// External callers cannot obtain the checked policy input.
+///
+/// ```compile_fail,E0624
+/// use nook_companion_core::AuthenticationAdvanceControlObservation;
+/// let bypass = |report: &AuthenticationAdvanceControlObservation| report.check();
+/// ```
+///
+/// A raw report cannot run policy with a caller-selected canonical path.
+///
+/// ```compile_fail,E0599
+/// use nook_companion_core::AuthenticationAdvanceControlObservation;
+/// let bypass = |report: &AuthenticationAdvanceControlObservation| {
+///     report.classify_canonical("/auth/login")
+/// };
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -105,30 +124,6 @@ pub enum AuthenticationAdvanceControlDecision {
 }
 
 impl AuthenticationAdvanceControlObservation {
-    fn credential_update_destination(&self) -> bool {
-        self.new_password_field_count.raw() > 0
-            && (control_destination_indicates_registration_route(&self.destination_identity)
-                || control_destination_indicates_password_recovery_route(
-                    &self.destination_identity,
-                )
-                || control_destination_indicates_password_update_route(&self.destination_identity))
-    }
-
-    fn is_primary_sso_submit(&self, authentication_scope_owns_control: bool) -> bool {
-        let expanded_control_label = expand_identity_text(&self.label);
-        authentication_scope_owns_control
-            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
-            && matches!(
-                self.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-            )
-            && contains_any_word(&expanded_control_label, &["sso"])
-            && contains_any_word(
-                &expanded_control_label,
-                &["sign in", "signin", "continue", "next"],
-            )
-    }
-
     /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
     #[must_use]
     pub fn is_bounded(&self) -> bool {
@@ -150,19 +145,23 @@ impl AuthenticationAdvanceControlObservation {
     /// Decide whether this DOM-extracted control can advance the observed ceremony.
     #[must_use]
     pub fn classify(&self) -> AuthenticationAdvanceControlDecision {
+        match self.check() {
+            Some(checked) => checked.classify(),
+            None => AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
+        }
+    }
+
+    fn check(&self) -> Option<CheckedAuthenticationControl<'_>> {
         if !self.is_bounded()
             || matches!(
                 self.submission_method,
                 PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
             )
         {
-            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+            return None;
         }
-        let Some(destination) =
-            canonicalize_control_destination(&self.source_origin, &self.destination_identity)
-        else {
-            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-        };
+        let destination =
+            canonicalize_control_destination(&self.source_origin, &self.destination_identity)?;
         if destination.has_provider_authority
             && matches!(
                 self.authentication_username,
@@ -170,103 +169,130 @@ impl AuthenticationAdvanceControlObservation {
                     | AuthenticationUsernameEvidence::StandardsBasedEmail
             )
         {
-            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+            return None;
         }
-        let positive_destination_identity = destination.path_identity;
-        let mut observation = self.clone();
-        observation.destination_identity = destination.route_identity;
-        observation.classify_canonical(&positive_destination_identity)
+        Some(CheckedAuthenticationControl {
+            observation: self,
+            destination,
+        })
+    }
+}
+
+/// Classification admission binds canonical evidence to the unchanged browser report.
+/// It deliberately carries no browser-freshness or actuation authority.
+struct CheckedAuthenticationControl<'a> {
+    observation: &'a AuthenticationAdvanceControlObservation,
+    destination: CanonicalControlDestination,
+}
+
+impl CheckedAuthenticationControl<'_> {
+    fn credential_update_destination(&self) -> bool {
+        self.observation.new_password_field_count.raw() > 0
+            && (AuthenticationRouteIdentity::new(&self.destination.route_identity)
+                .indicates_registration()
+                || AuthenticationRouteIdentity::new(&self.destination.route_identity)
+                    .indicates_password_recovery()
+                || AuthenticationRouteIdentity::new(&self.destination.route_identity)
+                    .indicates_password_update())
     }
 
-    fn classify_canonical(
-        &self,
-        positive_destination_identity: &str,
-    ) -> AuthenticationAdvanceControlDecision {
-        if matches!(self.actionability, PageControlActionability::Inert) {
-            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
-        }
+    fn is_primary_sso_submit(&self) -> bool {
         let authentication_scope_owns_control = matches!(
-            self.ownership,
+            self.observation.ownership,
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
         );
-        let semantic_submit_ceremony_present = has_semantic_submit_ceremony(
-            self,
-            authentication_scope_owns_control,
-            positive_destination_identity,
-        );
+        let expanded_control_label = expand_identity_text(&self.observation.label);
+        authentication_scope_owns_control
+            && matches!(
+                self.observation.semantics,
+                PageControlSemantics::SemanticSubmit
+            )
+            && matches!(
+                self.observation.authentication_username,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+            )
+            && contains_any_word(&expanded_control_label, &["sso"])
+            && contains_any_word(
+                &expanded_control_label,
+                &["sign in", "signin", "continue", "next"],
+            )
+    }
+
+    fn classify(self) -> AuthenticationAdvanceControlDecision {
+        if matches!(
+            self.observation.actionability,
+            PageControlActionability::Inert
+        ) {
+            return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
+        }
         let non_authentication_label =
-            looks_like_non_authentication_submit_control_label(&self.label);
-        let contextual_password_update = self.new_password_field_count.raw() > 0
-            && looks_like_password_update_submit_control_label(&self.label);
+            looks_like_non_authentication_submit_control_label(&self.observation.label);
+        let contextual_password_update = self.observation.new_password_field_count.raw() > 0
+            && looks_like_password_update_submit_control_label(&self.observation.label);
         let credential_update_destination = self.credential_update_destination();
-        if has_unconditional_veto_identity(self, credential_update_destination) {
+        if self.has_unconditional_veto_identity() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if one_time_code_control_lacks_authentication_context(self, positive_destination_identity) {
+        if self.one_time_code_control_lacks_authentication_context() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0
-            && form_identity_indicates_non_authentication_account_management(&self.form_identity)
-            && !identity_indicates_explicit_authentication_route(&self.form_identity)
+        if self.observation.new_password_field_count.raw() == 0
+            && self.observation.one_time_code_field_count.raw() == 0
+            && AuthenticationRouteIdentity::new(&self.observation.form_identity)
+                .indicates_account_management()
+            && !AuthenticationRouteIdentity::new(&self.observation.form_identity)
+                .indicates_authentication()
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
         if non_authentication_label && !contextual_password_update {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let current_password_only = self.password_field_count.raw() > 0
-            && self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0;
-        if current_password_only
-            && !has_positive_login_identity(
-                self,
-                authentication_scope_owns_control,
-                positive_destination_identity,
-            )
-        {
+        let current_password_only = self.observation.password_field_count.raw() > 0
+            && self.observation.new_password_field_count.raw() == 0
+            && self.observation.one_time_code_field_count.raw() == 0;
+        if current_password_only && !self.has_positive_login_identity() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let primary_sso_submit = self.is_primary_sso_submit(authentication_scope_owns_control);
-        if looks_like_alternate_authentication_route_control_label(&self.label)
+        let primary_sso_submit = self.is_primary_sso_submit();
+        if AuthenticationControlIdentity::new(&self.observation.label)
+            .is_alternate_authentication_route()
             && !primary_sso_submit
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count.raw() == 0
-            && (looks_like_registration_route_control_label(&self.label)
-                || contains_any_word(&expand_identity_text(&self.label), &["join"]))
+        if self.observation.new_password_field_count.raw() == 0
+            && (AuthenticationControlIdentity::new(&self.observation.label).is_registration()
+                || contains_any_word(&expand_identity_text(&self.observation.label), &["join"]))
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if looks_like_auxiliary_authentication_control_label(&self.label) {
+        if AuthenticationControlIdentity::new(&self.observation.label).is_auxiliary() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.one_time_code_field_count.raw() > 0
-            && looks_like_one_time_code_resend_control_label(&self.label)
+        if self.observation.one_time_code_field_count.raw() > 0
+            && AuthenticationControlIdentity::new(&self.observation.label).is_one_time_code_resend()
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count.raw() == 0
-            && looks_like_password_recovery_route_control_label(&self.label)
+        if self.observation.new_password_field_count.raw() == 0
+            && AuthenticationControlIdentity::new(&self.observation.label).is_password_recovery()
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if control_destination_indicates_non_authentication_route(&self.destination_identity)
+        if AuthenticationRouteIdentity::new(&self.destination.route_identity)
+            .indicates_non_authentication()
             && !credential_update_destination
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if self.new_password_field_count.raw() == 0
-            && control_destination_indicates_non_authentication_route(&self.form_identity)
+        if self.observation.new_password_field_count.raw() == 0
+            && AuthenticationRouteIdentity::new(&self.observation.form_identity)
+                .indicates_non_authentication()
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        if accepts_authentication_advance(
-            self,
-            authentication_scope_owns_control,
-            semantic_submit_ceremony_present,
-        ) {
+        if self.accepts_authentication_advance() {
             AuthenticationAdvanceControlDecision::AdvancesAuthentication
         } else {
             AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
@@ -277,30 +303,114 @@ impl AuthenticationAdvanceControlObservation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
     use crate::authentication_advance_control_is_safe;
 
-    fn login_control() -> AuthenticationAdvanceControlObservation {
-        AuthenticationAdvanceControlObservation {
-            actionability: PageControlActionability::Actionable,
-            ownership: PageControlOwnership::OwnedForm,
-            semantics: PageControlSemantics::SemanticSubmit,
-            authentication_username: AuthenticationUsernameEvidence::Explicit,
-            password_field_count: 1.into(),
-            new_password_field_count: 0.into(),
-            one_time_code_field_count: 0.into(),
-            semantic_submit_control_count: 1.into(),
-            source_origin: "https://login.example.test".to_owned(),
-            form_identity: "login-form".to_owned(),
-            destination_identity: "https://login.example.test/auth/login".to_owned(),
-            label: "Sign in".to_owned(),
-            machine_identity: String::new(),
-            submission_method: PageControlSubmissionMethod::Absent,
+    #[test]
+    fn checked_classification_keeps_canonical_evidence_bound_to_the_report() -> anyhow::Result<()> {
+        let mut report = AuthenticationAdvanceControlObservation::login_control();
+        report.destination_identity =
+            "https://login.example.test/auth/%6cogin?next=%2Fcheckout".to_owned();
+        let original = report.clone();
+        let checked = report.check().ok_or_else(|| {
+            anyhow::anyhow!("same-origin login must enter checked classification")
+        })?;
+        assert_eq!(checked.destination.path_identity, "/auth/login");
+        assert_eq!(
+            checked.destination.route_identity,
+            "/auth/login?next=/checkout"
+        );
+        assert_eq!(checked.observation, &original);
+        assert_eq!(
+            checked.classify(),
+            AuthenticationAdvanceControlDecision::AdvancesAuthentication
+        );
+        assert_eq!(report, original);
+        assert_eq!(report.classify(), original.classify());
+        Ok(())
+    }
+
+    #[test]
+    fn invalid_destination_evidence_never_enters_checked_policy() {
+        for destination in [
+            "https://other.example.test/auth/login",
+            "https://login.example.test/auth/%zz",
+            "https://login.example.test/auth/%256cogin",
+            "https://login.example.test/auth/%00login",
+            "/auth/login",
+        ] {
+            let mut report = AuthenticationAdvanceControlObservation::login_control();
+            report.destination_identity = destination.to_owned();
+            assert!(report.check().is_none(), "{destination}");
+            assert_eq!(
+                report.classify(),
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+            );
+        }
+        let mut report = AuthenticationAdvanceControlObservation::login_control();
+        report.label = "a".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+        assert!(report.check().is_none());
+    }
+
+    #[test]
+    fn provider_authority_requires_strong_username_evidence_before_policy() {
+        for evidence in [
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+        ] {
+            let mut report = AuthenticationAdvanceControlObservation::login_control();
+            report.source_origin = "https://accounts.google.com".to_owned();
+            report.destination_identity = "https://accounts.google.com/auth/login".to_owned();
+            report.authentication_username = evidence;
+            assert!(report.check().is_none());
+            report.authentication_username = AuthenticationUsernameEvidence::Explicit;
+            assert!(report.check().is_some());
+        }
+    }
+
+    #[test]
+    fn checked_policy_still_rejects_inert_and_destructive_controls() -> anyhow::Result<()> {
+        for destination in ["/auth/login", "/auth/delete-account"] {
+            let mut report = AuthenticationAdvanceControlObservation::login_control();
+            report.destination_identity = format!("https://login.example.test{destination}");
+            if destination == "/auth/login" {
+                report.actionability = PageControlActionability::Inert;
+            }
+            let checked = report.check().ok_or_else(|| {
+                anyhow::anyhow!("canonical route must be admitted before action policy")
+            })?;
+            assert_eq!(
+                checked.classify(),
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication
+            );
+        }
+        Ok(())
+    }
+
+    impl AuthenticationAdvanceControlObservation {
+        fn login_control() -> Self {
+            AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Actionable,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::Explicit,
+                password_field_count: 1.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://login.example.test".to_owned(),
+                form_identity: "login-form".to_owned(),
+                destination_identity: "https://login.example.test/auth/login".to_owned(),
+                label: "Sign in".to_owned(),
+                machine_identity: String::new(),
+                submission_method: PageControlSubmissionMethod::Absent,
+            }
         }
     }
 
     #[test]
     fn exact_owned_login_submit_is_safe_but_inert_or_registration_controls_are_not() {
-        let control = login_control();
+        let control = AuthenticationAdvanceControlObservation::login_control();
         assert!(authentication_advance_control_is_safe(&control));
 
         let mut inert = control.clone();
@@ -311,7 +421,7 @@ mod tests {
         registration.destination_identity = "https://login.example.test/register".to_owned();
         assert!(!authentication_advance_control_is_safe(&registration));
 
-        let mut account_settings = login_control();
+        let mut account_settings = AuthenticationAdvanceControlObservation::login_control();
         account_settings.destination_identity =
             "https://login.example.test/settings/profile".to_owned();
         assert!(!authentication_advance_control_is_safe(&account_settings));
@@ -319,7 +429,7 @@ mod tests {
 
     #[test]
     fn username_only_submits_require_positive_authentication_identity() {
-        let mut control = login_control();
+        let mut control = AuthenticationAdvanceControlObservation::login_control();
         control.password_field_count = 0.into();
         control.form_identity = "security-form".to_owned();
         control.destination_identity = "https://login.example.test/account/security".to_owned();
@@ -334,26 +444,26 @@ mod tests {
     #[test]
     fn sso_management_and_unlabeled_activations_do_not_advance_authentication() {
         for label in ["Configure SSO", "Manage SSO", "Enroll SSO"] {
-            let mut control = login_control();
+            let mut control = AuthenticationAdvanceControlObservation::login_control();
             control.label = label.to_owned();
             assert!(!authentication_advance_control_is_safe(&control));
         }
 
         for label in ["Open settings", "Enable MFA"] {
-            let mut control = login_control();
+            let mut control = AuthenticationAdvanceControlObservation::login_control();
             control.semantics = PageControlSemantics::Activation;
             control.semantic_submit_control_count = 0.into();
             control.label = label.to_owned();
             assert!(!authentication_advance_control_is_safe(&control));
         }
 
-        let mut continue_control = login_control();
+        let mut continue_control = AuthenticationAdvanceControlObservation::login_control();
         continue_control.semantics = PageControlSemantics::Activation;
         continue_control.semantic_submit_control_count = 0.into();
         continue_control.label = "Continue".to_owned();
         assert!(authentication_advance_control_is_safe(&continue_control));
 
-        let mut destructive_machine = login_control();
+        let mut destructive_machine = AuthenticationAdvanceControlObservation::login_control();
         destructive_machine.label = "Continue".to_owned();
         destructive_machine.machine_identity = "delete-account =".to_owned();
         assert!(!authentication_advance_control_is_safe(
@@ -371,7 +481,7 @@ mod tests {
                 "Update password",
             ),
         ] {
-            let mut control = login_control();
+            let mut control = AuthenticationAdvanceControlObservation::login_control();
             control.new_password_field_count = 1.into();
             control.destination_identity = destination.to_owned();
             control.label = label.to_owned();
@@ -381,14 +491,14 @@ mod tests {
             );
         }
 
-        let mut destructive = login_control();
+        let mut destructive = AuthenticationAdvanceControlObservation::login_control();
         destructive.new_password_field_count = 1.into();
         destructive.destination_identity =
             "https://login.example.test/register/delete-account".to_owned();
         destructive.label = "Create account".to_owned();
         assert!(!authentication_advance_control_is_safe(&destructive));
 
-        let mut provider = login_control();
+        let mut provider = AuthenticationAdvanceControlObservation::login_control();
         provider.new_password_field_count = 1.into();
         provider.destination_identity =
             "https://login.example.test/register?provider=google".to_owned();
@@ -398,7 +508,7 @@ mod tests {
 
     #[test]
     fn nested_local_login_routes_are_accepted() {
-        let mut control = login_control();
+        let mut control = AuthenticationAdvanceControlObservation::login_control();
         control.source_origin = "https://gitlab.com".to_owned();
         control.destination_identity = "https://gitlab.com/users/sign_in".to_owned();
         assert!(authentication_advance_control_is_safe(&control));
@@ -406,7 +516,7 @@ mod tests {
 
     #[test]
     fn ambiguous_semantic_submits_require_advance_label_evidence() {
-        let mut verify = login_control();
+        let mut verify = AuthenticationAdvanceControlObservation::login_control();
         verify.password_field_count = 0.into();
         verify.one_time_code_field_count = 1.into();
         verify.form_identity = "otp-challenge-form".to_owned();
@@ -432,7 +542,7 @@ mod tests {
 
     #[test]
     fn get_submitters_do_not_advance_authentication() {
-        let mut control = login_control();
+        let mut control = AuthenticationAdvanceControlObservation::login_control();
         control.submission_method = PageControlSubmissionMethod::Get;
         assert!(!authentication_advance_control_is_safe(&control));
 
@@ -449,7 +559,7 @@ mod tests {
             "https://login.example.test/oauth2/authorize",
             "https://login.example.test/oauth/authorize",
         ] {
-            let mut control = login_control();
+            let mut control = AuthenticationAdvanceControlObservation::login_control();
             control.destination_identity = destination.to_owned();
             assert!(
                 authentication_advance_control_is_safe(&control),

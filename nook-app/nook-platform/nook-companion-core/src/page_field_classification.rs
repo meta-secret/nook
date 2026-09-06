@@ -4,6 +4,11 @@
 //! which identity strings count as username, OTP, passkey, or manual-checkpoint
 //! signals used to build authentication workflow observations in the host.
 
+use control_identity::AuthenticationControlIdentity as ControlIdentity;
+use form_identity::{
+    AuthenticationRouteIdentity as RouteIdentity, CredentialDestination, DestinationPolicy,
+    OAuthAuthorization,
+};
 mod authentication_advance_control;
 mod control_identity;
 mod destination_identity;
@@ -217,11 +222,11 @@ pub fn looks_like_email_verification_body(body: &str) -> bool {
 #[must_use]
 pub fn looks_like_login_advance_control_label(label: &str) -> bool {
     if label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        || form_identity::form_identity_indicates_destructive_action(label)
+        || RouteIdentity::new(label).indicates_destructive_action()
         || looks_like_non_authentication_submit_control_label(label)
-        || control_identity::looks_like_password_recovery_route_control_label(label)
-        || control_identity::looks_like_registration_route_control_label(label)
-        || control_identity::looks_like_alternate_authentication_route_control_label(label)
+        || ControlIdentity::new(label).is_password_recovery()
+        || ControlIdentity::new(label).is_registration()
+        || ControlIdentity::new(label).is_alternate_authentication_route()
     {
         return false;
     }
@@ -305,18 +310,15 @@ pub(crate) fn one_time_code_ceremony_context_is_authenticated(
     else {
         return false;
     };
-    if form_identity::form_identity_indicates_destructive_action(form_identity)
-        || form_identity::form_identity_indicates_non_authentication_account_management(
-            form_identity,
-        )
-        || form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
-        || form_identity::control_destination_indicates_non_authentication_route(
-            &destination.route_identity,
-        )
-        || form_identity::destination_has_disallowed_action_or_provider(
-            &destination.route_identity,
-            false,
-            false,
+    if RouteIdentity::new(form_identity).indicates_destructive_action()
+        || RouteIdentity::new(form_identity).indicates_account_management()
+        || RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
+        || RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+        || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
+            DestinationPolicy {
+                credential: CredentialDestination::Authentication,
+                provider: OAuthAuthorization::Disallowed,
+            },
         )
     {
         return false;
@@ -380,18 +382,16 @@ pub(crate) fn authentication_passkey_control_is_safe(
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
         )
         || (!explicitly_marked && !looks_like_passkey_control_label(&observation.label))
-        || form_identity::form_identity_indicates_destructive_action(&observation.label)
-        || form_identity::identity_has_authentication_control_veto(&observation.machine_identity)
+        || RouteIdentity::new(&observation.label).indicates_destructive_action()
+        || RouteIdentity::new(&observation.machine_identity).has_control_veto()
         || matches!(
             observation.submission_method,
             PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
         )
         || label_names_passkey_enrollment_or_management
         || label_names_device_management
-        || form_identity::form_identity_indicates_destructive_action(&observation.form_identity)
-        || form_identity::form_identity_indicates_non_authentication_account_management(
-            &observation.form_identity,
-        )
+        || RouteIdentity::new(&observation.form_identity).indicates_destructive_action()
+        || RouteIdentity::new(&observation.form_identity).indicates_account_management()
     {
         return false;
     }
@@ -407,25 +407,18 @@ pub(crate) fn authentication_passkey_control_is_safe(
             observation.authentication_username,
             AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
         )
-        || form_identity::identity_indicates_explicit_authentication_route(
-            &observation.form_identity,
-        )
-        || form_identity::identity_indicates_explicit_authentication_route(
-            &destination.path_identity,
-        );
+        || RouteIdentity::new(&observation.form_identity).indicates_authentication()
+        || RouteIdentity::new(&destination.path_identity).indicates_authentication();
     if !has_authentication_context {
         return false;
     }
     if passkey_new_password_ceremony_lacks_assertion_state(observation, &destination) {
         return false;
     }
-    !form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
-        && !form_identity::control_destination_indicates_non_authentication_route(
-            &destination.route_identity,
-        )
-        && !form_identity::passkey_destination_has_disallowed_action_or_provider(
-            &destination.route_identity,
-        )
+    !RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
+        && !RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+        && !RouteIdentity::new(&destination.route_identity)
+            .has_disallowed_passkey_action_or_provider()
 }
 
 fn passkey_new_password_ceremony_lacks_assertion_state(
@@ -433,8 +426,8 @@ fn passkey_new_password_ceremony_lacks_assertion_state(
     destination: &CanonicalControlDestination,
 ) -> bool {
     observation.new_password_field_count.raw() > 0
-        && !form_identity::identity_indicates_explicit_login_route(&destination.path_identity)
-        && !form_identity::identity_indicates_explicit_login_route(&destination.route_identity)
+        && !RouteIdentity::new(&destination.path_identity).indicates_login()
+        && !RouteIdentity::new(&destination.route_identity).indicates_login()
 }
 
 /// Decide whether bounded form and destination identities describe a safe authentication route.
@@ -450,7 +443,7 @@ pub fn has_safe_authentication_route_identity(
     {
         return false;
     }
-    if form_identity::identity_has_authentication_control_veto(form_identity) {
+    if RouteIdentity::new(form_identity).has_control_veto() {
         return false;
     }
     let Some(destination) =
@@ -458,17 +451,18 @@ pub fn has_safe_authentication_route_identity(
     else {
         return false;
     };
-    if form_identity::control_destination_indicates_non_authentication_route(
-        &destination.route_identity,
-    ) || form_identity::destination_has_disallowed_action_or_provider(
-        &destination.route_identity,
-        false,
-        false,
-    ) {
+    if RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+        || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
+            DestinationPolicy {
+                credential: CredentialDestination::Authentication,
+                provider: OAuthAuthorization::Disallowed,
+            },
+        )
+    {
         return false;
     }
-    form_identity::identity_indicates_explicit_authentication_route(form_identity)
-        || form_identity::destination_has_safe_login_identity(&destination.path_identity)
+    RouteIdentity::new(form_identity).indicates_authentication()
+        || RouteIdentity::new(&destination.path_identity).has_safe_login_identity()
 }
 
 /// Admit implicit credential-creation on register, recovery, or password-update routes.
@@ -484,9 +478,12 @@ pub fn has_safe_credential_update_route_identity(
     {
         return false;
     }
-    if form_identity::form_identity_indicates_destructive_action(form_identity)
-        || form_identity::destination_has_disallowed_action_or_provider(form_identity, true, false)
-        || control_identity::looks_like_auxiliary_authentication_control_label(form_identity)
+    if RouteIdentity::new(form_identity).indicates_destructive_action()
+        || RouteIdentity::new(form_identity).has_disallowed_action_or_provider(DestinationPolicy {
+            credential: CredentialDestination::PasswordUpdate,
+            provider: OAuthAuthorization::Disallowed,
+        })
+        || ControlIdentity::new(form_identity).is_auxiliary()
     {
         return false;
     }
@@ -495,31 +492,27 @@ pub fn has_safe_credential_update_route_identity(
     else {
         return false;
     };
-    if form_identity::form_identity_indicates_destructive_action(&destination.route_identity)
-        || form_identity::destination_has_disallowed_action_or_provider(
-            &destination.route_identity,
-            true,
-            false,
+    if RouteIdentity::new(&destination.route_identity).indicates_destructive_action()
+        || RouteIdentity::new(&destination.route_identity).has_disallowed_action_or_provider(
+            DestinationPolicy {
+                credential: CredentialDestination::PasswordUpdate,
+                provider: OAuthAuthorization::Disallowed,
+            },
         )
     {
         return false;
     }
-    let credential_update_route =
-        form_identity::control_destination_indicates_registration_route(
-            &destination.route_identity,
-        ) || form_identity::control_destination_indicates_password_recovery_route(
-            &destination.route_identity,
-        ) || form_identity::control_destination_indicates_password_update_route(
-            &destination.route_identity,
-        );
-    if form_identity::control_destination_indicates_non_authentication_route(
-        &destination.route_identity,
-    ) && !credential_update_route
+    let credential_update_route = RouteIdentity::new(&destination.route_identity)
+        .indicates_registration()
+        || RouteIdentity::new(&destination.route_identity).indicates_password_recovery()
+        || RouteIdentity::new(&destination.route_identity).indicates_password_update();
+    if RouteIdentity::new(&destination.route_identity).indicates_non_authentication()
+        && !credential_update_route
     {
         return false;
     }
-    form_identity::identity_indicates_explicit_authentication_route(form_identity)
-        || form_identity::destination_has_safe_login_identity(&destination.path_identity)
+    RouteIdentity::new(form_identity).indicates_authentication()
+        || RouteIdentity::new(&destination.path_identity).has_safe_login_identity()
         || credential_update_route
 }
 
@@ -609,15 +602,15 @@ pub fn can_activate_authentication_route_control(
     if !has_safe_authentication_route_identity(source_origin, form_identity, destination_identity)
         || control_label.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
         || control_machine_identity.len() > MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
-        || form_identity::identity_has_authentication_control_veto(control_machine_identity)
+        || RouteIdentity::new(control_machine_identity).has_control_veto()
     {
         return false;
     }
     let has_matching_microsoft_authority =
         destination_identity::canonicalize_control_destination(source_origin, destination_identity)
             .is_some_and(|destination| destination.has_microsoft_provider_authority)
-            && control_identity::looks_like_microsoft_primary_sign_in_label(control_label);
-    if control_identity::label_names_external_authentication_provider(control_label)
+            && ControlIdentity::new(control_label).is_microsoft_primary_sign_in();
+    if ControlIdentity::new(control_label).label_names_provider()
         && !has_matching_microsoft_authority
     {
         return false;
