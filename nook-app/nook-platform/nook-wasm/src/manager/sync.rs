@@ -118,6 +118,7 @@ mod browser_tests {
     async fn local_sync_without_content_reports_a_new_vault() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         manager.delete_local_browser_data().await?;
+        crate::storage::event_db::clear_event_log_mode().await?;
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
@@ -125,8 +126,9 @@ mod browser_tests {
         let result = manager
             .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
             .await?;
-        assert!(!result.changed());
+        assert!(result.changed());
         assert_eq!(result.access_status()?, VaultAccessStatus::NewVault);
+        crate::storage::event_db::clear_event_log_mode().await?;
         manager.delete_local_browser_data().await?;
         Ok(())
     }

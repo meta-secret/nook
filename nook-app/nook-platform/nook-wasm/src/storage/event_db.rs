@@ -121,6 +121,11 @@ pub(crate) async fn remove_event_fixture(store_id: &str, event_id: &str) -> Resu
     store_delete(STORE_EVENTS, &event_key(store_id, event_id)).await
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+pub(crate) async fn clear_event_log_mode() -> Result<(), NookError> {
+    store_delete(STORE_VAULT, EVENT_LOG_MODE_KEY).await
+}
+
 pub(crate) async fn is_event_log_mode() -> Result<bool, NookError> {
     Ok(vault_get(EVENT_LOG_MODE_KEY)
         .await?
