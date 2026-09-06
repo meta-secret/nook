@@ -32,6 +32,7 @@ mod connect;
 mod device_protection;
 mod diagnostics;
 mod event_log;
+mod genesis;
 mod identity;
 mod identity_handoff;
 mod local_identity;

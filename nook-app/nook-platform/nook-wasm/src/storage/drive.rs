@@ -62,3 +62,46 @@ pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookEr
         .map_err(|e| NookError::Serialization(format!("Failed to parse Drive about: {e}")))?;
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn headers_trim_access_tokens_and_keep_the_product_user_agent() {
+        assert_eq!(
+            drive_headers("  token-123  "),
+            [
+                ("Authorization", "Bearer token-123".to_owned()),
+                ("User-Agent", "nook-wasm".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn errors_preserve_status_and_optional_body_without_leaking_empty_delimiters() {
+        assert!(matches!(
+            drive_error(StatusCode::BAD_REQUEST, "bad query"),
+            NookError::Drive(message)
+                if message == "Google Drive API responded with status 400 Bad Request — bad query"
+        ));
+        assert!(matches!(
+            drive_error(StatusCode::SERVICE_UNAVAILABLE, ""),
+            NookError::Drive(message)
+                if message == "Google Drive API responded with status 503 Service Unavailable"
+        ));
+    }
+
+    #[test]
+    fn about_response_accepts_optional_user_payloads() -> anyhow::Result<()> {
+        let with_user: DriveAboutResponse =
+            serde_json::from_str(r#"{"user":{"emailAddress":"person@example.test"}}"#)?;
+        assert_eq!(
+            with_user.user.and_then(|user| user.email_address),
+            Some("person@example.test".to_owned())
+        );
+        let without_user: DriveAboutResponse = serde_json::from_str(r#"{}"#)?;
+        assert!(without_user.user.is_none());
+        Ok(())
+    }
+}
