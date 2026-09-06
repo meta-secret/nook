@@ -82,3 +82,53 @@ fn pending_handoff_state_can_be_confirmed_and_rolled_back() -> Result<(), JsErro
     assert!(!manager.extension_identity_handoff_requires_connect());
     Ok(())
 }
+
+#[wasm_bindgen_test]
+async fn device_protection_handoff_guards_fail_closed_without_session_state() -> Result<(), JsError>
+{
+    let mut manager = NookVaultManager::new();
+    let context = NookExtensionIdentityHandoffContext::vault_creation();
+
+    assert!(
+        manager
+            .finish_extension_identity_handoff(
+                "not-an-envelope",
+                "nonce",
+                "not-a-device",
+                "not-a-public-key",
+                "not-a-signing-key",
+                &context,
+            )
+            .await
+            .is_err()
+    );
+    assert!(
+        manager
+            .seal_extension_identity_handoff("not-a-public-key", "nonce")
+            .await
+            .is_err()
+    );
+    assert!(
+        manager
+            .mark_extension_identity_handoff_existing_vault_import()
+            .is_err()
+    );
+    assert!(manager.commit_extension_identity_handoff().await.is_err());
+    assert!(
+        manager
+            .set_device_access_passkey_name(
+                "not-an-app-id".to_owned(),
+                "fingerprint".to_owned(),
+                "name".to_owned(),
+            )
+            .await
+            .is_err()
+    );
+    Ok(())
+}
+
+#[wasm_bindgen_test]
+fn handoff_contexts_reject_empty_store_references() {
+    assert!(NookExtensionIdentityHandoffContext::paired_vault("").is_err());
+    assert!(NookExtensionIdentityHandoffContext::existing_vault_import("").is_err());
+}
