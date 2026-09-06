@@ -44,8 +44,8 @@ fn passkey_error_code(error: &nook_core::PasskeyAuthenticatorError) -> &'static 
 
 #[cfg(test)]
 mod tests {
-    use super::passkey_error_code;
-    use nook_core::PasskeyAuthenticatorError;
+    use super::{NookVaultManager, passkey_error_code};
+    use nook_core::{PasskeyAuthenticatorError, VaultArchitecture};
 
     #[test]
     fn randomness_failure_has_a_distinct_browser_error_code() {
@@ -53,6 +53,77 @@ mod tests {
             passkey_error_code(&PasskeyAuthenticatorError::RandomnessUnavailable),
             "passkey-randomness-unavailable"
         );
+    }
+
+    #[test]
+    fn every_passkey_failure_maps_to_a_stable_browser_code() {
+        let cases = [
+            (
+                PasskeyAuthenticatorError::InvalidRequest("fixture"),
+                "passkey-invalid-request",
+            ),
+            (
+                PasskeyAuthenticatorError::RpOriginMismatch,
+                "passkey-rp-origin-mismatch",
+            ),
+            (
+                PasskeyAuthenticatorError::UnsupportedAlgorithm,
+                "passkey-unsupported-algorithm",
+            ),
+            (
+                PasskeyAuthenticatorError::CredentialExcluded,
+                "passkey-credential-excluded",
+            ),
+            (
+                PasskeyAuthenticatorError::CredentialNotFound,
+                "passkey-not-found",
+            ),
+            (
+                PasskeyAuthenticatorError::AmbiguousCredential,
+                "passkey-selection-required",
+            ),
+            (
+                PasskeyAuthenticatorError::InvalidKeyMaterial,
+                "passkey-invalid-key-material",
+            ),
+            (
+                PasskeyAuthenticatorError::SignatureCounterExhausted,
+                "passkey-counter-exhausted",
+            ),
+            (
+                PasskeyAuthenticatorError::RandomnessUnavailable,
+                "passkey-randomness-unavailable",
+            ),
+            (
+                PasskeyAuthenticatorError::Serialization,
+                "passkey-serialization-failed",
+            ),
+        ];
+        for (error, expected) in cases {
+            assert_eq!(passkey_error_code(&error), expected);
+        }
+    }
+
+    #[test]
+    fn passkey_capability_requires_unlock_and_simple_architecture() -> anyhow::Result<()> {
+        let locked = NookVaultManager::new();
+        assert!(locked.ensure_passkey_extension_capability().is_err());
+
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut ready = NookVaultManager::new();
+        ready.device.identity_private_key = identity.secret_string().into_inner();
+        assert!(ready.ensure_passkey_extension_capability().is_ok());
+
+        ready.vault.architecture = VaultArchitecture::sentinel_personal(
+            nook_core::DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 0.into(),
+            },
+        );
+        assert!(ready.ensure_passkey_extension_capability().is_err());
+        Ok(())
     }
 }
 

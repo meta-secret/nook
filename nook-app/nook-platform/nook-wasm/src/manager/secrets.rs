@@ -624,3 +624,27 @@ mod wasm_tests {
         Ok(())
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod projection_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn empty_secret_session_exposes_safe_helpers() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        assert!(manager.filter_secrets("fixture").is_err());
+        assert!(manager.generate_secret_id()?.starts_with("secret_"));
+        assert_eq!(manager.generate_id()?.len(), 11);
+        manager.status.tx.send("FIRST".to_owned())?;
+        manager.status.tx.send("SECOND".to_owned())?;
+        assert_eq!(
+            manager.drain_status_log(),
+            vec!["FIRST".to_owned(), "SECOND".to_owned()]
+        );
+        assert!(manager.drain_status_log().is_empty());
+        Ok(())
+    }
+}

@@ -42,6 +42,24 @@ impl NookVaultManager {
     }
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn empty_prior_vault_is_a_safe_import_snapshot() -> anyhow::Result<()> {
+        assert_eq!(
+            NookVaultManager::snapshot_prior_local_vault("  ").await?,
+            (String::new(), false)
+        );
+        NookVaultManager::ensure_prior_local_vault_still_registered("", false).await?;
+        Ok(())
+    }
+}
+
 #[wasm_bindgen]
 impl NookVaultManager {
     /// Copy a single-vault provider event log into local storage as its own vault.

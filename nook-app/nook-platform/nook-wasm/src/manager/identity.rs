@@ -74,6 +74,7 @@ impl NookVaultManager {
 
 #[cfg(test)]
 mod tests {
+    use super::NookVaultManager;
     use crate::manager::session::DeviceSessionState;
 
     #[test]
@@ -85,5 +86,16 @@ mod tests {
         };
 
         assert_eq!(device.public_app_id(), "app_companion_session");
+    }
+
+    #[test]
+    fn identity_snapshot_requests_validate_selected_store_ids() {
+        let manager = NookVaultManager::new();
+        assert!(manager.identity_directory_snapshot_request().is_ok());
+        assert!(
+            manager
+                .selected_vault_identity_context_request("invalid-store")
+                .is_err()
+        );
     }
 }

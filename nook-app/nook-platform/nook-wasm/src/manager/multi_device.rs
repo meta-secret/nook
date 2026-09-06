@@ -318,6 +318,62 @@ impl NookVaultManager {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sentinel_share_issuance_waits_for_quorum_and_projects_ready_participants()
+    -> anyhow::Result<()> {
+        let first = nook_core::DeviceIdentity::generate()?;
+        let second = nook_core::DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let policy = nook_core::SentinelPolicy {
+            threshold: 2.into(),
+            required_participants: 2.into(),
+            ready_participants: 0.into(),
+        };
+        let mut manager = NookVaultManager::new();
+        manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
+            nook_core::DeviceMode::Standard,
+            policy,
+        );
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.members_key = keys.members_key.to_string();
+
+        let one = vec![nook_core::member_from_identity(
+            &first,
+            "2026-09-06T00:00:00Z",
+        )];
+        assert!(manager.maybe_issue_sentinel_shares(&one)?.is_none());
+
+        let roster = vec![
+            nook_core::member_from_identity(&first, "2026-09-06T00:00:00Z"),
+            nook_core::member_from_identity(&second, "2026-09-06T00:00:00Z"),
+        ];
+        let operation = manager
+            .maybe_issue_sentinel_shares(&roster)?
+            .ok_or_else(|| anyhow::anyhow!("quorum should issue shares"))?;
+        assert!(matches!(
+            operation,
+            VaultOperation::SentinelSharesIssued { ref shares } if shares.len() == 2
+        ));
+        assert_eq!(manager.vault.meta.sentinel_shares.len(), 2);
+        assert_eq!(
+            u8::from(
+                manager
+                    .vault
+                    .architecture
+                    .sentinel
+                    .policy()?
+                    .ready_participants
+            ),
+            2
+        );
+        Ok(())
+    }
+}
+
 impl NookVaultManager {
     /// Approve an extension only when this manager was configured for the
     /// Simple app (or the unified development harness) and owns a Simple vault.
