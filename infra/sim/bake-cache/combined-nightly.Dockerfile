@@ -78,3 +78,16 @@ RUN test -n "$PRODUCT_SOURCE" \
   && echo bake-sim-wasm-node-source-expensive
 RUN sleep 1 \
   && echo bake-sim-wasm-node-coverage-execution-expensive
+
+# Preflight coverage dependencies are source-free. The full repository input
+# invalidates only the coverage execution vertex, never this prewarm.
+FROM parent AS preflight-coverage-deps
+RUN sleep 1 \
+  && echo bake-sim-preflight-coverage-dependencies-expensive
+
+FROM preflight-coverage-deps AS preflight-source
+ARG REPOSITORY_SOURCE
+RUN test -n "$REPOSITORY_SOURCE" \
+  && printf '%s\n' "$REPOSITORY_SOURCE" >/opt/preflight-repository-source-stamp \
+  && sleep 1 \
+  && echo bake-sim-preflight-coverage-execution-expensive

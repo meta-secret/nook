@@ -167,9 +167,23 @@ fn every_enforced_package_has_an_independent_hosted_failure_decision() -> anyhow
     assert!(hive_tasks.contains("LLVM_PROFILE_FILE=/profiles/%m-%p.profraw"));
     assert!(hive_arc.contains("LLVM_PROFILE_FILE=%q exec %q"));
     let preflight_gate =
-        "cargo llvm-cov test --locked -p nook-preflight --fail-under-lines \"$floor\"";
+        "cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines \"$floor\"";
     assert!(preflight.contains(preflight_gate));
     assert!(preflight.contains("WORKDIR /meta-secret/nook/preflight"));
+    let preflight_coverage_deps = preflight
+        .split_once("FROM deps AS coverage-deps")
+        .and_then(|(_, remainder)| {
+            remainder
+                .split_once("FROM coverage-deps AS build")
+                .map(|(stage, _)| stage)
+        })
+        .context("preflight coverage dependencies must be a bounded source-free stage")?;
+    assert!(preflight_coverage_deps.contains("cargo llvm-cov clean --workspace"));
+    assert!(preflight_coverage_deps.contains("cargo llvm-cov show-env --sh"));
+    assert!(preflight_coverage_deps.contains(
+        "CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo test --locked -p nook-preflight --no-run"
+    ));
+    assert!(!preflight_coverage_deps.contains("COPY --from=repository-source"));
     let target_envs = preflight
         .matches("ENV CARGO_TARGET_DIR=/meta-secret/preflight-target")
         .count();

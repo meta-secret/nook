@@ -65,11 +65,18 @@ fn bake_cache_sim_fixtures_mirror_parent_leaf_scopes() {
             && bake.contains("target \"leaf-via-platform-broken\"")
             && bake.contains("target \"combined-leaf\"")
             && bake.contains("target \"combined-consumer\"")
+            && bake.contains("target \"preflight-source\"")
             && bake.contains("target \"hive\"")
             && bake.contains("target \"leaf\"")
             && bake.contains("target \"leaf-short-chain\"")
             && bake.contains("target \"parent-pr-cold\""),
         "sim Bake must expose restore/publish plus broken and fixed nested leaf topologies"
+    );
+    assert!(
+        tasks.contains("bake-sim-preflight-coverage-dependencies-expensive")
+            && tasks.contains("bake-sim-preflight-coverage-execution-expensive")
+            && tasks.contains("preflight-source.args.REPOSITORY_SOURCE=${suffix}-${revision}"),
+        "sim must prove repository-source edits preserve preflight coverage dependencies"
     );
     assert!(
         bake.contains("BASE_OWN_CACHE_ENABLED")
