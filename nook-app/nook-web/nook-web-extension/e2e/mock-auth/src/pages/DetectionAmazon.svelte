@@ -8,6 +8,7 @@
   import { navigate } from '../lib/navigation'
 
   const EVIDENCE_KEY = 'amazon-submission-evidence'
+  const AMAZON_AUTOCOMPLETE = 'webauthn'
   let email = $state('')
   let hiddenPassword = $state('')
   let backdetectSubmissionCount = $state(0)
@@ -86,7 +87,7 @@
       id="ap_email_login"
       name="email"
       type="email"
-      autocomplete="webauthn"
+      autocomplete={AMAZON_AUTOCOMPLETE}
       aria-label="Enter mobile number or email"
       bind:value={email}
     />
