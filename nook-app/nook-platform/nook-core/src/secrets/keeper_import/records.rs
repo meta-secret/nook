@@ -76,7 +76,7 @@ impl KeeperMetadata<'_> {
         if let Some(entry) = (SourceLabelMetadata {
             key: "title",
             label: title,
-            website_url: website_url,
+            website_url,
         })
         .entry()
         {
