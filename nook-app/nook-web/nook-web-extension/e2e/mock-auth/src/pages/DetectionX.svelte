@@ -30,7 +30,7 @@
       hiddenPassword,
       alternativeActivationCount,
       continueActivationCount,
-      submitterPresent: event.submitter !== null,
+      submitterPresent: Boolean(event.submitter),
     })
     const completed = transition === XAuthMockTransitionKind.Completed
     sessionStorage.setItem(
@@ -40,7 +40,7 @@
         hiddenPasswordUntouched: hiddenPassword === '',
         alternativesUntouched: alternativeActivationCount === 0,
         nonSemanticContinueUntouched: continueActivationCount === 0,
-        implicitFormSubmission: event.submitter === null,
+        implicitFormSubmission: !event.submitter,
       }),
     )
     if (!completed) {

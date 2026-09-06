@@ -341,13 +341,13 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const form = page.getByTestId('x-active-form')
       expect(
         await form.evaluate((element) => ({
-          actionAttribute: element.getAttribute('action'),
-          methodAttribute: element.getAttribute('method'),
+          actionAttributePresent: element.hasAttribute('action'),
+          methodAttributePresent: element.hasAttribute('method'),
           method: (element as HTMLFormElement).method,
         })),
       ).toEqual({
-        actionAttribute: null,
-        methodAttribute: null,
+        actionAttributePresent: false,
+        methodAttributePresent: false,
         method: 'get',
       })
       const username = form.locator('[name="username_or_email"]')
