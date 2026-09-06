@@ -20,7 +20,10 @@
 
   function submitterIdentity(event: SubmitEvent): string {
     const { submitter } = event
-    if (submitter) return submitter.getAttribute('value') || ''
+    if (submitter && typeof submitter.getAttribute === 'function') {
+      const value = submitter.getAttribute('value')
+      if (value) return value
+    }
 
     // The extension mediates a page-world submit event from its isolated
     // world. Some browser versions cannot carry the cross-realm submitter
