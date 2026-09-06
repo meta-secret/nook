@@ -231,8 +231,8 @@ mod tests {
             }
         }
 
-        fn oauth_snapshot(credential: OAuthCredentialFixture<'_>) -> AuthProvidersSnapshotData {
-            let OAuthCredentialFixture { access, refresh } = credential;
+        fn oauth_snapshot(credential: &OAuthCredentialFixture<'_>) -> AuthProvidersSnapshotData {
+            let OAuthCredentialFixture { access, refresh } = *credential;
             AuthProvidersSnapshotData {
                 providers: vec![StorageProviderData {
                     id: "gd-1".to_owned(),
@@ -292,7 +292,7 @@ mod tests {
         let identity = DeviceIdentity::generate()?;
         let access = "ya29.oauth-access-token";
         let refresh = "1//refresh-token-secret";
-        let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(OAuthCredentialFixture {
+        let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
             access,
             refresh: Some(refresh),
         });
@@ -364,7 +364,7 @@ mod tests {
     #[test]
     fn open_failure_does_not_partially_decrypt_snapshot() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
-        let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(OAuthCredentialFixture {
+        let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
             access: "ya29.valid-access",
             refresh: Some("invalid plaintext refresh"),
         });
@@ -475,7 +475,7 @@ mod tests {
     #[test]
     fn late_malformed_armor_preserves_all_opened_fields() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
-        let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(OAuthCredentialFixture {
+        let mut snapshot = AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
             access: "valid access",
             refresh: Some("valid refresh"),
         });
