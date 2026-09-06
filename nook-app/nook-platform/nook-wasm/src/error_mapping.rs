@@ -238,9 +238,6 @@ mod browser_tests {
                 key: "secret".into(),
             },
         ));
-        let _ = NookError::from(nook_core::VaultError::Age(
-            nook_core::AgeCryptoError::Encrypt("recipient".into()),
-        ));
         assert!(matches!(
             NookError::from(nook_core::MultiDeviceError::IdentityLabelEmpty),
             NookError::Encryption(_)
