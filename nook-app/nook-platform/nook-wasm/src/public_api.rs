@@ -854,7 +854,12 @@ mod browser_tests {
             staged_local_remote_storage_args().unwrap().state(),
             NookStagedStorageArgsState::Incomplete
         );
-        assert!(staged_oauth_remote_storage_args(oauth.clone()).is_err());
+        assert_eq!(
+            staged_oauth_remote_storage_args(oauth.clone())
+                .unwrap()
+                .state(),
+            NookStagedStorageArgsState::Incomplete
+        );
 
         let revision = NookProviderSyncRevision::untracked();
         assert!(
