@@ -24,7 +24,13 @@ impl CheckedAuthenticationControl<'_> {
         let observation = self.observation;
         let owned_semantic_submit = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit);
+        let owned_explicit_activation = authentication_scope_owns_control
+            && matches!(observation.semantics, PageControlSemantics::Activation)
+            && AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
+            && AuthenticationRouteIdentity::new(&self.destination.path_identity)
+                .has_safe_login_identity();
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_login()
+            || owned_explicit_activation
             || (owned_semantic_submit
                 && (AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
                     || looks_like_supported_localized_login_control_label(&observation.label)
