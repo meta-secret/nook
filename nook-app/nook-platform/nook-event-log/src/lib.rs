@@ -57,12 +57,10 @@ pub use projection::{
     SecretReplacementConflict, SecurityConflict, VaultProjection,
     assert_projection_permutation_invariant, current_epoch_checkpoint, project_vault,
 };
-pub use remote_epoch_visibility::order_remote_events_for_visibility;
+pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;
 pub use store::{
-    LocalEventStore, RemoteEventLogClassification, classify_remote_event_log,
-    remote_event_belongs_to_store, remote_event_store_id, union_remote_events,
-    union_remote_events_and_heads,
+    CheckedRemoteEvent, LocalEventStore, RemoteEventBatch, RemoteEventLogClassification,
 };
 
 // Re-export typed wire values that appear in the event-log public API.

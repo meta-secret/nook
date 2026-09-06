@@ -5,15 +5,16 @@
 )]
 
 use crate::storage::event_db;
+use nook_core::{CheckedRemoteEvent, RemoteEventBatch, RemoteEventWrites};
 use nook_core::{MultiDeviceError, ProjectionEpoch, StorageMode, VaultCrypto, VaultType};
 use std::collections::BTreeSet;
 
 use super::{
     EventId, EventLogStorageRecord, EventLogSyncIssueState, ExternalEventLogRecord,
     LocalFolderEventWrite, NookError, NookVaultManager, RemoteEventLogClassification,
-    VaultCryptoState, append_outbox_index, classify_remote_event_log, load_from_indexed_db,
-    load_local_event_store, load_outbox, queue_outbox_entry, read_local_folder_event_files,
-    remove_outbox_entry, save_key_epoch, write_local_folder_event_files,
+    VaultCryptoState, append_outbox_index, load_from_indexed_db, load_local_event_store,
+    load_outbox, queue_outbox_entry, read_local_folder_event_files, remove_outbox_entry,
+    save_key_epoch, write_local_folder_event_files,
 };
 
 struct PendingOutboxEvent<'a> {
@@ -246,7 +247,7 @@ impl NookVaultManager {
         }
         let remote_events = self.fetch_current_provider_events(missing).await?;
         let classification =
-            classify_remote_event_log(&remote_events, Some(self.vault.store_id.as_str()))?;
+            RemoteEventBatch::new(&remote_events).classify(Some(self.vault.store_id.as_str()))?;
         self.guard_remote_event_log_classification("Sync provider", &classification)
     }
 
@@ -296,7 +297,7 @@ impl NookVaultManager {
             .into_iter()
             .map(|(event_id, bytes)| Ok((EventId::parse(&event_id)?, bytes)))
             .collect::<Result<Vec<_>, NookError>>()?;
-        nook_core::order_remote_events_for_visibility(&mut pending)?;
+        RemoteEventWrites::new(&mut pending).order()?;
         for (event_id, bytes) in pending {
             let pending = PendingOutboxEvent {
                 provider_id: &provider_id,
@@ -324,7 +325,7 @@ impl NookVaultManager {
                     Ok((event_id, bytes.to_vec()))
                 })
                 .collect::<Result<Vec<_>, NookError>>()?;
-            nook_core::order_remote_events_for_visibility(&mut missing)?;
+            RemoteEventWrites::new(&mut missing).order()?;
             for (event_id, bytes) in missing {
                 self.put_current_provider_event_if_absent(&event_id, &bytes)
                     .await?;
@@ -344,7 +345,8 @@ impl NookVaultManager {
             let mut discovered_store_ids = BTreeSet::new();
             let mut fetched = Vec::new();
             for (event_id, bytes) in self.fetch_current_provider_events(remote_ids).await? {
-                let store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
+                let store_id = CheckedRemoteEvent::parse(&event_id, &bytes)
+                    .map(CheckedRemoteEvent::into_store_id)?;
                 let store_id = store_id.as_str().to_owned();
                 discovered_store_ids.insert(store_id.clone());
                 fetched.push((event_id, bytes, store_id));
@@ -381,14 +383,12 @@ impl NookVaultManager {
                 .collect::<BTreeSet<_>>();
             let fetched = self.fetch_current_provider_events(missing_ids).await?;
             let classification =
-                classify_remote_event_log(&fetched, Some(self.vault.store_id.as_str()))?;
+                RemoteEventBatch::new(&fetched).classify(Some(self.vault.store_id.as_str()))?;
             self.guard_remote_event_log_classification("Sync provider", &classification)?;
             for (event_id, bytes) in fetched {
-                if !nook_core::remote_event_belongs_to_store(
-                    &event_id,
-                    &bytes,
-                    &self.vault.store_id,
-                )? {
+                if !CheckedRemoteEvent::parse(&event_id, &bytes)
+                    .map(|event| event.belongs_to_store(&self.vault.store_id))?
+                {
                     continue;
                 }
                 remote_events.push((event_id, bytes));
@@ -496,7 +496,8 @@ impl NookVaultManager {
             let mut discovered_store_ids = BTreeSet::new();
             let mut fetched = Vec::new();
             for (event_id, bytes) in parsed_records {
-                let store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
+                let store_id = CheckedRemoteEvent::parse(&event_id, &bytes)
+                    .map(CheckedRemoteEvent::into_store_id)?;
                 let store_id = store_id.as_str().to_owned();
                 discovered_store_ids.insert(store_id.clone());
                 fetched.push((event_id, bytes, store_id));
@@ -522,15 +523,13 @@ impl NookVaultManager {
                 .map(|(event_id, bytes, _)| (event_id, bytes))
                 .collect();
         } else {
-            let classification =
-                classify_remote_event_log(&parsed_records, Some(self.vault.store_id.as_str()))?;
+            let classification = RemoteEventBatch::new(&parsed_records)
+                .classify(Some(self.vault.store_id.as_str()))?;
             self.guard_remote_event_log_classification("Backup folder", &classification)?;
             for (event_id, bytes) in parsed_records {
-                if !nook_core::remote_event_belongs_to_store(
-                    &event_id,
-                    &bytes,
-                    &self.vault.store_id,
-                )? {
+                if !CheckedRemoteEvent::parse(&event_id, &bytes)
+                    .map(|event| event.belongs_to_store(&self.vault.store_id))?
+                {
                     continue;
                 }
                 remote_events.push((event_id, bytes));
@@ -566,7 +565,7 @@ impl NookVaultManager {
                 ))
             })
             .collect::<Result<Vec<_>, NookError>>()?;
-        nook_core::order_remote_events_for_visibility(&mut writes)?;
+        RemoteEventWrites::new(&mut writes).order()?;
         let writes = writes
             .into_iter()
             .map(|(event_id, content)| {
