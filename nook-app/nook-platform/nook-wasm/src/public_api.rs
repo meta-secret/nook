@@ -387,24 +387,6 @@ pub fn update_provider_sync_metadata(
     Ok(snapshot)
 }
 
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-pub fn set_google_drive_provider_mode(
-    config: nook_core::OAuthFileConfigData,
-    mode: nook_core::GoogleDriveMode,
-) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-    Ok(nook_core::set_google_drive_provider_mode(&config, mode))
-}
-
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-pub fn set_icloud_provider_mode(
-    config: nook_core::OAuthFileConfigData,
-    mode: nook_core::ICloudMode,
-) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-    Ok(nook_core::set_icloud_provider_mode(&config, mode))
-}
-
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
