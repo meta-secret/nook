@@ -396,7 +396,8 @@ mod tests {
         ];
         assert!(matches!(
             manager.maybe_issue_sentinel_shares(&roster),
-            Err(NookError::from(MultiDeviceError::SentinelGenesisRosterFull))
+            Err(NookError::Encryption(message))
+                if message == MultiDeviceError::SentinelGenesisRosterFull.to_string()
         ));
 
         let one = vec![roster[0].clone()];
