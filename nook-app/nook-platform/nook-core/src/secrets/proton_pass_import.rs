@@ -1,25 +1,17 @@
-//! Proton Pass export conversion into Nook's typed plaintext secret model.
-
-use super::import_support;
-
-use std::{
-    collections::BTreeMap,
-    fmt,
-    io::{Cursor, Read},
-    str,
-};
-
-use serde::Deserialize;
-use serde_json::Value;
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+//! Proton Pass ZIP/JSON admission into typed plaintext secrets.
+mod archive;
+mod items;
+use crate::SecretValue;
+use archive::ProtonPassArchive;
+use items::ProtonPassExport;
+use std::{fmt, str};
 use thiserror::Error;
-use zip::{ZipArchive, result};
-
-use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
-
 const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
-const MAX_EXPORT_DATA_BYTES: u64 = 64 * 1024 * 1024;
-const DATA_FILE: &str = "Proton Pass/data.json";
-
 #[derive(Debug, Error)]
 pub enum ProtonPassImportError {
     #[error("The Proton Pass export is too large to import safely.")]
@@ -43,364 +35,99 @@ pub struct ProtonPassImportPlan {
     pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
-#[derive(Debug, Deserialize)]
-struct ProtonPassExport {
-    vaults: BTreeMap<String, ProtonPassVault>,
+/// Borrow original export bytes until consuming import planning completes.
+/// ```
+/// use nook_core::ProtonPassImportInput;
+/// let plan = ProtonPassImportInput::from_bytes(br#"{"vaults":{}}"#).plan()?;
+/// assert!(plan.items.is_empty());
+/// # Ok::<(), nook_core::ProtonPassImportError>(())
+/// ```
+/// ```compile_fail,E0502
+/// use nook_core::ProtonPassImportInput;
+/// let mut bytes = Vec::new();
+/// let input = ProtonPassImportInput::from_bytes(&bytes);
+/// bytes.clear();
+/// let _ = input.plan();
+/// ```
+/// ```compile_fail,E0599
+/// use nook_core::ProtonPassImportInput;
+/// let input = ProtonPassImportInput::from_bytes(b"{}");
+/// let duplicate = input.clone();
+/// ```
+/// ```compile_fail,E0382
+/// use nook_core::ProtonPassImportInput;
+/// let input = ProtonPassImportInput::from_bytes(b"{}");
+/// let _ = input.plan();
+/// let _ = input.plan();
+/// ```
+pub struct ProtonPassImportInput<'a> {
+    bytes: &'a [u8],
 }
-
-#[derive(Debug, Deserialize)]
-struct ProtonPassVault {
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    items: Vec<ProtonPassItem>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ProtonPassItem {
-    data: ProtonPassItemData,
-    #[serde(default)]
-    state: u8,
-    #[serde(default)]
-    pinned: bool,
-    #[serde(default)]
-    files: Vec<Value>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ProtonPassItemData {
-    #[serde(default)]
-    metadata: ProtonPassMetadata,
-    #[serde(default)]
-    extra_fields: Vec<ProtonPassField>,
-    #[serde(rename = "type")]
-    item_type: String,
-    #[serde(default)]
-    content: ProtonPassContent,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct ProtonPassMetadata {
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    note: String,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ProtonPassContent {
-    #[serde(default)]
-    item_email: String,
-    #[serde(default)]
-    item_username: String,
-    #[serde(default)]
-    username: String,
-    #[serde(default)]
-    password: String,
-    #[serde(default)]
-    urls: Vec<String>,
-    #[serde(default)]
-    totp_uri: String,
-    #[serde(default)]
-    passkeys: Vec<Value>,
-    #[serde(default)]
-    cardholder_name: String,
-    #[serde(default)]
-    number: String,
-    #[serde(default)]
-    expiration_date: String,
-    #[serde(default)]
-    verification_number: String,
-    #[serde(default)]
-    pin: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ProtonPassField {
-    #[serde(default)]
-    field_name: String,
-    #[serde(rename = "type", default)]
-    field_type: String,
-    #[serde(default)]
-    data: Value,
-}
-
-fn invalid_export(error: impl fmt::Display) -> ProtonPassImportError {
-    ProtonPassImportError::InvalidExport(error.to_string())
-}
-
-fn read_zip_data(bytes: &[u8]) -> Result<String, ProtonPassImportError> {
-    let mut archive = ZipArchive::new(Cursor::new(bytes)).map_err(invalid_export)?;
-    let mut encrypted_data_found = false;
-    for index in 0..archive.len() {
-        let file = archive.by_index(index).map_err(invalid_export)?;
-        if file.name().ends_with("/data.pgp") || file.name() == "data.pgp" {
-            encrypted_data_found = true;
-        }
+impl<'a> ProtonPassImportInput<'a> {
+    #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: accepts the original Proton Pass ZIP archive bytes"
+        )
+    )]
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+        Self { bytes }
     }
-
-    let file = match archive.by_name(DATA_FILE) {
-        Ok(file) => file,
-        Err(result::ZipError::FileNotFound) if encrypted_data_found => {
+    pub fn plan(self) -> Result<ProtonPassImportPlan, ProtonPassImportError> {
+        if self.bytes.len() > MAX_ARCHIVE_BYTES {
+            return Err(ProtonPassImportError::ExportTooLarge);
+        }
+        if self.bytes.starts_with(b"-----BEGIN PGP MESSAGE-----") {
             return Err(ProtonPassImportError::EncryptedExport);
         }
-        Err(result::ZipError::FileNotFound) => {
-            return Err(ProtonPassImportError::MissingDataFile);
+        if self.is_zip() {
+            let mut archive = ProtonPassArchive::open(self.bytes)?;
+            let json = archive.select_data()?.read()?;
+            return ProtonPassExport::parse(&json).map(ProtonPassExport::plan);
         }
-        Err(error) => return Err(invalid_export(error)),
-    };
-    if file.size() > MAX_EXPORT_DATA_BYTES {
-        return Err(ProtonPassImportError::ExportTooLarge);
+        let json = str::from_utf8(self.bytes).map_err(ProtonPassImportError::invalid)?;
+        ProtonPassExport::parse(json).map(ProtonPassExport::plan)
     }
-    let mut json = String::new();
-    file.take(MAX_EXPORT_DATA_BYTES + 1)
-        .read_to_string(&mut json)
-        .map_err(invalid_export)?;
-    if u64::try_from(json.len()).unwrap_or(u64::MAX) > MAX_EXPORT_DATA_BYTES {
-        return Err(ProtonPassImportError::ExportTooLarge);
-    }
-    Ok(json)
-}
-
-fn field_value(field: &ProtonPassField) -> Option<String> {
-    let key = match field.field_type.as_str() {
-        "totp" => "totpUri",
-        "timestamp" => "timestamp",
-        "text" | "hidden" => "content",
-        _ => return None,
-    };
-    match field.data.get(key) {
-        Some(Value::String(value)) if !value.trim().is_empty() => Some(value.clone()),
-        Some(Value::Number(value)) => Some(value.to_string()),
-        _ => None,
+    fn is_zip(&self) -> bool {
+        self.bytes.starts_with(b"PK\x03\x04")
+            || self.bytes.starts_with(b"PK\x05\x06")
+            || self.bytes.starts_with(b"PK\x07\x08")
     }
 }
-
-fn append_proton_metadata(
-    notes: &mut String,
-    metadata: impl IntoIterator<Item = (String, String)>,
-) {
-    import_support::append_import_metadata(notes, "Proton Pass", metadata);
+impl ProtonPassImportError {
+    fn invalid(error: impl fmt::Display) -> Self {
+        Self::InvalidExport(error.to_string())
+    }
 }
-
-fn item_metadata(
-    item: &ProtonPassItem,
-    vault_name: &str,
-    primary_url: &str,
-    selected_username: &str,
-) -> Vec<(String, String)> {
-    let mut metadata = Vec::new();
-    if !vault_name.trim().is_empty() {
-        metadata.push(("vault".to_owned(), vault_name.trim().to_owned()));
-    }
-    if item.state == 2 {
-        metadata.push(("state".to_owned(), "trashed".to_owned()));
-    }
-    if item.pinned {
-        metadata.push(("pinned".to_owned(), "true".to_owned()));
-    }
-    let content = &item.data.content;
-    if !content.item_email.trim().is_empty() && content.item_email.trim() != selected_username {
-        metadata.push(("email".to_owned(), content.item_email.trim().to_owned()));
-    }
-    if !content.totp_uri.trim().is_empty() {
-        metadata.push(("totp".to_owned(), content.totp_uri.clone()));
-    }
-    metadata.extend(
-        content
-            .urls
-            .iter()
-            .filter(|url| !url.trim().is_empty() && url.trim() != primary_url)
-            .enumerate()
-            .map(|(index, url)| (format!("url[{}]", index + 2), url.trim().to_owned())),
-    );
-    metadata.extend(
-        item.data
-            .extra_fields
-            .iter()
-            .enumerate()
-            .filter_map(|(index, field)| {
-                let value = field_value(field)?;
-                let name = if field.field_name.trim().is_empty() {
-                    format!("field[{}]", index + 1)
-                } else {
-                    format!("field.{}", field.field_name.trim())
-                };
-                Some((name, value))
-            }),
-    );
-    if !content.passkeys.is_empty() {
-        metadata.push((
-            "passkeys_skipped".to_owned(),
-            content.passkeys.len().to_string(),
-        ));
-    }
-    if !item.files.is_empty() {
-        metadata.push((
-            "attachments_skipped".to_owned(),
-            item.files.len().to_string(),
-        ));
-    }
-    metadata
-}
-
-fn convert_login(item: &ProtonPassItem, vault_name: &str) -> SecretValue {
-    let content = &item.data.content;
-    let website_url = content
-        .urls
-        .iter()
-        .find(|url| !url.trim().is_empty())
-        .map_or_else(
-            || item.data.metadata.name.trim().to_owned(),
-            |url| url.trim().to_owned(),
-        );
-    let username = [
-        content.item_username.as_str(),
-        content.username.as_str(),
-        content.item_email.as_str(),
-    ]
-    .into_iter()
-    .find(|candidate| !candidate.trim().is_empty())
-    .map_or("", str::trim);
-    let mut notes = item.data.metadata.note.clone();
-    let mut metadata = item_metadata(item, vault_name, website_url.as_str(), username);
-    if let Some(name) = import_support::source_label_metadata(
-        "name",
-        &item.data.metadata.name,
-        website_url.as_str(),
-    ) {
-        metadata.insert(0, name);
-    }
-    append_proton_metadata(&mut notes, metadata);
-    SecretValue::Login(LoginSecret {
-        website_url,
-        username: username.to_owned(),
-        password: content.password.clone(),
-        notes,
-    })
-}
-
-fn convert_note(item: &ProtonPassItem, vault_name: &str) -> SecretValue {
-    let mut note = item.data.metadata.note.clone();
-    append_proton_metadata(&mut note, item_metadata(item, vault_name, "", ""));
-    SecretValue::SecureNote(SecureNoteSecret {
-        title: item.data.metadata.name.trim().to_owned(),
-        note,
-    })
-}
-
-fn parse_proton_expiration(raw: &str) -> (String, String) {
-    let trimmed = raw.trim();
-    if let Some((year, month)) = trimmed.split_once('-') {
-        return (month.trim().to_owned(), year.trim().to_owned());
-    }
-    if let Some((month, year)) = trimmed.split_once('/') {
-        return (month.trim().to_owned(), year.trim().to_owned());
-    }
-    (String::new(), String::new())
-}
-
-fn convert_credit_card(item: &ProtonPassItem, vault_name: &str) -> Option<SecretValue> {
-    let content = &item.data.content;
-    let (expiration_month, expiration_year) = parse_proton_expiration(&content.expiration_date);
-    let mut notes = item.data.metadata.note.clone();
-    let mut metadata = item_metadata(item, vault_name, "", "");
-    if !content.pin.trim().is_empty() {
-        metadata.push(("pin".to_owned(), content.pin.trim().to_owned()));
-    }
-    append_proton_metadata(&mut notes, metadata);
-    CreditCardSecret::from_fields(
-        item.data.metadata.name.trim(),
-        content.cardholder_name.trim(),
-        content.number.trim(),
-        expiration_month.trim(),
-        expiration_year.trim(),
-        content.verification_number.trim(),
-        &notes,
-    )
-    .ok()
-    .map(SecretValue::CreditCard)
-}
-
-fn plan_json(json: &str) -> Result<ProtonPassImportPlan, ProtonPassImportError> {
-    let export: ProtonPassExport =
-        serde_json::from_str(json).map_err(ProtonPassImportError::InvalidData)?;
-    let mut source_count = 0;
-    let mut items = Vec::new();
-    for vault in export.vaults.into_values() {
-        source_count += vault.items.len();
-        for item in vault.items {
-            match item.data.item_type.as_str() {
-                "login" => items.push(convert_login(&item, &vault.name)),
-                "note" => items.push(convert_note(&item, &vault.name)),
-                "creditCard" => {
-                    if let Some(card) = convert_credit_card(&item, &vault.name) {
-                        items.push(card);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    let skipped_unsupported = source_count.saturating_sub(items.len());
-    Ok(ProtonPassImportPlan {
-        items,
-        source_count: source_count.into(),
-        skipped_unsupported: skipped_unsupported.into(),
-    })
-}
-
-/// Parse an unencrypted Proton Pass ZIP export or a decrypted `data.json`
-/// export entirely in memory.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: accepts the original Proton Pass ZIP archive bytes"
-    )
-)]
-pub fn plan_proton_pass_import(
-    export_bytes: &[u8],
-) -> Result<ProtonPassImportPlan, ProtonPassImportError> {
-    if export_bytes.len() > MAX_ARCHIVE_BYTES {
-        return Err(ProtonPassImportError::ExportTooLarge);
-    }
-    if export_bytes.starts_with(b"-----BEGIN PGP MESSAGE-----") {
-        return Err(ProtonPassImportError::EncryptedExport);
-    }
-    if export_bytes.starts_with(b"PK\x03\x04")
-        || export_bytes.starts_with(b"PK\x05\x06")
-        || export_bytes.starts_with(b"PK\x07\x08")
-    {
-        let json = read_zip_data(export_bytes)?;
-        return plan_json(&json);
-    }
-    let json = str::from_utf8(export_bytes).map_err(invalid_export)?;
-    plan_json(json)
-}
-
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use std::io::Write;
 
     use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
-    use super::*;
+    use super::archive::DATA_FILE;
+    use super::{MAX_ARCHIVE_BYTES, ProtonPassImportError, ProtonPassImportInput};
+    use crate::{LoginSecret, SecretValue, SecureNoteSecret};
+    use std::io::Cursor;
 
-    fn build_zip(name: &str, data: &[u8]) -> anyhow::Result<Vec<u8>> {
-        let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        writer.start_file(name, options)?;
-        writer.write_all(data)?;
-        Ok(writer.finish()?.into_inner())
+    pub(super) struct ProtonPassZipFixture<'a> {
+        pub(super) name: &'a str,
+        pub(super) data: &'a [u8],
     }
+    impl ProtonPassZipFixture<'_> {
+        pub(super) fn build(self) -> anyhow::Result<Vec<u8>> {
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            writer.start_file(self.name, options)?;
+            writer.write_all(self.data)?;
+            Ok(writer.finish()?.into_inner())
+        }
 
-    fn export_json() -> &'static str {
-        r#"{
+        pub(super) fn export_json() -> &'static str {
+            r#"{
           "userId":"user",
           "version":"1.32.0",
           "vaults":{
@@ -455,11 +182,18 @@ mod tests {
             }
           }
         }"#
+        }
     }
-
     #[test]
     fn converts_zip_logins_and_notes_and_counts_unsupported_items() -> anyhow::Result<()> {
-        let plan = plan_proton_pass_import(&build_zip(DATA_FILE, export_json().as_bytes())?)?;
+        let plan = ProtonPassImportInput::from_bytes(
+            &ProtonPassZipFixture {
+                name: DATA_FILE,
+                data: ProtonPassZipFixture::export_json().as_bytes(),
+            }
+            .build()?,
+        )
+        .plan()?;
         assert_eq!(usize::from(plan.source_count), 3);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
@@ -497,8 +231,9 @@ mod tests {
 
     #[test]
     fn accepts_decrypted_json_and_uses_email_as_username_fallback() -> anyhow::Result<()> {
-        let json = export_json().replace(r#""itemUsername":"alice""#, r#""itemUsername":"""#);
-        let plan = plan_proton_pass_import(json.as_bytes())?;
+        let json = ProtonPassZipFixture::export_json()
+            .replace(r#""itemUsername":"alice""#, r#""itemUsername":"""#);
+        let plan = ProtonPassImportInput::from_bytes(json.as_bytes()).plan()?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };
@@ -509,11 +244,11 @@ mod tests {
 
     #[test]
     fn preserves_legacy_content_username() -> anyhow::Result<()> {
-        let json = export_json().replace(
+        let json = ProtonPassZipFixture::export_json().replace(
             r#""itemUsername":"alice""#,
             r#""itemUsername":"","username":"legacy-alice""#,
         );
-        let plan = plan_proton_pass_import(json.as_bytes())?;
+        let plan = ProtonPassImportInput::from_bytes(json.as_bytes()).plan()?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login")
         };
@@ -524,23 +259,31 @@ mod tests {
 
     #[test]
     fn rejects_encrypted_missing_invalid_and_oversized_exports() -> anyhow::Result<()> {
-        let encrypted = build_zip("Proton Pass/data.pgp", b"encrypted")?;
+        let encrypted = ProtonPassZipFixture {
+            name: "Proton Pass/data.pgp",
+            data: b"encrypted",
+        }
+        .build()?;
         assert!(matches!(
-            plan_proton_pass_import(&encrypted),
+            ProtonPassImportInput::from_bytes(&encrypted).plan(),
             Err(ProtonPassImportError::EncryptedExport)
         ));
-        let missing = build_zip("other.json", b"{}")?;
+        let missing = ProtonPassZipFixture {
+            name: "other.json",
+            data: b"{}",
+        }
+        .build()?;
         assert!(matches!(
-            plan_proton_pass_import(&missing),
+            ProtonPassImportInput::from_bytes(&missing).plan(),
             Err(ProtonPassImportError::MissingDataFile)
         ));
         assert!(matches!(
-            plan_proton_pass_import(b"not json"),
+            ProtonPassImportInput::from_bytes(b"not json").plan(),
             Err(ProtonPassImportError::InvalidData(_))
         ));
         let oversized = vec![0_u8; MAX_ARCHIVE_BYTES + 1];
         assert!(matches!(
-            plan_proton_pass_import(&oversized),
+            ProtonPassImportInput::from_bytes(&oversized).plan(),
             Err(ProtonPassImportError::ExportTooLarge)
         ));
         Ok(())
