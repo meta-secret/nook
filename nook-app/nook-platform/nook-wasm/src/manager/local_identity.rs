@@ -1,5 +1,6 @@
 //! Local identity creation, selection, and session adoption.
 
+use crate::storage::identity_record::LocalIdentitySigner;
 use crate::storage::{auth_providers, device_access, identity_record, indexed_db};
 use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
 use nook_core::{AppId, IdentityId, i18n_keys};
@@ -50,7 +51,9 @@ impl NookVaultManager {
                 .into());
             }
             let app_key = self.device_identity()?;
-            identity_record::load_or_create_signing_seed_for_app_key(&app_key).await?;
+            LocalIdentitySigner { app_key: &app_key }
+                .load_or_create()
+                .await?;
         }
         self.device.pending_local_identity_label = Some(label);
         Ok(())
@@ -395,7 +398,9 @@ impl NookVaultManager {
             .await?
             .is_some()
         {
-            identity_record::load_or_create_signing_seed_for_app_key(&app_key).await?
+            LocalIdentitySigner { app_key: &app_key }
+                .load_or_create()
+                .await?
         } else {
             identity_record::save_protected_local_identity(&app_key, record, DEFAULT_IDENTITY_LABEL)
                 .await?
