@@ -154,7 +154,7 @@ pub fn passkey_wrapped_device_identity_record(
         nonce: encode(&nonce),
         ciphertext: String::new(),
     };
-    let key = derive_passkey_wrapping_key(prf_output.as_ref(), &salt)?;
+    let key = derive_passkey_wrapping_key(prf_output, &salt)?;
     let cipher = Aes256Gcm::new_from_slice(key.as_ref())
         .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
     let aad = build_passkey_wrapped_aad(&record);
@@ -274,7 +274,7 @@ pub(super) fn unwrap_passkey_wrapped_device_identity(
     let salt = decode_fixed::<PASSKEY_WRAPPING_SALT_LEN>("hkdfSalt", &record.hkdf_salt)?;
     let nonce = decode_fixed::<AES_GCM_NONCE_LEN>("nonce", &record.nonce)?;
     let ciphertext = decode_field("ciphertext", &record.ciphertext)?;
-    let key = derive_passkey_wrapping_key(prf_output.as_ref(), &salt)?;
+    let key = derive_passkey_wrapping_key(prf_output, &salt)?;
     let aad = build_passkey_wrapped_aad(record);
     decrypt_device_identity(&key, nonce, &ciphertext, &aad)
 }
@@ -305,13 +305,13 @@ fn derive_pin_wrapping_key(
 }
 
 fn derive_passkey_wrapping_key(
-    prf_output: &[u8],
+    prf_output: &WebAuthnPrfOutput,
     salt: &[u8],
 ) -> DeviceKeyProtectionResult<Zeroizing<[u8; AES_KEY_LEN]>> {
-    if prf_output.len() != PRF_OUTPUT_LEN || salt.len() != PASSKEY_WRAPPING_SALT_LEN {
+    if salt.len() != PASSKEY_WRAPPING_SALT_LEN {
         return Err(DeviceKeyProtectionError::KeyDerivation);
     }
-    let hkdf = Hkdf::<Sha256>::new(Some(salt), prf_output);
+    let hkdf = Hkdf::<Sha256>::new(Some(salt), prf_output.as_ref());
     let mut key = Zeroizing::new([0u8; AES_KEY_LEN]);
     hkdf.expand(PASSKEY_WRAPPING_HKDF_INFO, key.as_mut())
         .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;

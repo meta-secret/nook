@@ -440,7 +440,7 @@ mod tests {
         assert_eq!(setup.user_handle().as_ref().len(), 32);
         assert_eq!(setup.prf_input().as_ref().len(), 32);
         assert_ne!(setup.user_handle(), other.user_handle());
-        assert_eq!(setup.prf_input(), deterministic_passkey_prf_input());
+        assert_eq!(setup.prf_input(), &deterministic_passkey_prf_input());
         assert_eq!(setup.prf_input(), other.prf_input());
         Ok(())
     }
@@ -775,7 +775,7 @@ mod tests {
             request.credential_id().as_ref(),
             registration.credential_id()
         );
-        assert_eq!(request.prf_input(), deterministic_passkey_prf_input());
+        assert_eq!(request.prf_input(), &deterministic_passkey_prf_input());
 
         let wrong_output = typed_prf_output(&[99u8; 32])?;
         assert!(matches!(
