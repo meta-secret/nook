@@ -187,7 +187,11 @@ describe('DOM-backed companion authentication simulation', () => {
   })
 
   test('runs the ChatGPT GET and OpenAI POST identifier forms', () => {
-    window.history.replaceState({}, '', '/auth/login')
+    window.history.replaceState(
+      {},
+      '',
+      '/auth/login?auth_origin=https%3A%2F%2Fauth.example.test',
+    )
     const chatGptRequest: DomAuthenticationSimulationRequest = {
       fixture: {
         html: `<main><h1>Log in or sign up</h1><form method="get" action="/auth/login">

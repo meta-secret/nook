@@ -261,22 +261,25 @@ test.describe('PIN Pilot mock-auth coverage', () => {
           `${openAi.origin}/log-in-or-create-account`,
         )
       } catch (error) {
-        const evidence = await page.evaluate(() => ({
-          href: location.href,
-          email:
-            document.querySelector<HTMLInputElement>('input[name="email"]')
-              ?.value || '',
-          submitEvidence:
-            sessionStorage.getItem('openai-chatgpt-submit-evidence') || '',
-          inputEvidence:
-            sessionStorage.getItem('openai-chatgpt-input-evidence') || '',
-          clickEvidence:
-            sessionStorage.getItem('openai-chatgpt-click-evidence') || '',
-          widgetText: await page
-            .locator('#nook-auth-widget')
-            .innerText()
-            .catch(() => ''),
-        }))
+        const widgetText = await page
+          .locator('#nook-auth-widget')
+          .innerText()
+          .catch(() => '')
+        const evidence = {
+          ...(await page.evaluate(() => ({
+            href: location.href,
+            email:
+              document.querySelector<HTMLInputElement>('input[name="email"]')
+                ?.value || '',
+            submitEvidence:
+              sessionStorage.getItem('openai-chatgpt-submit-evidence') || '',
+            inputEvidence:
+              sessionStorage.getItem('openai-chatgpt-input-evidence') || '',
+            clickEvidence:
+              sessionStorage.getItem('openai-chatgpt-click-evidence') || '',
+          }))),
+          widgetText,
+        }
         throw new Error(
           `${error instanceof Error ? error.message : String(error)}\nChatGPT mock evidence: ${JSON.stringify(evidence)}`,
           { cause: error },
