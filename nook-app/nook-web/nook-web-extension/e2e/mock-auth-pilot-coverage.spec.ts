@@ -40,11 +40,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       const loginPickerPromise = paired.context.waitForEvent('page')
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-      await expect(
-        widget.getByText(
-          'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
-        ),
-      ).toBeVisible()
+      await expect(widget).toContainText(
+        'Choose a saved username in the Nook window. Matching logins for this site are listed there.',
+      )
       await expect(widget.getByText('alice@nook.test')).toHaveCount(0)
       await expect(widget.getByText('bob@nook.test')).toHaveCount(0)
       const loginPicker = await loginPickerPromise
