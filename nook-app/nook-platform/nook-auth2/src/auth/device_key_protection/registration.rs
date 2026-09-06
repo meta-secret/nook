@@ -4,7 +4,9 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Local registration state binds setup data; it does not verify a browser ceremony.
-use super::protected_identity;
+use super::protected_identity::{
+    DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata, WrappedDeviceIdentity,
+};
 use super::{
     DeviceIdentity, DeviceKeyProtectionError, DeviceKeyProtectionResult, PasskeyAssertionRequest,
     PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyRegistrationPrfOutput,
@@ -143,11 +145,11 @@ impl<'a> PasskeyRegistration<'a> {
         let identity_secret = user_handle.derive_identity(prf_output)?;
         let identity = DeviceIdentity::from_secret_str(&identity_secret)
             .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
-        let record = protected_identity::passkey_derived_device_identity_record(
+        let record = WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
             credential_id,
             user_handle,
             prf_input,
-        )?;
+        })?;
         Ok(PasskeyDeviceIdentityMaterial {
             device_id: identity.device_id().to_string(),
             identity_secret,
@@ -168,12 +170,13 @@ impl<'a> PasskeyRegistration<'a> {
         let identity = DeviceIdentity::generate()
             .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
         let identity_secret = identity.secret_string();
-        let record = protected_identity::passkey_wrapped_device_identity_record(
-            credential_id,
-            user_handle,
-            prf_input,
-            prf_output,
-            &identity_secret,
+        let record = DeviceIdentityProtection::new(&identity_secret).with_passkey(
+            &PasskeyProtectionInput {
+                credential_id,
+                user_handle,
+                prf_input,
+                prf_output,
+            },
         )?;
         Ok(PasskeyDeviceIdentityMaterial {
             device_id: identity.device_id().to_string(),

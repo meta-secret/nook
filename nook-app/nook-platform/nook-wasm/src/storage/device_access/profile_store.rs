@@ -2,6 +2,8 @@
 
 use crate::storage::identity_record;
 use nook_core::AppId;
+#[cfg(test)]
+use nook_core::DeviceIdentityProtection;
 
 use crate::NookError;
 
@@ -303,7 +305,7 @@ mod browser_tests {
         let selected = AppKey::generate()?;
         let companion = AppKey::generate()?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&selected.secret_string(), "selected-pin")?;
+            DeviceIdentityProtection::new(&selected.secret_string()).with_pin("selected-pin")?;
         let owner = LocalIdentityKeyringEntry::legacy(
             IdentityId::generate()?,
             selected.app_id().clone(),

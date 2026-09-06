@@ -8,9 +8,9 @@ use crate::{DeviceProtectionDeviceModeState, NookDeviceAccessSnapshotRequest};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
 use crate::{passkey_browser, passkey_observation};
 use nook_core::{
-    AgeArmoredCiphertext, AppId, DeviceId, DeviceIdentity, DeviceIdentitySecret,
-    DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus, DevicePublicKey,
-    DeviceSigningPublicKey, DriveEventParent, HandoffSigningSeedChoice,
+    AgeArmoredCiphertext, AppId, DeviceId, DeviceIdentity, DeviceIdentityProtection,
+    DeviceIdentitySecret, DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus,
+    DevicePublicKey, DeviceSigningPublicKey, DriveEventParent, HandoffSigningSeedChoice,
     PasskeyDeviceProtectionMode, PasskeyRecoveryRequest, PasskeyRegistration,
     PasskeyRegistrationInput, PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput,
     StorageMode, StoreId, WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput,
@@ -766,7 +766,7 @@ impl NookVaultManager {
             } else {
                 self.device_identity()?
             };
-            let record = nook_core::wrap_device_identity_with_pin(&identity.secret_string(), &pin)?;
+            let record = DeviceIdentityProtection::new(&identity.secret_string()).with_pin(&pin)?;
             self.persist_and_adopt_local_identity(identity, &record)
                 .await?;
             Ok(())
@@ -844,7 +844,7 @@ impl NookVaultManager {
                 self.load_protected_local_identity().await?.ok_or_else(|| {
                     NookError::IndexedDb("No PIN-protected device identity found.".to_owned())
                 })?;
-            let secret = nook_core::unwrap_device_identity_with_pin(&record, &pin)?;
+            let secret = record.unwrap_pin(&pin)?;
             let identity = DeviceIdentity::from_secret_str(&secret)?;
             if identity.device_id().as_str() != stored_device_id {
                 return Err(NookError::Decryption(

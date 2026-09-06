@@ -1,3 +1,8 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 //! Passkey and PIN protection for browser X25519 device identities.
 //!
 //! Browser `navigator.credentials` calls stay in the presentation layer. This
@@ -14,7 +19,7 @@ use bech32::{Bech32, Hrp};
 use getrandom::fill;
 use hkdf::Hkdf;
 use nook_authenticator_domain::PasskeyDeviceProtectionMode;
-use pbkdf2::{pbkdf2_hmac, sha2::Sha256 as Pbkdf2Sha256};
+use pbkdf2::sha2::Sha256 as Pbkdf2Sha256;
 use serde::{Deserialize, Deserializer, Serialize, de};
 use sha2::Sha256;
 use std::fmt;

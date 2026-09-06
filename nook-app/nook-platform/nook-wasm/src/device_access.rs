@@ -1,5 +1,7 @@
 //! Read-only dashboard projection for browser device and vault access metadata.
 
+#[cfg(test)]
+use nook_core::DeviceIdentityProtection;
 use nook_core::{
     AppId, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment, PasskeyBackupState, StoreId,
 };
@@ -713,7 +715,7 @@ mod browser_tests {
         let first_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let first_wrapped =
-            nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
+            DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
@@ -724,7 +726,7 @@ mod browser_tests {
         let second_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let second_wrapped =
-            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
         identity_record::save_new_protected_local_identity(
             &second_key,
             &second_wrapped,

@@ -30,7 +30,7 @@ mod device_identity;
 
 use crate::storage::identity_record;
 use js_sys::Date;
-use nook_core::{AppId, IsoTimestamp, VaultName, VaultStoreIdentity};
+use nook_core::{AppId, IsoTimestamp, VaultName, VaultStoreIdentity, WrappedDeviceIdentity};
 use rexie::TransactionMode;
 
 pub use device_identity::DeviceProtectionDeviceModeState;
@@ -307,7 +307,7 @@ where
             )
             .await?
             .and_then(|raw| {
-                let wrapped = nook_core::parse_wrapped_device_identity(&raw).ok()?;
+                let wrapped = WrappedDeviceIdentity::parse(&raw).ok()?;
                 wrapped
                     .credential_id()
                     .ok()

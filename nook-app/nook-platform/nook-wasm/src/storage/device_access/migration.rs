@@ -1,6 +1,8 @@
 //! Ownership proof for migrating the single-profile compatibility record.
 
 use super::DeviceAccessProfile;
+#[cfg(test)]
+use nook_core::DeviceIdentityProtection;
 
 pub(super) fn profile_belongs_to_entry(
     profile: &DeviceAccessProfile,
@@ -33,7 +35,7 @@ mod tests {
         let selected = AppKey::generate()?;
         let companion = AppKey::generate()?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&selected.secret_string(), "selected-secret")?;
+            DeviceIdentityProtection::new(&selected.secret_string()).with_pin("selected-secret")?;
         let entry = LocalIdentityKeyringEntry::legacy(
             IdentityId::generate()?,
             selected.app_id().clone(),
