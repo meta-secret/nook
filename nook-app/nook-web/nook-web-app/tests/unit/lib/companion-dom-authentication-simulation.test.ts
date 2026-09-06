@@ -262,7 +262,9 @@ describe('DOM-backed companion authentication simulation', () => {
       [...socialButtons].every((button) => identifierForm.contains(button)),
     ).toBe(true)
     expect(
-      [...socialButtons].every((button) => button.form === socialForm),
+      [...socialButtons].every(
+        (button) => button.getAttribute('form') === socialForm.id,
+      ),
     ).toBe(true)
   })
 
