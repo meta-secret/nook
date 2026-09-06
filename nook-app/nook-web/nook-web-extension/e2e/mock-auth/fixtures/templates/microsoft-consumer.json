@@ -1,0 +1,19 @@
+{
+  "id": "microsoft-consumer",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "id": "usernameEntry",
+          "autocomplete": "username webauthn"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Next"
+      }
+    }
+  ]
+}

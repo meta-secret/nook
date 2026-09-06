@@ -1942,7 +1942,7 @@
   "microsoft": {
     "loginUrl": "https://login.live.com/",
     "source": "capture",
-    "template": "microsoft"
+    "template": "microsoft-consumer"
   },
   "microsoft-teams": {
     "loginUrl": "https://www.microsoft.com/login",

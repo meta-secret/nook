@@ -47,6 +47,8 @@ impl CheckedAuthenticationControl<'_> {
             && AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .indicates_oauth_authorization();
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_destructive_action()
+            || AuthenticationControlIdentity::new(&observation.form_identity)
+                .is_alternate_authentication_route()
             || AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.label).indicates_destructive_action()
@@ -73,6 +75,9 @@ impl CheckedAuthenticationControl<'_> {
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
         );
         let observation = self.observation;
+        if observation.has_empty_microsoft_consumer_login_root() {
+            return observation.is_microsoft_consumer_root_identifier_advance();
+        }
         let standards_email_semantic_submit = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
