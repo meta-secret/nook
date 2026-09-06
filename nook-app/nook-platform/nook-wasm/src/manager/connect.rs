@@ -306,13 +306,13 @@ mod tests {
             simple
                 .stored_records_snapshot()
                 .iter()
-                .any(|record| record.key.as_str().starts_with("auth/"))
+                .any(|record| nook_core::is_auth_stored_record(record).unwrap_or(false))
         );
         assert!(
             simple
                 .stored_records_snapshot()
                 .iter()
-                .any(|record| record.key.as_str().starts_with("member/"))
+                .any(|record| record.key.as_str().starts_with("member:"))
         );
 
         let mut sentinel = NookVaultManager::new();
@@ -331,13 +331,13 @@ mod tests {
             !sentinel
                 .stored_records_snapshot()
                 .iter()
-                .any(|record| record.key.as_str().starts_with("auth/"))
+                .any(|record| nook_core::is_auth_stored_record(record).unwrap_or(false))
         );
         assert!(
             sentinel
                 .stored_records_snapshot()
                 .iter()
-                .any(|record| record.key.as_str().starts_with("member/"))
+                .any(|record| record.key.as_str().starts_with("member:"))
         );
         Ok(())
     }
