@@ -9,7 +9,9 @@ the active harness.
 
 ## Rules
 
-- Every Team Agent task has one team identity.
+- Every functional Team Agent task has one team identity. A PR Steward task
+  uses the separate `pr-steward` operational identity and remains a
+  Gizmo-owned child task.
 - Every task names its outcome, allowed files, forbidden files, and acceptance
   evidence.
 - Before any Team Agent starts, Gizmo lists every task and dependency currently
@@ -33,8 +35,10 @@ the active harness.
 - Gizmo continues directly from that commit.
 - Do not cherry-pick, merge, copy, replay, or synthesize a worker commit into a
   separate integration branch.
-- Gizmo owns branch sequencing, pushes, pull requests, review coordination,
-  validation, readiness, and merge.
+- Gizmo owns branch sequencing, PR authorization, technical review
+  dispositions, readiness and merge verdicts. PR Steward performs only the
+  explicitly authorized external pull-request mechanics described in the
+  [PR Steward workflow](pr-steward.md).
 
 ## Procedure
 
@@ -97,4 +101,5 @@ Before accepting Team Agent work, verify:
 - no other writer ran concurrently;
 - the shared branch contains the accepted result;
 - focused acceptance checks passed; and
-- Gizmo still owns every external delivery action.
+- Gizmo still owns every external delivery decision and authorization. Any PR
+  Steward mutation stays inside the named packet.

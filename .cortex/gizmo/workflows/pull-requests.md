@@ -11,6 +11,11 @@
 - Another active task's branch and pull request are read-only without an explicit
   handoff.
 
+Gizmo Prime remains the policy, authorization, sequencing, Workbench, and
+final-verdict owner. It delegates bounded external PR mechanics to [PR
+Steward](pr-steward.md). PR Steward acts only on an explicit packet for the
+current owned pull request and exact head.
+
 Without an explicit handoff, do not:
 
 - push to it;
@@ -28,7 +33,22 @@ Full ownership policy:
 
 For implementation tasks, Gizmo's default job is to land a coherent PR with
 Nook's applicable GitHub Actions PR test checks green. Team subagents make the
-implementation edits.
+implementation edits. PR Steward performs the authorized external PR
+operations described in [its workflow](pr-steward.md).
+
+## PR Steward boundary
+
+PR Steward owns the mechanical seam after Gizmo has prepared a coherent exact
+head. It may create or update PR metadata, request and observe reviews, collect
+comments and check failures, retrigger named exact-head validation, perform
+bounded waits, collect readiness evidence, execute an explicitly authorized
+squash merge, and verify the remote merge state.
+
+PR Steward does not push code commits, choose technical fixes, adjudicate
+review findings, route functional work, alter Workbench state, declare
+readiness, or issue the final delivery verdict. Gizmo prepares and sequences
+the branch, routes every finding, authorizes each operation, and decides the
+outcome.
 
 ### PR title and description
 
@@ -127,25 +147,29 @@ ownership until merge or a concrete blocked handoff:
      `agent-implement.yml` and `rust-dependency-updates.yml` through
      `task ci-agent:fix` with
      `CI_AGENT_FIX_PROFILE=rust-dependency-update`.
-4. **Promptly push and create or update the PR.** Do not add another local
-   product or review gate. Keep its title and description synchronized with the
-   current diff.
-5. **Request review and validate on GitHub Actions:**
-   - If the pushed head is not validation-ready, immediately dispatch at least
-     one relevant focused `task remote TASK_NAME=<name>` job.
-   - When the coherent head is validation-ready, immediately run one
-     complete-validation command without requiring a focused task first:
+4. **Promptly publish the coherent branch and PR.** Gizmo pushes the exact
+   branch head. Gizmo then authorizes PR Steward to create or update the PR.
+   Keep its title and description synchronized with the current diff.
+5. **Request review and validate on GitHub Actions through PR Steward:**
+   - Gizmo authorizes the named operation for the exact pushed head.
+   - If the pushed head is not validation-ready, PR Steward immediately
+     dispatches at least one relevant focused `task remote TASK_NAME=<name>`
+     job.
+   - When the coherent head is validation-ready, PR Steward immediately runs
+     one complete-validation command without requiring a focused task first:
      `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
-   - It dispatches every required hosted check before any GitHub review wait.
+   - PR Steward dispatches every required hosted check before any GitHub review
+     wait.
    - Ordinary `task pr:validate` does not request Codex.
    - Set `CODEX_REVIEW=1` only for the final coherent head.
    - The opt-in requests one idempotent exact-head Codex review without waiting.
    - Hosted validation and an opted-in exact-head review proceed concurrently.
    - The eye reaction is liveness evidence only. It never settles review.
-   - After checks and any opted-in review settle, inspect the available result
-     sets.
-   - Batch current review findings and failed checks into one repair iteration.
+   - After checks and any opted-in review settle, PR Steward returns the
+     available result sets to Gizmo.
+   - Gizmo batches current review findings and failed checks into one repair
+     iteration.
    - A new PR head invalidates both evidence sets. An explicit base-ref
      retarget also invalidates them.
    - A later advance of the `main` branch does not invalidate successful
@@ -161,9 +185,10 @@ ownership until merge or a concrete blocked handoff:
    - Do not request Claude, CodeRabbit, or other optional reviewers.
    - Inspect the path-applicable `PR / Verify and preview` and `Web research / Build and deploy research catalog` workflows.
    - Do **not** run a required local `task check` / `task ci:pr`.
-6. **Fix Nook's failed PR workflow.** Inspect CI and app logs. Dispatch the
-   finding to its responsible team. Continue from the verified fix commit, run
-   pre-push hygiene, and push the complete fix. Validate the replacement head.
+6. **Fix Nook's failed PR workflow.** Authorize PR Steward to collect CI and
+   app logs. Gizmo dispatches the finding to its responsible team. Continue
+   from the verified fix commit, run pre-push hygiene, and push the complete
+   fix. Authorize PR Steward to validate the replacement head.
 7. **Promote durable discoveries when justified.** Apply the canonical
    [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
    when the work revealed a durable lesson or Cortex defect. No promotion is
@@ -179,11 +204,13 @@ ownership until merge or a concrete blocked handoff:
    - Require handled accepted or rejected comments.
    - Require every required team verdict.
    - Require every required security verdict.
-   - Require the exact-head readiness audit.
+   - Require the exact-head readiness evidence returned by PR Steward and the
+     Gizmo readiness verdict.
    - Keep a clarification-needed finding unresolved and readiness-blocking.
    - Re-read the complete diff.
    - Refresh the PR title and description.
-   - Squash-merge without separate permission.
+   - Send PR Steward a separate explicit merge authorization packet. PR
+     Steward performs the squash merge and verifies the remote merge state.
 
 ## Pull request size and modularity
 
@@ -213,8 +240,9 @@ ownership until merge or a concrete blocked handoff:
   limit.
 - Team Agent count never determines PR or Gizmo count. Do not fragment a small
   feature merely because multiple teams or agents contribute to it.
-- Gizmo Prime alone owns exact-head readiness, squash merge, and Workbench
-  lifecycle.
+- Gizmo Prime alone owns the readiness and merge verdict and Workbench
+  lifecycle. PR Steward performs the authorized readiness-evidence and squash
+  merge mechanics.
 
 ### Required plan
 
@@ -295,7 +323,7 @@ flowchart TD
   Z[0 Fetch origin/main] --> A[1 Branch + prepare PR]
   A --> I[2 Delegate team implementation]
   I --> CMT[3 Team returns committed handoff]
-  CMT --> E[4 Gizmo pre-push + push/update PR]
+  CMT --> E[4 Gizmo pre-push + push; PR Steward update PR]
   E --> D{Validation-ready?}
   D -->|no| X[Required relevant focused remote evidence]
   D -->|yes| V[Explicit loom/pr validate]
@@ -310,7 +338,7 @@ flowchart TD
   SI -->|promotion changed head| E
   SI -->|head unchanged| R[Run exact-head readiness audit]
   R -->|blocked| H
-  R -->|ready| M[Squash merge PR]
+  R -->|ready| M[Authorize PR Steward squash merge]
   M --> S[Publish Workbench issue + worklog + stats]
   S --> J{Feature acceptance complete?}
   J -->|no| B[Stop and report incomplete mission]
@@ -356,14 +384,17 @@ They are `agent-implement.yml` and `rust-dependency-updates.yml` through
 independent Git or external delivery authority. See the root
 [team worker contract](../../AGENTS.md#team-worker-contract) for the exact
 publication, isolation, and head-verification rules. Gizmo continues either
-returned head and owns review, validation, readiness, and merge.
+returned head. Gizmo owns review policy, technical dispositions, readiness and
+merge verdicts. PR Steward performs only the explicitly authorized external
+operations.
 
 Prepare an exact remote commit:
 
 1. Make the implementation coherent.
 2. Continue from the teams' formatted commits.
 3. Run pre-push hygiene.
-4. Promptly push and open or update the PR.
+4. Promptly push the coherent branch. Authorize PR Steward to open or update
+   the PR.
 
 This exposes the source to focused remote tasks but does not start complete
 validation.
@@ -381,7 +412,7 @@ validation.
 task loom:pre-push
 git commit
 git push -u origin HEAD
-gh pr create --title "…" --body "…"
+# Gizmo authorizes PR Steward to create or update the PR metadata.
 ```
 
 See [pre-push hygiene](../../teams/sre/dynamic-skills/pre-push-hygiene.md).
@@ -526,14 +557,15 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 - `PR`
 - `Web research` when `.github/workflows/web-research.yml` or `nook-app/nook-web/nook-web-research/**` changes
 
-- Keep monitoring inside the active delivery task with bounded direct waits.
+- Have PR Steward monitor inside the active delivery task with bounded direct
+  waits.
 - Never create a Codex scheduled task, automation, heartbeat, reminder, or
   recurring follow-up to continue PR monitoring later.
 - The agent may plan its polling cadence and next delivery action. Keep that
   plan inside the active task; do not persist it as Codex scheduling state.
-- "Merge when ready" is a terminal delivery instruction. Test the PR, monitor
-  its exact-head checks and substantive review state, and merge it as soon as
-  readiness succeeds.
+- "Merge when ready" is a terminal delivery instruction. Test the PR, authorize
+  PR Steward to monitor its exact-head checks and substantive review state, and
+  authorize a squash merge as soon as Gizmo's readiness verdict succeeds.
 - Never use an all-check watcher that can remain blocked on external services.
 - If neither repository workflow applies to the changed paths, there is no
   remote check to wait for.
@@ -542,10 +574,10 @@ Rust may use the configured ARC scale set. WASM and fork PR jobs remain hosted.
 task pr:preflight PR=<number>
 ```
 
-- Use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or
-  `task pr:ready` for read-only exact-head readiness.
+- Authorize PR Steward to use `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>`
+  or `task pr:ready` for read-only exact-head readiness evidence.
   - The command never merges by itself.
-  - Success tells Gizmo to squash-merge immediately.
+  - Success gives Gizmo evidence for its readiness verdict.
 - Codex review is not a readiness requirement.
   - Its bounded pre-validation lane must not deadlock delivery.
   - Do not request Claude, CodeRabbit, or other optional external reviews.
@@ -696,9 +728,15 @@ Merge only when all readiness conditions pass:
 - `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` or `task pr:ready`
   succeeds.
 
+Authorize PR Steward to run:
+
 ```bash
 gh pr merge <number> --squash
 ```
+
+PR Steward must verify the remote merge state and return the resulting commit
+to Gizmo. Gizmo remains responsible for the final delivery and Workbench
+closeout.
 
 The successful squash merge completes implementation delivery. Do not wait for, monitor, or live-verify the resulting Main run unless the user explicitly requested deployment/live verification or assigned a Main failure.
 
@@ -794,12 +832,16 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
 2. Dispatch the focused change to the responsible team.
 3. Run `task loom:pre-push`.
 4. Route team-owned formatter mutations back for fresh formatted commits.
-5. Promptly push and open or update the PR without another local gate.
-6. If the pushed head is not validation-ready, immediately dispatch at least
-   one relevant focused `task remote` job.
-7. Immediately run Loom or Task validation when the head is validation-ready.
-8. It dispatches hosted checks before any opted-in exact-head Codex review.
-9. Final-head review runs during hosted validation. Batch its findings with
+5. Promptly push the coherent branch and authorize PR Steward to open or
+   update the PR without another local gate.
+6. Authorize PR Steward to dispatch at least one relevant focused `task remote`
+   job when the pushed head is not validation-ready.
+7. Authorize PR Steward to run Loom or Task validation when the head is
+   validation-ready.
+8. PR Steward dispatches hosted checks before any opted-in exact-head Codex
+   review.
+9. Final-head review runs during hosted validation. PR Steward returns its
+   findings with
    failed checks after both settle.
 10. Keep Codex as the sole automatic provider. Do not activate Cursor Bugbot,
     Claude, CodeRabbit, or other optional reviews.
@@ -809,19 +851,20 @@ See [mission delivery](mission-delivery.md) for the delivery procedure.
     self-improvement review finds an evidence-backed candidate. Repeat hosted
     validation if promotion changes the head.
 13. On failure, dispatch the issue to its responsible team.
-14. Continue from and promptly push the verified fix, then obtain fresh exact-head
-    validation for the replacement head.
-15. Squash-merge after the exact-head readiness audit succeeds.
+14. Continue from and promptly push the verified fix, then authorize PR
+    Steward to obtain fresh exact-head validation for the replacement head.
+15. Authorize PR Steward to squash-merge after Gizmo's exact-head readiness
+    verdict succeeds.
 16. Publish the Workbench completion records.
 17. Report task duration.
 
 ## CLI reference
 
 ```bash
-# Open PR
+# Gizmo authorizes PR Steward to open or update the PR.
 gh pr create --title "…" --body "…"
 
-# Merge (ONLY this form)
+# Gizmo authorizes PR Steward after the readiness verdict (ONLY this form).
 gh pr merge <number> --squash
 ```
 

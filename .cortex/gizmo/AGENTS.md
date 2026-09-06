@@ -32,9 +32,16 @@ Gizmo owns:
 - the requested outcome and completion evidence;
 - task ownership and shared-branch write sequencing;
 - shared-file coordination;
-- pull requests and review coordination;
-- exact-head validation, readiness, merge, and Workbench completion; and
+- pull-request policy and authorization;
+- technical review-finding disposition and functional-team routing;
+- readiness and merge verdicts;
+- Workbench completion; and
 - the final delivery verdict.
+
+Gizmo delegates bounded external pull-request mechanics to the special
+Gizmo-owned PR Steward Team Agent. PR Steward is not a sixth functional team.
+It uses the [PR Steward workflow](workflows/pr-steward.md) and never acts
+without an explicit operation packet from Gizmo.
 
 Gizmo does not:
 
@@ -43,6 +50,10 @@ Gizmo does not:
 - replace an unavailable required Team Agent;
 - waive a blocking functional-owner or security verdict; or
 - create extra Git checkouts for Team Agent work.
+
+Gizmo does not allow PR Steward to edit functional code, adjudicate technical
+findings, sequence shared-branch writers, own Workbench outcomes, or decide
+the final delivery verdict.
 
 ## Pull-request size
 

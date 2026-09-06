@@ -40,8 +40,10 @@ finishes or stops.
 - Route every finding to the team that owns the affected change.
 - Keep fixes inside the same shared checkout and writer sequence.
 - Team Agents run focused implementation checks.
-- Gizmo runs shared pre-push and exact-head validation.
-- Gizmo owns pushes, pull requests, review replies, readiness, and merge.
+- Gizmo runs or authorizes shared pre-push and exact-head validation.
+- Gizmo owns PR policy, review dispositions, readiness and merge verdicts.
+- PR Steward performs authorized pull-request metadata, review observation,
+  validation, readiness-evidence, merge, and merge-verification mechanics.
 
 ## Prohibited complexity
 

@@ -20,7 +20,8 @@ It is not a free-form task diary.
 1. Gizmo starts an out-of-tree scratch event log when PR-bound work begins.
 2. Gizmo appends every local lightweight execution, focused remote run, complete
    validation run, retrigger, and merge attempt as it happens.
-3. Gizmo squash-merges the implementation PR through the readiness workflow.
+3. Gizmo authorizes PR Steward to squash-merge the implementation PR after the
+   readiness verdict succeeds.
 4. Gizmo assembles `stats/ai-agent/<pr-number>.yaml` with Loom after merge.
 5. Gizmo compares the record with one or two recent comparable records.
 6. Gizmo publishes the YAML to Workbench `main` with Loom.
