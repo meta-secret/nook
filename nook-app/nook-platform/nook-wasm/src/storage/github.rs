@@ -354,3 +354,50 @@ fn base64_decode(input: &str) -> Result<Vec<u8>, NookError> {
         .decode(input)
         .map_err(|e| NookError::Serialization(format!("Base64 decode error: {}", e)))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    fn cache_busting_appends_the_right_separator() {
+        let without_query = github_cache_bust_url("https://api.github.com/repos/example");
+        assert!(without_query.starts_with("https://api.github.com/repos/example?_="));
+        let with_query = github_cache_bust_url("https://api.github.com/repos/example?ref=main");
+        assert!(with_query.starts_with("https://api.github.com/repos/example?ref=main&_="));
+    }
+
+    #[test]
+    fn request_headers_trim_tokens_and_pin_the_github_api_version() {
+        assert_eq!(
+            github_get_headers("  pat  "),
+            [
+                ("Authorization", "Bearer pat".to_owned()),
+                ("Accept", "application/vnd.github+json".to_owned()),
+                ("X-GitHub-Api-Version", "2022-11-28".to_owned()),
+                ("User-Agent", "nook-wasm".to_owned()),
+            ]
+        );
+    }
+
+    #[test]
+    fn base64_decode_reports_success_and_serialization_failures() {
+        assert_eq!(base64_decode("bm9vaw==").unwrap(), b"nook");
+        let error = base64_decode("not base64!").expect_err("invalid base64 must fail closed");
+        assert!(
+            matches!(error, NookError::Serialization(message) if message.contains("Base64 decode error"))
+        );
+    }
+
+    #[test]
+    fn github_response_shapes_decode_expected_file_and_write_fields() -> anyhow::Result<()> {
+        let file: GitHubFileResponse = serde_json::from_str(r#"{"content":"bm9vaw=="}"#)?;
+        assert_eq!(file.content, "bm9vaw==");
+        let put: GitHubPutResponse = serde_json::from_str(r#"{"content":{"sha":"abc123"}}"#)?;
+        assert_eq!(put.content.sha, "abc123");
+        let user: GitHubUserResponse = serde_json::from_str(r#"{"login":"nook"}"#)?;
+        assert_eq!(user.login, "nook");
+        Ok(())
+    }
+}
