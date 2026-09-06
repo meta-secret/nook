@@ -79,11 +79,23 @@ describe('Microsoft consumer DOM-backed authentication simulation', () => {
     const recovery = [...document.querySelectorAll('button')].find(
       (button) => button.textContent === 'Forgot your username?',
     )
-    if (!username || !activeForm || !unrelatedForm || !close || !recovery) {
+    const next = [...document.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Next',
+    )
+    if (
+      !username ||
+      !activeForm ||
+      !unrelatedForm ||
+      !close ||
+      !recovery ||
+      !next
+    ) {
       throw new Error('expected Microsoft consumer structural evidence')
     }
     expect(username.value).toBe(FAKE_CREDENTIALS.username)
-    expect(result.selectedRoot === activeForm).toBe(true)
+    expect(result.selectedRoot === document).toBe(true)
+    expect(username.form === activeForm).toBe(true)
+    expect(next.form === activeForm).toBe(true)
     expect(activeForm.id).toBe('')
     expect(activeForm.name).toBe('')
     expect(activeForm.hasAttribute('aria-label')).toBe(false)
@@ -91,6 +103,7 @@ describe('Microsoft consumer DOM-backed authentication simulation', () => {
     expect(activeForm.hasAttribute('action')).toBe(false)
     expect(unrelatedForm.getAttribute('method')).toBe('post')
     expect(unrelatedForm.getAttribute('action')).toBe('')
+    expect(unrelatedForm.elements).toHaveLength(0)
     expect(close.type).toBe('button')
     expect(recovery.type).toBe('button')
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
