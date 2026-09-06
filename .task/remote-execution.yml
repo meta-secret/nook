@@ -5,6 +5,9 @@ tasks:
     desc: Run allowlisted tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>).
     env:
       REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'
+      REQUESTED_E2E_PROJECT: '{{.E2E_PROJECT}}'
+      REQUESTED_E2E_SPECS: '{{.E2E_SPECS}}'
+      REQUESTED_E2E_GREP: '{{.E2E_GREP}}'
     preconditions:
       - sh: command -v gh >/dev/null 2>&1
         msg: GitHub CLI is required.
@@ -44,9 +47,26 @@ tasks:
           .github/scripts/require-current-base.sh origin main
         fi
 
-        gh workflow run remote.yml \
-          --ref "$branch" \
+        workflow_args=(
+          --ref "$branch"
           --raw-field "tasks=$requested_tasks"
+        )
+        if [ "$requested_tasks" = "web:e2e:debug" ]; then
+          test -n "$REQUESTED_E2E_PROJECT" || {
+            echo "E2E_PROJECT is required for web:e2e:debug." >&2
+            exit 2
+          }
+          test -n "$REQUESTED_E2E_SPECS" || {
+            echo "E2E_SPECS is required for web:e2e:debug." >&2
+            exit 2
+          }
+          workflow_args+=(
+            --raw-field "e2e_project=$REQUESTED_E2E_PROJECT"
+            --raw-field "e2e_specs=$REQUESTED_E2E_SPECS"
+            --raw-field "e2e_grep=$REQUESTED_E2E_GREP"
+          )
+        fi
+        gh workflow run remote.yml "${workflow_args[@]}"
 
         echo "Dispatched '$requested_tasks' in one job for $branch at $local_sha."
         echo "Inspect it with:"

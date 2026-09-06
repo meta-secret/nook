@@ -265,6 +265,7 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     for task in [
         "web:build",
         "web:e2e",
+        "web:e2e:debug",
         "extension:e2e",
         "check",
         "ci:pr",
@@ -279,6 +280,7 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     for direct_task in [
         "web:build) task _web:build",
         "web:e2e) task _web:test:e2e",
+        "web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug",
         "extension:e2e) task _extension:test:e2e",
         "check) task _check",
         "ci:pr) task _ci:pr",
@@ -443,7 +445,13 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in ["loom:verify", "web:e2e", "extension:e2e", "ci:pr"] {
+    for tasks in [
+        "loom:verify",
+        "web:e2e",
+        "web:e2e:debug",
+        "extension:e2e",
+        "ci:pr",
+    ] {
         assert!(
             remote_batch_command(&["--requires-current-base", tasks])?
                 .status
