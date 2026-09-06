@@ -14,7 +14,9 @@ use rexie::{ObjectStore, Rexie, TransactionMode};
 use serde_json::Value;
 use std::fmt;
 
-use nook_core::{AuthProvidersSnapshotData, DeviceIdentity, NormalizedAuthSnapshot};
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::AuthProvidersSnapshotData;
+use nook_core::{DeviceIdentity, NormalizedAuthSnapshot};
 
 use crate::NookError;
 

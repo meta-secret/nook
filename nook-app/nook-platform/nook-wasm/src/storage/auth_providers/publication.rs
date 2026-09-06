@@ -126,10 +126,10 @@ impl PresealedProviderSnapshotPublication<'_> {
             state_key,
             schema_key,
             snapshot: merged,
-            legacy: if !legacy.is_null() {
-                LegacyProjectionWrite::Refresh
-            } else {
+            legacy: if legacy.is_null() {
                 LegacyProjectionWrite::Preserve
+            } else {
+                LegacyProjectionWrite::Refresh
             },
             completion: PublicationCompletion::Presealed,
         })
