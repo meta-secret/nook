@@ -29,9 +29,7 @@ use crate::storage::event_db::{
 use crate::storage::github_events::GitHubEventStore;
 use crate::storage::icloud::ICloudEventStore;
 use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
-use crate::storage::local_folder::{
-    LocalFolderEventWrite, read_local_folder_event_files, write_local_folder_event_files,
-};
+use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles};
 use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
     VaultOperation, apply_user_records_to_encrypted_session, build_signed_event,

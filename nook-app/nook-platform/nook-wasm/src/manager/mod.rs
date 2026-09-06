@@ -18,7 +18,8 @@
 //! in this file because every submodule depends on it.
 
 use crate::logger;
-use crate::storage::{auth_providers, indexed_db, local_folder};
+use crate::storage::local_folder::LocalFolderHandles;
+use crate::storage::{auth_providers, indexed_db};
 use nook_core::{
     DeviceIdentity, DeviceIdentitySecret, DriveEventParent, ICloudEventTarget, MultiDeviceError,
     SelfRosterSync, SentinelGenesisPhase, StorageMode, SymmetricKey, VaultCrypto, VaultNameRef,
@@ -263,7 +264,7 @@ impl NookVaultManager {
         if let Err(error) = logger::clear_logs_db().await {
             errors.push(error.to_string());
         }
-        if let Err(error) = local_folder::clear_local_folder_db().await {
+        if let Err(error) = LocalFolderHandles::current().clear().await {
             errors.push(error.to_string());
         }
         if let Err(error) = auth_providers::clear_auth_providers_db().await {

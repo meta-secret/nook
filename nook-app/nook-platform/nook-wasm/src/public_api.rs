@@ -2,7 +2,8 @@ use super::{
     NookEnrollmentProvider, NookLocalFolderConfig, NookProviderReplicationCapability,
     NookStorageConnectArgs, NookVaultArchitecture, passkey_browser, wasm_bindgen,
 };
-use crate::storage::{local_folder, session};
+use crate::storage::local_folder::LocalFolderHandles;
+use crate::storage::session;
 use crate::types::{NookManagerStoreScope, NookProviderSyncRevision};
 use nook_core::{
     ICloudShareRole, ICloudSharedTarget, ManagerStoreScopeRef, PasswordGenerationOptions,
@@ -42,20 +43,19 @@ pub fn set_vault_session_locked(locked: bool) {
 #[wasm_bindgen]
 #[must_use]
 pub fn is_local_folder_backup_supported() -> bool {
-    local_folder::is_local_folder_backup_supported()
+    NookLocalFolderConfig::is_supported()
 }
 
 #[wasm_bindgen]
 pub async fn choose_local_folder_backup_directory()
 -> Result<NookLocalFolderConfig, wasm_bindgen::JsError> {
-    local_folder::choose_local_folder_backup_directory()
-        .await
-        .map_err(Into::into)
+    NookLocalFolderConfig::choose().await.map_err(Into::into)
 }
 
 #[wasm_bindgen]
 pub async fn remove_local_folder_handle(handle_id: String) -> Result<(), wasm_bindgen::JsError> {
-    local_folder::remove_local_folder_handle(Some(handle_id))
+    LocalFolderHandles::current()
+        .remove(Some(handle_id))
         .await
         .map_err(Into::into)
 }

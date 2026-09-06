@@ -13,10 +13,9 @@ use std::collections::BTreeSet;
 
 use super::{
     EventId, EventLogStorageRecord, EventLogSyncIssueState, ExternalEventLogRecord,
-    LocalFolderEventWrite, NookError, NookVaultManager, RemoteEventLogClassification,
-    VaultCryptoState, append_outbox_index, load_from_indexed_db, load_local_event_store,
-    load_outbox, queue_outbox_entry, read_local_folder_event_files, remove_outbox_entry,
-    save_key_epoch, write_local_folder_event_files,
+    LocalFolderEventWrite, LocalFolderHandles, NookError, NookVaultManager,
+    RemoteEventLogClassification, VaultCryptoState, append_outbox_index, load_from_indexed_db,
+    load_local_event_store, load_outbox, queue_outbox_entry, remove_outbox_entry, save_key_epoch,
 };
 
 struct PendingOutboxEvent<'a> {
@@ -459,7 +458,10 @@ impl NookVaultManager {
     pub(super) async fn read_external_local_folder_records(
         handle_id: &str,
     ) -> Result<Vec<ExternalEventLogRecord>, NookError> {
-        read_local_folder_event_files(handle_id)
+        LocalFolderHandles::current()
+            .open_folder(handle_id)
+            .await?
+            .read_events()
             .await?
             .into_iter()
             .map(|file| {
@@ -584,7 +586,11 @@ impl NookVaultManager {
                 })
             })
             .collect::<Result<Vec<_>, NookError>>()?;
-        write_local_folder_event_files(handle_id, &writes).await?;
+        LocalFolderHandles::current()
+            .open_folder(handle_id)
+            .await?
+            .write_events(&writes)
+            .await?;
         Ok(load_from_indexed_db().await?.unwrap_or_default())
     }
 }
