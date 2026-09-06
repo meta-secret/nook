@@ -267,9 +267,10 @@ export function simulateDomAuthentication({
     workflowKind === AuthenticationWorkflowKind.Login &&
     workflowAction === AuthenticationWorkflowAction.ContinueWithNook &&
     credentialFill.kind === CredentialFillJourneyOutcomeKind.Completed &&
-    advanceControl !== 'implicit-submission' &&
-    (credentialSubmissionKind === 'observed' ||
-      detailedAdvanceControlSupportsLogin)
+    (advanceControl === 'implicit-submission'
+      ? credentialSubmissionKind === 'observed'
+      : credentialSubmissionKind === 'observed' ||
+        detailedAdvanceControlSupportsLogin)
   if (!loginApproved) {
     return {
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,

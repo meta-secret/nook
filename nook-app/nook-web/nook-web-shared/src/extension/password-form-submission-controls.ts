@@ -116,6 +116,7 @@ type ImplicitAuthenticationSubmitRequest = {
   hasAuthenticationUsername: boolean;
   hasAuthenticationPassword: boolean;
   approval: FormSubmissionApproval | false;
+  alternativeActuationIsSafe: () => boolean;
 };
 
 type AuthenticationFactTexts = string[];
@@ -609,6 +610,7 @@ export function requestImplicitAuthenticationSubmit({
   hasAuthenticationUsername,
   hasAuthenticationPassword,
   approval,
+  alternativeActuationIsSafe,
 }: ImplicitAuthenticationSubmitRequest): FormSubmissionResult {
   const sourceOrigin = form.ownerDocument.defaultView?.location.origin;
   if (
@@ -630,13 +632,24 @@ export function requestImplicitAuthenticationSubmit({
     hasAuthenticationUsername,
     hasAuthenticationPassword,
   };
-  if (!canRequestImplicitAuthenticationSubmit(capabilityRequest)) {
+  const legacyActuationIsSafe =
+    canRequestImplicitAuthenticationSubmit(capabilityRequest);
+  if (!legacyActuationIsSafe && !alternativeActuationIsSafe()) {
     return FormSubmissionResult.NotObserved;
   }
+  const requestedApproval = approval;
+  const alternativeApproval: FormSubmissionApproval = {
+    isApproved: () =>
+      alternativeActuationIsSafe() &&
+      (!requestedApproval || requestedApproval.isApproved()),
+    reject: () => {
+      if (requestedApproval) requestedApproval.reject();
+    },
+  };
   const submission: FormSubmissionObservation = {
     form,
     action: () => form.requestSubmit(),
-    approval,
+    approval: legacyActuationIsSafe ? approval : alternativeApproval,
     expectedSubmitter: false,
   };
   return observeSubmit(submission);
