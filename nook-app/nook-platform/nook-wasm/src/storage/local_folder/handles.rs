@@ -452,7 +452,7 @@ impl NookLocalFolderConfig {
         LocalFolderHandles::current()
             .store(FolderRegistration {
                 handle_id: &handle_id,
-                handle: handle,
+                handle,
             })
             .await?;
         Ok(NookLocalFolderConfig {
