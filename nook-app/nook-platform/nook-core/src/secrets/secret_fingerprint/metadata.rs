@@ -75,7 +75,7 @@ pub(super) enum ImportMetadataPolicy {
     Login,
 }
 impl ImportMetadataPolicy {
-    fn markers(&self) -> &'static [&'static ImportMetadataMarker] {
+    fn markers(self) -> &'static [&'static ImportMetadataMarker] {
         match self {
             Self::General => &IMPORT_METADATA_MARKERS,
             Self::Login => &LOGIN_IMPORT_METADATA_MARKERS,

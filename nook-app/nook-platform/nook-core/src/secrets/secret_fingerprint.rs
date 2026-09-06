@@ -42,7 +42,7 @@ impl SecretValue {
     /// ```
     /// Canonical operation fields are private implementation evidence.
     /// ```compile_fail,E0603
-    /// use nook_core::secret_fingerprint::canonical::CanonicalSecretFingerprint;
+    /// use nook_core::secrets::secret_fingerprint::canonical::CanonicalSecretFingerprint;
     /// ```
     pub fn fingerprint(&self, secrets_key: &SymmetricKey) -> ValidationResult<SecretFingerprint> {
         FingerprintRequest {

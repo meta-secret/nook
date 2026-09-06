@@ -242,7 +242,7 @@ mod tests {
     fn completion_consumes_one_bound_operation_without_a_replacement_key() -> anyhow::Result<()> {
         let fixture = LoginFingerprintFixture::new()?;
         let prepared = fixture.request().prepare(FingerprintKind::Version);
-        let finish: fn(CanonicalSecretFingerprint<'_>) -> ValidationResult<SecretFingerprint> =
+        let finish: fn(_) -> ValidationResult<SecretFingerprint> =
             CanonicalSecretFingerprint::finish;
         assert_eq!(finish(prepared)?, fixture.value.fingerprint(&fixture.key)?);
         Ok(())
