@@ -313,6 +313,105 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('fills the X identifier through its implicit GET form', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock X auth vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      const page = await paired.context.newPage()
+      await page.goto(`${mockAuth.origin}/i/flow/login`)
+      await expect(page).toHaveURL(
+        `${mockAuth.origin}/i/jf/onboarding/web?mode=login`,
+      )
+      await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+        'x-identifier',
+      )
+      const form = page.getByTestId('x-active-form')
+      expect(
+        await form.evaluate((element) => ({
+          actionAttributePresent: element.hasAttribute('action'),
+          methodAttributePresent: element.hasAttribute('method'),
+          method: (element as HTMLFormElement).method,
+        })),
+      ).toEqual({
+        actionAttributePresent: false,
+        methodAttributePresent: false,
+        method: 'get',
+      })
+      const username = form.locator('[name="username_or_email"]')
+      await expect(username).toHaveAttribute('type', 'text')
+      await expect(username).toHaveAttribute(
+        'autocomplete',
+        'username webauthn',
+      )
+      await expect(username).toHaveAttribute('name', 'username_or_email')
+      await expect(page.getByTestId('x-hidden-password')).toBeHidden()
+      await expect(form.locator('[name="password"]')).toHaveValue('')
+      await expect(
+        page
+          .getByTestId('x-responsive-copy')
+          .locator('[name="username_or_email"]'),
+      ).toHaveValue('')
+      await expect(
+        form.getByRole('button', { name: 'Continue with Apple' }),
+      ).toHaveAttribute('type', 'button')
+      await expect(
+        form.getByRole('button', { name: 'Continue with phone' }),
+      ).toHaveAttribute('type', 'button')
+      const continueControl = page.getByTestId('x-continue')
+      await expect(continueControl).not.toHaveAttribute('role')
+      await expect(continueControl).not.toHaveAttribute('tabindex')
+      expect(await continueControl.evaluate((element) => element.tagName)).toBe(
+        'DIV',
+      )
+      const googleFrame = form.locator('iframe[title="Continue with Google"]')
+      await expect(googleFrame).not.toHaveAttribute('src')
+      await expect(googleFrame).toHaveAttribute(
+        'srcdoc',
+        /Continue with Google/u,
+      )
+
+      const widget = page.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
+      const expectedEvidence = JSON.stringify({
+        credentialsMatched: true,
+        hiddenPasswordUntouched: true,
+        alternativesUntouched: true,
+        nonSemanticContinueUntouched: true,
+        implicitFormSubmission: true,
+      })
+      await expect
+        .poll(() =>
+          page.evaluate(
+            (key) => sessionStorage.getItem(key) || '',
+            'x-submission-evidence',
+          ),
+        )
+        .toBe(expectedEvidence)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('fills the owned GitHub login without touching its decoys or alternatives', async ({
     browserName,
   }, testInfo) => {

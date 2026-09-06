@@ -13,6 +13,8 @@
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
   import DetectionSignup from './pages/DetectionSignup.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
+  import DetectionX from './pages/DetectionX.svelte'
+  import DetectionXRedirect from './pages/DetectionXRedirect.svelte'
   import NotFound from './pages/NotFound.svelte'
   import PlainLogin from './pages/PlainLogin.svelte'
   import Success from './pages/Success.svelte'
@@ -98,6 +100,10 @@
   <DetectionGithub />
 {:else if pathname === '/auth/login' || pathname === '/log-in-or-create-account'}
   <DetectionOpenAi />
+{:else if pathname === '/i/jf/onboarding/web'}
+  <DetectionX />
+{:else if pathname === '/i/flow/login'}
+  <DetectionXRedirect />
 {:else if templateMatch?.[1]}
   <DetectionFromFixture templateId={templateMatch[1]} />
 {:else if siteMatch?.[1]}

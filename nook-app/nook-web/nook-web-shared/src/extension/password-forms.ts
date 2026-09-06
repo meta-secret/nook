@@ -62,7 +62,6 @@ import {
   PageControlSubmissionMethod,
   isRenderedControl,
   observeSubmit,
-  requestImplicitAuthenticationSubmit,
   ownedFormIdentity,
   PasswordFormQueryKind,
   semanticSubmitControlSelector,
@@ -83,6 +82,13 @@ import {
   LoginCredentialsLookupKind,
   type LoginCredentialsLookup,
 } from "./password-form-field-actions";
+import {
+  OwnedAdvanceControlActivationKind,
+  requestApprovedImplicitAuthenticationSubmit,
+  type ApprovedImplicitAuthenticationSubmitRequest,
+  type OwnedAdvanceControlActivation,
+  type OwnedAuthenticationControlRequest,
+} from "./password-form-implicit-actuation";
 import {
   emptyPasswordFormSummary,
   passwordFieldQuery,
@@ -531,7 +537,9 @@ export function authenticationPageObservationFacts({
     observation.formScope.kind === PasswordFormScopeKind.Owned &&
     !ownedObservationIsLocallyBounded(observation) &&
     !boundedAdvanceObservations.some(
-      ({ actionability }) => actionability === "actionable",
+      (candidate) =>
+        candidate.actionability === "actionable" &&
+        authentication_advance_control_is_safe(candidate),
     ) &&
     !advanceControls.some(
       (control) =>
@@ -855,25 +863,10 @@ export function readLoginCredentials(
   };
 }
 
-enum OwnedAdvanceControlActivationKind {
-  Absent = "absent",
-  Activated = "activated",
-}
-type OwnedAdvanceControlActivation =
-  | { kind: OwnedAdvanceControlActivationKind.Absent }
-  | {
-      kind: OwnedAdvanceControlActivationKind.Activated;
-      result: FormSubmissionResult;
-    };
-
-type OwnedAdvanceControlRequest = {
-  request: LoginFormSubmissionRequest;
-  form: HTMLFormElement;
-};
-
 export type LoginFormSubmissionRequest = PasswordFormScopeQuery & {
   submissionApproval?: FormSubmissionApproval;
 };
+type OwnedAdvanceControlRequest = OwnedAuthenticationControlRequest<LoginFormSubmissionRequest>;
 
 function findApprovedOwnedAdvanceControl({
   request,
@@ -988,13 +981,20 @@ export function submitLoginForm(
       return FormSubmissionResult.Submitted;
   }
   if (!form) return FormSubmissionResult.NotObserved;
-  const implicitRequest: Parameters<
-    typeof requestImplicitAuthenticationSubmit
-  >[0] = {
+  const implicitSubmitRequest: ApprovedImplicitAuthenticationSubmitRequest<PasswordFormObservation> = {
+    root: request.root,
     form,
+    observations: summarizeAuthenticationWorkflowForms,
+    factsForObservation: (observation) => {
+      const factsRequest: AuthenticationObservationFactsRequest = {
+        observation,
+        authenticatorSetupHint: false,
+      };
+      return authenticationPageObservationFacts(factsRequest);
+    },
     hasAuthenticationUsername,
     hasAuthenticationPassword: Boolean(passwordField),
-    approval: ((v) => (v ? v : false))(request.submissionApproval),
+    requestedApproval: ((v) => (v ? v : false))(request.submissionApproval),
   };
-  return requestImplicitAuthenticationSubmit(implicitRequest);
+  return requestApprovedImplicitAuthenticationSubmit(implicitSubmitRequest);
 }

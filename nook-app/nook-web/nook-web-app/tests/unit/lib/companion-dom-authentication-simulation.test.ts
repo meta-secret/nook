@@ -6,7 +6,11 @@ import {
   CompanionAuthenticationWorkflowMatchKind,
   CredentialFillRejection,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { FormSubmissionResult } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  authenticationPageObservationFacts,
+  FormSubmissionResult,
+  summarizeAuthenticationWorkflowForms,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   DomAuthenticationSimulationOutcomeKind,
   simulateDomAuthentication,
@@ -270,6 +274,150 @@ describe('DOM-backed companion authentication simulation', () => {
         (button) => button.getAttribute('form') === socialForm.id,
       ),
     ).toBe(true)
+  })
+
+  test('runs the X implicit GET form without touching hidden or alternative controls', () => {
+    window.history.replaceState({}, '', '/i/jf/onboarding/web?mode=login')
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><section data-testid="x-responsive-copy" style="display: none"><form>
+          <input name="username_or_email" type="text" autocomplete="username webauthn" aria-label="Email or username">
+          <div><input name="password" type="password"></div><div>Continue</div>
+        </form></section>
+        <form data-testid="x-active-form">
+          <iframe title="Continue with Google" sandbox srcdoc="<button type='button'>Continue with Google</button>"></iframe>
+          <button id="x-apple" type="button">Continue with Apple</button>
+          <button id="x-phone" type="button">Continue with phone</button>
+          <label for="x-username">Email or username</label>
+          <input id="x-username" name="username_or_email" type="text" autocomplete="username webauthn">
+          <div data-testid="x-hidden-password" style="display: none"><input id="x-password" name="password" type="password"></div>
+          <div data-testid="x-continue">Continue</div>
+        </form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      observationCount: 1,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      implicitSubmissionMethod: 'get',
+      advanceControl: 'implicit-submission',
+      detailedAdvanceControlKind: 'observed',
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: '',
+    })
+    expect(result.selectedRoot === document).toBe(true)
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected X authentication observation')
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: expect.arrayContaining([
+        expect.objectContaining({
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue with Apple'),
+          submissionMethod: 'absent',
+        }),
+        expect.objectContaining({
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue with phone'),
+          submissionMethod: 'absent',
+        }),
+      ]),
+    })
+    expect(facts.ceremony).toMatchObject({
+      advanceControl: 'implicit-submission',
+      implicitSubmissionMethod: 'get',
+    })
+    expect(facts.credentialSubmission).toMatchObject({
+      kind: 'observed',
+      facts: {
+        actionability: 'actionable',
+        method: 'get',
+      },
+    })
+    expect(fieldValue('#x-username')).toBe(FAKE_CREDENTIALS.username)
+    expect(fieldValue('#x-password')).toBe('')
+    expect(fieldValue('[data-testid="x-responsive-copy"] [type="text"]')).toBe(
+      '',
+    )
+    const activeForm = document.querySelector('[data-testid="x-active-form"]')
+    const continueControl = document.querySelector('[data-testid="x-continue"]')
+    const googleFrame = document.querySelector('iframe')
+    if (!activeForm || !continueControl || !googleFrame) {
+      throw new Error('expected X structural evidence')
+    }
+    expect(activeForm.hasAttribute('method')).toBe(false)
+    expect(activeForm.hasAttribute('action')).toBe(false)
+    expect(continueControl.tagName).toBe('DIV')
+    expect(continueControl.hasAttribute('role')).toBe(false)
+    expect(continueControl.hasAttribute('tabindex')).toBe(false)
+    expect(document.contains(googleFrame)).toBe(true)
+    expect(googleFrame.hasAttribute('src')).toBe(false)
+    expect(document.querySelector('#x-apple')?.getAttribute('type')).toBe(
+      'button',
+    )
+    expect(document.querySelector('#x-phone')?.getAttribute('type')).toBe(
+      'button',
+    )
+  })
+
+  test('does not infer implicit submission beside a Rust-safe actionable advance', () => {
+    window.history.replaceState({}, '', '/auth/login')
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<form aria-label="Login" action="/auth/login">
+          <label for="safe-username">Username</label>
+          <input id="safe-username" name="username" autocomplete="username">
+          <button id="safe-continue" type="button">Continue</button>
+        </form>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      advanceControl: 'absent',
+      credentialSubmissionKind: 'absent',
+      detailedAdvanceControlKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+    })
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) {
+      throw new Error('expected safe actionable authentication observation')
+    }
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.advanceControl).toBe('absent')
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        expect.objectContaining({
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue'),
+          submissionMethod: 'absent',
+        }),
+      ],
+    })
   })
 
   test('runs both bounded steps of the cross-origin Apple authorization surface', () => {
