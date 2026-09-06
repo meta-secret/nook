@@ -7,8 +7,9 @@ use super::{
     BuiltVaultEvent, NookError, NookVaultManager, VaultOperation, load_local_event_store,
     members_checkpoint_hash_from_roster, rewrapped_vault_meta_records_for_epoch, save_key_epoch,
 };
+use crate::storage::event_db::{EpochPairAppend, EventAppend, VaultEventPersistence};
+use crate::storage::identity_record;
 use crate::storage::identity_record::PendingIdentityRotation;
-use crate::storage::{event_db, identity_record};
 use nook_core::{
     EpochMetadataState, EpochPasswordState, EventId, IdentityVaultEventId, ProjectionEpoch,
     StoreId, SymmetricKey,
@@ -273,14 +274,18 @@ impl PreparedSecurityEpochExecution {
         manager: &mut NookVaultManager,
         plan_envelope: &nook_core::AgeArmoredCiphertext,
     ) -> Result<CommittedSecurityEpochExecution, SecurityEpochRotationFailure> {
-        let saved_heads = event_db::save_security_epoch_event_pair(
-            &manager.vault.store_id,
-            &self.trigger_event.event,
-            &self.trigger_event.bytes,
-            &self.checkpoint_event.event,
-            &self.checkpoint_event.bytes,
-        )
-        .await;
+        let saved_heads = VaultEventPersistence::new(&manager.vault.store_id)
+            .append_epoch_pair(EpochPairAppend {
+                trigger: EventAppend {
+                    event: &self.trigger_event.event,
+                    bytes: &self.trigger_event.bytes,
+                },
+                checkpoint: EventAppend {
+                    event: &self.checkpoint_event.event,
+                    bytes: &self.checkpoint_event.bytes,
+                },
+            })
+            .await;
         manager.event_log.heads = match saved_heads {
             Ok(heads) => heads,
             Err(error) => {
