@@ -1,6 +1,7 @@
 //! Event-log persistence and provider fan-out.
 
 use crate::storage::identity_record;
+use crate::storage::identity_record::LocalIdentitySigner;
 use nook_core::{
     EventError, IsoTimestamp, StoreId, VaultError, VaultNameRef, VaultProjection,
     VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
@@ -164,8 +165,9 @@ impl NookVaultManager {
             .await?
             .is_some()
         {
-            self.event_log.signing_seed =
-                identity_record::load_or_create_signing_seed_for_app_key(&app_key).await?;
+            self.event_log.signing_seed = LocalIdentitySigner { app_key: &app_key }
+                .load_or_create()
+                .await?;
             return Ok(SigningIdentity::from_seed_hex_stored(
                 &self.event_log.signing_seed,
             )?);
