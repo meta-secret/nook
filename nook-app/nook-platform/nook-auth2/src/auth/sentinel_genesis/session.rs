@@ -13,8 +13,8 @@ use super::{
     SentinelGenesisRequest, SentinelGenesisShareDelivery,
 };
 use crate::{
-    DeviceIdentity, MultiDeviceError, MultiDeviceResult, SentinelParticipantCount,
-    SentinelThreshold, StoreId,
+    DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, MultiDeviceResult,
+    SentinelParticipantCount, SentinelThreshold, StoreId,
 };
 use ed25519_dalek::{Signer, SigningKey};
 use multi_device::{VaultMember, VaultMetaRecord};
@@ -161,7 +161,7 @@ impl SentinelGenesisSession {
         };
         policy.validate()?;
         let session_id = multi_device::generate_id()?;
-        let signing_public_key = genesis::signing_public_key(signing_key);
+        let signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
         let mut request = SentinelGenesisRequest {
             version: GENESIS_VERSION,
             session_id: session_id.clone(),
@@ -170,13 +170,14 @@ impl SentinelGenesisSession {
             initiator_signing_public_key: signing_public_key,
             signature: String::new(),
         };
-        request.signature = hex::encode(
-            signing_key
-                .sign(&genesis::request_signing_bytes(&request)?)
-                .to_bytes(),
-        );
-        let response =
-            genesis::respond_to_sentinel_genesis_request(&request, identity, signing_key, label)?;
+        request.signature = hex::encode(signing_key.sign(&request.signing_bytes()?).to_bytes());
+        let response = request
+            .prepare_response(genesis::SentinelGenesisResponder {
+                identity,
+                signing_key,
+                label,
+            })
+            .and_then(genesis::CheckedSentinelGenesisResponse::sign)?;
         let session = Self {
             request,
             participants: Vec::new(),
@@ -211,12 +212,12 @@ impl SentinelGenesisSession {
         &self,
         response: &SentinelGenesisParticipantResponse,
     ) -> MultiDeviceResult<()> {
-        genesis::validate_request(&self.request)?;
+        self.request.validate()?;
         if response.version != GENESIS_VERSION || response.session_id != self.request.session_id {
             return Err(MultiDeviceError::InvalidSentinelGenesisSession);
         }
-        genesis::validate_participant(&response.participant, &response.session_id)?;
-        genesis::verify_response(response)?;
+        response.participant.validate_for(&response.session_id)?;
+        response.verify_signature()?;
         if self.participants.iter().any(|existing| {
             existing.device_id == response.participant.device_id
                 || existing.encryption_public_key == response.participant.encryption_public_key
@@ -280,7 +281,8 @@ impl SentinelGenesisSession {
                     .map_err(|_| MultiDeviceError::SentinelParticipantCountOverflow)?,
             });
         }
-        if genesis::signing_public_key(signing_key) != self.request.initiator_signing_public_key
+        if DeviceSigningPublicKey::from_signing_key(signing_key)
+            != self.request.initiator_signing_public_key
             || !self.participants.iter().any(|participant| {
                 participant.device_id == self.request.initiator_device_id
                     && participant.signing_public_key == self.request.initiator_signing_public_key
@@ -288,7 +290,7 @@ impl SentinelGenesisSession {
         {
             return Err(MultiDeviceError::InvalidSentinelGenesisSignature);
         }
-        genesis::validate_request(&self.request)
+        self.request.validate()
     }
     pub fn prepare(
         self,
@@ -349,7 +351,7 @@ impl ReadySentinelGenesis<'_> {
             };
             delivery.signature = hex::encode(
                 initiator_signing_key
-                    .sign(&genesis::delivery_signing_bytes(&delivery)?)
+                    .sign(&delivery.signing_bytes()?)
                     .to_bytes(),
             );
             deliveries.push(delivery);
@@ -398,12 +400,14 @@ mod tests {
             session: &SentinelGenesisSession,
         ) -> anyhow::Result<SentinelGenesisParticipantResponse> {
             let identity = DeviceIdentity::generate()?;
-            Ok(genesis::respond_to_sentinel_genesis_request(
-                session.request(),
-                &identity,
-                &SigningKey::from_bytes(&[3; 32]),
-                "Peer".to_owned(),
-            )?)
+            Ok(session
+                .request()
+                .prepare_response(genesis::SentinelGenesisResponder {
+                    identity: &identity,
+                    signing_key: &SigningKey::from_bytes(&[3; 32]),
+                    label: "Peer".to_owned(),
+                })
+                .and_then(genesis::CheckedSentinelGenesisResponse::sign)?)
         }
     }
     #[test]
@@ -468,12 +472,14 @@ mod tests {
         assert_eq!(session.participants()[1].label, "Peer");
         // Distinct signing key too: capacity rejection must follow uniqueness checks.
         let identity = DeviceIdentity::generate()?;
-        let extra = genesis::respond_to_sentinel_genesis_request(
-            session.request(),
-            &identity,
-            &SigningKey::from_bytes(&[4; 32]),
-            "Extra".to_owned(),
-        )?;
+        let extra = session
+            .request()
+            .prepare_response(genesis::SentinelGenesisResponder {
+                identity: &identity,
+                signing_key: &SigningKey::from_bytes(&[4; 32]),
+                label: "Extra".to_owned(),
+            })
+            .and_then(genesis::CheckedSentinelGenesisResponse::sign)?;
         let (session, error) = session
             .collect(extra)
             .err()

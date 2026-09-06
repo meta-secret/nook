@@ -96,3 +96,22 @@ pub(crate) fn vault_members_to_vec(
 ) -> Result<Vec<crate::NookVaultMember>, NookError> {
     Ok(members_to_vec(vault_member_records(records, members_key)?))
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn conversion_helpers_cover_content_and_empty_projection_paths() {
+        assert!(content_requires_genesis("not yaml", false).is_err());
+        assert!(sync_result_unchanged().is_ok());
+        assert!(sync_result_access_status(nook_core::VaultAccessStatus::Ready).is_ok());
+        assert!(wasm_iso_timestamp().ends_with('Z'));
+        assert!(pending_join_records(&[]).unwrap().is_empty());
+        assert!(pending_joins_to_vec(&[]).unwrap().is_empty());
+        assert!(vault_members_to_vec(&[], "not-a-key").is_err());
+    }
+}

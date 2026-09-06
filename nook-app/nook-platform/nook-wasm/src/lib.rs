@@ -142,6 +142,48 @@ pub enum NookError {
     Serialization(String),
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn extension_scopes_and_sentinel_translation_are_typed() {
+        assert_eq!(
+            extension_vault_access_scope(),
+            ExtensionConnectScope::VaultAccess
+        );
+        assert_eq!(
+            extension_password_filling_scope(),
+            ExtensionConnectScope::PasswordFilling
+        );
+        assert_eq!(
+            extension_passkey_management_scope(),
+            ExtensionConnectScope::PasskeyManagement
+        );
+        assert_eq!(
+            extension_sync_provider_credentials_scope(),
+            ExtensionConnectScope::SyncProviderCredentials
+        );
+        for value in [
+            "vault-access",
+            "password-filling",
+            "passkey-management",
+            "sync-provider-credentials",
+        ] {
+            assert!(is_extension_connect_scope(value));
+        }
+        assert!(!is_extension_connect_scope("unknown"));
+        let phase = nook_core::SentinelGenesisPhase::Inactive;
+        assert_eq!(
+            sentinel_genesis_phase_translation_key(phase),
+            phase.translation_key()
+        );
+    }
+}
+
 mod public_api;
 mod secret_api;
 mod vault_api;
