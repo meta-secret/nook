@@ -260,6 +260,87 @@ mod tests {
         assert!(manager.device.pending_extension_handoff.is_none());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn local_assessment_reports_new_vault_and_connect_recovery_is_toggleable()
+    -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.id = identity.device_id().as_str().to_owned();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+
+        assert_eq!(
+            manager
+                .assess_vault_connect("local".to_owned(), String::new(), String::new())
+                .await?,
+            VaultAccessStatus::NewVault
+        );
+        manager.prepare_connect_from_local_cache();
+        assert!(manager.storage.use_local_cache_for_connect);
+        manager.clear_connect_recovery();
+        assert!(!manager.storage.use_local_cache_for_connect);
+        manager.restore_local_after_provider_assessment().await?;
+        assert_eq!(manager.storage.mode, StorageMode::Local);
+
+        manager.delete_local_browser_data().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    fn genesis_key_helpers_cover_simple_and_sentinel_architectures() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut simple = NookVaultManager::new();
+        simple.initialize_genesis_vault(&identity)?;
+        assert!(!simple.vault.secrets_key.is_empty());
+        assert!(!simple.vault.members_key.is_empty());
+        assert!(
+            simple
+                .stored_records_snapshot()
+                .iter()
+                .any(|record| nook_core::is_auth_stored_record(record).unwrap_or(false))
+        );
+        assert!(
+            simple
+                .stored_records_snapshot()
+                .iter()
+                .any(|record| record.key.as_str().starts_with("member:"))
+        );
+
+        let mut sentinel = NookVaultManager::new();
+        sentinel.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
+            nook_core::DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 0.into(),
+            },
+        );
+        sentinel.initialize_genesis_vault(&identity)?;
+        assert!(!sentinel.vault.secrets_key.is_empty());
+        assert!(!sentinel.vault.members_key.is_empty());
+        assert!(
+            !sentinel
+                .stored_records_snapshot()
+                .iter()
+                .any(|record| nook_core::is_auth_stored_record(record).unwrap_or(false))
+        );
+        assert!(
+            sentinel
+                .stored_records_snapshot()
+                .iter()
+                .any(|record| record.key.as_str().starts_with("member:"))
+        );
+        Ok(())
+    }
 }
 
 #[wasm_bindgen]
