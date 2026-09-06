@@ -74,9 +74,9 @@ mod tests {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
             },
         );
         assert_eq!(architecture.vault_type, VaultType::Sentinel);

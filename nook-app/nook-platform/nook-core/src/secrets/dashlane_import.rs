@@ -42,8 +42,8 @@ pub enum DashlaneImportError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DashlaneImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 #[derive(Clone, Copy)]
@@ -396,8 +396,8 @@ fn plan_csv_text(csv_text: &str) -> Result<DashlaneImportPlan, DashlaneImportErr
     };
     Ok(DashlaneImportPlan {
         items: collection.items,
-        source_count: collection.source_count,
-        skipped_unsupported: collection.skipped_unsupported,
+        source_count: collection.source_count.into(),
+        skipped_unsupported: collection.skipped_unsupported.into(),
     })
 }
 
@@ -441,8 +441,8 @@ fn plan_zip_import(export_bytes: &[u8]) -> Result<DashlaneImportPlan, DashlaneIm
 
     let mut plan = DashlaneImportPlan {
         items: Vec::new(),
-        source_count: 0,
-        skipped_unsupported: 0,
+        source_count: 0.into(),
+        skipped_unsupported: 0.into(),
     };
     for (kind, index) in selected {
         let csv = read_zip_entry_text(&mut archive, index)?;
@@ -469,13 +469,21 @@ fn plan_zip_import(export_bytes: &[u8]) -> Result<DashlaneImportPlan, DashlaneIm
             }
         };
         plan.items.extend(collection.items);
-        plan.source_count += collection.source_count;
-        plan.skipped_unsupported += collection.skipped_unsupported;
+        plan.source_count = (usize::from(plan.source_count) + collection.source_count).into();
+        plan.skipped_unsupported =
+            (usize::from(plan.skipped_unsupported) + collection.skipped_unsupported).into();
     }
     Ok(plan)
 }
 
 /// Parse a Dashlane CSV or CSV-ZIP export entirely in memory.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: accepts the original Dashlane ZIP archive bytes"
+    )
+)]
 pub fn plan_dashlane_import(
     export_bytes: &[u8],
 ) -> Result<DashlaneImportPlan, DashlaneImportError> {
@@ -522,8 +530,8 @@ mod tests {
         );
 
         let plan = plan_dashlane_import(csv.as_bytes())?;
-        assert_eq!(plan.source_count, 1);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login");
@@ -555,8 +563,8 @@ mod tests {
         ])?;
 
         let plan = plan_dashlane_import(&zip)?;
-        assert_eq!(plan.source_count, 4);
-        assert_eq!(plan.skipped_unsupported, 1);
+        assert_eq!(usize::from(plan.source_count), 4);
+        assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert!(
             plan.items
                 .iter()

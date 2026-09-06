@@ -79,6 +79,13 @@ pub struct PasskeyRegistrationRequest {
     pub challenge: String,
     pub relying_party: PasskeyRelyingParty,
     pub user: PasskeyUser,
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "FFI boundary: preserves WebAuthn COSE algorithm identifiers required by the browser credential API"
+        )
+    )]
     pub algorithms: Vec<i32>,
     #[serde(default)]
     pub exclude_credentials: Vec<PasskeyCredentialDescriptor>,

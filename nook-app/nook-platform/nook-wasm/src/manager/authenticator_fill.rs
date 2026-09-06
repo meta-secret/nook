@@ -43,7 +43,7 @@ impl NookVaultManager {
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         let result = match &record.data {
             SecretValue::Authenticator(authenticator) => authenticator
-                .current_code(u64::from(unix_seconds))
+                .current_code(u64::from(unix_seconds).into())
                 .map(|code| NookTotpCode::from_core(code, u64::from(unix_seconds)))
                 .map_err(NookError::from),
             _ => Err(NookError::Decryption(

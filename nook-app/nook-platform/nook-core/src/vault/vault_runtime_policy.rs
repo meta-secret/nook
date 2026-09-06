@@ -74,28 +74,42 @@ impl VaultRuntimePolicy {
     }
 
     #[must_use]
-    pub fn resolve_vault_idle_timeout_ms(self, raw: RuntimeConfigValue<'_>) -> u32 {
+    pub fn resolve_vault_idle_timeout_ms(
+        self,
+        raw: RuntimeConfigValue<'_>,
+    ) -> crate::VaultIdleTimeoutMilliseconds {
         if !self.allow_fast_idle() {
-            return DEFAULT_VAULT_IDLE_TIMEOUT_MS;
+            return DEFAULT_VAULT_IDLE_TIMEOUT_MS.into();
         }
-        parse_config_millis(raw, MIN_VAULT_IDLE_TIMEOUT_MS).unwrap_or(DEFAULT_VAULT_IDLE_TIMEOUT_MS)
+        parse_config_millis(raw, MIN_VAULT_IDLE_TIMEOUT_MS)
+            .unwrap_or(DEFAULT_VAULT_IDLE_TIMEOUT_MS)
+            .into()
     }
 
     #[must_use]
-    pub fn resolve_vault_idle_warning_ms(self, raw: RuntimeConfigValue<'_>) -> u32 {
+    pub fn resolve_vault_idle_warning_ms(
+        self,
+        raw: RuntimeConfigValue<'_>,
+    ) -> crate::VaultIdleWarningMilliseconds {
         if !self.allow_fast_idle() {
-            return DEFAULT_VAULT_IDLE_WARNING_MS;
+            return DEFAULT_VAULT_IDLE_WARNING_MS.into();
         }
-        parse_config_millis(raw, 0).unwrap_or(DEFAULT_VAULT_IDLE_WARNING_MS)
+        parse_config_millis(raw, 0)
+            .unwrap_or(DEFAULT_VAULT_IDLE_WARNING_MS)
+            .into()
     }
 
     #[must_use]
-    pub fn resolve_vault_sync_interval_ms(self, raw: RuntimeConfigValue<'_>) -> u32 {
+    pub fn resolve_vault_sync_interval_ms(
+        self,
+        raw: RuntimeConfigValue<'_>,
+    ) -> crate::VaultSyncIntervalMilliseconds {
         if !self.allow_fast_sync() {
-            return DEFAULT_VAULT_SYNC_INTERVAL_MS;
+            return DEFAULT_VAULT_SYNC_INTERVAL_MS.into();
         }
         parse_config_millis(raw, MIN_VAULT_SYNC_INTERVAL_MS)
             .unwrap_or(DEFAULT_VAULT_SYNC_INTERVAL_MS)
+            .into()
     }
 }
 
@@ -130,15 +144,15 @@ mod tests {
     fn production_ignores_unsafe_fast_overrides() {
         let policy = VaultRuntimePolicy::new(ClientRunMode::Prod, false);
         assert_eq!(
-            policy.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000")),
+            u32::from(policy.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000"))),
             DEFAULT_VAULT_IDLE_TIMEOUT_MS
         );
         assert_eq!(
-            policy.resolve_vault_idle_warning_ms(RuntimeConfigValue::Set("0")),
+            u32::from(policy.resolve_vault_idle_warning_ms(RuntimeConfigValue::Set("0"))),
             DEFAULT_VAULT_IDLE_WARNING_MS
         );
         assert_eq!(
-            policy.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("250")),
+            u32::from(policy.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("250"))),
             DEFAULT_VAULT_SYNC_INTERVAL_MS
         );
         assert!(!policy.expose_debug_hooks());
@@ -148,29 +162,31 @@ mod tests {
     fn local_and_explicit_test_modes_honor_valid_overrides() {
         let local = VaultRuntimePolicy::new(ClientRunMode::Local, false);
         assert_eq!(
-            local.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1200")),
+            u32::from(local.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1200"))),
             1200
         );
         assert_eq!(
-            local.resolve_vault_idle_warning_ms(RuntimeConfigValue::Set("0")),
+            u32::from(local.resolve_vault_idle_warning_ms(RuntimeConfigValue::Set("0"))),
             0
         );
         assert_eq!(
-            local.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("300")),
+            u32::from(local.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("300"))),
             300
         );
         assert_eq!(
-            local.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("999")),
+            u32::from(local.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("999"))),
             DEFAULT_VAULT_IDLE_TIMEOUT_MS
         );
         assert_eq!(
-            local.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("249")),
+            u32::from(local.resolve_vault_sync_interval_ms(RuntimeConfigValue::Set("249"))),
             DEFAULT_VAULT_SYNC_INTERVAL_MS
         );
 
         let production_test = VaultRuntimePolicy::new(ClientRunMode::Prod, true);
         assert_eq!(
-            production_test.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000")),
+            u32::from(
+                production_test.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000"))
+            ),
             1000
         );
         assert!(production_test.expose_debug_hooks());

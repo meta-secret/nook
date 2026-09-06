@@ -43,7 +43,10 @@ pub enum VaultFormatError {
     #[error(
         "Vault schema version {found} is newer than this app supports (max {max_supported}). Update Nook or use a pinned older app if you need rollback."
     )]
-    UnsupportedSchemaVersion { found: u32, max_supported: u32 },
+    UnsupportedSchemaVersion {
+        found: crate::VaultSchemaVersion,
+        max_supported: crate::VaultSchemaVersion,
+    },
 
     #[error(transparent)]
     Validation(#[from] ValidationError),

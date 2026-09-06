@@ -76,8 +76,8 @@ impl<'a> PendingUnlockCompletion<'a> {
         quorum.check_context(
             &store_id,
             SentinelUnlockPolicy {
-                threshold: policy.threshold.into(),
-                required_participants: policy.required_participants.into(),
+                threshold: policy.threshold,
+                required_participants: policy.required_participants,
             },
         )?;
         let keys = quorum.finalize()?;
@@ -391,9 +391,9 @@ mod tests {
                     manager.vault.architecture = VaultArchitecture::sentinel_personal(
                         DeviceMode::Standard,
                         nook_core::SentinelPolicy {
-                            threshold: 3,
-                            required_participants: 3,
-                            ready_participants: 3,
+                            threshold: 3.into(),
+                            required_participants: 3.into(),
+                            ready_participants: 3.into(),
                         },
                     )
                 }

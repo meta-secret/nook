@@ -206,7 +206,7 @@ impl NookVaultManager {
         let mut record =
             nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
         let code = if let SecretValue::Authenticator(value) = &record.data {
-            value.current_code(u64::from(unix_seconds))?
+            value.current_code(u64::from(unix_seconds).into())?
         } else {
             record.zeroize_plaintext();
             return Err(NookError::Database(

@@ -171,9 +171,9 @@ impl NookVaultArchitecture {
             vault_type: VaultType::Sentinel,
             replication_type,
             sentinel: SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
-                threshold,
-                required_participants,
-                ready_participants,
+                threshold: threshold.into(),
+                required_participants: required_participants.into(),
+                ready_participants: ready_participants.into(),
             }),
         };
         architecture.validate()?;
@@ -204,7 +204,7 @@ impl NookVaultArchitecture {
         )
     )]
     pub fn sentinel_threshold(&self) -> Result<u8, wasm_bindgen::JsError> {
-        Ok(self.0.sentinel.policy()?.threshold)
+        Ok(self.0.sentinel.policy()?.threshold.into())
     }
 
     #[wasm_bindgen(getter, js_name = sentinel_required_participants)]
@@ -216,7 +216,7 @@ impl NookVaultArchitecture {
         )
     )]
     pub fn sentinel_required_participants(&self) -> Result<u8, wasm_bindgen::JsError> {
-        Ok(self.0.sentinel.policy()?.required_participants)
+        Ok(self.0.sentinel.policy()?.required_participants.into())
     }
 
     #[wasm_bindgen(getter, js_name = sentinel_ready_participants)]
@@ -228,7 +228,7 @@ impl NookVaultArchitecture {
         )
     )]
     pub fn sentinel_ready_participants(&self) -> Result<u8, wasm_bindgen::JsError> {
-        Ok(self.0.sentinel.policy()?.ready_participants)
+        Ok(self.0.sentinel.policy()?.ready_participants.into())
     }
 }
 

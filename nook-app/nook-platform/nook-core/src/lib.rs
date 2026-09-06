@@ -3,7 +3,6 @@
     clippy::missing_panics_doc,
     clippy::uninlined_format_args
 )]
-
 mod auth;
 mod crypto;
 mod errors;
@@ -32,14 +31,15 @@ pub use device_access::{
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
-    keepassxc_import, keeper_import, lastpass_import, login_site_hosts, onepassword_import,
-    passkey_authenticator, password, proton_pass_import, secret_fingerprint, secret_types,
-    secret_view, session,
+    import_support, keepassxc_import, keeper_import, lastpass_import, login_site_hosts,
+    onepassword_import, passkey_authenticator, password, proton_pass_import, secret_fingerprint,
+    secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
     vault_sync_session, vault_sync_state, vault_sync_store,
 };
+pub use vault::domain_numbers::*;
 pub(crate) use vault::{
     database, device_access, vault_access_diagnostics, vault_architecture, vault_client_policy,
     vault_connect, vault_event_session, vault_format, vault_ids, vault_runtime_policy,
@@ -55,16 +55,17 @@ pub use authenticator::{
     AuthenticatorSecret, BackupCodeAttachMode, BackupCodePersistenceVerification,
     MAX_AUTHENTICATOR_BACKUP_CODE_LEN, MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview,
     TotpAlgorithm, TotpCode, TotpDigits, TotpPeriod, TotpRemainingSeconds, TotpSecret,
-    apply_backup_codes, authenticator_setup_key_changed, normalize_backup_codes,
+    TotpUnixSeconds, apply_backup_codes, authenticator_setup_key_changed, normalize_backup_codes,
     verify_persisted_backup_codes,
 };
 pub use authenticator_issuer_hosts::{
     mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,
 };
 pub use bip39::{
-    Bip39MnemonicWordCount, Bip39WordSuggestionLimit, bip39_english_wordlist,
-    infer_bip39_mnemonic_length, is_bip39_word_sequence_valid, is_known_bip39_word,
-    join_bip39_words, parse_bip39_words, suggest_bip39_words, validate_bip39_mnemonic,
+    Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount, Bip39WordSuggestionLimit,
+    bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
+    is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
+    validate_bip39_mnemonic,
 };
 pub use bitwarden_import::{
     BitwardenImportError, BitwardenImportPlan, plan_bitwarden_import,
@@ -111,8 +112,10 @@ pub use extension_identity_handoff::{
     seal_extension_identity_handoff,
 };
 pub use google_authenticator_import::{
-    GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan, plan_google_authenticator_import,
+    GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,
+    GoogleAuthenticatorMigrationQrCodeCount, plan_google_authenticator_import,
 };
+pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedRecordCount};
 pub use keepassxc_import::{KeePassXcImportError, KeePassXcImportPlan, plan_keepassxc_import};
 pub use keeper_import::{KeeperImportError, KeeperImportPlan, plan_keeper_import};
 pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
@@ -172,7 +175,8 @@ pub use nook_companion_core::{
     AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
 };
 pub use onepassword_import::{
-    OnePasswordImportError, OnePasswordImportPlan, plan_onepassword_import,
+    OnePasswordImportError, OnePasswordImportPlan, UnsupportedOnePasswordExportVersion,
+    plan_onepassword_import,
 };
 pub use passkey_authenticator::{
     PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,
@@ -185,16 +189,18 @@ pub use proton_pass_import::{
 };
 pub use secret_fingerprint::{enrich_secret, secret_fingerprint, secret_identity_fingerprint};
 pub use secret_types::{
-    ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentSecret, LoginSecret,
-    PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose,
-    PasskeySecret, PasskeySecretVersion, PasskeySignatureCount, SecretRecord, SecretType,
-    SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload, StoredSecretRecord,
+    ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentByteCount, FileAttachmentSecret,
+    LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
+    PasskeyPublicKeyCose, PasskeySecret, PasskeySecretVersion, PasskeySignatureCount, SecretRecord,
+    SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload,
+    StoredSecretRecord,
 };
 pub use secret_view::{
-    ApiKeySecretForm, AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm,
-    LoginSecretForm, SecretFormFields, SecretListItem, SecretListItemData, SecureNoteSecretForm,
-    SeedPhraseSecretForm, authenticator_group_key, build_secret_yaml, build_secret_yaml_from_form,
-    hostname_from_url, login_host_matches_origin, resolve_entity_group_keys,
+    ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorSecretForm, CreditCardSecretForm,
+    FileAttachmentSecretForm, LoginSecretForm, SecretFormFields, SecretListItem,
+    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount,
+    authenticator_group_key, build_secret_yaml, build_secret_yaml_from_form, hostname_from_url,
+    login_host_matches_origin, resolve_entity_group_keys,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
@@ -469,7 +475,7 @@ mod test_support {
             &VaultUnlock::Keys,
             &[],
             VaultStoreIdentityRef::Assigned(store_id),
-            VaultVersionWrite::Version(version),
+            VaultVersionWrite::Version(version.into()),
         )?
         .into_inner())
     }

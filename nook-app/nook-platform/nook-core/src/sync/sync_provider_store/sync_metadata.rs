@@ -17,8 +17,8 @@ pub fn update_provider_sync_metadata(
     synced_at: &str,
 ) -> Vec<StorageProviderData> {
     let version = match crate::read_vault_version(vault_yaml) {
-        Ok(version) => match i64::try_from(version) {
-            Ok(version) if version > 0 => ProviderSyncedVaultVersion::Version(version),
+        Ok(version) => match i64::try_from(u64::from(version)) {
+            Ok(version) if version > 0 => ProviderSyncedVaultVersion::Version(version.into()),
             Ok(_) | Err(_) => ProviderSyncedVaultVersion::Unknown,
         },
         Err(_) => ProviderSyncedVaultVersion::Unknown,
@@ -98,7 +98,7 @@ mod tests {
     fn provider_sync_metadata_update_preserves_unreported_fields() {
         let mut provider = github_provider("github", "owner/repo", "pat");
         provider.sync_checkpoint = ProviderSyncCheckpoint::Synced {
-            version: ProviderSyncedVaultVersion::Version(9),
+            version: ProviderSyncedVaultVersion::Version(9.into()),
             synced_at: "earlier".to_owned(),
             revision: ProviderSyncRevision::Revision("old-revision".to_owned()),
             common_content_hash: "old-hash".to_owned(),
@@ -116,7 +116,7 @@ mod tests {
         assert_eq!(
             updated[0].sync_checkpoint,
             ProviderSyncCheckpoint::Synced {
-                version: ProviderSyncedVaultVersion::Version(9),
+                version: ProviderSyncedVaultVersion::Version(9.into()),
                 synced_at: "2026-07-17T12:00:00Z".to_owned(),
                 revision: ProviderSyncRevision::Revision("old-revision".to_owned()),
                 common_content_hash: crate::vault_content_hash(""),

@@ -293,8 +293,8 @@ impl NookVaultManager {
         let mut session = signing.start_sentinel_unlock(
             store_id,
             nook_core::SentinelUnlockPolicy {
-                threshold: policy.threshold.into(),
-                required_participants: policy.required_participants.into(),
+                threshold: policy.threshold,
+                required_participants: policy.required_participants,
             },
             &records,
             &identity,
@@ -483,9 +483,9 @@ impl NookVaultManager {
         self.vault.architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             nook_core::SentinelPolicy {
-                threshold: delivery.policy.threshold.into(),
-                required_participants: delivery.policy.participant_count.into(),
-                ready_participants: 1,
+                threshold: delivery.policy.threshold,
+                required_participants: delivery.policy.participant_count,
+                ready_participants: 1.into(),
             },
         );
         self.vault.meta = meta;
@@ -545,7 +545,7 @@ impl NookVaultManager {
         self.vault.password_entries = metadata.password_entries;
         self.vault.store_id = metadata.store_id;
         self.vault.vault_name = VaultNameState::Named(metadata.vault_name);
-        self.vault.vault_version = metadata.version;
+        self.vault.vault_version = metadata.version.into();
         self.vault.architecture = architecture;
         self.vault.meta = meta;
         self.vault.secrets_key.clear();
@@ -605,9 +605,9 @@ impl NookVaultManager {
         let share_count = u8::try_from(meta.sentinel_shares.len())
             .map_err(|_| MultiDeviceError::InvalidSentinelThreshold)?;
         Ok(Some(nook_core::SentinelPolicy {
-            threshold,
-            required_participants: required,
-            ready_participants: share_count,
+            threshold: threshold.into(),
+            required_participants: required.into(),
+            ready_participants: share_count.into(),
         }))
     }
 }
@@ -652,9 +652,9 @@ mod tests {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             nook_core::SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
             },
         );
         let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
@@ -699,9 +699,9 @@ mod tests {
 
         manager.ensure_sentinel_architecture_from_shares()?;
         let policy = manager.vault.architecture.sentinel.policy()?;
-        assert_eq!(policy.threshold, 3);
-        assert_eq!(policy.required_participants, 5);
-        assert_eq!(policy.ready_participants, 2);
+        assert_eq!(u8::from(policy.threshold), 3);
+        assert_eq!(u8::from(policy.required_participants), 5);
+        assert_eq!(u8::from(policy.ready_participants), 2);
         Ok(())
     }
 
@@ -734,9 +734,9 @@ mod tests {
         manager.vault.architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             nook_core::SentinelPolicy {
-                threshold: 3,
-                required_participants: 5,
-                ready_participants: 5,
+                threshold: 3.into(),
+                required_participants: 5.into(),
+                ready_participants: 5.into(),
             },
         );
         manager.vault.meta.sentinel_shares.insert(

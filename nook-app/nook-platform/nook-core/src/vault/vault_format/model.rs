@@ -31,7 +31,7 @@ pub enum VaultNameRef<'a> {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VaultVersionWrite {
     Initial,
-    Version(u64),
+    Version(crate::VaultVersion),
 }
 
 impl VaultFormat {

@@ -50,9 +50,9 @@ impl VaultClientPolicy {
     #[must_use]
     pub const fn manual_sync_has_target(
         local_vault_present: bool,
-        sync_provider_count: usize,
+        sync_provider_count: crate::VaultSyncProviderCount,
     ) -> bool {
-        local_vault_present || sync_provider_count > 0
+        local_vault_present || sync_provider_count.is_nonzero()
     }
 
     #[must_use]
@@ -75,11 +75,11 @@ impl VaultClientPolicy {
         saving: bool,
         password_busy: bool,
         syncing: bool,
-        sync_provider_count: usize,
+        sync_provider_count: crate::VaultSyncProviderCount,
     ) -> bool {
         !sync_blocked
             && (force || (!verifying && !saving && !password_busy && !syncing))
-            && sync_provider_count > 0
+            && sync_provider_count.is_nonzero()
     }
 
     #[must_use]
@@ -156,7 +156,7 @@ impl VaultClientPolicy {
         authenticated: bool,
         join_state: JoinEnrollmentState,
         awaiting_join_approval: bool,
-        sync_provider_count: usize,
+        sync_provider_count: crate::VaultSyncProviderCount,
     ) -> VaultSyncTimerTickDecision {
         if verifying || saving || syncing || password_busy {
             return VaultSyncTimerTickDecision::SkipBusy;
@@ -168,7 +168,7 @@ impl VaultClientPolicy {
             return VaultSyncTimerTickDecision::SkipNoRemoteUpdates;
         }
         if authenticated
-            && sync_provider_count == 0
+            && sync_provider_count.is_zero()
             && matches!(join_state, JoinEnrollmentState::None)
         {
             return VaultSyncTimerTickDecision::SkipLocalOnly;
@@ -186,7 +186,7 @@ impl VaultClientPolicy {
         password_busy: bool,
         syncing: bool,
         authenticated: bool,
-        sync_provider_count: usize,
+        sync_provider_count: crate::VaultSyncProviderCount,
         has_remote_credentials: bool,
         local_vault_present: bool,
     ) -> VaultStorageSyncDecision {
@@ -194,13 +194,13 @@ impl VaultClientPolicy {
         if sync_blocked || (!forced && (verifying || saving || password_busy || syncing)) {
             return VaultStorageSyncDecision::Skip;
         }
-        if !authenticated && sync_provider_count > 0 {
+        if !authenticated && sync_provider_count.is_nonzero() {
             return VaultStorageSyncDecision::SyncFirstProviderUnauthenticated;
         }
         if !has_remote_credentials {
             return VaultStorageSyncDecision::Skip;
         }
-        if authenticated && local_vault_present && sync_provider_count > 0 {
+        if authenticated && local_vault_present && sync_provider_count.is_nonzero() {
             return VaultStorageSyncDecision::SyncProviders;
         }
         VaultStorageSyncDecision::SyncConfiguredStorage
@@ -213,24 +213,48 @@ mod tests {
 
     #[test]
     fn manual_sync_requires_a_vault_or_explicit_provider_target() {
-        assert!(!VaultClientPolicy::manual_sync_has_target(false, 0));
-        assert!(VaultClientPolicy::manual_sync_has_target(true, 0));
-        assert!(VaultClientPolicy::manual_sync_has_target(false, 1));
+        assert!(!VaultClientPolicy::manual_sync_has_target(false, 0.into()));
+        assert!(VaultClientPolicy::manual_sync_has_target(true, 0.into()));
+        assert!(VaultClientPolicy::manual_sync_has_target(false, 1.into()));
     }
 
     #[test]
     fn provider_sync_guard_respects_busy_and_forced_states() {
         assert!(VaultClientPolicy::should_sync_from_providers(
-            false, false, false, false, false, false, 1,
+            false,
+            false,
+            false,
+            false,
+            false,
+            false,
+            1.into(),
         ));
         assert!(!VaultClientPolicy::should_sync_from_providers(
-            false, false, false, true, false, false, 1,
+            false,
+            false,
+            false,
+            true,
+            false,
+            false,
+            1.into(),
         ));
         assert!(VaultClientPolicy::should_sync_from_providers(
-            false, true, false, true, true, true, 1,
+            false,
+            true,
+            false,
+            true,
+            true,
+            true,
+            1.into(),
         ));
         assert!(!VaultClientPolicy::should_sync_from_providers(
-            true, true, false, false, false, false, 1,
+            true,
+            true,
+            false,
+            false,
+            false,
+            false,
+            1.into(),
         ));
     }
 
@@ -322,7 +346,7 @@ mod tests {
                 true,
                 JoinEnrollmentState::None,
                 false,
-                1,
+                1.into(),
             ),
             VaultSyncTimerTickDecision::SkipBusy
         );
@@ -335,7 +359,7 @@ mod tests {
                 false,
                 JoinEnrollmentState::None,
                 false,
-                1,
+                1.into(),
             ),
             VaultSyncTimerTickDecision::SkipNoRemoteUpdates
         );
@@ -348,7 +372,7 @@ mod tests {
                 true,
                 JoinEnrollmentState::None,
                 false,
-                0,
+                0.into(),
             ),
             VaultSyncTimerTickDecision::SkipLocalOnly
         );
@@ -361,7 +385,7 @@ mod tests {
                 false,
                 JoinEnrollmentState::Pending,
                 true,
-                1,
+                1.into(),
             ),
             VaultSyncTimerTickDecision::Sync
         );
@@ -378,7 +402,7 @@ mod tests {
                 false,
                 false,
                 true,
-                1,
+                1.into(),
                 true,
                 true,
             ),
@@ -393,7 +417,7 @@ mod tests {
                 true,
                 true,
                 false,
-                1,
+                1.into(),
                 false,
                 false,
             ),
@@ -408,7 +432,7 @@ mod tests {
                 false,
                 false,
                 true,
-                2,
+                2.into(),
                 true,
                 true,
             ),
@@ -423,7 +447,7 @@ mod tests {
                 false,
                 false,
                 false,
-                0,
+                0.into(),
                 true,
                 false,
             ),
@@ -438,7 +462,7 @@ mod tests {
                 false,
                 false,
                 true,
-                0,
+                0.into(),
                 false,
                 true,
             ),

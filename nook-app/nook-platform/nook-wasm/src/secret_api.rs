@@ -140,7 +140,7 @@ impl NookSecretListItem {
     pub fn seed_word_count(&self) -> u32 {
         match self.item.data {
             SecretListItemData::SeedPhrase { word_count, .. } => {
-                u32::try_from(word_count).unwrap_or(u32::MAX)
+                u32::try_from(usize::from(word_count)).unwrap_or(u32::MAX)
             }
             _ => 0,
         }
@@ -221,7 +221,7 @@ impl NookSecretListItem {
     pub fn size_bytes(&self) -> u32 {
         match self.item.data {
             SecretListItemData::FileAttachment { size_bytes, .. } => {
-                u32::try_from(size_bytes).unwrap_or(u32::MAX)
+                u32::try_from(u64::from(size_bytes)).unwrap_or(u32::MAX)
             }
             _ => 0,
         }
@@ -281,7 +281,7 @@ impl NookSecretListItem {
         match self.item.data {
             SecretListItemData::Authenticator {
                 backup_code_count, ..
-            } => u32::try_from(backup_code_count).unwrap_or(u32::MAX),
+            } => u32::try_from(usize::from(backup_code_count)).unwrap_or(u32::MAX),
             _ => 0,
         }
     }
@@ -327,7 +327,7 @@ pub fn current_code_from_otpauth_uri(
     }
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let unix_seconds = (millis / 1000.0) as u64;
-    AuthenticatorSecret::current_code_from_otpauth_uri(uri, unix_seconds)
+    AuthenticatorSecret::current_code_from_otpauth_uri(uri, unix_seconds.into())
         .map(|code| NookTotpCode::from_core(code, unix_seconds))
         .map_err(NookError::from)
         .map_err(Into::into)
@@ -603,13 +603,13 @@ mod wasm_tests {
                         issuer: "Namecheap".to_owned(),
                         account: "bynull".to_owned(),
                         website_url: String::new(),
-                        backup_code_count: 0,
+                        backup_code_count: 0.into(),
                     },
                 },
             ],
-            total: 2,
-            offset: 0,
-            limit: 50,
+            total: 2.into(),
+            offset: 0.into(),
+            limit: 50.into(),
         })?;
 
         let items = page.take_items();
@@ -628,9 +628,9 @@ mod wasm_tests {
                     title: "Recovery".to_owned(),
                 },
             }],
-            total: 1,
-            offset: 0,
-            limit: 50,
+            total: 1.into(),
+            offset: 0.into(),
+            limit: 50.into(),
         })?;
 
         let items = page.take_items();

@@ -20,7 +20,7 @@ impl SecretRecord {
             },
             SecretValue::SeedPhrase(value) => SecretListItemData::SeedPhrase {
                 name: value.name.clone(),
-                word_count: value.seed.split_whitespace().count(),
+                word_count: value.seed.split_whitespace().count().into(),
             },
             SecretValue::SecureNote(value) => SecretListItemData::SecureNote {
                 title: value.title.clone(),
@@ -35,7 +35,7 @@ impl SecretRecord {
                 issuer: value.issuer.clone(),
                 account: value.account.clone(),
                 website_url: value.website_url.clone(),
-                backup_code_count: value.backup_codes.len(),
+                backup_code_count: value.backup_codes.len().into(),
             },
             SecretValue::CreditCard(value) => SecretListItemData::CreditCard {
                 title: value.title.clone(),
@@ -250,7 +250,7 @@ mod tests {
             item.data,
             SecretListItemData::SeedPhrase {
                 name: "wallet".to_owned(),
-                word_count: 12,
+                word_count: 12.into(),
             }
         );
         assert!(!format!("{item:?}").contains("abandon"));
@@ -358,7 +358,7 @@ mod tests {
                 issuer: "Example".to_owned(),
                 account: "alice@example.com".to_owned(),
                 website_url: String::new(),
-                backup_code_count: 2,
+                backup_code_count: 2.into(),
             }
         );
         let debug = format!("{item:?}");

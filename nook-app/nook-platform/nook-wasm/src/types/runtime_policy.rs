@@ -22,7 +22,10 @@ impl NookVaultClientPolicy {
         local_vault_present: bool,
         sync_provider_count: u32,
     ) -> bool {
-        VaultClientPolicy::manual_sync_has_target(local_vault_present, sync_provider_count as usize)
+        VaultClientPolicy::manual_sync_has_target(
+            local_vault_present,
+            (sync_provider_count as usize).into(),
+        )
     }
 
     #[wasm_bindgen]
@@ -74,7 +77,7 @@ impl NookVaultClientPolicy {
         architecture_allows_secret_creation: bool,
     ) -> nook_core::VaultEditDecision {
         VaultClientPolicy::edit_block_reason(
-            security_conflict_count as usize,
+            (security_conflict_count as usize).into(),
             has_sync_conflict,
             architecture_allows_secret_creation,
         )
@@ -96,7 +99,7 @@ impl NookVaultClientPolicy {
         architecture_allows_secret_creation: bool,
     ) -> bool {
         VaultClientPolicy::edits_blocked(
-            security_conflict_count as usize,
+            (security_conflict_count as usize).into(),
             has_sync_conflict,
             architecture_allows_secret_creation,
         )
@@ -119,7 +122,7 @@ impl NookVaultClientPolicy {
         locale: &str,
     ) -> Result<String, wasm_bindgen::JsError> {
         VaultClientPolicy::edit_block_message(
-            security_conflict_count as usize,
+            (security_conflict_count as usize).into(),
             has_sync_conflict,
             architecture_allows_secret_creation,
             catalog_json,
@@ -157,7 +160,7 @@ impl NookVaultClientPolicy {
     ) -> bool {
         VaultClientPolicy::should_use_join_provider_for_connect(
             authenticated,
-            sync_provider_count as usize,
+            (sync_provider_count as usize).into(),
             join_state,
         )
     }
@@ -189,7 +192,7 @@ impl NookVaultClientPolicy {
             saving,
             password_busy,
             syncing,
-            sync_provider_count as usize,
+            (sync_provider_count as usize).into(),
         )
     }
 
@@ -239,7 +242,7 @@ impl NookVaultClientPolicy {
             authenticated,
             join_state,
             awaiting_join_approval,
-            sync_provider_count as usize,
+            (sync_provider_count as usize).into(),
         )
     }
 
@@ -274,7 +277,7 @@ impl NookVaultClientPolicy {
             password_busy,
             syncing,
             authenticated,
-            sync_provider_count as usize,
+            (sync_provider_count as usize).into(),
             has_remote_credentials,
             local_vault_present,
         )
@@ -302,8 +305,8 @@ impl NookVaultClientPolicy {
         VaultClientPolicy::should_auto_unlock(
             session_explicitly_locked,
             local_vault_present,
-            password_entry_count as usize,
-            sync_provider_count as usize,
+            (password_entry_count as usize).into(),
+            (sync_provider_count as usize).into(),
             provider_setup_active,
             add_provider_open,
         )
@@ -345,7 +348,7 @@ impl NookVaultClientPolicy {
     ) -> bool {
         VaultClientPolicy::should_show_login_vault_picker(
             authenticated,
-            local_vault_count as usize,
+            (local_vault_count as usize).into(),
             vault_selected,
             provider_setup_active,
             add_provider_open,
@@ -386,7 +389,7 @@ impl NookVaultClientPolicy {
         VaultClientPolicy::vault_connect_probe_decision(
             access_status,
             authenticated,
-            sync_provider_count as usize,
+            (sync_provider_count as usize).into(),
         )
     }
 
@@ -404,7 +407,10 @@ impl NookVaultClientPolicy {
         access_status: nook_core::VaultAccessStatus,
         password_entry_count: u32,
     ) -> nook_core::VaultConnectGateDecision {
-        VaultClientPolicy::vault_connect_gate_decision(access_status, password_entry_count as usize)
+        VaultClientPolicy::vault_connect_gate_decision(
+            access_status,
+            (password_entry_count as usize).into(),
+        )
     }
 
     #[wasm_bindgen]
@@ -473,7 +479,14 @@ impl NookVaultClientPolicy {
         requested_offset: u32,
         page_size: u32,
     ) -> u32 {
-        VaultClientPolicy::normalized_secret_page_offset(total, requested_offset, page_size)
+        u32::try_from(usize::from(
+            VaultClientPolicy::normalized_secret_page_offset(
+                (total as usize).into(),
+                (requested_offset as usize).into(),
+                (page_size as usize).into(),
+            ),
+        ))
+        .unwrap_or(u32::MAX)
     }
 
     #[wasm_bindgen]

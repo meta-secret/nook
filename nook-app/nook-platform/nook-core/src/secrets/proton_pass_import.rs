@@ -39,8 +39,8 @@ pub enum ProtonPassImportError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ProtonPassImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 #[derive(Debug, Deserialize)]
@@ -349,13 +349,20 @@ fn plan_json(json: &str) -> Result<ProtonPassImportPlan, ProtonPassImportError> 
     let skipped_unsupported = source_count.saturating_sub(items.len());
     Ok(ProtonPassImportPlan {
         items,
-        source_count,
-        skipped_unsupported,
+        source_count: source_count.into(),
+        skipped_unsupported: skipped_unsupported.into(),
     })
 }
 
 /// Parse an unencrypted Proton Pass ZIP export or a decrypted `data.json`
 /// export entirely in memory.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: accepts the original Proton Pass ZIP archive bytes"
+    )
+)]
 pub fn plan_proton_pass_import(
     export_bytes: &[u8],
 ) -> Result<ProtonPassImportPlan, ProtonPassImportError> {
@@ -453,8 +460,8 @@ mod tests {
     #[test]
     fn converts_zip_logins_and_notes_and_counts_unsupported_items() -> anyhow::Result<()> {
         let plan = plan_proton_pass_import(&build_zip(DATA_FILE, export_json().as_bytes())?)?;
-        assert_eq!(plan.source_count, 3);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 3);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
         assert_eq!(
             plan.items[0],

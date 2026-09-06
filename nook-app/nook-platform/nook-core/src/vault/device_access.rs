@@ -398,12 +398,26 @@ pub fn classify_device_access_identity_state(
 
 /// Stable, non-secret correlation id for a Nook-managed `WebAuthn` credential.
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: hashes the browser WebAuthn credential-id ArrayBuffer bytes"
+    )
+)]
 pub fn passkey_credential_identifier(credential_id: &[u8]) -> String {
     short_identifier("passkey", credential_id)
 }
 
 /// Stable, non-secret correlation id for the RP-scoped `WebAuthn` user handle.
 #[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "FFI boundary: hashes the browser WebAuthn user-handle ArrayBuffer bytes"
+    )
+)]
 pub fn passkey_user_handle_identifier(user_handle: &[u8]) -> String {
     short_identifier("user", user_handle)
 }

@@ -32,9 +32,9 @@ impl SecretTypeFilter {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretPage {
     pub records: Vec<SecretListItem>,
-    pub total: usize,
-    pub offset: usize,
-    pub limit: usize,
+    pub total: crate::SecretRecordCount,
+    pub offset: crate::SecretPageOffset,
+    pub limit: crate::SecretPageLimit,
 }
 
 fn decrypt_secret_record(
@@ -75,9 +75,11 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
     crypto: &VaultCrypto,
     query: &str,
     secret_type_filter: SecretTypeFilter,
-    offset: usize,
-    limit: usize,
+    offset: crate::SecretPageOffset,
+    limit: crate::SecretPageLimit,
 ) -> VaultResult<SecretPage> {
+    let offset = usize::from(offset);
+    let limit = usize::from(limit);
     let limit = limit.clamp(1, MAX_SECRET_PAGE_SIZE);
     let needle = query.trim();
     let mut ids = secrets.keys().cloned().collect::<Vec<_>>();
@@ -113,9 +115,9 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
             .collect::<VaultResult<Vec<_>>>()?;
         return Ok(SecretPage {
             records,
-            total,
-            offset,
-            limit,
+            total: total.into(),
+            offset: offset.into(),
+            limit: limit.into(),
         });
     }
 
@@ -144,9 +146,9 @@ pub fn query_encrypted_secrets<S: BuildHasher>(
 
     Ok(SecretPage {
         records,
-        total,
-        offset,
-        limit,
+        total: total.into(),
+        offset: offset.into(),
+        limit: limit.into(),
     })
 }
 
@@ -288,9 +290,16 @@ mod tests {
             encrypted_record(&crypto, "secret_b", "bob", "pw-b")?,
         ]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "", SecretTypeFilter::All, 1, 1)?;
+        let page = query_encrypted_secrets(
+            &secrets,
+            &crypto,
+            "",
+            SecretTypeFilter::All,
+            1.into(),
+            1.into(),
+        )?;
 
-        assert_eq!(page.total, 3);
+        assert_eq!(usize::from(page.total), 3);
         assert_eq!(page.records.len(), 1);
         assert_eq!(page.records[0].id.as_str(), "secret_b");
         assert_eq!(page.records[0].summary(), "bob");
@@ -308,9 +317,16 @@ mod tests {
             encrypted_record(&crypto, "secret_c", "team-carol", "hidden-c")?,
         ]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "team", SecretTypeFilter::All, 1, 1)?;
+        let page = query_encrypted_secrets(
+            &secrets,
+            &crypto,
+            "team",
+            SecretTypeFilter::All,
+            1.into(),
+            1.into(),
+        )?;
 
-        assert_eq!(page.total, 2);
+        assert_eq!(usize::from(page.total), 2);
         assert_eq!(page.records.len(), 1);
         assert_eq!(page.records[0].id.as_str(), "secret_c");
         Ok(())
@@ -332,11 +348,11 @@ mod tests {
             &crypto,
             "",
             SecretTypeFilter::Only(SecretType::SecureNote),
-            1,
-            1,
+            1.into(),
+            1.into(),
         )?;
 
-        assert_eq!(page.total, 2);
+        assert_eq!(usize::from(page.total), 2);
         assert_eq!(page.records.len(), 1);
         assert_eq!(page.records[0].id.as_str(), "secret_c");
         assert_eq!(page.records[0].secret_type(), SecretType::SecureNote);
@@ -358,11 +374,11 @@ mod tests {
             &crypto,
             "recovery",
             SecretTypeFilter::Only(SecretType::SecureNote),
-            0,
-            50,
+            0.into(),
+            50.into(),
         )?;
 
-        assert_eq!(page.total, 1);
+        assert_eq!(usize::from(page.total), 1);
         assert_eq!(page.records[0].id.as_str(), "secret_b");
         Ok(())
     }
@@ -378,7 +394,14 @@ mod tests {
             "credential-must-not-cross-page-boundary",
         )?]);
 
-        let page = query_encrypted_secrets(&secrets, &crypto, "", SecretTypeFilter::All, 0, 50)?;
+        let page = query_encrypted_secrets(
+            &secrets,
+            &crypto,
+            "",
+            SecretTypeFilter::All,
+            0.into(),
+            50.into(),
+        )?;
         let debug = format!("{:?}", page.records);
 
         assert_eq!(page.records[0].summary(), "alice");
@@ -445,11 +468,11 @@ mod tests {
             &crypto,
             "find-me-only-in-password",
             SecretTypeFilter::All,
-            0,
-            50,
+            0.into(),
+            50.into(),
         )?;
 
-        assert_eq!(page.total, 0);
+        assert_eq!(usize::from(page.total), 0);
         assert!(page.records.is_empty());
         Ok(())
     }

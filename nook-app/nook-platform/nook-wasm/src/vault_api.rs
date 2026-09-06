@@ -689,5 +689,5 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
     )
 )]
 pub fn read_vault_version(yaml: &str) -> u64 {
-    nook_core::read_vault_version(yaml).unwrap_or(0)
+    nook_core::read_vault_version(yaml).map_or(0, Into::into)
 }

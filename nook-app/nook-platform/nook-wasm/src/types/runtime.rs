@@ -251,6 +251,7 @@ impl NookRuntimeConfig {
     pub fn resolve_vault_idle_timeout_ms(&self, raw_timeout_ms: &str) -> u32 {
         self.policy
             .resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set(raw_timeout_ms))
+            .into()
     }
 
     #[wasm_bindgen]
@@ -265,6 +266,7 @@ impl NookRuntimeConfig {
     pub fn resolve_default_vault_idle_timeout_ms(&self) -> u32 {
         self.policy
             .resolve_vault_idle_timeout_ms(RuntimeConfigValue::Unset)
+            .into()
     }
 
     #[wasm_bindgen]
@@ -279,6 +281,7 @@ impl NookRuntimeConfig {
     pub fn resolve_vault_idle_warning_ms(&self, raw_warning_ms: &str) -> u32 {
         self.policy
             .resolve_vault_idle_warning_ms(RuntimeConfigValue::Set(raw_warning_ms))
+            .into()
     }
 
     #[wasm_bindgen]
@@ -293,6 +296,7 @@ impl NookRuntimeConfig {
     pub fn resolve_default_vault_idle_warning_ms(&self) -> u32 {
         self.policy
             .resolve_vault_idle_warning_ms(RuntimeConfigValue::Unset)
+            .into()
     }
 
     #[wasm_bindgen]
@@ -307,6 +311,7 @@ impl NookRuntimeConfig {
     pub fn resolve_vault_sync_interval_ms(&self, raw_interval_ms: &str) -> u32 {
         self.policy
             .resolve_vault_sync_interval_ms(RuntimeConfigValue::Set(raw_interval_ms))
+            .into()
     }
 
     #[wasm_bindgen]
@@ -321,6 +326,7 @@ impl NookRuntimeConfig {
     pub fn resolve_default_vault_sync_interval_ms(&self) -> u32 {
         self.policy
             .resolve_vault_sync_interval_ms(RuntimeConfigValue::Unset)
+            .into()
     }
 }
 
