@@ -101,11 +101,9 @@ pub(crate) use recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY;
 pub(crate) use recovery::{LocalIdentityRecovery, LocalIdentityRecoveryRequest};
 pub(crate) use simple_genesis::PENDING_SIMPLE_GENESIS_KEY;
 pub(crate) use simple_genesis::{
-    PendingSimpleGenesis, begin_or_resume_simple_genesis, pending_simple_genesis,
-    pending_simple_genesis_for_store, persist_simple_genesis_event,
-    resume_staged_simple_genesis_signing_seed,
+    OrdinarySimpleGenesisRequest, PendingSimpleGenesis, SimpleGenesisEventInput,
 };
-pub(crate) use staged_genesis::{StagedSimpleGenesisInput, begin_or_resume_staged_simple_genesis};
+pub(crate) use staged_genesis::StagedSimpleGenesisInput;
 
 pub(super) const IDENTITY_DIRECTORY_KEY: &str = "identity_directory_v1";
 pub(super) const LEGACY_IDENTITY_RECORD_KEY: &str = "identity_record_v1";
@@ -131,7 +129,7 @@ async fn load_pending_genesis(
         .map(serde_wasm_bindgen::from_value::<String>)
         .transpose()
         .map_err(|error| NookError::IndexedDb(format!("Pending genesis value error: {error:?}")))?
-        .map(|raw| simple_genesis::decode_pending_simple_genesis(&raw))
+        .map(|raw| PendingSimpleGenesis::decode(&raw))
         .transpose()
 }
 
@@ -163,7 +161,7 @@ async fn persist_pending_genesis(
 ) -> Result<(), NookError> {
     let key = serde_wasm_bindgen::to_value(PENDING_SIMPLE_GENESIS_KEY)
         .map_err(|error| NookError::IndexedDb(format!("Pending genesis key error: {error:?}")))?;
-    let encoded = simple_genesis::encode_pending_simple_genesis(pending)?;
+    let encoded = pending.encode()?;
     let value = serde_wasm_bindgen::to_value(&encoded)
         .map_err(|error| NookError::IndexedDb(format!("Pending genesis value error: {error:?}")))?;
     store
@@ -772,7 +770,7 @@ mod tests {
             migrated.selected().map_err(map_domain_error)?.identity_id,
             pending_identity_id
         );
-        let pending = pending_simple_genesis_for_store(store_id.as_str())
+        let pending = PendingSimpleGenesis::load_for_store(store_id.as_str())
             .await?
             .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
         assert_eq!(pending.identity_id, pending_identity_id);
@@ -818,17 +816,13 @@ mod tests {
                 .map_err(|error| NookError::IndexedDb(error.to_string()))?,
         )
         .await?;
-        idb_put_string(
-            PENDING_SIMPLE_GENESIS_KEY,
-            &simple_genesis::encode_pending_simple_genesis(&pending)?,
-        )
-        .await?;
+        idb_put_string(PENDING_SIMPLE_GENESIS_KEY, &pending.encode()?).await?;
 
         let migrated = load_identity_directory().await?;
         let normalized_raw = idb_get_string(PENDING_SIMPLE_GENESIS_KEY)
             .await?
             .ok_or_else(|| NookError::Database("Staged marker is missing.".to_owned()))?;
-        let normalized = simple_genesis::decode_pending_simple_genesis(&normalized_raw)?;
+        let normalized = PendingSimpleGenesis::decode(&normalized_raw)?;
         let staged = normalized
             .staged_identity()
             .ok_or_else(|| NookError::Database("Staged snapshots are missing.".to_owned()))?;
