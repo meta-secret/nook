@@ -772,14 +772,22 @@ mod tests {
             "reset-password",
             "delete-account",
             "account-settings",
-            "google-login",
-            "continue-with-passkey",
         ] {
             let mut rejected =
                 AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
             rejected.form_identity = form_identity.to_owned();
             assert!(!authentication_advance_control_is_safe(&rejected));
         }
+
+        let mut provider_form =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        provider_form.form_identity = "google-login".to_owned();
+        assert!(!authentication_advance_control_is_safe(&provider_form));
+
+        let mut passkey_form =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        passkey_form.form_identity = "continue-with-passkey".to_owned();
+        assert!(!authentication_advance_control_is_safe(&passkey_form));
 
         for label in [
             "Continue with Google",

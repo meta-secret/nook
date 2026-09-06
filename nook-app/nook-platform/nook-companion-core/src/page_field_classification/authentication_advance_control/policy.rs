@@ -47,6 +47,8 @@ impl CheckedAuthenticationControl<'_> {
             && AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .indicates_oauth_authorization();
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_destructive_action()
+            || AuthenticationControlIdentity::new(&observation.form_identity)
+                .is_alternate_authentication_route()
             || AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.label).indicates_destructive_action()
