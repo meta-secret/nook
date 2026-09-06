@@ -825,6 +825,92 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn sentinel_unlock_status_projects_each_session_state() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        assert_eq!(
+            manager.sentinel_unlock_status(),
+            SentinelVaultUnlockState::NotSentinel
+        );
+
+        manager.vault.architecture = VaultArchitecture::sentinel_personal(
+            DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 0.into(),
+            },
+        );
+        assert_eq!(
+            manager.sentinel_unlock_status(),
+            SentinelVaultUnlockState::AwaitingShares
+        );
+
+        manager.vault.meta.sentinel_shares.insert(
+            DeviceId::parse("0123456789abcdef")?,
+            nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::CURRENT,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                share_index: 1.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            },
+        );
+        assert_eq!(
+            manager.sentinel_unlock_status(),
+            SentinelVaultUnlockState::CeremonyRequired
+        );
+
+        let keys = nook_core::generate_vault_keys()?;
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.members_key = keys.members_key.to_string();
+        assert_eq!(
+            manager.sentinel_unlock_status(),
+            SentinelVaultUnlockState::Unlocked
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn architecture_rejects_invalid_share_indexes_and_versions() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.vault.meta.sentinel_shares.insert(
+            DeviceId::parse("0123456789abcdef")?,
+            nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::CURRENT,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                share_index: 0.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            },
+        );
+        assert!(manager.ensure_sentinel_architecture_from_shares().is_err());
+
+        manager.vault.meta.sentinel_shares.clear();
+        manager.vault.meta.sentinel_shares.insert(
+            DeviceId::parse("0123456789abcdef")?,
+            nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::LEGACY,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                share_index: 1.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            },
+        );
+        manager.vault.meta.sentinel_shares.insert(
+            DeviceId::parse("fedcba9876543210")?,
+            nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::CURRENT,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                share_index: 2.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            },
+        );
+        assert!(manager.ensure_sentinel_architecture_from_shares().is_err());
+        Ok(())
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]

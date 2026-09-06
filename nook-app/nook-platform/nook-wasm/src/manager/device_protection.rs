@@ -129,6 +129,105 @@ mod tests {
         ));
         Ok(())
     }
+
+    #[test]
+    fn handoff_enrollment_variants_preserve_authorization_context() -> Result<(), NookError> {
+        let vault_creation = NookExtensionIdentityHandoffContext {
+            value: ExtensionIdentityHandoffContextValue::VaultCreation,
+        };
+        assert!(matches!(
+            pending_extension_enrollment(&vault_creation, None)?,
+            PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None }
+        ));
+
+        let authorizer = AppKey::generate()?;
+        assert!(matches!(
+            pending_extension_enrollment(&vault_creation, Some(&authorizer))?,
+            PendingExtensionIdentityEnrollment::VaultCreation {
+                authorizer: Some(_)
+            }
+        ));
+
+        let store_id = nook_core::generate_store_id()?;
+        let paired = NookExtensionIdentityHandoffContext {
+            value: ExtensionIdentityHandoffContextValue::PairedVault {
+                store_id: store_id.clone(),
+            },
+        };
+        assert!(matches!(
+            pending_extension_enrollment(&paired, None)?,
+            PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock { store_id: id }
+                if id == store_id
+        ));
+        assert!(matches!(
+            pending_extension_enrollment(&paired, Some(&authorizer))?,
+            PendingExtensionIdentityEnrollment::PairedVault { store_id: id, .. }
+                if id == store_id
+        ));
+
+        let imported = NookExtensionIdentityHandoffContext {
+            value: ExtensionIdentityHandoffContextValue::ExistingVaultImport {
+                store_id: store_id.clone(),
+            },
+        };
+        assert!(matches!(
+            pending_extension_enrollment(&imported, None)?,
+            PendingExtensionIdentityEnrollment::ExistingVaultImport { store_id: id }
+                if id == store_id
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn handoff_projection_and_quiesce_clear_sensitive_session_state() -> Result<(), NookError> {
+        let (signing, signing_seed) = SigningIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        assert!(!manager.extension_identity_handoff_requires_connect());
+        manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
+            enrollment: PendingExtensionIdentityEnrollment::VaultCreation { authorizer: None },
+            authorizer_signing: None,
+            signing_public_key: signing.public_key(),
+            handoff_signing_seed: signing_seed.as_str().to_owned(),
+            persist_signing_seed: false,
+            previous_session_signing_seed: "previous-seed".to_owned(),
+        });
+        assert!(manager.extension_identity_handoff_requires_connect());
+        manager.confirm_extension_identity_handoff();
+        assert!(!manager.extension_identity_handoff_requires_connect());
+
+        manager.device.id = "device-id".to_owned();
+        manager.device.identity_private_key = "private-key".to_owned();
+        manager.device.extension_handoff_private_key = "handoff-key".to_owned();
+        manager.event_log.signing_seed = "signing-seed".to_owned();
+        manager.storage.access_token = "provider-token".to_owned();
+        manager.storage.remote_ref = "owner/repo".to_owned();
+        manager.storage.remote_path = "vault.yaml".to_owned();
+        manager.storage.mode = StorageMode::Github;
+
+        manager.quiesce_for_local_recovery();
+
+        assert!(manager.device.id.is_empty());
+        assert!(manager.device.identity_private_key.is_empty());
+        assert!(manager.device.extension_handoff_private_key.is_empty());
+        assert!(manager.event_log.signing_seed.is_empty());
+        assert!(manager.storage.access_token.is_empty());
+        assert!(manager.storage.remote_ref.is_empty());
+        assert!(manager.storage.remote_path.is_empty());
+        assert_eq!(manager.storage.mode, StorageMode::Local);
+        Ok(())
+    }
+
+    #[test]
+    fn passkey_device_modes_are_mapped_without_numeric_fallbacks() {
+        assert_eq!(
+            passkey_mode_from_device_mode(DeviceMode::Standard),
+            PasskeyDeviceProtectionMode::Standard
+        );
+        assert_eq!(
+            passkey_mode_from_device_mode(DeviceMode::AntiHacker),
+            PasskeyDeviceProtectionMode::AntiHacker
+        );
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
