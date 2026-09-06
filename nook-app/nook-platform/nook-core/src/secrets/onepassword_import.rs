@@ -1,28 +1,15 @@
-//! 1Password 1PUX conversion into Nook's typed plaintext secret model.
-
-use super::import_support;
-
-use std::{
-    fmt,
-    io::{Cursor, Read},
-    iter,
-};
-
-use serde::Deserialize;
-use serde_json::Value;
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+//! 1Password 1PUX export admission into typed plaintext secrets.
+mod archive;
+mod items;
+use crate::SecretValue;
+use archive::OnePasswordArchive;
+use std::fmt;
 use thiserror::Error;
-use zip::{ZipArchive, result};
-
-use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
-
-const SUPPORTED_1PUX_VERSION: u32 = 3;
-const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
-const MAX_EXPORT_DATA_BYTES: u64 = 64 * 1024 * 1024;
-const LOGIN_CATEGORY_UUID: &str = "001";
-const CREDIT_CARD_CATEGORY_UUID: &str = "002";
-const SECURE_NOTE_CATEGORY_UUID: &str = "003";
-const PASSWORD_CATEGORY_UUID: &str = "005";
-
 /// Unsupported 1PUX format version reported at the import boundary.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct UnsupportedOnePasswordExportVersion(u32);
@@ -70,530 +57,85 @@ pub struct OnePasswordImportPlan {
     pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ExportAttributes {
-    version: u32,
-    description: String,
+/// Borrow the original archive until the consuming plan has finished.
+/// ```
+/// use nook_core::{OnePasswordExport, OnePasswordImportError};
+/// let result = OnePasswordExport::from_bytes(b"invalid archive").plan();
+/// assert!(matches!(result, Err(OnePasswordImportError::InvalidArchive(_))));
+/// ```
+/// ```compile_fail,E0599
+/// use nook_core::OnePasswordExport;
+/// let export = OnePasswordExport::from_bytes(b"invalid archive");
+/// let duplicate = export.clone();
+/// ```
+/// ```compile_fail,E0502
+/// use nook_core::OnePasswordExport;
+/// let mut bytes = Vec::new();
+/// let export = OnePasswordExport::from_bytes(&bytes);
+/// bytes.clear();
+/// let _ = export.plan();
+/// ```
+/// ```compile_fail,E0382
+/// use nook_core::OnePasswordExport;
+/// let export = OnePasswordExport::from_bytes(b"invalid archive");
+/// let _ = export.plan();
+/// let _ = export.plan();
+/// ```
+pub struct OnePasswordExport<'a> {
+    bytes: &'a [u8],
 }
-
-#[derive(Debug, Deserialize)]
-struct ExportData {
-    accounts: Vec<OnePasswordAccount>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OnePasswordAccount {
-    vaults: Vec<OnePasswordVault>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OnePasswordVault {
-    #[serde(default)]
-    attrs: OnePasswordVaultAttrs,
-    #[serde(default)]
-    items: Vec<OnePasswordItemEnvelope>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct OnePasswordVaultAttrs {
-    #[serde(default)]
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum OnePasswordItemEnvelope {
-    Direct(OnePasswordItem),
-    Wrapped { item: OnePasswordItem },
-}
-
-impl OnePasswordItemEnvelope {
-    fn into_item(self) -> OnePasswordItem {
-        match self {
-            Self::Direct(item) | Self::Wrapped { item } => item,
-        }
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OnePasswordItem {
-    #[serde(default)]
-    state: String,
-    category_uuid: String,
-    #[serde(default)]
-    details: OnePasswordDetails,
-    #[serde(default)]
-    overview: OnePasswordOverview,
-}
-
-#[derive(Debug, Default, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OnePasswordDetails {
-    #[serde(default)]
-    login_fields: Vec<OnePasswordLoginField>,
-    #[serde(default)]
-    notes_plain: String,
-    #[serde(default)]
-    password: String,
-    #[serde(default)]
-    sections: Vec<OnePasswordSection>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OnePasswordLoginField {
-    #[serde(default)]
-    value: String,
-    #[serde(default)]
-    name: String,
-    #[serde(default, alias = "type")]
-    field_type: String,
-    #[serde(default)]
-    designation: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct OnePasswordSection {
-    #[serde(default)]
-    title: String,
-    #[serde(default)]
-    name: String,
-    #[serde(default)]
-    fields: Vec<OnePasswordField>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OnePasswordField {
-    #[serde(default)]
-    title: String,
-    #[serde(default)]
-    id: String,
-    #[serde(default)]
-    value: Value,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct OnePasswordOverview {
-    #[serde(default)]
-    title: String,
-    #[serde(default)]
-    url: String,
-    #[serde(default)]
-    urls: Vec<OnePasswordUrl>,
-    #[serde(default)]
-    tags: Vec<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct OnePasswordUrl {
-    #[serde(default)]
-    label: String,
-    #[serde(default)]
-    url: String,
-}
-
-fn archive_error(error: impl fmt::Display) -> OnePasswordImportError {
-    OnePasswordImportError::InvalidArchive(error.to_string())
-}
-
-fn read_zip_text(
-    archive: &mut ZipArchive<Cursor<&[u8]>>,
-    name: &'static str,
-    max_bytes: u64,
-) -> Result<String, OnePasswordImportError> {
-    let file = archive.by_name(name).map_err(|error| match error {
-        result::ZipError::FileNotFound => OnePasswordImportError::MissingEntry(name),
-        other => archive_error(other),
-    })?;
-    if file.size() > max_bytes {
-        return Err(if name == "export.data" {
-            OnePasswordImportError::ExportDataTooLarge
-        } else {
-            OnePasswordImportError::ArchiveTooLarge
-        });
-    }
-    let mut text = String::new();
-    file.take(max_bytes + 1)
-        .read_to_string(&mut text)
-        .map_err(archive_error)?;
-    if u64::try_from(text.len()).unwrap_or(u64::MAX) > max_bytes {
-        return Err(if name == "export.data" {
-            OnePasswordImportError::ExportDataTooLarge
-        } else {
-            OnePasswordImportError::ArchiveTooLarge
-        });
-    }
-    Ok(text)
-}
-
-fn field_value(value: &Value) -> Option<String> {
-    match value {
-        Value::Null => None,
-        Value::String(value) => (!value.trim().is_empty()).then(|| value.clone()),
-        Value::Bool(value) => Some(value.to_string()),
-        Value::Number(value) => Some(value.to_string()),
-        Value::Array(values) => {
-            let values = values.iter().filter_map(field_value).collect::<Vec<_>>();
-            (!values.is_empty()).then(|| values.join(", "))
-        }
-        Value::Object(values) => {
-            const WRAPPED_VALUE_KEYS: [&str; 13] = [
-                "concealed",
-                "string",
-                "email",
-                "url",
-                "totp",
-                "oneTimePassword",
-                "phone",
-                "date",
-                "monthYear",
-                "menu",
-                "reference",
-                "address",
-                "creditCardNumber",
-            ];
-            WRAPPED_VALUE_KEYS
-                .iter()
-                .find_map(|key| values.get(*key).and_then(field_value))
-                .or_else(|| serde_json::to_string(value).ok())
-        }
-    }
-}
-
-fn append_onepassword_metadata(
-    notes: &mut String,
-    metadata: impl IntoIterator<Item = (String, String)>,
-) {
-    import_support::append_import_metadata(
-        notes,
-        "1Password",
-        iter::once(("format".to_owned(), "1PUX".to_owned())).chain(metadata),
-    );
-}
-
-fn normalized_field_name(field: &OnePasswordField) -> String {
-    let name = if field.title.trim().is_empty() {
-        field.id.trim()
-    } else {
-        field.title.trim()
-    };
-    name.to_ascii_lowercase()
-}
-
-fn section_metadata(
-    sections: &[OnePasswordSection],
-    omit_login_credentials: bool,
-) -> Vec<(String, String)> {
-    sections
-        .iter()
-        .flat_map(|section| {
-            let section_name = if section.title.trim().is_empty() {
-                section.name.trim()
-            } else {
-                section.title.trim()
-            };
-            section
-                .fields
-                .iter()
-                .enumerate()
-                .filter_map(move |(index, field)| {
-                    if omit_login_credentials
-                        && [
-                            "username",
-                            "email",
-                            "password",
-                            "cardholder",
-                            "cardholder name",
-                            "name on card",
-                            "number",
-                            "card number",
-                            "credit card number",
-                            "ccnum",
-                            "expiry",
-                            "expires",
-                            "expiration",
-                            "expiry date",
-                            "valid thru",
-                            "cvv",
-                            "cvc",
-                            "security code",
-                            "verification number",
-                        ]
-                        .contains(&normalized_field_name(field).as_str())
-                    {
-                        return None;
-                    }
-                    let value = field_value(&field.value)?;
-                    let field_name = if field.title.trim().is_empty() {
-                        if field.id.trim().is_empty() {
-                            format!("field[{}]", index + 1)
-                        } else {
-                            field.id.trim().to_owned()
-                        }
-                    } else {
-                        field.title.trim().to_owned()
-                    };
-                    let key = if section_name.is_empty() {
-                        field_name
-                    } else {
-                        format!("{section_name}.{field_name}")
-                    };
-                    Some((key, value))
-                })
-        })
-        .collect()
-}
-
-fn item_metadata(
-    item: &OnePasswordItem,
-    vault_name: &str,
-    primary_url: &str,
-    omit_login_credentials: bool,
-) -> Vec<(String, String)> {
-    let mut metadata = Vec::new();
-    if !vault_name.trim().is_empty() {
-        metadata.push(("vault".to_owned(), vault_name.trim().to_owned()));
-    }
-    if item.state.eq_ignore_ascii_case("archived") {
-        metadata.push(("state".to_owned(), "archived".to_owned()));
-    }
-    if !item.overview.tags.is_empty() {
-        metadata.push(("tags".to_owned(), item.overview.tags.join(", ")));
-    }
-    metadata.extend(
-        item.overview
-            .urls
-            .iter()
-            .filter(|entry| !entry.url.trim().is_empty() && entry.url.trim() != primary_url)
-            .enumerate()
-            .map(|(index, entry)| {
-                let label = if entry.label.trim().is_empty() {
-                    format!("url[{}]", index + 2)
-                } else {
-                    format!("url.{}", entry.label.trim())
-                };
-                (label, entry.url.trim().to_owned())
-            }),
-    );
-    metadata.extend(section_metadata(
-        &item.details.sections,
-        omit_login_credentials,
-    ));
-    metadata
-}
-
-fn section_credential(sections: &[OnePasswordSection], names: &[&str]) -> String {
-    sections
-        .iter()
-        .flat_map(|section| section.fields.iter())
-        .find(|field| names.contains(&normalized_field_name(field).as_str()))
-        .and_then(|field| field_value(&field.value))
-        .unwrap_or_default()
-}
-
-fn login_field(item: &OnePasswordItem, designation: &str, fallback_names: &[&str]) -> String {
-    item.details
-        .login_fields
-        .iter()
-        .find(|field| field.designation.eq_ignore_ascii_case(designation))
-        .or_else(|| {
-            item.details.login_fields.iter().find(|field| {
-                fallback_names.contains(&field.name.trim().to_ascii_lowercase().as_str())
-                    || (designation == "password" && field.field_type.eq_ignore_ascii_case("P"))
-            })
-        })
-        .map(|field| field.value.clone())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| section_credential(&item.details.sections, fallback_names))
-}
-
-fn primary_url(item: &OnePasswordItem) -> String {
-    if !item.overview.url.trim().is_empty() {
-        return item.overview.url.trim().to_owned();
-    }
-    item.overview
-        .urls
-        .iter()
-        .find(|entry| !entry.url.trim().is_empty())
-        .map_or_else(
-            || item.overview.title.trim().to_owned(),
-            |entry| entry.url.trim().to_owned(),
+impl<'a> OnePasswordExport<'a> {
+    #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: accepts the original 1PUX ZIP archive bytes"
         )
-}
-
-fn convert_login(item: &OnePasswordItem, vault_name: &str) -> SecretValue {
-    let website_url = primary_url(item);
-    let username = login_field(item, "username", &["username", "email"]);
-    let password = if item.details.password.is_empty() {
-        login_field(item, "password", &["password"])
-    } else {
-        item.details.password.clone()
-    };
-    let mut notes = item.details.notes_plain.clone();
-    let mut metadata = item_metadata(item, vault_name, website_url.as_str(), true);
-    if let Some(title) =
-        import_support::source_label_metadata("title", &item.overview.title, website_url.as_str())
-    {
-        metadata.insert(0, title);
+    )]
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+        Self { bytes }
     }
-    append_onepassword_metadata(&mut notes, metadata);
-    SecretValue::Login(LoginSecret {
-        website_url,
-        username,
-        password,
-        notes,
-    })
-}
-
-fn convert_secure_note(item: &OnePasswordItem, vault_name: &str) -> SecretValue {
-    let mut note = item.details.notes_plain.clone();
-    append_onepassword_metadata(&mut note, item_metadata(item, vault_name, "", false));
-    SecretValue::SecureNote(SecureNoteSecret {
-        title: item.overview.title.trim().to_owned(),
-        note,
-    })
-}
-
-fn parse_month_year(raw: &str) -> (String, String) {
-    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
-    if digits.len() == 6 {
-        return (digits[4..6].to_owned(), digits[..4].to_owned());
-    }
-    if let Some((month, year)) = raw.split_once(['/', '-']) {
-        return (month.trim().to_owned(), year.trim().to_owned());
-    }
-    (String::new(), String::new())
-}
-
-fn convert_credit_card(item: &OnePasswordItem, vault_name: &str) -> Option<SecretValue> {
-    let cardholder = section_credential(
-        &item.details.sections,
-        &["cardholder", "cardholder name", "name on card"],
-    );
-    let number = section_credential(
-        &item.details.sections,
-        &["number", "card number", "credit card number", "ccnum"],
-    );
-    let expiry = section_credential(
-        &item.details.sections,
-        &[
-            "expiry",
-            "expires",
-            "expiration",
-            "expiry date",
-            "valid thru",
-        ],
-    );
-    let (expiration_month, expiration_year) = parse_month_year(&expiry);
-    let cvv = section_credential(
-        &item.details.sections,
-        &["cvv", "cvc", "security code", "verification number"],
-    );
-    let mut notes = item.details.notes_plain.clone();
-    append_onepassword_metadata(&mut notes, item_metadata(item, vault_name, "", true));
-    CreditCardSecret::from_fields(
-        item.overview.title.trim(),
-        cardholder.trim(),
-        number.trim(),
-        expiration_month.trim(),
-        expiration_year.trim(),
-        cvv.trim(),
-        &notes,
-    )
-    .ok()
-    .map(SecretValue::CreditCard)
-}
-
-fn convert_item(item: &OnePasswordItem, vault_name: &str) -> Option<SecretValue> {
-    match item.category_uuid.as_str() {
-        LOGIN_CATEGORY_UUID | PASSWORD_CATEGORY_UUID => Some(convert_login(item, vault_name)),
-        SECURE_NOTE_CATEGORY_UUID => Some(convert_secure_note(item, vault_name)),
-        CREDIT_CARD_CATEGORY_UUID => convert_credit_card(item, vault_name),
-        _ => None,
+    pub fn plan(self) -> Result<OnePasswordImportPlan, OnePasswordImportError> {
+        OnePasswordArchive::open(self.bytes)?.check()?.plan()
     }
 }
-
-fn plan_export_data(json: &str) -> Result<OnePasswordImportPlan, OnePasswordImportError> {
-    let data: ExportData =
-        serde_json::from_str(json).map_err(OnePasswordImportError::InvalidData)?;
-    let mut source_count = 0;
-    let mut items = Vec::new();
-    for account in data.accounts {
-        for vault in account.vaults {
-            let vault_name = vault.attrs.name;
-            source_count += vault.items.len();
-            items.extend(vault.items.into_iter().filter_map(|item| {
-                let item = item.into_item();
-                convert_item(&item, &vault_name)
-            }));
-        }
+impl OnePasswordImportError {
+    fn archive(error: impl fmt::Display) -> Self {
+        Self::InvalidArchive(error.to_string())
     }
-    let skipped_unsupported = source_count.saturating_sub(items.len());
-    Ok(OnePasswordImportPlan {
-        items,
-        source_count: source_count.into(),
-        skipped_unsupported: skipped_unsupported.into(),
-    })
 }
-
-/// Parse a 1Password Unencrypted Export (`.1pux`) archive without extracting it
-/// to disk. Only the bounded `export.attributes` and `export.data` entries are
-/// read; attachments remain untouched and unsupported.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: accepts the original 1PUX ZIP archive bytes"
-    )
-)]
-pub fn plan_onepassword_import(
-    archive_bytes: &[u8],
-) -> Result<OnePasswordImportPlan, OnePasswordImportError> {
-    if archive_bytes.len() > MAX_ARCHIVE_BYTES {
-        return Err(OnePasswordImportError::ArchiveTooLarge);
-    }
-    let mut archive = ZipArchive::new(Cursor::new(archive_bytes)).map_err(archive_error)?;
-    let attributes_json = read_zip_text(&mut archive, "export.attributes", 64 * 1024)?;
-    let attributes: ExportAttributes = serde_json::from_str(&attributes_json)
-        .map_err(OnePasswordImportError::InvalidAttributes)?;
-    if attributes.description != "1Password Unencrypted Export" {
-        return Err(archive_error(
-            "export.attributes has an unexpected description",
-        ));
-    }
-    if attributes.version != SUPPORTED_1PUX_VERSION {
-        return Err(OnePasswordImportError::UnsupportedVersion(
-            attributes.version.into(),
-        ));
-    }
-    let export_data = read_zip_text(&mut archive, "export.data", MAX_EXPORT_DATA_BYTES)?;
-    plan_export_data(&export_data)
-}
-
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use std::io::Write;
 
     use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
-    use super::*;
+    use super::archive::MAX_ARCHIVE_BYTES;
+    use super::{OnePasswordExport, OnePasswordImportError};
+    use crate::{SecretValue, SecureNoteSecret};
+    use std::io::Cursor;
 
-    fn build_1pux(attributes: &str, data: &str) -> anyhow::Result<Vec<u8>> {
-        let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        writer.start_file("export.attributes", options)?;
-        writer.write_all(attributes.as_bytes())?;
-        writer.start_file("export.data", options)?;
-        writer.write_all(data.as_bytes())?;
-        Ok(writer.finish()?.into_inner())
+    pub(super) struct OnePasswordArchiveFixture<'a> {
+        pub(super) attributes: &'a str,
+        pub(super) data: &'a str,
     }
+    impl OnePasswordArchiveFixture<'_> {
+        pub(super) fn build(self) -> anyhow::Result<Vec<u8>> {
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            writer.start_file("export.attributes", options)?;
+            writer.write_all(self.attributes.as_bytes())?;
+            writer.start_file("export.data", options)?;
+            writer.write_all(self.data.as_bytes())?;
+            Ok(writer.finish()?.into_inner())
+        }
 
-    fn current_attributes() -> &'static str {
-        r#"{"version":3,"description":"1Password Unencrypted Export","createdAt":1585333569}"#
+        pub(super) fn current_attributes() -> &'static str {
+            r#"{"version":3,"description":"1Password Unencrypted Export","createdAt":1585333569}"#
+        }
     }
-
     #[test]
     fn converts_login_password_and_secure_note_items() -> anyhow::Result<()> {
         let data = r#"{
@@ -644,7 +186,14 @@ mod tests {
             }]
           }]
         }"#;
-        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)?)?;
+        let plan = OnePasswordExport::from_bytes(
+            &OnePasswordArchiveFixture {
+                attributes: OnePasswordArchiveFixture::current_attributes(),
+                data,
+            }
+            .build()?,
+        )
+        .plan()?;
         assert_eq!(usize::from(plan.source_count), 3);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
@@ -696,7 +245,14 @@ mod tests {
             }]
           }]
         }"#;
-        let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)?)?;
+        let plan = OnePasswordExport::from_bytes(
+            &OnePasswordArchiveFixture {
+                attributes: OnePasswordArchiveFixture::current_attributes(),
+                data,
+            }
+            .build()?,
+        )
+        .plan()?;
         assert_eq!(usize::from(plan.source_count), 4);
         assert_eq!(usize::from(plan.skipped_unsupported), 2);
         assert_eq!(plan.items.len(), 2);
@@ -712,25 +268,26 @@ mod tests {
     #[test]
     fn rejects_non_archives_missing_entries_and_unknown_versions() -> anyhow::Result<()> {
         assert!(matches!(
-            plan_onepassword_import(b"not a zip"),
+            OnePasswordExport::from_bytes(b"not a zip").plan(),
             Err(OnePasswordImportError::InvalidArchive(_))
         ));
 
         let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
         writer.start_file("export.attributes", SimpleFileOptions::default())?;
-        writer.write_all(current_attributes().as_bytes())?;
+        writer.write_all(OnePasswordArchiveFixture::current_attributes().as_bytes())?;
         let missing_data = writer.finish()?.into_inner();
         assert!(matches!(
-            plan_onepassword_import(&missing_data),
+            OnePasswordExport::from_bytes(&missing_data).plan(),
             Err(OnePasswordImportError::MissingEntry("export.data"))
         ));
 
-        let future = build_1pux(
-            r#"{"version":4,"description":"1Password Unencrypted Export"}"#,
-            r#"{"accounts":[]}"#,
-        )?;
+        let future = OnePasswordArchiveFixture {
+            attributes: r#"{"version":4,"description":"1Password Unencrypted Export"}"#,
+            data: r#"{"accounts":[]}"#,
+        }
+        .build()?;
         assert!(matches!(
-            plan_onepassword_import(&future),
+            OnePasswordExport::from_bytes(&future).plan(),
             Err(OnePasswordImportError::UnsupportedVersion(version))
                 if u32::from(version) == 4
         ));
@@ -741,7 +298,7 @@ mod tests {
     fn rejects_oversized_archives_before_parsing() {
         let archive = vec![0_u8; MAX_ARCHIVE_BYTES + 1];
         assert!(matches!(
-            plan_onepassword_import(&archive),
+            OnePasswordExport::from_bytes(&archive).plan(),
             Err(OnePasswordImportError::ArchiveTooLarge)
         ));
     }
