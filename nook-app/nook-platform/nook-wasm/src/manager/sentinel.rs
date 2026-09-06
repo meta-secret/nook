@@ -892,7 +892,7 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    fn ceremony_projection_and_delivery_completion_are_fail_closed() -> anyhow::Result<()> {
+    fn ceremony_projection_and_delivery_completion_are_fail_closed() -> Result<(), JsError> {
         let identity = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;
         let session = nook_core::StartSentinelGenesisArgs {
@@ -918,7 +918,7 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    fn malformed_ceremony_payloads_do_not_discard_active_sessions() -> anyhow::Result<()> {
+    fn malformed_ceremony_payloads_do_not_discard_active_sessions() -> Result<(), JsError> {
         let identity = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;
         let session = nook_core::StartSentinelGenesisArgs {
