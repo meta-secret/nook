@@ -172,8 +172,8 @@ pub use nook_companion_core::{
     AuthenticationWorkflowTotalSteps, ExtensionEventCount, ExtensionSyncProviderCount,
 };
 pub use onepassword_import::{
-    OnePasswordImportError, OnePasswordImportPlan, UnsupportedOnePasswordExportVersion,
-    plan_onepassword_import,
+    OnePasswordExport, OnePasswordImportError, OnePasswordImportPlan,
+    UnsupportedOnePasswordExportVersion,
 };
 pub use passkey_authenticator::{
     CheckedPasskeyAssertion, CheckedPasskeyRegistration,
