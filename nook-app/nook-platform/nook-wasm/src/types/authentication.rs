@@ -426,7 +426,7 @@ mod browser_tests {
             total_steps: 3u8.into(),
             approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
             saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
-            observation_index: 1u8.into(),
+            observation_index: 1u32.into(),
         };
         let matched = NookAuthenticationWorkflowMatch::from_core(
             AuthenticationWorkflowMatch::Matched(snapshot),

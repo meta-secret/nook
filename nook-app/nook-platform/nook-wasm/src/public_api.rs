@@ -807,7 +807,11 @@ mod browser_tests {
         let oauth = nook_core::OAuthFileConfigData::default();
         let remote = oauth_remote_storage_ref(oauth.clone());
         assert!(remote.value().is_err());
-        assert!(update_oauth_remote_ref(&oauth, "file-1").config().is_ok());
+        assert!(
+            update_oauth_remote_ref(oauth.clone(), "file-1")
+                .config()
+                .is_ok()
+        );
         assert_eq!(
             staged_github_remote_storage_args("pat", "owner/repo")
                 .unwrap()

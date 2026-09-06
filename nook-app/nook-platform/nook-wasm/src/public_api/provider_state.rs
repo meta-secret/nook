@@ -641,7 +641,7 @@ mod browser_tests {
         assert!(incomplete.args().is_err());
         let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
         assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
-        assert_eq!(ready.args().unwrap().mode, "local");
+        assert_eq!(ready.args().unwrap().mode(), "local");
 
         let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
