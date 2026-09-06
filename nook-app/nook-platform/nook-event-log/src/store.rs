@@ -357,7 +357,7 @@ mod tests {
 
         assert_eq!(
             CheckedRemoteEvent::parse(&other_id, &bytes)
-                .map(|event| event.into_store_id())?
+                .map(CheckedRemoteEvent::into_store_id)?
                 .as_str(),
             "store_otherstore1"
         );
