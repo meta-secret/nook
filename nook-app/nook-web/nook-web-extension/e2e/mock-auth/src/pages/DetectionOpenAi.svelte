@@ -20,7 +20,7 @@
 
   function submitterIdentity(event: SubmitEvent): string {
     const { submitter } = event
-    return submitter instanceof HTMLButtonElement ? submitter.value : ''
+    return submitter ? submitter.getAttribute('value') || '' : ''
   }
 
   function submitChatGpt(event: SubmitEvent): void {
