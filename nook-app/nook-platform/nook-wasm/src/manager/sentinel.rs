@@ -5,8 +5,8 @@
 //! session-bound and encrypted to the requester.
 
 use nook_core::{
-    DeviceMode, MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase,
-    SentinelUnlockSigning, StoreId, SymmetricKey, VaultArchitecture, VaultMetaState, VaultType,
+    MultiDeviceError, SentinelConfiguration, SentinelGenesisPhase, SentinelUnlockSigning, StoreId,
+    SymmetricKey, VaultMetaState, VaultType,
 };
 use std::mem;
 mod delivery;
@@ -440,7 +440,8 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use nook_core::{
-        AgeArmoredCiphertext, DeviceId, DeviceIdentity, SentinelVaultUnlockState, SigningIdentity,
+        AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceMode, SentinelVaultUnlockState,
+        SigningIdentity, VaultArchitecture,
     };
 
     #[test]
