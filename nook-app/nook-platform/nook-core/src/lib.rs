@@ -83,18 +83,15 @@ pub use credit_card::CreditCardSecret;
 pub use dashlane_import::{DashlaneImportError, DashlaneImportPlan, plan_dashlane_import};
 pub use database::Database;
 pub use device_key_protection::{
-    DeviceKeyProtectionSetup, DeviceKeyProtectionVersion, PasskeyAssertionRequest,
-    PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyRecoveryRequest,
-    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WebAuthnCredentialId,
-    WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
-    derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
-    finish_passkey_device_identity, finish_passkey_device_identity_for_mode,
-    finish_passkey_wrapped_device_identity, parse_wrapped_device_identity,
-    passkey_assertion_request, passkey_derived_device_identity_record, passkey_recovery_request,
-    passkey_wrapped_device_identity_record, recover_passkey_device_identity,
-    resolve_passkey_registration, resolve_passkey_registration_for_mode,
-    serialize_wrapped_device_identity, unlock_passkey_device_identity,
-    unwrap_device_identity_with_pin, wrap_device_identity_with_pin,
+    AwaitingPasskeyAssertion, DeviceKeyProtectionSetup, DeviceKeyProtectionVersion,
+    PasskeyAssertionRequest, PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode,
+    PasskeyIdentityUnlock, PasskeyRecoveryInput, PasskeyRecoveryRequest, PasskeyRegistration,
+    PasskeyRegistrationInput, PasskeyRegistrationOutcome, PasskeyRegistrationPrfOutput,
+    PasskeyRegistrationResolution, WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput,
+    WebAuthnUserHandle, WrappedDeviceIdentity, parse_wrapped_device_identity,
+    passkey_derived_device_identity_record, passkey_wrapped_device_identity_record,
+    serialize_wrapped_device_identity, unwrap_device_identity_with_pin,
+    wrap_device_identity_with_pin,
 };
 pub use enrollment::{
     CheckedEnrollmentEnvelope, DecryptedEnrollmentPayload, EnrollmentCodeEnvelope,

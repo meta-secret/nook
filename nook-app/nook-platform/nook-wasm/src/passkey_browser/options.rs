@@ -79,7 +79,7 @@ pub(crate) fn request_options(
 }
 
 pub(crate) fn recovery_options(rp_id: &str) -> Result<CredentialRequestOptions, JsError> {
-    let prf_input = nook_core::deterministic_passkey_prf_input();
+    let prf_input = WebAuthnPrfInput::deterministic();
     let options = recovery_options_struct(rp_id, prf_input.as_ref())?;
     to_browser_object(&options)
         .map(JsCast::unchecked_into)

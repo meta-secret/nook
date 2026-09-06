@@ -528,8 +528,7 @@ mod tests {
         let _ = Rexie::delete("nook_db").await;
         let setup = DeviceKeyProtectionSetup::generate()?;
         let output = nook_core::WebAuthnPrfOutput::try_from(vec![21u8; 32])?;
-        let secret =
-            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &output)?;
+        let secret = setup.user_handle().derive_identity(&output)?;
         let identity = DeviceIdentity::from_secret_str(&secret)?;
         let credential_id = [7u8; 32];
         let typed_credential = nook_core::WebAuthnCredentialId::try_from(credential_id.to_vec())?;
