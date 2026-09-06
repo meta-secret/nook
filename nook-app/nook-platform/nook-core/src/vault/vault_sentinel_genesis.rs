@@ -3,6 +3,8 @@
 use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation};
 
 use crate::i18n_keys;
+#[cfg(test)]
+use crate::{CheckedSentinelGenesisResponse, SentinelGenesisResponder};
 use crate::{
     DeviceIdentity, DeviceMode, ReadySentinelGenesis, ReplicationType, SentinelGenesisReadiness,
     SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelParticipantCount, SentinelPolicy,
@@ -134,27 +136,6 @@ impl StartSentinelGenesisArgs {
     }
 }
 
-pub fn create_sentinel_genesis_public_key_announcement(
-    identity: &DeviceIdentity,
-    signing: &SigningIdentity,
-    label: String,
-) -> Result<crate::SentinelGenesisPublicKeyAnnouncement, crate::MultiDeviceError> {
-    nook_auth2::create_sentinel_genesis_public_key_announcement(
-        identity,
-        signing.signing_key(),
-        label,
-    )
-}
-
-pub fn respond_to_sentinel_genesis_request(
-    request: &crate::SentinelGenesisRequest,
-    identity: &DeviceIdentity,
-    signing: &SigningIdentity,
-    label: String,
-) -> Result<crate::SentinelGenesisParticipantResponse, crate::MultiDeviceError> {
-    nook_auth2::respond_to_sentinel_genesis_request(request, identity, signing.signing_key(), label)
-}
-
 /// Generate keys, encrypted member rows, and the complete encrypted share set
 /// as one result after all `N` signed participant responses are verified.
 impl SentinelGenesisOutput {
@@ -249,12 +230,14 @@ mod tests {
         );
         let peer = DeviceIdentity::generate()?;
         let (peer_signing, _) = SigningIdentity::generate()?;
-        let response: SentinelGenesisParticipantResponse = respond_to_sentinel_genesis_request(
-            session.request(),
-            &peer,
-            &peer_signing,
-            "Peer".to_owned(),
-        )?;
+        let response: SentinelGenesisParticipantResponse = session
+            .request()
+            .prepare_response(SentinelGenesisResponder {
+                identity: &peer,
+                signing_key: peer_signing.signing_key(),
+                label: "Peer".to_owned(),
+            })
+            .and_then(CheckedSentinelGenesisResponse::sign)?;
         let session = session
             .collect(response)
             .map_err(|rejected| rejected.into_parts().1)?;

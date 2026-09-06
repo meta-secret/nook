@@ -1,10 +1,15 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 //! Provider-independent Sentinel pre-genesis ceremony.
 //!
 //! Session state contains public data only. Vault keys and shares are generated
 //! together only after the complete `N`-participant roster has been verified.
 //! Sentinel roots are split with the current extendable SLIP-0039 format.
 
-use super::multi_device::{DeviceIdentity, VaultMetaRecord, device_id_from_public_key};
+use super::multi_device::{self, DeviceIdentity, VaultMetaRecord};
 mod links;
 mod session;
 pub use super::sentinel_genesis_types::*;
@@ -13,11 +18,7 @@ use crate::{
     MultiDeviceResult, StoredSecretRecord,
 };
 use ed25519_dalek::{Signer, SigningKey};
-pub use links::{
-    build_sentinel_genesis_participant_response_link, build_sentinel_genesis_request_link,
-    normalize_sentinel_genesis_participant_payload, normalize_sentinel_genesis_request,
-    sentinel_genesis_participant_fingerprint,
-};
+pub use links::SentinelGenesisLinkInput;
 pub use session::{
     ReadySentinelGenesis, SentinelGenesisReadiness, SentinelGenesisRejection,
     SentinelGenesisSession,
@@ -27,272 +28,444 @@ use sha2::{Digest, Sha256};
 const GENESIS_VERSION: SentinelGenesisVersion = SentinelGenesisVersion::CURRENT;
 const PUBLIC_KEY_ANNOUNCEMENT_KIND: &str = "publicKeyAnnouncement";
 
-pub fn create_sentinel_genesis_public_key_announcement(
-    identity: &DeviceIdentity,
-    signing_key: &SigningKey,
-    label: String,
-) -> MultiDeviceResult<SentinelGenesisPublicKeyAnnouncement> {
-    if label.chars().count() > 80 {
-        return Err(MultiDeviceError::DeviceNameTooLong);
-    }
-    let encryption_public_key = identity.public_key();
-    let signing_public_key = signing_public_key(signing_key);
-    let device_id = identity.device_id().clone();
-    let fingerprint =
-        standalone_participant_fingerprint(&encryption_public_key, &signing_public_key);
-    let bytes = announcement_signing_bytes(
-        GENESIS_VERSION,
-        &device_id,
-        &encryption_public_key,
-        &signing_public_key,
-        &label,
-    )?;
-    Ok(SentinelGenesisPublicKeyAnnouncement {
-        kind: PUBLIC_KEY_ANNOUNCEMENT_KIND.to_owned(),
-        version: GENESIS_VERSION,
-        device_id,
-        encryption_public_key,
-        signing_public_key,
-        label,
-        fingerprint,
-        signature: hex::encode(signing_key.sign(&bytes).to_bytes()),
-    })
+/// Identity, signing capability, and label for one participant response or announcement.
+pub struct SentinelGenesisResponder<'a> {
+    pub identity: &'a DeviceIdentity,
+    pub signing_key: &'a SigningKey,
+    pub label: String,
 }
-
-pub fn respond_to_sentinel_genesis_request(
-    request: &SentinelGenesisRequest,
-    identity: &DeviceIdentity,
-    signing_key: &SigningKey,
-    label: String,
-) -> MultiDeviceResult<SentinelGenesisParticipantResponse> {
-    validate_request(request)?;
-    if label.chars().count() > 80 {
-        return Err(MultiDeviceError::DeviceNameTooLong);
+/// Request and recipient expected by the caller accepting one delivery.
+pub struct SentinelGenesisDeliveryRecipient<'a> {
+    pub expected_request: &'a SentinelGenesisRequest,
+    pub identity: &'a DeviceIdentity,
+}
+/// A validated response request, retaining the exact request and signing key.
+///
+/// ```
+/// use nook_auth2::{SentinelGenesisRequest, SentinelGenesisResponder, MultiDeviceError};
+/// let respond = |request: &SentinelGenesisRequest, responder: SentinelGenesisResponder<'_>|
+///     -> Result<_, MultiDeviceError> { request.prepare_response(responder)?.sign() };
+/// ```
+///
+/// ```compile_fail,E0382
+/// use nook_auth2::{CheckedSentinelGenesisResponse, MultiDeviceError};
+/// let twice = |checked: CheckedSentinelGenesisResponse<'_>| -> Result<_, MultiDeviceError> {
+///     checked.sign()?;
+///     checked.sign()
+/// };
+/// ```
+///
+/// ```compile_fail,E0502
+/// use nook_auth2::{SentinelGenesisRequest, SentinelGenesisResponder, MultiDeviceError};
+/// let change = |request: &mut SentinelGenesisRequest, responder: SentinelGenesisResponder<'_>|
+///     -> Result<_, MultiDeviceError> {
+///     let checked = request.prepare_response(responder)?;
+///     request.signature.clear();
+///     checked.sign()
+/// };
+/// ```
+///
+/// ```compile_fail,E0451
+/// use nook_auth2::{CheckedSentinelGenesisResponse, SentinelGenesisRequest, SentinelGenesisParticipant};
+/// use ed25519_dalek::SigningKey;
+/// let fabricate = |request: &SentinelGenesisRequest, signing_key: &SigningKey, participant: SentinelGenesisParticipant| {
+///     let _ = CheckedSentinelGenesisResponse { request, signing_key, participant };
+/// };
+/// ```
+pub struct CheckedSentinelGenesisResponse<'a> {
+    request: &'a SentinelGenesisRequest,
+    signing_key: &'a SigningKey,
+    participant: SentinelGenesisParticipant,
+}
+/// Signature-checked delivery data. It does not establish persistence or replay protection.
+///
+/// ```
+/// use nook_auth2::{SentinelGenesisShareDelivery, SentinelGenesisDeliveryRecipient, MultiDeviceError};
+/// let accept = |delivery: &SentinelGenesisShareDelivery, recipient: &SentinelGenesisDeliveryRecipient<'_>|
+///     -> Result<_, MultiDeviceError> { delivery.check(recipient)?.into_record() };
+/// ```
+///
+/// ```compile_fail,E0382
+/// use nook_auth2::{CheckedSentinelGenesisDelivery, MultiDeviceError};
+/// let twice = |checked: CheckedSentinelGenesisDelivery<'_>| -> Result<_, MultiDeviceError> {
+///     checked.into_record()?;
+///     checked.into_record()
+/// };
+/// ```
+///
+/// ```compile_fail,E0502
+/// use nook_auth2::{SentinelGenesisShareDelivery, SentinelGenesisDeliveryRecipient, MultiDeviceError};
+/// let change = |delivery: &mut SentinelGenesisShareDelivery, recipient: &SentinelGenesisDeliveryRecipient<'_>|
+///     -> Result<_, MultiDeviceError> {
+///     let checked = delivery.check(recipient)?;
+///     delivery.signature.clear();
+///     checked.into_record()
+/// };
+/// ```
+///
+/// ```compile_fail,E0451
+/// use nook_auth2::{CheckedSentinelGenesisDelivery, SentinelGenesisShareDelivery};
+/// let fabricate = |delivery: &SentinelGenesisShareDelivery| {
+///     let _ = CheckedSentinelGenesisDelivery { delivery };
+/// };
+/// ```
+pub struct CheckedSentinelGenesisDelivery<'a> {
+    delivery: &'a SentinelGenesisShareDelivery,
+}
+struct ParticipantKeys<'a> {
+    encryption: &'a DevicePublicKey,
+    signing: &'a DeviceSigningPublicKey,
+}
+struct GenesisSignature<'a> {
+    public_key: &'a DeviceSigningPublicKey,
+    signature: &'a str,
+    bytes: &'a [u8],
+}
+struct ResponseSigningContext<'a> {
+    version: SentinelGenesisVersion,
+    session_id: &'a CompactToken,
+}
+struct AnnouncementSigningData<'a> {
+    version: SentinelGenesisVersion,
+    device_id: &'a DeviceId,
+    encryption_public_key: &'a DevicePublicKey,
+    signing_public_key: &'a DeviceSigningPublicKey,
+    label: &'a str,
+}
+impl SentinelGenesisPublicKeyAnnouncement {
+    pub fn create(responder: SentinelGenesisResponder<'_>) -> MultiDeviceResult<Self> {
+        let SentinelGenesisResponder {
+            identity,
+            signing_key,
+            label,
+        } = responder;
+        if label.chars().count() > 80 {
+            return Err(MultiDeviceError::DeviceNameTooLong);
+        }
+        let encryption_public_key = identity.public_key();
+        let signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
+        let device_id = identity.device_id().clone();
+        let fingerprint = ParticipantKeys {
+            encryption: &encryption_public_key,
+            signing: &signing_public_key,
+        }
+        .standalone();
+        let bytes = AnnouncementSigningData {
+            version: GENESIS_VERSION,
+            device_id: &device_id,
+            encryption_public_key: &encryption_public_key,
+            signing_public_key: &signing_public_key,
+            label: &label,
+        }
+        .bytes()?;
+        Ok(SentinelGenesisPublicKeyAnnouncement {
+            kind: PUBLIC_KEY_ANNOUNCEMENT_KIND.to_owned(),
+            version: GENESIS_VERSION,
+            device_id,
+            encryption_public_key,
+            signing_public_key,
+            label,
+            fingerprint,
+            signature: hex::encode(signing_key.sign(&bytes).to_bytes()),
+        })
     }
-    let encryption_public_key = identity.public_key();
-    let signing_public_key = signing_public_key(signing_key);
-    let participant = SentinelGenesisParticipant {
-        device_id: identity.device_id().clone(),
-        fingerprint: participant_fingerprint(
-            &encryption_public_key,
-            &signing_public_key,
+}
+impl SentinelGenesisRequest {
+    pub fn prepare_response<'a>(
+        &'a self,
+        responder: SentinelGenesisResponder<'a>,
+    ) -> MultiDeviceResult<CheckedSentinelGenesisResponse<'a>> {
+        let request = self;
+        let SentinelGenesisResponder {
+            identity,
+            signing_key,
+            label,
+        } = responder;
+        request.validate()?;
+        if label.chars().count() > 80 {
+            return Err(MultiDeviceError::DeviceNameTooLong);
+        }
+        let encryption_public_key = identity.public_key();
+        let signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
+        let participant = SentinelGenesisParticipant {
+            device_id: identity.device_id().clone(),
+            fingerprint: ParticipantKeys {
+                encryption: &encryption_public_key,
+                signing: &signing_public_key,
+            }
+            .in_session(&request.session_id),
+            encryption_public_key,
+            signing_public_key,
+            label,
+        };
+
+        Ok(CheckedSentinelGenesisResponse {
+            request,
+            signing_key,
+            participant,
+        })
+    }
+}
+impl CheckedSentinelGenesisResponse<'_> {
+    pub fn sign(self) -> MultiDeviceResult<SentinelGenesisParticipantResponse> {
+        let Self {
+            request,
+            signing_key,
+            participant,
+        } = self;
+        let bytes = participant.response_signing_bytes(&ResponseSigningContext {
+            version: GENESIS_VERSION,
+            session_id: &request.session_id,
+        })?;
+        Ok(SentinelGenesisParticipantResponse {
+            version: GENESIS_VERSION,
+            session_id: request.session_id.clone(),
+            participant,
+            signature: hex::encode(signing_key.sign(&bytes).to_bytes()),
+        })
+    }
+}
+impl SentinelGenesisShareDelivery {
+    pub fn check<'a>(
+        &'a self,
+        recipient: &SentinelGenesisDeliveryRecipient<'_>,
+    ) -> MultiDeviceResult<CheckedSentinelGenesisDelivery<'a>> {
+        let delivery = self;
+        let SentinelGenesisDeliveryRecipient {
+            expected_request,
+            identity,
+        } = recipient;
+        delivery.policy.validate()?;
+        if delivery.version != GENESIS_VERSION
+            || delivery.session_id != expected_request.session_id
+            || delivery.policy != expected_request.policy
+            || delivery.initiator_signing_public_key
+                != expected_request.initiator_signing_public_key
+        {
+            return Err(MultiDeviceError::InvalidSentinelGenesisSession);
+        }
+        if delivery.device_id != *identity.device_id()
+            || delivery.encryption_public_key != identity.public_key()
+        {
+            return Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch);
+        }
+        if delivery.share.threshold != delivery.policy.threshold
+            || delivery.share.required_participants != delivery.policy.participant_count
+            || u8::from(delivery.share.share_index) == 0
+            || u8::from(delivery.share.share_index) > u8::from(delivery.policy.participant_count)
+        {
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+        }
+        GenesisSignature {
+            public_key: &delivery.initiator_signing_public_key,
+            signature: &delivery.signature,
+            bytes: &delivery.signing_bytes()?,
+        }
+        .verify()?;
+
+        Ok(CheckedSentinelGenesisDelivery { delivery })
+    }
+}
+impl CheckedSentinelGenesisDelivery<'_> {
+    pub fn into_record(self) -> MultiDeviceResult<StoredSecretRecord> {
+        let delivery = self.delivery;
+        VaultMetaRecord::SentinelShare(delivery.device_id.clone(), delivery.share.clone())
+            .to_stored()
+    }
+}
+impl SentinelGenesisRequest {
+    fn validate(&self) -> MultiDeviceResult<()> {
+        let request = self;
+        request.policy.validate()?;
+        if request.version != GENESIS_VERSION || request.initiator_signing_public_key.is_empty() {
+            return Err(MultiDeviceError::InvalidSentinelGenesisSession);
+        }
+        GenesisSignature {
+            public_key: &request.initiator_signing_public_key,
+            signature: &request.signature,
+            bytes: &request.signing_bytes()?,
+        }
+        .verify()
+    }
+}
+impl SentinelGenesisRequest {
+    fn signing_bytes(&self) -> MultiDeviceResult<Vec<u8>> {
+        let request = self;
+        serde_json::to_vec(&(
+            request.version,
             &request.session_id,
-        ),
-        encryption_public_key,
-        signing_public_key,
-        label,
-    };
-    let bytes = response_signing_bytes(GENESIS_VERSION, &request.session_id, &participant)?;
-    Ok(SentinelGenesisParticipantResponse {
-        version: GENESIS_VERSION,
-        session_id: request.session_id.clone(),
-        participant,
-        signature: hex::encode(signing_key.sign(&bytes).to_bytes()),
-    })
-}
-
-pub fn accept_sentinel_genesis_share_delivery(
-    delivery: &SentinelGenesisShareDelivery,
-    expected_request: &SentinelGenesisRequest,
-    identity: &DeviceIdentity,
-) -> MultiDeviceResult<StoredSecretRecord> {
-    delivery.policy.validate()?;
-    if delivery.version != GENESIS_VERSION
-        || delivery.session_id != expected_request.session_id
-        || delivery.policy != expected_request.policy
-        || delivery.initiator_signing_public_key != expected_request.initiator_signing_public_key
-    {
-        return Err(MultiDeviceError::InvalidSentinelGenesisSession);
-    }
-    if delivery.device_id != *identity.device_id()
-        || delivery.encryption_public_key != identity.public_key()
-    {
-        return Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch);
-    }
-    if delivery.share.threshold != delivery.policy.threshold
-        || delivery.share.required_participants != delivery.policy.participant_count
-        || u8::from(delivery.share.share_index) == 0
-        || u8::from(delivery.share.share_index) > u8::from(delivery.policy.participant_count)
-    {
-        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
-    }
-    verify_signature(
-        &delivery.initiator_signing_public_key,
-        &delivery.signature,
-        &delivery_signing_bytes(delivery)?,
-    )?;
-    VaultMetaRecord::SentinelShare(delivery.device_id.clone(), delivery.share.clone()).to_stored()
-}
-
-fn validate_request(request: &SentinelGenesisRequest) -> MultiDeviceResult<()> {
-    request.policy.validate()?;
-    if request.version != GENESIS_VERSION || request.initiator_signing_public_key.is_empty() {
-        return Err(MultiDeviceError::InvalidSentinelGenesisSession);
-    }
-    verify_signature(
-        &request.initiator_signing_public_key,
-        &request.signature,
-        &request_signing_bytes(request)?,
-    )
-}
-
-fn request_signing_bytes(request: &SentinelGenesisRequest) -> MultiDeviceResult<Vec<u8>> {
-    serde_json::to_vec(&(
-        request.version,
-        &request.session_id,
-        request.policy,
-        &request.initiator_device_id,
-        &request.initiator_signing_public_key,
-    ))
-    .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
-}
-
-fn validate_participant(
-    participant: &SentinelGenesisParticipant,
-    session_id: &CompactToken,
-) -> MultiDeviceResult<()> {
-    if device_id_from_public_key(&participant.encryption_public_key)? != participant.device_id
-        || participant.signing_public_key.is_empty()
-        || participant.fingerprint
-            != participant_fingerprint(
-                &participant.encryption_public_key,
-                &participant.signing_public_key,
-                session_id,
-            )
-    {
-        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
-    }
-    Ok(())
-}
-
-fn verify_response(response: &SentinelGenesisParticipantResponse) -> MultiDeviceResult<()> {
-    verify_signature(
-        &response.participant.signing_public_key,
-        &response.signature,
-        &response_signing_bytes(
-            response.version,
-            &response.session_id,
-            &response.participant,
-        )?,
-    )
-}
-
-fn response_signing_bytes(
-    version: SentinelGenesisVersion,
-    session_id: &CompactToken,
-    participant: &SentinelGenesisParticipant,
-) -> MultiDeviceResult<Vec<u8>> {
-    serde_json::to_vec(&(version, session_id, participant))
+            request.policy,
+            &request.initiator_device_id,
+            &request.initiator_signing_public_key,
+        ))
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
-}
-
-fn delivery_signing_bytes(delivery: &SentinelGenesisShareDelivery) -> MultiDeviceResult<Vec<u8>> {
-    serde_json::to_vec(&(
-        delivery.version,
-        &delivery.session_id,
-        &delivery.store_id,
-        delivery.policy,
-        &delivery.device_id,
-        &delivery.encryption_public_key,
-        &delivery.share,
-        &delivery.initiator_signing_public_key,
-    ))
-    .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
-}
-
-fn signing_public_key(signing_key: &SigningKey) -> DeviceSigningPublicKey {
-    DeviceSigningPublicKey::from_signing_key(signing_key)
-}
-
-fn verify_signature(
-    public_key: &DeviceSigningPublicKey,
-    signature: &str,
-    bytes: &[u8],
-) -> MultiDeviceResult<()> {
-    public_key.verify_signature(signature, bytes, || {
-        MultiDeviceError::InvalidSentinelGenesisSignature
-    })
-}
-
-fn participant_fingerprint(
-    encryption: &DevicePublicKey,
-    signing: &DeviceSigningPublicKey,
-    session_id: &CompactToken,
-) -> String {
-    let mut digest = Sha256::new();
-    digest.update(b"nook-sentinel-genesis-participant-v1\0");
-    digest.update(session_id.as_str().as_bytes());
-    digest.update(b"\0");
-    digest.update(encryption.as_str().as_bytes());
-    digest.update(b"\0");
-    digest.update(signing.as_str().as_bytes());
-    hex::encode(digest.finalize())
-}
-
-fn standalone_participant_fingerprint(
-    encryption: &DevicePublicKey,
-    signing: &DeviceSigningPublicKey,
-) -> String {
-    let mut digest = Sha256::new();
-    digest.update(b"nook-sentinel-genesis-public-key-v1\0");
-    digest.update(encryption.as_str().as_bytes());
-    digest.update(b"\0");
-    digest.update(signing.as_str().as_bytes());
-    hex::encode(digest.finalize())
-}
-
-fn verify_public_key_announcement(
-    announcement: &SentinelGenesisPublicKeyAnnouncement,
-) -> MultiDeviceResult<()> {
-    if announcement.kind != PUBLIC_KEY_ANNOUNCEMENT_KIND
-        || announcement.version != GENESIS_VERSION
-        || announcement.signing_public_key.is_empty()
-    {
-        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
     }
-    if device_id_from_public_key(&announcement.encryption_public_key)? != announcement.device_id
-        || announcement.fingerprint
-            != standalone_participant_fingerprint(
-                &announcement.encryption_public_key,
-                &announcement.signing_public_key,
-            )
-    {
-        return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+}
+impl SentinelGenesisParticipant {
+    fn validate_for(&self, session_id: &CompactToken) -> MultiDeviceResult<()> {
+        let participant = self;
+        if multi_device::device_id_from_public_key(&participant.encryption_public_key)?
+            != participant.device_id
+            || participant.signing_public_key.is_empty()
+            || participant.fingerprint
+                != (ParticipantKeys {
+                    encryption: &participant.encryption_public_key,
+                    signing: &participant.signing_public_key,
+                })
+                .in_session(session_id)
+        {
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+        }
+        Ok(())
     }
-    verify_signature(
-        &announcement.signing_public_key,
-        &announcement.signature,
-        &announcement_signing_bytes(
-            announcement.version,
-            &announcement.device_id,
-            &announcement.encryption_public_key,
-            &announcement.signing_public_key,
-            &announcement.label,
-        )?,
-    )
 }
-
-fn announcement_signing_bytes(
-    version: SentinelGenesisVersion,
-    device_id: &DeviceId,
-    encryption_public_key: &DevicePublicKey,
-    signing_public_key: &DeviceSigningPublicKey,
-    label: &str,
-) -> MultiDeviceResult<Vec<u8>> {
-    serde_json::to_vec(&(
-        PUBLIC_KEY_ANNOUNCEMENT_KIND,
-        version,
-        device_id,
-        encryption_public_key,
-        signing_public_key,
-        label,
-    ))
-    .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+impl SentinelGenesisParticipantResponse {
+    fn verify_signature(&self) -> MultiDeviceResult<()> {
+        let response = self;
+        GenesisSignature {
+            public_key: &response.participant.signing_public_key,
+            signature: &response.signature,
+            bytes: &response
+                .participant
+                .response_signing_bytes(&ResponseSigningContext {
+                    version: response.version,
+                    session_id: &response.session_id,
+                })?,
+        }
+        .verify()
+    }
 }
-
+impl SentinelGenesisParticipant {
+    fn response_signing_bytes(
+        &self,
+        context: &ResponseSigningContext<'_>,
+    ) -> MultiDeviceResult<Vec<u8>> {
+        let participant = self;
+        let ResponseSigningContext {
+            version,
+            session_id,
+        } = context;
+        serde_json::to_vec(&(version, session_id, participant))
+            .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+    }
+}
+impl SentinelGenesisShareDelivery {
+    fn signing_bytes(&self) -> MultiDeviceResult<Vec<u8>> {
+        let delivery = self;
+        serde_json::to_vec(&(
+            delivery.version,
+            &delivery.session_id,
+            &delivery.store_id,
+            delivery.policy,
+            &delivery.device_id,
+            &delivery.encryption_public_key,
+            &delivery.share,
+            &delivery.initiator_signing_public_key,
+        ))
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+    }
+}
+impl GenesisSignature<'_> {
+    fn verify(self) -> MultiDeviceResult<()> {
+        let Self {
+            public_key,
+            signature,
+            bytes,
+        } = self;
+        public_key.verify_signature(signature, bytes, || {
+            MultiDeviceError::InvalidSentinelGenesisSignature
+        })
+    }
+}
+impl ParticipantKeys<'_> {
+    fn in_session(&self, session_id: &CompactToken) -> String {
+        let Self {
+            encryption,
+            signing,
+        } = *self;
+        let mut digest = Sha256::new();
+        digest.update(b"nook-sentinel-genesis-participant-v1\0");
+        digest.update(session_id.as_str().as_bytes());
+        digest.update(b"\0");
+        digest.update(encryption.as_str().as_bytes());
+        digest.update(b"\0");
+        digest.update(signing.as_str().as_bytes());
+        hex::encode(digest.finalize())
+    }
+}
+impl ParticipantKeys<'_> {
+    fn standalone(&self) -> String {
+        let Self {
+            encryption,
+            signing,
+        } = *self;
+        let mut digest = Sha256::new();
+        digest.update(b"nook-sentinel-genesis-public-key-v1\0");
+        digest.update(encryption.as_str().as_bytes());
+        digest.update(b"\0");
+        digest.update(signing.as_str().as_bytes());
+        hex::encode(digest.finalize())
+    }
+}
+impl SentinelGenesisPublicKeyAnnouncement {
+    fn validate(&self) -> MultiDeviceResult<()> {
+        let announcement = self;
+        if announcement.kind != PUBLIC_KEY_ANNOUNCEMENT_KIND
+            || announcement.version != GENESIS_VERSION
+            || announcement.signing_public_key.is_empty()
+        {
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+        }
+        if multi_device::device_id_from_public_key(&announcement.encryption_public_key)?
+            != announcement.device_id
+            || announcement.fingerprint
+                != (ParticipantKeys {
+                    encryption: &announcement.encryption_public_key,
+                    signing: &announcement.signing_public_key,
+                })
+                .standalone()
+        {
+            return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
+        }
+        GenesisSignature {
+            public_key: &announcement.signing_public_key,
+            signature: &announcement.signature,
+            bytes: &AnnouncementSigningData {
+                version: announcement.version,
+                device_id: &announcement.device_id,
+                encryption_public_key: &announcement.encryption_public_key,
+                signing_public_key: &announcement.signing_public_key,
+                label: &announcement.label,
+            }
+            .bytes()?,
+        }
+        .verify()
+    }
+}
+impl AnnouncementSigningData<'_> {
+    fn bytes(self) -> MultiDeviceResult<Vec<u8>> {
+        let Self {
+            version,
+            device_id,
+            encryption_public_key,
+            signing_public_key,
+            label,
+        } = self;
+        serde_json::to_vec(&(
+            PUBLIC_KEY_ANNOUNCEMENT_KIND,
+            version,
+            device_id,
+            encryption_public_key,
+            signing_public_key,
+            label,
+        ))
+        .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)
+    }
+}
 #[cfg(test)]
 mod tests {
     use std::io::Error as IoError;
+    use std::ptr;
     use std::slice;
 
     use super::super::multi_device;
@@ -317,14 +490,143 @@ mod tests {
         )> {
             let identity = DeviceIdentity::generate()?;
             let signing = Self::signing_key()?;
-            let response = respond_to_sentinel_genesis_request(
-                request,
-                &identity,
-                &signing,
-                label.to_owned(),
-            )?;
+            let response = request
+                .prepare_response(SentinelGenesisResponder {
+                    identity: &identity,
+                    signing_key: &signing,
+                    label: label.to_owned(),
+                })
+                .and_then(CheckedSentinelGenesisResponse::sign)?;
             Ok((identity, signing, response))
         }
+    }
+
+    #[test]
+    fn checked_response_preserves_request_signer_and_validation_order() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let signing = Fixture::signing_key()?;
+        let session =
+            SentinelGenesisSession::start(&owner, &signing, 2.into(), 2.into(), "Owner".into())?;
+        let peer = DeviceIdentity::generate()?;
+        let peer_signing = Fixture::signing_key()?;
+        let mut invalid = session.request().clone();
+        invalid.signature.clear();
+        match invalid.prepare_response(SentinelGenesisResponder {
+            identity: &peer,
+            signing_key: &peer_signing,
+            label: "é".repeat(81),
+        }) {
+            Err(error) => assert!(matches!(
+                error,
+                MultiDeviceError::InvalidSentinelGenesisSignature
+            )),
+            Ok(_) => anyhow::bail!("invalid request reached signing state"),
+        }
+        match session
+            .request()
+            .prepare_response(SentinelGenesisResponder {
+                identity: &peer,
+                signing_key: &peer_signing,
+                label: "é".repeat(81),
+            }) {
+            Err(error) => assert!(matches!(error, MultiDeviceError::DeviceNameTooLong)),
+            Ok(_) => anyhow::bail!("oversized label reached signing state"),
+        }
+        let checked = session
+            .request()
+            .prepare_response(SentinelGenesisResponder {
+                identity: &peer,
+                signing_key: &peer_signing,
+                label: "é".repeat(80),
+            })?;
+        assert!(ptr::eq(
+            ptr::from_ref(checked.request),
+            ptr::from_ref(session.request())
+        ));
+        assert!(ptr::eq(
+            ptr::from_ref(checked.signing_key),
+            ptr::from_ref(&peer_signing)
+        ));
+        let response = checked.sign()?;
+        response.verify_signature()?;
+        assert_eq!(response.session_id, session.request().session_id);
+        assert_eq!(response.participant.label, "é".repeat(80));
+        assert_eq!(response.participant.device_id, *peer.device_id());
+        let checked = session
+            .request()
+            .prepare_response(SentinelGenesisResponder {
+                identity: &peer,
+                signing_key: &peer_signing,
+                label: "Discard".into(),
+            })?;
+        drop(checked);
+        assert_eq!(session.participants().len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn checked_delivery_binds_original_and_preserves_recipient_before_signature_error()
+    -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let signing = Fixture::signing_key()?;
+        let session =
+            SentinelGenesisSession::start(&owner, &signing, 2.into(), 2.into(), "Owner".into())?;
+        let request = session.request().clone();
+        let (peer, _, response) = Fixture::participant(&request, "Peer")?;
+        let issued = session
+            .collect(response)?
+            .prepare(&signing)?
+            .issue(&StoreId::parse("store_AAAAAAAAAAA")?)?;
+        let delivery = issued
+            .deliveries
+            .iter()
+            .find(|delivery| delivery.device_id == *peer.device_id())
+            .ok_or_else(|| IoError::other("peer delivery must exist"))?;
+        let checked = delivery.check(&SentinelGenesisDeliveryRecipient {
+            expected_request: &request,
+            identity: &peer,
+        })?;
+        assert!(ptr::eq(
+            ptr::from_ref(checked.delivery),
+            ptr::from_ref(delivery)
+        ));
+        let record = checked.into_record()?;
+        assert_eq!(
+            record,
+            VaultMetaRecord::SentinelShare(delivery.device_id.clone(), delivery.share.clone())
+                .to_stored()?
+        );
+        let before = delivery.clone();
+        {
+            let _checked = delivery.check(&SentinelGenesisDeliveryRecipient {
+                expected_request: &request,
+                identity: &peer,
+            })?;
+        }
+        assert_eq!(delivery, &before);
+        let mut tampered = delivery.clone();
+        tampered.signature.clear();
+        match tampered.check(&SentinelGenesisDeliveryRecipient {
+            expected_request: &request,
+            identity: &owner,
+        }) {
+            Err(error) => assert!(matches!(
+                error,
+                MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch
+            )),
+            Ok(_) => anyhow::bail!("wrong recipient reached record state"),
+        }
+        match tampered.check(&SentinelGenesisDeliveryRecipient {
+            expected_request: &request,
+            identity: &peer,
+        }) {
+            Err(error) => assert!(matches!(
+                error,
+                MultiDeviceError::InvalidSentinelGenesisSignature
+            )),
+            Ok(_) => anyhow::bail!("tampered delivery reached record state"),
+        }
+        Ok(())
     }
 
     #[test]
@@ -388,7 +690,11 @@ mod tests {
         let peer = DeviceIdentity::generate()?;
         let peer_signing = Fixture::signing_key()?;
         let announcement =
-            create_sentinel_genesis_public_key_announcement(&peer, &peer_signing, "Peer".into())?;
+            SentinelGenesisPublicKeyAnnouncement::create(SentinelGenesisResponder {
+                identity: &peer,
+                signing_key: &peer_signing,
+                label: "Peer".into(),
+            })?;
         let payload = serde_json::to_string(&announcement)?;
         let (session, error) = session
             .collect_payload(&payload, "")
@@ -399,8 +705,8 @@ mod tests {
             error,
             MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected
         ));
-        let announcement_link =
-            build_sentinel_genesis_participant_response_link(&payload, "https://nook.example/app/");
+        let announcement_link = (SentinelGenesisLinkInput { input: &payload })
+            .response_link("https://nook.example/app/");
         assert!(matches!(
             announcement_link,
             Err(MultiDeviceError::StandaloneSentinelGenesisAnnouncementRejected)
@@ -549,11 +855,20 @@ mod tests {
             .iter()
             .find(|delivery| delivery.device_id == *peer.device_id())
             .ok_or_else(|| IoError::other("peer delivery must exist"))?;
-        let accepted =
-            accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &peer)?;
+        let accepted = peer_delivery
+            .check(&SentinelGenesisDeliveryRecipient {
+                expected_request: &expected_request,
+                identity: &peer,
+            })
+            .and_then(CheckedSentinelGenesisDelivery::into_record)?;
         assert!(issued.records.contains(&accepted));
         assert!(matches!(
-            accept_sentinel_genesis_share_delivery(peer_delivery, &expected_request, &owner),
+            peer_delivery
+                .check(&SentinelGenesisDeliveryRecipient {
+                    expected_request: &expected_request,
+                    identity: &owner
+                })
+                .and_then(CheckedSentinelGenesisDelivery::into_record),
             Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch)
         ));
         Ok(())

@@ -96,11 +96,13 @@ impl NookVaultManager {
             let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&entry.delivery_json)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             // Revalidate the persisted bundle before advertising it to UI.
-            let _ = nook_core::accept_sentinel_genesis_share_delivery(
-                &stored.delivery,
-                &stored.request,
-                &identity,
-            )?;
+            let _ = stored
+                .delivery
+                .check(&nook_core::SentinelGenesisDeliveryRecipient {
+                    expected_request: &stored.request,
+                    identity: &identity,
+                })
+                .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
             summaries.push(NookSentinelStoredDeliverySummary::from_delivery(
                 entry.store_id,
                 &stored.delivery,
@@ -124,11 +126,13 @@ impl NookVaultManager {
                 })?;
         let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        let record = nook_core::accept_sentinel_genesis_share_delivery(
-            &stored.delivery,
-            &stored.request,
-            &identity,
-        )?;
+        let record = stored
+            .delivery
+            .check(&nook_core::SentinelGenesisDeliveryRecipient {
+                expected_request: &stored.request,
+                identity: &identity,
+            })
+            .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
         self.install_accepted_sentinel_delivery(&stored.delivery, &record)?;
         Ok(serde_json::to_string(&record)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
@@ -176,10 +180,12 @@ impl NookVaultManager {
     ) -> Result<String, JsError> {
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
-        let announcement = nook_core::create_sentinel_genesis_public_key_announcement(
-            &identity,
-            &signing,
-            participant_label,
+        let announcement = nook_core::SentinelGenesisPublicKeyAnnouncement::create(
+            nook_core::SentinelGenesisResponder {
+                identity: &identity,
+                signing_key: signing.signing_key(),
+                label: participant_label,
+            },
         )?;
         Ok(serde_json::to_string(&announcement)
             .map_err(|error| NookError::Serialization(error.to_string()))?)
@@ -193,17 +199,21 @@ impl NookVaultManager {
         request_json: String,
         participant_label: String,
     ) -> Result<String, JsError> {
-        let request_json = nook_core::normalize_sentinel_genesis_request(&request_json)?;
+        let request_json = (nook_core::SentinelGenesisLinkInput {
+            input: &request_json,
+        })
+        .canonical_request()?;
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let identity = self.ensure_device_identity()?;
         let signing = self.ensure_signing_identity().await?;
-        let response = nook_core::respond_to_sentinel_genesis_request(
-            &request,
-            &identity,
-            &signing,
-            participant_label,
-        )?;
+        let response = request
+            .prepare_response(nook_core::SentinelGenesisResponder {
+                identity: &identity,
+                signing_key: signing.signing_key(),
+                label: participant_label,
+            })
+            .and_then(nook_core::CheckedSentinelGenesisResponse::sign)?;
         let response_json = serde_json::to_string(&response)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         self.pending_sentinel_genesis_request = CeremonyState::Active(request);
@@ -213,7 +223,10 @@ impl NookVaultManager {
     /// Remember the initiator request so a later share delivery can be verified.
     #[wasm_bindgen]
     pub fn remember_sentinel_genesis_request(&mut self, request_json: &str) -> Result<(), JsError> {
-        let request_json = nook_core::normalize_sentinel_genesis_request(request_json)?;
+        let request_json = (nook_core::SentinelGenesisLinkInput {
+            input: request_json,
+        })
+        .canonical_request()?;
         let request: nook_core::SentinelGenesisRequest = serde_json::from_str(&request_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         self.pending_sentinel_genesis_request = CeremonyState::Active(request);
@@ -230,8 +243,10 @@ impl NookVaultManager {
     ) -> Result<NookSentinelGenesisStatus, JsError> {
         self.sentinel_genesis
             .get("No Sentinel genesis ceremony is active.")?;
-        let response_json =
-            nook_core::normalize_sentinel_genesis_participant_payload(response_json)?;
+        let response_json = (nook_core::SentinelGenesisLinkInput {
+            input: response_json,
+        })
+        .canonical_response()?;
         let session = match mem::replace(&mut self.sentinel_genesis, CeremonyState::Inactive) {
             CeremonyState::Active(session) => session,
             CeremonyState::Inactive => {
@@ -359,12 +374,14 @@ impl NookVaultManager {
             .ok_or(MultiDeviceError::InvalidSentinelUnlockPayload)?;
             let stored: StoredSentinelGenesisDelivery = serde_json::from_str(&stored_json)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
-            nook_core::accept_sentinel_genesis_share_delivery(
-                &stored.delivery,
-                &stored.request,
-                &identity,
-            )
-            .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)?;
+            stored
+                .delivery
+                .check(&nook_core::SentinelGenesisDeliveryRecipient {
+                    expected_request: &stored.request,
+                    identity: &identity,
+                })
+                .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)
+                .map_err(|_| MultiDeviceError::InvalidSentinelUnlockPayload)?;
             if stored.request.initiator_device_id != request.requester_device_id
                 || stored.delivery.store_id != request.store_id
                 || stored.delivery.policy.threshold != request.policy.threshold
@@ -430,8 +447,12 @@ impl NookVaultManager {
             .get("Paste the initiator request in the share section before accepting delivery.")?
             .clone();
         let identity = self.ensure_device_identity()?;
-        let record =
-            nook_core::accept_sentinel_genesis_share_delivery(&delivery, &request, &identity)?;
+        let record = delivery
+            .check(&nook_core::SentinelGenesisDeliveryRecipient {
+                expected_request: &request,
+                identity: &identity,
+            })
+            .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
         let stored = StoredSentinelGenesisDelivery {
             request,
             delivery: delivery.clone(),
