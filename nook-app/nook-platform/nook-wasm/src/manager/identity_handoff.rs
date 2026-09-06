@@ -88,21 +88,20 @@ impl NookVaultManager {
             .pending_extension_handoff
             .as_ref()
             .ok_or_else(|| NookError::Database("Identity handoff disappeared.".to_owned()))?;
-        let committed = identity_record::commit_authenticated_identity_handoff(
-            identity_record::IdentityHandoffCommit {
-                app_key: &identity,
-                signing_public_key: &pending.signing_public_key,
-                authorizer_signing: None,
-                enrollment: &pending.enrollment,
-                signing_seed: pending
-                    .persist_signing_seed
-                    .then_some(self.event_log.signing_seed.as_str()),
-                existing_vault: Some(identity_record::ExistingVaultImportCommit {
-                    device_id: identity.device_id().clone(),
-                    label,
-                }),
-            },
-        )
+        let committed = identity_record::IdentityHandoffCommit {
+            app_key: &identity,
+            signing_public_key: &pending.signing_public_key,
+            authorizer_signing: None,
+            enrollment: &pending.enrollment,
+            signing_seed: pending
+                .persist_signing_seed
+                .then_some(self.event_log.signing_seed.as_str()),
+            existing_vault: Some(identity_record::ExistingVaultImportCommit {
+                device_id: identity.device_id().clone(),
+                label,
+            }),
+        }
+        .commit()
         .await?;
         let vault_keys = committed.existing_vault_keys.ok_or_else(|| {
             NookError::Database("Existing-vault handoff did not return committed keys.".to_owned())
@@ -142,16 +141,15 @@ impl NookVaultManager {
         let signing_seed = pending
             .persist_signing_seed
             .then_some(self.event_log.signing_seed.as_str());
-        identity_record::commit_authenticated_identity_handoff(
-            identity_record::IdentityHandoffCommit {
-                app_key: &identity,
-                signing_public_key: &pending.signing_public_key,
-                authorizer_signing: pending.authorizer_signing.as_ref(),
-                enrollment: &pending.enrollment,
-                signing_seed,
-                existing_vault: None,
-            },
-        )
+        identity_record::IdentityHandoffCommit {
+            app_key: &identity,
+            signing_public_key: &pending.signing_public_key,
+            authorizer_signing: pending.authorizer_signing.as_ref(),
+            enrollment: &pending.enrollment,
+            signing_seed,
+            existing_vault: None,
+        }
+        .commit()
         .await?;
         self.device.pending_extension_handoff = None;
         Ok(())

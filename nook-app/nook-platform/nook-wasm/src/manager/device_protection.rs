@@ -401,16 +401,15 @@ impl NookVaultManager {
         let signing_seed = pending
             .persist_signing_seed
             .then_some(self.event_log.signing_seed.as_str());
-        identity_record::commit_authenticated_identity_handoff(
-            identity_record::IdentityHandoffCommit {
-                app_key: &app_key,
-                signing_public_key: &pending.signing_public_key,
-                authorizer_signing: pending.authorizer_signing.as_ref(),
-                enrollment: &pending.enrollment,
-                signing_seed,
-                existing_vault: None,
-            },
-        )
+        identity_record::IdentityHandoffCommit {
+            app_key: &app_key,
+            signing_public_key: &pending.signing_public_key,
+            authorizer_signing: pending.authorizer_signing.as_ref(),
+            enrollment: &pending.enrollment,
+            signing_seed,
+            existing_vault: None,
+        }
+        .commit()
         .await?;
         Ok(())
     }

@@ -15,9 +15,7 @@ mod recovery;
 pub(crate) mod simple_genesis;
 mod staged_genesis;
 pub(crate) use genesis_flow::SimpleGenesisCompletion;
-pub(crate) use handoff::{
-    ExistingVaultImportCommit, IdentityHandoffCommit, commit_authenticated_identity_handoff,
-};
+pub(crate) use handoff::{ExistingVaultImportCommit, IdentityHandoffCommit};
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use keyring::{LOCAL_IDENTITY_KEYRING_KEY, clear_keyring_for_test};
 pub(crate) use keyring::{
