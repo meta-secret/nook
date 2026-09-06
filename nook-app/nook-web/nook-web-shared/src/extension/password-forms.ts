@@ -972,7 +972,7 @@ export function submitLoginForm(
     request.kind === PasswordFormQueryKind.Scoped &&
     ownedObservationIsLocallyBounded(request)
   ) return FormSubmissionResult.NotObserved;
-  if (!passwordField) {
+  if (!passwordField || !form) {
     const nookNamedArgs0_4: Parameters<typeof clickAdvanceControl>[0] = {
       ...request,
       usernameField,
