@@ -12,8 +12,8 @@
   let email = $state('')
   let alternativeActivationCount = $state(0)
   let error = $state('')
-  let chatGptForm = $state<HTMLFormElement>()
-  let openAiForm = $state<HTMLFormElement>()
+  let chatGptForm: HTMLFormElement | undefined
+  let openAiForm: HTMLFormElement | undefined
 
   function activateAlternative(event: Event): void {
     event.preventDefault()
@@ -41,6 +41,7 @@
   function submitterIdentity(
     event: SubmitEvent,
     fallbackForm: HTMLFormElement | undefined,
+    fallbackIdentity: string,
   ): string {
     const { submitter } = event
     if (submitter && typeof submitter.getAttribute === 'function') {
@@ -59,15 +60,13 @@
         'button[type="submit"], button:not([type])',
       ),
     ).filter((control) => !control.hasAttribute('form'))
-    return submitControls.length === 1
-      ? submitControls[0].getAttribute('value') || ''
-      : ''
+    return submitControls.length === 1 ? fallbackIdentity : ''
   }
 
   function submitChatGpt(event: SubmitEvent): void {
     event.preventDefault()
     const submission: ChatGptAuthMockSubmission = {
-      submitter: submitterIdentity(event, chatGptForm),
+      submitter: submitterIdentity(event, chatGptForm, 'chatgpt-continue'),
       email,
       alternativeActivationCount,
       authorizationTarget: OpenAiAuthMockScenario.authorizationTarget(
@@ -84,7 +83,11 @@
 
   function submitOpenAi(event: SubmitEvent): void {
     event.preventDefault()
-    const submittedControlIdentity = submitterIdentity(event, openAiForm)
+    const submittedControlIdentity = submitterIdentity(
+      event,
+      openAiForm,
+      'openai-continue',
+    )
     const submission: OpenAiAuthMockSubmission = {
       submitter: submittedControlIdentity,
       email,
