@@ -216,12 +216,14 @@ mod tests {
                 threshold: 2.into(),
             }
             .start(&identity, &signer)?;
-            let response = nook_core::respond_to_sentinel_genesis_request(
-                genesis.request(),
-                &participant,
-                &participant_signer,
-                "Participant".to_owned(),
-            )?;
+            let response = genesis
+                .request()
+                .prepare_response(nook_core::SentinelGenesisResponder {
+                    identity: &participant,
+                    signing_key: participant_signer.signing_key(),
+                    label: "Participant".to_owned(),
+                })
+                .and_then(nook_core::CheckedSentinelGenesisResponse::sign)?;
             let genesis = genesis.collect(response)?;
             let output = SentinelGenesisOutput::from_ready(genesis.prepare(signer.signing_key())?)?;
             Ok(Self {

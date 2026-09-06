@@ -104,15 +104,15 @@ pub fn build_sentinel_genesis_request_link(
     request_json: &str,
     base_url: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::build_sentinel_genesis_request_link(
-        request_json,
-        base_url,
-    )?)
+    Ok((nook_core::SentinelGenesisLinkInput {
+        input: request_json,
+    })
+    .request_link(base_url)?)
 }
 
 #[wasm_bindgen]
 pub fn normalize_sentinel_genesis_request(input: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::normalize_sentinel_genesis_request(input)?)
+    Ok((nook_core::SentinelGenesisLinkInput { input }).canonical_request()?)
 }
 
 #[wasm_bindgen]
@@ -120,26 +120,24 @@ pub fn build_sentinel_genesis_participant_response_link(
     response_json: &str,
     base_url: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::build_sentinel_genesis_participant_response_link(
-        response_json,
-        base_url,
-    )?)
+    Ok((nook_core::SentinelGenesisLinkInput {
+        input: response_json,
+    })
+    .response_link(base_url)?)
 }
 
 #[wasm_bindgen]
 pub fn normalize_sentinel_genesis_participant_payload(
     input: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::normalize_sentinel_genesis_participant_payload(
-        input,
-    )?)
+    Ok((nook_core::SentinelGenesisLinkInput { input }).canonical_response()?)
 }
 
 #[wasm_bindgen]
 pub fn sentinel_genesis_participant_fingerprint(
     input: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::sentinel_genesis_participant_fingerprint(input)?)
+    Ok((nook_core::SentinelGenesisLinkInput { input }).reported_fingerprint()?)
 }
 
 #[wasm_bindgen]

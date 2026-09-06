@@ -12,10 +12,10 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 use std::io::{Read, Write};
 
 use crate::{
-    AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, MultiDeviceError,
-    SentinelGenesisRequest, SentinelGenesisShareDelivery, StorageProviderType, StoredSecretRecord,
-    accept_sentinel_genesis_share_delivery, auth_snapshot_legacy_storage_value,
-    encrypt_for_recipient, normalize_auth_snapshot,
+    AgeArmoredCiphertext, AuthProvidersSnapshotData, CheckedSentinelGenesisDelivery,
+    DeviceIdentity, MultiDeviceError, SentinelGenesisDeliveryRecipient, SentinelGenesisRequest,
+    SentinelGenesisShareDelivery, StorageProviderType, StoredSecretRecord,
+    auth_snapshot_legacy_storage_value, encrypt_for_recipient, normalize_auth_snapshot,
 };
 
 const MAX_ENCODED_PACKAGE_BYTES: usize = 16 * 1024;
@@ -90,8 +90,13 @@ pub fn accept_sentinel_onboarding_package(
     identity: &DeviceIdentity,
 ) -> Result<AcceptedSentinelOnboarding, MultiDeviceError> {
     validate_request_delivery(&package.request, &package.delivery)?;
-    let share_record =
-        accept_sentinel_genesis_share_delivery(&package.delivery, &package.request, identity)?;
+    let share_record = package
+        .delivery
+        .check(SentinelGenesisDeliveryRecipient {
+            expected_request: &package.request,
+            identity,
+        })
+        .and_then(CheckedSentinelGenesisDelivery::into_record)?;
     let provider_json = identity.open_utf8(&package.provider_snapshot)?;
     let provider_storage: serde_json::Value = serde_json::from_str(&provider_json)
         .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
@@ -241,12 +246,14 @@ mod tests {
             threshold: 2.into(),
         }
         .start(&owner, &owner_signing)?;
-        let response = crate::respond_to_sentinel_genesis_request(
-            session.request(),
-            &member,
-            &member_signing,
-            "Member".to_owned(),
-        )?;
+        let response = session
+            .request()
+            .prepare_response(crate::SentinelGenesisResponder {
+                identity: &member,
+                signing_key: member_signing.signing_key(),
+                label: "Member".to_owned(),
+            })
+            .and_then(crate::CheckedSentinelGenesisResponse::sign)?;
         let session = session.collect(response)?;
         let request = session.request().clone();
         let store_id = crate::generate_store_id()?;

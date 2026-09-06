@@ -183,11 +183,12 @@ impl NookVaultManager {
             .ok_or_else(|| {
                 JsError::new("Sentinel genesis did not issue the initiator's encrypted share.")
             })?;
-        let _ = nook_core::accept_sentinel_genesis_share_delivery(
-            own_delivery,
-            &pending.request,
-            &identity,
-        )?;
+        let _ = own_delivery
+            .check(nook_core::SentinelGenesisDeliveryRecipient {
+                expected_request: &pending.request,
+                identity: &identity,
+            })
+            .and_then(nook_core::CheckedSentinelGenesisDelivery::into_record)?;
         let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
             request: pending.request.clone(),
             delivery: own_delivery.clone(),
@@ -312,12 +313,14 @@ mod tests {
                 };
             let peer = DeviceIdentity::generate()?;
             let peer_signer = SigningIdentity::generate()?.0;
-            let response = nook_core::respond_to_sentinel_genesis_request(
-                session.request(),
-                &peer,
-                &peer_signer,
-                "Peer".to_owned(),
-            )?;
+            let response = session
+                .request()
+                .prepare_response(nook_core::SentinelGenesisResponder {
+                    identity: &peer,
+                    signing_key: peer_signer.signing_key(),
+                    label: "Peer".to_owned(),
+                })
+                .and_then(nook_core::CheckedSentinelGenesisResponse::sign)?;
             let session = session.collect(response)?;
             self.manager.sentinel_genesis_phase = SentinelGenesisPhase::from_session(&session);
             self.manager.sentinel_genesis = CeremonyState::Active(session);

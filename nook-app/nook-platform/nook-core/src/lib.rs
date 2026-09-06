@@ -230,16 +230,15 @@ pub use website_login_save::{
 };
 
 pub use nook_auth2::{
-    DeviceKeyDerivationIterations, EnrollmentKeyDerivationIterations, IdentityControlEpoch,
-    MockPasskeyCredentialCount, PasswordCharacterCount, PasswordWorkFactor, ReadySentinelGenesis,
-    SentinelGenesisIssued, SentinelGenesisParticipant, SentinelGenesisParticipantResponse,
-    SentinelGenesisPolicy, SentinelGenesisPublicKeyAnnouncement, SentinelGenesisReadiness,
-    SentinelGenesisRejection, SentinelGenesisRequest, SentinelGenesisSession,
+    CheckedSentinelGenesisDelivery, CheckedSentinelGenesisResponse, DeviceKeyDerivationIterations,
+    EnrollmentKeyDerivationIterations, IdentityControlEpoch, MockPasskeyCredentialCount,
+    PasswordCharacterCount, PasswordWorkFactor, ReadySentinelGenesis,
+    SentinelGenesisDeliveryRecipient, SentinelGenesisIssued, SentinelGenesisLinkInput,
+    SentinelGenesisParticipant, SentinelGenesisParticipantResponse, SentinelGenesisPolicy,
+    SentinelGenesisPublicKeyAnnouncement, SentinelGenesisReadiness, SentinelGenesisRejection,
+    SentinelGenesisRequest, SentinelGenesisResponder, SentinelGenesisSession,
     SentinelGenesisShareDelivery, SentinelGenesisVersion, SentinelParticipantCount,
     SentinelRecordCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold,
-    accept_sentinel_genesis_share_delivery, build_sentinel_genesis_participant_response_link,
-    build_sentinel_genesis_request_link, normalize_sentinel_genesis_participant_payload,
-    normalize_sentinel_genesis_request, sentinel_genesis_participant_fingerprint,
 };
 
 pub use multi_device::{
@@ -427,7 +426,6 @@ pub use vault_search_catalog::{
 };
 pub use vault_sentinel_genesis::{
     SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
-    create_sentinel_genesis_public_key_announcement, respond_to_sentinel_genesis_request,
     sentinel_genesis_operations,
 };
 pub use vault_sentinel_unlock::SentinelUnlockSigning;
