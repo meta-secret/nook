@@ -288,6 +288,86 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('[name="otherPassword"]')).toBe('')
   })
 
+  test('runs the owned GitHub login while leaving external alternatives and hidden decoys untouched', () => {
+    window.history.replaceState({}, '', '/login')
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form data-turbo="false" action="/session" method="post" accept-charset="UTF-8">
+          <input name="add_account" type="hidden" value="">
+          <input name="webauthn-conditional" type="hidden" value="unknown">
+          <input name="javascript-support" type="hidden" value="unknown">
+          <input name="webauthn-support" type="hidden" value="unknown">
+          <input name="webauthn-iuvpaa-support" type="hidden" value="unknown">
+          <input name="return_to" type="hidden" value="">
+          <input name="allow_signup" type="hidden" value="">
+          <input name="client_id" type="hidden" value="">
+          <input name="integration" type="hidden" value="">
+          <input name="required_field_mock_auth" class="form-control" type="text" hidden>
+          <label for="login_field">Username or email address</label>
+          <input type="text" name="login" id="login_field" autocapitalize="off" autocorrect="off" autocomplete="username" autofocus required>
+          <label for="password">Password</label>
+          <input type="password" name="password" id="password" autocomplete="current-password" required>
+          <a id="forgot-password" href="/password_reset">Forgot password?</a>
+          <input type="submit" name="commit" value="Sign in" class="js-sign-in-button" data-disable-with="Signing in…" data-signin-label="Sign in" data-sso-label="Sign in with your identity provider">
+        </form>
+        <section aria-label="Other sign-in options">
+          <button type="button">Continue with Google</button>
+          <button type="button">Continue with Apple</button>
+          <button type="button">Sign in with a passkey</button>
+          <a href="/signup">Create an account</a>
+        </section></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      observationCount: 2,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'Sign in',
+    })
+    expect(result.selectedRoot === document).toBe(true)
+    expect(fieldValue('#login_field')).toBe(FAKE_CREDENTIALS.username)
+    expect(fieldValue('#password')).toBe(FAKE_CREDENTIALS.password)
+    expect(fieldValue('[name="required_field_mock_auth"]')).toBe('')
+    expect(fieldValue('[name="add_account"]')).toBe('')
+    expect(fieldValue('[name="webauthn-conditional"]')).toBe('unknown')
+    expect(fieldValue('[name="javascript-support"]')).toBe('unknown')
+    expect(fieldValue('[name="webauthn-support"]')).toBe('unknown')
+    expect(fieldValue('[name="webauthn-iuvpaa-support"]')).toBe('unknown')
+    expect(fieldValue('[name="return_to"]')).toBe('')
+    expect(fieldValue('[name="allow_signup"]')).toBe('')
+    expect(fieldValue('[name="client_id"]')).toBe('')
+    expect(fieldValue('[name="integration"]')).toBe('')
+    const form = document.querySelector('form')
+    const forgotPassword = document.querySelector('#forgot-password')
+    const submit = document.querySelector('.js-sign-in-button')
+    const honeypot = document.querySelector('[name="required_field_mock_auth"]')
+    if (!form || !forgotPassword || !submit || !honeypot) {
+      throw new Error('expected GitHub structural evidence')
+    }
+    expect(form.getAttribute('accept-charset')).toBe('UTF-8')
+    expect(forgotPassword.closest('form')).toBe(form)
+    expect(honeypot.getAttribute('class')).toBe('form-control')
+    expect(honeypot.hasAttribute('hidden')).toBe(true)
+    expect(honeypot.hasAttribute('autocomplete')).toBe(false)
+    expect(honeypot.hasAttribute('tabindex')).toBe(false)
+    expect(honeypot.hasAttribute('aria-hidden')).toBe(false)
+    expect(submit.getAttribute('data-disable-with')).toBe('Signing in…')
+    expect(submit.getAttribute('data-signin-label')).toBe('Sign in')
+    expect(submit.getAttribute('data-sso-label')).toBe(
+      'Sign in with your identity provider',
+    )
+  })
+
   test('runs the Namecheap shell through observation, classification, fill, and submission', () => {
     const request: DomAuthenticationSimulationRequest = {
       fixture: NAMECHEAP_PAGE_WIDE_LOGIN,

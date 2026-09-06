@@ -4,6 +4,7 @@
   import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
   import DetectionFromFixture from './pages/DetectionFromFixture.svelte'
   import DetectionGoogle from './pages/DetectionGoogle.svelte'
+  import DetectionGithub from './pages/DetectionGithub.svelte'
   import DetectionHiddenHeaderLogin from './pages/DetectionHiddenHeaderLogin.svelte'
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
@@ -92,6 +93,8 @@
   <DetectionApple />
 {:else if pathname === '/v3/signin/identifier' || pathname === '/v3/signin/challenge/pwd'}
   <DetectionGoogle />
+{:else if pathname === '/github' || pathname === '/github/login'}
+  <DetectionGithub />
 {:else if templateMatch?.[1]}
   <DetectionFromFixture templateId={templateMatch[1]} />
 {:else if siteMatch?.[1]}
