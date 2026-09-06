@@ -8,8 +8,9 @@ use super::{
     members_checkpoint_hash_from_roster, rewrapped_vault_meta_records_for_epoch, save_key_epoch,
 };
 use crate::storage::event_db::{EpochPairAppend, EventAppend, VaultEventPersistence};
-use crate::storage::identity_record;
-use crate::storage::identity_record::PendingIdentityRotation;
+use crate::storage::identity_record::{
+    IdentityReconciliationStore, PendingIdentityRotation, ReconciliationIntent,
+};
 use nook_core::{
     EpochMetadataState, EpochPasswordState, EventId, IdentityVaultEventId, ProjectionEpoch,
     StoreId, SymmetricKey,
@@ -238,13 +239,13 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let plan_envelope = identity.seal_utf8(&plan_json)?;
         let store_id = StoreId::parse(&self.vault.store_id)?;
-        identity_record::mark_identity_reconciliation_pending(
-            &store_id,
-            &previous_key_epoch,
-            &previous_checkpoint,
-            plan_envelope.clone(),
-        )
-        .await?;
+        IdentityReconciliationStore::new(&store_id)
+            .mark(ReconciliationIntent {
+                previous_key_epoch: &previous_key_epoch,
+                previous_checkpoint: &previous_checkpoint,
+                plan_envelope: plan_envelope.clone(),
+            })
+            .await?;
         Ok(PersistedSecurityEpochRecoveryPlan {
             plan,
             plan_envelope,
@@ -289,12 +290,10 @@ impl PreparedSecurityEpochExecution {
         manager.event_log.heads = match saved_heads {
             Ok(heads) => heads,
             Err(error) => {
-                identity_record::abort_prepared_identity_reconciliation(
-                    &self.store_id,
-                    plan_envelope,
-                )
-                .await
-                .map_err(SecurityEpochRotationFailure::before)?;
+                IdentityReconciliationStore::new(&self.store_id)
+                    .abort(plan_envelope)
+                    .await
+                    .map_err(SecurityEpochRotationFailure::before)?;
                 return Err(SecurityEpochRotationFailure::BeforeCommit(
                     NookError::Database(format!(
                         "Vault changed before security rotation committed; retry the operation: {error}"
@@ -354,13 +353,10 @@ impl CommittedSecurityEpochExecution {
             checkpoint,
         } = self.execution;
         if advanced {
-            identity_record::commit_identity_reconciliation_epoch(&store_id, &key_epoch).await?;
-            identity_record::commit_identity_reconciliation_checkpoint(
-                &store_id,
-                &key_epoch,
-                &checkpoint,
-            )
-            .await?;
+            let epoch_commit = IdentityReconciliationStore::new(&store_id)
+                .commit_epoch(&key_epoch)
+                .await?;
+            epoch_commit.commit_checkpoint(&checkpoint).await?;
             nook_core::materialize_vault_meta_from_graph(&graph, &mut manager.vault.meta)?;
             manager.adopt_projected_security_epoch(&projection).await?;
             manager.apply_event_projection_to_session().await?;
@@ -369,7 +365,9 @@ impl CommittedSecurityEpochExecution {
             manager.ensure_identity_after_connect(&identity).await?;
             return Ok(());
         }
-        identity_record::commit_identity_reconciliation_epoch(&store_id, &key_epoch).await?;
+        let epoch_commit = IdentityReconciliationStore::new(&store_id)
+            .commit_epoch(&key_epoch)
+            .await?;
         manager.event_log.key_epoch = trigger_event_id.as_str().to_owned();
         save_key_epoch(&manager.vault.store_id, &manager.event_log.key_epoch).await?;
 
@@ -386,12 +384,7 @@ impl CommittedSecurityEpochExecution {
             .queue_event_outbox_for_current_provider(&trigger_event_id, &trigger_event.bytes)
             .await?;
         manager.persist_projection_cache().await?;
-        identity_record::commit_identity_reconciliation_checkpoint(
-            &store_id,
-            &key_epoch,
-            &checkpoint,
-        )
-        .await?;
+        epoch_commit.commit_checkpoint(&checkpoint).await?;
         let identity = manager.device_identity()?;
         manager.ensure_identity_after_connect(&identity).await?;
         Ok(())
@@ -407,8 +400,7 @@ impl NookVaultManager {
             return Ok(false);
         }
         let store_id = StoreId::parse(&self.vault.store_id)?;
-        let Some(pending) = identity_record::load_pending_identity_rotation(&store_id).await?
-        else {
+        let Some(pending) = IdentityReconciliationStore::new(&store_id).load().await? else {
             return Ok(false);
         };
         let (plan_envelope, persisted_key_epoch) = match pending {

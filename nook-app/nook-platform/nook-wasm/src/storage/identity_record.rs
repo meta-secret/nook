@@ -96,12 +96,7 @@ pub(super) async fn local_keyring_entry_for_app_id_from_store(
     keyring::entry_for_app_id_from_store(store, app_id).await
 }
 pub(crate) use reconciliation::{
-    PendingIdentityRotation, abort_prepared_identity_reconciliation,
-    commit_identity_reconciliation_checkpoint, commit_identity_reconciliation_epoch,
-    load_pending_identity_rotation, mark_identity_reconciliation_pending,
-};
-use reconciliation::{
-    clear_consumed_identity_reconciliation, is_identity_reconciliation_key, resolve_identity_epoch,
+    IdentityReconciliationStore, PendingIdentityRotation, ReconciliationIntent,
 };
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 pub(crate) use recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY;
@@ -580,57 +575,7 @@ pub(crate) struct LegacyVaultIdentityInput<'a> {
 pub(crate) async fn ensure_identity_from_legacy_vault(
     input: LegacyVaultIdentityInput<'_>,
 ) -> Result<nook_core::IdentityRecord, NookError> {
-    let LegacyVaultIdentityInput {
-        app_key,
-        store_id,
-        secrets_envelope,
-        members_envelope,
-        key_epoch,
-        verified_previous_key_epoch,
-        committed_event_ids,
-        checkpoint_ancestors,
-        authorized_auth_ids,
-        label,
-    } = input;
-    let app_key = app_key.clone();
-    let store_id = store_id.clone();
-    let label = label.to_owned();
-    let resolution = resolve_identity_epoch(
-        &store_id,
-        key_epoch,
-        verified_previous_key_epoch,
-        &committed_event_ids,
-        &checkpoint_ancestors,
-    )
-    .await?;
-    let consumed_marker = resolution.consumed_marker;
-    let directory_store_id = store_id.clone();
-    let record = update_identity_directory(move |directory| {
-        let identity_id = directory
-            .import_legacy_vault(
-                &label,
-                &app_key,
-                directory_store_id,
-                nook_core::IdentityVaultDekReconciliation {
-                    secrets_envelope,
-                    members_envelope,
-                    epoch_update: resolution.update,
-                    authorized_auth_ids,
-                },
-            )
-            .map_err(|error| NookError::Database(error.to_string()))?;
-        directory
-            .identities()
-            .iter()
-            .find(|record| record.identity_id == identity_id)
-            .cloned()
-            .ok_or_else(|| NookError::Database("Imported identity disappeared.".to_owned()))
-    })
-    .await?;
-    if let Some(consumed_marker) = consumed_marker {
-        clear_consumed_identity_reconciliation(&store_id, &consumed_marker).await?;
-    }
-    Ok(record)
+    input.reconcile().await
 }
 
 pub(crate) async fn generate_vault_dek_for_identity(
