@@ -627,7 +627,8 @@ fn assert_preflight_reporter_contract(root: &Path) {
     for required in [
         "FROM rust-base AS chef",
         "FROM rust-base AS deps",
-        "FROM deps AS build",
+        "FROM deps AS coverage-deps",
+        "FROM coverage-deps AS build",
         "cargo chef prepare --recipe-path recipe.json",
         "cargo chef cook --recipe-path recipe.json",
         "cargo chef cook --tests --recipe-path recipe.json",

@@ -30,7 +30,19 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && cargo chef cook --clippy --recipe-path recipe.json \
     && nook-sccache-report preflight-chef
 
-FROM deps AS build
+# Prewarm the coverage-instrumented dependency graph against dummy crate roots.
+# The final coverage run receives the complete repository as runtime input, so
+# it must not clean and reconstruct third-party dependencies on every source edit.
+FROM deps AS coverage-deps
+
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo llvm-cov clean --workspace \
+    && eval "$(CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo llvm-cov show-env --sh)" \
+    && CARGO_TARGET_DIR=/meta-secret/preflight-target/llvm-cov-target cargo test --locked -p nook-preflight --no-run \
+    && nook-sccache-report preflight-coverage-dependencies
+
+FROM coverage-deps AS build
 
 COPY preflight/src src
 COPY preflight/tests tests
@@ -51,7 +63,7 @@ ENV NOOK_REPOSITORY_SOURCE_CONTEXT=1
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     floor="$(jq -er '.package_lines_percent["nook-preflight"] | numbers' /meta-secret/nook/nook-app/nook-platform/nook-core/coverage-floor.json)" \
-    && cargo llvm-cov test --locked -p nook-preflight --fail-under-lines "$floor" \
+    && cargo llvm-cov test --locked --no-clean -p nook-preflight --fail-under-lines "$floor" \
     && nook-sccache-report preflight-test-and-coverage
 
 FROM scratch AS cli-export

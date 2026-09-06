@@ -351,6 +351,16 @@ target "wasm-node-source" {
   output = ["type=cacheonly"]
 }
 
+target "preflight-source" {
+  context    = "."
+  dockerfile = "combined-nightly.Dockerfile"
+  target     = "preflight-source"
+  args = {
+    REPOSITORY_SOURCE = "default-repository-source"
+  }
+  output = ["type=cacheonly"]
+}
+
 target "hive" {
   context = "."
   dockerfile = "hive.Dockerfile"

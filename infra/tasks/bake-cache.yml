@@ -350,25 +350,23 @@ tasks:
         BAKE_SIM_PARENT_OWN_CACHE_ENABLED=
         BAKE_SIM_BASE_OWN_CACHE_ENABLED=
         create_builder "nook-bake-sim-rust-source-${suffix}"
-        bake_plain "$proof_log" \
-          --set "dylint-split.args.PRODUCT_SOURCE=${suffix}-first" \
-          dylint-split
-        bake_plain "$proof_log" \
-          --set "dylint-split.args.PRODUCT_SOURCE=${suffix}-second" \
-          dylint-split
+        for revision in first second; do
+          bake_plain "$proof_log" --set "dylint-split.args.PRODUCT_SOURCE=${suffix}-${revision}" dylint-split
+        done
         require_cached_step "$proof_log" "bake-sim-dylint-self-test-expensive"
         require_uncached_step "$proof_log" "bake-sim-dylint-product-expensive"
-        bake_plain "$proof_log" \
-          --set "wasm-node-source.args.PRODUCT_SOURCE=${suffix}-first" \
-          wasm-node-source
-        bake_plain "$proof_log" \
-          --set "wasm-node-source.args.PRODUCT_SOURCE=${suffix}-second" \
-          wasm-node-source
+        for revision in first second; do
+          bake_plain "$proof_log" --set "wasm-node-source.args.PRODUCT_SOURCE=${suffix}-${revision}" wasm-node-source
+        done
         require_cached_step "$proof_log" "bake-sim-wasm-node-os-tooling-expensive"
         require_cached_step "$proof_log" "bake-sim-wasm-node-browser-tooling-expensive"
         require_cached_step "$proof_log" "bake-sim-wasm-node-host-coverage-dependencies-expensive"; require_cached_step "$proof_log" "bake-sim-wasm-node-browser-coverage-dependencies-expensive"
         require_uncached_step "$proof_log" "bake-sim-wasm-node-source-expensive"
         require_uncached_step "$proof_log" "bake-sim-wasm-node-coverage-execution-expensive"
+        for revision in first second; do
+          bake_plain "$proof_log" --set "preflight-source.args.REPOSITORY_SOURCE=${suffix}-${revision}" preflight-source
+        done
+        awk -v cached_marker="bake-sim-preflight-coverage-dependencies-expensive" -v uncached_marker="bake-sim-preflight-coverage-execution-expensive" 'index($0, cached_marker) && !cached_step { cached_step = $1 } index($0, uncached_marker) && !uncached_step { uncached_step = $1 } $1 == cached_step && $2 == "CACHED" { cached = 1 } $1 == uncached_step && $2 == "CACHED" { uncached = 1 } $1 == uncached_step && $2 ~ /^[0-9]+\.[0-9]+$/ && index($0, uncached_marker) { executed = 1 } END { exit !(cached_step && uncached_step && cached && executed && !uncached) }' "$proof_log"
         echo "Rust source-boundary cache proof: ok"
 
         echo "== Scenario A: Main cold publish =="
