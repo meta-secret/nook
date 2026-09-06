@@ -76,8 +76,8 @@ impl<'a> PendingUnlockCompletion<'a> {
         quorum.check_context(
             &store_id,
             SentinelUnlockPolicy {
-                threshold: policy.threshold.into(),
-                required_participants: policy.required_participants.into(),
+                threshold: policy.threshold,
+                required_participants: policy.required_participants,
             },
         )?;
         let keys = quorum.finalize()?;

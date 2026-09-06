@@ -287,7 +287,7 @@ impl NookVaultManager {
         let share_records = nook_core::create_sentinel_share_records_for_recipients(
             &keys,
             &recipients,
-            policy.threshold.into(),
+            policy.threshold,
         )?;
         let mut shares = Vec::with_capacity(share_records.len());
         for record in &share_records {

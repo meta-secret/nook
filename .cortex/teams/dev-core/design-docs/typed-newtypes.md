@@ -233,7 +233,7 @@ enum VersionedVaultEventBody {
 
 Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
 Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
-`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, `nook-event-log`, and `nook-core` are activated.
+`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, and `nook-event-log` are activated.
 Later crates migrate in dependency order.
 Activate a migrated crate only while the Dylint library is loaded:
 
@@ -288,7 +288,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `vault_sync` — `VaultSyncUnixMilliseconds` for successful-sync timestamps
 - [x] `vault diagnostics` — `VaultEncryptedPayloadCount` for event payload counts
 - [x] search catalog — `SecretSearchCatalogChangeCount` for reconciliation outcomes
-- [x] Core vault and sync APIs — typed paging, policy counts, timings, versions, and Sentinel policy values
+- [x] Core vault and sync prerequisite — typed paging, policy counts, timings, versions, and Sentinel policy values; activation remains pending on inherited facade contracts
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
 - [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`

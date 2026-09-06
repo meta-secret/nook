@@ -293,8 +293,8 @@ impl NookVaultManager {
         let mut session = signing.start_sentinel_unlock(
             store_id,
             nook_core::SentinelUnlockPolicy {
-                threshold: policy.threshold.into(),
-                required_participants: policy.required_participants.into(),
+                threshold: policy.threshold,
+                required_participants: policy.required_participants,
             },
             &records,
             &identity,
