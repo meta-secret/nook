@@ -59,17 +59,24 @@ impl NookVaultManager {
     ) -> Result<NookAuthenticatorBackupAttachResult, JsError> {
         let mode = BackupCodeAttachMode::parse(mode)
             .map_err(|_| NookError::from(ValidationError::AuthenticatorBackupCodesInvalid))?;
-        let reviewed_codes =
-            Zeroizing::new(nook_core::normalize_backup_codes(&codes).map_err(NookError::from)?);
+        let reviewed_codes = Zeroizing::new(
+            nook_core::BackupCodeInput::new(&codes)
+                .normalize()
+                .map_err(NookError::from)?,
+        );
         let id = SecretId::parse(secret_id).map_err(NookError::from)?;
         let crypto = self.vault.crypto.get()?;
         let mut record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)
             .map_err(NookError::from)?;
         let result = match &mut record.data {
             SecretValue::Authenticator(authenticator) => {
-                let attached =
-                    nook_core::apply_backup_codes(&authenticator.backup_codes, &codes, mode)
-                        .map_err(NookError::from)?;
+                let attached = nook_core::BackupCodeApplication {
+                    existing: &authenticator.backup_codes,
+                    incoming: &codes,
+                    mode,
+                }
+                .apply()
+                .map_err(NookError::from)?;
                 authenticator.backup_codes.zeroize();
                 authenticator.backup_codes = attached;
                 authenticator.normalize().map_err(NookError::from)?;
