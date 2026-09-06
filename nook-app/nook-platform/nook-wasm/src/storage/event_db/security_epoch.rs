@@ -307,7 +307,7 @@ pub(crate) async fn save_verified_remote_events(
         NookError::IndexedDb(format!("Remote projections store error: {error:?}"))
     })?;
     let (persisted_ids, mut local) = load_local_store(&events, store_id).await?;
-    let heads = nook_core::union_remote_events_and_heads(&mut local, remote_events, store_id)?;
+    let heads = local.union_remote_and_heads(remote_events, store_id)?;
     let graph = local.load_graph(store_id)?;
     if !nook_core::project_vault(&graph, store_id)?
         .security_conflicts

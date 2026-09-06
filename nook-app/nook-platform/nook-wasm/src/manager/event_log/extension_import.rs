@@ -3,6 +3,7 @@ use crate::NookError;
 use crate::manager::{CeremonyState, EventLogSessionState, SyncOutboxState, VaultSessionState};
 use crate::storage::event_db::{clear_local_event_store, load_local_event_store};
 use crate::storage::indexed_db;
+use nook_core::CheckedRemoteEvent;
 use nook_core::EventId;
 use nook_core::{
     DeviceId, DevicePublicKey, DeviceSigningPublicKey, SentinelGenesisPhase, StoreId,
@@ -26,7 +27,8 @@ impl NookVaultManager {
             let event_id = EventId::parse(&record.event_id)?;
             Self::validate_event_record_id(&event_id, &record.event)?;
             let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
-            let record_store_id = nook_core::remote_event_store_id(&event_id, &bytes)?;
+            let record_store_id =
+                CheckedRemoteEvent::parse(&event_id, &bytes).map(|event| event.into_store_id())?;
             if record_store_id != *expected_store_id {
                 return Err(NookError::Database(format!(
                     "Approved vault store_id {} does not match imported store_id {}.",
