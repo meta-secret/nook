@@ -87,3 +87,22 @@ mod tests {
         assert_eq!(device.public_app_id(), "app_companion_session");
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn identity_snapshot_requests_validate_selected_store_ids() {
+        let manager = NookVaultManager::new();
+        assert!(manager.identity_directory_snapshot_request().is_ok());
+        assert!(
+            manager
+                .selected_vault_identity_context_request("invalid-store")
+                .is_err()
+        );
+    }
+}
