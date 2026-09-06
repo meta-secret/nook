@@ -311,7 +311,7 @@ pub(crate) async fn save_verified_remote_events(
         .iter()
         .map(|(event_id, bytes)| (event_id.clone(), bytes.clone().into()))
         .collect::<Vec<_>>();
-    let heads = nook_core::union_remote_events_and_heads(&mut local, &typed_events, store_id)?;
+    let heads = local.union_remote_and_heads(&typed_events, store_id)?;
     let graph = local.load_graph(store_id)?;
     if !nook_core::project_vault(&graph, store_id)?
         .security_conflicts

@@ -11,7 +11,7 @@ use crate::{
     AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
     LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord, VaultCrypto,
     VaultMetaState, VaultOperation, VaultProjection, build_members_records, build_signed_event,
-    project_vault, reencrypt_user_secrets_for_epoch, resolve_member_roster, union_remote_events,
+    project_vault, reencrypt_user_secrets_for_epoch, resolve_member_roster, sha256_hex,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -117,7 +117,7 @@ impl VaultEventSession {
             .iter()
             .map(|(event_id, bytes)| (event_id.clone(), EventStorageBytes::from(bytes.clone())))
             .collect::<Vec<_>>();
-        union_remote_events(&mut self.store, &remote_events, &self.store_id)?;
+        self.store.union_remote(&remote_events, &self.store_id)?;
         self.set_heads_from_graph()
     }
 
