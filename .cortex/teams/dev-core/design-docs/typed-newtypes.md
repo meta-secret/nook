@@ -233,7 +233,7 @@ enum VersionedVaultEventBody {
 
 Development core owns `raw_numeric_public_api`, suppression validation, and rollout.
 Both lints remain allow-by-default, so unmigrated crates remain unenforced until activated.
-`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, and `nook-event-log` are activated.
+`nook-app-common`, `nook-authenticator-domain`, `nook-companion-core`, `nook-companion-wasm`, `nook-wasm`, `nook-replication`, `nook-auth2`, `nook-event-log`, and `nook-core` are activated.
 Later crates migrate in dependency order.
 Activate a migrated crate only while the Dylint library is loaded:
 
@@ -264,6 +264,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [ ] `VaultEventSession` — `store_id: StoreId`, `heads: Vec<EventId>`, `key_epoch: KeyEpoch`
 - [ ] `VaultProjection` maps — `BTreeMap<SecretId, …>` instead of `String` keys
 - [x] `device_key_protection` — validated `DeviceKeyProtectionVersion`
+- [x] `device_key_protection` — typed WebAuthn credential, user-handle, and PRF bytes
 - [x] `sentinel_genesis` — validated `SentinelGenesisVersion`
 - [x] `sentinel_genesis` command — typed participant count and threshold
 - [x] `sentinel_unlock` — validated `SentinelUnlockVersion`
@@ -288,7 +289,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `vault_sync` — `VaultSyncUnixMilliseconds` for successful-sync timestamps
 - [x] `vault diagnostics` — `VaultEncryptedPayloadCount` for event payload counts
 - [x] search catalog — `SecretSearchCatalogChangeCount` for reconciliation outcomes
-- [x] Core vault and sync prerequisite — typed paging, policy counts, timings, versions, and Sentinel policy values; activation remains pending on inherited facade contracts
+- [x] Core domain API activation — typed vault/sync APIs plus typed Auth2 and Event Log facade contracts
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
 - [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`

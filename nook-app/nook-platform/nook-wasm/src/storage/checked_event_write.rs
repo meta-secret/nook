@@ -22,7 +22,7 @@ impl<'a> CheckedEventWrite<'a> {
         event_id: &'a EventId,
         provider: &str,
     ) -> Result<Self, NookError> {
-        let event = parse_remote_event_storage_bytes(bytes)
+        let event = parse_remote_event_storage_bytes(&bytes.to_vec().into())
             .map_err(|e| NookError::Serialization(format!("{provider} event parse: {e}")))?;
         let actual = event.id()?;
         if actual != *event_id {
@@ -55,7 +55,8 @@ impl<'a> CheckedEventWrite<'a> {
     }
 
     fn matches_event(bytes: &[u8], expected: &VaultEvent) -> bool {
-        parse_remote_event_storage_bytes(bytes).is_ok_and(|event| &event == expected)
+        parse_remote_event_storage_bytes(&bytes.to_vec().into())
+            .is_ok_and(|event| &event == expected)
     }
 }
 
@@ -95,7 +96,7 @@ mod tests {
             )?;
             Ok(Self {
                 event_id: event.id()?,
-                bytes: serialize_event_storage_yaml(&event)?,
+                bytes: serialize_event_storage_yaml(&event)?.into(),
                 event,
             })
         }
@@ -113,7 +114,7 @@ mod tests {
         assert!(!checked.matches(b"invalid event"));
         fixture.event.signature =
             Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
-        assert!(!checked.matches(&serialize_event_storage_yaml(&fixture.event)?));
+        assert!(!checked.matches(serialize_event_storage_yaml(&fixture.event)?.as_ref()));
         Ok(())
     }
 

@@ -7,7 +7,7 @@ use crate::event::{
     serialize_event_storage_yaml,
 };
 use crate::signing::SigningIdentity;
-use crate::{EventError, EventResult};
+use crate::{EventError, EventResult, EventStorageBytes};
 use nook_auth2::{AuthKeyId, IsoTimestamp, OpaqueCiphertext, SecretId, StoreId};
 
 /// Inputs required to append a new event.
@@ -22,14 +22,9 @@ pub struct AppendEventInput<'a> {
 }
 
 /// Build and sign a vault event; returns the event and its provider-storage YAML bytes.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: returns canonical signed event storage bytes"
-    )
-)]
-pub fn build_signed_event(input: AppendEventInput<'_>) -> EventResult<(VaultEvent, Vec<u8>)> {
+pub fn build_signed_event(
+    input: AppendEventInput<'_>,
+) -> EventResult<(VaultEvent, EventStorageBytes)> {
     let signing_actor_id = input.signing_identity.actor_id()?;
     if signing_actor_id != *input.actor_id {
         return Err(EventError::ActorSigningKeyMismatch {
@@ -151,8 +146,8 @@ mod tests {
             created_at: &created_at,
             operations: vec![VaultOperation::VaultCleared],
         })?;
-        assert!(!bytes.is_empty());
-        assert!(str::from_utf8(&bytes)?.starts_with("schema_version:"));
+        assert!(!bytes.as_ref().is_empty());
+        assert!(str::from_utf8(bytes.as_ref())?.starts_with("schema_version:"));
         assert_eq!(event.body.store_id, store_id);
         assert_eq!(event.body.actor_id, actor);
         assert_eq!(parse_event_storage_bytes(&bytes)?.id()?, event.id()?);

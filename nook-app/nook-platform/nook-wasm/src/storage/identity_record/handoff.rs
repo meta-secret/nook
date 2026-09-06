@@ -451,20 +451,20 @@ mod tests {
         Ok(SignedAccessEvents {
             signing_public_key,
             approval_id,
-            approval_bytes,
+            approval_bytes: approval_bytes.into(),
             replacement_id: replacement
                 .id()
                 .map_err(|error| NookError::Database(error.to_string()))?,
-            replacement_bytes,
+            replacement_bytes: replacement_bytes.into(),
             replacement_keys,
             revocation_id: revocation
                 .id()
                 .map_err(|error| NookError::Database(error.to_string()))?,
-            revocation_bytes,
+            revocation_bytes: revocation_bytes.into(),
             pending_revocation_id: pending_revocation
                 .id()
                 .map_err(|error| NookError::Database(error.to_string()))?,
-            pending_revocation_bytes,
+            pending_revocation_bytes: pending_revocation_bytes.into(),
         })
     }
 
@@ -484,7 +484,7 @@ mod tests {
                 events.revocation_bytes.clone(),
             ),
         ] {
-            local.put_event(event_id, bytes);
+            local.put_event(event_id, bytes.into());
         }
         let graph = local.load_graph(fixture.store_id.as_str())?;
 

@@ -326,8 +326,9 @@ impl NookVaultManager {
             operations,
         };
         let proposed = VaultEvent::sign(body, signing.signing_key())?;
-        let proposed_bytes = nook_core::serialize_event_storage_yaml(&proposed)
-            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        let proposed_bytes: Vec<u8> = nook_core::serialize_event_storage_yaml(&proposed)
+            .map_err(|e| NookError::Serialization(e.to_string()))?
+            .into();
         let bytes = if let Some(pending) = pending {
             let app_key = self.device_identity()?;
             let proposed_yaml = String::from_utf8(proposed_bytes)
@@ -350,13 +351,13 @@ impl NookVaultManager {
         } else {
             proposed_bytes
         };
-        let import = nook_core::parse_event_storage_bytes(&bytes)?;
+        let import = nook_core::parse_event_storage_bytes(&bytes.clone().into())?;
         let expected_store_id = StoreId::parse(&self.vault.store_id)?;
         let event_id = import.validate_envelope(&expected_store_id)?;
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
+        save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes.as_ref()).await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.vault.store_id, &self.event_log.heads).await?;
-        self.queue_event_outbox_for_current_provider(&event_id, &bytes)
+        self.queue_event_outbox_for_current_provider(&event_id, bytes.as_ref())
             .await?;
         Ok(())
     }
@@ -413,10 +414,10 @@ impl NookVaultManager {
         let event_id = genesis.id()?;
         let bytes = nook_core::serialize_event_storage_yaml(&genesis)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        save_event_bytes(&self.vault.store_id, event_id.as_str(), &bytes).await?;
+        save_event_bytes(&self.vault.store_id, event_id.as_str(), bytes.as_ref()).await?;
         self.event_log.heads = vec![event_id.as_str().to_owned()];
         save_heads(&self.vault.store_id, &self.event_log.heads).await?;
-        self.queue_event_outbox_for_current_provider(&event_id, &bytes)
+        self.queue_event_outbox_for_current_provider(&event_id, bytes.as_ref())
             .await?;
         Ok(())
     }

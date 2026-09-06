@@ -58,7 +58,8 @@ impl DriveEventStore<'_> {
     ) -> Result<Option<Vec<u8>>, NookError> {
         let mut accepted: Option<(VaultEvent, Vec<u8>)> = None;
         for bytes in candidates {
-            let Ok(event) = parse_remote_event_storage_bytes(&bytes) else {
+            let storage_bytes = bytes.clone().into();
+            let Ok(event) = parse_remote_event_storage_bytes(&storage_bytes) else {
                 continue;
             };
             let Ok(parsed_id) = event.id() else {
@@ -379,7 +380,7 @@ mod tests {
                 identity.signing_key(),
             )?;
             let event_id = event.id()?;
-            let bytes = serialize_event_storage_yaml(&event)?;
+            let bytes = serialize_event_storage_yaml(&event)?.into();
             Ok(Self(event_id, event, bytes))
         }
     }
@@ -421,7 +422,7 @@ mod tests {
     fn select_matching_rejects_same_id_divergent_envelopes() -> anyhow::Result<()> {
         let EventFixture(event_id, mut event, bytes) = EventFixture::new()?;
         event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
-        let divergent = serialize_event_storage_yaml(&event)?;
+        let divergent = serialize_event_storage_yaml(&event)?.into();
         let err = DriveEventStore::select_matching_drive_event_bytes(&event_id, [bytes, divergent])
             .err()
             .ok_or_else(|| anyhow::anyhow!("expected divergent duplicate corruption"))?;

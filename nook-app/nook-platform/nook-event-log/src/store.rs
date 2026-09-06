@@ -10,7 +10,7 @@ use crate::canonical::EventId;
 use crate::event::{VaultEvent, parse_event_storage_bytes, serialize_event_storage_yaml};
 use crate::graph::{EventGraph, EventInsertStatus};
 mod remote;
-use crate::{EventError, EventResult};
+use crate::{EventError, EventResult, EventStorageBytes};
 pub use nook_replication::RemoteEventLogClassification;
 use nook_replication::ReplicaStore;
 pub use remote::{CheckedRemoteEvent, RemoteEventBatch};
@@ -28,27 +28,15 @@ impl LocalEventStore {
         Self::default()
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "database boundary: stores immutable event representation bytes"
-        )
-    )]
-    pub fn put_event(&mut self, event_id: EventId, storage_bytes: Vec<u8>) {
-        let _ = self.replica.put_event(event_id, storage_bytes);
+    pub fn put_event(&mut self, event_id: EventId, storage_bytes: EventStorageBytes) {
+        let _ = self.replica.put_event(event_id, storage_bytes.into());
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "database boundary: returns immutable event representation bytes"
-        )
-    )]
-    pub fn get_bytes(&self, event_id: &EventId) -> Option<&[u8]> {
-        self.replica.get_bytes(event_id)
+    pub fn get_bytes(&self, event_id: &EventId) -> Option<EventStorageBytes> {
+        self.replica
+            .get_bytes(event_id)
+            .map(|bytes| bytes.to_vec().into())
     }
 
     #[must_use]
@@ -56,38 +44,29 @@ impl LocalEventStore {
         self.replica.event_ids()
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "database boundary: queues immutable event representation bytes for provider delivery"
-        )
-    )]
-    pub fn queue_outbox(&mut self, provider_id: &str, event_id: EventId, bytes: Vec<u8>) {
-        let _ = self.replica.queue_outbox(provider_id, event_id, bytes);
+    pub fn queue_outbox(&mut self, provider_id: &str, event_id: EventId, bytes: EventStorageBytes) {
+        let _ = self
+            .replica
+            .queue_outbox(provider_id, event_id, bytes.into());
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "database boundary: releases immutable event representation bytes from the provider outbox"
-        )
-    )]
-    pub fn dequeue_outbox(&mut self, provider_id: &str, event_id: &EventId) -> Option<Vec<u8>> {
-        self.replica.dequeue_outbox(provider_id, event_id)
+    pub fn dequeue_outbox(
+        &mut self,
+        provider_id: &str,
+        event_id: &EventId,
+    ) -> Option<EventStorageBytes> {
+        self.replica
+            .dequeue_outbox(provider_id, event_id)
+            .map(Into::into)
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "database boundary: snapshots immutable event representation bytes in a provider outbox"
-        )
-    )]
-    pub fn pending_outbox(&self, provider_id: &str) -> Vec<(EventId, Vec<u8>)> {
-        self.replica.pending_outbox(provider_id)
+    pub fn pending_outbox(&self, provider_id: &str) -> Vec<(EventId, EventStorageBytes)> {
+        self.replica
+            .pending_outbox(provider_id)
+            .into_iter()
+            .map(|(event_id, bytes)| (event_id, bytes.into()))
+            .collect()
     }
 
     #[must_use]
@@ -105,7 +84,7 @@ impl LocalEventStore {
                     .ok_or_else(|| EventError::MissingEvent {
                         event_id: event_id.as_str().to_owned(),
                     })?;
-            let event = parse_event_storage_bytes(bytes)?;
+            let event = parse_event_storage_bytes(&bytes.to_vec().into())?;
             let _ = graph.insert(event, store_id)?;
         }
         Ok(graph)
@@ -219,7 +198,7 @@ mod tests {
     }
 
     impl VaultEvent {
-        fn remote_record(&self) -> EventResult<(EventId, Vec<u8>)> {
+        fn remote_record(&self) -> EventResult<(EventId, EventStorageBytes)> {
             Ok((self.id()?, serialize_event_storage_yaml(self)?))
         }
     }
@@ -259,7 +238,7 @@ mod tests {
     fn outbox_queue_and_dequeue() -> EventResult<()> {
         let mut local = LocalEventStore::new();
         let id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
-        let bytes = b"event-bytes".to_vec();
+        let bytes = EventStorageBytes::from(b"event-bytes".to_vec());
         local.queue_outbox("github", id.clone(), bytes.clone());
         assert_eq!(local.pending_outbox("github").len(), 1);
         let dequeued = local
@@ -484,7 +463,7 @@ mod tests {
     #[test]
     fn classify_remote_event_log_fails_closed_on_unreadable_event() -> anyhow::Result<()> {
         let event_id = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
-        let err = RemoteEventBatch::new(&[(event_id, b"not event yaml".to_vec())])
+        let err = RemoteEventBatch::new(&[(event_id, b"not event yaml".to_vec().into())])
             .classify(Some(STORE))
             .err()
             .ok_or_else(|| anyhow::anyhow!("store test should reject invalid input"))?;
@@ -615,7 +594,7 @@ mod tests {
         let remote_id = remote.id()?;
         let remote_bytes = serialize_event_storage_yaml(&remote)?;
         let existing_id = EventId::parse("sha256u:zMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMzMw")?;
-        let existing_bytes = b"not event yaml".to_vec();
+        let existing_bytes = EventStorageBytes::from(b"not event yaml".to_vec());
 
         let mut local = LocalEventStore::new();
         local.put_event(existing_id.clone(), existing_bytes.clone());
@@ -627,10 +606,7 @@ mod tests {
 
         assert!(matches!(result, Err(EventError::ParseStoredEvent(_))));
         assert_eq!(local.event_ids(), before_event_ids);
-        assert_eq!(
-            local.get_bytes(&existing_id),
-            Some(existing_bytes.as_slice())
-        );
+        assert_eq!(local.get_bytes(&existing_id), Some(existing_bytes.clone()));
         assert_eq!(local.pending_outbox("drive"), before_outbox);
         assert!(local.get_bytes(&remote_id).is_none());
         Ok(())
@@ -687,7 +663,7 @@ mod tests {
             &device_b
                 .event_ids()
                 .iter()
-                .filter_map(|id| device_b.get_bytes(id).map(|b| (id.clone(), b.to_vec())))
+                .filter_map(|id| device_b.get_bytes(id).map(|bytes| (id.clone(), bytes)))
                 .collect::<Vec<_>>(),
             STORE,
         )?;
@@ -695,7 +671,7 @@ mod tests {
             &device_a
                 .event_ids()
                 .iter()
-                .filter_map(|id| device_a.get_bytes(id).map(|b| (id.clone(), b.to_vec())))
+                .filter_map(|id| device_a.get_bytes(id).map(|bytes| (id.clone(), bytes)))
                 .collect::<Vec<_>>(),
             STORE,
         )?;

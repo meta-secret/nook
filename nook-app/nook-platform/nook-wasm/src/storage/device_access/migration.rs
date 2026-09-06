@@ -9,9 +9,9 @@ pub(super) fn profile_belongs_to_entry(
     let passkey_belongs = profile.passkey.as_ref().is_none_or(|passkey| {
         entry
             .wrapped_app_key()
-            .credential_id_bytes()
+            .credential_id()
             .is_ok_and(|credential_id| {
-                nook_core::passkey_credential_identifier(&credential_id)
+                nook_core::passkey_credential_identifier(credential_id.as_ref())
                     == passkey.credential_fingerprint
             })
     });

@@ -536,17 +536,20 @@ mod tests {
     #[test]
     fn classifies_every_persisted_protection_shape() -> anyhow::Result<()> {
         let setup = DeviceKeyProtectionSetup::generate()?;
+        let standard_credential = crate::WebAuthnCredentialId::try_from(vec![7; 32])?;
         let standard = passkey_derived_device_identity_record(
-            &[7; 32],
+            &standard_credential,
             setup.user_handle(),
             setup.prf_input(),
         )?;
         let identity = DeviceIdentity::generate()?;
+        let wrapped_credential = crate::WebAuthnCredentialId::try_from(vec![8; 32])?;
+        let wrapped_output = crate::WebAuthnPrfOutput::try_from(vec![9; 32])?;
         let anti_hacker = passkey_wrapped_device_identity_record(
-            &[8; 32],
+            &wrapped_credential,
             setup.user_handle(),
             setup.prf_input(),
-            &[9; 32],
+            &wrapped_output,
             &identity.secret_string(),
         )?;
         assert_eq!(

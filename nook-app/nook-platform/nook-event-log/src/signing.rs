@@ -1,7 +1,7 @@
 //! Ed25519 signing identity for vault events (separate from X25519 encryption keys).
 
 use crate::canonical::{self, format_ed25519_signature};
-use crate::{EventError, EventResult};
+use crate::{CanonicalEventBodyBytes, EventError, EventResult};
 use ed25519_dalek::{Signer, SigningKey, VerifyingKey};
 use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, SigningSeedHex, format_auth_key_id};
 use sha2::{Digest, Sha256};
@@ -79,26 +79,12 @@ impl SigningIdentity {
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: signs canonical event-body bytes with the device identity"
-        )
-    )]
-    pub fn sign_bytes(&self, body_bytes: &[u8]) -> String {
-        format_ed25519_signature(&self.signing_key.sign(body_bytes))
+    pub fn sign_bytes(&self, body_bytes: &CanonicalEventBodyBytes) -> String {
+        format_ed25519_signature(&self.signing_key.sign(body_bytes.as_ref()))
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: verifies canonical event-body bytes with a device public key"
-        )
-    )]
     pub fn verify_bytes(
-        body_bytes: &[u8],
+        body_bytes: &CanonicalEventBodyBytes,
         signature: &str,
         verifying_key: &VerifyingKey,
     ) -> EventResult<()> {
@@ -115,9 +101,9 @@ mod tests {
         let (identity, seed) = SigningIdentity::generate()?;
         let restored = SigningIdentity::from_seed_hex_stored(seed.as_str())?;
         assert_eq!(identity.actor_id()?, restored.actor_id()?);
-        let body = b"event-body";
-        let sig = identity.sign_bytes(body);
-        SigningIdentity::verify_bytes(body, &sig, &restored.verifying_key())?;
+        let body = b"event-body".to_vec().into();
+        let sig = identity.sign_bytes(&body);
+        SigningIdentity::verify_bytes(&body, &sig, &restored.verifying_key())?;
         Ok(())
     }
 }

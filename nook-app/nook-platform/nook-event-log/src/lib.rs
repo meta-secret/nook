@@ -22,6 +22,7 @@ mod canonical;
 mod epoch;
 mod errors;
 mod event;
+mod event_bytes;
 mod fingerprint;
 mod graph;
 mod projection;
@@ -49,6 +50,7 @@ pub use event::{
     VaultOperation, build_genesis_import_event, parse_event_storage_bytes,
     parse_remote_event_storage_bytes, serialize_event_storage_yaml,
 };
+pub use event_bytes::{CanonicalEventBodyBytes, EventStorageBytes};
 pub use fingerprint::SecretFingerprint;
 pub use graph::{EventGraph, EventInsertStatus, EventPendingReason};
 pub use nook_replication::CausalGraphEventCount as EventCount;

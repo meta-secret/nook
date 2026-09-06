@@ -410,7 +410,7 @@ impl NookOtpauthPreview {
                 TotpDigits::Seven => 7,
                 TotpDigits::Eight => 8,
             },
-            period: u32::try_from(preview.period.serialized_value()).unwrap_or(u32::MAX),
+            period: u32::try_from(u64::from(preview.period)).unwrap_or(u32::MAX),
         }
     }
 

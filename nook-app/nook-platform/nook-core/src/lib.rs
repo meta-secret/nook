@@ -1,3 +1,8 @@
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_raw_numeric_api_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 #![allow(
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
@@ -80,7 +85,8 @@ pub use database::Database;
 pub use device_key_protection::{
     DeviceKeyProtectionSetup, DeviceKeyProtectionVersion, PasskeyAssertionRequest,
     PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyRecoveryRequest,
-    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WrappedDeviceIdentity,
+    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WebAuthnCredentialId,
+    WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
     derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
     finish_passkey_device_identity, finish_passkey_device_identity_for_mode,
     finish_passkey_wrapped_device_identity, parse_wrapped_device_identity,
@@ -273,20 +279,20 @@ pub use multi_device::{
 };
 
 pub use nook_event_log::{
-    AppendEventInput, CheckedRemoteEvent, Ed25519Signature, EncryptedSecretPayload,
-    EpochMetadataState, EpochPasswordState, EpochRecord, EpochRotationReason, EpochTransition,
-    EventCount, EventGraph, EventId, EventInsertStatus, EventPendingReason, GenesisImportPayload,
-    KeyEpoch, LocalEventStore, ObservedHeads, ProjectedSecret, ProjectedSecretLifecycle,
-    ProjectedSecretOrigin, ProjectionEpoch, RemoteEventBatch, RemoteEventLogClassification,
-    RemoteEventWrites, SecretFingerprint, SecretReplacementConflict, SecurityConflict,
-    SentinelShareIssuedPayload, SigningIdentity, VaultEvent, VaultEventBody,
-    VaultEventSchemaVersion, VaultOperation, VaultProjection,
-    assert_projection_permutation_invariant, build_genesis_import_event, build_signed_event,
-    canonical_json_bytes, canonicalize_json, concurrent_epoch_rotations_conflict,
-    current_epoch_checkpoint, encrypted_secret_from_armored, event_id_from_body_bytes,
-    format_ed25519_signature, operation_starts_epoch, parents_from_heads, parse_ed25519_signature,
-    parse_event_storage_bytes, parse_remote_event_storage_bytes, project_vault,
-    serialize_event_storage_yaml, sha256_hex, sign_body, verify_body_signature,
+    AppendEventInput, CanonicalEventBodyBytes, CheckedRemoteEvent, Ed25519Signature,
+    EncryptedSecretPayload, EpochMetadataState, EpochPasswordState, EpochRecord,
+    EpochRotationReason, EpochTransition, EventCount, EventGraph, EventId, EventInsertStatus,
+    EventPendingReason, EventStorageBytes, GenesisImportPayload, KeyEpoch, LocalEventStore,
+    ObservedHeads, ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin,
+    ProjectionEpoch, RemoteEventBatch, RemoteEventLogClassification, RemoteEventWrites,
+    SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
+    SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
+    VaultProjection, assert_projection_permutation_invariant, build_genesis_import_event,
+    build_signed_event, canonical_json_bytes, canonicalize_json,
+    concurrent_epoch_rotations_conflict, current_epoch_checkpoint, encrypted_secret_from_armored,
+    event_id_from_body_bytes, format_ed25519_signature, operation_starts_epoch, parents_from_heads,
+    parse_ed25519_signature, parse_event_storage_bytes, parse_remote_event_storage_bytes,
+    project_vault, serialize_event_storage_yaml, sign_body, verify_body_signature,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
@@ -392,7 +398,7 @@ pub use vault_epoch_crypto::{
     rewrap_vault_meta_for_epoch, rewrapped_vault_meta_records_for_epoch,
     rotate_vault_keys_with_secrets,
 };
-pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput};
+pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput, sha256_hex};
 pub use vault_format::{
     VaultFormat, VaultName, VaultNameRef, VaultStoreIdentity, VaultStoreIdentityRef,
     VaultVersionWrite, current_vault_schema_version, default_vault_name_for_store_id,

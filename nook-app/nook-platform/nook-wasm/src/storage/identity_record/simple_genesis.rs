@@ -464,7 +464,7 @@ pub(crate) fn resume_staged_simple_genesis_signing_seed(
 }
 
 fn validate_genesis_signing_seed(event_yaml: &str, signing_seed: &str) -> Result<(), NookError> {
-    let event = nook_core::parse_event_storage_bytes(event_yaml.as_bytes())?;
+    let event = nook_core::parse_event_storage_bytes(&event_yaml.as_bytes().to_vec().into())?;
     let signing = SigningIdentity::from_seed_hex_stored(signing_seed)?;
     if event.body.actor_signing_public_key != signing.public_key() {
         return Err(NookError::Database(
@@ -653,7 +653,8 @@ mod tests {
             },
             event_signing.signing_key(),
         )?;
-        let event_yaml = String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?)?;
+        let event_yaml =
+            String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?.into())?;
         let mut pending = PendingSimpleGenesis {
             store_id,
             identity_id: IdentityId::generate()?,

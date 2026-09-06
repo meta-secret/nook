@@ -527,12 +527,14 @@ mod tests {
     -> Result<(), NookError> {
         let _ = Rexie::delete("nook_db").await;
         let setup = DeviceKeyProtectionSetup::generate()?;
+        let output = nook_core::WebAuthnPrfOutput::try_from(vec![21u8; 32])?;
         let secret =
-            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])?;
+            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &output)?;
         let identity = DeviceIdentity::from_secret_str(&secret)?;
         let credential_id = [7u8; 32];
+        let typed_credential = nook_core::WebAuthnCredentialId::try_from(credential_id.to_vec())?;
         let wrapped = nook_core::passkey_derived_device_identity_record(
-            &credential_id,
+            &typed_credential,
             setup.user_handle(),
             setup.prf_input(),
         )?;
@@ -564,9 +566,11 @@ mod tests {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let identity = DeviceIdentity::generate()?;
         let current_credential = [8u8; 32];
+        let typed_credential =
+            nook_core::WebAuthnCredentialId::try_from(current_credential.to_vec())?;
         let current_fingerprint = nook_core::passkey_credential_identifier(&current_credential);
         let current_wrapped = nook_core::passkey_derived_device_identity_record(
-            &current_credential,
+            &typed_credential,
             setup.user_handle(),
             setup.prf_input(),
         )?;
@@ -606,11 +610,14 @@ mod tests {
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let first_setup = DeviceKeyProtectionSetup::generate()?;
         let first_credential = [31u8; 32];
+        let typed_credential =
+            nook_core::WebAuthnCredentialId::try_from(first_credential.to_vec())?;
+        let output = nook_core::WebAuthnPrfOutput::try_from(vec![41u8; 32])?;
         let first_wrapped = nook_core::passkey_wrapped_device_identity_record(
-            &first_credential,
+            &typed_credential,
             first_setup.user_handle(),
             first_setup.prf_input(),
-            &[41u8; 32],
+            &output,
             &first_key.secret_string(),
         )?;
         identity_record::save_new_protected_local_identity(

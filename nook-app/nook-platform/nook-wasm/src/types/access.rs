@@ -11,8 +11,8 @@ pub struct NookPasskeySetup {
 impl NookPasskeySetup {
     pub(crate) fn from_core(setup: &nook_core::DeviceKeyProtectionSetup) -> Self {
         Self {
-            user_handle: setup.user_handle().to_vec(),
-            prf_input: setup.prf_input().to_vec(),
+            user_handle: setup.user_handle().as_ref().to_vec(),
+            prf_input: setup.prf_input().as_ref().to_vec(),
         }
     }
 }
@@ -91,8 +91,8 @@ impl NookPasskeyUnlockOptions {
     ) -> Result<Self, nook_core::DeviceKeyProtectionError> {
         let request = nook_core::passkey_assertion_request(record)?;
         Ok(Self {
-            credential_id: request.credential_id().to_vec(),
-            prf_input: request.prf_input().to_vec(),
+            credential_id: request.credential_id().as_ref().to_vec(),
+            prf_input: request.prf_input().as_ref().to_vec(),
         })
     }
 }

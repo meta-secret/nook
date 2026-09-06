@@ -221,11 +221,13 @@ mod tests {
         );
 
         let setup = DeviceKeyProtectionSetup::generate()?;
+        let output = nook_core::WebAuthnPrfOutput::try_from(vec![21u8; 32])?;
         let secret =
-            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &[21u8; 32])?;
+            nook_core::derive_device_identity_from_passkey_prf(setup.user_handle(), &output)?;
         let identity = DeviceIdentity::from_secret_str(&secret)?;
+        let credential = nook_core::WebAuthnCredentialId::try_from(vec![7u8; 32])?;
         let wrapped = nook_core::passkey_derived_device_identity_record(
-            &[7u8; 32],
+            &credential,
             setup.user_handle(),
             setup.prf_input(),
         )?;
@@ -240,7 +242,7 @@ mod tests {
             device_identity_device_mode().await?,
             DeviceProtectionDeviceModeState::Standard
         );
-        assert_eq!(reloaded.user_handle_bytes()?, setup.user_handle());
+        assert_eq!(reloaded.user_handle()?, *setup.user_handle());
         Ok(())
     }
 

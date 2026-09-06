@@ -540,7 +540,7 @@ mod wasm_tests {
                 device_a
                     .store
                     .get_bytes(&id)
-                    .map(|bytes| (id, bytes.to_vec()))
+                    .map(|bytes| (id, bytes.into()))
             })
             .collect();
         device_b.union_remote(&genesis_events)?;
@@ -573,7 +573,7 @@ mod wasm_tests {
                 device_a
                     .store
                     .get_bytes(&id)
-                    .map(|bytes| (id, bytes.to_vec()))
+                    .map(|bytes| (id, bytes.into()))
             })
             .collect();
         let b_events: Vec<_> = device_b
@@ -584,7 +584,7 @@ mod wasm_tests {
                 device_b
                     .store
                     .get_bytes(&id)
-                    .map(|bytes| (id, bytes.to_vec()))
+                    .map(|bytes| (id, bytes.into()))
             })
             .collect();
         device_a.union_remote(&b_events)?;
