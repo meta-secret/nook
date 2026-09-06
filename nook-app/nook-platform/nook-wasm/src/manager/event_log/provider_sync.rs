@@ -1,3 +1,9 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::storage::event_db;
 use nook_core::{
     EventStorageBytes, MultiDeviceError, ProjectionEpoch, StorageMode, VaultCrypto, VaultType,
@@ -12,8 +18,50 @@ use super::{
     remove_outbox_entry, save_key_epoch, write_local_folder_event_files,
 };
 
-fn outbox_event_is_current(local_ids: Option<&BTreeSet<EventId>>, event_id: &EventId) -> bool {
-    local_ids.is_none_or(|ids| ids.contains(event_id))
+struct PendingOutboxEvent<'a> {
+    provider_id: &'a str,
+    event_id: EventId,
+    bytes: EventStorageBytes,
+    local_ids: Option<&'a BTreeSet<EventId>>,
+}
+
+struct PublishedOutboxEvent<'a> {
+    provider_id: &'a str,
+    event_id: EventId,
+}
+
+impl PendingOutboxEvent<'_> {
+    fn is_current(&self) -> bool {
+        self.local_ids
+            .is_none_or(|ids| ids.contains(&self.event_id))
+    }
+
+    async fn discard(self) -> Result<(), NookError> {
+        remove_outbox_entry(self.provider_id, self.event_id.as_str()).await
+    }
+}
+
+impl<'a> PendingOutboxEvent<'a> {
+    async fn publish(
+        self,
+        manager: &NookVaultManager,
+    ) -> Result<PublishedOutboxEvent<'a>, NookError> {
+        // Always put-if-absent: a listed remote name may be unreadable junk.
+        manager
+            .put_current_provider_event_if_absent(&self.event_id, self.bytes.as_ref())
+            .await?;
+        Ok(PublishedOutboxEvent {
+            provider_id: self.provider_id,
+            event_id: self.event_id,
+        })
+    }
+}
+
+impl PublishedOutboxEvent<'_> {
+    async fn acknowledge(self) -> Result<EventId, NookError> {
+        remove_outbox_entry(self.provider_id, self.event_id.as_str()).await?;
+        Ok(self.event_id)
+    }
 }
 
 impl NookVaultManager {
@@ -252,15 +300,17 @@ impl NookVaultManager {
             .collect::<Result<Vec<_>, NookError>>()?;
         nook_core::order_remote_events_for_visibility(&mut pending)?;
         for (event_id, bytes) in pending {
-            if !outbox_event_is_current(local_ids.as_ref(), &event_id) {
-                remove_outbox_entry(&provider_id, event_id.as_str()).await?;
+            let pending = PendingOutboxEvent {
+                provider_id: &provider_id,
+                event_id,
+                bytes,
+                local_ids: local_ids.as_ref(),
+            };
+            if !pending.is_current() {
+                pending.discard().await?;
                 continue;
             }
-            // Always put-if-absent: a listed remote name may be unreadable junk.
-            // Only drop the outbox row after a successful idempotent publish.
-            self.put_current_provider_event_if_absent(&event_id, bytes.as_ref())
-                .await?;
-            remove_outbox_entry(&provider_id, event_id.as_str()).await?;
+            let event_id = pending.publish(self).await?.acknowledge().await?;
             remote_ids.insert(event_id);
         }
 
@@ -546,6 +596,73 @@ mod tests {
     use super::*;
     use nook_core::{DeviceIdentity, VaultMetaState};
     use wasm_bindgen::JsError;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    struct OutboxFixture {
+        provider_id: String,
+        event_id: EventId,
+        bytes: Vec<u8>,
+    }
+
+    impl OutboxFixture {
+        async fn queue(&self) -> Result<PendingOutboxEvent<'_>, NookError> {
+            queue_outbox_entry(&self.provider_id, self.event_id.as_str(), &self.bytes).await?;
+            append_outbox_index(&self.provider_id, self.event_id.as_str()).await?;
+            Ok(PendingOutboxEvent {
+                provider_id: &self.provider_id,
+                event_id: self.event_id.clone(),
+                bytes: self.bytes.clone().into(),
+                local_ids: None,
+            })
+        }
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn outbox_publication_failure_and_durable_completion() -> anyhow::Result<()> {
+        let fixture = OutboxFixture {
+            provider_id: format!("outbox-lifecycle-{}", nook_core::generate_store_id()?),
+            event_id: EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?,
+            bytes: b"invalid event fixture".to_vec(),
+        };
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::Github;
+        match fixture.queue().await?.publish(&manager).await {
+            Err(NookError::Serialization(message)) => {
+                assert!(message.starts_with("GitHub event parse:"));
+            }
+            Err(_) => anyhow::bail!("unexpected publication failure"),
+            Ok(_) => anyhow::bail!("malformed event was published"),
+        }
+        assert_eq!(
+            load_outbox(&fixture.provider_id).await?,
+            vec![(fixture.event_id.to_string(), fixture.bytes.clone())]
+        );
+        let excluded = BTreeSet::new();
+        let mut pending = fixture.queue().await?;
+        pending.local_ids = Some(&excluded);
+        assert!(!pending.is_current());
+        pending.discard().await?;
+        assert!(load_outbox(&fixture.provider_id).await?.is_empty());
+
+        // Dropping an unpolled publication leaves the durable row intact.
+        drop(fixture.queue().await?.publish(&manager));
+        assert_eq!(
+            load_outbox(&fixture.provider_id).await?,
+            vec![(fixture.event_id.to_string(), fixture.bytes.clone())]
+        );
+        // Exercise durable acknowledgement independently of remote publication.
+        let published = PublishedOutboxEvent {
+            provider_id: &fixture.provider_id,
+            event_id: fixture.event_id.clone(),
+        };
+        assert_eq!(published.acknowledge().await?, fixture.event_id);
+        assert!(load_outbox(&fixture.provider_id).await?.is_empty());
+        Ok(())
+    }
 
     #[test]
     fn projected_epoch_keys_use_the_current_auth_envelopes() -> anyhow::Result<()> {
@@ -565,8 +682,20 @@ mod tests {
         let retained = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let quarantined = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let local_ids = BTreeSet::from([retained.clone()]);
-        assert!(outbox_event_is_current(Some(&local_ids), &retained));
-        assert!(!outbox_event_is_current(Some(&local_ids), &quarantined));
+        for (index, event_id, expected) in [
+            (None, retained.clone(), true),
+            (Some(&local_ids), retained, true),
+            (Some(&local_ids), quarantined.clone(), false),
+            (Some(&BTreeSet::new()), quarantined, false),
+        ] {
+            let pending = PendingOutboxEvent {
+                provider_id: "index-fixture",
+                event_id,
+                bytes: Vec::new().into(),
+                local_ids: index,
+            };
+            assert_eq!(pending.is_current(), expected);
+        }
         Ok(())
     }
 

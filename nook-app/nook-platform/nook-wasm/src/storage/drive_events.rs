@@ -1,34 +1,49 @@
 //! Google Drive immutable event file adapter.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use reqwest::Client;
 use std::str;
 
+use super::checked_event_write::CheckedEventWrite;
 use crate::NookError;
-use crate::storage::{event_storage_matches_expected, parse_expected_event_storage_bytes};
 use nook_core::{DriveEventParent, EventId, VaultEvent, parse_remote_event_storage_bytes};
+
+pub(crate) struct DriveEventStore<'a> {
+    pub(crate) token: &'a str,
+    pub(crate) parent: &'a DriveEventParent,
+}
 
 const DRIVE_EVENT_MISSING: &str = "Drive event file missing.";
 const SHA256_BASE64URL_LEN: usize = 43;
 
-fn is_sha256_base64url_digest(digest: &str) -> bool {
-    digest.len() == SHA256_BASE64URL_LEN
-        && digest
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+impl DriveEventStore<'_> {
+    fn is_sha256_base64url_digest(digest: &str) -> bool {
+        digest.len() == SHA256_BASE64URL_LEN
+            && digest
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
+    }
 }
 
 /// Accept Drive list rows only when the filename digest matches Nook's
 /// `appProperties.event_id`. Name-only `{digest}.yaml` junk is ignored so assess
 /// / sync do not download leftover non-event files.
-fn drive_listed_event_id(name: &str, app_event_id: Option<&str>) -> Option<String> {
-    let digest = name.strip_suffix(".yaml")?;
-    if !is_sha256_base64url_digest(digest) {
-        return None;
-    }
-    let expected = format!("sha256u:{digest}");
-    match app_event_id {
-        Some(id) if id == expected => Some(expected),
-        Some(_) | None => None,
+impl DriveEventStore<'_> {
+    fn drive_listed_event_id(name: &str, app_event_id: Option<&str>) -> Option<String> {
+        let digest = name.strip_suffix(".yaml")?;
+        if !Self::is_sha256_base64url_digest(digest) {
+            return None;
+        }
+        let expected = format!("sha256u:{digest}");
+        match app_event_id {
+            Some(id) if id == expected => Some(expected),
+            Some(_) | None => None,
+        }
     }
 }
 
@@ -36,92 +51,186 @@ fn drive_listed_event_id(name: &str, app_event_id: Option<&str>) -> Option<Strin
 ///
 /// Unreadable or wrong-id candidates are skipped so a junk/empty duplicate cannot
 /// block a valid event file. Divergent valid events for one id are corruption.
-fn select_matching_drive_event_bytes(
-    event_id: &EventId,
-    candidates: impl IntoIterator<Item = Vec<u8>>,
-) -> Result<Option<Vec<u8>>, NookError> {
-    let mut accepted: Option<(VaultEvent, Vec<u8>)> = None;
-    for bytes in candidates {
-        let Ok(event) = parse_remote_event_storage_bytes(&bytes.clone().into()) else {
-            continue;
-        };
-        let Ok(parsed_id) = event.id() else {
-            continue;
-        };
-        if parsed_id != *event_id {
-            continue;
-        }
-        if let Some((existing_event, _)) = &accepted {
-            if existing_event == &event {
+impl DriveEventStore<'_> {
+    fn select_matching_drive_event_bytes(
+        event_id: &EventId,
+        candidates: impl IntoIterator<Item = Vec<u8>>,
+    ) -> Result<Option<Vec<u8>>, NookError> {
+        let mut accepted: Option<(VaultEvent, Vec<u8>)> = None;
+        for bytes in candidates {
+            let storage_bytes = bytes.clone().into();
+            let Ok(event) = parse_remote_event_storage_bytes(&storage_bytes) else {
+                continue;
+            };
+            let Ok(parsed_id) = event.id() else {
+                continue;
+            };
+            if parsed_id != *event_id {
                 continue;
             }
-            return Err(NookError::Drive(
-                "Drive duplicate event files contain different events.".to_owned(),
-            ));
+            if let Some((existing_event, _)) = &accepted {
+                if existing_event == &event {
+                    continue;
+                }
+                return Err(NookError::Drive(
+                    "Drive duplicate event files contain different events.".to_owned(),
+                ));
+            }
+            accepted = Some((event, bytes));
         }
-        accepted = Some((event, bytes));
+        Ok(accepted.map(|(_, bytes)| bytes))
     }
-    Ok(accepted.map(|(_, bytes)| bytes))
-}
 
-fn parent_query_fragment(parent: &DriveEventParent) -> String {
-    match parent {
-        DriveEventParent::AppDataFolder => "'appDataFolder' in parents".to_owned(),
-        DriveEventParent::SharedFolder { folder_id } => {
-            format!("'{}' in parents", folder_id.replace('\'', "\\'"))
+    fn parent_query_fragment(parent: &DriveEventParent) -> String {
+        match parent {
+            DriveEventParent::AppDataFolder => "'appDataFolder' in parents".to_owned(),
+            DriveEventParent::SharedFolder { folder_id } => {
+                format!("'{}' in parents", folder_id.replace('\'', "\\'"))
+            }
         }
     }
-}
 
-fn list_spaces_query(parent: &DriveEventParent) -> Option<&'static str> {
-    match parent {
-        DriveEventParent::AppDataFolder => Some("appDataFolder"),
-        DriveEventParent::SharedFolder { .. } => None,
-    }
-}
-
-fn parent_id_for_create(parent: &DriveEventParent) -> &str {
-    match parent {
-        DriveEventParent::AppDataFolder => "appDataFolder",
-        DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
-    }
-}
-
-pub(crate) async fn list_drive_event_ids(
-    token: &str,
-    parent: &DriveEventParent,
-) -> Result<Vec<String>, NookError> {
-    let token = token.trim();
-    let query = format!(
-        "name contains '.yaml' and {} and trashed=false",
-        parent_query_fragment(parent)
-    );
-    let mut url = format!(
-        "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name,appProperties)&pageSize=1000",
-        urlencoding::encode(&query)
-    );
-    if let Some(spaces) = list_spaces_query(parent) {
-        url.push_str("&spaces=");
-        url.push_str(spaces);
-    }
-    let client = Client::new();
-    let mut event_ids = Vec::new();
-    let mut page_token: Option<String> = None;
-
-    loop {
-        let mut request_url = url.clone();
-        if let Some(page) = &page_token {
-            request_url.push_str("&pageToken=");
-            request_url.push_str(&urlencoding::encode(page));
+    fn list_spaces_query(parent: &DriveEventParent) -> Option<&'static str> {
+        match parent {
+            DriveEventParent::AppDataFolder => Some("appDataFolder"),
+            DriveEventParent::SharedFolder { .. } => None,
         }
+    }
+
+    fn parent_id_for_create(parent: &DriveEventParent) -> &str {
+        match parent {
+            DriveEventParent::AppDataFolder => "appDataFolder",
+            DriveEventParent::SharedFolder { folder_id } => folder_id.as_str(),
+        }
+    }
+
+    pub(crate) async fn list_drive_event_ids(&self) -> Result<Vec<String>, NookError> {
+        let token = self.token;
+        let parent = self.parent;
+        let token = token.trim();
+        let query = format!(
+            "name contains '.yaml' and {} and trashed=false",
+            Self::parent_query_fragment(parent)
+        );
+        let mut url = format!(
+            "https://www.googleapis.com/drive/v3/files?q={}&fields=nextPageToken,files(id,name,appProperties)&pageSize=1000",
+            urlencoding::encode(&query)
+        );
+        if let Some(spaces) = Self::list_spaces_query(parent) {
+            url.push_str("&spaces=");
+            url.push_str(spaces);
+        }
+        let client = Client::new();
+        let mut event_ids = Vec::new();
+        let mut page_token: Option<String> = None;
+
+        loop {
+            let mut request_url = url.clone();
+            if let Some(page) = &page_token {
+                request_url.push_str("&pageToken=");
+                request_url.push_str(&urlencoding::encode(page));
+            }
+            let response = client
+                .get(&request_url)
+                .header("Authorization", format!("Bearer {token}"))
+                .send()
+                .await?;
+            if !response.status().is_success() {
+                return Err(NookError::Drive(format!(
+                    "Drive list events failed: {}",
+                    response.status()
+                )));
+            }
+            let body: serde_json::Value = response
+                .json()
+                .await
+                .map_err(|e| NookError::Serialization(e.to_string()))?;
+            if let Some(files) = body.get("files").and_then(|v| v.as_array()) {
+                for file in files {
+                    let Some(name) = file.get("name").and_then(|v| v.as_str()) else {
+                        continue;
+                    };
+                    let app_event_id = file
+                        .get("appProperties")
+                        .and_then(|props| props.get("event_id"))
+                        .and_then(|value| value.as_str());
+                    if let Some(event_id) = Self::drive_listed_event_id(name, app_event_id) {
+                        event_ids.push(event_id);
+                    }
+                }
+            }
+            page_token = body
+                .get("nextPageToken")
+                .and_then(|v| v.as_str())
+                .map(str::to_owned);
+            if page_token.is_none() {
+                break;
+            }
+        }
+        Ok(event_ids)
+    }
+
+    pub(crate) async fn fetch_drive_event(&self, event_id: &EventId) -> Result<Vec<u8>, NookError> {
+        self.fetch_drive_event_optional(event_id)
+            .await?
+            .ok_or_else(|| NookError::Drive(DRIVE_EVENT_MISSING.to_owned()))
+    }
+
+    pub(crate) async fn fetch_drive_event_optional(
+        &self,
+        event_id: &EventId,
+    ) -> Result<Option<Vec<u8>>, NookError> {
+        let token = self.token;
+        let parent = self.parent;
+        let token = token.trim();
+        let file_ids = Self::lookup_drive_event_file_ids(
+            token,
+            parent,
+            &format!("{}.yaml", event_id.encoded_digest()),
+        )
+        .await?;
+        if file_ids.is_empty() {
+            return Ok(None);
+        }
+
+        let client = Client::new();
+        let mut candidates = Vec::with_capacity(file_ids.len());
+        for file_id in file_ids {
+            candidates.push(Self::download_drive_event_file(&client, token, &file_id).await?);
+        }
+        // Same-name junk/empty files are skipped; only content-addressed matches count.
+        // When every candidate is unreadable, treat the event as absent so put-if-absent
+        // can publish good local bytes beside the leftover name.
+        Self::select_matching_drive_event_bytes(event_id, candidates)
+    }
+
+    async fn lookup_drive_event_file_ids(
+        token: &str,
+        parent: &DriveEventParent,
+        file_name: &str,
+    ) -> Result<Vec<String>, NookError> {
+        let query = format!(
+            "name = '{}' and {} and trashed=false",
+            file_name.replace('\'', "\\'"),
+            Self::parent_query_fragment(parent)
+        );
+        let mut list_url = format!(
+            "https://www.googleapis.com/drive/v3/files?q={}&fields=files(id)",
+            urlencoding::encode(&query)
+        );
+        if let Some(spaces) = Self::list_spaces_query(parent) {
+            list_url.push_str("&spaces=");
+            list_url.push_str(spaces);
+        }
+        let client = Client::new();
         let response = client
-            .get(&request_url)
+            .get(&list_url)
             .header("Authorization", format!("Bearer {token}"))
             .send()
             .await?;
         if !response.status().is_success() {
             return Err(NookError::Drive(format!(
-                "Drive list events failed: {}",
+                "Drive lookup event failed: {}",
                 response.status()
             )));
         }
@@ -129,209 +238,120 @@ pub(crate) async fn list_drive_event_ids(
             .json()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        if let Some(files) = body.get("files").and_then(|v| v.as_array()) {
-            for file in files {
-                let Some(name) = file.get("name").and_then(|v| v.as_str()) else {
-                    continue;
-                };
-                let app_event_id = file
-                    .get("appProperties")
-                    .and_then(|props| props.get("event_id"))
-                    .and_then(|value| value.as_str());
-                if let Some(event_id) = drive_listed_event_id(name, app_event_id) {
-                    event_ids.push(event_id);
-                }
+        let Some(files) = body.get("files").and_then(|v| v.as_array()) else {
+            return Ok(Vec::new());
+        };
+        Ok(files
+            .iter()
+            .filter_map(|file| file.get("id").and_then(|v| v.as_str()).map(str::to_owned))
+            .collect())
+    }
+
+    async fn download_drive_event_file(
+        client: &reqwest::Client,
+        token: &str,
+        file_id: &str,
+    ) -> Result<Vec<u8>, NookError> {
+        let download_url = format!("https://www.googleapis.com/drive/v3/files/{file_id}?alt=media");
+        let download = client
+            .get(&download_url)
+            .header("Authorization", format!("Bearer {token}"))
+            .send()
+            .await?;
+        if !download.status().is_success() {
+            return Err(NookError::Drive(format!(
+                "Drive download event failed: {}",
+                download.status()
+            )));
+        }
+        let bytes = download
+            .bytes()
+            .await
+            .map_err(|e| NookError::Drive(format!("Drive read event body: {e}")))?;
+        Ok(bytes.to_vec())
+    }
+
+    pub(crate) async fn put_drive_event_if_absent(
+        &self,
+        event_id: &EventId,
+        bytes: &[u8],
+    ) -> Result<String, NookError> {
+        let checked = CheckedEventWrite::parse(bytes, event_id, "Drive")?;
+        self.put_checked(checked).await
+    }
+
+    async fn put_checked(&self, checked: CheckedEventWrite<'_>) -> Result<String, NookError> {
+        let token = self.token.trim();
+        let parent = self.parent;
+        let event_id = checked.event_id();
+        let bytes = checked.bytes();
+        match self.fetch_drive_event(event_id).await {
+            Ok(existing) if checked.matches(&existing) => {
+                return Ok(String::new());
             }
+            Ok(_) => {
+                return Err(NookError::Drive(
+                    "Drive event path already exists with different bytes.".to_owned(),
+                ));
+            }
+            Err(NookError::Drive(message)) if message == DRIVE_EVENT_MISSING => {}
+            Err(err) => return Err(err),
         }
-        page_token = body
-            .get("nextPageToken")
+        let file_name = format!("{}.yaml", event_id.encoded_digest());
+        let metadata = serde_json::json!({
+            "name": file_name,
+            "parents": [Self::parent_id_for_create(parent)],
+            "appProperties": {
+                "event_id": event_id.as_str(),
+            }
+        });
+        let content = str::from_utf8(bytes)
+            .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
+
+        let boundary = "nook_event_boundary";
+        let mut body = String::new();
+        body.push_str("--");
+        body.push_str(boundary);
+        body.push_str("\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n");
+        body.push_str(&metadata.to_string());
+        body.push_str("\r\n--");
+        body.push_str(boundary);
+        body.push_str("\r\nContent-Type: application/x-yaml\r\n\r\n");
+        body.push_str(content);
+        body.push_str("\r\n--");
+        body.push_str(boundary);
+        body.push_str("--");
+
+        let client = Client::new();
+        let response = client
+            .post("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart")
+            .header("Authorization", format!("Bearer {token}"))
+            .header(
+                "Content-Type",
+                format!("multipart/related; boundary={boundary}"),
+            )
+            .body(body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            return Err(NookError::Drive(format!(
+                "Drive event create failed: {}",
+                response.status()
+            )));
+        }
+        let parsed: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| NookError::Serialization(e.to_string()))?;
+        parsed
+            .get("id")
             .and_then(|v| v.as_str())
-            .map(str::to_owned);
-        if page_token.is_none() {
-            break;
-        }
+            .map(str::to_owned)
+            .ok_or_else(|| {
+                NookError::Drive("Drive event create response missing file id.".to_owned())
+            })
     }
-    Ok(event_ids)
-}
-
-pub(crate) async fn fetch_drive_event(
-    token: &str,
-    parent: &DriveEventParent,
-    event_id: &EventId,
-) -> Result<Vec<u8>, NookError> {
-    fetch_drive_event_optional(token, parent, event_id)
-        .await?
-        .ok_or_else(|| NookError::Drive(DRIVE_EVENT_MISSING.to_owned()))
-}
-
-pub(crate) async fn fetch_drive_event_optional(
-    token: &str,
-    parent: &DriveEventParent,
-    event_id: &EventId,
-) -> Result<Option<Vec<u8>>, NookError> {
-    let token = token.trim();
-    let file_ids = lookup_drive_event_file_ids(
-        token,
-        parent,
-        &format!("{}.yaml", event_id.encoded_digest()),
-    )
-    .await?;
-    if file_ids.is_empty() {
-        return Ok(None);
-    }
-
-    let client = Client::new();
-    let mut candidates = Vec::with_capacity(file_ids.len());
-    for file_id in file_ids {
-        candidates.push(download_drive_event_file(&client, token, &file_id).await?);
-    }
-    // Same-name junk/empty files are skipped; only content-addressed matches count.
-    // When every candidate is unreadable, treat the event as absent so put-if-absent
-    // can publish good local bytes beside the leftover name.
-    select_matching_drive_event_bytes(event_id, candidates)
-}
-
-async fn lookup_drive_event_file_ids(
-    token: &str,
-    parent: &DriveEventParent,
-    file_name: &str,
-) -> Result<Vec<String>, NookError> {
-    let query = format!(
-        "name = '{}' and {} and trashed=false",
-        file_name.replace('\'', "\\'"),
-        parent_query_fragment(parent)
-    );
-    let mut list_url = format!(
-        "https://www.googleapis.com/drive/v3/files?q={}&fields=files(id)",
-        urlencoding::encode(&query)
-    );
-    if let Some(spaces) = list_spaces_query(parent) {
-        list_url.push_str("&spaces=");
-        list_url.push_str(spaces);
-    }
-    let client = Client::new();
-    let response = client
-        .get(&list_url)
-        .header("Authorization", format!("Bearer {token}"))
-        .send()
-        .await?;
-    if !response.status().is_success() {
-        return Err(NookError::Drive(format!(
-            "Drive lookup event failed: {}",
-            response.status()
-        )));
-    }
-    let body: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| NookError::Serialization(e.to_string()))?;
-    let Some(files) = body.get("files").and_then(|v| v.as_array()) else {
-        return Ok(Vec::new());
-    };
-    Ok(files
-        .iter()
-        .filter_map(|file| file.get("id").and_then(|v| v.as_str()).map(str::to_owned))
-        .collect())
-}
-
-async fn download_drive_event_file(
-    client: &reqwest::Client,
-    token: &str,
-    file_id: &str,
-) -> Result<Vec<u8>, NookError> {
-    let download_url = format!("https://www.googleapis.com/drive/v3/files/{file_id}?alt=media");
-    let download = client
-        .get(&download_url)
-        .header("Authorization", format!("Bearer {token}"))
-        .send()
-        .await?;
-    if !download.status().is_success() {
-        return Err(NookError::Drive(format!(
-            "Drive download event failed: {}",
-            download.status()
-        )));
-    }
-    let bytes = download
-        .bytes()
-        .await
-        .map_err(|e| NookError::Drive(format!("Drive read event body: {e}")))?;
-    Ok(bytes.to_vec())
-}
-
-pub(crate) async fn put_drive_event_if_absent(
-    token: &str,
-    parent: &DriveEventParent,
-    event_id: &EventId,
-    bytes: &[u8],
-) -> Result<String, NookError> {
-    let token = token.trim();
-    let expected_event = parse_expected_event_storage_bytes(bytes, event_id, "Drive")?;
-    match fetch_drive_event(token, parent, event_id).await {
-        Ok(existing)
-            if existing == bytes || event_storage_matches_expected(&existing, &expected_event) =>
-        {
-            return Ok(String::new());
-        }
-        Ok(_) => {
-            return Err(NookError::Drive(
-                "Drive event path already exists with different bytes.".to_owned(),
-            ));
-        }
-        Err(NookError::Drive(message)) if message == DRIVE_EVENT_MISSING => {}
-        Err(err) => return Err(err),
-    }
-    let file_name = format!("{}.yaml", event_id.encoded_digest());
-    let metadata = serde_json::json!({
-        "name": file_name,
-        "parents": [parent_id_for_create(parent)],
-        "appProperties": {
-            "event_id": event_id.as_str(),
-        }
-    });
-    let content = str::from_utf8(bytes)
-        .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
-
-    let boundary = "nook_event_boundary";
-    let mut body = String::new();
-    body.push_str("--");
-    body.push_str(boundary);
-    body.push_str("\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n");
-    body.push_str(&metadata.to_string());
-    body.push_str("\r\n--");
-    body.push_str(boundary);
-    body.push_str("\r\nContent-Type: application/x-yaml\r\n\r\n");
-    body.push_str(content);
-    body.push_str("\r\n--");
-    body.push_str(boundary);
-    body.push_str("--");
-
-    let client = Client::new();
-    let response = client
-        .post("https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart")
-        .header("Authorization", format!("Bearer {token}"))
-        .header(
-            "Content-Type",
-            format!("multipart/related; boundary={boundary}"),
-        )
-        .body(body)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        return Err(NookError::Drive(format!(
-            "Drive event create failed: {}",
-            response.status()
-        )));
-    }
-    let parsed: serde_json::Value = response
-        .json()
-        .await
-        .map_err(|e| NookError::Serialization(e.to_string()))?;
-    parsed
-        .get("id")
-        .and_then(|v| v.as_str())
-        .map(str::to_owned)
-        .ok_or_else(|| NookError::Drive("Drive event create response missing file id.".to_owned()))
 }
 
 #[cfg(test)]
@@ -342,29 +362,33 @@ mod tests {
         StoreId, VaultEvent, build_genesis_import_event, serialize_event_storage_yaml,
     };
 
-    fn sample_genesis_event() -> anyhow::Result<(EventId, VaultEvent, Vec<u8>)> {
-        let (identity, _seed) = SigningIdentity::generate()?;
-        let event = build_genesis_import_event(
-            &StoreId::parse("store_testtoken11")?,
-            &identity.actor_id()?,
-            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
-            GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
-                secrets: vec![],
-                password_entries: vec![],
-            },
-            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
-            identity.signing_key(),
-        )?;
-        let event_id = event.id()?;
-        let bytes: Vec<u8> = serialize_event_storage_yaml(&event)?.into();
-        Ok((event_id, event, bytes))
+    struct EventFixture(EventId, VaultEvent, Vec<u8>);
+
+    impl EventFixture {
+        fn new() -> anyhow::Result<Self> {
+            let (identity, _seed) = SigningIdentity::generate()?;
+            let event = build_genesis_import_event(
+                &StoreId::parse("store_testtoken11")?,
+                &identity.actor_id()?,
+                &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+                GenesisImportPayload {
+                    source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                    secrets: vec![],
+                    password_entries: vec![],
+                },
+                &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+                identity.signing_key(),
+            )?;
+            let event_id = event.id()?;
+            let bytes = serialize_event_storage_yaml(&event)?.into();
+            Ok(Self(event_id, event, bytes))
+        }
     }
 
     #[test]
     fn select_matching_skips_unreadable_duplicate_and_keeps_valid_event() -> anyhow::Result<()> {
-        let (event_id, _, bytes) = sample_genesis_event()?;
-        let selected = select_matching_drive_event_bytes(
+        let EventFixture(event_id, _, bytes) = EventFixture::new()?;
+        let selected = DriveEventStore::select_matching_drive_event_bytes(
             &event_id,
             [b"not yaml".to_vec(), Vec::new(), bytes.clone()],
         )?;
@@ -374,8 +398,8 @@ mod tests {
 
     #[test]
     fn select_matching_treats_all_unreadable_candidates_as_absent() -> anyhow::Result<()> {
-        let (event_id, _, _) = sample_genesis_event()?;
-        let selected = select_matching_drive_event_bytes(
+        let EventFixture(event_id, _, _) = EventFixture::new()?;
+        let selected = DriveEventStore::select_matching_drive_event_bytes(
             &event_id,
             [b"not yaml".to_vec(), b"{bad:".to_vec()],
         )?;
@@ -385,19 +409,21 @@ mod tests {
 
     #[test]
     fn select_matching_accepts_identical_duplicates() -> anyhow::Result<()> {
-        let (event_id, _, bytes) = sample_genesis_event()?;
-        let selected =
-            select_matching_drive_event_bytes(&event_id, [bytes.clone(), bytes.clone()])?;
+        let EventFixture(event_id, _, bytes) = EventFixture::new()?;
+        let selected = DriveEventStore::select_matching_drive_event_bytes(
+            &event_id,
+            [bytes.clone(), bytes.clone()],
+        )?;
         assert_eq!(selected, Some(bytes));
         Ok(())
     }
 
     #[test]
     fn select_matching_rejects_same_id_divergent_envelopes() -> anyhow::Result<()> {
-        let (event_id, mut event, bytes) = sample_genesis_event()?;
+        let EventFixture(event_id, mut event, bytes) = EventFixture::new()?;
         event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
-        let divergent: Vec<u8> = serialize_event_storage_yaml(&event)?.into();
-        let err = select_matching_drive_event_bytes(&event_id, [bytes, divergent])
+        let divergent = serialize_event_storage_yaml(&event)?.into();
+        let err = DriveEventStore::select_matching_drive_event_bytes(&event_id, [bytes, divergent])
             .err()
             .ok_or_else(|| anyhow::anyhow!("expected divergent duplicate corruption"))?;
         assert!(
@@ -408,24 +434,53 @@ mod tests {
     }
 
     #[test]
+    fn private_and_shared_queries_keep_their_original_scope() {
+        let private = DriveEventParent::AppDataFolder;
+        let shared = DriveEventParent::SharedFolder {
+            folder_id: "owner's-folder".to_owned(),
+        };
+        assert_eq!(
+            DriveEventStore::parent_query_fragment(&private),
+            "'appDataFolder' in parents"
+        );
+        assert_eq!(
+            DriveEventStore::list_spaces_query(&private),
+            Some("appDataFolder")
+        );
+        assert_eq!(
+            DriveEventStore::parent_id_for_create(&private),
+            "appDataFolder"
+        );
+        assert_eq!(
+            DriveEventStore::parent_query_fragment(&shared),
+            "'owner\\'s-folder' in parents"
+        );
+        assert_eq!(DriveEventStore::list_spaces_query(&shared), None);
+        assert_eq!(
+            DriveEventStore::parent_id_for_create(&shared),
+            "owner's-folder"
+        );
+    }
+
+    #[test]
     fn listed_event_id_requires_matching_app_property() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         let name = format!("{digest}.yaml");
         let expected = format!("sha256u:{digest}");
         assert_eq!(
-            drive_listed_event_id(&name, Some(expected.as_str())),
+            DriveEventStore::drive_listed_event_id(&name, Some(expected.as_str())),
             Some(expected.clone())
         );
-        assert_eq!(drive_listed_event_id(&name, None), None);
+        assert_eq!(DriveEventStore::drive_listed_event_id(&name, None), None);
         assert_eq!(
-            drive_listed_event_id(
+            DriveEventStore::drive_listed_event_id(
                 &name,
                 Some("sha256u:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
             ),
             None
         );
         assert_eq!(
-            drive_listed_event_id("notes.yaml", Some("sha256u:notes")),
+            DriveEventStore::drive_listed_event_id("notes.yaml", Some("sha256u:notes")),
             None
         );
     }

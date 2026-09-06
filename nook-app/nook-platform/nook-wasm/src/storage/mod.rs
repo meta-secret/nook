@@ -7,10 +7,10 @@
 use rexie::{ObjectStore, Rexie, TransactionMode};
 
 use crate::NookError;
-use nook_core::{EventId, VaultEvent, parse_remote_event_storage_bytes};
 use std::{cell::RefCell, rc::Rc};
 
 pub(crate) mod auth_providers;
+mod checked_event_write;
 pub(crate) mod device_access;
 pub(crate) mod drive;
 pub(crate) mod drive_events;
@@ -72,27 +72,4 @@ pub(crate) async fn open_nook_database() -> Result<Rc<rexie::Rexie>, NookError> 
         }
     });
     Ok(connection)
-}
-
-pub(crate) fn parse_expected_event_storage_bytes(
-    bytes: &[u8],
-    event_id: &EventId,
-    provider: &str,
-) -> Result<VaultEvent, NookError> {
-    let event = parse_remote_event_storage_bytes(&bytes.to_vec().into())
-        .map_err(|e| NookError::Serialization(format!("{provider} event parse: {e}")))?;
-    let actual = event.id()?;
-    if actual != *event_id {
-        return Err(NookError::Serialization(format!(
-            "{provider} event id mismatch: expected {}, got {}",
-            event_id.as_str(),
-            actual.as_str()
-        )));
-    }
-    Ok(event)
-}
-
-#[must_use]
-pub(crate) fn event_storage_matches_expected(bytes: &[u8], expected: &VaultEvent) -> bool {
-    parse_remote_event_storage_bytes(&bytes.to_vec().into()).is_ok_and(|event| &event == expected)
 }
