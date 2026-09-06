@@ -514,7 +514,7 @@ mod tests {
             let name = method.to_owned();
             let callback = Closure::<dyn FnMut(Object) -> Promise>::new(move |_descriptor| {
                 calls.borrow_mut().push(name.clone());
-                Promise::resolve(&value)
+                Promise::resolve(&value).unchecked_into::<Promise>()
             });
             Reflect::set(&self.handle, &JsString::from(method), callback.as_ref()).map_err(
                 |error| FolderFailure::new(&error.unchecked_into()).into_error("fixture method"),

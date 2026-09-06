@@ -450,7 +450,9 @@ mod tests {
             fixture.install(FixtureMethod {
                 target: &directory,
                 name: "getDirectoryHandle",
-                callback: Closure::new(move |_, _| Promise::resolve(&parent)),
+                callback: Closure::new(move |_, _| {
+                    Promise::resolve(&parent).unchecked_into::<Promise>()
+                }),
             })?;
             let found = Rc::new(Cell::new(false));
             let child = file.clone();
@@ -466,7 +468,7 @@ mod tests {
                         found.set(true);
                     }
                     if found.get() {
-                        Promise::resolve(&child)
+                        Promise::resolve(&child).unchecked_into::<Promise>()
                     } else {
                         Promise::reject(&JsString::from("fixture file absent"))
                     }
@@ -479,7 +481,7 @@ mod tests {
                 callback: Closure::new(move |_, _| {
                     let parts = Array::of1(&JsString::from(content.borrow().as_str()));
                     match BrowserFile::new_with_str_sequence(&parts, "event.yaml") {
-                        Ok(file) => Promise::resolve(&file),
+                        Ok(file) => Promise::resolve(&file).unchecked_into::<Promise>(),
                         Err(error) => Promise::reject(&error),
                     }
                 }),
@@ -491,7 +493,7 @@ mod tests {
                 name: "createWritable",
                 callback: Closure::new(move |_, _| {
                     calls.borrow_mut().push("createWritable".to_owned());
-                    Promise::resolve(&writable)
+                    Promise::resolve(&writable).unchecked_into::<Promise>()
                 }),
             })?;
             let calls = Rc::clone(&fixture.calls);
@@ -513,7 +515,7 @@ mod tests {
                         return Promise::reject(&JsString::from("fixture requires text"));
                     };
                     *content.borrow_mut() = value;
-                    Promise::resolve(&Object::new())
+                    Promise::resolve(&Object::new()).unchecked_into::<Promise>()
                 }),
             })?;
             let calls = Rc::clone(&fixture.calls);
@@ -526,7 +528,7 @@ mod tests {
                     if reject_close {
                         Promise::reject(&JsString::from("fixture close rejected"))
                     } else {
-                        Promise::resolve(&Object::new())
+                        Promise::resolve(&Object::new()).unchecked_into::<Promise>()
                     }
                 }),
             })?;
@@ -817,7 +819,7 @@ mod tests {
                     }
                     index.set(index.get() + 1);
                 }
-                Promise::resolve(&value)
+                Promise::resolve(&value).unchecked_into::<Promise>()
             });
             let iterator = Object::new();
             Reflect::set(&iterator, &JsString::from("next"), next.as_ref()).map_err(|error| {
