@@ -771,6 +771,16 @@ mod projection_tests {
         );
         assert!(local_required.snapshot().is_err());
         assert!(local_required.oauth_file().is_err());
+
+        let saved_snapshot = nook_core::AuthProvidersSnapshotData::default();
+        let saved_oauth = nook_core::StoredOAuthFileConfiguration::NotApplicable;
+        let saved = NookProviderSaveOutcome(nook_core::ProviderSaveOutcome::Saved {
+            snapshot: saved_snapshot.clone(),
+            oauth_file: Box::new(saved_oauth.clone()),
+        });
+        assert_eq!(saved.state(), NookProviderSaveOutcomeState::Saved);
+        assert_eq!(saved.snapshot().unwrap(), saved_snapshot);
+        assert_eq!(saved.oauth_file().unwrap(), saved_oauth);
     }
 
     #[cfg(target_arch = "wasm32")]
