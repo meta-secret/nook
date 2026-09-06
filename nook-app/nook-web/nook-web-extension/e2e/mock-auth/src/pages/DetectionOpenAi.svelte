@@ -45,6 +45,13 @@
 
   function submitChatGpt(event: SubmitEvent): void {
     event.preventDefault()
+    sessionStorage.setItem(
+      'openai-chatgpt-submit-evidence',
+      JSON.stringify({
+        submitter: submitterIdentity(event, 'chatgpt-continue'),
+        email: submittedEmail(),
+      }),
+    )
     const submission: ChatGptAuthMockSubmission = {
       submitter: submitterIdentity(event, 'chatgpt-continue'),
       email: submittedEmail(),

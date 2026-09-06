@@ -256,7 +256,25 @@ test.describe('PIN Pilot mock-auth coverage', () => {
       const widget = page.locator('#nook-auth-widget')
       await expect(widget.getByText('Ready to sign in')).toBeVisible()
       await widget.getByRole('button', { name: 'Continue with Nook' }).click()
-      await expect(page).toHaveURL(`${openAi.origin}/log-in-or-create-account`)
+      try {
+        await expect(page).toHaveURL(
+          `${openAi.origin}/log-in-or-create-account`,
+        )
+      } catch (error) {
+        const evidence = await page.evaluate(() => ({
+          href: location.href,
+          email:
+            document.querySelector<HTMLInputElement>('input[name="email"]')
+              ?.value || '',
+          submitEvidence:
+            sessionStorage.getItem('openai-chatgpt-submit-evidence') || '',
+          widgetText:
+            document.querySelector('#nook-auth-widget')?.textContent || '',
+        }))
+        throw new Error(
+          `${error instanceof Error ? error.message : String(error)}\nChatGPT mock evidence: ${JSON.stringify(evidence)}`,
+        )
+      }
 
       await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
         'openai-identifier',
