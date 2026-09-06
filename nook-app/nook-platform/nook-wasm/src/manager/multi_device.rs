@@ -477,6 +477,37 @@ mod browser_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn multi_device_identity_and_join_guards_fail_closed() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        assert!(manager.device_signing_public_key_js().await.is_err());
+        assert!(
+            manager
+                .create_join_request("2026-09-06T00:00:00Z".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .approve_join_request("not-a-device".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .approve_extension_device(
+                    "not-a-device".to_owned(),
+                    "not-a-public-key".to_owned(),
+                    "not-a-signing-key".to_owned(),
+                    "label".to_owned(),
+                )
+                .await
+                .is_err()
+        );
+        assert!(manager.ensure_vault_roster_hydrated_js().await.is_ok());
+        Ok(())
+    }
 }
 
 impl NookVaultManager {

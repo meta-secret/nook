@@ -601,6 +601,8 @@ impl NookVaultManager {
 #[cfg(test)]
 #[allow(clippy::items_after_test_module)]
 mod tests {
+    use crate::manager::session::NookEventLogSyncIssueState;
+
     use super::*;
     use nook_core::{DeviceIdentity, VaultMetaState};
     use wasm_bindgen::JsError;
@@ -729,6 +731,45 @@ mod tests {
         assert!(issue.is_store_mismatch());
         assert_eq!(issue.local_store_id()?, "store_local12345");
         assert_eq!(issue.remote_store_id()?, "store_remote1234");
+        Ok(())
+    }
+
+    #[test]
+    fn empty_and_same_store_classifications_leave_no_pending_issue() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        for classification in [
+            RemoteEventLogClassification::Empty,
+            RemoteEventLogClassification::SameStore {
+                store_id: "store_same12345".to_owned(),
+            },
+        ] {
+            manager.guard_remote_event_log_classification("Drive", &classification)?;
+            assert_eq!(
+                manager.take_event_log_sync_issue().state(),
+                NookEventLogSyncIssueState::Clear
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[allow(
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes and then inspects the stored multi-store issue"
+    )]
+    fn multiple_store_classification_records_all_store_ids_in_the_issue() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        let classification = RemoteEventLogClassification::MultipleStores {
+            store_ids: vec!["store_first1234".to_owned(), "store_second12".to_owned()],
+        };
+        let error = manager
+            .guard_remote_event_log_classification("GitHub", &classification)
+            .expect_err("multiple provider stores must be rejected");
+        assert!(
+            matches!(error, NookError::Database(message) if message.contains("store_first1234") && message.contains("store_second12"))
+        );
+        let issue = manager.take_event_log_sync_issue().issue()?;
+        assert!(issue.is_multiple_stores());
         Ok(())
     }
 }

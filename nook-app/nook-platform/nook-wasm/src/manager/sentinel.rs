@@ -17,7 +17,7 @@ mod unlock_finalization;
 use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
-use crate::storage::auth_providers::save_auth_providers;
+use crate::storage::auth_providers::ProviderSnapshotPublication;
 use crate::storage::indexed_db::{
     list_sentinel_genesis_share_deliveries, load_sentinel_genesis_finalization_pending,
     load_sentinel_genesis_share_delivery, save_sentinel_genesis_share_delivery,
@@ -78,7 +78,12 @@ impl NookVaultManager {
             &stored_json,
         )
         .await?;
-        save_auth_providers(&identity, &accepted.provider_snapshot).await?;
+        ProviderSnapshotPublication {
+            identity: &identity,
+            snapshot: &accepted.provider_snapshot,
+        }
+        .save()
+        .await?;
         self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record)?;
         self.sentinel_genesis_phase = SentinelGenesisPhase::Complete;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
@@ -773,6 +778,50 @@ mod tests {
         assert_eq!(
             manager.sentinel_unlock_status(),
             SentinelVaultUnlockState::CeremonyRequired
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn architecture_rejects_duplicate_or_mismatched_share_metadata() -> anyhow::Result<()> {
+        let duplicate = |second: nook_core::SentinelShareEnvelope| {
+            let mut manager = NookVaultManager::new();
+            manager.vault.meta.sentinel_shares.insert(
+                DeviceId::parse("0123456789abcdef").expect("valid device id"),
+                nook_core::SentinelShareEnvelope {
+                    version: nook_core::SentinelShareVersion::CURRENT,
+                    threshold: 2.into(),
+                    required_participants: 3.into(),
+                    share_index: 1.into(),
+                    ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+                },
+            );
+            manager.vault.meta.sentinel_shares.insert(
+                DeviceId::parse("fedcba9876543210").expect("valid device id"),
+                second,
+            );
+            manager.ensure_sentinel_architecture_from_shares()
+        };
+
+        assert!(
+            duplicate(nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::CURRENT,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                share_index: 1.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            })
+            .is_err()
+        );
+        assert!(
+            duplicate(nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::CURRENT,
+                threshold: 3.into(),
+                required_participants: 3.into(),
+                share_index: 2.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            })
+            .is_err()
         );
         Ok(())
     }

@@ -1,16 +1,14 @@
 //! Ownership and migration policy for the singleton provider rollback projection.
 
 use crate::storage::identity_record;
+use nook_core::ProviderCredentialStorageAdmission;
 use rexie::TransactionMode;
 
-use nook_core::{
-    DeviceIdentity, open_provider_credentials, provider_credentials_are_presealed,
-    seal_provider_credentials,
-};
+use nook_core::DeviceIdentity;
 
 use super::{
-    NookError, SCHEMA_KEY, STATE_KEY, STORE, idb_err, open_auth_db, read_raw_snapshot_from_store,
-    schema_key_for_app_id, state_key_for_app_id, write_snapshot_to_store,
+    NookError, ProviderSnapshotStore, SCHEMA_KEY, STATE_KEY, STORE, idb_err, open_auth_db,
+    read_raw_snapshot_from_store, schema_key_for_app_id, state_key_for_app_id,
 };
 
 pub(super) async fn may_migrate_legacy_snapshot(
@@ -70,7 +68,7 @@ pub(super) fn legacy_snapshot_belongs_to_identity(
     }
     let mut snapshot = nook_core::normalize_auth_snapshot(legacy).snapshot;
     let sealed = snapshot.clone();
-    open_provider_credentials(identity, &mut snapshot).is_ok() && snapshot != sealed
+    snapshot.open_credentials(identity).is_ok() && snapshot != sealed
 }
 
 pub(super) async fn migrate_legacy_auth_providers_for_identity(
@@ -90,10 +88,22 @@ pub(super) async fn migrate_legacy_auth_providers_for_identity(
     require_compatible_legacy_snapshot(&scoped, &legacy)?;
     if scoped.is_null() && !legacy.is_null() {
         let mut snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
-        open_provider_credentials(identity, &mut snapshot)?;
-        seal_provider_credentials(identity, &mut snapshot)?;
-        write_snapshot_to_store(&store, &state_key, &schema_key, &snapshot).await?;
-        write_snapshot_to_store(&store, STATE_KEY, SCHEMA_KEY, &snapshot).await?;
+        snapshot.open_credentials(identity)?;
+        snapshot.seal_credentials(identity)?;
+        ProviderSnapshotStore {
+            store: &store,
+            state_key: &state_key,
+            schema_key: &schema_key,
+        }
+        .write(&snapshot)
+        .await?;
+        ProviderSnapshotStore {
+            store: &store,
+            state_key: STATE_KEY,
+            schema_key: SCHEMA_KEY,
+        }
+        .write(&snapshot)
+        .await?;
     }
     transaction
         .done()
@@ -123,14 +133,29 @@ pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity() -> Res
     require_compatible_legacy_snapshot(&scoped, &legacy)?;
     if scoped.is_null() {
         let snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
-        if !legacy.is_null() && !provider_credentials_are_presealed(&snapshot) {
+        if !legacy.is_null()
+            && snapshot.credential_storage_admission()
+                != ProviderCredentialStorageAdmission::MarkerCompatible
+        {
             return Err(NookError::Decryption(
                 "Legacy auth providers require current identity authorization".to_owned(),
             ));
         }
         if !legacy.is_null() {
-            write_snapshot_to_store(&store, &state_key, &schema_key, &snapshot).await?;
-            write_snapshot_to_store(&store, STATE_KEY, SCHEMA_KEY, &snapshot).await?;
+            ProviderSnapshotStore {
+                store: &store,
+                state_key: &state_key,
+                schema_key: &schema_key,
+            }
+            .write(&snapshot)
+            .await?;
+            ProviderSnapshotStore {
+                store: &store,
+                state_key: STATE_KEY,
+                schema_key: SCHEMA_KEY,
+            }
+            .write(&snapshot)
+            .await?;
         }
     }
     transaction

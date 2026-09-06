@@ -80,7 +80,7 @@ pub use chrome_passwords_import::{
     ChromePasswordsImportError, ChromePasswordsImportPlan, plan_chrome_passwords_import,
 };
 pub use credit_card::CreditCardSecret;
-pub use dashlane_import::{DashlaneImportError, DashlaneImportPlan, plan_dashlane_import};
+pub use dashlane_import::{DashlaneExport, DashlaneImportError, DashlaneImportPlan};
 pub use database::Database;
 pub use device_key_protection::{
     AwaitingPasskeyAssertion, DeviceIdentityProtection, DeviceKeyProtectionSetup,
@@ -306,9 +306,7 @@ pub use session::{
     replace_encrypted_authenticator_verified, replace_encrypted_secret, replace_secret,
 };
 pub use sync_provider_credentials::{
-    AGE_ARMOR_MARKER, is_sealed_credential, open_provider_credentials,
-    provider_credentials_are_presealed, seal_provider_credentials,
-    seal_provider_credentials_for_public_key,
+    AGE_ARMOR_MARKER, ProviderCredentialEncoding, ProviderCredentialStorageAdmission,
 };
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,

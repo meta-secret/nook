@@ -622,6 +622,84 @@ mod tests {
     }
 
     #[test]
+    fn password_removal_drops_only_the_requested_entry_and_rewraps_the_rest() -> anyhow::Result<()>
+    {
+        let old_keys = nook_core::generate_vault_keys()?;
+        let new_keys = nook_core::generate_vault_keys()?;
+        let keep = serde_json::from_value(serde_json::json!({
+            "id": "pwdentry001", "label": "Keep", "created_at": "2026-08-15T00:00:00Z",
+            "envelope": serde_json::from_str::<serde_json::Value>(
+                &serde_json::to_string(&nook_core::attach_password_envelope_with_work_factor(
+                    &old_keys, "keep-password", 10.into()
+                )?)?
+            )?
+        }))?;
+        let remove = serde_json::from_value(serde_json::json!({
+            "id": "pwdentry002", "label": "Drop", "created_at": "2026-08-15T00:00:00Z",
+            "envelope": serde_json::from_str::<serde_json::Value>(
+                &serde_json::to_string(&nook_core::attach_password_envelope_with_work_factor(
+                    &old_keys, "drop-password", 10.into()
+                )?)?
+            )?
+        }))?;
+        let entries = PreparedEpochRotation::rewrap_password_entries(
+            &[keep, remove],
+            &new_keys,
+            &VaultOperation::PasswordRemoved {
+                entry_id: PasswordEntryId::parse("pwdentry002")?,
+            },
+        )?;
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].id, "pwdentry001");
+        assert_eq!(
+            nook_core::resolve_keys_from_entry(&entries[0], "keep-password")?,
+            new_keys
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn password_rotation_rejects_an_unknown_entry() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let envelope =
+            nook_core::attach_password_envelope_with_work_factor(&keys, "updated", 10.into())?;
+        let error = PreparedEpochRotation::rewrap_password_entries(
+            &[],
+            &keys,
+            &VaultOperation::PasswordRotated {
+                entry_id: PasswordEntryId::parse("pwdentry002")?,
+                envelope,
+            },
+        )
+        .expect_err("unknown password entries must fail closed");
+        assert!(
+            matches!(error, NookError::Database(message) if message == "Password entry not found.")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn recovery_plan_rejects_malformed_checkpoint_after_valid_trigger() -> anyhow::Result<()> {
+        let mut plan = SecurityEpochRecoveryPlan::fixture()?;
+        plan.checkpoint_event_yaml = "not an event".to_owned();
+        match plan.prepare_execution("store_epochstate1", None) {
+            Err(NookError::Database(message))
+                if message.starts_with("failed to parse stored event:") => {}
+            Err(error) => return Err(error.into()),
+            Ok(_) => anyhow::bail!("malformed checkpoint must not be accepted"),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn classified_rotation_failures_preserve_the_original_error() {
+        let before = SecurityEpochRotationFailure::before(NookError::Database("before".to_owned()));
+        let after = SecurityEpochRotationFailure::after(NookError::Database("after".to_owned()));
+        assert!(matches!(before.into_error(), NookError::Database(message) if message == "before"));
+        assert!(matches!(after.into_error(), NookError::Database(message) if message == "after"));
+    }
+
+    #[test]
     fn committed_epoch_failure_resets_the_live_session() {
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = "store_committed_epoch_failure".to_owned();
