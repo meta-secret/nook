@@ -1,27 +1,17 @@
-//! Apple Passwords / Safari password export conversion into Nook's typed
-//! plaintext secret model.
-//!
-//! Accepts either a plaintext Apple Passwords / Safari passwords CSV, or a
-//! Safari browsing-data ZIP that contains a passwords CSV entry.
-
-use std::{
-    fmt,
-    io::{Cursor, Read},
-    str,
-};
-
-use csv::StringRecord;
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+//! Apple Passwords and Safari export admission into typed plaintext secrets.
+mod archive;
+mod records;
+use crate::SecretValue;
+use archive::SafariArchive;
+pub use records::ApplePasswordsCsvInput;
+use std::{fmt, str};
 use thiserror::Error;
-use zip::ZipArchive;
-
-use super::import_support::{
-    self, MAX_CSV_BYTES, collect_csv_records, csv_field, csv_password_field, csv_reader,
-    normalized_csv_header, optional_csv_field,
-};
-use crate::{AuthenticatorSecret, LoginSecret, SecretValue};
-
 const MAX_ARCHIVE_BYTES: usize = 128 * 1024 * 1024;
-
 #[derive(Debug, Error)]
 pub enum ApplePasswordsImportError {
     #[error("The Apple Passwords or Safari export is too large to import safely.")]
@@ -47,247 +37,80 @@ pub struct ApplePasswordsImportPlan {
     pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
-#[derive(Clone, Copy)]
-struct ApplePasswordColumns {
-    title: usize,
-    url: usize,
-    username: usize,
-    password: usize,
-    notes: Option<usize>,
-    otp_auth: Option<usize>,
+/// Borrow original ZIP or CSV bytes until import planning completes.
+/// ```
+/// use nook_core::ApplePasswordsExportInput;
+/// let plan = ApplePasswordsExportInput::from_bytes(b"Title,URL,Username,Password\n").plan()?;
+/// assert!(plan.items.is_empty());
+/// # Ok::<(), nook_core::ApplePasswordsImportError>(())
+/// ```
+/// ```compile_fail,E0502
+/// use nook_core::ApplePasswordsExportInput;
+/// let mut bytes = Vec::new();
+/// let input = ApplePasswordsExportInput::from_bytes(&bytes);
+/// bytes.clear();
+/// let _ = input.plan();
+/// ```
+/// ```compile_fail,E0599
+/// use nook_core::ApplePasswordsExportInput;
+/// let input = ApplePasswordsExportInput::from_bytes(b"");
+/// let duplicate = input.clone();
+/// ```
+/// ```compile_fail,E0382
+/// use nook_core::ApplePasswordsExportInput;
+/// let input = ApplePasswordsExportInput::from_bytes(b"");
+/// let _ = input.plan();
+/// let _ = input.plan();
+/// ```
+pub struct ApplePasswordsExportInput<'a> {
+    bytes: &'a [u8],
 }
-
-fn required_column(
-    normalized: &[String],
-    name: &'static str,
-) -> Result<usize, ApplePasswordsImportError> {
-    normalized
-        .iter()
-        .position(|header| header == &normalized_csv_header(name))
-        .ok_or(ApplePasswordsImportError::MissingColumn(name))
-}
-
-fn optional_column(normalized: &[String], name: &str) -> Option<usize> {
-    let expected = normalized_csv_header(name);
-    normalized.iter().position(|header| header == &expected)
-}
-
-fn columns(headers: &StringRecord) -> Result<ApplePasswordColumns, ApplePasswordsImportError> {
-    let normalized = headers
-        .iter()
-        .map(normalized_csv_header)
-        .collect::<Vec<_>>();
-    Ok(ApplePasswordColumns {
-        title: required_column(&normalized, "Title")?,
-        url: required_column(&normalized, "URL")?,
-        username: required_column(&normalized, "Username")?,
-        password: required_column(&normalized, "Password")?,
-        notes: optional_column(&normalized, "Notes"),
-        otp_auth: optional_column(&normalized, "OTPAuth"),
-    })
-}
-
-fn append_title_metadata(notes: &mut String, title: &str, website_url: &str) {
-    if let Some(entry) = import_support::source_label_metadata("title", title, website_url) {
-        import_support::append_import_metadata(notes, "Apple Passwords", [entry]);
-    }
-}
-
-fn convert_record(
-    record: &StringRecord,
-    columns: ApplePasswordColumns,
-) -> (Vec<SecretValue>, usize) {
-    let title = csv_field(record, columns.title);
-    let url = csv_field(record, columns.url);
-    let username = csv_field(record, columns.username);
-    let password = csv_password_field(record, columns.password);
-    let mut notes = optional_csv_field(record, columns.notes);
-    let otp_auth = optional_csv_field(record, columns.otp_auth);
-
-    if title.is_empty()
-        && url.is_empty()
-        && username.is_empty()
-        && password.is_empty()
-        && notes.is_empty()
-        && otp_auth.is_empty()
-    {
-        return (Vec::new(), 1);
-    }
-
-    let website_url = if url.is_empty() { title.clone() } else { url };
-    append_title_metadata(&mut notes, &title, &website_url);
-
-    let mut items = Vec::new();
-    let mut skipped_unsupported = 0;
-
-    if password.is_empty() {
-        skipped_unsupported += 1;
-    } else {
-        items.push(SecretValue::Login(LoginSecret {
-            website_url: website_url.clone(),
-            username,
-            password,
-            notes,
-        }));
-    }
-
-    if !otp_auth.is_empty() {
-        match AuthenticatorSecret::from_otpauth_uri(&otp_auth) {
-            Ok(mut authenticator) => {
-                if authenticator.website_url.trim().is_empty() && !website_url.trim().is_empty() {
-                    authenticator.website_url = website_url;
-                }
-                authenticator.apply_inferred_website_url_if_empty();
-                items.push(SecretValue::Authenticator(authenticator));
-            }
-            Err(_) => skipped_unsupported += 1,
-        }
-    }
-
-    (items, skipped_unsupported)
-}
-
-fn is_zip_export(bytes: &[u8]) -> bool {
-    bytes.starts_with(b"PK\x03\x04")
-        || bytes.starts_with(b"PK\x05\x06")
-        || bytes.starts_with(b"PK\x07\x08")
-}
-
-fn invalid_archive(error: impl fmt::Display) -> ApplePasswordsImportError {
-    ApplePasswordsImportError::InvalidArchive(error.to_string())
-}
-
-fn csv_entry_basename(name: &str) -> &str {
-    name.rsplit(['/', '\\']).next().unwrap_or(name)
-}
-
-fn is_csv_entry(name: &str) -> bool {
-    !name.ends_with(['/', '\\'])
-        && csv_entry_basename(name)
-            .rsplit_once('.')
-            .is_some_and(|(_, extension)| extension.eq_ignore_ascii_case("csv"))
-}
-
-fn is_passwords_csv_entry(name: &str) -> bool {
-    csv_entry_basename(name).eq_ignore_ascii_case("passwords.csv")
-}
-
-fn read_zip_entry_text(
-    archive: &mut ZipArchive<Cursor<&[u8]>>,
-    index: usize,
-) -> Result<String, ApplePasswordsImportError> {
-    let file = archive.by_index(index).map_err(invalid_archive)?;
-    if file.size() > MAX_CSV_BYTES as u64 {
-        return Err(ApplePasswordsImportError::CsvTooLarge);
-    }
-    let mut csv = String::new();
-    file.take(MAX_CSV_BYTES as u64 + 1)
-        .read_to_string(&mut csv)
-        .map_err(invalid_archive)?;
-    if csv.len() > MAX_CSV_BYTES {
-        return Err(ApplePasswordsImportError::CsvTooLarge);
-    }
-    Ok(csv)
-}
-
-fn plan_safari_zip_import(
-    export_bytes: &[u8],
-) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
-    let mut archive = ZipArchive::new(Cursor::new(export_bytes)).map_err(invalid_archive)?;
-    let mut csv_indexes = Vec::new();
-    for index in 0..archive.len() {
-        let name = archive
-            .by_index(index)
-            .map_err(invalid_archive)?
-            .name()
-            .to_owned();
-        if is_csv_entry(&name) {
-            csv_indexes.push((is_passwords_csv_entry(&name), name, index));
-        }
-    }
-    csv_indexes.sort_by(|left, right| {
-        right.0.cmp(&left.0).then_with(|| {
-            left.1
-                .to_ascii_lowercase()
-                .cmp(&right.1.to_ascii_lowercase())
-        })
-    });
-
-    let mut saw_csv = false;
-    let mut last_missing_column = None;
-    for (_, _, index) in csv_indexes {
-        saw_csv = true;
-        let csv = read_zip_entry_text(&mut archive, index)?;
-        match plan_apple_passwords_import(&csv) {
-            Ok(plan) => return Ok(plan),
-            Err(ApplePasswordsImportError::MissingColumn(column)) => {
-                last_missing_column = Some(column);
-            }
-            Err(error) => return Err(error),
-        }
-    }
-
-    if let Some(column) = last_missing_column {
-        return Err(ApplePasswordsImportError::MissingColumn(column));
-    }
-    if saw_csv {
-        return Err(ApplePasswordsImportError::MissingPasswordsFile);
-    }
-    Err(ApplePasswordsImportError::MissingPasswordsFile)
-}
-
-/// Parse an Apple Passwords CSV or Safari browsing-data ZIP export in memory.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: accepts the original Apple Passwords ZIP archive bytes"
-    )
-)]
-pub fn plan_apple_passwords_export(
-    export_bytes: &[u8],
-) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
-    if export_bytes.len() > MAX_ARCHIVE_BYTES {
-        return Err(ApplePasswordsImportError::ExportTooLarge);
-    }
-    if is_zip_export(export_bytes) {
-        return plan_safari_zip_import(export_bytes);
-    }
-    let csv_text = str::from_utf8(export_bytes).map_err(|_| {
-        ApplePasswordsImportError::InvalidArchive(
-            "expected UTF-8 CSV or a Safari browsing-data ZIP archive".to_owned(),
+impl<'a> ApplePasswordsExportInput<'a> {
+    #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: accepts the original Apple Passwords ZIP archive bytes"
         )
-    })?;
-    plan_apple_passwords_import(csv_text)
-}
-
-/// Parse an Apple Passwords CSV export entirely in memory.
-pub fn plan_apple_passwords_import(
-    csv_text: &str,
-) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
-    if csv_text.len() > MAX_CSV_BYTES {
-        return Err(ApplePasswordsImportError::CsvTooLarge);
+    )]
+    pub fn from_bytes(bytes: &'a [u8]) -> Self {
+        Self { bytes }
     }
-
-    let mut reader = csv_reader(csv_text);
-    let columns = columns(reader.headers()?)?;
-    let collection = collect_csv_records(
-        &mut reader,
-        ApplePasswordsImportError::TooManyRecords,
-        |record| convert_record(record, columns),
-    )?;
-
-    Ok(ApplePasswordsImportPlan {
-        items: collection.items,
-        source_count: collection.source_count.into(),
-        skipped_unsupported: collection.skipped_unsupported.into(),
-    })
+    pub fn plan(self) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
+        if self.bytes.len() > MAX_ARCHIVE_BYTES {
+            return Err(ApplePasswordsImportError::ExportTooLarge);
+        }
+        if self.is_zip() {
+            return SafariArchive::open(self.bytes)?.plan();
+        }
+        let text = str::from_utf8(self.bytes).map_err(|_| {
+            ApplePasswordsImportError::InvalidArchive(
+                "expected UTF-8 CSV or a Safari browsing-data ZIP archive".to_owned(),
+            )
+        })?;
+        ApplePasswordsCsvInput::new(text).plan()
+    }
+    fn is_zip(&self) -> bool {
+        self.bytes.starts_with(b"PK\x03\x04")
+            || self.bytes.starts_with(b"PK\x05\x06")
+            || self.bytes.starts_with(b"PK\x07\x08")
+    }
 }
-
+impl ApplePasswordsImportError {
+    fn archive(error: impl fmt::Display) -> Self {
+        Self::InvalidArchive(error.to_string())
+    }
+}
 #[cfg(test)]
-mod tests {
-    use super::*;
+pub(super) mod tests {
+    use super::{
+        ApplePasswordsCsvInput, ApplePasswordsExportInput, ApplePasswordsImportError,
+        MAX_ARCHIVE_BYTES,
+    };
+    use crate::LoginSecret;
     use crate::{SecretValue, TotpDigits};
+    use std::io::Cursor;
 
     #[test]
     fn imports_login_notes_title_and_authenticator() -> anyhow::Result<()> {
@@ -299,7 +122,7 @@ mod tests {
             "secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA256&digits=8&period=45\"\n"
         );
 
-        let plan = plan_apple_passwords_import(csv)?;
+        let plan = ApplePasswordsCsvInput::new(csv).plan()?;
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
@@ -329,7 +152,7 @@ mod tests {
     fn supports_bom_reordered_headers_and_optional_columns() -> anyhow::Result<()> {
         let csv = "\u{feff}Password,Username,URL,Title\nsecret,alice,,Example\n";
 
-        let plan = plan_apple_passwords_import(csv)?;
+        let plan = ApplePasswordsCsvInput::new(csv).plan()?;
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(
@@ -352,7 +175,7 @@ mod tests {
             ",,,,,\n"
         );
 
-        let plan = plan_apple_passwords_import(csv)?;
+        let plan = ApplePasswordsCsvInput::new(csv).plan()?;
 
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(plan.items.len(), 1);
@@ -369,7 +192,7 @@ mod tests {
             "secret=JBSWY3DPEHPK3PXP&issuer=Example\"\n"
         );
 
-        let plan = plan_apple_passwords_import(csv)?;
+        let plan = ApplePasswordsCsvInput::new(csv).plan()?;
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(plan.items.len(), 1);
@@ -382,7 +205,7 @@ mod tests {
     fn preserves_leading_and_trailing_password_whitespace() -> anyhow::Result<()> {
         let csv = "Title,URL,Username,Password\nExample,https://example.com,alice,\" secret \"\n";
 
-        let plan = plan_apple_passwords_import(csv)?;
+        let plan = ApplePasswordsCsvInput::new(csv).plan()?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login");
         };
@@ -393,7 +216,8 @@ mod tests {
 
     #[test]
     fn rejects_non_apple_csv_headers() -> anyhow::Result<()> {
-        let error = plan_apple_passwords_import("name,login,secret\nExample,alice,password\n")
+        let error = ApplePasswordsCsvInput::new("name,login,secret\nExample,alice,password\n")
+            .plan()
             .err()
             .ok_or_else(|| {
                 anyhow::anyhow!("apple passwords import test should reject invalid input")
@@ -406,35 +230,43 @@ mod tests {
         Ok(())
     }
 
-    fn build_zip(entries: &[(&str, &[u8])]) -> anyhow::Result<Vec<u8>> {
-        use std::io::Write;
-
-        use zip::CompressionMethod;
-        use zip::ZipWriter;
-        use zip::write::SimpleFileOptions;
-
-        let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
-        let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
-        for (name, data) in entries {
-            writer.start_file(*name, options)?;
-            writer.write_all(data)?;
-        }
-        Ok(writer.finish()?.into_inner())
+    pub(super) struct SafariZipFixture<'a> {
+        pub(super) entries: &'a [(&'a str, &'a [u8])],
     }
+    impl SafariZipFixture<'_> {
+        pub(super) fn build(self) -> anyhow::Result<Vec<u8>> {
+            use std::io::Write;
 
+            use zip::CompressionMethod;
+            use zip::ZipWriter;
+            use zip::write::SimpleFileOptions;
+
+            let mut writer = ZipWriter::new(Cursor::new(Vec::new()));
+            let options =
+                SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
+            for (name, data) in self.entries {
+                writer.start_file(*name, options)?;
+                writer.write_all(data)?;
+            }
+            Ok(writer.finish()?.into_inner())
+        }
+    }
     #[test]
     fn imports_safari_browsing_data_zip_passwords_csv() -> anyhow::Result<()> {
         let csv = concat!(
             "Title,URL,Username,Password,Notes,OTPAuth\n",
             "Safari Example,https://safari.example,alice,secret,from safari,\n"
         );
-        let zip = build_zip(&[
-            ("Bookmarks.html", b"<html></html>"),
-            ("Passwords.csv", csv.as_bytes()),
-            ("PaymentCards.json", br#"{"payment_cards":[]}"#),
-        ])?;
+        let zip = SafariZipFixture {
+            entries: &[
+                ("Bookmarks.html", b"<html></html>"),
+                ("Passwords.csv", csv.as_bytes()),
+                ("PaymentCards.json", br#"{"payment_cards":[]}"#),
+            ],
+        }
+        .build()?;
 
-        let plan = plan_apple_passwords_export(&zip)?;
+        let plan = ApplePasswordsExportInput::from_bytes(&zip).plan()?;
 
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(
@@ -453,12 +285,15 @@ mod tests {
     fn prefers_passwords_csv_when_archive_contains_other_csvs() -> anyhow::Result<()> {
         let other = "name,login,secret\nIgnored,bob,other\n";
         let passwords = "Title,URL,Username,Password\nExample,https://example.com,alice,secret\n";
-        let zip = build_zip(&[
-            ("Notes.csv", other.as_bytes()),
-            ("Passwords.csv", passwords.as_bytes()),
-        ])?;
+        let zip = SafariZipFixture {
+            entries: &[
+                ("Notes.csv", other.as_bytes()),
+                ("Passwords.csv", passwords.as_bytes()),
+            ],
+        }
+        .build()?;
 
-        let plan = plan_apple_passwords_export(&zip)?;
+        let plan = ApplePasswordsExportInput::from_bytes(&zip).plan()?;
         let SecretValue::Login(login) = &plan.items[0] else {
             panic!("expected login");
         };
@@ -469,9 +304,12 @@ mod tests {
     #[test]
     fn accepts_localized_csv_name_when_headers_match_apple_passwords() -> anyhow::Result<()> {
         let csv = "Title,URL,Username,Password\nExample,https://example.com,alice,secret\n";
-        let zip = build_zip(&[("Пароли.csv", csv.as_bytes())])?;
+        let zip = SafariZipFixture {
+            entries: &[("Пароли.csv", csv.as_bytes())],
+        }
+        .build()?;
 
-        let plan = plan_apple_passwords_export(&zip)?;
+        let plan = ApplePasswordsExportInput::from_bytes(&zip).plan()?;
         assert_eq!(plan.items.len(), 1);
         Ok(())
     }
@@ -479,7 +317,7 @@ mod tests {
     #[test]
     fn accepts_raw_csv_bytes_through_export_entry_point() -> anyhow::Result<()> {
         let csv = "Title,URL,Username,Password\nExample,https://example.com,alice,secret\n";
-        let plan = plan_apple_passwords_export(csv.as_bytes())?;
+        let plan = ApplePasswordsExportInput::from_bytes(csv.as_bytes()).plan()?;
         assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(plan.items.len(), 1);
         Ok(())
@@ -487,14 +325,17 @@ mod tests {
 
     #[test]
     fn rejects_zip_without_passwords_csv_and_oversized_exports() -> anyhow::Result<()> {
-        let missing = build_zip(&[("Bookmarks.html", b"<html></html>")])?;
+        let missing = SafariZipFixture {
+            entries: &[("Bookmarks.html", b"<html></html>")],
+        }
+        .build()?;
         assert!(matches!(
-            plan_apple_passwords_export(&missing),
+            ApplePasswordsExportInput::from_bytes(&missing).plan(),
             Err(ApplePasswordsImportError::MissingPasswordsFile)
         ));
         let oversized = vec![0_u8; MAX_ARCHIVE_BYTES + 1];
         assert!(matches!(
-            plan_apple_passwords_export(&oversized),
+            ApplePasswordsExportInput::from_bytes(&oversized).plan(),
             Err(ApplePasswordsImportError::ExportTooLarge)
         ));
         Ok(())

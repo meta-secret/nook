@@ -5,6 +5,7 @@
 )]
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
+use nook_core::ApplePasswordsExportInput;
 use nook_core::DashlaneExport;
 use nook_core::GoogleAuthenticatorMigrationInput;
 use nook_core::KeeperCsvInput;
@@ -452,7 +453,8 @@ impl NookVaultManager {
         export: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
         let export = Zeroizing::new(export);
-        let plan = nook_core::plan_apple_passwords_export(export.as_slice())
+        let plan = ApplePasswordsExportInput::from_bytes(export.as_slice())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(export);
         self.commit_secret_import(
