@@ -1,6 +1,9 @@
 use super::wasm_bindgen;
 use crate::{NookDecryptedEnrollmentPayload, NookEnrollmentIssueInput};
-use nook_core::{CheckedEnrollmentEnvelope, EnrollmentEntryLabel};
+use nook_core::{
+    CheckedEnrollmentEnvelope, CheckedEnrollmentIssuance, EnrollmentEntryLabel, EnrollmentIssuance,
+    EnrollmentLinkInput,
+};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -37,24 +40,27 @@ impl NookEnrollmentEntryLabel {
 
 #[wasm_bindgen]
 pub fn peek_enrollment_entry_id(code: &str) -> Result<String, wasm_bindgen::JsError> {
-    let code = nook_core::normalize_enrollment_code(code);
-    Ok(nook_core::peek_enrollment_entry_id(&code)?)
+    let code = EnrollmentLinkInput { input: code }.normalize();
+    Ok(CheckedEnrollmentEnvelope::parse(&code)
+        .map(|checked| checked.envelope().entry_id.clone())?)
 }
 
 #[wasm_bindgen]
 pub fn peek_enrollment_entry_label(
     code: &str,
 ) -> Result<NookEnrollmentEntryLabel, wasm_bindgen::JsError> {
-    let code = nook_core::normalize_enrollment_code(code);
+    let code = EnrollmentLinkInput { input: code }.normalize();
     Ok(NookEnrollmentEntryLabel(
-        nook_core::peek_enrollment_entry_label(&code)?,
+        CheckedEnrollmentEnvelope::parse(&code)
+            .map(|checked| checked.envelope().entry_label.clone())?,
     ))
 }
 
 #[wasm_bindgen]
 pub fn peek_enrollment_issued_at(code: &str) -> Result<String, wasm_bindgen::JsError> {
-    let code = nook_core::normalize_enrollment_code(code);
-    Ok(nook_core::peek_enrollment_issued_at(&code)?)
+    let code = EnrollmentLinkInput { input: code }.normalize();
+    Ok(CheckedEnrollmentEnvelope::parse(&code)
+        .map(|checked| checked.envelope().issued_at.clone())?)
 }
 
 #[wasm_bindgen]
@@ -62,11 +68,13 @@ pub fn encrypt_unlabeled_enrollment_payload(
     input: &NookEnrollmentIssueInput,
     password: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::encrypt_enrollment_payload(
-        &input.to_core()?,
+    Ok(EnrollmentIssuance {
+        input: &input.to_core()?,
         password,
-        "",
-    )?)
+        entry_label: "",
+    }
+    .check()
+    .and_then(CheckedEnrollmentIssuance::issue)?)
 }
 
 #[wasm_bindgen]
@@ -75,11 +83,13 @@ pub fn encrypt_labeled_enrollment_payload(
     password: &str,
     entry_label: &str,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::encrypt_enrollment_payload(
-        &input.to_core()?,
+    Ok(EnrollmentIssuance {
+        input: &input.to_core()?,
         password,
         entry_label,
-    )?)
+    }
+    .check()
+    .and_then(CheckedEnrollmentIssuance::issue)?)
 }
 
 #[wasm_bindgen]
@@ -87,7 +97,7 @@ pub fn decrypt_enrollment_payload(
     code: &str,
     password: &str,
 ) -> Result<NookDecryptedEnrollmentPayload, wasm_bindgen::JsError> {
-    let code = nook_core::normalize_enrollment_code(code);
+    let code = EnrollmentLinkInput { input: code }.normalize();
     Ok(NookDecryptedEnrollmentPayload::from_core(
         CheckedEnrollmentEnvelope::parse(&code)?.decrypt(password)?,
     ))
@@ -96,7 +106,7 @@ pub fn decrypt_enrollment_payload(
 #[wasm_bindgen]
 #[must_use]
 pub fn build_enrollment_link(code: &str, base_url: &str) -> String {
-    nook_core::build_enrollment_link(code, base_url)
+    EnrollmentLinkInput { input: code }.link(base_url)
 }
 
 #[wasm_bindgen]
@@ -143,7 +153,7 @@ pub fn sentinel_genesis_participant_fingerprint(
 #[wasm_bindgen]
 #[must_use]
 pub fn normalize_enrollment_code(code: &str) -> String {
-    nook_core::normalize_enrollment_code(code)
+    EnrollmentLinkInput { input: code }.normalize()
 }
 
 #[cfg(test)]
