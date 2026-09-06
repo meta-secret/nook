@@ -15,6 +15,7 @@ use nook_core::{
     AgeArmoredCiphertext, SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey,
     VaultOperation,
 };
+use nook_core::{ChromePasswordsCsvInput, KeePassXcCsvInput, LastPassCsvInput};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -365,7 +366,8 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn import_keepassxc_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
         let csv = Zeroizing::new(csv);
-        let plan = nook_core::plan_keepassxc_import(csv.as_str())
+        let plan = KeePassXcCsvInput::new(csv.as_str())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
         self.commit_secret_import(
@@ -382,7 +384,8 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn import_lastpass_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
         let csv = Zeroizing::new(csv);
-        let plan = nook_core::plan_lastpass_import(csv.as_str())
+        let plan = LastPassCsvInput::new(csv.as_str())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
         self.commit_secret_import(
@@ -473,7 +476,8 @@ impl NookVaultManager {
         csv: String,
     ) -> Result<NookImportResult, JsError> {
         let csv = Zeroizing::new(csv);
-        let plan = nook_core::plan_chrome_passwords_import(csv.as_str())
+        let plan = ChromePasswordsCsvInput::new(csv.as_str())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
         self.commit_secret_import(
