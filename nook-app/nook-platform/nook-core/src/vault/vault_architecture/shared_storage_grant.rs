@@ -5,6 +5,7 @@ use super::provider_replication::{
 };
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{StorageProviderType, i18n_keys};
+use nook_auth2::EnrollmentEmail;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -170,7 +171,10 @@ pub fn prepare_shared_storage_grant(
     }
     match request.joiner_identity_kind {
         SharedJoinerIdentityKind::Email => {
-            if !nook_auth2::is_plausible_email(identity) {
+            if (EnrollmentEmail { value: identity })
+                .check_plausibility()
+                .is_err()
+            {
                 return Err(ValidationError::SharedJoinerIdentityInvalid);
             }
         }
