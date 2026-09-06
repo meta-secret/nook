@@ -50,9 +50,8 @@ impl NookVaultManager {
         }
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = SecretValue::from_yaml_str(input.secret_type, &input.data)?;
-        let identity_fingerprint =
-            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
-        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
+        let identity_fingerprint = typed_value.identity_fingerprint(&secrets_key)?;
+        let fingerprint = typed_value.fingerprint(&secrets_key)?;
         typed_value.zeroize_plaintext();
         let crypto = self.vault.crypto.get()?;
         let replacement = nook_core::ReplaceSecretInput {
@@ -277,9 +276,8 @@ impl NookVaultManager {
         nook_core::validate_secret_data(&data)?;
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = SecretValue::from_yaml_str(secret_type, &data)?;
-        let identity_fingerprint =
-            nook_core::secret_identity_fingerprint(&typed_value, &secrets_key)?;
-        let fingerprint = nook_core::secret_fingerprint(&typed_value, &secrets_key)?;
+        let identity_fingerprint = typed_value.identity_fingerprint(&secrets_key)?;
+        let fingerprint = typed_value.fingerprint(&secrets_key)?;
         typed_value.zeroize_plaintext();
 
         let armored = self.vault.crypto.get()?.encrypt_value(&data)?;
@@ -472,7 +470,7 @@ mod wasm_tests {
         use nook_core::{
             LoginSecret, SecretId, SecretType, SecretValue, SigningIdentity, VaultCrypto,
             VaultEventSession, VaultOperation, encrypted_secret_from_armored, generate_store_id,
-            generate_vault_keys, secret_fingerprint, secret_identity_fingerprint,
+            generate_vault_keys,
         };
         use std::collections::BTreeSet;
 
@@ -491,8 +489,8 @@ mod wasm_tests {
                 password: password.to_owned(),
                 notes: String::new(),
             });
-            let identity = secret_identity_fingerprint(&value, secrets_key)?;
-            let version = secret_fingerprint(&value, secrets_key)?;
+            let identity = value.identity_fingerprint(secrets_key)?;
+            let version = value.fingerprint(secrets_key)?;
             let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
             session.append_operations(
                 vec![VaultOperation::SecretCreated {
