@@ -619,3 +619,117 @@ mod projection_conflict_tests {
         assert_eq!(conflict.reasons(), vec!["password-rotated".to_owned()]);
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::{
+        CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecisionReason,
+        ProviderVaultIdentityEligibility, VaultSyncConflictKind,
+    };
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn conflict_adapters_project_content_store_and_security_paths_in_wasm() {
+        let revision = NookProviderSyncRevision::tracked("remote-7".into());
+        let content = NookPendingSyncConflict::content(
+            "provider".into(),
+            "Provider".into(),
+            "local-yaml".into(),
+            "remote-yaml".into(),
+            4,
+            9,
+            "github".into(),
+            "pat".into(),
+            "owner/repo".into(),
+            &revision,
+        );
+        assert_eq!(content.provider_id(), "provider");
+        assert!(!content.is_pending_provider());
+        assert_eq!(content.provider_label(), "Provider");
+        assert_eq!(content.local_yaml(), "local-yaml");
+        assert_eq!(content.remote_yaml(), "remote-yaml");
+        assert_eq!(content.mode(), "github");
+        assert_eq!(content.pat(), "pat");
+        assert_eq!(content.repo(), "owner/repo");
+        assert_eq!(content.remote_revision().value().unwrap(), "remote-7");
+        assert_eq!(content.kind(), VaultSyncConflictKind::Content);
+        assert_eq!(content.content_local_version().unwrap(), 4);
+        assert_eq!(content.content_remote_version().unwrap(), 9);
+        assert!(content.local_store_id().is_err());
+        assert!(content.remote_store_id().is_err());
+
+        let store = NookPendingSyncConflict::store_id(
+            "provider".into(),
+            "Provider".into(),
+            String::new(),
+            String::new(),
+            "local".into(),
+            String::new(),
+            String::new(),
+            &NookProviderSyncRevision::untracked(),
+            "local-store".into(),
+            "remote-store".into(),
+        );
+        assert_eq!(store.local_store_id().unwrap(), "local-store");
+        assert_eq!(store.remote_store_id().unwrap(), "remote-store");
+        assert!(store.content_local_version().is_err());
+        assert_eq!(
+            NookPendingSyncConflict::pending_store_id(
+                "Pending".into(),
+                String::new(),
+                String::new(),
+                "local".into(),
+                String::new(),
+                String::new(),
+                &NookProviderSyncRevision::untracked(),
+                "a".into(),
+                "b".into(),
+            )
+            .is_pending_provider(),
+            true
+        );
+        let from_vaults = NookPendingSyncConflict::content_from_vaults(
+            "provider".into(),
+            "Provider".into(),
+            "not-yaml".into(),
+            "not-yaml".into(),
+            "local".into(),
+            String::new(),
+            String::new(),
+            &NookProviderSyncRevision::untracked(),
+        );
+        assert_eq!(from_vaults.content_local_version().unwrap(), 0);
+
+        let projection = NookProviderVaultDecisionProjection::from_core(
+            nook_core::project_provider_vault_decision(
+                CurrentVaultReplaceability::Replaceable,
+                vec![nook_core::ProviderVaultIdentityObservation {
+                    identity_id: "identity".into(),
+                    identity_label: "Personal".into(),
+                    linked_to_provider_vault: false,
+                    protected_local_app_available: true,
+                    is_current_app: true,
+                    app_grant: IdentityVaultAppGrantKind::NotLinked,
+                }],
+            ),
+        );
+        let identities = projection.identities();
+        assert_eq!(identities[0].identity_id(), "identity");
+        assert_eq!(identities[0].identity_label(), "Personal");
+        let _ = projection.decision();
+        let _ = projection.reason();
+        assert_eq!(
+            identities[0].eligibility(),
+            ProviderVaultIdentityEligibility::NotLinked
+        );
+
+        let security =
+            NookSecurityConflict::from_display_parts(vec!["event".into()], vec!["reason".into()]);
+        assert_eq!(security.events(), vec!["event"]);
+        assert_eq!(security.reasons(), vec!["reason"]);
+        let _ = ProviderVaultDecisionReason::ReadyToAdopt;
+    }
+}

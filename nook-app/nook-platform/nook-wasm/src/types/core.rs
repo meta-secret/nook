@@ -377,6 +377,78 @@ mod tests {
     }
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::{DeviceMode, OauthFilePreset, ProviderJoinerIdentity, ReplicationType};
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn core_projection_wrappers_execute_success_and_rejection_paths_in_wasm() {
+        let untracked = NookProviderSyncRevision::untracked();
+        assert!(untracked.value().is_err());
+        let tracked = NookProviderSyncRevision::tracked("rev-1".into());
+        assert_eq!(tracked.value().unwrap(), "rev-1");
+        let unscoped = NookManagerStoreScope::unscoped();
+        assert!(unscoped.store_id().is_err());
+        let scoped = NookManagerStoreScope::scoped("store-1".into());
+        assert_eq!(scoped.store_id().unwrap(), "store-1");
+
+        let draft = NookVaultArchitecture::draft(
+            DeviceMode::Standard,
+            nook_core::VaultType::Simple,
+            ReplicationType::Personal,
+        )
+        .unwrap();
+        assert_eq!(draft.vault_type(), nook_core::VaultType::Simple);
+        let simple =
+            NookVaultArchitecture::simple(DeviceMode::Standard, ReplicationType::Personal).unwrap();
+        assert!(simple.sentinel_threshold().is_err());
+        let sentinel = NookVaultArchitecture::sentinel(
+            DeviceMode::AntiHacker,
+            ReplicationType::Shared,
+            2,
+            3,
+            1,
+        )
+        .unwrap();
+        assert_eq!(sentinel.sentinel_threshold().unwrap(), 2);
+        assert_eq!(sentinel.sentinel_required_participants().unwrap(), 3);
+        assert_eq!(sentinel.sentinel_ready_participants().unwrap(), 1);
+
+        let not_applicable = NookProviderReplicationCapability::from_core(
+            nook_core::ProviderReplicationCapability {
+                provider_type: "local".into(),
+                oauth_preset: nook_core::ProviderOauthPreset::NotApplicable,
+                supports_personal: true,
+                supports_shared: false,
+                shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
+            },
+        );
+        assert_eq!(not_applicable.provider_type(), "local");
+        assert!(not_applicable.oauth_preset().is_err());
+        assert!(not_applicable.shared_joiner_identity().is_err());
+
+        let configured = NookProviderReplicationCapability::from_core(
+            nook_core::ProviderReplicationCapability {
+                provider_type: "oauth_file".into(),
+                oauth_preset: nook_core::ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+                supports_personal: true,
+                supports_shared: true,
+                shared_joiner_identity: ProviderJoinerIdentity::Required(
+                    nook_core::SharedJoinerIdentityKind::Email,
+                ),
+            },
+        );
+        assert_eq!(configured.oauth_preset().unwrap(), "google-drive");
+        assert_eq!(configured.shared_joiner_identity().unwrap(), "email");
+        assert!(configured.supports_personal());
+        assert!(configured.supports_shared());
+    }
+}
+
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookAuthenticatorAccount {
