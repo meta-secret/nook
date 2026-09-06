@@ -781,6 +781,50 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    fn architecture_rejects_duplicate_or_mismatched_share_metadata() -> anyhow::Result<()> {
+        let duplicate = |second: nook_core::SentinelShareEnvelope| {
+            let mut manager = NookVaultManager::new();
+            manager.vault.meta.sentinel_shares.insert(
+                DeviceId::parse("0123456789abcdef").expect("valid device id"),
+                nook_core::SentinelShareEnvelope {
+                    version: nook_core::SentinelShareVersion::CURRENT,
+                    threshold: 2.into(),
+                    required_participants: 3.into(),
+                    share_index: 1.into(),
+                    ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+                },
+            );
+            manager.vault.meta.sentinel_shares.insert(
+                DeviceId::parse("fedcba9876543210").expect("valid device id"),
+                second,
+            );
+            manager.ensure_sentinel_architecture_from_shares()
+        };
+
+        assert!(
+            duplicate(nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::CURRENT,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                share_index: 1.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            })
+            .is_err()
+        );
+        assert!(
+            duplicate(nook_core::SentinelShareEnvelope {
+                version: nook_core::SentinelShareVersion::CURRENT,
+                threshold: 3.into(),
+                required_participants: 3.into(),
+                share_index: 2.into(),
+                ciphertext: AgeArmoredCiphertext::from_trusted("encrypted".to_owned()),
+            })
+            .is_err()
+        );
+        Ok(())
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
