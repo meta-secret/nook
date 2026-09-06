@@ -9,9 +9,8 @@ coordinates delivery but does not redefine a team's technical contract.
 
 ## Universal rules
 
-- Every functional Team Agent task has exactly one team identity. PR Steward is
-  the separate Gizmo-owned operational identity for bounded pull-request
-  mechanics.
+- Every Team Agent task has exactly one team identity. PR Steward is a separate
+  operational Team Agent context for bounded pull-request mechanics.
 - The functional owner defines behavior, contracts, tests, and acceptance.
 - File location is evidence of ownership, not an exception to semantic
   ownership.
@@ -38,7 +37,7 @@ Gizmo owns:
 - Workbench state; and
 - the final delivery verdict.
 
-The special Gizmo-owned PR Steward Team Agent performs pull-request metadata.
+The separate PR Steward Team Agent performs pull-request metadata.
 It observes reviews and checks.
 It retriggers exact-head validation.
 It collects readiness evidence.

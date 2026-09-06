@@ -38,10 +38,11 @@ Gizmo owns:
 - Workbench completion; and
 - the final delivery verdict.
 
-Gizmo delegates bounded external pull-request mechanics to the special
-Gizmo-owned PR Steward Team Agent. PR Steward is not a sixth functional team.
-It uses the [PR Steward workflow](workflows/pr-steward.md) and never acts
-without an explicit operation packet from Gizmo.
+Gizmo delegates bounded external pull-request mechanics to the separate
+[PR Steward Team Agent](../teams/pr-steward/AGENTS.md). PR Steward is not a
+sixth functional team. Its [knowledge graph](../teams/pr-steward/knowledge-graph.md)
+defines the operational context, and it never acts without an explicit
+operation packet from Gizmo.
 
 Gizmo does not:
 

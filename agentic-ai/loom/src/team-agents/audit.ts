@@ -1,7 +1,12 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, normalize } from 'node:path';
-import { TEAM_AUTHORITY_CATALOG, TeamKey } from './catalog.ts';
-import type { TeamAuthority } from './catalog.ts';
+import {
+  GIZMO_OWNED_AGENT_CATALOG,
+  TEAM_AUTHORITY_CATALOG,
+  GizmoOwnedAgentKey,
+  TeamKey,
+} from './catalog.ts';
+import type { GizmoOwnedAgentProfile, TeamAuthority } from './catalog.ts';
 import { CORTEX_AUTHORING_SKILL_PATHS } from './context.ts';
 
 export type TeamAuthorityAuditFinding = {
@@ -51,6 +56,25 @@ const GIZMO_AUTHORITY_MARKERS = [
 ] as const;
 const PARENT_OWNED_LIFECYCLE_BOUNDARY =
   'The active harness owns creation, communication, scheduling, retries, cancellation, barriers, synthesis, and delivery lifecycle state.';
+const EXPECTED_GIZMO_OWNED_AGENTS = new Map<
+  GizmoOwnedAgentKey,
+  Omit<GizmoOwnedAgentProfile, 'key' | 'model' | 'reasoningEffort'>
+>([
+  [
+    GizmoOwnedAgentKey.PrSteward,
+    {
+      identity: 'PR Steward',
+      description:
+        'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
+      contextPaths: [
+        '.cortex/teams/pr-steward/AGENTS.md',
+        '.cortex/teams/pr-steward/knowledge-graph.md',
+      ],
+      capabilityBoundary:
+        'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
+    },
+  ],
+]);
 const EXPECTED_TEAM_AUTHORITIES = new Map<TeamKey, ExpectedTeamAuthority>([
   [
     TeamKey.Ai,
@@ -111,7 +135,68 @@ export function auditTeamAgents(
     repoRoot: request.repoRoot,
     authorities: TEAM_AUTHORITY_CATALOG,
   };
-  return auditTeamAuthorities(authorityRequest);
+  const authorityReport = auditTeamAuthorities(authorityRequest);
+  const operationalFindings = auditGizmoOwnedAgents(request.repoRoot);
+  return {
+    ...authorityReport,
+    findings: [...authorityReport.findings, ...operationalFindings],
+    auditOk: authorityReport.auditOk && operationalFindings.length === 0,
+  };
+}
+
+function auditGizmoOwnedAgents(
+  repoRoot: string,
+): readonly TeamAuthorityAuditFinding[] {
+  const findings: TeamAuthorityAuditFinding[] = [];
+  const seenKeys = new Set<GizmoOwnedAgentKey>();
+  const seenIdentities = new Set<string>();
+  for (const agent of GIZMO_OWNED_AGENT_CATALOG) {
+    const expected = EXPECTED_GIZMO_OWNED_AGENTS.get(agent.key);
+    if (
+      !expected ||
+      agent.identity !== expected.identity ||
+      seenKeys.has(agent.key) ||
+      seenIdentities.has(agent.identity) ||
+      agent.description !== expected.description ||
+      agent.model !== 'gpt-5.6-luna' ||
+      agent.reasoningEffort !== 'xhigh' ||
+      agent.capabilityBoundary !== expected.capabilityBoundary ||
+      JSON.stringify(agent.contextPaths) !==
+        JSON.stringify(expected.contextPaths)
+    ) {
+      findings.push({
+        code: 'invalid-operational-team-agent-contract',
+        path: TEAM_CATALOG_PATH,
+        message: `Operational Team Agent contract is missing, duplicated, or drifted: ${agent.key}`,
+      });
+    }
+    seenKeys.add(agent.key);
+    seenIdentities.add(agent.identity);
+    for (const contextPath of agent.contextPaths) {
+      if (!safeRepositoryPath(contextPath)) {
+        findings.push({
+          code: 'unsafe-operational-team-context-path',
+          path: contextPath,
+          message:
+            'Operational Team Agent context paths must be normalized and repository-relative.',
+        });
+      } else if (!existsSync(join(repoRoot, contextPath))) {
+        findings.push({
+          code: 'missing-operational-team-context-path',
+          path: contextPath,
+          message: `Operational Team Agent context is missing: ${contextPath}`,
+        });
+      }
+    }
+  }
+  if (GIZMO_OWNED_AGENT_CATALOG.length !== EXPECTED_GIZMO_OWNED_AGENTS.size) {
+    findings.push({
+      code: 'invalid-operational-team-agent-count',
+      path: TEAM_CATALOG_PATH,
+      message: 'The operational Team Agent catalog has drifted.',
+    });
+  }
+  return findings;
 }
 
 export function auditTeamAuthorities(

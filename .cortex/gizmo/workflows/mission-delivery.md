@@ -16,7 +16,7 @@ state. Delivery continues to the user-selected terminal condition.
 - Use [module-oriented development](module-oriented-development.md) for real
   provider-consumer order.
 - Use [pull request delivery](pull-requests.md) for validation and merge.
-- Use [PR Steward](pr-steward.md) for the authorized external pull-request
+- Use [PR Steward](../../teams/pr-steward/AGENTS.md) for the authorized external pull-request
   mechanics within that delivery sequence.
 - Use [Workbench issue management](issues.md) for plans and worklogs.
 - Use the

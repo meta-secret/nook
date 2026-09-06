@@ -13,7 +13,9 @@
 
 Gizmo Prime remains the policy, authorization, sequencing, Workbench, and
 final-verdict owner. It delegates bounded external PR mechanics to [PR
-Steward](pr-steward.md). PR Steward acts only on an explicit packet for the
+Steward](../../teams/pr-steward/AGENTS.md). The separate [lifecycle
+authority](../../teams/pr-steward/workflows/pull-request-lifecycle.md) owns
+the mechanical procedure. PR Steward acts only on an explicit packet for the
 current owned pull request and exact head.
 
 Without an explicit handoff, do not:
@@ -34,7 +36,7 @@ Full ownership policy:
 For implementation tasks, Gizmo's default job is to land a coherent PR with
 Nook's applicable GitHub Actions PR test checks green. Team subagents make the
 implementation edits. PR Steward performs the authorized external PR
-operations described in [its workflow](pr-steward.md).
+operations described in the [PR Steward lifecycle](../../teams/pr-steward/workflows/pull-request-lifecycle.md).
 
 ## PR Steward boundary
 

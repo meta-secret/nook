@@ -66,6 +66,10 @@ describe('canonical Cortex team authority', () => {
           'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
         model: 'gpt-5.6-luna',
         reasoningEffort: 'xhigh',
+        contextPaths: [
+          '.cortex/teams/pr-steward/AGENTS.md',
+          '.cortex/teams/pr-steward/knowledge-graph.md',
+        ],
         capabilityBoundary:
           'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
       },

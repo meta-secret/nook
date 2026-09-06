@@ -7,8 +7,8 @@ rules belong to Gizmo's linked authorities.
 ## Mandatory context selection
 
 1. Read the [root context router](knowledge-graph.md).
-2. Classify the work as Gizmo delivery control, AI, development core, security,
-   SRE, web development, or shared ownership.
+2. Classify the work as Gizmo delivery control, PR Steward operations, AI,
+   development core, security, SRE, web development, or shared ownership.
 3. Load exactly one owning `AGENTS.md` and knowledge graph.
 4. Open only the documents and headings needed for the assigned work.
 5. Stop loading Cortex when the task can be executed safely.
@@ -22,9 +22,11 @@ requires an explicit expertise task from Gizmo Prime.
 
 - [Gizmo Prime](gizmo/AGENTS.md) owns mission planning, delegation,
   shared-branch sequencing, PR policy and authorization, review finding
-  disposition, and Workbench state. The Gizmo-owned [PR Steward](gizmo/workflows/pr-steward.md)
-  performs explicitly authorized mechanical pull-request operations and
-  returns evidence to Gizmo.
+  disposition, and Workbench state.
+- [PR Steward](teams/pr-steward/AGENTS.md) owns explicitly authorized
+  mechanical pull-request operations and returns evidence to Gizmo. Its
+  [knowledge graph](teams/pr-steward/knowledge-graph.md) is a separate
+  operational Team Agent context, not a functional engineering authority.
 - [AI contract](teams/ai/AGENTS.md) and
   [graph](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, routing, and
   agent automation.
@@ -350,7 +352,7 @@ and do not rename, reorder, or remove its time, PR, actor, or action fields.
   - `SECURITY` for Security;
   - `SRE` for SRE;
   - `WEB-DEV` for Web development;
-  - `PR-STEWARD` for the Gizmo-owned PR Steward operational agent; and
+  - `PR-STEWARD` for the PR Steward operational Team Agent; and
   - `SKILL` for an actively executing skill.
   - Use the Team Agent's team token, not `Team Agent` or a personal name.
   - Use `SKILL` only for an activity performed by a skill.
