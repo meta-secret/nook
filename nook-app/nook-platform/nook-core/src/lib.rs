@@ -110,7 +110,7 @@ pub use extension_identity_handoff::{
 };
 pub use google_authenticator_import::{
     GoogleAuthenticatorImportError, GoogleAuthenticatorImportPlan,
-    GoogleAuthenticatorMigrationQrCodeCount, plan_google_authenticator_import,
+    GoogleAuthenticatorMigrationInput, GoogleAuthenticatorMigrationQrCodeCount,
 };
 pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedRecordCount};
 pub use keepassxc_import::{KeePassXcImportError, KeePassXcImportPlan, plan_keepassxc_import};

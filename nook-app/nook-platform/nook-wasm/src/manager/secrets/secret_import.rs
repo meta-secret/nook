@@ -6,6 +6,7 @@
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
 use nook_core::DashlaneExport;
+use nook_core::GoogleAuthenticatorMigrationInput;
 use nook_core::OnePasswordExport;
 use nook_core::ProtonPassImportInput;
 use nook_core::{
@@ -514,7 +515,8 @@ impl NookVaultManager {
         migration_uris: Vec<String>,
     ) -> Result<NookImportResult, JsError> {
         let migration_uris = Zeroizing::new(migration_uris);
-        let plan = nook_core::plan_google_authenticator_import(migration_uris.as_slice())
+        let plan = GoogleAuthenticatorMigrationInput::from_uris(migration_uris.as_slice())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(migration_uris);
         self.commit_secret_import(
