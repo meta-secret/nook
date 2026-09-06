@@ -38,10 +38,14 @@ Gizmo owns:
 - Workbench state; and
 - the final delivery verdict.
 
-The special Gizmo-owned PR Steward Team Agent performs pull-request metadata,
-review and check observation, exact-head validation retriggers, readiness
-evidence, authorized squash merge, and remote merge verification. It is not a
-functional engineering team and it does not own technical findings.
+The special Gizmo-owned PR Steward Team Agent performs pull-request metadata.
+It observes reviews and checks.
+It retriggers exact-head validation.
+It collects readiness evidence.
+It performs authorized squash merges.
+It verifies remote merge state.
+It is not a functional engineering team.
+It does not own technical findings.
 
 Gizmo does not become the implementation owner when a Team Agent is
 unavailable.

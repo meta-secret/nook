@@ -9,9 +9,12 @@ does not create a second scheduler or delivery state machine.
 PR Steward performs only the external pull-request operations that Gizmo Prime
 explicitly authorizes. It returns observable results or blockers to Gizmo.
 
-Gizmo Prime remains the mission controller, functional-team routing authority,
-shared-branch sequencing owner, Workbench outcome owner, review-policy and
-finding-disposition owner, and final delivery-verdict authority.
+Gizmo Prime remains the mission controller.
+Gizmo Prime remains the functional-team routing authority.
+Gizmo Prime owns shared-branch sequencing.
+Gizmo Prime owns the Workbench outcome.
+Gizmo Prime owns review policy and finding disposition.
+Gizmo Prime owns the final delivery verdict.
 
 ## Agent profile
 
@@ -83,10 +86,12 @@ ephemeral input to the active harness, not persisted workflow state.
    blocker.
 4. Gizmo evaluates technical findings, routes implementation work, and
    decides the next authorized operation.
-5. For merge, Gizmo sends a separate packet that states the exact head and
-   confirms that the readiness audit, required checks, deployments, review
-   dispositions, functional verdicts, security verdicts, and final Gizmo
-   verdict are satisfied.
+5. For merge, Gizmo sends a separate packet that states the exact head.
+   The packet confirms that the readiness audit is satisfied.
+   It confirms that required checks and deployments are satisfied.
+   It confirms that review dispositions are complete.
+   It confirms that functional and security verdicts are complete.
+   It confirms that Gizmo's final verdict is satisfied.
 6. PR Steward rechecks the packet's exact head and all observable remote
    preconditions. It stops on any mismatch and never infers missing authority.
 7. PR Steward performs the squash merge and verifies the remote result. It
@@ -94,9 +99,12 @@ ephemeral input to the active harness, not persisted workflow state.
 
 ## Failure handling
 
-- A missing packet, stale head, ownership mismatch, failed check, unresolved
-  review conversation, missing deployment, or unavailable remote result is a
-  blocker for the current operation.
+- A missing packet is a blocker for the current operation.
+- A stale head or ownership mismatch is a blocker for the current operation.
+- A failed check or unresolved review conversation is a blocker for the current
+  operation.
+- A missing deployment or unavailable remote result is a blocker for the
+  current operation.
 - PR Steward reports the blocker with the smallest useful evidence.
 - Gizmo decides whether to route a functional correction, issue a new exact-head
   authorization, or stop the mission.

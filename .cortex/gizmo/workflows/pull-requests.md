@@ -39,16 +39,31 @@ operations described in [its workflow](pr-steward.md).
 ## PR Steward boundary
 
 PR Steward owns the mechanical seam after Gizmo has prepared a coherent exact
-head. It may create or update PR metadata, request and observe reviews, collect
-comments and check failures, retrigger named exact-head validation, perform
-bounded waits, collect readiness evidence, execute an explicitly authorized
-squash merge, and verify the remote merge state.
+head.
 
-PR Steward does not push code commits, choose technical fixes, adjudicate
-review findings, route functional work, alter Workbench state, declare
-readiness, or issue the final delivery verdict. Gizmo prepares and sequences
-the branch, routes every finding, authorizes each operation, and decides the
-outcome.
+It may perform these operations:
+
+- create or update PR metadata;
+- request and observe reviews;
+- collect comments and check failures;
+- retrigger named exact-head validation;
+- perform bounded waits;
+- collect readiness evidence;
+- execute an explicitly authorized squash merge; and
+- verify the remote merge state.
+
+PR Steward does not push code commits.
+It does not choose technical fixes.
+It does not adjudicate review findings.
+It does not route functional work.
+It does not alter Workbench state.
+It does not declare readiness.
+It does not issue the final delivery verdict.
+
+Gizmo prepares and sequences the branch.
+Gizmo routes every finding.
+Gizmo authorizes each operation.
+Gizmo decides the outcome.
 
 ### PR title and description
 
@@ -156,8 +171,9 @@ ownership until merge or a concrete blocked handoff:
      dispatches at least one relevant focused `task remote TASK_NAME=<name>`
      job.
    - When the coherent head is validation-ready, PR Steward immediately runs
-     one complete-validation command without requiring a focused task first:
-     `task pr:validate PR=<number>` or
+     complete validation.
+   - A focused task is not required first.
+   - Use `task pr:validate PR=<number>` or
      `task loom:pr-land CONFIG=<pr-land-validate-request.yaml>`.
    - PR Steward dispatches every required hosted check before any GitHub review
      wait.
