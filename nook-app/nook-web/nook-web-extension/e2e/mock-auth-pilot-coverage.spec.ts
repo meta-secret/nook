@@ -412,6 +412,111 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('fills the Microsoft consumer identifier through semantic Next', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock Microsoft consumer auth vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        'https://login.live.com',
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      const page = await paired.context.newPage()
+      await page.route('https://login.live.com/**', async (route) => {
+        const requestedUrl = new URL(route.request().url())
+        const localResponse = await page.request.get(
+          `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+        )
+        await route.fulfill({ response: localResponse })
+      })
+      await page.goto('https://login.live.com/')
+      await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+        'microsoft-consumer-identifier',
+      )
+      const form = page.getByTestId('microsoft-consumer-form')
+      expect(
+        await form.evaluate((element) => ({
+          actionAttributePresent: element.hasAttribute('action'),
+          ariaLabelPresent: element.hasAttribute('aria-label'),
+          id: element.id,
+          methodAttribute: element.getAttribute('method'),
+          nameAttributePresent: element.hasAttribute('name'),
+        })),
+      ).toEqual({
+        actionAttributePresent: false,
+        ariaLabelPresent: false,
+        id: '',
+        methodAttribute: 'post',
+        nameAttributePresent: false,
+      })
+      const username = page.locator('#usernameEntry')
+      await expect(username).toHaveAttribute('type', 'email')
+      await expect(username).toHaveAttribute(
+        'autocomplete',
+        'username webauthn',
+      )
+      await expect(username).not.toHaveAttribute('name')
+      await expect(username).not.toHaveAttribute('placeholder')
+      await expect(username).not.toHaveAttribute('aria-label')
+      await expect(page.getByLabel('Email or phone number')).toBeVisible()
+      await expect(page.locator('#i0116, [name="loginfmt"]')).toHaveCount(0)
+      await expect(form.getByRole('button', { name: 'Close' })).toHaveAttribute(
+        'type',
+        'button',
+      )
+      await expect(
+        form.getByRole('button', { name: 'Forgot your username?' }),
+      ).toHaveAttribute('type', 'button')
+      await expect(form.getByRole('button', { name: 'Next' })).toHaveAttribute(
+        'type',
+        'submit',
+      )
+      await expect(
+        page.getByRole('link', { name: 'Create an account' }),
+      ).toBeVisible()
+      await expect(page.getByRole('link', { name: 'Help' })).toBeVisible()
+      const unrelatedForm = page.getByTestId('microsoft-unrelated-empty-form')
+      await expect(unrelatedForm).toHaveAttribute('method', 'post')
+      await expect(unrelatedForm).toHaveAttribute('action', '')
+
+      const widget = page.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
+      const expectedEvidence = JSON.stringify({
+        submittedControl: 'Next',
+        usernameMatched: true,
+        closeUntouched: true,
+        recoveryUntouched: true,
+        signupAndHelpUntouched: true,
+        unrelatedFormUntouched: true,
+      })
+      await expect
+        .poll(() =>
+          page.evaluate(
+            (key) => sessionStorage.getItem(key) || '',
+            'microsoft-consumer-submission-evidence',
+          ),
+        )
+        .toBe(expectedEvidence)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('fills the owned GitHub login without touching its decoys or alternatives', async ({
     browserName,
   }, testInfo) => {

@@ -8,6 +8,7 @@
   import DetectionHiddenHeaderLogin from './pages/DetectionHiddenHeaderLogin.svelte'
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
+  import DetectionMicrosoftConsumer from './pages/DetectionMicrosoftConsumer.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
   import DetectionOpenAi from './pages/DetectionOpenAi.svelte'
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
@@ -90,6 +91,8 @@
   <DetectionSpa />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
+{:else if pathname === '/' || pathname === '/microsoft-consumer'}
+  <DetectionMicrosoftConsumer />
 {:else if pathname === '/account/sign-in'}
   <DetectionAppleShell />
 {:else if pathname === '/appleauth/auth/authorize/signin'}
