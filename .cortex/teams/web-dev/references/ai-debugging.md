@@ -323,6 +323,45 @@ allowlist exposes console messages but deliberately excludes both network tools:
 even a request list can expose query-string credentials or identifiers, while
 request details can additionally expose headers and bodies.
 
+## Remote focused E2E debugging
+
+Remote focused E2E debugging is the hosted path for reproducing a failing
+Playwright selection quickly. It is separate from the local annotation pilot.
+
+The SRE-hosted job invokes the internal Web Development target:
+
+```sh
+task _web:test:e2e:debug
+```
+
+The job must set `NOOK_REMOTE_E2E_DEBUG=1`. The runner fails closed without that
+capability marker. Running the package script directly on a developer machine
+does not start Playwright.
+
+### Inputs
+
+Set these environment variables in the hosted job:
+
+- `E2E_PROJECT` selects exactly one project: `stable`, `unstable`, or
+  `sync-live`.
+- `E2E_SPECS` contains one or more comma-separated spec file names.
+- `E2E_GREP` optionally contains the JavaScript regular expression passed to
+  Playwright's `--grep` selector.
+
+The runner resolves `E2E_SPECS` against the selected project's existing
+`playwright.gates.json` catalog. It rejects empty entries, duplicates, path
+traversal, unknown projects, unknown spec files, invalid regular expressions,
+and oversized input.
+
+The runner constructs Playwright arguments as an argv array. It never embeds
+the selector in a shell command. Focused runs use one worker and request
+`retain-on-failure` traces. The existing E2E build, cleanup, and `test-results`
+artifact behavior remains active.
+
+For a static validation self-check, the hosted capability marker may be used
+with `NOOK_E2E_DEBUG_SELF_CHECK=1`. This exercises the selector and catalog
+guards without launching a browser.
+
 ## Three required pilot scenarios
 
 Use synthetic/non-sensitive vault data in the isolated MCP browser profile.

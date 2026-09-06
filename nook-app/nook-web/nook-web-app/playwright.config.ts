@@ -53,6 +53,61 @@ const SYNC_LIVE_SPECS = playwrightGates.manual
 const specPaths = (files: readonly string[]) =>
   files.map((file) => path.join('**', file))
 
+const projectDefinitions = [
+  {
+    name: 'stable',
+    testMatch: specPaths(PR_SPECS),
+    fullyParallel: true,
+  },
+  {
+    name: 'unstable',
+    testMatch: specPaths(SYNC_PROVIDER_SPECS),
+    fullyParallel: true,
+  },
+  {
+    name: 'sync-live',
+    testMatch: specPaths(SYNC_LIVE_SPECS),
+    // Real GitHub: CI sets one NOOK_GITHUB_E2E_REPO per container — keep files serial.
+    fullyParallel: false,
+  },
+  {
+    name: 'ui-demo',
+    testMatch: '**/demos/**/*.demo.spec.ts',
+    fullyParallel: false,
+    retries: 0,
+    outputDir: uiDemoOutputDir,
+    use: {
+      headless: true,
+      trace: 'retain-on-failure',
+      viewport: { width: 1280, height: 720 },
+      video: {
+        mode: 'on',
+        size: { width: 1280, height: 720 },
+      },
+    },
+  },
+]
+const debugProject = ((v) => (v ? v.trim() : ''))(process.env.E2E_PROJECT)
+const debugSpecs = ((v) =>
+  v
+    ? v
+        .split(',')
+        .map((file) => file.trim())
+        .filter((file) => file.length > 0)
+    : [])(process.env.E2E_SPECS)
+const debugGrep = ((v) => (v ? v.trim() : ''))(process.env.E2E_GREP)
+const isFocusedDebug = process.env.NOOK_REMOTE_E2E_DEBUG === '1'
+const focusedProjects = projectDefinitions
+  .filter((project) => project.name === debugProject)
+  .map((project) => ({
+    ...project,
+    testMatch: specPaths(debugSpecs),
+    ...(debugGrep ? { grep: new RegExp(debugGrep) } : {}),
+  }))
+if (isFocusedDebug && (debugSpecs.length === 0 || focusedProjects.length !== 1))
+  throw new Error('Remote E2E debug configuration is incomplete.')
+const configuredProjects = isFocusedDebug ? focusedProjects : projectDefinitions
+
 /** CI runs e2e after `ci:main:parallel` — serve production dist (no Vite dev optimizer). */
 const usePreviewServer = isCi && fs.existsSync(distDir)
 // The assembled production preview mounts the independent nokey.sh artifact
@@ -120,38 +175,5 @@ export default defineConfig({
           ),
         },
   },
-  projects: [
-    {
-      name: 'stable',
-      testMatch: specPaths(PR_SPECS),
-      fullyParallel: true,
-    },
-    {
-      name: 'unstable',
-      testMatch: specPaths(SYNC_PROVIDER_SPECS),
-      fullyParallel: true,
-    },
-    {
-      name: 'sync-live',
-      testMatch: specPaths(SYNC_LIVE_SPECS),
-      // Real GitHub: CI sets one NOOK_GITHUB_E2E_REPO per container — keep files serial.
-      fullyParallel: false,
-    },
-    {
-      name: 'ui-demo',
-      testMatch: '**/demos/**/*.demo.spec.ts',
-      fullyParallel: false,
-      retries: 0,
-      outputDir: uiDemoOutputDir,
-      use: {
-        headless: true,
-        trace: 'retain-on-failure',
-        viewport: { width: 1280, height: 720 },
-        video: {
-          mode: 'on',
-          size: { width: 1280, height: 720 },
-        },
-      },
-    },
-  ],
+  projects: configuredProjects,
 })

@@ -26,6 +26,7 @@
     "format:check": "prettier --check . ../nook-web-shared/src/vault-app ../nook-vault-simple ../nook-vault-sentinel",
     "test": "vitest run --passWithNoTests",
     "test:e2e": "bun run test:e2e:stable && bun run test:e2e:unstable",
+    "test:e2e:debug": "bun scripts/run-e2e-debug.ts",
     "test:e2e:stable": "PLAYWRIGHT_WORKERS=3 playwright test --project=stable",
     "test:e2e:unstable": "PLAYWRIGHT_WORKERS=2 playwright test --project=unstable",
     "test:e2e:pr": "bun run test:e2e:stable",

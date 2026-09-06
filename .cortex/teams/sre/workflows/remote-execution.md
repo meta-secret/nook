@@ -58,6 +58,21 @@ Dispatch one Kubernetes-native browser task:
 task remote TASK_NAME=web:e2e
 ```
 
+Dispatch a focused Kubernetes-native browser task. The project and spec set
+are required; the grep expression is optional and is passed to Playwright as
+an argv value:
+
+```bash
+task remote TASK_NAME=web:e2e:debug \
+  E2E_PROJECT=stable \
+  E2E_SPECS=connect.spec.ts,login-unlock-flow.spec.ts \
+  E2E_GREP='exact test title'
+```
+
+Focused E2E debugging is remote-only. The internal runner rejects direct local
+execution, validates each spec against the selected Playwright project
+catalog, and retains failure traces under the remote E2E artifact.
+
 Dispatch one ARC-native Rust task:
 
 ```bash

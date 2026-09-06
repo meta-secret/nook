@@ -38,6 +38,18 @@ on:
         description: Optional exact ARC runner route for operator smoke validation
         required: false
         type: string
+      e2e_project:
+        description: Playwright project for web:e2e:debug
+        required: false
+        type: string
+      e2e_specs:
+        description: Comma-separated Playwright spec files for web:e2e:debug
+        required: false
+        type: string
+      e2e_grep:
+        description: Optional Playwright title regular expression for web:e2e:debug
+        required: false
+        type: string
 
 permissions:
   actions: read
@@ -60,6 +72,7 @@ jobs:
       ((inputs.task != 'rust-cache:promote' || inputs.tasks != '') &&
       (inputs.tasks || inputs.task) != 'web:build' &&
       (inputs.tasks || inputs.task) != 'web:e2e' &&
+      (inputs.tasks || inputs.task) != 'web:e2e:debug' &&
       (inputs.tasks || inputs.task) != 'extension:e2e' &&
       (inputs.tasks || inputs.task) != 'check' &&
       (inputs.tasks || inputs.task) != 'ci:pr' &&
@@ -187,6 +200,7 @@ jobs:
       (inputs.tasks == '' || inputs.task == '') &&
       ((inputs.tasks || inputs.task) == 'web:build' ||
       (inputs.tasks || inputs.task) == 'web:e2e' ||
+      (inputs.tasks || inputs.task) == 'web:e2e:debug' ||
       (inputs.tasks || inputs.task) == 'extension:e2e' ||
       (inputs.tasks || inputs.task) == 'check' ||
       (inputs.tasks || inputs.task) == 'ci:pr' ||
@@ -225,6 +239,7 @@ jobs:
       (inputs.tasks == '' || inputs.task == '') &&
       ((inputs.tasks || inputs.task) == 'web:build' ||
       (inputs.tasks || inputs.task) == 'web:e2e' ||
+      (inputs.tasks || inputs.task) == 'web:e2e:debug' ||
       (inputs.tasks || inputs.task) == 'extension:e2e' ||
       (inputs.tasks || inputs.task) == 'check' ||
       (inputs.tasks || inputs.task) == 'ci:pr' ||
@@ -240,6 +255,9 @@ jobs:
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     env:
       CI: "1"
+      E2E_PROJECT: ${{ inputs.e2e_project }}
+      E2E_SPECS: ${{ inputs.e2e_specs }}
+      E2E_GREP: ${{ inputs.e2e_grep }}
     steps:
       - name: Run selected task without a nested container runtime
         working-directory: /meta-secret/nook
@@ -250,6 +268,7 @@ jobs:
           case "$REMOTE_CONTAINER_TASK" in
             web:build) task _web:build ;;
             web:e2e) task _web:test:e2e ;;
+            web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug ;;
             extension:e2e) task _extension:test:e2e ;;
             check) task _check ;;
             ci:pr) task _ci:pr ;;
