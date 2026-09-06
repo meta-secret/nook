@@ -1,6 +1,6 @@
 use super::{
     NookEnrollmentProvider, NookLocalFolderConfig, NookProviderReplicationCapability,
-    NookVaultArchitecture, passkey_browser, wasm_bindgen,
+    NookStorageConnectArgs, NookVaultArchitecture, passkey_browser, wasm_bindgen,
 };
 use crate::storage::local_folder::LocalFolderHandles;
 use crate::storage::session;
