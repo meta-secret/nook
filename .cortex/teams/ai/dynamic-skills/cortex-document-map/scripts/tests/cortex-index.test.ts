@@ -77,6 +77,7 @@ test('renders the complete canonical Cortex context router', () => {
   }
 
   const teamOwnershipContracts = [
+    '[PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical',
     '[AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,',
     '[Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault',
     '[Security](teams/security/knowledge-graph.md): security architecture,',
