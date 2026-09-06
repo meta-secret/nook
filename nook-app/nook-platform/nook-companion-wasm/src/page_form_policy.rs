@@ -463,6 +463,81 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn authentication_advance_control_wasm_export_preserves_linkedin_button_login_policy() {
+        let mut linkedin = login_advance_observation("https://www.linkedin.com/login/", "Sign in");
+        linkedin.source_origin = "https://www.linkedin.com".to_owned();
+        linkedin.form_identity.clear();
+        linkedin.ownership = nook_companion_core::PageControlOwnership::LocallyScoped;
+        linkedin.semantics = nook_companion_core::PageControlSemantics::Activation;
+        linkedin.semantic_submit_control_count = 0.into();
+        assert!(authentication_advance_control_is_safe(linkedin.clone()));
+
+        for label in [
+            "Show password",
+            "Keep me signed in",
+            "Forgot password",
+            "Sign in with Apple",
+            "Use passkey",
+            "Continue with SAML",
+            "Sign in with SSO",
+            "Join now",
+            "Terms of Service",
+            "Privacy Policy",
+            "Delete account",
+        ] {
+            let mut rejected = linkedin.clone();
+            rejected.label = label.to_owned();
+            assert!(!authentication_advance_control_is_safe(rejected), "{label}");
+        }
+
+        for destination in [
+            "https://attacker.example/login/",
+            "https://www.linkedin.com/signup",
+            "https://www.linkedin.com/checkpoint/rp/request-password-reset",
+            "https://www.linkedin.com/login?provider=apple",
+        ] {
+            let mut rejected = linkedin.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(rejected),
+                "{destination}"
+            );
+        }
+
+        for form_identity in ["signup", "passkey", "saml", "enterprise-sso"] {
+            let mut rejected = linkedin.clone();
+            rejected.form_identity = form_identity.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(rejected),
+                "{form_identity}"
+            );
+        }
+
+        for machine_identity in ["provider=apple", "reset-password", "delete-account"] {
+            let mut rejected = linkedin.clone();
+            rejected.machine_identity = machine_identity.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(rejected),
+                "{machine_identity}"
+            );
+        }
+
+        let mut unowned = linkedin.clone();
+        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(unowned));
+
+        let mut inert = linkedin.clone();
+        inert.actionability = nook_companion_core::PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(inert));
+
+        linkedin.semantics = nook_companion_core::PageControlSemantics::SemanticSubmit;
+        linkedin.semantic_submit_control_count = 2.into();
+        linkedin.label = "Primary action".to_owned();
+        assert!(!authentication_advance_control_is_safe(linkedin));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_facts_wasm_export_accepts_exact_login_mode_get() {
         let facts = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {

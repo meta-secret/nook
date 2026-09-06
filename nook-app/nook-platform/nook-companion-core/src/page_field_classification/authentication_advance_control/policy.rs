@@ -35,6 +35,7 @@ impl CheckedAuthenticationControl<'_> {
     pub(super) fn has_unconditional_veto_identity(&self) -> bool {
         let credential_update_destination = self.credential_update_destination();
         let observation = self.observation;
+        let expanded_label = expand_identity_text(&observation.label);
         let primary_oauth_login = matches!(observation.ownership, PageControlOwnership::OwnedForm)
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
@@ -53,7 +54,11 @@ impl CheckedAuthenticationControl<'_> {
                 .indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.label).indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.machine_identity).has_control_veto()
-            || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])
+            || contains_any_word(&expanded_label, &["cancel"])
+            || contains_any_word(
+                &expanded_label,
+                &["keep me signed in", "stay signed in", "remember me"],
+            )
             || AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .has_disallowed_action_or_provider(DestinationPolicy {
                     credential: if credential_update_destination {
