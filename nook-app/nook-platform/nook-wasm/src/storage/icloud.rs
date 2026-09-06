@@ -501,7 +501,7 @@ impl ICloudEventStore<'_> {
                         event_id = event_id.as_str(),
                         record_name,
                         existing_len,
-                        expected_len = bytes.len(),
+                        expected_len = checked.bytes().len(),
                         "CloudKit event exists with different content"
                     );
                     return Err(NookError::ICloud(
