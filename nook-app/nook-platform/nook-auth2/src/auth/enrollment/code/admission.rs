@@ -193,9 +193,9 @@ mod tests {
 
         fn expect_decryption_error(
             &self,
-            rejection: EnrollmentDecryptionRejection<'_>,
+            rejection: &EnrollmentDecryptionRejection<'_>,
         ) -> anyhow::Result<()> {
-            let EnrollmentDecryptionRejection { password, expected } = rejection;
+            let EnrollmentDecryptionRejection { password, expected } = *rejection;
             let encoded = Engine::encode(&URL_SAFE_NO_PAD, serde_json::to_vec(self)?.as_slice());
             match CheckedEnrollmentEnvelope::parse(&encoded)
                 .and_then(|checked| checked.decrypt(password))
@@ -221,53 +221,53 @@ mod tests {
         wire.iv.clear();
         wire.ct.clear();
         wire.issued_at.clear();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::UnsupportedEncryptionParameters,
         })?;
         wire.kdf = "pbkdf2-sha256".to_owned();
         wire.cipher = "unsupported".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::UnsupportedEncryptionParameters,
         })?;
         wire.cipher = "aes-gcm-256".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::MissingKdfParameters,
         })?;
         wire.iterations = 1.into();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::MissingEntryId,
         })?;
         wire.entry_id = "entry-1".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::InvalidEntryLabel,
         })?;
         wire.entry_label = EnrollmentEntryLabel::Unlabeled;
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::MissingField { field: "salt" },
         })?;
         wire.salt = "AA".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::MissingField { field: "iv" },
         })?;
         wire.iv = "AA".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::MissingField { field: "ct" },
         })?;
         wire.ct = "AA".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::MissingField { field: "issued_at" },
         })?;
         wire.issued_at = "present".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::DecryptPasswordRequired,
         })?;
@@ -278,22 +278,22 @@ mod tests {
     fn password_check_precedes_byte_decoding_and_iv_keeps_fixed_length() -> anyhow::Result<()> {
         let mut wire = EnrollmentCodeEnvelope::admission_fixture();
         wire.salt = "!".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: " ",
             expected: &EnrollmentError::DecryptPasswordRequired,
         })?;
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: "pw",
             expected: &EnrollmentError::InvalidCode,
         })?;
         wire.salt = "AA".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: "pw",
             expected: &EnrollmentError::InvalidCode,
         })?;
         wire.iv = Engine::encode(&URL_SAFE_NO_PAD, [0; 12].as_slice());
         wire.ct = "!".to_owned();
-        wire.expect_decryption_error(EnrollmentDecryptionRejection {
+        wire.expect_decryption_error(&EnrollmentDecryptionRejection {
             password: "pw",
             expected: &EnrollmentError::InvalidCode,
         })?;
