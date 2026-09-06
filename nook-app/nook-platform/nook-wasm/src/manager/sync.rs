@@ -113,4 +113,21 @@ mod browser_tests {
         );
         assert_eq!(manager.vault.store_id, "store_sync_fixture");
     }
+
+    #[wasm_bindgen_test]
+    async fn local_sync_without_content_reports_a_new_vault() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.id = identity.device_id().to_string();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+
+        let result = manager
+            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .await?;
+        assert!(result.changed());
+        assert_eq!(result.access_status()?, VaultAccessStatus::NewVault);
+        manager.delete_local_browser_data().await?;
+        Ok(())
+    }
 }

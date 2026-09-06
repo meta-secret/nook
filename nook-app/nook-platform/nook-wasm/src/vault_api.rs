@@ -872,4 +872,27 @@ mod projection_tests {
         assert!(!configured_vault_application_is_sentinel());
         assert!(configured_vault_application_supports_extension());
     }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn provider_and_version_helpers_cover_valid_inputs() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let snapshot = nook_core::AuthProvidersSnapshotData::default();
+        let sealed = seal_auth_providers_for_device_public_key(
+            identity.public_key().as_str(),
+            snapshot.clone(),
+        )?;
+        assert_eq!(sealed, snapshot);
+
+        let with_local = ensure_local_provider_row(snapshot, "store_valid_fixture")?;
+        assert_eq!(with_local.providers.len(), 1);
+        assert_eq!(
+            with_local.providers[0].provider_type,
+            nook_core::StorageProviderType::Local
+        );
+
+        let yaml = nook_core::serialize_stored(&[], nook_core::VaultFormat::Yaml)?;
+        assert_eq!(read_vault_version(yaml.as_str()), 1);
+        Ok(())
+    }
 }
