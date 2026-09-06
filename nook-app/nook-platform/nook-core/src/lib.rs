@@ -74,7 +74,7 @@ pub use bip39::{
 };
 pub use bitwarden_import::{BitwardenExport, BitwardenImportError, BitwardenImportPlan};
 pub use chrome_passwords_import::{
-    ChromePasswordsImportError, ChromePasswordsImportPlan, plan_chrome_passwords_import,
+    ChromePasswordsCsvInput, ChromePasswordsImportError, ChromePasswordsImportPlan,
 };
 pub use credit_card::CreditCardSecret;
 pub use dashlane_import::{DashlaneExport, DashlaneImportError, DashlaneImportPlan};
@@ -113,9 +113,9 @@ pub use google_authenticator_import::{
     GoogleAuthenticatorMigrationInput, GoogleAuthenticatorMigrationQrCodeCount,
 };
 pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedRecordCount};
-pub use keepassxc_import::{KeePassXcImportError, KeePassXcImportPlan, plan_keepassxc_import};
+pub use keepassxc_import::{KeePassXcCsvInput, KeePassXcImportError, KeePassXcImportPlan};
 pub use keeper_import::{KeeperCsvInput, KeeperImportError, KeeperImportPlan};
-pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
+pub use lastpass_import::{LastPassCsvInput, LastPassImportError, LastPassImportPlan};
 pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
 pub use nook_app_common::i18n_keys;
 pub use nook_app_common::{
