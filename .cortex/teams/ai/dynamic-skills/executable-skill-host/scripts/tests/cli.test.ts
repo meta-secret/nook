@@ -253,6 +253,12 @@ describe('provider-neutral executable skill YAML host', () => {
             description: 'create security key component',
             depends_on: ['update-cortex'],
           },
+          {
+            id: 'steward-pr',
+            team: 'pr-steward',
+            description: 'perform authorized pull-request delivery mechanics',
+            depends_on: ['create-security-key'],
+          },
         ],
       },
     });
