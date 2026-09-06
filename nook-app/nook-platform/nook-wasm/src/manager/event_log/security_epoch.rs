@@ -113,7 +113,7 @@ impl Drop for SecurityEpochRecoveryPlan {
 impl SecurityEpochRecoveryPlan {
     fn built_event_from_yaml(yaml: &str) -> Result<BuiltVaultEvent, NookError> {
         let bytes = yaml.as_bytes().to_vec();
-        let event = nook_core::parse_event_storage_bytes(&bytes)?;
+        let event = nook_core::parse_event_storage_bytes(&bytes.into())?;
         Ok(BuiltVaultEvent { event, bytes })
     }
 }
@@ -535,7 +535,7 @@ mod tests {
                 },
                 signing.signing_key(),
             )?;
-            let yaml = String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?)?;
+            let yaml = String::from_utf8(nook_core::serialize_event_storage_yaml(&event)?.into())?;
             Ok(Self {
                 new_secrets_key: String::new(),
                 new_members_key: String::new(),

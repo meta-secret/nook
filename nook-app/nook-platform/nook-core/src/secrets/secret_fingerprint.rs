@@ -351,8 +351,8 @@ mod tests {
             website_url: String::new(),
             secret: TotpSecret::parse(secret)?,
             algorithm: TotpAlgorithm::Sha1,
-            digits: TotpDigits::parse(6)?,
-            period: TotpPeriod::parse(30)?,
+            digits: TotpDigits::try_from(6)?,
+            period: TotpPeriod::try_from(30)?,
             backup_codes: backup_codes.iter().map(ToString::to_string).collect(),
         }))
     }

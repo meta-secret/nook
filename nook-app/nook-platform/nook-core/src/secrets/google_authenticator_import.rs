@@ -277,8 +277,8 @@ fn convert_parameter(mut parameter: OtpParameters) -> Result<SecretValue, ()> {
         _ => return Err(()),
     };
     let digits = match MigrationDigits::try_from(parameter.digits).ok() {
-        Some(MigrationDigits::Unspecified | MigrationDigits::Six) => TotpDigits::parse(6),
-        Some(MigrationDigits::Eight) => TotpDigits::parse(8),
+        Some(MigrationDigits::Unspecified | MigrationDigits::Six) => TotpDigits::try_from(6),
+        Some(MigrationDigits::Eight) => TotpDigits::try_from(8),
         None => return Err(()),
     }
     .map_err(|_| ())?;
@@ -291,7 +291,7 @@ fn convert_parameter(mut parameter: OtpParameters) -> Result<SecretValue, ()> {
         secret: TotpSecret::parse(&encoded_secret).map_err(|_| ())?,
         algorithm,
         digits,
-        period: TotpPeriod::parse(30).map_err(|_| ())?,
+        period: TotpPeriod::try_from(30).map_err(|_| ())?,
         backup_codes: Vec::new(),
     };
     authenticator.apply_inferred_website_url_if_empty();

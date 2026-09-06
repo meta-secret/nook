@@ -592,6 +592,7 @@ pub mod mock_passkey {
 
         use super::*;
         use crate::{
+            WebAuthnCredentialId, WebAuthnPrfOutput, WebAuthnUserHandle,
             derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
             passkey_derived_device_identity_record,
         };
@@ -607,7 +608,7 @@ pub mod mock_passkey {
                     RP_ID,
                     "Test passkey",
                     user_handle,
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )?)
@@ -621,7 +622,7 @@ pub mod mock_passkey {
                 &MockPasskeyAssertionRequest::with_allowed_credential(
                     RP_ID,
                     registration.credential_id().to_vec(),
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )?;
@@ -632,8 +633,8 @@ pub mod mock_passkey {
             assert_eq!(assertion.sign_count(), 1);
             assert!(
                 derive_device_identity_from_passkey_prf(
-                    assertion.user_handle(),
-                    assertion.prf_output()
+                    &WebAuthnUserHandle::try_from(assertion.user_handle().to_vec())?,
+                    &WebAuthnPrfOutput::try_from(assertion.prf_output().to_vec())?
                 )
                 .is_ok()
             );
@@ -646,30 +647,30 @@ pub mod mock_passkey {
             let mut authenticator = MemoryPasskeyAuthenticator::new();
             let registration = approved_registration(&mut authenticator, vec![9; 32])?;
             let original_identity = derive_device_identity_from_passkey_prf(
-                registration.user_handle(),
-                registration.prf_output(),
+                &WebAuthnUserHandle::try_from(registration.user_handle().to_vec())?,
+                &WebAuthnPrfOutput::try_from(registration.prf_output().to_vec())?,
             )?;
 
             let assertion = authenticator.authenticate(
                 &MockPasskeyAssertionRequest::discoverable(
                     RP_ID,
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )?;
             let recovered_identity = derive_device_identity_from_passkey_prf(
-                assertion.user_handle(),
-                assertion.prf_output(),
+                &WebAuthnUserHandle::try_from(assertion.user_handle().to_vec())?,
+                &WebAuthnPrfOutput::try_from(assertion.prf_output().to_vec())?,
             )?;
             let recovered_record = passkey_derived_device_identity_record(
-                assertion.credential_id(),
-                assertion.user_handle(),
+                &WebAuthnCredentialId::try_from(assertion.credential_id().to_vec())?,
+                &WebAuthnUserHandle::try_from(assertion.user_handle().to_vec())?,
                 &deterministic_passkey_prf_input(),
             )?;
 
             assert_eq!(recovered_identity, original_identity);
             assert_eq!(
-                recovered_record.credential_id_bytes()?,
+                recovered_record.credential_id()?.as_ref(),
                 registration.credential_id()
             );
             Ok(())
@@ -683,7 +684,7 @@ pub mod mock_passkey {
                     RP_ID,
                     "Denied",
                     vec![8; 32],
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Denied,
             );
@@ -701,7 +702,7 @@ pub mod mock_passkey {
                 &MockPasskeyAssertionRequest::with_allowed_credential(
                     RP_ID,
                     registration.credential_id().to_vec(),
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Denied,
             );
@@ -726,7 +727,7 @@ pub mod mock_passkey {
                 &MockPasskeyAssertionRequest::with_allowed_credential(
                     RP_ID,
                     vec![44; 32],
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             );
@@ -747,7 +748,7 @@ pub mod mock_passkey {
                 &MockPasskeyAssertionRequest::with_allowed_credential(
                     "example.com",
                     registration.credential_id().to_vec(),
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             );
@@ -770,7 +771,7 @@ pub mod mock_passkey {
                         second.credential_id().to_vec(),
                         first.credential_id().to_vec(),
                     ],
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             )?;
@@ -802,7 +803,7 @@ pub mod mock_passkey {
             let result = authenticator.authenticate(
                 &MockPasskeyAssertionRequest::discoverable(
                     RP_ID,
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             );
@@ -834,10 +835,14 @@ pub mod mock_passkey {
             let first = approved_registration(&mut authenticator, vec![1; 32])?;
             let second = approved_registration(&mut authenticator, vec![2; 32])?;
 
-            let first_identity =
-                derive_device_identity_from_passkey_prf(first.user_handle(), first.prf_output())?;
-            let second_identity =
-                derive_device_identity_from_passkey_prf(second.user_handle(), second.prf_output())?;
+            let first_identity = derive_device_identity_from_passkey_prf(
+                &WebAuthnUserHandle::try_from(first.user_handle().to_vec())?,
+                &WebAuthnPrfOutput::try_from(first.prf_output().to_vec())?,
+            )?;
+            let second_identity = derive_device_identity_from_passkey_prf(
+                &WebAuthnUserHandle::try_from(second.user_handle().to_vec())?,
+                &WebAuthnPrfOutput::try_from(second.prf_output().to_vec())?,
+            )?;
 
             assert_ne!(first.credential_id(), second.credential_id());
             assert_ne!(first_identity, second_identity);
@@ -853,7 +858,7 @@ pub mod mock_passkey {
                     RP_ID,
                     "Bad user",
                     Vec::<u8>::new(),
-                    deterministic_passkey_prf_input(),
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
                 ),
                 MockPasskeyUserAuthorization::Approved,
             );
@@ -862,7 +867,10 @@ pub mod mock_passkey {
                 MockPasskeyUserAuthorization::Approved,
             );
             let bad_rp = authenticator.authenticate(
-                &MockPasskeyAssertionRequest::discoverable(" ", deterministic_passkey_prf_input()),
+                &MockPasskeyAssertionRequest::discoverable(
+                    " ",
+                    deterministic_passkey_prf_input().as_ref().to_vec(),
+                ),
                 MockPasskeyUserAuthorization::Approved,
             );
 

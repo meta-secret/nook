@@ -174,7 +174,7 @@ pub(crate) async fn load_local_event_store(store_id: &str) -> Result<LocalEventS
             if let Some(bytes) = store_get(STORE_EVENTS, &key).await?
                 && let Ok(event_id) = EventId::parse(&raw_id)
             {
-                local.put_event(event_id, bytes.into_bytes());
+                local.put_event(event_id, bytes.into_bytes().into());
             }
         }
     }
@@ -272,7 +272,7 @@ pub(crate) async fn load_local_event_store_from_store(
         let event_id = EventId::parse(&raw_id).map_err(|error| {
             NookError::Serialization(format!("Invalid indexed event id {raw_id}: {error}"))
         })?;
-        let bytes = bytes.into_bytes();
+        let bytes: nook_core::EventStorageBytes = bytes.into_bytes().into();
         let stored_event = nook_core::parse_event_storage_bytes(&bytes)?;
         let stored_event_id = stored_event.id()?;
         if stored_event_id != event_id {
@@ -615,7 +615,7 @@ mod tests {
         store_put(
             STORE_EVENTS,
             &row_key,
-            &String::from_utf8(event_bytes)
+            &String::from_utf8(event_bytes.into())
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
         )
         .await?;

@@ -423,12 +423,12 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
         match &protected {
             Some((device_id, record)) => {
                 let credential_id = record
-                    .credential_id_bytes()
-                    .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
+                    .credential_id()
+                    .map(|bytes| nook_core::passkey_credential_identifier(bytes.as_ref()))
                     .unwrap_or_default();
                 let user_handle_id = record
-                    .user_handle_bytes()
-                    .map(|bytes| nook_core::passkey_user_handle_identifier(&bytes))
+                    .user_handle()
+                    .map(|bytes| nook_core::passkey_user_handle_identifier(bytes.as_ref()))
                     .unwrap_or_default();
                 (device_id.clone(), credential_id, user_handle_id)
             }

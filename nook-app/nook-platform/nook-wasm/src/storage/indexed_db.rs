@@ -296,9 +296,9 @@ where
         let fingerprint = match guarded_entry {
             Some(entry) => entry
                 .wrapped_app_key()
-                .credential_id_bytes()
+                .credential_id()
                 .ok()
-                .map(|bytes| nook_core::passkey_credential_identifier(&bytes)),
+                .map(|bytes| nook_core::passkey_credential_identifier(bytes.as_ref())),
             None if allow_legacy_guard => read_string_preferring(
                 &store,
                 APP_KEY_WRAPPED_KEY,
@@ -309,9 +309,9 @@ where
             .and_then(|raw| {
                 let wrapped = nook_core::parse_wrapped_device_identity(&raw).ok()?;
                 wrapped
-                    .credential_id_bytes()
+                    .credential_id()
                     .ok()
-                    .map(|bytes| nook_core::passkey_credential_identifier(&bytes))
+                    .map(|bytes| nook_core::passkey_credential_identifier(bytes.as_ref()))
             }),
             None => None,
         };

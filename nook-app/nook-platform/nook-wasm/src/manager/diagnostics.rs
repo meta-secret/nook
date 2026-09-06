@@ -64,7 +64,7 @@ impl NookVaultManager {
                     ));
                     continue;
                 };
-                match nook_core::parse_event_storage_bytes(bytes) {
+                match nook_core::parse_event_storage_bytes(&bytes) {
                     Ok(event) => events.push(event),
                     Err(_) => warnings.push(format!(
                         "Local event {event_id} is unreadable and was skipped."

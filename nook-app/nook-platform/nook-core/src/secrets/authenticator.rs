@@ -24,11 +24,11 @@ fn parse_totp_algorithm(value: &str) -> Result<TotpAlgorithm, ValidationError> {
 }
 
 fn parse_totp_digits(value: u32) -> Result<TotpDigits, ValidationError> {
-    TotpDigits::parse(value).map_err(|_| ValidationError::AuthenticatorDigitsInvalid)
+    TotpDigits::try_from(value).map_err(|_| ValidationError::AuthenticatorDigitsInvalid)
 }
 
 fn parse_totp_period(value: u64) -> Result<TotpPeriod, ValidationError> {
-    TotpPeriod::parse(value).map_err(|_| ValidationError::AuthenticatorPeriodInvalid)
+    TotpPeriod::try_from(value).map_err(|_| ValidationError::AuthenticatorPeriodInvalid)
 }
 const MIN_SECRET_BYTES: usize = 10;
 
@@ -484,7 +484,7 @@ mod tests {
             website_url: String::new(),
             secret: rfc_secret(secret)?,
             algorithm,
-            digits: TotpDigits::parse(8)?,
+            digits: TotpDigits::try_from(8)?,
             period: TotpPeriod::default(),
             backup_codes: Vec::new(),
         })
@@ -601,8 +601,8 @@ mod tests {
     fn rejects_short_or_invalid_base32_secrets_and_parameters() {
         assert!(TotpSecret::parse("not base32!").is_err());
         assert!(TotpSecret::parse("JBSWY3DP").is_err());
-        assert!(TotpDigits::parse(5).is_err());
-        assert!(TotpPeriod::parse(10).is_err());
+        assert!(TotpDigits::try_from(5).is_err());
+        assert!(TotpPeriod::try_from(10).is_err());
     }
 
     #[test]

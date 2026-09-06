@@ -145,7 +145,7 @@ fn applied_pending_and_duplicate_appends_keep_publication_behavior() -> VaultRes
     assert_eq!(pending_outbox.len(), 1);
     assert_eq!(pending_outbox[0].0, event_id);
     assert_eq!(
-        Some(pending_outbox[0].1.as_slice()),
+        Some(pending_outbox[0].1.clone()),
         applied.session.store.get_bytes(&event_id)
     );
 
@@ -247,7 +247,7 @@ fn child_event_with_genesis(
         .store
         .get_bytes(&genesis_head)
         .ok_or(EventError::MissingGenesisBytes)?
-        .to_vec();
+        .into();
     let store_id = StoreId::parse(device.store_id())?;
     let actor_id = device.actor_id()?;
     let key_epoch = EventId::parse(&device.session.key_epoch)?;
@@ -269,7 +269,7 @@ fn child_event_with_genesis(
             },
         }],
     })?;
-    Ok((genesis_head, genesis_bytes, event.id()?, child_bytes))
+    Ok((genesis_head, genesis_bytes, event.id()?, child_bytes.into()))
 }
 
 #[test]
@@ -682,7 +682,7 @@ fn provider_switch_outbox_flush_and_union() -> VaultResult<()> {
         providers
             .get_mut("github")
             .ok_or_else(|| missing_provider_bucket("github"))?
-            .put_event(id, bytes);
+            .put_event(id, bytes.into());
     }
 
     let mut b = EventLogDevice::replica_of(&a)?;
@@ -709,7 +709,7 @@ fn provider_advanced_before_local_flush_keeps_both_event_log_writes() -> VaultRe
         providers
             .get_mut("github")
             .ok_or_else(|| missing_provider_bucket("github"))?
-            .put_event(id, bytes);
+            .put_event(id, bytes.into());
     }
     union_device_from_providers(&mut local, &providers)?;
     union_device_from_providers(&mut remote_device, &providers)?;

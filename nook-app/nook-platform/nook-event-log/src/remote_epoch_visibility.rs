@@ -3,7 +3,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    EventId, EventResult, LocalEventStore, VaultEvent, VaultOperation, parse_event_storage_bytes,
+    EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent, VaultOperation,
+    parse_event_storage_bytes,
 };
 
 fn starts_security_epoch(event: &VaultEvent) -> bool {
@@ -31,7 +32,7 @@ fn committed_epoch_parent(event: &VaultEvent) -> Option<&EventId> {
 
 fn authorized_checkpoint_parents(
     local: &LocalEventStore,
-    remote_events: &[(EventId, Vec<u8>)],
+    remote_events: &[(EventId, EventStorageBytes)],
     store_id: &str,
 ) -> EventResult<BTreeSet<EventId>> {
     let mut candidate = local.clone();
@@ -80,9 +81,9 @@ pub(crate) fn incomplete_security_transition_events(
 /// omitted trigger instead of extending an incomplete security transition.
 pub(crate) fn visibility_gated_remote_events(
     local: &LocalEventStore,
-    remote_events: &[(EventId, Vec<u8>)],
+    remote_events: &[(EventId, EventStorageBytes)],
     store_id: &str,
-) -> EventResult<Vec<(EventId, Vec<u8>)>> {
+) -> EventResult<Vec<(EventId, EventStorageBytes)>> {
     let mut candidate = local.clone();
     for (event_id, bytes) in remote_events {
         candidate.put_event(event_id.clone(), bytes.clone());
@@ -120,14 +121,9 @@ fn publish_priority(event: &VaultEvent) -> u8 {
 /// Order provider writes so a checkpoint becomes visible before its trigger.
 /// An observer may temporarily see an orphan checkpoint, which is quarantined;
 /// it never sees an appendable epoch trigger without its checkpoint.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: orders immutable remote event storage byte records for visibility"
-    )
-)]
-pub fn order_remote_events_for_visibility(events: &mut [(EventId, Vec<u8>)]) -> EventResult<()> {
+pub fn order_remote_events_for_visibility(
+    events: &mut [(EventId, EventStorageBytes)],
+) -> EventResult<()> {
     let mut priorities = BTreeMap::new();
     for (event_id, bytes) in events.iter() {
         let event = parse_event_storage_bytes(bytes)?;
@@ -156,7 +152,7 @@ mod tests {
     use ed25519_dalek::SigningKey;
 
     const STORE: &str = "store_testtoken11";
-    type RemoteEvent = (EventId, Vec<u8>);
+    type RemoteEvent = (EventId, EventStorageBytes);
 
     fn signed_event(
         signing_key: &SigningKey,

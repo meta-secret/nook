@@ -5,13 +5,27 @@
 //! adapter that replays core event-log operations into auth metadata state.
 
 use crate::{EpochMetadataState, MemberLabel};
-use nook_auth2::MultiDeviceError;
+use nook_auth2::{MultiDeviceError, encrypt_for_recipient as encrypt_for_auth_recipient};
 
 pub use nook_auth2::multi_device_api::*;
 
 use std::collections::BTreeMap;
 
 use crate::VaultOperation;
+
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: encrypts serialized age plaintext bytes"
+    )
+)]
+pub fn encrypt_for_recipient(
+    plaintext: &[u8],
+    recipient_public: &DevicePublicKey,
+) -> nook_auth2::MultiDeviceResult<AgeArmoredCiphertext> {
+    encrypt_for_auth_recipient(plaintext, recipient_public)
+}
 
 /// Inputs for the immutable Simple-vault identity roster written at genesis.
 pub struct SimpleIdentityGenesisOperationsInput<'a> {

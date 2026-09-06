@@ -174,7 +174,7 @@ impl EventLogDevice {
                     .session
                     .store
                     .get_bytes(&id)
-                    .map(|bytes| (id, bytes.to_vec()))
+                    .map(|bytes| (id, bytes.into()))
             })
             .collect();
         self.session.union_remote(&remote_events)
@@ -185,7 +185,12 @@ impl EventLogDevice {
     }
 
     pub fn pending_outbox(&self, provider: &str) -> Vec<(EventId, Vec<u8>)> {
-        self.session.store.pending_outbox(provider)
+        self.session
+            .store
+            .pending_outbox(provider)
+            .into_iter()
+            .map(|(event_id, bytes)| (event_id, bytes.into()))
+            .collect()
     }
 
     pub fn flush_outbox_to(
@@ -205,7 +210,7 @@ impl EventLogDevice {
                 self.session
                     .store
                     .get_bytes(&id)
-                    .map(|bytes| (id, bytes.to_vec()))
+                    .map(|bytes| (id, bytes.into()))
             })
             .collect()
     }
@@ -273,7 +278,7 @@ pub fn write_all_device_events_to_provider(
         .ok_or_else(|| missing_provider_bucket(provider))?;
     for (id, bytes) in device.remote_events() {
         if bucket.get_bytes(&id).is_none() {
-            bucket.put_event(id, bytes);
+            bucket.put_event(id, bytes.into());
         }
     }
     Ok(())
@@ -290,7 +295,7 @@ pub fn pull_provider_into_device(
     let events = bucket
         .event_ids()
         .into_iter()
-        .filter_map(|id| bucket.get_bytes(&id).map(|bytes| (id, bytes.to_vec())))
+        .filter_map(|id| bucket.get_bytes(&id).map(|bytes| (id, bytes.into())))
         .collect::<Vec<_>>();
     device.session.union_remote(&events)
 }
@@ -352,7 +357,7 @@ pub fn union_device_from_providers(
     for bucket in providers.values() {
         for id in bucket.event_ids() {
             if let Some(bytes) = bucket.get_bytes(&id) {
-                remote.push((id, bytes.to_vec()));
+                remote.push((id, bytes.into()));
             }
         }
     }

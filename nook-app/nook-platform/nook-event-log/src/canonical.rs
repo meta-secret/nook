@@ -4,7 +4,7 @@
 //! representation with lexicographically sorted object keys at every level.
 //! Array order is preserved (parent lists are sorted before hashing).
 
-use crate::{EventError, EventResult};
+use crate::{CanonicalEventBodyBytes, EventError, EventResult};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use nook_auth2::Sha256Hex;
@@ -74,15 +74,7 @@ impl EventId {
         Ok(Self::from_sha256_bytes(&bytes))
     }
 
-    #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: constructs an event id from canonical SHA-256 digest bytes"
-        )
-    )]
-    pub fn from_sha256_bytes(bytes: &[u8; SHA256_BYTES_LEN]) -> Self {
+    fn from_sha256_bytes(bytes: &[u8; SHA256_BYTES_LEN]) -> Self {
         Self(format!(
             "{EVENT_ID_PREFIX}{}",
             URL_SAFE_NO_PAD.encode(bytes)
@@ -194,15 +186,8 @@ pub fn sha256_hex(bytes: &[u8]) -> Sha256Hex {
 
 /// Compute the content-addressed [`EventId`] for canonical event body bytes.
 #[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: derives an event id from canonical event-body bytes"
-    )
-)]
-pub fn event_id_from_body_bytes(body_bytes: &[u8]) -> EventId {
-    let digest: [u8; SHA256_BYTES_LEN] = Sha256::digest(body_bytes).into();
+pub fn event_id_from_body_bytes(body_bytes: &CanonicalEventBodyBytes) -> EventId {
+    let digest: [u8; SHA256_BYTES_LEN] = Sha256::digest(body_bytes.as_ref()).into();
     EventId::from_sha256_bytes(&digest)
 }
 
@@ -224,16 +209,11 @@ pub fn canonicalize_json(value: &Value) -> Value {
 }
 
 /// Serialize a JSON value to canonical compact UTF-8 bytes.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: emits canonical compact JSON bytes for signing and storage"
-    )
-)]
-pub fn canonical_json_bytes(value: &Value) -> EventResult<Vec<u8>> {
+pub fn canonical_json_bytes(value: &Value) -> EventResult<CanonicalEventBodyBytes> {
     let canonical = canonicalize_json(value);
-    serde_json::to_vec(&canonical).map_err(EventError::from)
+    serde_json::to_vec(&canonical)
+        .map(Into::into)
+        .map_err(EventError::from)
 }
 
 /// Parse an `ed25519:{hex}` signature string.
@@ -258,33 +238,24 @@ pub fn format_ed25519_signature(signature: &Signature) -> String {
 
 /// Sign canonical body bytes with an Ed25519 key.
 #[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: signs canonical event-body bytes"
-    )
-)]
-pub fn sign_body(body_bytes: &[u8], signing_key: &SigningKey) -> Ed25519Signature {
-    Ed25519Signature::from_trusted(format_ed25519_signature(&signing_key.sign(body_bytes)))
+pub fn sign_body(
+    body_bytes: &CanonicalEventBodyBytes,
+    signing_key: &SigningKey,
+) -> Ed25519Signature {
+    Ed25519Signature::from_trusted(format_ed25519_signature(
+        &signing_key.sign(body_bytes.as_ref()),
+    ))
 }
 
 /// Verify an Ed25519 signature over canonical body bytes.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: verifies a signature over canonical event-body bytes"
-    )
-)]
 pub fn verify_body_signature(
-    body_bytes: &[u8],
+    body_bytes: &CanonicalEventBodyBytes,
     signature: impl AsRef<str>,
     verifying_key: &VerifyingKey,
 ) -> EventResult<()> {
     let parsed = parse_ed25519_signature(signature.as_ref())?;
     verifying_key
-        .verify(body_bytes, &parsed)
+        .verify(body_bytes.as_ref(), &parsed)
         .map_err(|_| EventError::SignatureVerificationFailed)?;
     Ok(())
 }
@@ -299,15 +270,15 @@ mod tests {
     fn canonical_json_sorts_object_keys() -> anyhow::Result<()> {
         let value = json!({"b": 2, "a": {"d": 4, "c": 3}});
         let bytes = canonical_json_bytes(&value)?;
-        assert_eq!(bytes, br#"{"a":{"c":3,"d":4},"b":2}"#);
+        assert_eq!(bytes.as_ref(), br#"{"a":{"c":3,"d":4},"b":2}"#);
         Ok(())
     }
 
     #[test]
     fn event_id_is_stable_for_same_body() {
-        let body = br#"{"schema_version":1}"#;
-        let a = event_id_from_body_bytes(body);
-        let b = event_id_from_body_bytes(body);
+        let body = br#"{"schema_version":1}"#.to_vec().into();
+        let a = event_id_from_body_bytes(&body);
+        let b = event_id_from_body_bytes(&body);
         assert_eq!(a, b);
         assert!(a.as_str().starts_with("sha256u:"));
         assert_eq!(a.encoded_digest().len(), 43);
@@ -327,9 +298,9 @@ mod tests {
     fn ed25519_sign_verify_roundtrip() -> anyhow::Result<()> {
         let signing_key = signing_key();
         let verifying_key = signing_key.verifying_key();
-        let body = b"canonical-body";
-        let sig = sign_body(body, &signing_key);
-        verify_body_signature(body, &sig, &verifying_key)?;
+        let body = b"canonical-body".to_vec().into();
+        let sig = sign_body(&body, &signing_key);
+        verify_body_signature(&body, &sig, &verifying_key)?;
         Ok(())
     }
 
@@ -340,7 +311,7 @@ mod tests {
         assert_eq!(roundtripped, id);
 
         let signing_key = signing_key();
-        let sig = sign_body(b"body", &signing_key);
+        let sig = sign_body(&b"body".to_vec().into(), &signing_key);
         let sig_back: Ed25519Signature = serde_json::from_str(&serde_json::to_string(&sig)?)?;
         assert_eq!(sig_back, sig);
         assert!(Ed25519Signature::parse("bad-signature").is_err());

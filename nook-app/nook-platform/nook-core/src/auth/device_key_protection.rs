@@ -3,7 +3,8 @@
 pub use nook_auth2::{
     DeviceKeyProtectionSetup, DeviceKeyProtectionVersion, PasskeyAssertionRequest,
     PasskeyDeviceIdentityMaterial, PasskeyDeviceProtectionMode, PasskeyRecoveryRequest,
-    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WrappedDeviceIdentity,
+    PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution, WebAuthnCredentialId,
+    WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle, WrappedDeviceIdentity,
     derive_device_identity_from_passkey_prf, deterministic_passkey_prf_input,
     finish_passkey_device_identity, finish_passkey_device_identity_for_mode,
     finish_passkey_wrapped_device_identity, parse_wrapped_device_identity,

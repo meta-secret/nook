@@ -8,10 +8,10 @@ use crate::errors::VaultResult;
 use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
-    AppendEventInput, Database, EventId, LocalEventStore, ObservedHeads, SigningIdentity,
-    StoredSecretRecord, VaultCrypto, VaultMetaState, VaultOperation, VaultProjection,
-    build_members_records, build_signed_event, project_vault, reencrypt_user_secrets_for_epoch,
-    resolve_member_roster, sha256_hex, union_remote_events,
+    AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
+    LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord, VaultCrypto,
+    VaultMetaState, VaultOperation, VaultProjection, build_members_records, build_signed_event,
+    project_vault, reencrypt_user_secrets_for_epoch, resolve_member_roster, union_remote_events,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -40,7 +40,10 @@ pub struct VaultSecurityEpochRotationInput<'a> {
 impl VaultEventSession {
     #[must_use]
     pub fn new(store_id: String, signing: SigningIdentity, signing_seed: String) -> Self {
-        let key_epoch = nook_event_log::event_id_from_body_bytes(store_id.as_bytes()).into_inner();
+        let key_epoch = nook_event_log::event_id_from_body_bytes(&CanonicalEventBodyBytes::from(
+            store_id.as_bytes().to_vec(),
+        ))
+        .into_inner();
         Self {
             store: LocalEventStore::new(),
             store_id,
@@ -110,7 +113,11 @@ impl VaultEventSession {
         )
     )]
     pub fn union_remote(&mut self, remote_events: &[(EventId, Vec<u8>)]) -> VaultResult<()> {
-        union_remote_events(&mut self.store, remote_events, &self.store_id)?;
+        let remote_events = remote_events
+            .iter()
+            .map(|(event_id, bytes)| (event_id.clone(), EventStorageBytes::from(bytes.clone())))
+            .collect::<Vec<_>>();
+        union_remote_events(&mut self.store, &remote_events, &self.store_id)?;
         self.set_heads_from_graph()
     }
 
@@ -192,4 +199,16 @@ impl VaultEventSession {
             new_keys.members_key.as_str().to_owned(),
         ))
     }
+}
+
+#[must_use]
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: hashes encoded vault metadata bytes"
+    )
+)]
+pub fn sha256_hex(bytes: &[u8]) -> Sha256Hex {
+    nook_event_log::sha256_hex(bytes)
 }

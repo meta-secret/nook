@@ -7,7 +7,7 @@ use crate::canonical::{
     sign_body, verify_body_signature,
 };
 use crate::signing::SigningIdentity;
-use crate::{EventError, EventResult};
+use crate::{CanonicalEventBodyBytes, EventError, EventResult, EventStorageBytes};
 use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelShareVersion};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
@@ -283,14 +283,7 @@ impl VaultEventBody {
         Ok(canonicalize_json(&value))
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: emits canonical event-body bytes for content addressing and signing"
-        )
-    )]
-    pub fn to_canonical_bytes(&self) -> EventResult<Vec<u8>> {
+    pub fn to_canonical_bytes(&self) -> EventResult<CanonicalEventBodyBytes> {
         canonical_json_bytes(&self.to_canonical_value()?)
     }
 
@@ -396,32 +389,18 @@ impl VaultEvent {
 ///
 /// Event ids and signatures still use canonical compact JSON body bytes. The
 /// persisted event envelope is pretty YAML so humans can inspect provider files.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: emits the signed event YAML storage byte representation"
-    )
-)]
-pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<Vec<u8>> {
+pub fn serialize_event_storage_yaml(event: &VaultEvent) -> EventResult<EventStorageBytes> {
     let mut yaml =
         serde_yaml::to_string(event).map_err(|e| EventError::EventSerialize(e.to_string()))?;
     if !yaml.ends_with('\n') {
         yaml.push('\n');
     }
-    Ok(yaml.into_bytes())
+    Ok(yaml.into_bytes().into())
 }
 
 /// Parse a stored event from YAML bytes.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: parses signed event bytes loaded from local storage"
-    )
-)]
-pub fn parse_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
-    let text = str::from_utf8(bytes).map_err(|e| {
+pub fn parse_event_storage_bytes(bytes: &EventStorageBytes) -> EventResult<VaultEvent> {
+    let text = str::from_utf8(bytes.as_ref()).map_err(|e| {
         EventError::ParseStoredEvent(format!("event storage bytes are not UTF-8: {e}"))
     })?;
     serde_yaml::from_str(text)
@@ -429,14 +408,7 @@ pub fn parse_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
 }
 
 /// Parse a remote event and classify errors for provider sync.
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: parses signed event bytes received from a remote provider"
-    )
-)]
-pub fn parse_remote_event_storage_bytes(bytes: &[u8]) -> EventResult<VaultEvent> {
+pub fn parse_remote_event_storage_bytes(bytes: &EventStorageBytes) -> EventResult<VaultEvent> {
     parse_event_storage_bytes(bytes).map_err(|error| match error {
         EventError::ParseStoredEvent(message) => EventError::ParseRemoteEvent(message),
         other => other,
@@ -667,7 +639,7 @@ mod tests {
             &signing_key,
         )?;
 
-        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?)?;
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?.into())?;
         assert!(yaml.starts_with("schema_version: 3\n"));
         assert!(yaml.contains("operations:\n- type: vault-imported\n"));
         assert!(yaml.contains("\n  secrets:\n  - id: secret_abc12345678\n"));
@@ -676,7 +648,7 @@ mod tests {
         assert!(yaml.ends_with('\n'));
         assert!(!yaml.trim_start().starts_with('{'));
         assert_eq!(
-            parse_event_storage_bytes(yaml.as_bytes())?.id()?,
+            parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?.id()?,
             event.id()?
         );
         Ok(())
@@ -761,7 +733,7 @@ mod tests {
         };
         let event = VaultEvent::sign(body, &signing_key)?;
 
-        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?)?;
+        let yaml = String::from_utf8(serialize_event_storage_yaml(&event)?.into())?;
         assert!(yaml.contains("  envelope:\n"));
         assert!(yaml.contains("    version: 1\n"));
         assert!(yaml.contains("    kdf: scrypt\n"));
@@ -769,7 +741,10 @@ mod tests {
         assert!(yaml.contains("    ciphertext: age-ciphertext\n"));
         assert!(!yaml.contains("envelope_"));
         assert!(!yaml.contains('{'));
-        assert_eq!(parse_event_storage_bytes(yaml.as_bytes())?, event);
+        assert_eq!(
+            parse_event_storage_bytes(&yaml.as_bytes().to_vec().into())?,
+            event
+        );
         Ok(())
     }
 }

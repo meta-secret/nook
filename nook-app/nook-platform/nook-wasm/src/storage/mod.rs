@@ -79,7 +79,7 @@ pub(crate) fn parse_expected_event_storage_bytes(
     event_id: &EventId,
     provider: &str,
 ) -> Result<VaultEvent, NookError> {
-    let event = parse_remote_event_storage_bytes(bytes)
+    let event = parse_remote_event_storage_bytes(&bytes.to_vec().into())
         .map_err(|e| NookError::Serialization(format!("{provider} event parse: {e}")))?;
     let actual = event.id()?;
     if actual != *event_id {
@@ -94,5 +94,5 @@ pub(crate) fn parse_expected_event_storage_bytes(
 
 #[must_use]
 pub(crate) fn event_storage_matches_expected(bytes: &[u8], expected: &VaultEvent) -> bool {
-    parse_remote_event_storage_bytes(bytes).is_ok_and(|event| &event == expected)
+    parse_remote_event_storage_bytes(&bytes.to_vec().into()).is_ok_and(|event| &event == expected)
 }
