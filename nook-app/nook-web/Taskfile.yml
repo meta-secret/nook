@@ -436,6 +436,21 @@ tasks:
       - cd "{{.WEB_ROOT}}" && bun x playwright test ${E2E_SPEC}
       - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
 
+  _web:test:e2e:debug:
+    desc: Run a remote-only focused Playwright debug selection with retained failure traces.
+    env:
+      NOOK_E2E_SKIP_GITHUB_CLEANUP: "1"
+      VITE_E2E_EXPOSE_VAULT: "true"
+      VITE_VAULT_SYNC_INTERVAL_MS: "500"
+      VITE_VAULT_IDLE_TIMEOUT_MS: "2500"
+      VITE_VAULT_IDLE_WARNING_MS: "0"
+      PLAYWRIGHT_WORKERS: "1"
+    cmds:
+      - test "${NOOK_REMOTE_E2E_DEBUG:-}" = "1" || (echo "_web:test:e2e:debug is hosted-only; set NOOK_REMOTE_E2E_DEBUG=1 in the remote job" >&2; exit 1)
+      - task: _web:e2e:build-if-needed
+      - cd "{{.WEB_ROOT}}" && bun run test:e2e:debug
+      - defer: cd "{{.WEB_ROOT}}" && bun run test:e2e:cleanup
+
   _web:test:ui-demo:
     desc: Record selected headless Playwright demo specs at a human-readable pace.
     env:
