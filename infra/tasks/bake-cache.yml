@@ -366,7 +366,7 @@ tasks:
         for revision in first second; do
           bake_plain "$proof_log" --set "preflight-source.args.REPOSITORY_SOURCE=${suffix}-${revision}" preflight-source
         done
-        require_cached_step "$proof_log" "bake-sim-preflight-coverage-dependencies-expensive"; require_uncached_step "$proof_log" "bake-sim-preflight-coverage-execution-expensive"
+        awk -v cached_marker="bake-sim-preflight-coverage-dependencies-expensive" -v uncached_marker="bake-sim-preflight-coverage-execution-expensive" 'index($0, cached_marker) && !cached_step { cached_step = $1 } index($0, uncached_marker) && !uncached_step { uncached_step = $1 } $1 == cached_step && $2 == "CACHED" { cached = 1 } $1 == uncached_step && $2 == "CACHED" { uncached = 1 } $1 == uncached_step && $2 ~ /^[0-9]+\.[0-9]+$/ && index($0, uncached_marker) { executed = 1 } END { exit !(cached_step && uncached_step && cached && executed && !uncached) }' "$proof_log"
         echo "Rust source-boundary cache proof: ok"
 
         echo "== Scenario A: Main cold publish =="
