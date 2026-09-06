@@ -197,7 +197,9 @@ pub(crate) async fn put_wrapped_device_identity(
 pub(crate) async fn delete_device_identity_for_recovery(
     expected_app_id: Option<nook_core::AppId>,
 ) -> Result<identity_record::LocalIdentityRecovery, NookError> {
-    identity_record::delete_identity_directory_for_recovery(expected_app_id).await
+    identity_record::LocalIdentityRecoveryRequest { expected_app_id }
+        .execute()
+        .await
 }
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod tests {
