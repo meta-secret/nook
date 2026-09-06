@@ -5,6 +5,7 @@
 )]
 //! Encoded ceremony data and ES256 credential material.
 use super::*;
+use base64::Engine;
 pub(super) struct CanonicalPasskeyField<'a> {
     pub(super) name: &'static str,
     pub(super) value: &'a str,
@@ -19,10 +20,12 @@ impl CanonicalPasskeyField<'_> {
             min,
             max,
         } = self;
-        let bytes = URL_SAFE_NO_PAD
-            .decode(value)
+        let bytes = Engine::decode(&URL_SAFE_NO_PAD, value)
             .map_err(|_| PasskeyAuthenticatorError::InvalidRequest(name))?;
-        if bytes.len() < min || bytes.len() > max || URL_SAFE_NO_PAD.encode(&bytes) != value {
+        if bytes.len() < min
+            || bytes.len() > max
+            || Engine::encode(&URL_SAFE_NO_PAD, &bytes) != value
+        {
             return Err(PasskeyAuthenticatorError::InvalidRequest(name));
         }
         Ok(bytes)
@@ -130,15 +133,13 @@ impl PasskeyPrivateKeyPkcs8 {
     ) -> PasskeyAuthenticatorResult<()> {
         let private_key = self;
         let private_bytes = Zeroizing::new(
-            URL_SAFE_NO_PAD
-                .decode(private_key.encoded())
+            Engine::decode(&URL_SAFE_NO_PAD, private_key.encoded())
                 .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?,
         );
         let secret = SecretKey::from_pkcs8_der(&private_bytes)
             .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
         if let Some(public_key) = public_key {
-            let public_bytes = URL_SAFE_NO_PAD
-                .decode(public_key.encoded())
+            let public_bytes = Engine::decode(&URL_SAFE_NO_PAD, public_key.encoded())
                 .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
             let (x, y) = CoseKeyBytes(&public_bytes).coordinates()?;
             let encoded = secret.public_key().to_sec1_point(false);
@@ -241,7 +242,7 @@ mod tests {
     fn canonical_challenge_boundaries_and_noncanonical_encoding_fail_closed() {
         for length in [MIN_CHALLENGE_BYTES, MAX_CHALLENGE_BYTES] {
             let expected = vec![0x3c; length];
-            let encoded = URL_SAFE_NO_PAD.encode(&expected);
+            let encoded = Engine::encode(&URL_SAFE_NO_PAD, &expected);
             assert_eq!(
                 CanonicalPasskeyField {
                     name: "challenge",
@@ -253,9 +254,12 @@ mod tests {
                 Ok(expected)
             );
         }
-        let too_short = URL_SAFE_NO_PAD.encode([0x3c; MIN_CHALLENGE_BYTES - 1]);
-        let too_long = URL_SAFE_NO_PAD.encode(vec![0x3c; MAX_CHALLENGE_BYTES + 1]);
-        let padded = format!("{}=", URL_SAFE_NO_PAD.encode([0x3c; MIN_CHALLENGE_BYTES]));
+        let too_short = Engine::encode(&URL_SAFE_NO_PAD, [0x3c; MIN_CHALLENGE_BYTES - 1]);
+        let too_long = Engine::encode(&URL_SAFE_NO_PAD, vec![0x3c; MAX_CHALLENGE_BYTES + 1]);
+        let padded = format!(
+            "{}=",
+            Engine::encode(&URL_SAFE_NO_PAD, [0x3c; MIN_CHALLENGE_BYTES])
+        );
         let malformed: [&str; 4] = [&too_short, &too_long, &padded, "not+base64/url"];
         for value in malformed {
             assert_eq!(

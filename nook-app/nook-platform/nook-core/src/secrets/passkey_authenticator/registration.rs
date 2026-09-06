@@ -5,6 +5,7 @@
 )]
 //! Registration admission precedes credential randomness and generation.
 use super::*;
+use base64::Engine;
 /// Admitted request data, with the original request and exclusion input still borrowed.
 /// This state does not establish user presence or durable credential persistence.
 ///
@@ -123,7 +124,7 @@ impl CheckedPasskeyRegistration<'_> {
         let mut credential_id = [0_u8; 32];
         getrandom::fill(&mut credential_id)
             .map_err(|_| PasskeyAuthenticatorError::RandomnessUnavailable)?;
-        let credential_id_encoded = URL_SAFE_NO_PAD.encode(credential_id);
+        let credential_id_encoded = Engine::encode(&URL_SAFE_NO_PAD, credential_id);
         let secret_key = SecretKey::try_generate()
             .map_err(|_| PasskeyAuthenticatorError::RandomnessUnavailable)?;
         let pkcs8 = secret_key
@@ -131,16 +132,17 @@ impl CheckedPasskeyRegistration<'_> {
             .map_err(|_| PasskeyAuthenticatorError::Serialization)?;
         let encoded_point = secret_key.public_key().to_sec1_point(false);
         let cose_key = CoseEncodedPoint(&encoded_point).encode()?;
-        let private_key = PasskeyPrivateKeyPkcs8::parse(URL_SAFE_NO_PAD.encode(pkcs8.as_bytes()))
-            .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
-        let public_key = PasskeyPublicKeyCose::parse(URL_SAFE_NO_PAD.encode(&cose_key))
+        let private_key =
+            PasskeyPrivateKeyPkcs8::parse(Engine::encode(&URL_SAFE_NO_PAD, pkcs8.as_bytes()))
+                .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
+        let public_key = PasskeyPublicKeyCose::parse(Engine::encode(&URL_SAFE_NO_PAD, &cose_key))
             .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?;
         let credential = PasskeySecret {
             version: PASSKEY_SECRET_VERSION,
             rp_id: request.relying_party.id.to_ascii_lowercase(),
             rp_name: request.relying_party.name.clone(),
             credential_id: credential_id_encoded,
-            user_handle: URL_SAFE_NO_PAD.encode(user_handle),
+            user_handle: Engine::encode(&URL_SAFE_NO_PAD, user_handle),
             user_name: request.user.name.clone(),
             user_display_name: request.user.display_name.clone(),
             key: PasskeyCredentialKey::Es256 {
@@ -165,9 +167,11 @@ impl CheckedPasskeyRegistration<'_> {
         credential_id.zeroize();
         Ok(PasskeyRegistrationResult {
             credential,
-            client_data_json: URL_SAFE_NO_PAD.encode(client_data),
-            attestation_object: URL_SAFE_NO_PAD
-                .encode(AttestationObject(authenticator_data).encode()?),
+            client_data_json: Engine::encode(&URL_SAFE_NO_PAD, client_data),
+            attestation_object: Engine::encode(
+                &URL_SAFE_NO_PAD,
+                AttestationObject(authenticator_data).encode()?,
+            ),
             transports: vec!["internal".to_owned()],
         })
     }
@@ -231,13 +235,13 @@ mod tests {
             expected: PasskeyAuthenticatorError::InvalidRequest("user handle"),
         }
         .check()?;
-        request.user.id = URL_SAFE_NO_PAD.encode([1_u8]);
+        request.user.id = Engine::encode(&URL_SAFE_NO_PAD, [1_u8]);
         RegistrationRejection {
             request: request.clone(),
             expected: PasskeyAuthenticatorError::InvalidRequest("challenge"),
         }
         .check()?;
-        request.challenge = URL_SAFE_NO_PAD.encode([2_u8; 16]);
+        request.challenge = Engine::encode(&URL_SAFE_NO_PAD, [2_u8; 16]);
         RegistrationRejection {
             request,
             expected: PasskeyAuthenticatorError::InvalidRequest("excluded credential id"),
@@ -263,7 +267,7 @@ mod tests {
         assert!(existing.is_empty());
         let result = request.prepare(&existing)?.generate()?;
         let data: RegistrationClientData =
-            serde_json::from_slice(&URL_SAFE_NO_PAD.decode(result.client_data_json)?)?;
+            serde_json::from_slice(&Engine::decode(&URL_SAFE_NO_PAD, result.client_data_json)?)?;
         assert_eq!(data.ceremony_type, "webauthn.create");
         assert_eq!(data.challenge, request.challenge);
         assert_eq!(data.origin, request.origin);
@@ -284,7 +288,7 @@ mod tests {
             .prepare(&[])
             .and_then(CheckedPasskeyRegistration::generate)?;
         result.credential.validate()?;
-        let attestation = URL_SAFE_NO_PAD.decode(&result.attestation_object)?;
+        let attestation = Engine::decode(&URL_SAFE_NO_PAD, &result.attestation_object)?;
         let value: Value = de::from_reader(attestation.as_slice())?;
         let Value::Map(entries) = value else {
             panic!("attestation must be a map")

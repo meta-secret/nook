@@ -5,6 +5,7 @@
 )]
 //! Assertion selection binds the credential, counter, and request before signing.
 use super::*;
+use base64::Engine;
 /// A locally selected credential and its next counter, not a global counter reservation.
 ///
 /// ```
@@ -137,8 +138,7 @@ impl CheckedPasskeyAssertion<'_> {
             private_key_pkcs8, ..
         } = &credential.key;
         let private_bytes = Zeroizing::new(
-            URL_SAFE_NO_PAD
-                .decode(private_key_pkcs8.encoded())
+            Engine::decode(&URL_SAFE_NO_PAD, private_key_pkcs8.encoded())
                 .map_err(|_| PasskeyAuthenticatorError::InvalidKeyMaterial)?,
         );
         let secret = SecretKey::from_pkcs8_der(&private_bytes)
@@ -150,9 +150,9 @@ impl CheckedPasskeyAssertion<'_> {
         updated_credential.signature_count = next_count;
         Ok(PasskeyAssertionResult {
             credential_id: credential.credential_id.clone(),
-            client_data_json: URL_SAFE_NO_PAD.encode(client_data),
-            authenticator_data: URL_SAFE_NO_PAD.encode(authenticator_data),
-            signature: URL_SAFE_NO_PAD.encode(signature.to_der().as_bytes()),
+            client_data_json: Engine::encode(&URL_SAFE_NO_PAD, client_data),
+            authenticator_data: Engine::encode(&URL_SAFE_NO_PAD, authenticator_data),
+            signature: Engine::encode(&URL_SAFE_NO_PAD, signature.to_der().as_bytes()),
             user_handle: credential.user_handle.clone(),
             updated_credential,
         })
@@ -186,7 +186,7 @@ mod tests {
         fn fixture() -> Self {
             Self {
                 origin: "https://login.example.com".to_owned(),
-                challenge: URL_SAFE_NO_PAD.encode([9_u8; 32]),
+                challenge: Engine::encode(&URL_SAFE_NO_PAD, [9_u8; 32]),
                 rp_id: "example.com".to_owned(),
                 allow_credentials: Vec::new(),
                 user_verification_required: true,
@@ -228,7 +228,7 @@ mod tests {
             expected: PasskeyAuthenticatorError::InvalidRequest("challenge"),
         }
         .check()?;
-        request.challenge = URL_SAFE_NO_PAD.encode([2_u8; 16]);
+        request.challenge = Engine::encode(&URL_SAFE_NO_PAD, [2_u8; 16]);
         AssertionRejection {
             request: request.clone(),
             expected: PasskeyAuthenticatorError::InvalidRequest("allowed credential id"),
@@ -276,7 +276,7 @@ mod tests {
             .and_then(CheckedPasskeyRegistration::generate)?;
         let request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
-            challenge: URL_SAFE_NO_PAD.encode([9_u8; 32]),
+            challenge: Engine::encode(&URL_SAFE_NO_PAD, [9_u8; 32]),
             rp_id: "example.com".to_owned(),
             allow_credentials: vec![PasskeyCredentialDescriptor {
                 id: registration.credential.credential_id.clone(),
@@ -287,16 +287,20 @@ mod tests {
             .prepare(slice::from_ref(&registration.credential))
             .and_then(CheckedPasskeyAssertion::sign)?;
         assert_eq!(u32::from(assertion.updated_credential.signature_count), 1);
-        let auth_data = URL_SAFE_NO_PAD.decode(&assertion.authenticator_data)?;
-        let client_data = URL_SAFE_NO_PAD.decode(&assertion.client_data_json)?;
+        let auth_data = Engine::decode(&URL_SAFE_NO_PAD, &assertion.authenticator_data)?;
+        let client_data = Engine::decode(&URL_SAFE_NO_PAD, &assertion.client_data_json)?;
         let mut signed = auth_data;
         signed.extend_from_slice(&Sha256::digest(client_data));
-        let signature = Signature::from_der(&URL_SAFE_NO_PAD.decode(assertion.signature)?)?;
+        let signature =
+            Signature::from_der(&Engine::decode(&URL_SAFE_NO_PAD, assertion.signature)?)?;
         let PasskeyCredentialKey::Es256 {
             public_key_cose, ..
         } = &registration.credential.key;
-        let (x, y) =
-            CoseKeyBytes(&URL_SAFE_NO_PAD.decode(public_key_cose.encoded())?).coordinates()?;
+        let (x, y) = CoseKeyBytes(&Engine::decode(
+            &URL_SAFE_NO_PAD,
+            public_key_cose.encoded(),
+        )?)
+        .coordinates()?;
         let mut point = vec![4];
         point.extend_from_slice(&x);
         point.extend_from_slice(&y);
@@ -315,7 +319,7 @@ mod tests {
         newer.signature_count = 7.into();
         let request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
-            challenge: URL_SAFE_NO_PAD.encode([11_u8; 32]),
+            challenge: Engine::encode(&URL_SAFE_NO_PAD, [11_u8; 32]),
             rp_id: "example.com".to_owned(),
             allow_credentials: vec![PasskeyCredentialDescriptor {
                 id: newer.credential_id.clone(),
@@ -349,7 +353,7 @@ mod tests {
 
         let mut assertion_request = PasskeyAssertionRequest {
             origin: "https://login.example.com".to_owned(),
-            challenge: URL_SAFE_NO_PAD.encode([12_u8; 32]),
+            challenge: Engine::encode(&URL_SAFE_NO_PAD, [12_u8; 32]),
             rp_id: "example.com".to_owned(),
             allow_credentials: vec![PasskeyCredentialDescriptor {
                 id: "not-base64url=".to_owned(),
