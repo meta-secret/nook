@@ -5,7 +5,6 @@
 )]
 //! Assertion selection binds the credential, counter, and request before signing.
 use super::*;
-use base64::Engine as _;
 /// A locally selected credential and its next counter, not a global counter reservation.
 ///
 /// ```

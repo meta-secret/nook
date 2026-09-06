@@ -5,7 +5,6 @@
 )]
 //! Encoded ceremony data and ES256 credential material.
 use super::*;
-use base64::Engine as _;
 pub(super) struct CanonicalPasskeyField<'a> {
     pub(super) name: &'static str,
     pub(super) value: &'a str,

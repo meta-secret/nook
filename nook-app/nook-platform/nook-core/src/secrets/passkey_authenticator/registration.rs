@@ -5,7 +5,6 @@
 )]
 //! Registration admission precedes credential randomness and generation.
 use super::*;
-use base64::Engine as _;
 /// Admitted request data, with the original request and exclusion input still borrowed.
 /// This state does not establish user presence or durable credential persistence.
 ///
