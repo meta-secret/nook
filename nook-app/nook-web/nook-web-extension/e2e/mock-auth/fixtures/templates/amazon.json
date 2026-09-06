@@ -1,0 +1,21 @@
+{
+  "id": "amazon",
+  "quirks": [],
+  "steps": [
+    {
+      "fields": [
+        {
+          "id": "ap_email_login",
+          "name": "email",
+          "type": "email",
+          "autocomplete": "webauthn",
+          "aria-label": "Enter mobile number or email"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue"
+      }
+    }
+  ]
+}

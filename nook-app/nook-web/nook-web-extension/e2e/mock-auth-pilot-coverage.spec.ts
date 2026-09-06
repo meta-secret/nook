@@ -515,6 +515,121 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('fills Amazon identifier', async ({ browserName }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock Amazon auth vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        'https://www.amazon.com',
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+      const page = await paired.context.newPage()
+      let interceptedAmazonRequestCount = 0
+      await page.route('https://www.amazon.com/**', async (route) => {
+        interceptedAmazonRequestCount += 1
+        const requestedUrl = new URL(route.request().url())
+        const localResponse = await page.request.get(
+          `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+        )
+        await route.fulfill({ response: localResponse })
+      })
+      const amazonUrl =
+        'https://www.amazon.com/ap/signin?openid.mode=checkid_setup&openid.return_to=https%3A%2F%2Fwww.amazon.com%2F'
+      await page.goto(amazonUrl)
+      expect(interceptedAmazonRequestCount).toBeGreaterThan(0)
+      await expect(page).toHaveURL(amazonUrl)
+      await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+        'amazon-identifier',
+      )
+      const form = page.locator('#ap_login_form')
+      await expect(form).toHaveAttribute('name', 'signIn')
+      await expect(form).toHaveAttribute('method', 'post')
+      await expect(form).toHaveAttribute('action', '/ax/claim')
+      const email = form.locator('#ap_email_login')
+      await expect(email).toHaveAttribute('name', 'email')
+      await expect(email).toHaveAttribute('type', 'email')
+      await expect(email).toHaveAttribute('autocomplete', 'webauthn')
+      await expect(email).toHaveAttribute(
+        'aria-label',
+        'Enter mobile number or email',
+      )
+      await expect(email).toHaveValue('')
+      const hiddenPassword = form.locator('#auth-credential-autofill-hint')
+      await expect(hiddenPassword).toHaveClass(/\baok-hidden\b/u)
+      await expect(hiddenPassword).toBeHidden()
+      await expect(hiddenPassword).toHaveValue('')
+      expect(
+        await hiddenPassword.evaluate((field) => ({
+          display: getComputedStyle(field).display,
+          height: field.getBoundingClientRect().height,
+          visibility: getComputedStyle(field).visibility,
+          width: field.getBoundingClientRect().width,
+        })),
+      ).toEqual({ display: 'none', height: 0, visibility: 'hidden', width: 0 })
+      await expect(form.locator('input[type="hidden"]')).toHaveCount(2)
+      const backdetect = page.locator('form[name="ue_backdetect"]')
+      await expect(backdetect).toHaveCount(2)
+      expect(
+        await backdetect.evaluateAll((forms) =>
+          forms.every(
+            (form) =>
+              form.getAttribute('action') === 'get' &&
+              (form as HTMLFormElement).elements.length === 0,
+          ),
+        ),
+      ).toBe(true)
+      const continueButton = form.getByRole('button', { name: 'Continue' })
+      await expect(continueButton).toHaveAttribute('type', 'submit')
+      await expect(
+        page.getByText('Create a free business account'),
+      ).toBeVisible()
+      await expect(page.getByRole('link', { name: 'Help' })).toBeVisible()
+      await expect(
+        page.getByRole('link', { name: 'Conditions of Use' }),
+      ).toBeVisible()
+      await expect(
+        page.getByRole('link', { name: 'Privacy Notice' }),
+      ).toBeVisible()
+      const widget = page.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await expect(
+        widget.getByRole('button', { name: /passkey/i }),
+      ).toHaveCount(0)
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
+      await expect
+        .poll(() =>
+          page.evaluate(
+            (key) => sessionStorage.getItem(key) || '',
+            'amazon-submission-evidence',
+          ),
+        )
+        .toBe(
+          JSON.stringify({
+            submittedControl: 'Continue',
+            emailMatched: true,
+            hiddenPasswordUntouched: true,
+            metadataUntouched: true,
+            backdetectFormsUntouched: true,
+            alternativesUntouched: true,
+          }),
+        )
+      expect(interceptedAmazonRequestCount).toBeGreaterThan(1)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('fills the owned GitHub login without touching its decoys or alternatives', async ({
     browserName,
   }, testInfo) => {

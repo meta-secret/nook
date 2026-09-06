@@ -196,7 +196,7 @@ describe('canonical mock-auth credential-fill matrix', () => {
 
   test('simulates every template twice and covers every site mapping', () => {
     const templateIds = listShellTemplateIds()
-    expect(templateIds).toHaveLength(25)
+    expect(templateIds).toHaveLength(26)
     const templateResults = new Map<string, CredentialFillJourneyOutcome[]>()
 
     for (const templateId of templateIds) {
