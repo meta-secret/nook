@@ -12,14 +12,19 @@
   let email = $state('')
   let alternativeActivationCount = $state(0)
   let error = $state('')
+  let chatGptForm = $state<HTMLFormElement>()
+  let openAiForm = $state<HTMLFormElement>()
 
   function activateAlternative(event: Event): void {
     event.preventDefault()
     alternativeActivationCount += 1
   }
 
-  function submittedForm(event: SubmitEvent): HTMLFormElement | undefined {
-    return [event.currentTarget, event.target].find(
+  function submittedForm(
+    event: SubmitEvent,
+    fallbackForm: HTMLFormElement | undefined,
+  ): HTMLFormElement | undefined {
+    return [fallbackForm, event.currentTarget, event.target].find(
       (candidate): candidate is HTMLFormElement => {
         if (
           !candidate ||
@@ -33,7 +38,10 @@
     )
   }
 
-  function submitterIdentity(event: SubmitEvent): string {
+  function submitterIdentity(
+    event: SubmitEvent,
+    fallbackForm: HTMLFormElement | undefined,
+  ): string {
     const { submitter } = event
     if (submitter && typeof submitter.getAttribute === 'function') {
       const value = submitter.getAttribute('value')
@@ -44,7 +52,7 @@
     // world. Some browser versions cannot carry the cross-realm submitter
     // through the synthetic event, so preserve native implicit-submit
     // semantics only when this form has one unambiguous submit control.
-    const form = submittedForm(event)
+    const form = submittedForm(event, fallbackForm)
     if (!form) return ''
     const submitControls = Array.from(
       form.querySelectorAll<HTMLButtonElement>(
@@ -59,7 +67,7 @@
   function submitChatGpt(event: SubmitEvent): void {
     event.preventDefault()
     const submission: ChatGptAuthMockSubmission = {
-      submitter: submitterIdentity(event),
+      submitter: submitterIdentity(event, chatGptForm),
       email,
       alternativeActivationCount,
       authorizationTarget: OpenAiAuthMockScenario.authorizationTarget(
@@ -76,7 +84,7 @@
 
   function submitOpenAi(event: SubmitEvent): void {
     event.preventDefault()
-    const submittedControlIdentity = submitterIdentity(event)
+    const submittedControlIdentity = submitterIdentity(event, openAiForm)
     const submission: OpenAiAuthMockSubmission = {
       submitter: submittedControlIdentity,
       email,
@@ -106,7 +114,12 @@
     <h1>Log in or sign up</h1>
     <p data-testid="mock-auth-scenario">chatgpt-identifier</p>
     {#if error}<p role="alert">{error}</p>{/if}
-    <form method="get" action="/auth/login" onsubmit={submitChatGpt}>
+    <form
+      bind:this={chatGptForm}
+      method="get"
+      action="/auth/login"
+      onsubmit={submitChatGpt}
+    >
       <button type="button" onclick={activateAlternative}
         >Continue with Google</button
       >
@@ -144,6 +157,7 @@
     ></form>
     <form
       id="openai-identifier-form"
+      bind:this={openAiForm}
       method="post"
       action="/log-in-or-create-account"
       onsubmit={submitOpenAi}
