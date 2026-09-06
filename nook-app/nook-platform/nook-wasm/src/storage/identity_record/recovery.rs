@@ -7,8 +7,8 @@ use nook_core::{AppId, IdentityDirectory, IdentitySelection, LocalIdentityKeyrin
 use rexie::TransactionMode;
 
 use super::{
-    IDENTITY_DIRECTORY_KEY, LEGACY_IDENTITY_RECORD_KEY, RETIRED_APP_IDS_KEY, decode_directory,
-    is_identity_reconciliation_key, keyring, load_identity_directory, load_retired_app_ids,
+    IDENTITY_DIRECTORY_KEY, IdentityReconciliationStore, LEGACY_IDENTITY_RECORD_KEY,
+    RETIRED_APP_IDS_KEY, decode_directory, keyring, load_identity_directory, load_retired_app_ids,
     simple_genesis, write_identity_directory,
 };
 use crate::{NookError, storage::open_nook_database};
@@ -45,7 +45,7 @@ async fn recovery_reconciliation_keys(store: &rexie::Store) -> Result<Vec<String
         })?
         .into_iter()
         .filter_map(|value| serde_wasm_bindgen::from_value::<String>(value).ok())
-        .filter(|key| is_identity_reconciliation_key(key))
+        .filter(|key| IdentityReconciliationStore::matches_key(key))
         .collect())
 }
 
