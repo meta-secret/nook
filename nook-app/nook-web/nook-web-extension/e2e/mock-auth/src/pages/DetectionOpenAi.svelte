@@ -18,6 +18,21 @@
     alternativeActivationCount += 1
   }
 
+  function submittedForm(event: SubmitEvent): HTMLFormElement | undefined {
+    return [event.currentTarget, event.target].find(
+      (candidate): candidate is HTMLFormElement => {
+        if (
+          !candidate ||
+          typeof (candidate as { querySelectorAll?: unknown })
+            .querySelectorAll !== 'function'
+        ) {
+          return false
+        }
+        return (candidate as { tagName?: unknown }).tagName === 'FORM'
+      },
+    )
+  }
+
   function submitterIdentity(event: SubmitEvent): string {
     const { submitter } = event
     if (submitter && typeof submitter.getAttribute === 'function') {
@@ -29,8 +44,8 @@
     // world. Some browser versions cannot carry the cross-realm submitter
     // through the synthetic event, so preserve native implicit-submit
     // semantics only when this form has one unambiguous submit control.
-    const form = event.currentTarget
-    if (!form || typeof form.querySelectorAll !== 'function') return ''
+    const form = submittedForm(event)
+    if (!form) return ''
     const submitControls = Array.from(
       form.querySelectorAll<HTMLButtonElement>(
         'button[type="submit"], button:not([type])',
