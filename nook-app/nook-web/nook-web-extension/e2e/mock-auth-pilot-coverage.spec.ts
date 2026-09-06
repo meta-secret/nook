@@ -236,12 +236,9 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         'alice@nook.test',
         'extension-fill-password',
       )
-      await saveVaultLogin(
-        paired.vaultPage,
-        openAi.origin,
-        'alice@nook.test',
-        'extension-fill-password',
-      )
+      // Both fixtures bind to localhost. Nook intentionally matches login
+      // accounts by host, so one shared credential keeps this flow out of the
+      // account-picker branch while still covering both form structures.
 
       const page = await paired.context.newPage()
       const authOrigin = encodeURIComponent(openAi.origin)
