@@ -251,3 +251,41 @@ mod tests {
         assert_eq!(account.value().unwrap(), "owner@example.com");
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn oauth_state_adapters_project_every_variant_in_wasm() {
+        assert!(NookOAuthRefreshCredential::not_issued().value().is_err());
+        let token = NookOAuthRefreshCredential::token("refresh".into());
+        assert_eq!(token.value().unwrap(), "refresh");
+
+        assert!(NookOAuthTokenExpiry::unknown().value().is_err());
+        let expiry = NookOAuthTokenExpiry::expires_at("2030-01-01".into());
+        assert_eq!(expiry.value().unwrap(), "2030-01-01");
+
+        let unresolved = NookOAuthRemoteFile::unresolved();
+        assert!(unresolved.file_id_value().is_err());
+        assert!(unresolved.file_name_value().is_err());
+        let by_id = NookOAuthRemoteFile::file_id("id".into());
+        assert!(by_id.file_name_value().is_err());
+        let by_name = NookOAuthRemoteFile::file_name("name".into());
+        assert!(by_name.file_id_value().is_err());
+        let identified = NookOAuthRemoteFile::identified("id".into(), "name".into());
+        assert_eq!(identified.file_id_value().unwrap(), "id");
+        assert_eq!(identified.file_name_value().unwrap(), "name");
+
+        assert!(NookOAuthAccountIdentity::unknown().value().is_err());
+        assert_eq!(
+            NookOAuthAccountIdentity::email("owner@example.com".into())
+                .value()
+                .unwrap(),
+            "owner@example.com"
+        );
+    }
+}

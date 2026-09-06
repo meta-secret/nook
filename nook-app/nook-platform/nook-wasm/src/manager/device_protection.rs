@@ -130,6 +130,10 @@ mod tests {
     }
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+#[path = "device_protection_browser_tests.rs"]
+mod browser_tests;
+
 impl Drop for PendingExtensionIdentityHandoff {
     fn drop(&mut self) {
         self.previous_session_signing_seed.zeroize();

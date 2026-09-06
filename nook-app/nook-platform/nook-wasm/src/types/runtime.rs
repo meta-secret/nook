@@ -398,3 +398,62 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn runtime_adapters_project_all_modes_and_overrides_in_wasm() {
+        let locale = NookBrowserLocale::from_tags(vec!["de-DE".into(), "ru-RU".into()]);
+        assert_eq!(locale.language_tags(), vec!["de-DE", "ru-RU"]);
+        assert_eq!(locale.app_locale(), "ru");
+
+        for (raw, expected) in [
+            ("local", NookClientRunMode::Local),
+            ("dev", NookClientRunMode::Dev),
+            ("prod", NookClientRunMode::Prod),
+        ] {
+            assert_eq!(NookClientRunModeUtil::parse(raw).unwrap(), expected);
+        }
+        assert!(NookClientRunModeUtil::parse("unknown").is_err());
+
+        let args = NookStorageConnectArgs::from(nook_core::StorageConnectArgs {
+            mode: "github".into(),
+            pat: "pat".into(),
+            repo: "owner/repo".into(),
+        });
+        assert_eq!(args.mode(), "github");
+        assert_eq!(args.pat(), "pat");
+        assert_eq!(args.repo(), "owner/repo");
+
+        let folder = NookGoogleDriveFolder::new("folder".into(), "Vault".into());
+        assert_eq!(folder.id(), "folder");
+        assert_eq!(folder.name(), "Vault");
+
+        for (mode, local, dev, prod) in [
+            (NookClientRunMode::Local, true, false, false),
+            (NookClientRunMode::Dev, false, true, false),
+            (NookClientRunMode::Prod, false, false, true),
+        ] {
+            let config = NookRuntimeConfig::new(mode, true);
+            assert_eq!(config.run_mode(), mode);
+            assert_eq!(config.is_local(), local);
+            assert_eq!(config.is_dev(), dev);
+            assert_eq!(config.is_prod(), prod);
+            assert!(config.e2e_expose_vault());
+            let _ = config.allow_fast_idle();
+            let _ = config.allow_fast_sync();
+            let _ = config.expose_debug_hooks();
+            let _ = config.resolve_vault_idle_timeout_ms("1200");
+            let _ = config.resolve_default_vault_idle_timeout_ms();
+            let _ = config.resolve_vault_idle_warning_ms("300");
+            let _ = config.resolve_default_vault_idle_warning_ms();
+            let _ = config.resolve_vault_sync_interval_ms("500");
+            let _ = config.resolve_default_vault_sync_interval_ms();
+        }
+    }
+}

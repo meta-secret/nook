@@ -405,3 +405,109 @@ mod tests {
         assert!(authentication_page_observations_are_valid(&observations));
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::BrowserOAuthProvider;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn companion_heuristic_exports_cover_policy_and_url_paths_in_wasm() {
+        assert!(page_has_backup_code_hint("backup code"));
+        assert!(!page_has_backup_code_hint("nothing useful"));
+        let candidates =
+            extract_backup_code_candidates("Save your backup codes\nA1B2-C3D4-E5F6\nignore".into());
+        assert!(!candidates.is_empty());
+        assert_eq!(expand_identity_text("  Login  "), "login");
+
+        for field in [
+            NookPageInputFieldObservation::new(
+                PageInputType::Email,
+                false,
+                false,
+                vec!["username".into()],
+                "Email address".into(),
+                true,
+            ),
+            NookPageInputFieldObservation::new(
+                PageInputType::Text,
+                false,
+                false,
+                vec!["one-time-code".into()],
+                "verification code".into(),
+                false,
+            ),
+            NookPageInputFieldObservation::new(
+                PageInputType::Password,
+                true,
+                true,
+                Vec::new(),
+                String::new(),
+                false,
+            ),
+        ] {
+            let _ = looks_like_username_field(&field);
+            let _ = looks_like_one_time_code_field(&field);
+        }
+        let context = NookLoginContextObservation::new(
+            "login-form".into(),
+            vec!["account".into()],
+            "Continue".into(),
+            "/login".into(),
+        );
+        assert!(has_login_context(&context));
+        for label in ["Use a passkey", "Continue", "Verify manually", "Sign in"] {
+            let _ = looks_like_passkey_control_label(label);
+            let _ = looks_like_manual_checkpoint_label(label);
+            let _ = looks_like_login_advance_control_label(label);
+        }
+        let _ = looks_like_email_verification_body("check your email for a code");
+        for input_type in ["text", "email", "password", "unknown"] {
+            let _ = parse_page_input_type(input_type);
+        }
+
+        let observation =
+            NookAuthenticationPageObservation::new(1, 1, 1, 0, 0, true, false, false, false, 0);
+        assert!(authentication_form_observation_priority(&observation) > 0);
+        let mut observations = NookAuthenticationPageObservations::new();
+        observations.add(&observation);
+        let _ = authentication_page_observations_are_valid(&observations);
+
+        for (provider, origin, host) in [
+            (
+                BrowserOAuthProvider::GoogleDrive,
+                "https://simple.nokey.sh",
+                "simple.nokey.sh",
+            ),
+            (
+                BrowserOAuthProvider::ICloud,
+                "https://pr-7.nokey-simple.pages.dev",
+                "pr-7.nokey-simple.pages.dev",
+            ),
+        ] {
+            let support = resolve_oauth_origin_support(provider, origin, host);
+            let _ = support.is_supported();
+            let _ = support.is_unsupported();
+            let _ = support.origin();
+            let _ = support.unsupported_reason();
+        }
+        assert!(is_cloudflare_pr_preview_host("pr-7.nokey-simple.pages.dev"));
+        assert_eq!(
+            default_simple_vault_url(),
+            nook_core::DEFAULT_SIMPLE_VAULT_URL
+        );
+        let base = "https://simple.nokey.sh/";
+        let _ = normalize_simple_vault_base_url(base).unwrap();
+        let _ = simple_vault_url(base, "events.json").unwrap();
+        let _ = simple_vault_match_pattern(base).unwrap();
+        let _ = matching_sentinel_vault_base_url(base).unwrap();
+        let _ = sentinel_vault_match_patterns(base).unwrap();
+        let _ = nook_vault_app_exclude_match_patterns(base).unwrap();
+        let _ = is_nook_vault_app_url("https://simple.nokey.sh/", base).unwrap();
+        let _ = belongs_to_simple_vault(base, "https://simple.nokey.sh/events.json").unwrap();
+        let _ = belongs_to_sentinel_vault(base, "https://simple.nokey.sh/events.json").unwrap();
+    }
+}
