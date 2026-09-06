@@ -273,6 +273,7 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         }))
         throw new Error(
           `${error instanceof Error ? error.message : String(error)}\nChatGPT mock evidence: ${JSON.stringify(evidence)}`,
+          { cause: error },
         )
       }
 
