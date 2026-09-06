@@ -3,6 +3,8 @@
 use super::recovery;
 use crate::storage;
 use crate::storage::{event_db, indexed_db};
+#[cfg(test)]
+use nook_core::DeviceIdentityProtection;
 use nook_core::{IdentitySelection, LocalIdentityKeyring, LocalIdentityKeyringEntry};
 use rexie::TransactionMode;
 
@@ -480,7 +482,7 @@ mod tests {
         NookError,
     > {
         let app_key = AppKey::generate().map_err(map_domain_error)?;
-        let wrapped = nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), pin)?;
+        let wrapped = DeviceIdentityProtection::new(&app_key.secret_string()).with_pin(pin)?;
         let saved = identity_record::save_new_protected_local_identity(
             &app_key,
             &wrapped,
@@ -501,9 +503,9 @@ mod tests {
         let second_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let first_wrapped =
-            nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
+            DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let second_wrapped =
-            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
 
         let first = identity_record::save_new_protected_local_identity(
             &first_key,
@@ -561,7 +563,7 @@ mod tests {
         let first_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let first_wrapped =
-            nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
+            DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let first = identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
@@ -586,7 +588,7 @@ mod tests {
         let second_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let second_wrapped =
-            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
         assert!(
             identity_record::save_new_protected_local_identity(
                 &second_key,
@@ -656,7 +658,7 @@ mod tests {
         indexed_db::idb_put_string(event_db::SIGNING_SEED_KEY, &"22".repeat(32)).await?;
         let second_key = AppKey::generate().map_err(map_domain_error)?;
         let second_wrapped =
-            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
 
         let result = identity_record::save_new_protected_local_identity(
             &second_key,
@@ -767,7 +769,7 @@ mod tests {
         indexed_db::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "first-secret")?;
+            DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("first-secret")?;
         let protected = identity_record::save_new_protected_local_identity(
             &app_key, &wrapped, None, "Personal",
         )
@@ -821,7 +823,7 @@ mod tests {
         let first_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let first_wrapped =
-            nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
+            DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
@@ -833,7 +835,7 @@ mod tests {
         let second_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let second_wrapped =
-            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
 
         let result = identity_record::save_new_protected_local_identity(
             &second_key,
@@ -863,10 +865,8 @@ mod tests {
             create_pin_identity("Work", "second-secret", Some(&first_key)).await?;
         let replacement_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
-        let replacement_wrapped = nook_core::wrap_device_identity_with_pin(
-            &replacement_key.secret_string(),
-            "replacement-secret",
-        )?;
+        let replacement_wrapped = DeviceIdentityProtection::new(&replacement_key.secret_string())
+            .with_pin("replacement-secret")?;
         indexed_db::idb_put_string(
             recovery::PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY,
             "pending",
@@ -901,7 +901,7 @@ mod tests {
         let _ = Rexie::delete("nook_db").await;
         let (app_key, _, protected) = create_pin_identity("Personal", "first-secret", None).await?;
         let replacement_wrapped =
-            nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "new-protection")?;
+            DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("new-protection")?;
         indexed_db::save_wrapped_device_identity(app_key.app_id().as_str(), &replacement_wrapped)
             .await?;
 

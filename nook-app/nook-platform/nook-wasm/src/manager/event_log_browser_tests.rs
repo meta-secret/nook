@@ -9,6 +9,7 @@ use crate::storage::indexed_db::{
 };
 use crate::storage::{event_db, identity_record, indexed_db};
 use crate::vault_api::list_local_vaults;
+use nook_core::DeviceIdentityProtection;
 use nook_core::{
     AppKey, ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity,
     DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus, IdentityId, IdentitySelection,
@@ -109,7 +110,7 @@ async fn authenticated_legacy_key_bootstraps_keyring_and_preserves_signer() -> a
         .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
     let app_key = AppKey::generate()?;
     let wrapped =
-        nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "legacy identity pin")?;
+        DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("legacy identity pin")?;
     let (legacy_signing, legacy_seed) = SigningIdentity::generate()?;
     indexed_db::save_wrapped_device_identity(app_key.app_id().as_str(), &wrapped).await?;
     event_db::save_signing_seed(legacy_seed.as_str()).await?;

@@ -588,12 +588,12 @@ pub mod mock_passkey {
 
     #[cfg(test)]
     mod tests {
+        use crate::{PasskeyRecordMetadata, WrappedDeviceIdentity};
         use std::io;
 
         use super::*;
         use crate::{
             WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput, WebAuthnUserHandle,
-            passkey_derived_device_identity_record,
         };
 
         const RP_ID: &str = "localhost";
@@ -662,11 +662,14 @@ pub mod mock_passkey {
                 WebAuthnUserHandle::try_from(assertion.user_handle().to_vec())?.derive_identity(
                     &WebAuthnPrfOutput::try_from(assertion.prf_output().to_vec())?,
                 )?;
-            let recovered_record = passkey_derived_device_identity_record(
-                &WebAuthnCredentialId::try_from(assertion.credential_id().to_vec())?,
-                &WebAuthnUserHandle::try_from(assertion.user_handle().to_vec())?,
-                &WebAuthnPrfInput::deterministic(),
-            )?;
+            let recovered_record =
+                WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
+                    credential_id: &WebAuthnCredentialId::try_from(
+                        assertion.credential_id().to_vec(),
+                    )?,
+                    user_handle: &WebAuthnUserHandle::try_from(assertion.user_handle().to_vec())?,
+                    prf_input: &WebAuthnPrfInput::deterministic(),
+                })?;
 
             assert_eq!(recovered_identity, original_identity);
             assert_eq!(

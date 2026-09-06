@@ -335,6 +335,7 @@ pub(crate) async fn clear_auth_providers_db() -> Result<(), NookError> {
 mod wasm_idb_tests {
     use crate::storage::{identity_record, indexed_db};
     use futures_util::future;
+    use nook_core::DeviceIdentityProtection;
     use nook_core::{
         ActiveVaultScope, GoogleDriveMode, ProviderSyncCheckpoint, ProviderVaultScope,
         StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
@@ -418,10 +419,8 @@ mod wasm_idb_tests {
         identity_record::clear_keyring_for_test().await?;
         identity_record::clear_identity_directory_for_test().await?;
         let identity = DeviceIdentity::generate()?;
-        let wrapped = nook_core::wrap_device_identity_with_pin(
-            &identity.secret_string(),
-            "credential free projection pin",
-        )?;
+        let wrapped = DeviceIdentityProtection::new(&identity.secret_string())
+            .with_pin("credential free projection pin")?;
         identity_record::save_new_protected_local_identity(&identity, &wrapped, None, "Personal")
             .await?;
 
@@ -677,7 +676,7 @@ mod wasm_idb_tests {
         identity_record::clear_identity_directory_for_test().await?;
         let first = DeviceIdentity::generate()?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&first.secret_string(), "first identity pin")?;
+            DeviceIdentityProtection::new(&first.secret_string()).with_pin("first identity pin")?;
         identity_record::save_new_protected_local_identity(&first, &wrapped, None, "Personal")
             .await?;
         let mut legacy = github_snapshot("github_pat_locked_legacy");
@@ -710,10 +709,8 @@ mod wasm_idb_tests {
         identity_record::clear_keyring_for_test().await?;
         identity_record::clear_identity_directory_for_test().await?;
         let identity = DeviceIdentity::generate()?;
-        let wrapped = nook_core::wrap_device_identity_with_pin(
-            &identity.secret_string(),
-            "provider conflict identity pin",
-        )?;
+        let wrapped = DeviceIdentityProtection::new(&identity.secret_string())
+            .with_pin("provider conflict identity pin")?;
         identity_record::save_new_protected_local_identity(&identity, &wrapped, None, "Personal")
             .await?;
         save_auth_providers(&identity, &github_snapshot("github_pat_scoped_newer")).await?;
@@ -743,10 +740,8 @@ mod wasm_idb_tests {
         identity_record::clear_keyring_for_test().await?;
         identity_record::clear_identity_directory_for_test().await?;
         let identity = DeviceIdentity::generate()?;
-        let wrapped = nook_core::wrap_device_identity_with_pin(
-            &identity.secret_string(),
-            "legacy provider identity pin",
-        )?;
+        let wrapped = DeviceIdentityProtection::new(&identity.secret_string())
+            .with_pin("legacy provider identity pin")?;
         identity_record::save_new_protected_local_identity(&identity, &wrapped, None, "Personal")
             .await?;
         let mut legacy = github_snapshot_with_id("gh-legacy", "github_pat_legacy");

@@ -281,7 +281,7 @@ mod tests {
             mode: PasskeyDeviceProtectionMode::AntiHacker,
         })
         .complete(&prf_output)?;
-        let local_record = crate::serialize_wrapped_device_identity(material.record())?;
+        let local_record = material.record().to_json()?;
         let unsupported = local_record.replace(r#""version":4"#, r#""version":99"#);
         let unknown = local_record.replace(
             r#""protection":"passkey-wrapped-local""#,

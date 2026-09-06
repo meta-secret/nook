@@ -5,6 +5,10 @@
 
 use js_sys::Date;
 use nook_core::IsoTimestamp;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::{DeviceIdentityProtection, PasskeyProtectionInput};
+#[cfg(test)]
+use nook_core::{PasskeyRecordMetadata, WrappedDeviceIdentity};
 
 pub(crate) use nook_core::{
     DeviceAccessProfile, DeviceAccessProfileDecodeResult, PasskeyAccessProfile,
@@ -532,11 +536,11 @@ mod tests {
         let identity = DeviceIdentity::from_secret_str(&secret)?;
         let credential_id = [7u8; 32];
         let typed_credential = nook_core::WebAuthnCredentialId::try_from(credential_id.to_vec())?;
-        let wrapped = nook_core::passkey_derived_device_identity_record(
-            &typed_credential,
-            setup.user_handle(),
-            setup.prf_input(),
-        )?;
+        let wrapped = WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
+            credential_id: &typed_credential,
+            user_handle: setup.user_handle(),
+            prf_input: setup.prf_input(),
+        })?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
         delete_device_access_profile().await?;
 
@@ -568,11 +572,11 @@ mod tests {
         let typed_credential =
             nook_core::WebAuthnCredentialId::try_from(current_credential.to_vec())?;
         let current_fingerprint = nook_core::passkey_credential_identifier(&current_credential);
-        let current_wrapped = nook_core::passkey_derived_device_identity_record(
-            &typed_credential,
-            setup.user_handle(),
-            setup.prf_input(),
-        )?;
+        let current_wrapped = WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
+            credential_id: &typed_credential,
+            user_handle: setup.user_handle(),
+            prf_input: setup.prf_input(),
+        })?;
         save_wrapped_device_identity(identity.device_id().as_str(), &current_wrapped).await?;
 
         record_passkey_created(
@@ -612,13 +616,13 @@ mod tests {
         let typed_credential =
             nook_core::WebAuthnCredentialId::try_from(first_credential.to_vec())?;
         let output = nook_core::WebAuthnPrfOutput::try_from(vec![41u8; 32])?;
-        let first_wrapped = nook_core::passkey_wrapped_device_identity_record(
-            &typed_credential,
-            first_setup.user_handle(),
-            first_setup.prf_input(),
-            &output,
-            &first_key.secret_string(),
-        )?;
+        let first_wrapped = DeviceIdentityProtection::new(&first_key.secret_string())
+            .with_passkey(&PasskeyProtectionInput {
+                credential_id: &typed_credential,
+                user_handle: first_setup.user_handle(),
+                prf_input: first_setup.prf_input(),
+                prf_output: &output,
+            })?;
         identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
@@ -643,7 +647,7 @@ mod tests {
         let second_key =
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let second_wrapped =
-            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
         identity_record::save_new_protected_local_identity(
             &second_key,
             &second_wrapped,
@@ -685,7 +689,7 @@ mod tests {
         let _ = Rexie::delete("nook_db").await;
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "first-secret")?;
+            DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("first-secret")?;
         identity_record::save_new_protected_local_identity(&app_key, &wrapped, None, "Personal")
             .await?;
         let app_device_id = device_id(app_key.app_id().as_str())?;

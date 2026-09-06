@@ -2,6 +2,8 @@
 
 use crate::storage;
 use crate::storage::event_db;
+#[cfg(test)]
+use nook_core::DeviceIdentityProtection;
 use nook_core::{DeviceSigningPublicKey, IdentitySelection, SigningIdentity, i18n_keys};
 use rexie::TransactionMode;
 
@@ -229,10 +231,8 @@ mod tests {
     -> Result<(), NookError> {
         indexed_db::idb_delete_key(event_db::SIGNING_SEED_KEY).await?;
         let app_key = AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
-        let wrapped = nook_core::wrap_device_identity_with_pin(
-            &app_key.secret_string(),
-            "legacy identity pin",
-        )?;
+        let wrapped = DeviceIdentityProtection::new(&app_key.secret_string())
+            .with_pin("legacy identity pin")?;
         let identity = IdentityRecord::create_with_app_key("Legacy", &app_key, None)
             .map_err(|error| NookError::Database(error.to_string()))?;
         let entry = LocalIdentityKeyringEntry::legacy(
