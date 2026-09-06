@@ -186,6 +186,92 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('#password-input')).toBe(FAKE_CREDENTIALS.password)
   })
 
+  test('runs the ChatGPT GET and OpenAI POST identifier forms', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/auth/login?auth_origin=https%3A%2F%2Fauth.example.test',
+    )
+    const chatGptRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><h1>Log in or sign up</h1><form method="get" action="/auth/login">
+          <button type="button">Continue with Google</button>
+          <button type="button">Continue with Apple</button>
+          <button type="button">Continue with phone</button>
+          <input id="email" name="email" type="email" autocomplete="email" aria-label="Email address" placeholder="Email address">
+          <button name="intent" type="submit" value="chatgpt-continue">Continue</button>
+        </form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const chatGpt = simulateDomAuthentication(chatGptRequest)
+    expect(chatGpt).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'Continue',
+    })
+    expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
+    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
+
+    window.history.replaceState({}, '', '/log-in-or-create-account')
+    const openAiRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form id="openai-social-form" method="post" action="/log-in-or-create-account" hidden></form>
+        <form id="openai-identifier-form" method="post" action="/log-in-or-create-account">
+          <button name="intent" type="submit" value="google" form="openai-social-form">Continue with Google</button>
+          <button name="intent" type="submit" value="apple" form="openai-social-form">Continue with Apple</button>
+          <button name="intent" type="submit" value="microsoft" form="openai-social-form">Continue with Microsoft</button>
+          <button id="phone-alternative" type="button">Continue with phone</button>
+          <input id="email" name="email" type="email" autocomplete="email" aria-label="Email address" placeholder="Email address">
+          <button name="intent" type="submit" value="openai-continue">Continue</button>
+        </form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const openAi = simulateDomAuthentication(openAiRequest)
+    expect(openAi).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'Continue',
+    })
+    expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
+    expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
+    const identifierForm = document.querySelector('#openai-identifier-form')
+    const socialForm = document.querySelector('#openai-social-form')
+    const phone =
+      document.querySelector<HTMLButtonElement>('#phone-alternative')
+    const socialButtons = document.querySelectorAll<HTMLButtonElement>(
+      'button[form="openai-social-form"]',
+    )
+    if (!identifierForm || !socialForm || !phone) {
+      throw new Error('expected OpenAI form ownership evidence')
+    }
+    expect(phone.form).toBe(identifierForm)
+    expect(socialButtons).toHaveLength(3)
+    expect(
+      [...socialButtons].every((button) => identifierForm.contains(button)),
+    ).toBe(true)
+    expect(
+      [...socialButtons].every(
+        (button) => button.getAttribute('form') === socialForm.id,
+      ),
+    ).toBe(true)
+  })
+
   test('runs both bounded steps of the cross-origin Apple authorization surface', () => {
     window.history.replaceState({}, '', '/appleauth/auth/authorize/signin')
     const identifierRequest: DomAuthenticationSimulationRequest = {
