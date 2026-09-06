@@ -112,7 +112,7 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
   AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
   LoginPickerKind: { Closed: 'closed', Open: 'open' },
   pickerState: {},
-  widgetState: { busy: false },
+  widgetState: { busy: false, credentialActuationInFlight: false },
 }))
 
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
@@ -179,6 +179,7 @@ beforeEach(() => {
   document.body.replaceChildren()
   vi.clearAllMocks()
   widgetState.dismissed = false
+  widgetState.credentialActuationInFlight = false
   actionMocks.performRevalidation.mockImplementation(async (request) => {
     const actResult = request.act({
       currentWorkflow: workflow,
@@ -197,7 +198,37 @@ beforeEach(() => {
 })
 
 describe('revalidated authentication actions', () => {
-  test('binds login credential release and fill to one observation', async () => {
+  test('revalidates the post-fill submission through a fresh domain decision', async () => {
+    const ui = controls()
+    ui.continueButton.disabled = true
+    let browserReactionSettled = false
+    actionMocks.fillLoginCredentials.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        expect(widgetState.credentialActuationInFlight).toBe(true)
+        ui.continueButton.disabled = false
+        browserReactionSettled = true
+      })
+      return true
+    })
+    actionMocks.performRevalidation.mockImplementation(async (request) => {
+      if (actionMocks.performRevalidation.mock.calls.length === 3) {
+        expect(browserReactionSettled).toBe(true)
+        expect(ui.continueButton.disabled).toBe(false)
+      }
+      const actResult = request.act({
+        currentWorkflow: workflow,
+        observationBindingToken: 'approved-observation',
+        revalidateCurrentWorkflow: () => workflow,
+      })
+      return {
+        kind:
+          actResult.kind === 'acted'
+            ? 'acted'
+            : actResult.kind === 'control-missing'
+              ? 'control-missing'
+              : 'action-failed',
+      }
+    })
     actionMocks.sendLoginFill.mockResolvedValue({
       kind: 'delivered',
       response: { ok: true, username: 'person', password: 'secret' },
@@ -212,19 +243,24 @@ describe('revalidated authentication actions', () => {
         },
         workflow,
         approval,
-        ...controls(),
+        ...ui,
       }),
     ).resolves.toBe(true)
 
-    expect(actionMocks.performRevalidation).toHaveBeenCalledTimes(2)
+    expect(actionMocks.performRevalidation).toHaveBeenCalledTimes(3)
     expect(actionMocks.performRevalidation.mock.calls[1]?.[0]).toMatchObject({
       observationBinding: {
         kind: 'required',
         token: 'approved-observation',
       },
     })
+    expect(actionMocks.performRevalidation.mock.calls[2]?.[0]).toMatchObject({
+      expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+      observationBinding: { kind: 'unbound' },
+    })
     expect(actionMocks.fillLoginCredentials).toHaveBeenCalledOnce()
     expect(actionMocks.submitLoginForm).toHaveBeenCalledOnce()
+    expect(widgetState.credentialActuationInFlight).toBe(false)
   })
 
   test('authorizes OTP release before filling the returned code', async () => {
@@ -403,12 +439,13 @@ describe('revalidated authentication actions', () => {
       const result = request.act({
         currentWorkflow: workflow,
         observationBindingToken: 'approved-observation',
-        revalidateCurrentWorkflow: () => false,
+        revalidateCurrentWorkflow: () => workflow,
       })
-      return {
-        kind: result.kind === 'acted' ? 'acted' : 'action-failed',
-      }
+      return { kind: result.kind }
     })
+    actionMocks.performRevalidation.mockImplementationOnce(async () => ({
+      kind: 'rejected',
+    }))
 
     await expect(
       fillAndSubmitAccount({
@@ -425,7 +462,98 @@ describe('revalidated authentication actions', () => {
 
     expect(actionMocks.fillLoginCredentials).toHaveBeenCalledOnce()
     expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
+    expect(actionMocks.clearLoginCredentials).toHaveBeenCalledOnce()
     expect(response.password).toBe('')
+    expect(widgetState.credentialActuationInFlight).toBe(false)
+  })
+
+  test('clears filled credentials when fill revalidation throws after actuation', async () => {
+    const response = {
+      ok: true,
+      username: 'ada@example.test',
+      password: 'vault-secret',
+    }
+    actionMocks.sendLoginFill.mockResolvedValue({
+      kind: 'delivered',
+      response,
+    })
+    actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
+      const result = request.act({
+        currentWorkflow: workflow,
+        observationBindingToken: 'approved-observation',
+        revalidateCurrentWorkflow: () => workflow,
+      })
+      return { kind: result.kind }
+    })
+    actionMocks.performRevalidation.mockImplementationOnce(async (request) => {
+      request.act({
+        currentWorkflow: workflow,
+        observationBindingToken: 'approved-observation',
+        revalidateCurrentWorkflow: () => workflow,
+      })
+      throw new Error('fill revalidation failed')
+    })
+
+    await expect(
+      fillAndSubmitAccount({
+        account: {
+          vaultStoreId: 'vault',
+          secretId: 'login',
+          authorizationGeneration: 'epoch-1',
+        },
+        workflow,
+        approval,
+        ...controls(),
+      }),
+    ).rejects.toThrow('fill revalidation failed')
+
+    expect(actionMocks.fillLoginCredentials).toHaveBeenCalledOnce()
+    expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
+    expect(actionMocks.clearLoginCredentials).toHaveBeenCalledOnce()
+    expect(response.password).toBe('')
+    expect(widgetState.credentialActuationInFlight).toBe(false)
+  })
+
+  test('clears filled credentials when post-fill revalidation throws', async () => {
+    const response = {
+      ok: true,
+      username: 'ada@example.test',
+      password: 'vault-secret',
+    }
+    actionMocks.sendLoginFill.mockResolvedValue({
+      kind: 'delivered',
+      response,
+    })
+    actionMocks.performRevalidation.mockImplementation(async (request) => {
+      if (actionMocks.performRevalidation.mock.calls.length === 3) {
+        throw new Error('post-fill revalidation failed')
+      }
+      const result = request.act({
+        currentWorkflow: workflow,
+        observationBindingToken: 'approved-observation',
+        revalidateCurrentWorkflow: () => workflow,
+      })
+      return { kind: result.kind }
+    })
+
+    await expect(
+      fillAndSubmitAccount({
+        account: {
+          vaultStoreId: 'vault',
+          secretId: 'login',
+          authorizationGeneration: 'epoch-1',
+        },
+        workflow,
+        approval,
+        ...controls(),
+      }),
+    ).rejects.toThrow('post-fill revalidation failed')
+
+    expect(actionMocks.fillLoginCredentials).toHaveBeenCalledOnce()
+    expect(actionMocks.submitLoginForm).not.toHaveBeenCalled()
+    expect(actionMocks.clearLoginCredentials).toHaveBeenCalledOnce()
+    expect(response.password).toBe('')
+    expect(widgetState.credentialActuationInFlight).toBe(false)
   })
 
   test('refuses a TOTP that expires during revalidation', async () => {

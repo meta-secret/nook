@@ -60,6 +60,7 @@ export type ExtensionManifest = {
     exclude_matches: string[]
     js: string[]
     run_at: ContentScriptRunAt
+    all_frames: boolean
     type?: ExtensionManifestType.Module
     world?: ContentScriptWorld
   }>
@@ -154,12 +155,14 @@ export function createManifest(
         // Companion-ready uses top-level await; classic content scripts reject TLA.
         type: ExtensionManifestType.Module,
         run_at: ContentScriptRunAt.DocumentIdle,
+        all_frames: true,
       },
       {
         matches: ['<all_urls>'],
         exclude_matches: vaultAppExclusions,
         js: ['content/webauthn-content.js'],
         run_at: ContentScriptRunAt.DocumentStart,
+        all_frames: false,
         world: ContentScriptWorld.Isolated,
       },
       {
@@ -167,6 +170,7 @@ export function createManifest(
         exclude_matches: vaultAppExclusions,
         js: ['content/webauthn-page.js'],
         run_at: ContentScriptRunAt.DocumentStart,
+        all_frames: false,
         world: ContentScriptWorld.Main,
       },
       {
@@ -174,6 +178,7 @@ export function createManifest(
         exclude_matches: vaultAppExclusions,
         js: ['content/authentication-route-page.js'],
         run_at: ContentScriptRunAt.DocumentStart,
+        all_frames: false,
         world: ContentScriptWorld.Main,
       },
       {
@@ -181,6 +186,7 @@ export function createManifest(
         exclude_matches: sentinel_vault_match_patterns(simpleVaultBaseUrl),
         js: ['content/simple-vault-bridge.js'],
         run_at: ContentScriptRunAt.DocumentStart,
+        all_frames: false,
       },
     ],
     externally_connectable: {

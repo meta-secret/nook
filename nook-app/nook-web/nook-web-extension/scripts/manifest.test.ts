@@ -118,6 +118,14 @@ describe('extension origin isolation', () => {
       script.js.includes('content/autofill.js'),
     )
     expect(autofill?.type).toBe('module')
+    expect(autofill).toHaveProperty('all_frames', true)
+    expect(
+      defaultManifest()
+        .content_scripts.filter(
+          (script) => !script.js.includes('content/autofill.js'),
+        )
+        .every((script) => !script.all_frames),
+    ).toBe(true)
   })
 
   test('installs a MAIN-world authentication route hook at document start', () => {

@@ -219,6 +219,96 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('fills both Apple steps inside the exact cross-origin authorization frame', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const accountSite = await startMockAuthServer()
+    const appleAuthorization = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock Apple auth vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        appleAuthorization.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      const page = await paired.context.newPage()
+      const authOrigin = encodeURIComponent(appleAuthorization.origin)
+      await page.goto(
+        `${accountSite.origin}/account/sign-in?auth_origin=${authOrigin}`,
+      )
+      await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
+
+      const authorizationFrame = page.frameLocator(
+        '[data-testid="apple-auth-frame"]',
+      )
+      await expect(
+        authorizationFrame.getByTestId('apple-auth-step'),
+      ).toHaveText('identifier')
+      const identifier = authorizationFrame.locator('#account_name_text_field')
+      await expect(identifier).toHaveAttribute(
+        'autocomplete',
+        'username webauthn',
+      )
+      await expect(authorizationFrame.locator('#continue')).toBeDisabled()
+      await expect(
+        authorizationFrame.getByRole('button', {
+          name: 'Sign in with Passkey',
+        }),
+      ).toBeEnabled()
+      await expect(
+        authorizationFrame.locator('[name="decoyPassword"]'),
+      ).toHaveValue('')
+
+      const widget = authorizationFrame.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(
+        authorizationFrame.getByTestId('apple-auth-step'),
+      ).toHaveText('password')
+      await expect(identifier).toHaveValue('alice@nook.test')
+      await expect(
+        authorizationFrame.locator('[name="decoyPassword"]'),
+      ).toHaveValue('')
+      await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
+      await expect(
+        authorizationFrame.getByRole('button', {
+          name: 'Sign in with Passkey',
+        }),
+      ).toBeEnabled()
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(
+        authorizationFrame.getByTestId('mock-auth-success'),
+      ).toHaveText('Authentication complete', { timeout: 20_000 })
+      const expectedEvidence = JSON.stringify({
+        identifierContinueSubmitted: true,
+        passwordSignInSubmitted: true,
+        loginCredentialsMatched: true,
+        decoyPasswordUnchanged: true,
+      })
+      await expect
+        .poll(() =>
+          authorizationFrame
+            .locator('body')
+            .evaluate(
+              () => sessionStorage.getItem('apple-submission-evidence') || '',
+            ),
+        )
+        .toBe(expectedEvidence)
+      await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await Promise.all([accountSite.close(), appleAuthorization.close()])
+    }
+  })
+
   test('does not claim success after wrong-password autofill', async ({
     browserName,
   }, testInfo) => {

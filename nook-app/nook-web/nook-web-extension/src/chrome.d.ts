@@ -9,6 +9,7 @@ type ChromeTabsQueryRequest = { active?: boolean; currentWindow?: boolean }
 type ChromeTabCreationRequest = { url: string }
 
 type ChromeTabCreationPromiseRequest = { url: string }
+type ChromeTabMessageOptions = { frameId: number }
 type ChromeStorageItems = Record<string, unknown>
 
 declare namespace chrome {
@@ -141,6 +142,19 @@ declare namespace chrome {
     function sendMessage<TResponse = unknown>(
       tabId: number,
       message: unknown,
+    ): Promise<TResponse>
+    // eslint-disable-next-line max-params -- Chrome owns this callback overload.
+    function sendMessage<TResponse = unknown>(
+      tabId: number,
+      message: unknown,
+      options: ChromeTabMessageOptions,
+      callback: (response: TResponse) => void,
+    ): void
+    // eslint-disable-next-line max-params -- Chrome owns this Promise overload.
+    function sendMessage<TResponse = unknown>(
+      tabId: number,
+      message: unknown,
+      options: ChromeTabMessageOptions,
     ): Promise<TResponse>
   }
 

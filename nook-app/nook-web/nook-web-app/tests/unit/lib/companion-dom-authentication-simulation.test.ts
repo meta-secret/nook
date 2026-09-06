@@ -186,6 +186,108 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(fieldValue('#password-input')).toBe(FAKE_CREDENTIALS.password)
   })
 
+  test('runs both bounded steps of the cross-origin Apple authorization surface', () => {
+    window.history.replaceState({}, '', '/appleauth/auth/authorize/signin')
+    const identifierRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form id="sign-in-form" method="post" action="/appleauth/auth/authorize/signin"><fieldset aria-label="Sign in to Apple Account">
+          <input id="account_name_text_field" name="accountName" type="text" autocomplete="username webauthn" aria-label="Email or Phone Number">
+          <input name="decoyPassword" type="password" tabindex="-1" aria-hidden="true" hidden>
+          <button type="button">Sign in with Passkey</button>
+          <button id="continue" type="submit">Continue</button>
+        </fieldset></form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const identifier = simulateDomAuthentication(identifierRequest)
+    const {
+      selectedRoot: identifierRoot,
+      observedRoots: identifierObservedRoots,
+      ...identifierEvidence
+    } = identifier
+    expect(identifierEvidence).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'continue',
+    })
+    expect(identifierObservedRoots.length).toBe(1)
+    expect(identifierRoot === document).toBe(true)
+    expect(fieldValue('#account_name_text_field')).toBe(
+      FAKE_CREDENTIALS.username,
+    )
+    expect(fieldValue('[name="decoyPassword"]')).toBe('')
+
+    const passwordRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form id="sign-in-form" method="post" action="/appleauth/auth/authorize/signin"><fieldset aria-label="Sign in to Apple Account">
+          <input id="account_name_text_field" name="accountName" type="text" autocomplete="username webauthn" aria-label="Email or Phone Number">
+          <input id="password_text_field" name="password" type="password" autocomplete="current-password" aria-label="Password">
+          <input name="decoyPassword" type="password" tabindex="-1" aria-hidden="true" hidden>
+          <button type="button">Sign in with Passkey</button>
+          <button id="sign-in" type="submit">Sign In</button>
+        </fieldset></form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const password = simulateDomAuthentication(passwordRequest)
+    const {
+      selectedRoot: passwordRoot,
+      observedRoots: passwordObservedRoots,
+      ...passwordEvidence
+    } = password
+    expect(passwordEvidence).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'sign-in',
+    })
+    expect(passwordObservedRoots.length).toBe(1)
+    expect(passwordRoot === document).toBe(true)
+    expect(fieldValue('#account_name_text_field')).toBe(
+      FAKE_CREDENTIALS.username,
+    )
+    expect(fieldValue('#password_text_field')).toBe(FAKE_CREDENTIALS.password)
+    expect(fieldValue('[name="decoyPassword"]')).toBe('')
+  })
+
+  test('keeps an ambiguous Apple password surface fail closed', () => {
+    window.history.replaceState({}, '', '/appleauth/auth/authorize/signin')
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form id="sign-in-form" method="post" action="/appleauth/auth/authorize/signin">
+          <input id="account_name_text_field" name="accountName" type="text" autocomplete="username webauthn">
+          <input id="password_text_field" name="password" type="password" autocomplete="current-password">
+          <input name="otherPassword" type="password" autocomplete="current-password">
+          <button id="sign-in" type="submit">Sign In</button>
+        </form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+    expect(fieldValue('#account_name_text_field')).toBe('')
+    expect(fieldValue('#password_text_field')).toBe('')
+    expect(fieldValue('[name="otherPassword"]')).toBe('')
+  })
+
   test('runs the Namecheap shell through observation, classification, fill, and submission', () => {
     const request: DomAuthenticationSimulationRequest = {
       fixture: NAMECHEAP_PAGE_WIDE_LOGIN,

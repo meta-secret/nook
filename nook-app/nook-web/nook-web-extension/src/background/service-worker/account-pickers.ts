@@ -49,6 +49,7 @@ type PendingAuthenticatorPicker = {
   requestId: string
   origin: string
   tabId: number
+  frameId: number
   allowedVaultStoreIds: string[]
   expiresAt: number
 }
@@ -125,7 +126,52 @@ type PendingAccountPickerMemoryCleanupArgs = {
 
 type AccountPickerCancellation = {
   tabId: number
+  frameId: number
   message: WebsiteAuthenticatorCanceledMessage | WebsiteLoginCanceledMessage
+}
+
+type AccountPickerPageMessageDelivery = {
+  tabId: number
+  frameId: number
+  message: unknown
+}
+
+type AccountPickerPageSenderMatch = {
+  tabId: number
+  frameId: number
+  sender: chrome.runtime.MessageSender
+}
+
+export class AccountPickerPageTarget {
+  static senderFrameId(sender: chrome.runtime.MessageSender): number {
+    return typeof sender.frameId === 'number' &&
+      Number.isInteger(sender.frameId) &&
+      sender.frameId >= 0
+      ? sender.frameId
+      : 0
+  }
+
+  static matchesSender({
+    tabId,
+    frameId,
+    sender,
+  }: AccountPickerPageSenderMatch): boolean {
+    return (
+      !!sender.tab &&
+      'id' in sender.tab &&
+      sender.tab.id === tabId &&
+      AccountPickerPageTarget.senderFrameId(sender) === frameId
+    )
+  }
+
+  static send({
+    tabId,
+    frameId,
+    message,
+  }: AccountPickerPageMessageDelivery): Promise<unknown> {
+    const options: ChromeTabMessageOptions = { frameId }
+    return chrome.tabs.sendMessage(tabId, message, options)
+  }
 }
 
 type AccountPickerSurfaceRemovalArgs = [number, () => void]
@@ -140,6 +186,7 @@ export function takePendingAccountPickerMemoryCleanup({
   const cancellations: AccountPickerCancellation[] = [
     ...Array.from(authenticatorRequests.values(), (request) => ({
       tabId: request.tabId,
+      frameId: request.frameId,
       message: {
         type: WebsiteAuthenticatorCanceledMessageType.NookWebsiteAuthenticatorCanceled,
         payload: { origin: request.origin, requestId: request.requestId },
@@ -147,6 +194,7 @@ export function takePendingAccountPickerMemoryCleanup({
     })),
     ...Array.from(loginRequests.values(), (request) => ({
       tabId: request.tabId,
+      frameId: request.frameId,
       message: {
         type: WebsiteLoginCanceledMessageType.NookWebsiteLoginCanceled,
         payload: { origin: request.origin, requestId: request.requestId },
@@ -180,6 +228,7 @@ export function persistedAccountPickerCleanupPlan(
         }
         const targetedCancellation: AccountPickerCancellation = {
           tabId: value.tabId,
+          frameId: value.frameId,
           message: cancellation,
         }
         cancellations.push(targetedCancellation)
@@ -193,6 +242,7 @@ export function persistedAccountPickerCleanupPlan(
         }
         const targetedCancellation: AccountPickerCancellation = {
           tabId: value.tabId,
+          frameId: value.frameId,
           message: cancellation,
         }
         cancellations.push(targetedCancellation)
@@ -205,8 +255,8 @@ export function persistedAccountPickerCleanupPlan(
 async function clearPersistedAccountPickers(): Promise<void> {
   const plan = persistedAccountPickerCleanupPlan(await getAllSessionStorage())
   await Promise.allSettled(
-    plan.cancellations.map(({ tabId, message }) =>
-      chrome.tabs.sendMessage(tabId, message),
+    plan.cancellations.map((delivery) =>
+      AccountPickerPageTarget.send(delivery),
     ),
   )
   const removals = await Promise.allSettled(
@@ -270,8 +320,8 @@ export async function clearPendingAccountPickers(): Promise<void> {
   const memoryCancellations =
     takePendingAccountPickerMemoryCleanup(memoryCleanupArgs)
   const memoryDelivery = Promise.allSettled(
-    memoryCancellations.map(({ tabId, message }) =>
-      chrome.tabs.sendMessage(tabId, message),
+    memoryCancellations.map((delivery) =>
+      AccountPickerPageTarget.send(delivery),
     ),
   )
   const cleanup = await Promise.allSettled([
@@ -316,6 +366,10 @@ function isPendingAuthenticatorPicker(
     typeof value.tabId === 'number' &&
     Number.isInteger(value.tabId) &&
     value.tabId >= 0 &&
+    'frameId' in value &&
+    typeof value.frameId === 'number' &&
+    Number.isInteger(value.frameId) &&
+    value.frameId >= 0 &&
     'allowedVaultStoreIds' in value &&
     Array.isArray(value.allowedVaultStoreIds) &&
     value.allowedVaultStoreIds.every(

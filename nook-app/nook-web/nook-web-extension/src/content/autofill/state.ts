@@ -141,6 +141,7 @@ class WidgetState {
   dismissed = false
   busy = false
   collapsed = false
+  credentialActuationInFlight = false
   get host(): WidgetHost {
     return this.hostState
   }
