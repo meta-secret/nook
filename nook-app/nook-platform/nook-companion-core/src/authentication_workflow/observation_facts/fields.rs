@@ -27,7 +27,8 @@ impl AuthenticationFieldObservationFacts {
         if matches!(
             observation.submission_method,
             PageControlSubmissionMethod::Get
-        ) {
+        ) || observation.is_microsoft_consumer_root_identifier_advance()
+        {
             return self.username_field_count.raw() == 1
                 && matches!(
                     observation.authentication_username,

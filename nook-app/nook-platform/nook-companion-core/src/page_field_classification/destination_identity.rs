@@ -16,6 +16,8 @@ pub struct CanonicalControlDestination {
     pub has_provider_authority: bool,
     /// Whether the source host is a Microsoft authentication authority.
     pub has_microsoft_provider_authority: bool,
+    /// Whether the exact HTTPS destination host and path are Microsoft's consumer login root.
+    pub is_microsoft_consumer_login_root: bool,
 }
 
 fn is_http_url(url: &Url) -> bool {
@@ -126,6 +128,9 @@ pub fn canonicalize_control_destination(
         Some(value) => Some(decode_component(value)?),
         None => None,
     };
+    let is_microsoft_consumer_login_root = destination.scheme() == "https"
+        && destination.host_str() == Some("login.live.com")
+        && decoded_path == "/";
     let mut path_identity = decoded_path.clone();
     if let Some(fragment) = &fragment {
         path_identity.push('#');
@@ -157,6 +162,7 @@ pub fn canonicalize_control_destination(
                     .iter()
                     .any(|domain| host_matches_registered_domain(host, domain))
             }),
+        is_microsoft_consumer_login_root,
     })
 }
 

@@ -124,6 +124,41 @@ pub enum AuthenticationAdvanceControlDecision {
 }
 
 impl AuthenticationAdvanceControlObservation {
+    pub(crate) fn has_empty_microsoft_consumer_login_root(&self) -> bool {
+        self.form_identity.is_empty()
+            && canonicalize_control_destination(&self.source_origin, &self.destination_identity)
+                .is_some_and(|destination| destination.is_microsoft_consumer_login_root)
+    }
+
+    pub(crate) fn is_microsoft_consumer_root_identifier_advance(&self) -> bool {
+        let Some(destination) =
+            canonicalize_control_destination(&self.source_origin, &self.destination_identity)
+        else {
+            return false;
+        };
+        destination.is_microsoft_consumer_login_root
+            && destination.path_identity == "/"
+            && destination.route_identity == "/"
+            && self.form_identity.is_empty()
+            && matches!(self.actionability, PageControlActionability::Actionable)
+            && matches!(
+                self.ownership,
+                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+            )
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && matches!(self.submission_method, PageControlSubmissionMethod::Post)
+            && matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+            )
+            && self.password_field_count.raw() == 0
+            && self.new_password_field_count.raw() == 0
+            && self.one_time_code_field_count.raw() == 0
+            && self.semantic_submit_control_count.raw() == 1
+            && (expand_identity_text(&self.label) == "next"
+                || AuthenticationControlIdentity::new(&self.label).is_explicit_advance())
+    }
+
     fn is_identifier_only_get_advance(&self) -> bool {
         matches!(self.actionability, PageControlActionability::Actionable)
             && matches!(
@@ -431,6 +466,18 @@ mod tests {
                 submission_method: PageControlSubmissionMethod::Absent,
             }
         }
+
+        fn microsoft_consumer_identifier_advance() -> Self {
+            let mut observation = Self::login_control();
+            observation.authentication_username = AuthenticationUsernameEvidence::Explicit;
+            observation.password_field_count = 0.into();
+            observation.source_origin = "https://login.live.com".to_owned();
+            observation.form_identity.clear();
+            observation.destination_identity = "https://login.live.com/".to_owned();
+            observation.label = "Next".to_owned();
+            observation.submission_method = PageControlSubmissionMethod::Post;
+            observation
+        }
     }
 
     #[test]
@@ -655,6 +702,159 @@ mod tests {
 
         identifier.submission_method = PageControlSubmissionMethod::Dialog;
         assert!(!authentication_advance_control_is_safe(&identifier));
+    }
+
+    #[test]
+    fn exact_microsoft_consumer_root_identifier_advance_is_safe() {
+        let observation =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        assert!(authentication_advance_control_is_safe(&observation));
+
+        let mut locally_scoped = observation;
+        locally_scoped.ownership = PageControlOwnership::LocallyScoped;
+        assert!(authentication_advance_control_is_safe(&locally_scoped));
+
+        locally_scoped.label = "Sign in".to_owned();
+        assert!(authentication_advance_control_is_safe(&locally_scoped));
+    }
+
+    #[test]
+    fn microsoft_consumer_root_requires_exact_https_authority_and_route() {
+        for (source, destination) in [
+            ("http://login.live.com", "http://login.live.com/"),
+            ("https://login.live.com", "https://other.example/"),
+            (
+                "https://login.live.com.evil.example",
+                "https://login.live.com.evil.example/",
+            ),
+            (
+                "https://nested.login.live.com",
+                "https://nested.login.live.com/",
+            ),
+            ("https://account.live.com", "https://account.live.com/"),
+            ("https://live.com", "https://live.com/"),
+            ("https://microsoft.com", "https://microsoft.com/"),
+            (
+                "https://login.microsoftonline.com",
+                "https://login.microsoftonline.com/",
+            ),
+            (
+                "https://login.live.com",
+                "https://login.live.com/?mode=login",
+            ),
+            ("https://login.live.com", "https://login.live.com/#login"),
+        ] {
+            let mut rejected =
+                AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+            rejected.source_origin = source.to_owned();
+            rejected.destination_identity = destination.to_owned();
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        let mut authenticated_microsoft =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        authenticated_microsoft.source_origin = "https://login.microsoftonline.com".to_owned();
+        authenticated_microsoft.destination_identity =
+            "https://login.microsoftonline.com/common/login".to_owned();
+        assert!(authentication_advance_control_is_safe(
+            &authenticated_microsoft
+        ));
+    }
+
+    #[test]
+    fn microsoft_consumer_root_preserves_form_and_control_vetoes() {
+        for form_identity in [
+            "signup",
+            "reset-password",
+            "delete-account",
+            "account-settings",
+            "google-login",
+            "continue-with-passkey",
+        ] {
+            let mut rejected =
+                AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+            rejected.form_identity = form_identity.to_owned();
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for label in [
+            "Continue with Google",
+            "Cancel",
+            "Delete account",
+            "Reset password",
+        ] {
+            let mut rejected =
+                AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+            rejected.label = label.to_owned();
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for machine_identity in ["provider=google", "delete-account", "reset-password"] {
+            let mut rejected =
+                AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+            rejected.machine_identity = machine_identity.to_owned();
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+    }
+
+    #[test]
+    fn microsoft_consumer_root_requires_exact_identifier_submit_shape() {
+        for evidence in [
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+        ] {
+            let mut rejected =
+                AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+            rejected.authentication_username = evidence;
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for mutation in [
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.password_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.new_password_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.one_time_code_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.semantic_submit_control_count = 2.into();
+            },
+        ] {
+            let mut rejected =
+                AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+            mutation(&mut rejected);
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for method in [
+            PageControlSubmissionMethod::Absent,
+            PageControlSubmissionMethod::Get,
+            PageControlSubmissionMethod::Dialog,
+        ] {
+            let mut rejected =
+                AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+            rejected.submission_method = method;
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        let mut unowned =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(&unowned));
+
+        let mut activation =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        activation.semantics = PageControlSemantics::Activation;
+        assert!(!authentication_advance_control_is_safe(&activation));
+
+        let mut inert =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(&inert));
     }
 
     #[test]

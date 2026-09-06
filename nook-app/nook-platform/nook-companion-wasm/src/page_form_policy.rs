@@ -405,6 +405,35 @@ mod tests {
         identifier_get.password_field_count = 0.into();
         identifier_get.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
         assert!(authentication_advance_control_is_safe(identifier_get));
+
+        let mut microsoft = login_advance_observation("https://login.live.com/", "Next");
+        microsoft.authentication_username =
+            nook_companion_core::AuthenticationUsernameEvidence::Explicit;
+        microsoft.password_field_count = 0.into();
+        microsoft.source_origin = "https://login.live.com".to_owned();
+        microsoft.form_identity.clear();
+        microsoft.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
+        assert!(authentication_advance_control_is_safe(microsoft.clone()));
+
+        for destination in [
+            "https://live.com/",
+            "https://login.microsoftonline.com/",
+            "https://login.live.com/?mode=login",
+            "https://login.live.com/#login",
+        ] {
+            let mut rejected = microsoft.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(!authentication_advance_control_is_safe(rejected));
+        }
+
+        microsoft.form_identity = "signup".to_owned();
+        assert!(!authentication_advance_control_is_safe(microsoft.clone()));
+        microsoft.form_identity.clear();
+        microsoft.password_field_count = 1.into();
+        assert!(!authentication_advance_control_is_safe(microsoft.clone()));
+        microsoft.password_field_count = 0.into();
+        microsoft.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
+        assert!(!authentication_advance_control_is_safe(microsoft));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

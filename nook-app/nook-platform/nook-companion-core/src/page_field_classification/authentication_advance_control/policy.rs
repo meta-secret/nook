@@ -73,6 +73,9 @@ impl CheckedAuthenticationControl<'_> {
             PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
         );
         let observation = self.observation;
+        if observation.has_empty_microsoft_consumer_login_root() {
+            return observation.is_microsoft_consumer_root_identifier_advance();
+        }
         let standards_email_semantic_submit = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
