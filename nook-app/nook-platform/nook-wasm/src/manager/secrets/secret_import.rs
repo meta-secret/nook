@@ -6,6 +6,7 @@
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
 use nook_core::DashlaneExport;
+use nook_core::OnePasswordExport;
 use nook_core::{
     AgeArmoredCiphertext, SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey,
     VaultOperation,
@@ -419,7 +420,8 @@ impl NookVaultManager {
         archive: Vec<u8>,
     ) -> Result<NookImportResult, JsError> {
         let archive = Zeroizing::new(archive);
-        let plan = nook_core::plan_onepassword_import(archive.as_slice())
+        let plan = OnePasswordExport::from_bytes(archive.as_slice())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(archive);
         self.commit_secret_import(
