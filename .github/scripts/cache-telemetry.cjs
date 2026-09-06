@@ -3,6 +3,9 @@ const path = require('node:path')
 const { spawn, spawnSync } = require('node:child_process')
 
 const SCCACHE_MARKER = 'NOOK_SCCACHE_STATS '
+const HISTORY_LOG_CONCURRENCY = 8
+const HISTORY_LOG_TIMEOUT_MS = 4_000
+const HISTORY_RECORD_LIMIT = 32
 
 function parseJsonObjects(text) {
   const trimmed = text.trim()
@@ -76,6 +79,52 @@ function normalizeBuildRecord(record) {
 function historyLogRef(ref) {
   const [historyRef = ''] = [String(ref).split('/').filter(Boolean).pop()]
   return historyRef
+}
+
+function compareStrings(left, right) {
+  return left < right ? -1 : left > right ? 1 : 0
+}
+
+function selectBuildRecords(records, limit = HISTORY_RECORD_LIMIT) {
+  const finalized = records
+    .filter((record) => record.completed_at)
+    .sort((left, right) => {
+      const completed = compareStrings(
+        String(right.completed_at),
+        String(left.completed_at),
+      )
+      if (completed !== 0) return completed
+      const started = compareStrings(
+        String(right.started_at || ''),
+        String(left.started_at || ''),
+      )
+      if (started !== 0) return started
+      return compareStrings(left.ref, right.ref)
+    })
+  const warnings = []
+  const unfinishedCount = records.length - finalized.length
+  if (unfinishedCount > 0) {
+    warnings.push(`buildx_records_unfinished_skipped:${unfinishedCount}`)
+  }
+  if (finalized.length > limit) {
+    warnings.push(`buildx_records_truncated:${limit}/${finalized.length}`)
+  }
+  return { records: finalized.slice(0, limit), warnings }
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length)
+  let nextIndex = 0
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex
+      nextIndex += 1
+      results[index] = await mapper(items[index], index)
+    }
+  }
+  const workerCount = Math.min(concurrency, items.length)
+  await Promise.all(Array.from({ length: workerCount }, () => worker()))
+  return results
 }
 
 function normalizeSccacheReport(report) {
@@ -192,7 +241,7 @@ function listBuildHistory() {
   return parseJsonObjects(result.stdout).map(normalizeBuildRecord)
 }
 
-function readHistoryEvents(ref) {
+function readHistoryEvents(ref, timeoutMs = HISTORY_LOG_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const child = spawn('docker', [
       'buildx',
@@ -204,14 +253,27 @@ function readHistoryEvents(ref) {
     ])
     let stdout = ''
     let stderr = ''
+    let timedOut = false
+    const timeout = setTimeout(() => {
+      timedOut = true
+      child.kill('SIGTERM')
+    }, timeoutMs)
     child.stdout.on('data', (chunk) => {
       stdout += chunk
     })
     child.stderr.on('data', (chunk) => {
       stderr += chunk
     })
-    child.on('error', reject)
+    child.on('error', (error) => {
+      clearTimeout(timeout)
+      reject(error)
+    })
     child.on('close', (status) => {
+      clearTimeout(timeout)
+      if (timedOut) {
+        reject(new Error(`buildx history logs timed out after ${timeoutMs}ms`))
+        return
+      }
       const parsedStdout = parseRawJsonProgress(stdout)
       const parsedStderr = parseRawJsonProgress(stderr)
       const events = [...parsedStdout.objects, ...parsedStderr.objects]
@@ -360,26 +422,37 @@ async function collectTelemetry({
   let records = []
   try {
     const baseline = new Set(baselineRefs)
-    records = listBuildHistory().filter(
+    const candidates = listBuildHistory().filter(
       (record) => record.ref && !baseline.has(record.ref),
     )
+    const selection = selectBuildRecords(candidates)
+    records = selection.records
+    warnings.push(...selection.warnings)
   } catch (error) {
     warnings.push(`buildx_history_unavailable: ${error.message}`)
   }
 
   const reports = []
   const seenReports = new Set()
-  for (const record of records) {
-    try {
-      reports.push(
-        ...extractSccacheReports(
-          await readHistoryEvents(record.ref),
-          seenReports,
-        ),
+  const logResults = await mapWithConcurrency(
+    records,
+    HISTORY_LOG_CONCURRENCY,
+    async (record) => {
+      try {
+        return { record, events: await readHistoryEvents(record.ref) }
+      } catch (error) {
+        return { record, error }
+      }
+    },
+  )
+  for (const result of logResults) {
+    if (result.error) {
+      warnings.push(
+        `buildx_logs_unavailable:${result.record.ref}: ${result.error.message}`,
       )
-    } catch (error) {
-      warnings.push(`buildx_logs_unavailable:${record.ref}: ${error.message}`)
+      continue
     }
+    reports.push(...extractSccacheReports(result.events, seenReports))
   }
 
   return {
@@ -519,9 +592,11 @@ module.exports = {
   cacheBackendFromEnvironment,
   extractSccacheReports,
   historyLogRef,
+  mapWithConcurrency,
   normalizeBuildRecord,
   parseJsonObjects,
   parseRawJsonProgress,
+  selectBuildRecords,
   summarizeBuildkit,
   summarizeSccache,
   validateTelemetryRecord,
