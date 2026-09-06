@@ -346,7 +346,7 @@ impl NookVaultManager {
             let mut fetched = Vec::new();
             for (event_id, bytes) in self.fetch_current_provider_events(remote_ids).await? {
                 let store_id = CheckedRemoteEvent::parse(&event_id, &bytes)
-                    .map(|event| event.into_store_id())?;
+                    .map(CheckedRemoteEvent::into_store_id)?;
                 let store_id = store_id.as_str().to_owned();
                 discovered_store_ids.insert(store_id.clone());
                 fetched.push((event_id, bytes, store_id));
@@ -497,7 +497,7 @@ impl NookVaultManager {
             let mut fetched = Vec::new();
             for (event_id, bytes) in parsed_records {
                 let store_id = CheckedRemoteEvent::parse(&event_id, &bytes)
-                    .map(|event| event.into_store_id())?;
+                    .map(CheckedRemoteEvent::into_store_id)?;
                 let store_id = store_id.as_str().to_owned();
                 discovered_store_ids.insert(store_id.clone());
                 fetched.push((event_id, bytes, store_id));
