@@ -130,18 +130,18 @@ mod tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
-    use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+    use js_sys::Function;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
     fn ceremony_activity_is_fail_closed() -> Result<(), JsError> {
-        let active = Closure::wrap(Box::new(|| JsValue::TRUE) as Box<dyn FnMut() -> JsValue>);
-        assert!(ensure_ceremony_active(active.as_ref().unchecked_ref()).is_ok());
+        let active = Function::new_no_args("return true;");
+        assert!(ensure_ceremony_active(&active).is_ok());
 
-        let inactive = Closure::wrap(Box::new(|| JsValue::FALSE) as Box<dyn FnMut() -> JsValue>);
-        assert!(ensure_ceremony_active(inactive.as_ref().unchecked_ref()).is_err());
+        let inactive = Function::new_no_args("return false;");
+        assert!(ensure_ceremony_active(&inactive).is_err());
         Ok(())
     }
 

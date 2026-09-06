@@ -378,13 +378,14 @@ mod tests {
     {
         let first = nook_core::DeviceIdentity::generate()?;
         let second = nook_core::DeviceIdentity::generate()?;
+        let third = nook_core::DeviceIdentity::generate()?;
         let keys = nook_core::generate_vault_keys()?;
         let mut manager = NookVaultManager::new();
         manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
             nook_core::DeviceMode::Standard,
             nook_core::SentinelPolicy {
-                threshold: 1.into(),
-                required_participants: 1.into(),
+                threshold: 2.into(),
+                required_participants: 2.into(),
                 ready_participants: 0.into(),
             },
         );
@@ -393,6 +394,7 @@ mod tests {
         let roster = vec![
             nook_core::member_from_identity(&first, "2026-09-06T00:00:00Z"),
             nook_core::member_from_identity(&second, "2026-09-06T00:00:00Z"),
+            nook_core::member_from_identity(&third, "2026-09-06T00:00:00Z"),
         ];
         assert!(matches!(
             manager.maybe_issue_sentinel_shares(&roster),
@@ -400,9 +402,17 @@ mod tests {
                 if message == MultiDeviceError::SentinelGenesisRosterFull.to_string()
         ));
 
-        let one = vec![roster[0].clone()];
-        assert!(manager.maybe_issue_sentinel_shares(&one)?.is_some());
-        assert!(manager.maybe_issue_sentinel_shares(&one)?.is_none());
+        let quorum_roster = roster[..2].to_vec();
+        assert!(
+            manager
+                .maybe_issue_sentinel_shares(&quorum_roster)?
+                .is_some()
+        );
+        assert!(
+            manager
+                .maybe_issue_sentinel_shares(&quorum_roster)?
+                .is_none()
+        );
         Ok(())
     }
 }
