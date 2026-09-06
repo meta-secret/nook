@@ -572,3 +572,91 @@ mod tests {
         assert_eq!(hint.value().unwrap(), "ghp_123456…");
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn provider_state_wrappers_cover_typed_getters_and_storage_drafts() {
+        let missing = NookOAuthAccessToken(NookOAuthAccessTokenValue::Missing);
+        assert_eq!(missing.kind(), NookOAuthAccessTokenKind::Missing);
+        assert!(missing.token().is_err());
+        assert_eq!(
+            missing_oauth_access_token().kind(),
+            NookOAuthAccessTokenKind::Missing
+        );
+
+        let configured = nook_core::OAuthFileConfigData {
+            access_token: nook_core::StoredOAuthAccessCredential::AccessToken(" token ".into()),
+            file_id: nook_core::StoredOAuthRemoteFileId::FileId("file-1".into()),
+            file_name: nook_core::StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
+            ..Default::default()
+        };
+        let token = oauth_access_token(configured.clone());
+        assert_eq!(token.kind(), NookOAuthAccessTokenKind::Available);
+        assert_eq!(token.token().unwrap(), " token ");
+
+        let missing_selection = NookProviderSelection(None);
+        assert_eq!(
+            missing_selection.state(),
+            NookProviderSelectionState::Missing
+        );
+        assert!(missing_selection.provider_id().is_err());
+        let selected = NookProviderSelection(Some("provider-1".into()));
+        assert_eq!(selected.state(), NookProviderSelectionState::Selected);
+        assert_eq!(selected.provider_id().unwrap(), "provider-1");
+
+        let unresolved = NookOAuthRemoteStorageReference::new(None);
+        assert_eq!(
+            unresolved.state(),
+            NookOAuthRemoteStorageReferenceState::Unresolved
+        );
+        assert!(unresolved.value().is_err());
+        let resolved = NookOAuthRemoteStorageReference::new(Some("file-1".into()));
+        assert_eq!(
+            resolved.state(),
+            NookOAuthRemoteStorageReferenceState::Resolved
+        );
+        assert_eq!(resolved.value().unwrap(), "file-1");
+
+        let rejected = NookOAuthRemoteConfigurationUpdate::new(None);
+        assert_eq!(
+            rejected.state(),
+            NookOAuthRemoteConfigurationUpdateState::Rejected
+        );
+        assert!(rejected.config().is_err());
+        let updated = NookOAuthRemoteConfigurationUpdate::new(Some(configured.clone()));
+        assert_eq!(
+            updated.state(),
+            NookOAuthRemoteConfigurationUpdateState::Updated
+        );
+        assert_eq!(updated.config().unwrap().file_name, configured.file_name);
+
+        let incomplete = NookStagedStorageArgs::new(None);
+        assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
+        assert!(incomplete.args().is_err());
+        let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
+        assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
+        assert_eq!(ready.args().unwrap().mode, "local");
+
+        let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
+        assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
+        assert!(no_hint.value().is_err());
+        let hint = mask_github_pat_hint(nook_core::StoredGithubPat::Token("ghp_123456".into()));
+        assert_eq!(hint.state(), NookGithubPatHintState::Available);
+        assert!(hint.value().unwrap().contains("3456"));
+
+        assert_eq!(local_vault_storage_args().mode(), "local");
+        assert_eq!(draft_local_storage_args().mode(), "local");
+        let github = draft_github_storage_args("pat", "owner/repo");
+        assert_eq!(github.mode(), "github");
+        assert_eq!(github.pat(), "pat");
+        assert_eq!(github.repo(), "owner/repo");
+        let oauth = draft_oauth_storage_args(configured);
+        assert_eq!(oauth.mode(), "google-drive");
+    }
+}

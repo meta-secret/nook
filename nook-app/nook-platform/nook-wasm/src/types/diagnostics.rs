@@ -302,3 +302,98 @@ fn diagnostic_epoch_id(
         DiagnosticEpoch::Known(epoch_id) => Ok(epoch_id.clone()),
     }
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn diagnostic_projection_getters_cover_known_and_unknown_epochs() {
+        let recommendations =
+            NookVaultSecurityRecommendations::from_core(nook_core::VaultSecurityRecommendations {
+                needs_sync_provider: true,
+                needs_another_device: false,
+            });
+        assert!(recommendations.needs_sync_provider());
+        assert!(!recommendations.needs_another_device());
+        assert!(recommendations.has_recommendations());
+
+        let history = NookVaultEpochHistoryDiagnostic {
+            epoch_id: "epoch-1".into(),
+            started_by: "device-1".into(),
+            reason: "rotation".into(),
+        };
+        assert_eq!(history.epoch_id(), "epoch-1");
+        assert_eq!(history.started_by(), "device-1");
+        assert_eq!(history.reason(), "rotation");
+
+        let secret_unknown = NookVaultSecretAccessDiagnostic {
+            secret_id: "secret-1".into(),
+            secret_type: nook_core::SecretType::Login,
+            status: "blocked".into(),
+            epoch_status: "unknown".into(),
+            epoch: DiagnosticEpoch::Unknown,
+            explanation: "missing epoch".into(),
+        };
+        assert_eq!(secret_unknown.secret_id(), "secret-1");
+        assert_eq!(secret_unknown.secret_type(), nook_core::SecretType::Login);
+        assert_eq!(secret_unknown.status(), "blocked");
+        assert_eq!(secret_unknown.epoch_status(), "unknown");
+        assert_eq!(
+            secret_unknown.epoch_state(),
+            NookDiagnosticEpochState::Unknown
+        );
+        assert!(secret_unknown.epoch_id().is_err());
+        assert_eq!(secret_unknown.explanation(), "missing epoch");
+
+        let secret_known = NookVaultSecretAccessDiagnostic {
+            epoch: DiagnosticEpoch::Known("epoch-2".into()),
+            ..secret_unknown
+        };
+        assert_eq!(secret_known.epoch_state(), NookDiagnosticEpochState::Known);
+        assert_eq!(secret_known.epoch_id().unwrap(), "epoch-2");
+
+        let event = NookVaultEventAccessDiagnostic {
+            event_id: "event-1".into(),
+            key_epoch: "epoch-2".into(),
+            epoch_status: "current".into(),
+            encrypted_payloads: 3,
+            explanation: "available".into(),
+        };
+        assert_eq!(event.event_id(), "event-1");
+        assert_eq!(event.key_epoch(), "epoch-2");
+        assert_eq!(event.epoch_status(), "current");
+        assert_eq!(event.encrypted_payloads(), 3);
+        assert_eq!(event.explanation(), "available");
+
+        let report = NookVaultAccessReport {
+            device_id: "device-1".into(),
+            auth_id: "auth-1".into(),
+            key_status: "ready".into(),
+            key_explanation: "authorized".into(),
+            current_epoch: DiagnosticEpoch::Known("epoch-2".into()),
+            auth_key_ids: vec!["auth-1".into()],
+            epoch_history: vec![history],
+            secrets: vec![secret_known],
+            events: vec![event],
+            warnings: vec!["warning".into()],
+        };
+        assert_eq!(report.device_id(), "device-1");
+        assert_eq!(report.auth_id(), "auth-1");
+        assert_eq!(report.key_status(), "ready");
+        assert_eq!(report.key_explanation(), "authorized");
+        assert_eq!(report.current_epoch().unwrap(), "epoch-2");
+        assert_eq!(
+            report.current_epoch_state(),
+            NookDiagnosticEpochState::Known
+        );
+        assert_eq!(report.auth_key_ids(), vec!["auth-1"]);
+        assert_eq!(report.epoch_history().len(), 1);
+        assert_eq!(report.secrets().len(), 1);
+        assert_eq!(report.events().len(), 1);
+        assert_eq!(report.warnings(), vec!["warning"]);
+    }
+}

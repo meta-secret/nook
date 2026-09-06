@@ -744,3 +744,291 @@ pub fn enrollment_icloud_shared_provider_for_architecture(
         )?,
     ))
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use nook_core::{
+        GoogleDriveMode, ICloudMode, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
+        ReplicationType, StorageProviderData, StorageProviderType, StoredGithubPat,
+        StoredGithubRepository, StoredGoogleDriveFolder, StoredOAuthAccessCredential,
+        StoredOAuthAccountIdentity, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+    };
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn github_provider() -> StorageProviderData {
+        StorageProviderData::github(
+            "provider-1",
+            "GitHub",
+            "ghp_test",
+            "work-vault",
+            "2026-01-01T00:00:00Z",
+        )
+    }
+
+    fn shared_oauth_provider() -> StorageProviderData {
+        StorageProviderData {
+            id: "oauth-provider".into(),
+            provider_type: StorageProviderType::OauthFile,
+            label: "Google Drive".into(),
+            github_pat: StoredGithubPat::Missing,
+            github_repo: StoredGithubRepository::DefaultRepository,
+            oauth_file: StoredOAuthFileConfiguration::Configured(nook_core::OAuthFileConfigData {
+                preset: OauthFilePreset::GoogleDrive,
+                access_token: StoredOAuthAccessCredential::AccessToken("access-token".into()),
+                file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
+                folder_id: StoredGoogleDriveFolder::FolderId("target-1".into()),
+                drive_mode: GoogleDriveMode::Shared,
+                ..Default::default()
+            }),
+            local_folder: nook_core::StoredLocalFolderConfiguration::NotApplicable,
+            store_id: ProviderVaultScope::Unscoped,
+            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
+            created_at: "2026-01-01T00:00:00Z".into(),
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn public_helpers_project_password_totp_and_provider_credentials() {
+        set_vault_session_locked(true);
+        assert!(is_vault_session_locked());
+        set_vault_session_locked(false);
+        assert!(!is_vault_session_locked());
+        let _ = is_local_folder_backup_supported();
+
+        assert!(generate_id().unwrap().len() > 10);
+        assert!(generate_secret_id().unwrap().len() > 10);
+        let options = default_password_generation_options();
+        let password = generate_password(options).unwrap();
+        assert!(!password.is_empty());
+        assert!(vault_password_min_length() > 0);
+        assert!(vault_password_recommended_min_length() >= vault_password_min_length());
+        assert!(!is_vault_password_long_enough("short"));
+        assert!(!is_vault_password_recommended_length("short"));
+
+        let code = generate_totp_code("JBSWY3DPEHPK3PXP", 59).unwrap();
+        assert_eq!(code.len(), 6);
+        assert!(verify_totp_code("JBSWY3DPEHPK3PXP", &code, 59).unwrap());
+        assert!(!verify_totp_code("JBSWY3DPEHPK3PXP", "bad", 59).unwrap());
+        assert!(generate_totp_code("bad", 59).is_err());
+
+        assert!(has_github_credentials("ghp_test"));
+        assert!(!has_github_credentials(""));
+        assert!(has_oauth_credentials("access-token"));
+        assert!(!has_oauth_credentials(""));
+        assert!(has_local_folder_credentials("handle"));
+        assert!(!has_local_folder_credentials(""));
+
+        let provider = github_provider();
+        let detail = provider_storage_detail(
+            provider.clone(),
+            "This device".into(),
+            "No token".into(),
+            "Google signed in".into(),
+            "iCloud signed in".into(),
+            "Google signed out".into(),
+            "iCloud signed out".into(),
+            "Reconnect folder".into(),
+        )
+        .unwrap();
+        assert!(detail.contains("GitHub"));
+        assert_eq!(
+            localize_provider_label(
+                "github",
+                "This device".into(),
+                "GitHub".into(),
+                "Local".into(),
+                "Drive".into(),
+                "iCloud".into(),
+            ),
+            "GitHub"
+        );
+        assert_eq!(
+            provider_wasm_args(provider.clone()).unwrap().mode(),
+            "github"
+        );
+
+        let empty = nook_core::AuthProvidersSnapshotData::default();
+        let unscoped = NookManagerStoreScope::unscoped();
+        assert!(
+            active_vault_providers(empty.clone(), &unscoped)
+                .unwrap()
+                .providers
+                .is_empty()
+        );
+        assert!(
+            sync_providers_for_active_vault(empty.clone(), &unscoped)
+                .unwrap()
+                .providers
+                .is_empty()
+        );
+        assert!(
+            local_provider_for_active_vault(empty.clone(), &unscoped)
+                .unwrap()
+                .provider_id()
+                .is_err()
+        );
+        assert_eq!(provider_label_by_id(empty.clone(), "missing").unwrap(), "");
+        assert!(
+            providers_visible_while_device_locked(empty)
+                .providers
+                .is_empty()
+        );
+
+        let oauth = nook_core::OAuthFileConfigData::default();
+        let remote = oauth_remote_storage_ref(oauth.clone());
+        assert!(remote.value().is_err());
+        assert!(update_oauth_remote_ref(&oauth, "file-1").config().is_ok());
+        assert_eq!(
+            staged_github_remote_storage_args("pat", "owner/repo")
+                .unwrap()
+                .state(),
+            NookStagedStorageArgsState::Ready
+        );
+        assert_eq!(
+            staged_local_remote_storage_args().unwrap().state(),
+            NookStagedStorageArgsState::Ready
+        );
+        assert!(staged_oauth_remote_storage_args(oauth.clone()).is_err());
+
+        let revision = NookProviderSyncRevision::untracked();
+        assert!(
+            update_provider_sync_metadata(
+                nook_core::AuthProvidersSnapshotData::default(),
+                "provider-1",
+                "not yaml",
+                &revision,
+                &unscoped,
+                "2026-01-01T00:00:00Z",
+            )
+            .is_ok()
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn public_provider_and_vault_architecture_helpers_project_success_paths() {
+        let provider = github_provider();
+        let architecture = default_vault_architecture();
+        assert!(validate_vault_architecture(&architecture).is_ok());
+        assert!(vault_architecture_onboarding_type(&architecture).is_ok());
+        assert!(vault_architecture_can_create_secret(&architecture).unwrap());
+        assert!(provider_onboarding_type(provider.clone(), &architecture).is_ok());
+        assert_eq!(
+            provider_oauth_preset_for_provider(provider.clone()),
+            nook_core::ProviderOauthPreset::NotApplicable
+        );
+        assert!(matches!(
+            provider_oauth_preset_for_config(nook_core::OAuthFileConfigData::default()),
+            nook_core::ProviderOauthPreset::Preset(_)
+        ));
+        assert!(provider_replication_capability(provider.clone()).is_ok());
+        assert!(validate_provider_replication(provider.clone(), ReplicationType::Personal).is_ok());
+        assert!(
+            provider_supports_replication(provider.clone(), ReplicationType::Personal).unwrap()
+        );
+
+        let snapshot = nook_core::AuthProvidersSnapshotData {
+            providers: vec![provider.clone()],
+            ..Default::default()
+        };
+        assert_eq!(
+            first_compatible_provider_id(snapshot.clone(), ReplicationType::Personal)
+                .provider_id()
+                .unwrap(),
+            "provider-1"
+        );
+        assert_eq!(
+            first_compatible_provider_id_preferred(
+                snapshot.clone(),
+                ReplicationType::Personal,
+                "provider-1"
+            )
+            .provider_id()
+            .unwrap(),
+            "provider-1"
+        );
+        assert!(
+            shared_grant_provider_id(
+                snapshot,
+                OauthFilePreset::GoogleDrive,
+                nook_core::SharedStorageTargetSelection::Create,
+            )
+            .provider_id()
+            .is_err()
+        );
+
+        let updated_drive = set_google_drive_provider_mode(
+            nook_core::OAuthFileConfigData::default(),
+            GoogleDriveMode::Shared,
+        )
+        .unwrap();
+        assert_eq!(updated_drive.drive_mode, GoogleDriveMode::Shared);
+        let updated_icloud = set_icloud_provider_mode(
+            nook_core::OAuthFileConfigData::default(),
+            ICloudMode::Shared,
+        )
+        .unwrap();
+        assert_eq!(updated_icloud.icloud_mode, ICloudMode::Shared);
+
+        let target = create_icloud_shared_storage_target(
+            "owner",
+            "zone",
+            "owner-record",
+            "root-record",
+            "short-guid",
+        )
+        .unwrap();
+        assert_eq!(
+            parse_icloud_shared_storage_target(&target)
+                .unwrap()
+                .zone_name,
+            "zone"
+        );
+        assert!(create_icloud_shared_storage_target("unknown", "", "", "", "").is_err());
+        assert!(
+            bind_google_drive_shared_folder(nook_core::OAuthFileConfigData::default(), "folder-1")
+                .is_ok()
+        );
+
+        let google = google_oauth_tokens_to_config(
+            "access-token",
+            "2030-01-01T00:00:00Z",
+            StoredOAuthFileConfiguration::NotApplicable,
+        )
+        .unwrap();
+        assert!(google.access_token.as_deref().is_some());
+        let icloud = icloud_oauth_tokens_to_config(
+            "access-token",
+            StoredOAuthAccountIdentity::Email("alice@example.test".into()),
+            StoredOAuthFileConfiguration::NotApplicable,
+        )
+        .unwrap();
+        assert!(icloud.access_token.as_deref().is_some());
+
+        let github_enrollment =
+            enrollment_provider_for_architecture(provider.clone(), &architecture).unwrap();
+        assert_eq!(
+            github_enrollment.provider_type(),
+            StorageProviderType::Github
+        );
+        assert_eq!(github_enrollment.github_pat().unwrap(), "ghp_test");
+        assert_eq!(github_enrollment.github_repo().unwrap(), "work-vault");
+        let shared = enrollment_shared_provider_for_architecture(
+            shared_oauth_provider(),
+            &architecture,
+            "alice@example.test",
+            "target-1",
+        )
+        .unwrap();
+        assert!(shared.is_shared_provider_grant());
+        let icloud_shared = enrollment_icloud_shared_provider_for_architecture(
+            shared_oauth_provider(),
+            &architecture,
+            "target-2",
+        )
+        .unwrap();
+        assert!(icloud_shared.is_shared_provider_grant());
+    }
+}
