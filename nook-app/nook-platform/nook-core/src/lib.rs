@@ -185,10 +185,10 @@ pub use onepassword_import::{
     plan_onepassword_import,
 };
 pub use passkey_authenticator::{
+    CheckedPasskeyAssertion, CheckedPasskeyRegistration,
     PasskeyAssertionRequest as WebsitePasskeyAssertionRequest, PasskeyAssertionResult,
-    PasskeyAuthenticatorError, PasskeyCredentialDescriptor, PasskeyRegistrationRequest,
-    PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser, assert_website_passkey,
-    create_website_passkey, validate_website_passkey_origin,
+    PasskeyAuthenticatorError, PasskeyCredentialDescriptor, PasskeyOrigin,
+    PasskeyRegistrationRequest, PasskeyRegistrationResult, PasskeyRelyingParty, PasskeyUser,
 };
 pub use proton_pass_import::{
     ProtonPassImportError, ProtonPassImportPlan, plan_proton_pass_import,
