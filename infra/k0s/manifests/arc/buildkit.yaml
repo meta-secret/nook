@@ -105,6 +105,12 @@ metadata:
   namespace: arc-runners
 data:
   buildkitd.toml: |
+    [worker.oci]
+      gc = true
+      reservedSpace = "4GB"
+      maxUsedSpace = "56GB"
+      minFreeSpace = "8GB"
+
     [registry."docker.io"]
       mirrors = ["registry.dev.nokey.sh"]
 ---
@@ -188,9 +194,6 @@ spec:
             # cannot mount a second /proc. This mode is limited to trusted
             # same-repository jobs; forks and Dependabot stay hosted.
             - --oci-worker-no-process-sandbox
-            - --oci-worker-gc
-            - --oci-worker-gc-keepstorage
-            - "56000"
           ports:
             - name: buildkit
               containerPort: 1234

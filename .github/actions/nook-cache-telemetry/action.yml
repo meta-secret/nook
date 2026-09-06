@@ -31,9 +31,21 @@ runs:
         fi
         suffix="${NOOK_CACHE_TELEMETRY_SUFFIX:+-$NOOK_CACHE_TELEMETRY_SUFFIX}"
         output="$RUNNER_TEMP/nook-cache-telemetry/$GITHUB_JOB$suffix.json"
-        timeout 30s "$node_bin" .github/scripts/cache-telemetry.cjs collect \
+        if timeout 30s "$node_bin" .github/scripts/cache-telemetry.cjs collect \
           --baseline "$baseline" \
-          --output "$output"
+          --output "$output"; then
+          :
+        else
+          status=$?
+          warning="collection_failed:$status"
+          if [ "$status" -eq 124 ]; then
+            warning="collection_timeout:30s"
+          fi
+          echo "Cache telemetry collection unavailable ($warning); preserving an incomplete record."
+          "$node_bin" .github/scripts/cache-telemetry.cjs unavailable \
+            --warning "$warning" \
+            --output "$output"
+        fi
 
     - name: Upload cache telemetry
       continue-on-error: true
