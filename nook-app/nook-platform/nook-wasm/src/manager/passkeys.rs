@@ -127,6 +127,39 @@ mod tests {
     }
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use js_sys::Function;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn ceremony_activity_is_fail_closed() -> Result<(), JsError> {
+        let active = Function::new_no_args("return true;");
+        assert!(ensure_ceremony_active(&active).is_ok());
+
+        let inactive = Function::new_no_args("return false;");
+        assert!(ensure_ceremony_active(&inactive).is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn website_passkey_origin_validation_rejects_malformed_input() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        assert!(
+            manager
+                .list_website_passkey_accounts("", "not-an-origin")
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+}
+
 fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
     let receiver = Object::new();
     let active = ceremony_active
