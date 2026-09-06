@@ -4,6 +4,8 @@
 //! module keeps protection naming and safe passkey identifiers consistent for
 //! every host without exposing credential bytes or private device material.
 
+#[cfg(test)]
+use crate::{DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata};
 use std::{error, fmt};
 
 use serde::{Deserialize, Serialize, de::Error as _};
@@ -451,8 +453,7 @@ mod tests {
     use super::*;
     use crate::{
         AppKey, DeviceIdentity, DeviceKeyProtectionSetup, IdentityDirectory, IdentitySelection,
-        PasskeyDeviceProtectionMode, generate_store_id, passkey_derived_device_identity_record,
-        passkey_wrapped_device_identity_record, wrap_device_identity_with_pin,
+        PasskeyDeviceProtectionMode, generate_store_id,
     };
 
     #[test]
@@ -537,26 +538,27 @@ mod tests {
     fn classifies_every_persisted_protection_shape() -> anyhow::Result<()> {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let standard_credential = crate::WebAuthnCredentialId::try_from(vec![7; 32])?;
-        let standard = passkey_derived_device_identity_record(
-            &standard_credential,
-            setup.user_handle(),
-            setup.prf_input(),
-        )?;
+        let standard = WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
+            credential_id: &standard_credential,
+            user_handle: setup.user_handle(),
+            prf_input: setup.prf_input(),
+        })?;
         let identity = DeviceIdentity::generate()?;
         let wrapped_credential = crate::WebAuthnCredentialId::try_from(vec![8; 32])?;
         let wrapped_output = crate::WebAuthnPrfOutput::try_from(vec![9; 32])?;
-        let anti_hacker = passkey_wrapped_device_identity_record(
-            &wrapped_credential,
-            setup.user_handle(),
-            setup.prf_input(),
-            &wrapped_output,
-            &identity.secret_string(),
+        let anti_hacker = DeviceIdentityProtection::new(&identity.secret_string()).with_passkey(
+            &PasskeyProtectionInput {
+                credential_id: &wrapped_credential,
+                user_handle: setup.user_handle(),
+                prf_input: setup.prf_input(),
+                prf_output: &wrapped_output,
+            },
         )?;
         assert_eq!(
             anti_hacker.device_mode()?,
             PasskeyDeviceProtectionMode::AntiHacker.as_str()
         );
-        let pin = wrap_device_identity_with_pin(&identity.secret_string(), "six words")?;
+        let pin = DeviceIdentityProtection::new(&identity.secret_string()).with_pin("six words")?;
 
         assert_eq!(
             classify_device_access_protection(None),

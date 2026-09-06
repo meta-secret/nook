@@ -4,6 +4,8 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
+#[cfg(test)]
+use crate::DeviceIdentityProtection;
 
 use std::collections::HashSet;
 
@@ -284,10 +286,8 @@ mod tests {
         fn new() -> anyhow::Result<Self> {
             let app_key = AppKey::generate()?;
             let identity_id = IdentityId::generate()?;
-            let wrapped = crate::wrap_device_identity_with_pin(
-                &app_key.secret_string(),
-                "correct horse battery staple",
-            )?;
+            let wrapped = DeviceIdentityProtection::new(&app_key.secret_string())
+                .with_pin("correct horse battery staple")?;
             let seed = "11".repeat(32);
             let signing_public_key = DeviceSigningPublicKey::derive_from_seed(&seed)?;
             let entry =
@@ -411,10 +411,8 @@ mod tests {
             app_key,
             signing_public_key,
         } = ProtectedEntryFixture::new()?;
-        let replacement = crate::wrap_device_identity_with_pin(
-            &app_key.secret_string(),
-            "replacement browser protection",
-        )?;
+        let replacement = DeviceIdentityProtection::new(&app_key.secret_string())
+            .with_pin("replacement browser protection")?;
 
         entry.replace_wrapped_app_key(app_key.app_id(), replacement.clone())?;
 

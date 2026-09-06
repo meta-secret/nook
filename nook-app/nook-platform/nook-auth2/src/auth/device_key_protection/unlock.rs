@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Deterministic derivation and stored-identity checks, without browser authorization claims.
-use super::protected_identity;
+use super::protected_identity::DeviceIdentitySecretEncoding;
 use super::{
     DETERMINISTIC_IDENTITY_HKDF_INFO, DETERMINISTIC_PRF_INPUT_CONTEXT, DeviceIdentity,
     DeviceIdentitySecret, DeviceKeyProtectionError, DeviceKeyProtectionResult,
@@ -47,7 +47,10 @@ impl WebAuthnUserHandle {
         let mut secret_bytes = Zeroizing::new([0u8; 32]);
         hkdf.expand(DETERMINISTIC_IDENTITY_HKDF_INFO, secret_bytes.as_mut())
             .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
-        let mut encoded = protected_identity::encode_age_identity_secret(secret_bytes.as_ref())?;
+        let mut encoded = (DeviceIdentitySecretEncoding {
+            bytes: secret_bytes.as_ref(),
+        })
+        .encode()?;
         let secret = DeviceIdentitySecret::parse(&encoded)
             .map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity);
         encoded.zeroize();
@@ -81,9 +84,7 @@ impl WrappedDeviceIdentity {
                 let user_handle = record.user_handle()?;
                 user_handle.derive_identity(prf_output)?
             }
-            WrappedDeviceIdentity::PasskeyWrappedLocal(inner) => {
-                protected_identity::unwrap_passkey_wrapped_device_identity(inner, prf_output)?
-            }
+            WrappedDeviceIdentity::PasskeyWrappedLocal(inner) => inner.unwrap(prf_output)?,
             WrappedDeviceIdentity::Pin(_) => {
                 return Err(DeviceKeyProtectionError::UnsupportedParameters);
             }

@@ -1,5 +1,7 @@
 use crate::storage::identity_record;
-use nook_core::AppId;
+use nook_core::{AppId, WrappedDeviceIdentity};
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::{DeviceIdentityProtection, PasskeyRecordMetadata};
 use rexie::TransactionMode;
 
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -13,7 +15,7 @@ use super::{
     open_nook_database, read_string_preferring,
 };
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
-use nook_core::{DeviceProtectionStatus, WrappedDeviceIdentity};
+use nook_core::DeviceProtectionStatus;
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 async fn device_identity_protection_status() -> Result<nook_core::DeviceProtectionStatus, NookError>
@@ -117,7 +119,7 @@ pub(crate) async fn load_legacy_wrapped_device_identity_from_store(
     let app_id = app_id
         .filter(|value| !value.trim().is_empty())
         .ok_or_else(|| NookError::IndexedDb("Protected app key is missing app_id.".to_owned()))?;
-    let wrapped = nook_core::parse_wrapped_device_identity(&raw)?;
+    let wrapped = WrappedDeviceIdentity::parse(&raw)?;
     Ok(Some((app_id, wrapped)))
 }
 
@@ -151,7 +153,7 @@ pub(crate) async fn put_wrapped_device_identity(
     device_id: &str,
     record: &nook_core::WrappedDeviceIdentity,
 ) -> Result<(), NookError> {
-    let wrapped = nook_core::serialize_wrapped_device_identity(record)?;
+    let wrapped = record.to_json()?;
     let id_value = serde_wasm_bindgen::to_value(device_id)
         .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
     let wrapped_value = serde_wasm_bindgen::to_value(&wrapped)
@@ -225,11 +227,11 @@ mod tests {
         let secret = setup.user_handle().derive_identity(&output)?;
         let identity = DeviceIdentity::from_secret_str(&secret)?;
         let credential = nook_core::WebAuthnCredentialId::try_from(vec![7u8; 32])?;
-        let wrapped = nook_core::passkey_derived_device_identity_record(
-            &credential,
-            setup.user_handle(),
-            setup.prf_input(),
-        )?;
+        let wrapped = WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
+            credential_id: &credential,
+            user_handle: setup.user_handle(),
+            prf_input: setup.prf_input(),
+        })?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
 
         let (_, reloaded) = load_wrapped_device_identity()
@@ -250,7 +252,7 @@ mod tests {
         let _ = Rexie::delete("nook_db").await;
         let identity = DeviceIdentity::generate()?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+            DeviceIdentityProtection::new(&identity.secret_string()).with_pin("123456")?;
 
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
 
@@ -266,7 +268,7 @@ mod tests {
         let _ = Rexie::delete("nook_db").await;
         let identity = DeviceIdentity::generate()?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+            DeviceIdentityProtection::new(&identity.secret_string()).with_pin("123456")?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
         idb_delete_keys(&[APP_ID_KEY, DEVICE_ID_KEY]).await?;
 
@@ -281,9 +283,9 @@ mod tests {
         let first_key = AppKey::generate()?;
         let second_key = AppKey::generate()?;
         let first_wrapped =
-            nook_core::wrap_device_identity_with_pin(&first_key.secret_string(), "first-secret")?;
+            DeviceIdentityProtection::new(&first_key.secret_string()).with_pin("first-secret")?;
         let second_wrapped =
-            nook_core::wrap_device_identity_with_pin(&second_key.secret_string(), "second-secret")?;
+            DeviceIdentityProtection::new(&second_key.secret_string()).with_pin("second-secret")?;
         identity_record::save_new_protected_local_identity(
             &first_key,
             &first_wrapped,
@@ -322,7 +324,7 @@ mod tests {
         let _ = Rexie::delete("nook_db").await;
         let identity = DeviceIdentity::generate()?;
         let wrapped =
-            nook_core::wrap_device_identity_with_pin(&identity.secret_string(), "123456")?;
+            DeviceIdentityProtection::new(&identity.secret_string()).with_pin("123456")?;
         save_wrapped_device_identity(identity.device_id().as_str(), &wrapped).await?;
         indexed_db::idb_put_string(
             identity_record::IDENTITY_DIRECTORY_KEY,

@@ -621,8 +621,8 @@ pub async fn load_identity_snapshot() -> Result<NookIdentitySnapshotLoad, wasm_b
 mod tests {
     use super::*;
     use nook_core::{
-        AppKey, CurrentVaultReplaceability, IdentityDirectory, IdentityRecord,
-        LocalIdentityKeyring, LocalIdentityKeyringEntry,
+        AppKey, CurrentVaultReplaceability, DeviceIdentityProtection, IdentityDirectory,
+        IdentityRecord, LocalIdentityKeyring, LocalIdentityKeyringEntry,
     };
 
     #[test]
@@ -827,7 +827,7 @@ mod tests {
         identity: &nook_core::IdentityRecord,
         app_key: &nook_core::AppKey,
     ) -> anyhow::Result<nook_core::LocalIdentityKeyringEntry> {
-        let wrapped = nook_core::wrap_device_identity_with_pin(&app_key.secret_string(), "123456")?;
+        let wrapped = DeviceIdentityProtection::new(&app_key.secret_string()).with_pin("123456")?;
         Ok(LocalIdentityKeyringEntry::legacy(
             identity.identity_id.clone(),
             app_key.app_id().clone(),
