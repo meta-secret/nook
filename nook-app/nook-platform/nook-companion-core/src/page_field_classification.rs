@@ -325,7 +325,7 @@ pub(crate) fn one_time_code_ceremony_context_is_authenticated(
     }
     [form_identity, destination.path_identity.as_str()]
         .into_iter()
-        .any(form_identity::identity_indicates_one_time_code_authentication_context)
+        .any(|identity| RouteIdentity::new(identity).indicates_one_time_code_authentication())
 }
 
 pub(crate) fn authentication_passkey_control_is_safe(
