@@ -141,7 +141,7 @@ mod tests {
         }"#;
 
         let plan = BitwardenExport {
-            json: json,
+            json,
             password: None,
         }
         .plan()?;
@@ -168,7 +168,7 @@ mod tests {
           {"type":4,"name":"Identity"}
         ]}"#;
         let plan = BitwardenExport {
-            json: json,
+            json,
             password: None,
         }
         .plan()?;
