@@ -1,16 +1,17 @@
-//! Keeper Password Manager CSV conversion into Nook's typed plaintext model.
-
-use std::{collections, iter};
-
-use csv::StringRecord;
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+//! Keeper CSV schema admission into typed plaintext secrets.
+mod columns;
+mod records;
+use super::import_support::{self, MAX_CSV_BYTES};
+use crate::SecretValue;
+use columns::{KeeperColumns, KeeperHeaders};
+use csv::Reader;
+use records::KeeperRecord;
 use thiserror::Error;
-
-use super::import_support::{
-    MAX_CSV_BYTES, append_import_metadata, collect_csv_records, csv_field, csv_password_field,
-    csv_reader, normalized_csv_header, optional_csv_field, source_label_metadata,
-};
-use crate::{LoginSecret, SecretValue, SecureNoteSecret};
-
 #[derive(Debug, Error)]
 pub enum KeeperImportError {
     #[error("The Keeper CSV export is too large to import safely.")]
@@ -30,335 +31,130 @@ pub struct KeeperImportPlan {
     pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
-#[derive(Clone)]
-struct KeeperColumns {
-    folder: Option<usize>,
-    title: usize,
-    login: usize,
-    password: usize,
-    website: usize,
-    notes: usize,
-    shared_folder: Option<usize>,
-    custom_fields: Vec<CustomFieldColumn>,
+/// The CSV remains borrowed until its admitted reader is consumed.
+/// ```
+/// use nook_core::KeeperCsvInput;
+/// let plan = KeeperCsvInput::new("Title,Login,Password,Website Address,Notes\n").plan()?;
+/// assert!(plan.items.is_empty());
+/// # Ok::<(), nook_core::KeeperImportError>(())
+/// ```
+/// ```compile_fail,E0502
+/// use nook_core::KeeperCsvInput;
+/// let mut csv = String::new();
+/// let input = KeeperCsvInput::new(&csv);
+/// csv.clear();
+/// let _ = input.plan();
+/// ```
+/// ```compile_fail,E0599
+/// use nook_core::KeeperCsvInput;
+/// let input = KeeperCsvInput::new("");
+/// let duplicate = input.clone();
+/// ```
+/// ```compile_fail,E0382
+/// use nook_core::KeeperCsvInput;
+/// let input = KeeperCsvInput::new("");
+/// let _ = input.plan();
+/// let _ = input.plan();
+/// ```
+pub struct KeeperCsvInput<'a> {
+    text: &'a str,
 }
-
-#[derive(Clone)]
-enum CustomFieldColumn {
-    Named {
-        name: String,
-        value_index: usize,
-    },
-    Paired {
-        name_index: usize,
-        value_index: usize,
-    },
-    Blob {
-        index: usize,
-    },
+impl<'a> KeeperCsvInput<'a> {
+    #[must_use]
+    pub fn new(text: &'a str) -> Self {
+        Self { text }
+    }
+    pub fn plan(self) -> Result<KeeperImportPlan, KeeperImportError> {
+        self.check()?.collect()
+    }
+    fn check(self) -> Result<CheckedKeeperCsv<'a>, KeeperImportError> {
+        if self.text.len() > MAX_CSV_BYTES {
+            return Err(KeeperImportError::CsvTooLarge);
+        }
+        let mut reader = import_support::csv_reader(self.text);
+        let columns = KeeperHeaders::new(reader.headers()?).admit()?;
+        Ok(CheckedKeeperCsv { reader, columns })
+    }
 }
-
-fn required_column(
-    normalized: &[String],
-    name: &'static str,
-    aliases: &[&str],
-) -> Result<usize, KeeperImportError> {
-    iter::once(name)
-        .chain(aliases.iter().copied())
-        .find_map(|candidate| {
-            let expected = normalized_csv_header(candidate);
-            normalized.iter().position(|header| header == &expected)
-        })
-        .ok_or(KeeperImportError::MissingColumn(name))
+/// Private fields bind schema to its original reader.
+/// ```compile_fail,E0603
+/// use nook_core::keeper_import::CheckedKeeperCsv;
+/// ```
+struct CheckedKeeperCsv<'a> {
+    reader: Reader<&'a [u8]>,
+    columns: KeeperColumns,
 }
-
-fn optional_column(normalized: &[String], names: &[&str]) -> Option<usize> {
-    names.iter().find_map(|name| {
-        let expected = normalized_csv_header(name);
-        normalized.iter().position(|header| header == &expected)
-    })
-}
-
-fn parse_custom_field_pair_header(header: &str) -> Option<(usize, bool)> {
-    let trimmed = header.trim();
-    let lower = trimmed.to_ascii_lowercase();
-    let rest = lower.strip_prefix("custom field")?;
-    let rest = rest.trim_start();
-    let (number, kind) = if let Some(rest) = rest.strip_suffix(" name") {
-        (rest.trim(), false)
-    } else {
-        let rest = rest.strip_suffix(" value")?;
-        (rest.trim(), true)
-    };
-    let index = number.parse::<usize>().ok()?;
-    if index == 0 {
-        return None;
-    }
-    Some((index, kind))
-}
-
-fn columns(headers: &StringRecord) -> Result<KeeperColumns, KeeperImportError> {
-    let normalized = headers
-        .iter()
-        .map(normalized_csv_header)
-        .collect::<Vec<_>>();
-    let folder = optional_column(&normalized, &["folder"]);
-    let title = required_column(&normalized, "title", &["name"])?;
-    let login = required_column(&normalized, "login", &["username", "user name"])?;
-    let password = required_column(&normalized, "password", &[])?;
-    let website = required_column(
-        &normalized,
-        "website address",
-        &["login url", "url", "website", "website url"],
-    )?;
-    let notes = required_column(&normalized, "notes", &["note"])?;
-    let shared_folder = optional_column(&normalized, &["shared folder", "sharedfolder"]);
-
-    let known = [
-        folder,
-        Some(title),
-        Some(login),
-        Some(password),
-        Some(website),
-        Some(notes),
-        shared_folder,
-    ]
-    .into_iter()
-    .flatten()
-    .collect::<collections::HashSet<_>>();
-
-    let mut paired = collections::BTreeMap::<usize, (Option<usize>, Option<usize>)>::new();
-    let mut named = Vec::new();
-    let mut blob = None;
-    let mut trailing = Vec::new();
-
-    for (index, header) in headers.iter().enumerate() {
-        if known.contains(&index) {
-            continue;
-        }
-        let raw = header.trim_start_matches('\u{feff}').trim();
-        if raw.is_empty() {
-            continue;
-        }
-        if let Some((pair_index, is_value)) = parse_custom_field_pair_header(raw) {
-            let entry = paired.entry(pair_index).or_insert((None, None));
-            if is_value {
-                entry.1 = Some(index);
-            } else {
-                entry.0 = Some(index);
-            }
-            continue;
-        }
-        let normalized_header = normalized_csv_header(raw);
-        if normalized_header == "customfields" {
-            blob = Some(index);
-            continue;
-        }
-        if raw.starts_with('$') {
-            named.push(CustomFieldColumn::Named {
-                name: raw.to_owned(),
-                value_index: index,
-            });
-            continue;
-        }
-        trailing.push(index);
-    }
-
-    let mut custom_fields = Vec::new();
-    for (_, (name_index, value_index)) in paired {
-        if let (Some(name_index), Some(value_index)) = (name_index, value_index) {
-            custom_fields.push(CustomFieldColumn::Paired {
-                name_index,
-                value_index,
-            });
-        }
-    }
-    custom_fields.append(&mut named);
-    if let Some(index) = blob {
-        custom_fields.push(CustomFieldColumn::Blob { index });
-    } else {
-        for chunk in trailing.chunks(2) {
-            match *chunk {
-                [name_index, value_index] => {
-                    custom_fields.push(CustomFieldColumn::Paired {
-                        name_index,
-                        value_index,
-                    });
-                }
-                [index] => custom_fields.push(CustomFieldColumn::Blob { index }),
-                _ => {}
-            }
-        }
-    }
-
-    Ok(KeeperColumns {
-        folder,
-        title,
-        login,
-        password,
-        website,
-        notes,
-        shared_folder,
-        custom_fields,
-    })
-}
-
-fn collect_custom_fields(record: &StringRecord, columns: &KeeperColumns) -> Vec<(String, String)> {
-    let mut fields = Vec::new();
-    for column in &columns.custom_fields {
-        match column {
-            CustomFieldColumn::Named { name, value_index } => {
-                let value = csv_field(record, *value_index);
-                if !value.is_empty() {
-                    fields.push((name.clone(), value));
-                }
-            }
-            CustomFieldColumn::Paired {
-                name_index,
-                value_index,
-            } => {
-                let name = csv_field(record, *name_index);
-                let value = csv_field(record, *value_index);
-                if !name.is_empty() && !value.is_empty() {
-                    fields.push((name, value));
-                }
-            }
-            CustomFieldColumn::Blob { index } => {
-                let blob = csv_field(record, *index);
-                for line in blob.lines() {
-                    let line = line.trim();
-                    if line.is_empty() {
-                        continue;
-                    }
-                    if let Some((name, value)) = line.split_once(':') {
-                        let name = name.trim();
-                        let value = value.trim();
-                        if !name.is_empty() && !value.is_empty() {
-                            fields.push((name.to_owned(), value.to_owned()));
-                        }
-                    } else {
-                        fields.push(("custom field".to_owned(), line.to_owned()));
-                    }
-                }
-            }
-        }
-    }
-    fields
-}
-
-fn append_keeper_metadata(
-    notes: &mut String,
-    title: &str,
-    website_url: &str,
-    folder: &str,
-    shared_folder: &str,
-    custom_fields: &[(String, String)],
-) {
-    let mut metadata = Vec::new();
-    if let Some(entry) = source_label_metadata("title", title, website_url) {
-        metadata.push(entry);
-    }
-    if !folder.trim().is_empty() {
-        metadata.push(("folder".to_owned(), folder.trim().to_owned()));
-    }
-    if !shared_folder.trim().is_empty() {
-        metadata.push(("shared folder".to_owned(), shared_folder.trim().to_owned()));
-    }
-    for (name, value) in custom_fields {
-        let key = if name.starts_with('$') {
-            format!("field.{name}")
-        } else {
-            format!("field.{}", name.trim())
-        };
-        metadata.push((key, value.clone()));
-    }
-    append_import_metadata(notes, "Keeper", metadata);
-}
-
-fn convert_record(record: &StringRecord, columns: &KeeperColumns) -> Option<SecretValue> {
-    let title = csv_field(record, columns.title);
-    let login = csv_field(record, columns.login);
-    let password = csv_password_field(record, columns.password);
-    let website = csv_field(record, columns.website);
-    let mut notes = csv_field(record, columns.notes);
-    let folder = optional_csv_field(record, columns.folder);
-    let shared_folder = optional_csv_field(record, columns.shared_folder);
-    let custom_fields = collect_custom_fields(record, columns);
-
-    if title.is_empty()
-        && login.is_empty()
-        && password.trim().is_empty()
-        && website.is_empty()
-        && notes.is_empty()
-        && folder.is_empty()
-        && shared_folder.is_empty()
-        && custom_fields.is_empty()
-    {
-        return None;
-    }
-
-    let looks_like_login = !login.is_empty() || !password.trim().is_empty() || !website.is_empty();
-    if !looks_like_login {
-        if title.is_empty() && notes.is_empty() && custom_fields.is_empty() {
-            return None;
-        }
-        append_keeper_metadata(&mut notes, "", "", &folder, &shared_folder, &custom_fields);
-        return Some(SecretValue::SecureNote(SecureNoteSecret {
-            title: if title.is_empty() {
-                "Keeper note".to_owned()
-            } else {
-                title
-            },
-            note: notes,
-        }));
-    }
-
-    let website_url = if website.is_empty() {
-        title.clone()
-    } else {
-        website
-    };
-    append_keeper_metadata(
-        &mut notes,
-        &title,
-        &website_url,
-        &folder,
-        &shared_folder,
-        &custom_fields,
-    );
-    Some(SecretValue::Login(LoginSecret {
-        website_url,
-        username: login,
-        password,
-        notes,
-    }))
-}
-
-/// Parse a plaintext Keeper CSV vault export entirely in memory.
-pub fn plan_keeper_import(csv_text: &str) -> Result<KeeperImportPlan, KeeperImportError> {
-    if csv_text.len() > MAX_CSV_BYTES {
-        return Err(KeeperImportError::CsvTooLarge);
-    }
-
-    let mut reader = csv_reader(csv_text);
-    let columns = columns(reader.headers()?)?;
-    let collection =
-        collect_csv_records(&mut reader, KeeperImportError::TooManyRecords, |record| {
-            match convert_record(record, &columns) {
+impl CheckedKeeperCsv<'_> {
+    fn collect(mut self) -> Result<KeeperImportPlan, KeeperImportError> {
+        let collection = import_support::collect_csv_records(
+            &mut self.reader,
+            KeeperImportError::TooManyRecords,
+            |record| match (KeeperRecord {
+                record,
+                columns: &self.columns,
+            })
+            .convert()
+            {
                 Some(item) => (vec![item], 0),
                 None => (Vec::new(), 1),
-            }
-        })?;
-
-    Ok(KeeperImportPlan {
-        items: collection.items,
-        source_count: collection.source_count.into(),
-        skipped_unsupported: collection.skipped_unsupported.into(),
-    })
+            },
+        )?;
+        Ok(KeeperImportPlan {
+            items: collection.items,
+            source_count: collection.source_count.into(),
+            skipped_unsupported: collection.skipped_unsupported.into(),
+        })
+    }
 }
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{KeeperCsvInput, KeeperImportError, MAX_CSV_BYTES};
+    use crate::{LoginSecret, SecretValue, SecureNoteSecret};
+
+    #[test]
+    fn checked_reader_keeps_original_schema_and_password_bytes() -> anyhow::Result<()> {
+        let csv = "Password,Notes,Login,Title,Website Address\n\"  sécret 🔑  \",, alice ,Example,https://example.com\n";
+        let checked = KeeperCsvInput::new(csv).check()?;
+        assert_eq!(checked.columns.password, 0);
+        assert_eq!(checked.columns.login, 2);
+        let plan = checked.collect()?;
+        let [SecretValue::Login(login)] = plan.items.as_slice() else {
+            anyhow::bail!("expected login")
+        };
+        assert_eq!(login.password, "  sécret 🔑  ");
+        assert_eq!(login.username, "alice");
+        Ok(())
+    }
+
+    #[test]
+    fn required_column_errors_keep_admission_order() {
+        for (csv, missing) in [
+            ("Other\n", "title"),
+            ("Title\n", "login"),
+            ("Title,Login\n", "password"),
+            ("Title,Login,Password\n", "website address"),
+            ("Title,Login,Password,Website Address\n", "notes"),
+        ] {
+            match KeeperCsvInput::new(csv).plan() {
+                Err(KeeperImportError::MissingColumn(name)) => {
+                    assert_eq!(name, missing);
+                }
+                _ => panic!("required column admission must reject"),
+            }
+        }
+    }
+
+    #[test]
+    fn record_limit_counts_skipped_rows_before_next_record_conversion() {
+        let csv = format!(
+            "Title,Login,Password,Website Address,Notes\n{}",
+            ",,,,\n".repeat(100_001)
+        );
+        assert!(matches!(
+            KeeperCsvInput::new(&csv).plan(),
+            Err(KeeperImportError::TooManyRecords)
+        ));
+    }
 
     #[test]
     fn imports_logins_and_secure_notes_with_folder_and_custom_fields() -> anyhow::Result<()> {
@@ -370,7 +166,7 @@ mod tests {
             "Personal,Recovery,,,,\"# Offline note\",Team,,,,\n",
         );
 
-        let plan = plan_keeper_import(csv)?;
+        let plan = KeeperCsvInput::new(csv).plan()?;
         assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(
@@ -407,7 +203,7 @@ mod tests {
             "Wi-Fi memo,,,,Guest network details,general,\n",
         );
 
-        let plan = plan_keeper_import(csv)?;
+        let plan = KeeperCsvInput::new(csv).plan()?;
         assert_eq!(usize::from(plan.source_count), 3);
         assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert_eq!(plan.items.len(), 2);
@@ -438,12 +234,12 @@ mod tests {
     #[test]
     fn rejects_missing_columns_and_oversized_exports() {
         assert!(matches!(
-            plan_keeper_import("Title,Login,Password\n"),
+            KeeperCsvInput::new("Title,Login,Password\n").plan(),
             Err(KeeperImportError::MissingColumn(_))
         ));
         let export = "x".repeat(MAX_CSV_BYTES + 1);
         assert!(matches!(
-            plan_keeper_import(&export),
+            KeeperCsvInput::new(&export).plan(),
             Err(KeeperImportError::CsvTooLarge)
         ));
     }

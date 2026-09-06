@@ -114,7 +114,7 @@ pub use google_authenticator_import::{
 };
 pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedRecordCount};
 pub use keepassxc_import::{KeePassXcImportError, KeePassXcImportPlan, plan_keepassxc_import};
-pub use keeper_import::{KeeperImportError, KeeperImportPlan, plan_keeper_import};
+pub use keeper_import::{KeeperCsvInput, KeeperImportError, KeeperImportPlan};
 pub use lastpass_import::{LastPassImportError, LastPassImportPlan, plan_lastpass_import};
 pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
 pub use nook_app_common::i18n_keys;

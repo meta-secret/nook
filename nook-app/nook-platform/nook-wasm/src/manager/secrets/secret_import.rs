@@ -7,6 +7,7 @@ use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
 use nook_core::DashlaneExport;
 use nook_core::GoogleAuthenticatorMigrationInput;
+use nook_core::KeeperCsvInput;
 use nook_core::OnePasswordExport;
 use nook_core::ProtonPassImportInput;
 use nook_core::{
@@ -396,7 +397,8 @@ impl NookVaultManager {
     #[wasm_bindgen]
     pub async fn import_keeper_csv(&mut self, csv: String) -> Result<NookImportResult, JsError> {
         let csv = Zeroizing::new(csv);
-        let plan = nook_core::plan_keeper_import(csv.as_str())
+        let plan = KeeperCsvInput::new(csv.as_str())
+            .plan()
             .map_err(|error| NookError::Database(error.to_string()))?;
         drop(csv);
         self.commit_secret_import(
