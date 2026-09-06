@@ -493,7 +493,7 @@ mod tests {
                 event_db::save_event_bytes(
                     fixture.output.store_id.as_str(),
                     event_id.as_str(),
-                    &bytes,
+                    bytes.as_ref(),
                 )
                 .await?;
                 let quorum = fixture

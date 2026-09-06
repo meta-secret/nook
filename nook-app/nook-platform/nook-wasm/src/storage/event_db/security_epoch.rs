@@ -102,7 +102,7 @@ async fn load_local_store(
             read_string(events, &event_key(store_id, raw_id), "Epoch event").await?
             && let Ok(event_id) = EventId::parse(raw_id)
         {
-            local.put_event(event_id, bytes.into_bytes());
+            local.put_event(event_id, bytes.into_bytes().into());
         }
     }
     Ok((ids, local))
@@ -307,7 +307,11 @@ pub(crate) async fn save_verified_remote_events(
         NookError::IndexedDb(format!("Remote projections store error: {error:?}"))
     })?;
     let (persisted_ids, mut local) = load_local_store(&events, store_id).await?;
-    let heads = local.union_remote_and_heads(remote_events, store_id)?;
+    let typed_events = remote_events
+        .iter()
+        .map(|(event_id, bytes)| (event_id.clone(), bytes.clone().into()))
+        .collect::<Vec<_>>();
+    let heads = local.union_remote_and_heads(&typed_events, store_id)?;
     let graph = local.load_graph(store_id)?;
     if !nook_core::project_vault(&graph, store_id)?
         .security_conflicts

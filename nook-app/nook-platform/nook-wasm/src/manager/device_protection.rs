@@ -12,7 +12,8 @@ use nook_core::{
     DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus, DevicePublicKey,
     DeviceSigningPublicKey, DriveEventParent, HandoffSigningSeedChoice,
     PasskeyDeviceProtectionMode, PasskeyRegistrationPrfOutput, PasskeyRegistrationResolution,
-    StorageMode, StoreId, WrappedDeviceIdentity, i18n_keys,
+    StorageMode, StoreId, WebAuthnCredentialId, WebAuthnPrfInput, WebAuthnPrfOutput,
+    WebAuthnUserHandle, WrappedDeviceIdentity, i18n_keys,
 };
 use std::mem;
 use wasm_bindgen::JsError;
@@ -546,13 +547,20 @@ impl NookVaultManager {
             let credential = passkey_browser::create_credential(&creation_options).await?;
             let mut observation = passkey_observation::observe_registration(&credential);
             let credential_id = passkey_browser::credential_id(&credential)?;
+            let credential_id = WebAuthnCredentialId::try_from(credential_id)?;
+            let user_handle = WebAuthnUserHandle::try_from(user_handle)?;
+            let prf_input = WebAuthnPrfInput::try_from(prf_input)?;
             let create_prf_output =
                 passkey_browser::prf_output(&credential, true)?.map(Zeroizing::new);
+            let create_prf_output = create_prf_output
+                .as_deref()
+                .map(|output| WebAuthnPrfOutput::try_from(output.clone()))
+                .transpose()?;
             let resolution = nook_core::resolve_passkey_registration_for_mode(
                 &credential_id,
                 &user_handle,
                 &prf_input,
-                match create_prf_output.as_deref() {
+                match create_prf_output {
                     Some(output) => PasskeyRegistrationPrfOutput::Available(output),
                     None => PasskeyRegistrationPrfOutput::Unavailable,
                 },
@@ -565,19 +573,20 @@ impl NookVaultManager {
                 PasskeyRegistrationResolution::NeedsAssertion(request) => {
                     let request_options = passkey_browser::request_options(
                         rp_id,
-                        request.credential_id(),
-                        request.prf_input(),
+                        request.credential_id().as_ref(),
+                        request.prf_input().as_ref(),
                     )?;
                     let credential = passkey_browser::get_credential(&request_options).await?;
                     observation.merge_usage(passkey_observation::observe_assertion(&credential));
                     let prf_output =
                         Zeroizing::new(passkey_browser::require_prf_output(&credential)?);
+                    let prf_output = WebAuthnPrfOutput::try_from(prf_output.to_vec())?;
                     (
                         nook_core::finish_passkey_device_identity_for_mode(
                             request.credential_id(),
                             &user_handle,
                             request.prf_input(),
-                            prf_output.as_slice(),
+                            &prf_output,
                             mode,
                         )?,
                         PasskeyCreationCeremony::RegistrationAndAssertion,
@@ -585,7 +594,8 @@ impl NookVaultManager {
                 }
             };
             let device_id = self.save_passkey_material(&material).await?;
-            let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
+            let credential_fingerprint =
+                nook_core::passkey_credential_identifier(credential_id.as_ref());
             let _ = device_access::record_passkey_created_for_app_id(
                 &device_id,
                 &credential_fingerprint,
@@ -596,7 +606,12 @@ impl NookVaultManager {
             .await;
             let updated_label =
                 passkey_browser::passkey_label_with_device_id(&passkey_label, &device_id);
-            passkey_browser::signal_current_user_details(rp_id, &user_handle, &updated_label).await;
+            passkey_browser::signal_current_user_details(
+                rp_id,
+                user_handle.as_ref(),
+                &updated_label,
+            )
+            .await;
             Ok(())
         }
         .await;
@@ -650,11 +665,15 @@ impl NookVaultManager {
         let creating_local_identity = self.is_creating_local_identity();
         let mode = passkey_mode_from_device_mode(device_mode);
         let result = async {
+            let credential_id = WebAuthnCredentialId::try_from(credential_id)?;
+            let user_handle = WebAuthnUserHandle::try_from(user_handle)?;
+            let prf_input = WebAuthnPrfInput::try_from(prf_input)?;
+            let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone())?;
             let material = nook_core::finish_passkey_device_identity_for_mode(
                 &credential_id,
                 &user_handle,
                 &prf_input,
-                &prf_output,
+                &typed_prf_output,
                 mode,
             )?;
             self.save_passkey_material(&material).await
@@ -710,10 +729,13 @@ impl NookVaultManager {
         mut prf_output: Vec<u8>,
     ) -> Result<(), JsError> {
         let result = async {
+            let credential_id = WebAuthnCredentialId::try_from(credential_id)?;
+            let user_handle = WebAuthnUserHandle::try_from(user_handle)?;
+            let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone())?;
             let material = nook_core::recover_passkey_device_identity(
                 &credential_id,
                 &user_handle,
-                &prf_output,
+                &typed_prf_output,
             )?;
             self.save_passkey_material(&material).await
         }
@@ -799,8 +821,12 @@ impl NookVaultManager {
                 self.load_protected_local_identity().await?.ok_or_else(|| {
                     NookError::IndexedDb("No passkey-protected device identity found.".to_owned())
                 })?;
-            let secret =
-                nook_core::unlock_passkey_device_identity(&stored_device_id, &record, &prf_output)?;
+            let typed_prf_output = WebAuthnPrfOutput::try_from(prf_output.clone())?;
+            let secret = nook_core::unlock_passkey_device_identity(
+                &stored_device_id,
+                &record,
+                &typed_prf_output,
+            )?;
             let app_key = DeviceIdentity::from_secret_str(&secret)?;
             self.adopt_unlocked_local_identity(app_key, &record).await
         }

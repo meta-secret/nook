@@ -5,8 +5,10 @@
 )]
 
 use crate::storage::event_db;
-use nook_core::{CheckedRemoteEvent, RemoteEventBatch, RemoteEventWrites};
-use nook_core::{MultiDeviceError, ProjectionEpoch, StorageMode, VaultCrypto, VaultType};
+use nook_core::{
+    CheckedRemoteEvent, EventStorageBytes, MultiDeviceError, ProjectionEpoch, RemoteEventBatch,
+    RemoteEventWrites, StorageMode, VaultCrypto, VaultType,
+};
 use std::collections::BTreeSet;
 
 use super::{
@@ -20,7 +22,7 @@ use super::{
 struct PendingOutboxEvent<'a> {
     provider_id: &'a str,
     event_id: EventId,
-    bytes: Vec<u8>,
+    bytes: EventStorageBytes,
     local_ids: Option<&'a BTreeSet<EventId>>,
 }
 
@@ -47,7 +49,7 @@ impl<'a> PendingOutboxEvent<'a> {
     ) -> Result<PublishedOutboxEvent<'a>, NookError> {
         // Always put-if-absent: a listed remote name may be unreadable junk.
         manager
-            .put_current_provider_event_if_absent(&self.event_id, &self.bytes)
+            .put_current_provider_event_if_absent(&self.event_id, self.bytes.as_ref())
             .await?;
         Ok(PublishedOutboxEvent {
             provider_id: self.provider_id,
@@ -209,7 +211,7 @@ impl NookVaultManager {
     async fn fetch_current_provider_events(
         &mut self,
         event_ids: impl IntoIterator<Item = EventId>,
-    ) -> Result<Vec<(EventId, Vec<u8>)>, NookError> {
+    ) -> Result<Vec<(EventId, EventStorageBytes)>, NookError> {
         let mut events = Vec::new();
         for event_id in event_ids {
             // Listed names can outlive readable content (Drive junk duplicates).
@@ -218,7 +220,7 @@ impl NookVaultManager {
                 .fetch_current_provider_event_optional(&event_id)
                 .await?
             {
-                events.push((event_id, bytes));
+                events.push((event_id, bytes.into()));
             }
         }
         Ok(events)
@@ -295,7 +297,7 @@ impl NookVaultManager {
         let mut pending = load_outbox(&provider_id)
             .await?
             .into_iter()
-            .map(|(event_id, bytes)| Ok((EventId::parse(&event_id)?, bytes)))
+            .map(|(event_id, bytes)| Ok((EventId::parse(&event_id)?, bytes.into())))
             .collect::<Result<Vec<_>, NookError>>()?;
         RemoteEventWrites::new(&mut pending).order()?;
         for (event_id, bytes) in pending {
@@ -322,12 +324,12 @@ impl NookVaultManager {
                     let bytes = local.get_bytes(&event_id).ok_or_else(|| {
                         NookError::Database(format!("Local event {event_id} is missing"))
                     })?;
-                    Ok((event_id, bytes.to_vec()))
+                    Ok((event_id, bytes))
                 })
                 .collect::<Result<Vec<_>, NookError>>()?;
             RemoteEventWrites::new(&mut missing).order()?;
             for (event_id, bytes) in missing {
-                self.put_current_provider_event_if_absent(&event_id, &bytes)
+                self.put_current_provider_event_if_absent(&event_id, bytes.as_ref())
                     .await?;
                 remote_ids.insert(event_id);
             }
@@ -411,7 +413,7 @@ impl NookVaultManager {
             let bytes = store.get_bytes(&event_id).ok_or_else(|| {
                 NookError::Database(format!("Event {} missing from local store.", event_id))
             })?;
-            let event = nook_core::parse_event_storage_bytes(bytes)?;
+            let event = nook_core::parse_event_storage_bytes(&bytes)?;
             records.push(EventLogStorageRecord {
                 event_id: event_id.as_str().to_owned(),
                 path: event_id.storage_path(),
@@ -424,11 +426,15 @@ impl NookVaultManager {
     async fn persist_merged_remote_events(
         &mut self,
         local: &mut nook_core::LocalEventStore,
-        remote_events: &[(EventId, Vec<u8>)],
+        remote_events: &[(EventId, EventStorageBytes)],
         persist_locked_projection: bool,
     ) -> Result<(), NookError> {
+        let storage_records = remote_events
+            .iter()
+            .map(|(event_id, bytes)| (event_id.clone(), bytes.clone().into()))
+            .collect::<Vec<_>>();
         let (heads, persisted) =
-            event_db::save_verified_remote_events(&self.vault.store_id, remote_events).await?;
+            event_db::save_verified_remote_events(&self.vault.store_id, &storage_records).await?;
         *local = persisted;
         self.event_log.heads = heads.clone();
         let graph = local.load_graph(&self.vault.store_id)?;
@@ -481,7 +487,7 @@ impl NookVaultManager {
         &mut self,
         records: Vec<ExternalEventLogRecord>,
     ) -> Result<Vec<EventLogStorageRecord>, NookError> {
-        let parsed_records: Vec<(EventId, Vec<u8>)> = records
+        let parsed_records: Vec<(EventId, EventStorageBytes)> = records
             .into_iter()
             .map(|record| {
                 let event_id = EventId::parse(&record.event_id)?;
@@ -561,7 +567,9 @@ impl NookVaultManager {
             .map(|record| {
                 Ok((
                     EventId::parse(&record.event_id)?,
-                    Self::serialize_event_log_storage_record(record)?.into_bytes(),
+                    Self::serialize_event_log_storage_record(record)?
+                        .into_bytes()
+                        .into(),
                 ))
             })
             .collect::<Result<Vec<_>, NookError>>()?;
@@ -571,7 +579,7 @@ impl NookVaultManager {
             .map(|(event_id, content)| {
                 Ok(LocalFolderEventWrite {
                     event_id: event_id.into_inner(),
-                    content: String::from_utf8(content)
+                    content: String::from_utf8(content.into())
                         .map_err(|error| NookError::Serialization(error.to_string()))?,
                 })
             })
@@ -602,7 +610,7 @@ mod tests {
             Ok(PendingOutboxEvent {
                 provider_id: &self.provider_id,
                 event_id: self.event_id.clone(),
-                bytes: self.bytes.clone(),
+                bytes: self.bytes.clone().into(),
                 local_ids: None,
             })
         }
@@ -682,7 +690,7 @@ mod tests {
             let pending = PendingOutboxEvent {
                 provider_id: "index-fixture",
                 event_id,
-                bytes: Vec::new(),
+                bytes: Vec::new().into(),
                 local_ids: index,
             };
             assert_eq!(pending.is_current(), expected);

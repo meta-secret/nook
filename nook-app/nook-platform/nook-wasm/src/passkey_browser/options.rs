@@ -3,7 +3,10 @@ use coset::iana;
 use getrandom::fill;
 use iana::Algorithm;
 use js_sys::{JsString, Reflect, Uint8Array};
-use nook_core::{DeviceKeyProtectionSetup, PasskeyAssertionRequest};
+use nook_core::{
+    DeviceKeyProtectionSetup, PasskeyAssertionRequest, WebAuthnCredentialId, WebAuthnPrfInput,
+    WebAuthnUserHandle,
+};
 use passkey_types::{
     Bytes,
     webauthn::{
@@ -31,15 +34,20 @@ pub(crate) fn creation_options(
     user_handle: &[u8],
     prf_input: &[u8],
 ) -> Result<CredentialCreationOptions, JsError> {
+    let user_handle = WebAuthnUserHandle::try_from(user_handle.to_vec())
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    let prf_input = WebAuthnPrfInput::try_from(prf_input.to_vec())
+        .map_err(|error| JsError::new(&error.to_string()))?;
     let setup = DeviceKeyProtectionSetup::new(user_handle, prf_input)
         .map_err(|error| JsError::new(&error.to_string()))?;
-    let passkey_label = passkey_label_with_passkey_handle(passkey_label, setup.user_handle());
+    let passkey_label =
+        passkey_label_with_passkey_handle(passkey_label, setup.user_handle().as_ref());
     let options = creation_options_struct(
         rp_id,
         rp_name,
         &passkey_label,
-        setup.user_handle(),
-        setup.prf_input(),
+        setup.user_handle().as_ref(),
+        setup.prf_input().as_ref(),
     )?;
     to_browser_object(&options)
         .map(JsCast::unchecked_into)
@@ -55,9 +63,16 @@ pub(crate) fn request_options(
     credential_id: &[u8],
     prf_input: &[u8],
 ) -> Result<CredentialRequestOptions, JsError> {
-    let request = PasskeyAssertionRequest::new(credential_id, prf_input)
+    let credential_id = WebAuthnCredentialId::try_from(credential_id.to_vec())
         .map_err(|error| JsError::new(&error.to_string()))?;
-    let options = request_options_struct(rp_id, request.credential_id(), request.prf_input())?;
+    let prf_input = WebAuthnPrfInput::try_from(prf_input.to_vec())
+        .map_err(|error| JsError::new(&error.to_string()))?;
+    let request = PasskeyAssertionRequest::new(credential_id, prf_input);
+    let options = request_options_struct(
+        rp_id,
+        request.credential_id().as_ref(),
+        request.prf_input().as_ref(),
+    )?;
     to_browser_object(&options)
         .map(JsCast::unchecked_into)
         .map_err(|error| JsError::new(&format!("Failed to build passkey request options: {error}")))
@@ -65,7 +80,7 @@ pub(crate) fn request_options(
 
 pub(crate) fn recovery_options(rp_id: &str) -> Result<CredentialRequestOptions, JsError> {
     let prf_input = nook_core::deterministic_passkey_prf_input();
-    let options = recovery_options_struct(rp_id, &prf_input)?;
+    let options = recovery_options_struct(rp_id, prf_input.as_ref())?;
     to_browser_object(&options)
         .map(JsCast::unchecked_into)
         .map_err(|error| {

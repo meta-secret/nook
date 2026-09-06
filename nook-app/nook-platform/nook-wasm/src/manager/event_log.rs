@@ -95,7 +95,7 @@ impl NookVaultManager {
         content: &str,
     ) -> Result<EventLogStorageRecord, NookError> {
         let event_id = EventId::parse(event_id)?;
-        let event = nook_core::parse_event_storage_bytes(content.as_bytes())?;
+        let event = nook_core::parse_event_storage_bytes(&content.as_bytes().to_vec().into())?;
         Self::validate_event_record_id(&event_id, &event)?;
         Ok(EventLogStorageRecord {
             event_id: event_id.as_str().to_owned(),
@@ -110,7 +110,7 @@ impl NookVaultManager {
         let event_id = EventId::parse(&record.event_id)?;
         Self::validate_event_record_id(&event_id, &record.event)?;
         let bytes = nook_core::serialize_event_storage_yaml(&record.event)?;
-        String::from_utf8(bytes).map_err(|e| {
+        String::from_utf8(bytes.into()).map_err(|e| {
             NookError::Serialization(format!("Event storage content is not UTF-8: {e}"))
         })
     }
@@ -315,7 +315,10 @@ impl NookVaultManager {
             created_at: &created_at,
             operations,
         })?;
-        Ok(BuiltVaultEvent { event, bytes })
+        Ok(BuiltVaultEvent {
+            event,
+            bytes: bytes.into(),
+        })
     }
 
     pub(super) async fn persist_built_vault_event(

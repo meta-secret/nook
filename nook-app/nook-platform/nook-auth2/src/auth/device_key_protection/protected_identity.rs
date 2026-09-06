@@ -2,15 +2,14 @@ use std::str;
 
 use super::{
     AES_GCM_NONCE_LEN, AES_KEY_LEN, AGE_SECRET_KEY_PREFIX, Aead, Aes256Gcm, Array, Bech32,
-    CIPHER_NAME, CREDENTIAL_ID_MAX_LEN, Deserialize, DeviceIdentitySecret,
-    DeviceKeyProtectionError, DeviceKeyProtectionResult, DeviceKeyProtectionVersion, Engine, Hkdf,
-    Hrp, KDF_NAME, KeyInit, PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION,
-    PASSKEY_WRAPPED_AAD_CONTEXT, PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION,
-    PASSKEY_WRAPPING_HKDF_INFO, PASSKEY_WRAPPING_SALT_LEN, PIN_AAD_CONTEXT,
-    PIN_DEVICE_KEY_PROTECTION_VERSION, PIN_KDF_NAME, PIN_MIN_LEN, PIN_PBKDF2_ITERATIONS,
-    PIN_SALT_LEN, PRF_INPUT_LEN, PRF_OUTPUT_LEN, PasskeyDeviceProtectionMode, Payload,
-    Pbkdf2Sha256, Serialize, Sha256, URL_SAFE_NO_PAD, USER_HANDLE_MAX_LEN, Zeroize, Zeroizing,
-    fill, pbkdf2_hmac,
+    CIPHER_NAME, Deserialize, DeviceIdentitySecret, DeviceKeyProtectionError,
+    DeviceKeyProtectionResult, DeviceKeyProtectionVersion, Engine, Hkdf, Hrp, KDF_NAME, KeyInit,
+    PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION, PASSKEY_WRAPPED_AAD_CONTEXT,
+    PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION, PASSKEY_WRAPPING_HKDF_INFO,
+    PASSKEY_WRAPPING_SALT_LEN, PIN_AAD_CONTEXT, PIN_DEVICE_KEY_PROTECTION_VERSION, PIN_KDF_NAME,
+    PIN_MIN_LEN, PIN_PBKDF2_ITERATIONS, PIN_SALT_LEN, PasskeyDeviceProtectionMode, Payload,
+    Pbkdf2Sha256, Serialize, Sha256, URL_SAFE_NO_PAD, WebAuthnCredentialId, WebAuthnPrfInput,
+    WebAuthnPrfOutput, WebAuthnUserHandle, Zeroize, Zeroizing, fill, pbkdf2_hmac,
 };
 use crate::DeviceKeyDerivationIterations;
 
@@ -63,51 +62,33 @@ pub struct PinWrappedDeviceIdentity {
 }
 
 impl WrappedDeviceIdentity {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: decodes the persisted WebAuthn credential id into ArrayBuffer bytes"
-        )
-    )]
-    pub fn credential_id_bytes(&self) -> DeviceKeyProtectionResult<Vec<u8>> {
-        match self {
+    pub fn credential_id(&self) -> DeviceKeyProtectionResult<WebAuthnCredentialId> {
+        let bytes = match self {
             Self::PasskeyDerived(record) => decode_field("credentialId", &record.credential_id),
             Self::PasskeyWrappedLocal(record) => {
                 decode_field("credentialId", &record.credential_id)
             }
             Self::Pin(_) => Err(DeviceKeyProtectionError::UnsupportedParameters),
-        }
+        }?;
+        bytes.try_into()
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: decodes the persisted WebAuthn user handle into ArrayBuffer bytes"
-        )
-    )]
-    pub fn user_handle_bytes(&self) -> DeviceKeyProtectionResult<Vec<u8>> {
-        match self {
+    pub fn user_handle(&self) -> DeviceKeyProtectionResult<WebAuthnUserHandle> {
+        let bytes = match self {
             Self::PasskeyDerived(record) => decode_field("userHandle", &record.user_handle),
             Self::PasskeyWrappedLocal(record) => decode_field("userHandle", &record.user_handle),
             Self::Pin(_) => Err(DeviceKeyProtectionError::UnsupportedParameters),
-        }
+        }?;
+        bytes.try_into()
     }
 
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: decodes the persisted WebAuthn PRF input into ArrayBuffer bytes"
-        )
-    )]
-    pub fn prf_input_bytes(&self) -> DeviceKeyProtectionResult<Vec<u8>> {
-        match self {
+    pub fn prf_input(&self) -> DeviceKeyProtectionResult<WebAuthnPrfInput> {
+        let bytes = match self {
             Self::PasskeyDerived(record) => decode_field("prfInput", &record.prf_input),
             Self::PasskeyWrappedLocal(record) => decode_field("prfInput", &record.prf_input),
             Self::Pin(_) => Err(DeviceKeyProtectionError::UnsupportedParameters),
-        }
+        }?;
+        bytes.try_into()
     }
 
     #[must_use]
@@ -131,47 +112,30 @@ impl WrappedDeviceIdentity {
     }
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: records WebAuthn credential-id, user-handle, and PRF-input ArrayBuffer bytes"
-    )
-)]
 pub fn passkey_derived_device_identity_record(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_input: &WebAuthnPrfInput,
 ) -> DeviceKeyProtectionResult<WrappedDeviceIdentity> {
-    validate_passkey_metadata(credential_id, user_handle, prf_input)?;
     Ok(WrappedDeviceIdentity::PasskeyDerived(
         PasskeyDerivedDeviceIdentity {
             version: PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION,
             protection: "passkey-derived".to_owned(),
-            credential_id: encode(credential_id),
-            user_handle: encode(user_handle),
-            prf_input: encode(prf_input),
+            credential_id: encode(credential_id.as_ref()),
+            user_handle: encode(user_handle.as_ref()),
+            prf_input: encode(prf_input.as_ref()),
             kdf: KDF_NAME.to_owned(),
         },
     ))
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: records WebAuthn credential-id, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
-    )
-)]
 pub fn passkey_wrapped_device_identity_record(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
-    prf_output: &[u8],
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_input: &WebAuthnPrfInput,
+    prf_output: &WebAuthnPrfOutput,
     identity: &DeviceIdentitySecret,
 ) -> DeviceKeyProtectionResult<WrappedDeviceIdentity> {
-    validate_passkey_metadata(credential_id, user_handle, prf_input)?;
-    validate_recovery_inputs(user_handle, prf_output)?;
     let mut salt = [0u8; PASSKEY_WRAPPING_SALT_LEN];
     let mut nonce = [0u8; AES_GCM_NONCE_LEN];
     fill(&mut salt).map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
@@ -181,9 +145,9 @@ pub fn passkey_wrapped_device_identity_record(
         version: PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION,
         protection: "passkey-wrapped-local".to_owned(),
         device_mode: PasskeyDeviceProtectionMode::AntiHacker.as_str().to_owned(),
-        credential_id: encode(credential_id),
-        user_handle: encode(user_handle),
-        prf_input: encode(prf_input),
+        credential_id: encode(credential_id.as_ref()),
+        user_handle: encode(user_handle.as_ref()),
+        prf_input: encode(prf_input.as_ref()),
         kdf: KDF_NAME.to_owned(),
         hkdf_salt: encode(&salt),
         cipher: CIPHER_NAME.to_owned(),
@@ -295,7 +259,7 @@ fn decrypt_device_identity(
 
 pub(super) fn unwrap_passkey_wrapped_device_identity(
     record: &PasskeyWrappedLocalDeviceIdentity,
-    prf_output: &[u8],
+    prf_output: &WebAuthnPrfOutput,
 ) -> DeviceKeyProtectionResult<DeviceIdentitySecret> {
     if record.version != PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION {
         return Err(DeviceKeyProtectionError::UnsupportedVersion(record.version));
@@ -307,10 +271,6 @@ pub(super) fn unwrap_passkey_wrapped_device_identity(
     {
         return Err(DeviceKeyProtectionError::UnsupportedParameters);
     }
-    if prf_output.len() != PRF_OUTPUT_LEN {
-        return Err(DeviceKeyProtectionError::PrfOutputInvalid);
-    }
-
     let salt = decode_fixed::<PASSKEY_WRAPPING_SALT_LEN>("hkdfSalt", &record.hkdf_salt)?;
     let nonce = decode_fixed::<AES_GCM_NONCE_LEN>("nonce", &record.nonce)?;
     let ciphertext = decode_field("ciphertext", &record.ciphertext)?;
@@ -331,58 +291,6 @@ pub fn parse_wrapped_device_identity(
     serde_json::from_str(raw).map_err(DeviceKeyProtectionError::Parse)
 }
 
-fn validate_passkey_metadata(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
-) -> DeviceKeyProtectionResult<()> {
-    validate_credential_id(credential_id)?;
-    validate_user_handle(user_handle)?;
-    validate_prf_input(prf_input)?;
-    Ok(())
-}
-
-pub(super) fn validate_credential_id(credential_id: &[u8]) -> DeviceKeyProtectionResult<()> {
-    if credential_id.is_empty() {
-        return Err(DeviceKeyProtectionError::CredentialIdEmpty);
-    }
-    if credential_id.len() > CREDENTIAL_ID_MAX_LEN {
-        return Err(DeviceKeyProtectionError::CredentialIdTooLarge);
-    }
-    Ok(())
-}
-
-fn validate_user_handle(user_handle: &[u8]) -> DeviceKeyProtectionResult<()> {
-    if user_handle.is_empty() || user_handle.len() > USER_HANDLE_MAX_LEN {
-        return Err(DeviceKeyProtectionError::UserHandleInvalid);
-    }
-    Ok(())
-}
-
-pub(super) fn validate_prf_input(
-    prf_input: &[u8],
-) -> DeviceKeyProtectionResult<[u8; PRF_INPUT_LEN]> {
-    if prf_input.len() != PRF_INPUT_LEN {
-        return Err(DeviceKeyProtectionError::PrfInputInvalid);
-    }
-    let mut input = [0u8; PRF_INPUT_LEN];
-    input.copy_from_slice(prf_input);
-    Ok(input)
-}
-
-pub(super) fn validate_recovery_inputs(
-    user_handle: &[u8],
-    prf_output: &[u8],
-) -> DeviceKeyProtectionResult<()> {
-    if user_handle.is_empty() || user_handle.len() > USER_HANDLE_MAX_LEN {
-        return Err(DeviceKeyProtectionError::UserHandleInvalid);
-    }
-    if prf_output.len() != PRF_OUTPUT_LEN {
-        return Err(DeviceKeyProtectionError::PrfOutputInvalid);
-    }
-    Ok(())
-}
-
 fn derive_pin_wrapping_key(
     pin: &str,
     salt: &[u8],
@@ -397,13 +305,13 @@ fn derive_pin_wrapping_key(
 }
 
 fn derive_passkey_wrapping_key(
-    prf_output: &[u8],
+    prf_output: &WebAuthnPrfOutput,
     salt: &[u8],
 ) -> DeviceKeyProtectionResult<Zeroizing<[u8; AES_KEY_LEN]>> {
-    if prf_output.len() != PRF_OUTPUT_LEN || salt.len() != PASSKEY_WRAPPING_SALT_LEN {
+    if salt.len() != PASSKEY_WRAPPING_SALT_LEN {
         return Err(DeviceKeyProtectionError::KeyDerivation);
     }
-    let hkdf = Hkdf::<Sha256>::new(Some(salt), prf_output);
+    let hkdf = Hkdf::<Sha256>::new(Some(salt), prf_output.as_ref());
     let mut key = Zeroizing::new([0u8; AES_KEY_LEN]);
     hkdf.expand(PASSKEY_WRAPPING_HKDF_INFO, key.as_mut())
         .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
@@ -532,8 +440,8 @@ mod tests {
 
     #[test]
     fn passkey_derived_record_stores_only_recovery_metadata() -> anyhow::Result<()> {
-        let credential_id = vec![7u8; 48];
-        let user_handle = vec![8u8; 32];
+        let credential_id = WebAuthnCredentialId::try_from(vec![7u8; 48])?;
+        let user_handle = WebAuthnUserHandle::try_from(vec![8u8; 32])?;
         let prf_input = deterministic_passkey_prf_input();
         let record =
             passkey_derived_device_identity_record(&credential_id, &user_handle, &prf_input)?;
@@ -541,9 +449,9 @@ mod tests {
         let parsed = parse_wrapped_device_identity(&json)?;
 
         assert_eq!(parsed.protection_mode(), "passkey");
-        assert_eq!(parsed.credential_id_bytes()?, credential_id);
-        assert_eq!(parsed.user_handle_bytes()?, user_handle);
-        assert_eq!(parsed.prf_input_bytes()?, prf_input);
+        assert_eq!(parsed.credential_id()?, credential_id);
+        assert_eq!(parsed.user_handle()?, user_handle);
+        assert_eq!(parsed.prf_input()?, prf_input);
         assert_eq!(
             passkey_derived_record(&parsed)?.version,
             PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION
@@ -555,10 +463,10 @@ mod tests {
 
     #[test]
     fn anti_hacker_record_wraps_random_identity_locally() -> anyhow::Result<()> {
-        let credential_id = vec![7u8; 48];
-        let user_handle = vec![8u8; 32];
+        let credential_id = WebAuthnCredentialId::try_from(vec![7u8; 48])?;
+        let user_handle = WebAuthnUserHandle::try_from(vec![8u8; 32])?;
         let prf_input = deterministic_passkey_prf_input();
-        let prf_output = [10u8; 32];
+        let prf_output = WebAuthnPrfOutput::try_from(vec![10u8; 32])?;
         let material = finish_passkey_wrapped_device_identity(
             &credential_id,
             &user_handle,
@@ -575,9 +483,9 @@ mod tests {
             record.version,
             PASSKEY_WRAPPED_LOCAL_DEVICE_KEY_PROTECTION_VERSION
         );
-        assert_eq!(parsed.credential_id_bytes()?, credential_id);
-        assert_eq!(parsed.user_handle_bytes()?, user_handle);
-        assert_eq!(parsed.prf_input_bytes()?, prf_input);
+        assert_eq!(parsed.credential_id()?, credential_id);
+        assert_eq!(parsed.user_handle()?, user_handle);
+        assert_eq!(parsed.prf_input()?, prf_input);
         assert!(json.contains("ciphertext"));
         assert!(json.contains("nonce"));
         assert!(!json.contains("AGE-SECRET-KEY-"));
@@ -590,10 +498,10 @@ mod tests {
 
     #[test]
     fn anti_hacker_unlock_requires_local_wrapper_and_matching_prf() -> anyhow::Result<()> {
-        let credential_id = vec![7u8; 48];
-        let user_handle = vec![8u8; 32];
+        let credential_id = WebAuthnCredentialId::try_from(vec![7u8; 48])?;
+        let user_handle = WebAuthnUserHandle::try_from(vec![8u8; 32])?;
         let prf_input = deterministic_passkey_prf_input();
-        let prf_output = [10u8; 32];
+        let prf_output = WebAuthnPrfOutput::try_from(vec![10u8; 32])?;
         let material = finish_passkey_wrapped_device_identity(
             &credential_id,
             &user_handle,
@@ -604,8 +512,9 @@ mod tests {
         let unlocked =
             unlock_passkey_device_identity(material.device_id(), material.record(), &prf_output)?;
         assert_eq!(&unlocked, material.identity_secret());
+        let wrong_output = WebAuthnPrfOutput::try_from(vec![11u8; 32])?;
         assert!(
-            unlock_passkey_device_identity(material.device_id(), material.record(), &[11u8; 32])
+            unlock_passkey_device_identity(material.device_id(), material.record(), &wrong_output)
                 .is_err()
         );
 
@@ -617,15 +526,15 @@ mod tests {
     #[test]
     fn passkey_derived_record_rejects_invalid_metadata() {
         assert!(matches!(
-            passkey_derived_device_identity_record(&[], &[8u8; 32], &[9u8; 32]),
+            WebAuthnCredentialId::try_from(Vec::new()),
             Err(DeviceKeyProtectionError::CredentialIdEmpty)
         ));
         assert!(matches!(
-            passkey_derived_device_identity_record(&[7u8; 48], &[1u8; 65], &[9u8; 32]),
+            WebAuthnUserHandle::try_from(vec![1u8; 65]),
             Err(DeviceKeyProtectionError::UserHandleInvalid)
         ));
         assert!(matches!(
-            passkey_derived_device_identity_record(&[7u8; 48], &[8u8; 32], &[1u8; 31]),
+            WebAuthnPrfInput::try_from(vec![1u8; 31]),
             Err(DeviceKeyProtectionError::PrfInputInvalid)
         ));
     }

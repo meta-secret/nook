@@ -122,7 +122,7 @@ impl<'de> Deserialize<'de> for TotpDigits {
     where
         D: Deserializer<'de>,
     {
-        Self::parse(u32::deserialize(deserializer)?).map_err(D::Error::custom)
+        Self::try_from(u32::deserialize(deserializer)?).map_err(D::Error::custom)
     }
 }
 
@@ -136,9 +136,9 @@ impl fmt::Display for TotpDigits {
     }
 }
 
-impl TotpDigits {
-    /// # Errors
-    /// Returns an error when the digit count is outside the supported range.
+impl TryFrom<u32> for TotpDigits {
+    type Error = AuthenticatorDomainError;
+
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
         expect(
@@ -146,7 +146,7 @@ impl TotpDigits {
             reason = "serialization boundary: validates a numeric digit count decoded from authenticator data"
         )
     )]
-    pub fn parse(value: u32) -> Result<Self, AuthenticatorDomainError> {
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
         match value {
             6 => Ok(Self::Six),
             7 => Ok(Self::Seven),
@@ -165,7 +165,7 @@ impl<'de> Deserialize<'de> for TotpPeriod {
     where
         D: Deserializer<'de>,
     {
-        Self::parse(u64::deserialize(deserializer)?).map_err(D::Error::custom)
+        Self::try_from(u64::deserialize(deserializer)?).map_err(D::Error::custom)
     }
 }
 
@@ -181,9 +181,9 @@ impl fmt::Display for TotpPeriod {
     }
 }
 
-impl TotpPeriod {
-    /// # Errors
-    /// Returns an error when the period is outside the supported range.
+impl TryFrom<u64> for TotpPeriod {
+    type Error = AuthenticatorDomainError;
+
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
         expect(
@@ -191,29 +191,25 @@ impl TotpPeriod {
             reason = "serialization boundary: validates a numeric period decoded from authenticator data"
         )
     )]
-    pub fn parse(value: u64) -> Result<Self, AuthenticatorDomainError> {
+    fn try_from(value: u64) -> Result<Self, Self::Error> {
         if (15..=300).contains(&value) {
             Ok(Self(value))
         } else {
             Err(AuthenticatorDomainError::PeriodInvalid)
         }
     }
+}
 
-    #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: exposes the validated period only to companion and WASM wire adapters"
-        )
-    )]
-    pub const fn serialized_value(self) -> u64 {
-        self.0
-    }
-
+impl TotpPeriod {
     #[must_use]
     pub const fn duration(self) -> Duration {
         Duration::from_secs(self.0)
+    }
+}
+
+impl From<TotpPeriod> for u64 {
+    fn from(value: TotpPeriod) -> Self {
+        value.0
     }
 }
 
@@ -249,29 +245,26 @@ mod tests {
         assert_eq!(TotpAlgorithm::Sha512.as_str(), "SHA512");
         assert_eq!(serde_json::to_string(&TotpDigits::Eight)?, "8");
         assert_eq!(TotpDigits::Eight.to_string(), "8");
-        assert_eq!(
-            TotpPeriod::parse(300).map(TotpPeriod::serialized_value),
-            Ok(300)
-        );
+        assert_eq!(TotpPeriod::try_from(300).map(u64::from), Ok(300));
         Ok(())
     }
 
     #[test]
     fn bounds_authenticator_numbers() {
-        assert_eq!(TotpDigits::parse(6), Ok(TotpDigits::Six));
-        assert_eq!(TotpDigits::parse(7), Ok(TotpDigits::Seven));
-        assert_eq!(TotpDigits::parse(8), Ok(TotpDigits::Eight));
+        assert_eq!(TotpDigits::try_from(6), Ok(TotpDigits::Six));
+        assert_eq!(TotpDigits::try_from(7), Ok(TotpDigits::Seven));
+        assert_eq!(TotpDigits::try_from(8), Ok(TotpDigits::Eight));
         for digits in [0, 5, 9, u32::MAX] {
-            assert!(TotpDigits::parse(digits).is_err());
+            assert!(TotpDigits::try_from(digits).is_err());
         }
         for period in [15, 30, 300] {
             assert_eq!(
-                TotpPeriod::parse(period).map(TotpPeriod::duration),
+                TotpPeriod::try_from(period).map(TotpPeriod::duration),
                 Ok(Duration::from_secs(period))
             );
         }
         for period in [0, 14, 301, u64::MAX] {
-            assert!(TotpPeriod::parse(period).is_err());
+            assert!(TotpPeriod::try_from(period).is_err());
         }
     }
 

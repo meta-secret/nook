@@ -266,14 +266,15 @@ mod tests {
 
     #[test]
     fn local_device_wrapper_is_excluded_from_yaml_partition() -> anyhow::Result<()> {
-        let credential_id = vec![7u8; 48];
-        let user_handle = vec![8u8; 32];
+        let credential_id = crate::WebAuthnCredentialId::try_from(vec![7u8; 48])?;
+        let user_handle = crate::WebAuthnUserHandle::try_from(vec![8u8; 32])?;
         let prf_input = crate::deterministic_passkey_prf_input();
+        let prf_output = crate::WebAuthnPrfOutput::try_from(vec![10u8; 32])?;
         let material = crate::finish_passkey_wrapped_device_identity(
             &credential_id,
             &user_handle,
             &prf_input,
-            &[10u8; 32],
+            &prf_output,
         )?;
         let local_record = crate::serialize_wrapped_device_identity(material.record())?;
         let unsupported = local_record.replace(r#""version":4"#, r#""version":99"#);

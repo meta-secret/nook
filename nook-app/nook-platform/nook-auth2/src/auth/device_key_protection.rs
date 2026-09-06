@@ -28,6 +28,8 @@ use crate::{
 
 mod protected_identity;
 pub use protected_identity::*;
+mod webauthn_bytes;
+pub use webauthn_bytes::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
@@ -102,21 +104,18 @@ const AGE_SECRET_KEY_PREFIX: &str = "age-secret-key-";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceKeyProtectionSetup {
-    user_handle: [u8; PRF_INPUT_LEN],
-    prf_input: [u8; PRF_INPUT_LEN],
+    user_handle: WebAuthnUserHandle,
+    prf_input: WebAuthnPrfInput,
 }
 
 impl DeviceKeyProtectionSetup {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: accepts WebAuthn user-handle and PRF-input ArrayBuffer bytes"
-        )
-    )]
-    pub fn new(user_handle: &[u8], prf_input: &[u8]) -> DeviceKeyProtectionResult<Self> {
-        let user_handle = validate_prf_input(user_handle)?;
-        let prf_input = validate_prf_input(prf_input)?;
+    pub fn new(
+        user_handle: WebAuthnUserHandle,
+        prf_input: WebAuthnPrfInput,
+    ) -> DeviceKeyProtectionResult<Self> {
+        if user_handle.as_ref().len() != PRF_INPUT_LEN {
+            return Err(DeviceKeyProtectionError::UserHandleInvalid);
+        }
         Ok(Self {
             user_handle,
             prf_input,
@@ -128,64 +127,35 @@ impl DeviceKeyProtectionSetup {
         fill(&mut user_handle)
             .map_err(|error| DeviceKeyProtectionError::RandomBytes(error.to_string()))?;
         Ok(Self {
-            user_handle,
+            user_handle: user_handle.to_vec().try_into()?,
             prf_input: deterministic_passkey_prf_input(),
         })
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: exposes the WebAuthn user handle as ArrayBuffer bytes"
-        )
-    )]
-    pub fn user_handle(&self) -> &[u8] {
+    pub fn user_handle(&self) -> &WebAuthnUserHandle {
         &self.user_handle
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: exposes the WebAuthn PRF input as ArrayBuffer bytes"
-        )
-    )]
-    pub fn prf_input(&self) -> &[u8] {
+    pub fn prf_input(&self) -> &WebAuthnPrfInput {
         &self.prf_input
     }
 }
 
 #[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: creates the WebAuthn PRF extension input as ArrayBuffer bytes"
-    )
-)]
-pub fn deterministic_passkey_prf_input() -> [u8; PRF_INPUT_LEN] {
+pub fn deterministic_passkey_prf_input() -> WebAuthnPrfInput {
     let digest = Sha256::digest(DETERMINISTIC_PRF_INPUT_CONTEXT);
     let mut input = [0u8; PRF_INPUT_LEN];
     input.copy_from_slice(&digest);
-    input
+    WebAuthnPrfInput::from_validated(input)
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: consumes WebAuthn PRF output and user-handle ArrayBuffer bytes"
-    )
-)]
 pub fn derive_device_identity_from_passkey_prf(
-    user_handle: &[u8],
-    prf_output: &[u8],
+    user_handle: &WebAuthnUserHandle,
+    prf_output: &WebAuthnPrfOutput,
 ) -> DeviceKeyProtectionResult<DeviceIdentitySecret> {
-    validate_recovery_inputs(user_handle, prf_output)?;
-    let hkdf = Hkdf::<Sha256>::new(Some(user_handle), prf_output);
+    let hkdf = Hkdf::<Sha256>::new(Some(user_handle.as_ref()), prf_output.as_ref());
     let mut secret_bytes = Zeroizing::new([0u8; 32]);
     hkdf.expand(DETERMINISTIC_IDENTITY_HKDF_INFO, secret_bytes.as_mut())
         .map_err(|_| DeviceKeyProtectionError::KeyDerivation)?;
@@ -198,67 +168,38 @@ pub fn derive_device_identity_from_passkey_prf(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PasskeyAssertionRequest {
-    credential_id: Vec<u8>,
-    prf_input: [u8; PRF_INPUT_LEN],
+    credential_id: WebAuthnCredentialId,
+    prf_input: WebAuthnPrfInput,
 }
 
 impl PasskeyAssertionRequest {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: accepts WebAuthn credential-id and PRF-input ArrayBuffer bytes"
-        )
-    )]
-    pub fn new(credential_id: &[u8], prf_input: &[u8]) -> DeviceKeyProtectionResult<Self> {
-        validate_credential_id(credential_id)?;
-        let prf_input = validate_prf_input(prf_input)?;
-        Ok(Self {
-            credential_id: credential_id.to_vec(),
+    #[must_use]
+    pub fn new(credential_id: WebAuthnCredentialId, prf_input: WebAuthnPrfInput) -> Self {
+        Self {
+            credential_id,
             prf_input,
-        })
+        }
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: exposes the WebAuthn credential id as ArrayBuffer bytes"
-        )
-    )]
-    pub fn credential_id(&self) -> &[u8] {
+    pub fn credential_id(&self) -> &WebAuthnCredentialId {
         &self.credential_id
     }
 
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: exposes the WebAuthn PRF input as ArrayBuffer bytes"
-        )
-    )]
-    pub fn prf_input(&self) -> &[u8] {
+    pub fn prf_input(&self) -> &WebAuthnPrfInput {
         &self.prf_input
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PasskeyRecoveryRequest {
-    prf_input: [u8; PRF_INPUT_LEN],
+    prf_input: WebAuthnPrfInput,
 }
 
 impl PasskeyRecoveryRequest {
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "FFI boundary: exposes the WebAuthn PRF input as ArrayBuffer bytes"
-        )
-    )]
-    pub fn prf_input(&self) -> &[u8] {
+    pub fn prf_input(&self) -> &WebAuthnPrfInput {
         &self.prf_input
     }
 }
@@ -308,33 +249,17 @@ pub enum PasskeyRegistrationResolution {
     NeedsAssertion(PasskeyAssertionRequest),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PasskeyRegistrationPrfOutput<'a> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PasskeyRegistrationPrfOutput {
     Unavailable,
-    Available(
-        #[cfg_attr(
-            dylint_lib = "nook_domain_api",
-            expect(
-                raw_numeric_public_api,
-                reason = "FFI boundary: carries WebAuthn PRF extension output as ArrayBuffer bytes"
-            )
-        )]
-        &'a [u8],
-    ),
+    Available(WebAuthnPrfOutput),
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: resolves WebAuthn registration credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
-    )
-)]
 pub fn resolve_passkey_registration(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
-    prf_output: PasskeyRegistrationPrfOutput<'_>,
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_input: &WebAuthnPrfInput,
+    prf_output: PasskeyRegistrationPrfOutput,
 ) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
     resolve_passkey_registration_for_mode(
         credential_id,
@@ -345,18 +270,11 @@ pub fn resolve_passkey_registration(
     )
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: resolves WebAuthn registration byte buffers for the selected browser protection mode"
-    )
-)]
 pub fn resolve_passkey_registration_for_mode(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
-    prf_output: PasskeyRegistrationPrfOutput<'_>,
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_input: &WebAuthnPrfInput,
+    prf_output: PasskeyRegistrationPrfOutput,
     mode: PasskeyDeviceProtectionMode,
 ) -> DeviceKeyProtectionResult<PasskeyRegistrationResolution> {
     match prf_output {
@@ -364,30 +282,24 @@ pub fn resolve_passkey_registration_for_mode(
             credential_id,
             user_handle,
             prf_input,
-            output,
+            &output,
             mode,
         )
         .map(Box::new)
         .map(PasskeyRegistrationResolution::Complete),
         PasskeyRegistrationPrfOutput::Unavailable => {
-            PasskeyAssertionRequest::new(credential_id, prf_input)
-                .map(PasskeyRegistrationResolution::NeedsAssertion)
+            Ok(PasskeyRegistrationResolution::NeedsAssertion(
+                PasskeyAssertionRequest::new(credential_id.clone(), prf_input.clone()),
+            ))
         }
     }
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: consumes WebAuthn credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
-    )
-)]
 pub fn finish_passkey_device_identity_for_mode(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
-    prf_output: &[u8],
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_input: &WebAuthnPrfInput,
+    prf_output: &WebAuthnPrfOutput,
     mode: PasskeyDeviceProtectionMode,
 ) -> DeviceKeyProtectionResult<PasskeyDeviceIdentityMaterial> {
     match mode {
@@ -403,18 +315,11 @@ pub fn finish_passkey_device_identity_for_mode(
     }
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: consumes WebAuthn credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
-    )
-)]
 pub fn finish_passkey_device_identity(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
-    prf_output: &[u8],
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_input: &WebAuthnPrfInput,
+    prf_output: &WebAuthnPrfOutput,
 ) -> DeviceKeyProtectionResult<PasskeyDeviceIdentityMaterial> {
     let identity_secret = derive_device_identity_from_passkey_prf(user_handle, prf_output)?;
     let identity = DeviceIdentity::from_secret_str(&identity_secret)
@@ -427,20 +332,12 @@ pub fn finish_passkey_device_identity(
     })
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: consumes WebAuthn credential, user-handle, PRF-input, and PRF-output ArrayBuffer bytes"
-    )
-)]
 pub fn finish_passkey_wrapped_device_identity(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_input: &[u8],
-    prf_output: &[u8],
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_input: &WebAuthnPrfInput,
+    prf_output: &WebAuthnPrfOutput,
 ) -> DeviceKeyProtectionResult<PasskeyDeviceIdentityMaterial> {
-    validate_recovery_inputs(user_handle, prf_output)?;
     let identity =
         DeviceIdentity::generate().map_err(|_| DeviceKeyProtectionError::InvalidDeviceIdentity)?;
     let identity_secret = identity.secret_string();
@@ -461,7 +358,10 @@ pub fn finish_passkey_wrapped_device_identity(
 pub fn passkey_assertion_request(
     record: &WrappedDeviceIdentity,
 ) -> DeviceKeyProtectionResult<PasskeyAssertionRequest> {
-    PasskeyAssertionRequest::new(&record.credential_id_bytes()?, &record.prf_input_bytes()?)
+    Ok(PasskeyAssertionRequest::new(
+        record.credential_id()?,
+        record.prf_input()?,
+    ))
 }
 
 #[must_use]
@@ -471,17 +371,10 @@ pub fn passkey_recovery_request() -> PasskeyRecoveryRequest {
     }
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: consumes WebAuthn credential, user-handle, and PRF-output ArrayBuffer bytes"
-    )
-)]
 pub fn recover_passkey_device_identity(
-    credential_id: &[u8],
-    user_handle: &[u8],
-    prf_output: &[u8],
+    credential_id: &WebAuthnCredentialId,
+    user_handle: &WebAuthnUserHandle,
+    prf_output: &WebAuthnPrfOutput,
 ) -> DeviceKeyProtectionResult<PasskeyDeviceIdentityMaterial> {
     finish_passkey_device_identity(
         credential_id,
@@ -491,24 +384,17 @@ pub fn recover_passkey_device_identity(
     )
 }
 
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: consumes WebAuthn PRF-output ArrayBuffer bytes"
-    )
-)]
 pub fn unlock_passkey_device_identity(
     stored_device_id: &str,
     record: &WrappedDeviceIdentity,
-    prf_output: &[u8],
+    prf_output: &WebAuthnPrfOutput,
 ) -> DeviceKeyProtectionResult<DeviceIdentitySecret> {
     let secret = match record {
         WrappedDeviceIdentity::PasskeyDerived(inner) => {
             if inner.version != PASSKEY_DERIVED_DEVICE_KEY_PROTECTION_VERSION {
                 return Err(DeviceKeyProtectionError::UnsupportedVersion(inner.version));
             }
-            let user_handle = record.user_handle_bytes()?;
+            let user_handle = record.user_handle()?;
             derive_device_identity_from_passkey_prf(&user_handle, prf_output)?
         }
         WrappedDeviceIdentity::PasskeyWrappedLocal(inner) => {
@@ -536,37 +422,57 @@ mod tests {
 
     const TEST_RP_ID: &str = "localhost";
 
+    fn typed_credential_id(value: &[u8]) -> anyhow::Result<WebAuthnCredentialId> {
+        Ok(value.to_vec().try_into()?)
+    }
+
+    fn typed_user_handle(value: &[u8]) -> anyhow::Result<WebAuthnUserHandle> {
+        Ok(value.to_vec().try_into()?)
+    }
+
+    fn typed_prf_output(value: &[u8]) -> anyhow::Result<WebAuthnPrfOutput> {
+        Ok(value.to_vec().try_into()?)
+    }
+
     #[test]
     fn setup_uses_random_user_handle_and_deterministic_prf_input() -> anyhow::Result<()> {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let other = DeviceKeyProtectionSetup::generate()?;
-        assert_eq!(setup.user_handle().len(), 32);
-        assert_eq!(setup.prf_input().len(), 32);
+        assert_eq!(setup.user_handle().as_ref().len(), 32);
+        assert_eq!(setup.prf_input().as_ref().len(), 32);
         assert_ne!(setup.user_handle(), other.user_handle());
-        assert_eq!(setup.prf_input(), deterministic_passkey_prf_input());
+        assert_eq!(setup.prf_input(), &deterministic_passkey_prf_input());
         assert_eq!(setup.prf_input(), other.prf_input());
         Ok(())
     }
 
     #[test]
     fn setup_rejects_material_outside_the_rust_owned_contract() -> anyhow::Result<()> {
-        let valid = [7u8; 32];
-        let setup = DeviceKeyProtectionSetup::new(&valid, &valid)?;
-        assert_eq!(setup.user_handle(), valid);
-        assert_eq!(setup.prf_input(), valid);
-        assert!(DeviceKeyProtectionSetup::new(&[], &valid).is_err());
-        assert!(DeviceKeyProtectionSetup::new(&valid, &[8u8; 31]).is_err());
+        let setup = DeviceKeyProtectionSetup::new(
+            WebAuthnUserHandle::try_from(vec![7u8; 32])?,
+            WebAuthnPrfInput::try_from(vec![7u8; 32])?,
+        )?;
+        assert_eq!(setup.user_handle().as_ref(), &[7u8; 32]);
+        assert_eq!(setup.prf_input().as_ref(), &[7u8; 32]);
+        assert!(WebAuthnUserHandle::try_from(Vec::new()).is_err());
+        assert!(WebAuthnPrfInput::try_from(vec![8u8; 31]).is_err());
+        let oversized = WebAuthnUserHandle::try_from(vec![8u8; 33])?;
+        assert!(
+            DeviceKeyProtectionSetup::new(oversized, deterministic_passkey_prf_input()).is_err()
+        );
         Ok(())
     }
 
     #[test]
     fn passkey_prf_derives_stable_age_identity() -> anyhow::Result<()> {
-        let user_handle = [8u8; 32];
-        let prf_output = [10u8; 32];
+        let user_handle = WebAuthnUserHandle::try_from(vec![8u8; 32])?;
+        let prf_output = WebAuthnPrfOutput::try_from(vec![10u8; 32])?;
         let identity = derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
         let same = derive_device_identity_from_passkey_prf(&user_handle, &prf_output)?;
-        let different_user = derive_device_identity_from_passkey_prf(&[9u8; 32], &prf_output)?;
-        let different_prf = derive_device_identity_from_passkey_prf(&user_handle, &[11u8; 32])?;
+        let different_user = typed_user_handle(&[9u8; 32])?;
+        let different_prf = typed_prf_output(&[11u8; 32])?;
+        let different_user = derive_device_identity_from_passkey_prf(&different_user, &prf_output)?;
+        let different_prf = derive_device_identity_from_passkey_prf(&user_handle, &different_prf)?;
 
         assert_eq!(identity, same);
         assert_ne!(identity, different_user);
@@ -583,8 +489,8 @@ mod tests {
             MockPasskeyRegistrationRequest::new(
                 TEST_RP_ID,
                 "Test passkey",
-                setup.user_handle().to_vec(),
-                setup.prf_input().to_vec(),
+                setup.user_handle().as_ref().to_vec(),
+                setup.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Approved,
         )?)
@@ -600,10 +506,10 @@ mod tests {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let registration = approved_mock_registration(authenticator, &setup)?;
         let resolution = resolve_passkey_registration(
-            registration.credential_id(),
+            &typed_credential_id(registration.credential_id())?,
             setup.user_handle(),
             setup.prf_input(),
-            PasskeyRegistrationPrfOutput::Available(registration.prf_output()),
+            PasskeyRegistrationPrfOutput::Available(typed_prf_output(registration.prf_output())?),
         )?;
         let PasskeyRegistrationResolution::Complete(material) = resolution else {
             return Err(anyhow::anyhow!(
@@ -619,16 +525,16 @@ mod tests {
         let (setup, registration, material) = complete_mock_registration(&mut authenticator)?;
 
         assert_eq!(
-            material.record().credential_id_bytes()?,
+            material.record().credential_id()?.as_ref(),
             registration.credential_id()
         );
-        assert_eq!(material.record().user_handle_bytes()?, setup.user_handle());
-        assert_eq!(material.record().prf_input_bytes()?, setup.prf_input());
+        assert_eq!(material.record().user_handle()?, *setup.user_handle());
+        assert_eq!(material.record().prf_input()?, *setup.prf_input());
         assert_eq!(
             material.identity_secret(),
             &derive_device_identity_from_passkey_prf(
                 setup.user_handle(),
-                registration.prf_output()
+                &typed_prf_output(registration.prf_output())?
             )?
         );
         Ok(())
@@ -640,10 +546,10 @@ mod tests {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let registration = approved_mock_registration(&mut authenticator, &setup)?;
         let resolution = resolve_passkey_registration_for_mode(
-            registration.credential_id(),
+            &typed_credential_id(registration.credential_id())?,
             setup.user_handle(),
             setup.prf_input(),
-            PasskeyRegistrationPrfOutput::Available(registration.prf_output()),
+            PasskeyRegistrationPrfOutput::Available(typed_prf_output(registration.prf_output())?),
             PasskeyDeviceProtectionMode::AntiHacker,
         )?;
         let PasskeyRegistrationResolution::Complete(material) = resolution else {
@@ -664,7 +570,7 @@ mod tests {
         let setup = DeviceKeyProtectionSetup::generate()?;
         let registration = approved_mock_registration(&mut authenticator, &setup)?;
         let resolution = resolve_passkey_registration(
-            registration.credential_id(),
+            &typed_credential_id(registration.credential_id())?,
             setup.user_handle(),
             setup.prf_input(),
             PasskeyRegistrationPrfOutput::Unavailable,
@@ -675,31 +581,37 @@ mod tests {
                 "registration without PRF output should request assertion fallback"
             ));
         };
-        assert_eq!(request.credential_id(), registration.credential_id());
+        assert_eq!(
+            request.credential_id().as_ref(),
+            registration.credential_id()
+        );
         assert_eq!(request.prf_input(), setup.prf_input());
 
         let assertion = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
                 TEST_RP_ID,
-                request.credential_id().to_vec(),
-                request.prf_input().to_vec(),
+                request.credential_id().as_ref().to_vec(),
+                request.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Approved,
         )?;
         let material = finish_passkey_device_identity(
-            assertion.credential_id(),
+            &typed_credential_id(assertion.credential_id())?,
             setup.user_handle(),
             request.prf_input(),
-            assertion.prf_output(),
+            &typed_prf_output(assertion.prf_output())?,
         )?;
 
         assert_eq!(
-            material.record().credential_id_bytes()?,
+            material.record().credential_id()?.as_ref(),
             registration.credential_id()
         );
         assert_eq!(
             material.identity_secret(),
-            &derive_device_identity_from_passkey_prf(setup.user_handle(), assertion.prf_output())?
+            &derive_device_identity_from_passkey_prf(
+                setup.user_handle(),
+                &typed_prf_output(assertion.prf_output())?
+            )?
         );
         Ok(())
     }
@@ -712,8 +624,8 @@ mod tests {
         let assertion = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
                 TEST_RP_ID,
-                request.credential_id().to_vec(),
-                request.prf_input().to_vec(),
+                request.credential_id().as_ref().to_vec(),
+                request.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Approved,
         )?;
@@ -721,7 +633,7 @@ mod tests {
         let unlocked = unlock_passkey_device_identity(
             material.device_id(),
             material.record(),
-            assertion.prf_output(),
+            &typed_prf_output(assertion.prf_output())?,
         )?;
 
         assert_eq!(assertion.credential_id(), registration.credential_id());
@@ -736,7 +648,7 @@ mod tests {
             unlock_passkey_device_identity(
                 material.device_id(),
                 &wrong_version,
-                assertion.prf_output()
+                &typed_prf_output(assertion.prf_output())?
             ),
             Err(DeviceKeyProtectionError::UnsupportedVersion(_))
         ));
@@ -752,25 +664,25 @@ mod tests {
         let assertion = authenticator.authenticate(
             &MockPasskeyAssertionRequest::discoverable(
                 TEST_RP_ID,
-                recovery_request.prf_input().to_vec(),
+                recovery_request.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Approved,
         )?;
 
         let recovered = recover_passkey_device_identity(
-            assertion.credential_id(),
-            assertion.user_handle(),
-            assertion.prf_output(),
+            &typed_credential_id(assertion.credential_id())?,
+            &typed_user_handle(assertion.user_handle())?,
+            &typed_prf_output(assertion.prf_output())?,
         )?;
 
         assert_eq!(recovered.device_id(), original.device_id());
         assert_eq!(recovered.identity_secret(), original.identity_secret());
         assert_eq!(
-            recovered.record().credential_id_bytes()?,
+            recovered.record().credential_id()?.as_ref(),
             registration.credential_id()
         );
         assert_eq!(
-            recovered.record().prf_input_bytes()?,
+            recovered.record().prf_input()?,
             deterministic_passkey_prf_input()
         );
         Ok(())
@@ -784,8 +696,8 @@ mod tests {
             MockPasskeyRegistrationRequest::new(
                 TEST_RP_ID,
                 "Denied",
-                setup.user_handle().to_vec(),
-                setup.prf_input().to_vec(),
+                setup.user_handle().as_ref().to_vec(),
+                setup.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Denied,
         );
@@ -796,7 +708,7 @@ mod tests {
 
         let registration = approved_mock_registration(&mut authenticator, &setup)?;
         let PasskeyRegistrationResolution::NeedsAssertion(request) = resolve_passkey_registration(
-            registration.credential_id(),
+            &typed_credential_id(registration.credential_id())?,
             setup.user_handle(),
             setup.prf_input(),
             PasskeyRegistrationPrfOutput::Unavailable,
@@ -809,8 +721,8 @@ mod tests {
         let denied_assertion = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
                 TEST_RP_ID,
-                request.credential_id().to_vec(),
-                request.prf_input().to_vec(),
+                request.credential_id().as_ref().to_vec(),
+                request.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Denied,
         );
@@ -831,8 +743,8 @@ mod tests {
         let wrong_rp = authenticator.authenticate(
             &MockPasskeyAssertionRequest::with_allowed_credential(
                 "example.com",
-                request.credential_id().to_vec(),
-                request.prf_input().to_vec(),
+                request.credential_id().as_ref().to_vec(),
+                request.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Approved,
         );
@@ -840,7 +752,7 @@ mod tests {
             &MockPasskeyAssertionRequest::with_allowed_credential(
                 TEST_RP_ID,
                 vec![44; registration.credential_id().len()],
-                request.prf_input().to_vec(),
+                request.prf_input().as_ref().to_vec(),
             ),
             MockPasskeyUserAuthorization::Approved,
         );
@@ -860,10 +772,13 @@ mod tests {
         let (_, registration, material) = complete_mock_registration(&mut authenticator)?;
         let request = passkey_assertion_request(material.record())?;
 
-        assert_eq!(request.credential_id(), registration.credential_id());
-        assert_eq!(request.prf_input(), deterministic_passkey_prf_input());
+        assert_eq!(
+            request.credential_id().as_ref(),
+            registration.credential_id()
+        );
+        assert_eq!(request.prf_input(), &deterministic_passkey_prf_input());
 
-        let wrong_output = [99u8; 32];
+        let wrong_output = typed_prf_output(&[99u8; 32])?;
         assert!(matches!(
             unlock_passkey_device_identity(material.device_id(), material.record(), &wrong_output),
             Err(DeviceKeyProtectionError::DeviceIdentityMismatch)
@@ -874,11 +789,11 @@ mod tests {
     #[test]
     fn passkey_prf_identity_derivation_rejects_invalid_inputs() {
         assert!(matches!(
-            derive_device_identity_from_passkey_prf(&[], &[10u8; 32]),
+            WebAuthnUserHandle::try_from(Vec::new()),
             Err(DeviceKeyProtectionError::UserHandleInvalid)
         ));
         assert!(matches!(
-            derive_device_identity_from_passkey_prf(&[8u8; 32], &[10u8; 31]),
+            WebAuthnPrfOutput::try_from(vec![10u8; 31]),
             Err(DeviceKeyProtectionError::PrfOutputInvalid)
         ));
     }

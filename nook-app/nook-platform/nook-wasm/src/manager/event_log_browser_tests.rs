@@ -71,8 +71,8 @@ async fn passkey_protection_bootstraps_the_initial_identity() -> anyhow::Result<
     manager
         .finish_device_protection(
             vec![7u8; 32],
-            setup.user_handle().to_vec(),
-            setup.prf_input().to_vec(),
+            setup.user_handle().as_ref().to_vec(),
+            setup.prf_input().as_ref().to_vec(),
             vec![21u8; 32],
         )
         .await

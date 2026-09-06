@@ -9,7 +9,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    EventId, EventResult, LocalEventStore, VaultEvent, VaultOperation, parse_event_storage_bytes,
+    EventId, EventResult, EventStorageBytes, LocalEventStore, VaultEvent, VaultOperation,
+    parse_event_storage_bytes,
 };
 
 impl VaultEvent {
@@ -42,7 +43,7 @@ impl VaultEvent {
 impl LocalEventStore {
     fn authorized_checkpoint_parents(
         &self,
-        remote_events: &[(EventId, Vec<u8>)],
+        remote_events: &[(EventId, EventStorageBytes)],
         store_id: &str,
     ) -> EventResult<BTreeSet<EventId>> {
         let mut candidate = self.clone();
@@ -95,9 +96,9 @@ impl LocalEventStore {
 impl LocalEventStore {
     pub(crate) fn visibility_gated_remote_events(
         &self,
-        remote_events: &[(EventId, Vec<u8>)],
+        remote_events: &[(EventId, EventStorageBytes)],
         store_id: &str,
-    ) -> EventResult<Vec<(EventId, Vec<u8>)>> {
+    ) -> EventResult<Vec<(EventId, EventStorageBytes)>> {
         let mut candidate = self.clone();
         for (event_id, bytes) in remote_events {
             candidate.put_event(event_id.clone(), bytes.clone());
@@ -143,7 +144,7 @@ impl VaultEvent {
 /// ```
 /// use nook_event_log::{EventId, EventResult, RemoteEventWrites};
 /// # fn main() -> EventResult<()> {
-/// let mut records: Vec<(EventId, Vec<u8>)> = Vec::new();
+/// let mut records: Vec<(EventId, nook_event_log::EventStorageBytes)> = Vec::new();
 /// RemoteEventWrites::new(&mut records).order()?;
 /// records.clear();
 /// # Ok(())
@@ -153,7 +154,7 @@ impl VaultEvent {
 ///
 /// ```compile_fail,E0382
 /// use nook_event_log::{EventId, RemoteEventWrites};
-/// let mut records: Vec<(EventId, Vec<u8>)> = Vec::new();
+/// let mut records: Vec<(EventId, nook_event_log::EventStorageBytes)> = Vec::new();
 /// let writes = RemoteEventWrites::new(&mut records);
 /// let _ = writes.order();
 /// let _ = writes.order();
@@ -162,24 +163,17 @@ impl VaultEvent {
 ///
 /// ```compile_fail,E0499
 /// use nook_event_log::{EventId, RemoteEventWrites};
-/// let mut records: Vec<(EventId, Vec<u8>)> = Vec::new();
+/// let mut records: Vec<(EventId, nook_event_log::EventStorageBytes)> = Vec::new();
 /// let writes = RemoteEventWrites::new(&mut records);
 /// records.clear();
 /// let _ = writes.order();
 /// ```
 pub struct RemoteEventWrites<'a> {
-    events: &'a mut [(EventId, Vec<u8>)],
+    events: &'a mut [(EventId, EventStorageBytes)],
 }
 impl<'a> RemoteEventWrites<'a> {
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: borrows immutable remote event byte records for visibility ordering"
-        )
-    )]
-    pub fn new(events: &'a mut [(EventId, Vec<u8>)]) -> Self {
+    pub fn new(events: &'a mut [(EventId, EventStorageBytes)]) -> Self {
         Self { events }
     }
     pub fn order(self) -> EventResult<()> {
@@ -214,7 +208,7 @@ mod tests {
     use ed25519_dalek::SigningKey;
 
     const STORE: &str = "store_testtoken11";
-    type RemoteEvent = (EventId, Vec<u8>);
+    type RemoteEvent = (EventId, EventStorageBytes);
 
     impl EpochPairFixture {
         fn signed_event(
@@ -296,7 +290,7 @@ mod tests {
     fn malformed_write_batch_preserves_original_order_and_bytes() -> EventResult<()> {
         let EpochPairFixture(_, trigger, checkpoint) = EpochPairFixture::new()?;
         let mut writes = vec![trigger, checkpoint];
-        writes[1].1 = b"invalid event".to_vec();
+        writes[1].1 = b"invalid event".to_vec().into();
         let original = writes.clone();
         assert!(matches!(
             RemoteEventWrites::new(&mut writes).order(),

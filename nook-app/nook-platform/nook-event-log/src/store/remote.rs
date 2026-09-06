@@ -6,7 +6,8 @@
 
 use super::{LocalEventStore, RemoteEventLogClassification};
 use crate::{
-    EventError, EventId, EventResult, StoreId, VaultEvent, parse_remote_event_storage_bytes,
+    EventError, EventId, EventResult, EventStorageBytes, StoreId, VaultEvent,
+    parse_remote_event_storage_bytes,
 };
 use std::collections::BTreeSet;
 
@@ -23,14 +24,7 @@ pub struct CheckedRemoteEvent {
 }
 
 impl CheckedRemoteEvent {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: checks signed remote event representation bytes"
-        )
-    )]
-    pub fn parse(event_id: &EventId, bytes: &[u8]) -> EventResult<Self> {
+    pub fn parse(event_id: &EventId, bytes: &EventStorageBytes) -> EventResult<Self> {
         let event = parse_remote_event_storage_bytes(bytes)?;
         if event.id()? != *event_id {
             return Err(EventError::RemoteEventIdMismatch {
@@ -61,18 +55,11 @@ impl CheckedRemoteEvent {
 
 /// Borrowed provider records; classification validates every envelope before reporting scope.
 pub struct RemoteEventBatch<'a> {
-    events: &'a [(EventId, Vec<u8>)],
+    events: &'a [(EventId, EventStorageBytes)],
 }
 impl<'a> RemoteEventBatch<'a> {
     #[must_use]
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: borrows remote provider event representation bytes"
-        )
-    )]
-    pub fn new(events: &'a [(EventId, Vec<u8>)]) -> Self {
+    pub fn new(events: &'a [(EventId, EventStorageBytes)]) -> Self {
         Self { events }
     }
     pub fn classify(
@@ -133,7 +120,7 @@ struct PreparedRemoteUnion<'a> {
 impl<'a> PreparedRemoteUnion<'a> {
     fn prepare(
         local: &'a mut LocalEventStore,
-        remote_events: &[(EventId, Vec<u8>)],
+        remote_events: &[(EventId, EventStorageBytes)],
         store_id: &str,
     ) -> EventResult<Self> {
         let visible_remote_events =
@@ -166,13 +153,12 @@ impl<'a> PreparedRemoteUnion<'a> {
                 .get_bytes(&event_id)
                 .ok_or_else(|| EventError::MissingEvent {
                     event_id: event_id.as_str().to_owned(),
-                })?
-                .to_vec();
+                })?;
             accepted.put_event(event_id, bytes);
         }
         for (provider_id, event_id, bytes) in local.replica.outbox_entries() {
             if !quarantined.contains(&event_id) {
-                accepted.queue_outbox(&provider_id, event_id, bytes);
+                accepted.queue_outbox(&provider_id, event_id, bytes.into());
             }
         }
         let imported = candidates
@@ -193,30 +179,16 @@ impl<'a> PreparedRemoteUnion<'a> {
 }
 
 impl LocalEventStore {
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: validates and merges immutable remote event representation bytes"
-        )
-    )]
     pub fn union_remote(
         &mut self,
-        remote_events: &[(EventId, Vec<u8>)],
+        remote_events: &[(EventId, EventStorageBytes)],
         store_id: &str,
     ) -> EventResult<Vec<EventId>> {
         Ok(PreparedRemoteUnion::prepare(self, remote_events, store_id)?.commit())
     }
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: validates immutable remote event bytes before projecting heads"
-        )
-    )]
     pub fn union_remote_and_heads(
         &mut self,
-        remote_events: &[(EventId, Vec<u8>)],
+        remote_events: &[(EventId, EventStorageBytes)],
         store_id: &str,
     ) -> EventResult<Vec<String>> {
         self.union_remote(remote_events, store_id)?;
@@ -241,7 +213,7 @@ mod tests {
 
     struct RemoteFixture {
         event: VaultEvent,
-        records: Vec<(EventId, Vec<u8>)>,
+        records: Vec<(EventId, EventStorageBytes)>,
     }
 
     impl RemoteFixture {
@@ -273,7 +245,7 @@ mod tests {
         let outbox = local.pending_outbox("provider");
         let prepared = PreparedRemoteUnion::prepare(&mut local, &fixture.records, STORE)?;
         assert_eq!(prepared.imported, vec![id.clone()]);
-        assert_eq!(prepared.accepted.get_bytes(id), Some(bytes.as_slice()));
+        assert_eq!(prepared.accepted.get_bytes(id), Some(bytes.clone()));
         drop(prepared);
         assert!(local.event_ids().is_empty());
         assert_eq!(local.pending_outbox("provider"), outbox);
@@ -308,7 +280,7 @@ mod tests {
         let fixture = RemoteFixture::new()?;
         let (id, _) = &fixture.records[0];
         let mut local = LocalEventStore::new();
-        let corrupt = b"invalid local event".to_vec();
+        let corrupt = EventStorageBytes::from(b"invalid local event".to_vec());
         local.put_event(id.clone(), corrupt.clone());
         local.queue_outbox("provider", id.clone(), corrupt.clone());
         match PreparedRemoteUnion::prepare(&mut local, &[], STORE) {
@@ -316,7 +288,7 @@ mod tests {
             Err(error) => return Err(error.into()),
             Ok(_) => anyhow::bail!("corrupt local graph was prepared"),
         }
-        assert_eq!(local.get_bytes(id), Some(corrupt.as_slice()));
+        assert_eq!(local.get_bytes(id), Some(corrupt.clone()));
         assert_eq!(
             local.pending_outbox("provider"),
             vec![(id.clone(), corrupt)]
