@@ -976,7 +976,7 @@ mod projection_tests {
         assert!(has_active_local_vault().await.is_ok());
         assert!(list_local_vaults().await.is_ok());
         assert!(get_active_vault_selection().await.is_ok());
-        assert!(set_active_vault("missing-store").await.is_err());
+        assert!(set_active_vault("missing-store".to_owned()).await.is_err());
         assert!(
             set_local_vault_label("missing-store".to_owned(), "label".to_owned())
                 .await
