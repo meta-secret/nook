@@ -256,3 +256,56 @@ pub(crate) fn password_entries_to_vec(
         .map(NookPasswordEntrySummary::from_core)
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn access_wrappers_project_owned_bytes_and_metadata() {
+        let setup = NookPasskeySetup {
+            user_handle: vec![1, 2, 3],
+            prf_input: vec![4, 5],
+        };
+        assert_eq!(setup.user_handle(), vec![1, 2, 3]);
+        assert_eq!(setup.prf_input(), vec![4, 5]);
+
+        let unlock = NookPasskeyUnlockOptions {
+            credential_id: vec![9, 8],
+            prf_input: vec![7, 6],
+        };
+        assert_eq!(unlock.credential_id(), vec![9, 8]);
+        assert_eq!(unlock.prf_input(), vec![7, 6]);
+
+        let join = NookJoinRequest {
+            device_id: "device-1".into(),
+            public_key: "public-key".into(),
+            requested_at: "2026-01-01".into(),
+        };
+        assert_eq!(join.device_id(), "device-1");
+        assert_eq!(join.public_key(), "public-key");
+        assert_eq!(join.requested_at(), "2026-01-01");
+
+        let member = NookVaultMember {
+            auth_id: "auth-1".into(),
+            device_id: "device-1".into(),
+            public_key: "public-key".into(),
+            enrolled_at: "2026-01-02".into(),
+            label: "Alice".into(),
+        };
+        assert_eq!(member.auth_id(), "auth-1");
+        assert_eq!(member.device_id(), "device-1");
+        assert_eq!(member.public_key(), "public-key");
+        assert_eq!(member.enrolled_at(), "2026-01-02");
+        assert_eq!(member.label(), "Alice");
+
+        let entry = NookPasswordEntrySummary {
+            id: "entry-1".into(),
+            label: "Recovery".into(),
+            created_at: "2026-01-03".into(),
+        };
+        assert_eq!(entry.id(), "entry-1");
+        assert_eq!(entry.label(), "Recovery");
+        assert_eq!(entry.created_at(), "2026-01-03");
+    }
+}

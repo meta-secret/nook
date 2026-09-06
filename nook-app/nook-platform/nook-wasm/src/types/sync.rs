@@ -509,3 +509,117 @@ impl NookVaultSyncResult {
         })
     }
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn enrollment_provider_projects_personal_and_shared_variants() {
+        let local = NookEnrollmentProvider::local();
+        assert_eq!(local.provider_type(), nook_core::StorageProviderType::Local);
+        assert!(!local.is_shared_provider_grant());
+        assert!(matches!(
+            local.onboarding_type(),
+            nook_core::OnboardingType::PersonalCredentialTransfer
+        ));
+        assert!(local.github_pat().is_err());
+
+        let github = NookEnrollmentProvider::github("owner/repo".into(), "pat".into());
+        assert_eq!(
+            github.provider_type(),
+            nook_core::StorageProviderType::Github
+        );
+        assert_eq!(github.github_repo().unwrap(), "owner/repo");
+        assert_eq!(github.github_pat().unwrap(), "pat");
+        assert!(github.oauth_preset().is_err());
+
+        let oauth = NookEnrollmentProvider::oauth_file(
+            "google-drive".into(),
+            "access-token".into(),
+            NookOAuthRefreshCredential::token("refresh-token".into()),
+            NookOAuthTokenExpiry::expires_at("2030-01-01".into()),
+            NookOAuthRemoteFile::identified("file-1".into(), "vault.json".into()),
+            NookOAuthAccountIdentity::email("owner@example.com".into()),
+        );
+        assert_eq!(
+            oauth.provider_type(),
+            nook_core::StorageProviderType::OauthFile
+        );
+        assert_eq!(oauth.oauth_preset().unwrap(), "google-drive");
+        assert_eq!(oauth.oauth_access_token().unwrap(), "access-token");
+        assert_eq!(
+            oauth.oauth_refresh().unwrap().value().unwrap(),
+            "refresh-token"
+        );
+        assert_eq!(oauth.oauth_expiry().unwrap().value().unwrap(), "2030-01-01");
+        assert_eq!(
+            oauth.oauth_remote_file().unwrap().file_id_value().unwrap(),
+            "file-1"
+        );
+        assert_eq!(
+            oauth.oauth_account().unwrap().value().unwrap(),
+            "owner@example.com"
+        );
+
+        let drive =
+            NookEnrollmentProvider::shared_provider_grant("joiner".into(), "folder-1".into());
+        assert!(drive.is_shared_provider_grant());
+        assert_eq!(drive.oauth_preset().unwrap(), "google-drive");
+        assert_eq!(drive.shared_joiner_identity_kind().unwrap(), "email");
+        assert_eq!(drive.shared_joiner_identity().unwrap(), "joiner");
+        assert_eq!(drive.shared_storage_target_id().unwrap(), "folder-1");
+        assert!(drive.oauth_access_token().is_err());
+
+        let icloud = NookEnrollmentProvider::icloud_shared("share-1".into());
+        assert_eq!(icloud.oauth_preset().unwrap(), "icloud");
+        assert_eq!(icloud.shared_storage_target_id().unwrap(), "share-1");
+        assert!(icloud.shared_joiner_identity().is_err());
+    }
+
+    #[test]
+    fn enrollment_inputs_and_sync_targets_keep_typed_values() {
+        let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
+        let unnamed = NookEnrollmentIssueInput::unnamed(
+            provider.clone(),
+            "entry-1".into(),
+            "2026-01-01".into(),
+        );
+        assert_eq!(unnamed.entry_id(), "entry-1");
+        assert_eq!(unnamed.issued_at(), "2026-01-01");
+        assert_eq!(unnamed.to_core().unwrap().vault_name, "");
+        let named = NookEnrollmentIssueInput::named(
+            provider,
+            "Personal".into(),
+            "entry-2".into(),
+            "2026-01-02".into(),
+        );
+        assert_eq!(named.to_core().unwrap().vault_name, "Personal");
+
+        let payload =
+            NookDecryptedEnrollmentPayload::from_core(nook_core::DecryptedEnrollmentPayload {
+                provider: NookEnrollmentProvider::local().to_core(),
+                vault_name: "Vault".into(),
+                entry_id: "entry-3".into(),
+                issued_at: "2026-01-03".into(),
+            });
+        assert_eq!(payload.vault_name(), "Vault");
+        assert_eq!(payload.entry_id(), "entry-3");
+        assert_eq!(payload.issued_at(), "2026-01-03");
+        assert!(matches!(
+            payload.onboarding_type(),
+            nook_core::OnboardingType::PersonalCredentialTransfer
+        ));
+
+        let local = NookSyncProviderTarget::local();
+        assert!(local.is_local());
+        assert!(!local.is_github() && !local.is_empty() && !local.is_oauth_file());
+        let github = NookSyncProviderTarget::github("repo".into(), "pat".into());
+        assert!(github.is_github());
+        let empty = NookSyncProviderTarget::empty();
+        assert!(empty.is_empty());
+    }
+}

@@ -75,11 +75,13 @@ impl NookSentinelUnlockSessionStatus {
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use super::NookSentinelUnlockSessionStatus;
     use nook_core::{SentinelUnlockReadiness, SentinelUnlockStatus};
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
     fn unlock_status_bridge_projects_counts_and_rejects_overflow()
     -> Result<(), wasm_bindgen::JsError> {
@@ -384,5 +386,104 @@ impl NookSentinelGenesisFinalizeResult {
     #[wasm_bindgen(getter, js_name = participantDeliveries)]
     pub fn participant_deliveries(&mut self) -> Vec<NookSentinelGenesisDelivery> {
         mem::take(&mut self.deliveries)
+    }
+}
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod projection_tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[test]
+    fn sentinel_projection_wrappers_project_status_and_owned_values() {
+        let inactive = NookSentinelUnlockSessionStatus::inactive();
+        assert!(!inactive.active());
+        assert_eq!(inactive.collected(), 0);
+        assert_eq!(inactive.threshold(), 0);
+        assert!(!inactive.ready());
+
+        let summary = NookSentinelStoredDeliverySummary {
+            store_id: "store-1".into(),
+            session_id: "session-1".into(),
+            participant_count: 3,
+            threshold: 2,
+        };
+        assert_eq!(summary.store_id(), "store-1");
+        assert_eq!(summary.session_id(), "session-1");
+        assert_eq!(summary.participant_count(), 3);
+        assert_eq!(summary.threshold(), 2);
+
+        let participant = NookSentinelGenesisParticipantStatus {
+            device_id: "device-1".into(),
+            label: "Alice".into(),
+            fingerprint: "fingerprint".into(),
+        };
+        assert_eq!(participant.device_id(), "device-1");
+        assert_eq!(participant.label(), "Alice");
+        assert_eq!(participant.fingerprint(), "fingerprint");
+
+        let mut status = NookSentinelGenesisStatus {
+            participants: vec![participant],
+            phase: SentinelGenesisPhase::ReadyToFinalize,
+        };
+        assert_eq!(status.phase(), SentinelGenesisPhase::ReadyToFinalize);
+        assert_eq!(status.participants().len(), 1);
+        assert!(status.participants().is_empty());
+
+        let delivery = NookSentinelGenesisDelivery {
+            device_id: "device-1".into(),
+            fingerprint: "fingerprint".into(),
+            payload: "{}".into(),
+        };
+        assert_eq!(delivery.device_id(), "device-1");
+        assert_eq!(delivery.fingerprint(), "fingerprint");
+        assert_eq!(delivery.payload(), "{}");
+
+        let mut finalized = NookSentinelGenesisFinalizeResult {
+            store_id: "store-2".into(),
+            architecture: nook_core::VaultArchitecture::default(),
+            deliveries: vec![delivery],
+        };
+        assert_eq!(finalized.store_id(), "store-2");
+        assert_eq!(finalized.phase(), SentinelGenesisPhase::DeliveringShares);
+        assert_eq!(finalized.participant_deliveries().len(), 1);
+        assert!(finalized.participant_deliveries().is_empty());
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn event_log_issue_projects_each_classification() {
+        let same = NookEventLogSyncIssue::new(
+            "GitHub".into(),
+            RemoteEventLogClassification::SameStore {
+                store_id: "store-1".into(),
+            },
+        );
+        assert_eq!(same.provider_label(), "GitHub");
+        assert!(!same.is_store_mismatch() && !same.is_multiple_stores());
+        assert!(same.local_store_id().is_err());
+        assert!(same.remote_store_id().is_err());
+        assert!(same.store_ids().is_empty());
+
+        let different = NookEventLogSyncIssue::new(
+            "Drive".into(),
+            RemoteEventLogClassification::DifferentStore {
+                local_store_id: "local".into(),
+                remote_store_id: "remote".into(),
+            },
+        );
+        assert!(different.is_store_mismatch());
+        assert_eq!(different.local_store_id().unwrap(), "local");
+        assert_eq!(different.remote_store_id().unwrap(), "remote");
+
+        let multiple = NookEventLogSyncIssue::new(
+            "iCloud".into(),
+            RemoteEventLogClassification::MultipleStores {
+                store_ids: vec!["a".into(), "b".into()],
+            },
+        );
+        assert!(multiple.is_multiple_stores());
+        assert_eq!(multiple.store_ids(), vec!["a", "b"]);
     }
 }

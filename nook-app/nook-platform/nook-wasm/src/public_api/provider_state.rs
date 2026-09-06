@@ -424,3 +424,151 @@ pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHin
         },
     )
 }
+
+#[cfg(test)]
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn provider_state_wrappers_project_success_and_rejection_variants() {
+        let draft = nook_core::ActiveProviderCredentialDraft {
+            storage_mode: StorageProviderType::Github,
+            github_pat: "pat".into(),
+            github_repo: "owner/repo".into(),
+            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+            local_folder: StoredLocalFolderConfiguration::NotApplicable,
+        };
+        assert_eq!(
+            active_provider_credentials_projection_state(
+                nook_core::ActiveProviderCredentialsProjection::Unchanged
+            ),
+            NookActiveProviderCredentialsProjectionState::Unchanged
+        );
+        assert_eq!(
+            active_provider_credentials_projection_state(
+                nook_core::ActiveProviderCredentialsProjection::Apply(Box::new(draft.clone()))
+            ),
+            NookActiveProviderCredentialsProjectionState::Apply
+        );
+        assert!(
+            active_provider_credentials_projection_draft(
+                nook_core::ActiveProviderCredentialsProjection::Unchanged
+            )
+            .is_err()
+        );
+        let projected = active_provider_credentials_projection_draft(
+            nook_core::ActiveProviderCredentialsProjection::Apply(Box::new(draft)),
+        )
+        .expect("apply projection keeps its draft");
+        assert_eq!(projected.github_repo, "owner/repo");
+
+        assert_eq!(
+            stored_oauth_file_configuration_state(StoredOAuthFileConfiguration::NotApplicable),
+            NookStoredOAuthFileConfigurationState::NotApplicable
+        );
+        assert_eq!(
+            stored_oauth_file_configuration_state(StoredOAuthFileConfiguration::Configured(
+                nook_core::OAuthFileConfigData::default(),
+            )),
+            NookStoredOAuthFileConfigurationState::Configured
+        );
+        assert_eq!(
+            stored_local_folder_configuration_state(StoredLocalFolderConfiguration::NotApplicable),
+            NookStoredLocalFolderConfigurationState::NotApplicable
+        );
+        assert_eq!(
+            stored_local_folder_configuration_state(StoredLocalFolderConfiguration::Configured(
+                nook_core::LocalFolderConfigData::default(),
+            )),
+            NookStoredLocalFolderConfigurationState::Configured
+        );
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::OauthFile, false, false),
+            NookExistingVaultProviderReadiness::MissingOauthFile
+        );
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::LocalFolder, false, false),
+            NookExistingVaultProviderReadiness::MissingLocalFolder
+        );
+        assert_eq!(
+            existing_vault_provider_readiness(StorageProviderType::Github, false, false),
+            NookExistingVaultProviderReadiness::Ready
+        );
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    fn provider_state_values_keep_secret_boundaries_and_defaults() {
+        let missing = missing_oauth_access_token();
+        assert_eq!(missing.kind(), NookOAuthAccessTokenKind::Missing);
+        assert!(missing.token().is_err());
+        let mut config = nook_core::OAuthFileConfigData::default();
+        config.access_token = nook_core::StoredOAuthAccessCredential::AccessToken(" token ".into());
+        let available = oauth_access_token(config.clone());
+        assert_eq!(available.kind(), NookOAuthAccessTokenKind::Available);
+        assert_eq!(available.token().unwrap(), "token");
+
+        let missing_selection = NookProviderSelection(None);
+        assert_eq!(
+            missing_selection.state(),
+            NookProviderSelectionState::Missing
+        );
+        assert!(missing_selection.provider_id().is_err());
+        let selected = NookProviderSelection(Some("provider-1".into()));
+        assert_eq!(selected.state(), NookProviderSelectionState::Selected);
+        assert_eq!(selected.provider_id().unwrap(), "provider-1");
+
+        let unresolved = NookOAuthRemoteStorageReference::new(None);
+        assert_eq!(
+            unresolved.state(),
+            NookOAuthRemoteStorageReferenceState::Unresolved
+        );
+        assert!(unresolved.value().is_err());
+        let resolved = NookOAuthRemoteStorageReference::new(Some("file-1".into()));
+        assert_eq!(
+            resolved.state(),
+            NookOAuthRemoteStorageReferenceState::Resolved
+        );
+        assert_eq!(resolved.value().unwrap(), "file-1");
+
+        let rejected = NookOAuthRemoteConfigurationUpdate::new(None);
+        assert_eq!(
+            rejected.state(),
+            NookOAuthRemoteConfigurationUpdateState::Rejected
+        );
+        assert!(rejected.config().is_err());
+        let updated = NookOAuthRemoteConfigurationUpdate::new(Some(config.clone()));
+        assert_eq!(
+            updated.state(),
+            NookOAuthRemoteConfigurationUpdateState::Updated
+        );
+        assert_eq!(updated.config().unwrap(), config);
+
+        let incomplete = NookStagedStorageArgs::new(None);
+        assert_eq!(incomplete.state(), NookStagedStorageArgsState::Incomplete);
+        assert!(incomplete.args().is_err());
+        let ready = NookStagedStorageArgs::new(Some(nook_core::StorageConnectArgs::local()));
+        assert_eq!(ready.state(), NookStagedStorageArgsState::Ready);
+        assert!(ready.args().is_ok());
+
+        assert_eq!(local_vault_storage_args().mode(), "local");
+        assert_eq!(draft_local_storage_args().mode(), "local");
+        let github_args = draft_github_storage_args("pat", "owner/repo");
+        assert_eq!(github_args.mode(), "github");
+        assert_eq!(github_args.pat(), "pat");
+        assert_eq!(github_args.repo(), "owner/repo");
+        assert_eq!(draft_oauth_storage_args(config).mode(), "google-drive");
+
+        let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
+        assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
+        assert!(no_hint.value().is_err());
+        let hint = mask_github_pat_hint(nook_core::StoredGithubPat::Token(
+            "ghp_1234567890ABCDEF".into(),
+        ));
+        assert_eq!(hint.state(), NookGithubPatHintState::Available);
+        assert_eq!(hint.value().unwrap(), "ghp_123456…");
+    }
+}
