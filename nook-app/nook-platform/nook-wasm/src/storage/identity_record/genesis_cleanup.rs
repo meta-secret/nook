@@ -12,7 +12,7 @@ use rexie::TransactionMode;
 use super::{
     IDENTITY_DIRECTORY_KEY, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis,
     SimpleGenesisCompletion, decode_directory_value, map_domain_error, migrate_directory,
-    migrate_staged_genesis_directories, simple_genesis::decode_pending_simple_genesis,
+    migrate_staged_genesis_directories,
 };
 use crate::{NookError, storage::open_nook_database};
 
@@ -116,7 +116,7 @@ impl SimpleGenesisCompletion<'_> {
             let raw: String = serde_wasm_bindgen::from_value(current).map_err(|error| {
                 NookError::IndexedDb(format!("Genesis cleanup decode error: {error:?}"))
             })?;
-            let mut pending = decode_pending_simple_genesis(&raw)?;
+            let mut pending = PendingSimpleGenesis::decode(&raw)?;
             if pending.store_id == completed.store_id
                 && pending.identity_id == completed.identity_id
                 && pending.created_at == completed.created_at

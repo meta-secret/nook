@@ -1,3 +1,8 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 //! Staged identity ownership for crash-safe fresh-vault genesis.
 
 use super::LocalIdentityRecovery;
@@ -8,10 +13,9 @@ use std::{cell::RefCell, rc::Rc};
 use super::genesis_flow::PendingSimpleGenesisFlow;
 use super::simple_genesis::{
     PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
-    decode_pending_simple_genesis, encode_pending_simple_genesis,
 };
-use crate::storage::indexed_db::{StringUpdateGuard, idb_update_string};
-use crate::{NookError, conversion::wasm_iso_timestamp};
+use crate::storage::indexed_db::{self, StringUpdateGuard};
+use crate::{NookError, conversion};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,146 +33,154 @@ pub(crate) struct StagedSimpleGenesisInput<'a> {
     pub(crate) label: &'a str,
 }
 
-fn bind_staged_genesis_identity(
-    directory: &mut nook_core::IdentityDirectory,
-    input: &StagedSimpleGenesisInput<'_>,
-) -> Result<nook_core::IdentityId, NookError> {
-    let live_owner = input.authorizer.unwrap_or(input.app_key);
-    let owner_identity_id = match directory
-        .identity_for_app_key(live_owner)
-        .map_err(super::map_domain_error)?
-    {
-        Some(identity_id) => {
-            directory
-                .select(&identity_id)
-                .map_err(super::map_domain_error)?;
-            identity_id
-        }
-        None => directory
-            .create_identity(input.label, live_owner, None)
-            .map_err(super::map_domain_error)?,
-    };
-    if directory
-        .identity_for_app_key(input.app_key)
-        .map_err(super::map_domain_error)?
-        .is_some_and(|identity_id| identity_id != owner_identity_id)
-    {
-        return Err(NookError::Database(
-            "Staged app key belongs to another local identity.".to_owned(),
-        ));
-    }
-    let identity_id = directory
-        .enroll_selected_app_key_for_vault_creation(input.app_key, input.label)
-        .map_err(super::map_domain_error)?;
-    if identity_id != owner_identity_id {
-        return Err(NookError::Database(
-            "Staged app key resolved to another local identity.".to_owned(),
-        ));
-    }
-    Ok(identity_id)
-}
+impl StagedSimpleGenesisInput<'_> {
+    fn bind_identity(
+        &self,
+        directory: &mut nook_core::IdentityDirectory,
+    ) -> Result<nook_core::IdentityId, NookError> {
+        let input = self;
 
-pub(crate) async fn begin_or_resume_staged_simple_genesis(
-    input: StagedSimpleGenesisInput<'_>,
-) -> Result<
-    (
-        PendingSimpleGenesis,
-        nook_core::IdentityRecord,
-        nook_core::VaultKeys,
-    ),
-    NookError,
-> {
-    if LocalIdentityRecovery::has_pending().await? {
-        return Err(NookError::Database(
-            "Pending identity recovery cleanup must finish before staged vault creation."
-                .to_owned(),
-        ));
-    }
-    let base_directory = super::load_identity_directory().await?;
-    let mut staged_directory = base_directory.clone();
-    let identity_id = bind_staged_genesis_identity(&mut staged_directory, &input)?;
-    staged_directory
-        .set_member_signing_public_key(
-            &identity_id,
-            input.app_key.app_id(),
-            input.signing_public_key,
-        )
-        .map_err(super::map_domain_error)?;
-    if let Some((app_id, signing_public_key)) = input.authorizer_signing {
-        staged_directory
-            .set_member_signing_public_key(&identity_id, app_id, signing_public_key)
-            .map_err(super::map_domain_error)?;
-    }
-    let store_id = nook_core::generate_store_id().map_err(super::map_domain_error)?;
-    let _ = staged_directory
-        .open_or_generate_vault_dek_for_identity(&identity_id, input.app_key, store_id.clone())
-        .map_err(super::map_domain_error)?;
-    let proposed = PendingSimpleGenesis {
-        store_id,
-        identity_id,
-        created_at: IsoTimestamp::parse(&wasm_iso_timestamp())
-            .map_err(|error| NookError::Database(error.to_string()))?,
-        event_state: PendingSimpleGenesisEvent::AwaitingEvent,
-        flow: PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
-            base_directory,
-            directory: staged_directory,
-        }),
-    };
-    let selected = Rc::new(RefCell::new(None));
-    let captured = Rc::clone(&selected);
-    idb_update_string(
-        PENDING_SIMPLE_GENESIS_KEY,
-        StringUpdateGuard::Unconditional,
-        move |current| {
-            let pending = current
-                .as_deref()
-                .map(decode_pending_simple_genesis)
-                .transpose()?
-                .unwrap_or(proposed);
-            if !pending.is_staged() {
-                return Err(NookError::IndexedDb(
-                    "Pending Simple genesis belongs to another creation flow.".to_owned(),
-                ));
+        let live_owner = input.authorizer.unwrap_or(input.app_key);
+        let owner_identity_id = match directory
+            .identity_for_app_key(live_owner)
+            .map_err(super::map_domain_error)?
+        {
+            Some(identity_id) => {
+                directory
+                    .select(&identity_id)
+                    .map_err(super::map_domain_error)?;
+                identity_id
             }
-            let encoded = encode_pending_simple_genesis(&pending)?;
-            *captured.borrow_mut() = Some(pending);
-            Ok(encoded)
-        },
-    )
-    .await?;
-    let pending = selected.borrow_mut().take().ok_or_else(|| {
-        NookError::IndexedDb("Staged Simple genesis produced no result.".to_owned())
-    })?;
-    let staged = pending.staged_identity().ok_or_else(|| {
-        NookError::IndexedDb("Staged Simple genesis lost its identity state.".to_owned())
-    })?;
-    let identity = staged
-        .directory
-        .identities()
-        .iter()
-        .find(|identity| identity.identity_id == pending.identity_id)
-        .cloned()
-        .ok_or_else(|| NookError::Database("Staged genesis identity disappeared.".to_owned()))?;
-    let mut directory = staged.directory.clone();
-    let keys = directory
-        .open_or_generate_vault_dek_for_identity(
-            &pending.identity_id,
-            input.app_key,
-            pending.store_id.clone(),
+            None => directory
+                .create_identity(input.label, live_owner, None)
+                .map_err(super::map_domain_error)?,
+        };
+        if directory
+            .identity_for_app_key(input.app_key)
+            .map_err(super::map_domain_error)?
+            .is_some_and(|identity_id| identity_id != owner_identity_id)
+        {
+            return Err(NookError::Database(
+                "Staged app key belongs to another local identity.".to_owned(),
+            ));
+        }
+        let identity_id = directory
+            .enroll_selected_app_key_for_vault_creation(input.app_key, input.label)
+            .map_err(super::map_domain_error)?;
+        if identity_id != owner_identity_id {
+            return Err(NookError::Database(
+                "Staged app key resolved to another local identity.".to_owned(),
+            ));
+        }
+        Ok(identity_id)
+    }
+    pub(crate) async fn begin_or_resume(
+        self,
+    ) -> Result<
+        (
+            PendingSimpleGenesis,
+            nook_core::IdentityRecord,
+            nook_core::VaultKeys,
+        ),
+        NookError,
+    > {
+        let input = self;
+        if LocalIdentityRecovery::has_pending().await? {
+            return Err(NookError::Database(
+                "Pending identity recovery cleanup must finish before staged vault creation."
+                    .to_owned(),
+            ));
+        }
+        let base_directory = super::load_identity_directory().await?;
+        let mut staged_directory = base_directory.clone();
+        let identity_id = input.bind_identity(&mut staged_directory)?;
+        staged_directory
+            .set_member_signing_public_key(
+                &identity_id,
+                input.app_key.app_id(),
+                input.signing_public_key,
+            )
+            .map_err(super::map_domain_error)?;
+        if let Some((app_id, signing_public_key)) = input.authorizer_signing {
+            staged_directory
+                .set_member_signing_public_key(&identity_id, app_id, signing_public_key)
+                .map_err(super::map_domain_error)?;
+        }
+        let store_id = nook_core::generate_store_id().map_err(super::map_domain_error)?;
+        let _ = staged_directory
+            .open_or_generate_vault_dek_for_identity(&identity_id, input.app_key, store_id.clone())
+            .map_err(super::map_domain_error)?;
+        let proposed = PendingSimpleGenesis {
+            store_id,
+            identity_id,
+            created_at: IsoTimestamp::parse(&conversion::wasm_iso_timestamp())
+                .map_err(|error| NookError::Database(error.to_string()))?,
+            event_state: PendingSimpleGenesisEvent::AwaitingEvent,
+            flow: PendingSimpleGenesisFlow::Staged(StagedSimpleGenesisIdentity {
+                base_directory,
+                directory: staged_directory,
+            }),
+        };
+        let selected = Rc::new(RefCell::new(None));
+        let captured = Rc::clone(&selected);
+        indexed_db::idb_update_string(
+            PENDING_SIMPLE_GENESIS_KEY,
+            StringUpdateGuard::Unconditional,
+            move |current| {
+                let pending = current
+                    .as_deref()
+                    .map(PendingSimpleGenesis::decode)
+                    .transpose()?
+                    .unwrap_or(proposed);
+                if !pending.is_staged() {
+                    return Err(NookError::IndexedDb(
+                        "Pending Simple genesis belongs to another creation flow.".to_owned(),
+                    ));
+                }
+                let encoded = pending.encode()?;
+                *captured.borrow_mut() = Some(pending);
+                Ok(encoded)
+            },
         )
-        .map_err(super::map_domain_error)?;
-    Ok((pending, identity, keys))
+        .await?;
+        let pending = selected.borrow_mut().take().ok_or_else(|| {
+            NookError::IndexedDb("Staged Simple genesis produced no result.".to_owned())
+        })?;
+        let staged = pending.staged_identity().ok_or_else(|| {
+            NookError::IndexedDb("Staged Simple genesis lost its identity state.".to_owned())
+        })?;
+        let identity = staged
+            .directory
+            .identities()
+            .iter()
+            .find(|identity| identity.identity_id == pending.identity_id)
+            .cloned()
+            .ok_or_else(|| {
+                NookError::Database("Staged genesis identity disappeared.".to_owned())
+            })?;
+        let mut directory = staged.directory.clone();
+        let keys = directory
+            .open_or_generate_vault_dek_for_identity(
+                &pending.identity_id,
+                input.app_key,
+                pending.store_id.clone(),
+            )
+            .map_err(super::map_domain_error)?;
+        Ok((pending, identity, keys))
+    }
 }
-
 #[cfg(test)]
 mod tests {
-    use super::super::{SimpleGenesisCompletion, recovery, simple_genesis};
+    use super::super::{SimpleGenesisCompletion, SimpleGenesisEventInput, recovery};
     use crate::storage::identity_record;
     use crate::storage::{event_db, indexed_db};
     use nook_core::{AppKey, IdentityDirectory, IsoTimestamp, SigningIdentity};
 
-    use super::*;
-    use wasm_bindgen_test::*;
+    use super::{
+        NookError, PendingSimpleGenesis, PendingSimpleGenesisEvent, PendingSimpleGenesisFlow,
+        StagedSimpleGenesisIdentity, StagedSimpleGenesisInput,
+    };
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
 
@@ -179,6 +191,13 @@ mod tests {
         staged_identity: StagedSimpleGenesisIdentity,
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn staged_identity_publishes_only_with_genesis_cleanup() -> Result<(), NookError> {
         identity_record::clear_identity_directory_for_test().await?;
@@ -190,16 +209,17 @@ mod tests {
             SigningIdentity::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let authorizer_signing_pair =
             (authorizer.app_id().clone(), authorizer_signing.public_key());
-        let (pending, _, _) = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+        let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &extension,
             signing_public_key: &extension_signing.public_key(),
             authorizer: Some(&authorizer),
             authorizer_signing: Some(&authorizer_signing_pair),
             label: "Personal",
-        })
+        }
+        .begin_or_resume()
         .await?;
 
-        let encoded = simple_genesis::encode_pending_simple_genesis(&pending)?;
+        let encoded = pending.encode()?;
         let wire: StagedGenesisCompatibilityWire = serde_json::from_str(&encoded)
             .map_err(|error| NookError::Database(error.to_string()))?;
         let PendingSimpleGenesisFlow::Staged(current_staged) = wire.flow else {
@@ -208,7 +228,7 @@ mod tests {
             ));
         };
         assert_eq!(current_staged, wire.staged_identity);
-        assert!(simple_genesis::decode_pending_simple_genesis(&encoded)?.is_staged());
+        assert!(PendingSimpleGenesis::decode(&encoded)?.is_staged());
 
         assert!(
             identity_record::load_identity_directory()
@@ -236,6 +256,13 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn pending_recovery_cleanup_blocks_staged_genesis() -> Result<(), NookError> {
         identity_record::clear_identity_directory_for_test().await?;
@@ -247,13 +274,14 @@ mod tests {
         let app_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
         let (signing, _) = SigningIdentity::generate()?;
 
-        let result = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+        let result = StagedSimpleGenesisInput {
             app_key: &app_key,
             signing_public_key: &signing.public_key(),
             authorizer: None,
             authorizer_signing: None,
             label: "Personal",
-        })
+        }
+        .begin_or_resume()
         .await;
 
         assert!(matches!(
@@ -269,6 +297,13 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn staged_publish_refuses_to_overwrite_concurrent_identity_update()
     -> Result<(), NookError> {
@@ -276,13 +311,14 @@ mod tests {
         let extension = AppKey::generate().map_err(identity_record::map_domain_error)?;
         let (extension_signing, _) =
             SigningIdentity::generate().map_err(|error| NookError::Database(error.to_string()))?;
-        let (pending, _, _) = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+        let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &extension,
             signing_public_key: &extension_signing.public_key(),
             authorizer: None,
             authorizer_signing: None,
             label: "Personal",
-        })
+        }
+        .begin_or_resume()
         .await?;
         let concurrent = AppKey::generate().map_err(identity_record::map_domain_error)?;
         let concurrent_update = concurrent.clone();
@@ -310,7 +346,7 @@ mod tests {
         );
         assert!(current.identity_for_app_key(&concurrent)?.is_some());
         assert!(
-            identity_record::pending_simple_genesis_for_store(pending.store_id.as_str())
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
                 .await?
                 .is_none()
         );
@@ -318,6 +354,13 @@ mod tests {
         identity_record::idb_delete_key(event_db::SIGNING_SEED_KEY).await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn directory_update_preserves_pending_identity_during_fallback_migration()
     -> Result<(), NookError> {
@@ -348,19 +391,14 @@ mod tests {
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
         )
         .await?;
-        indexed_db::idb_put_string(
-            PENDING_SIMPLE_GENESIS_KEY,
-            &encode_pending_simple_genesis(&pending)?,
-        )
-        .await?;
+        indexed_db::idb_put_string(PENDING_SIMPLE_GENESIS_KEY, &pending.encode()?).await?;
 
         identity_record::update_identity_directory(|_| Ok(())).await?;
 
         let current = identity_record::load_identity_directory().await?;
-        let normalized =
-            identity_record::pending_simple_genesis_for_store(pending.store_id.as_str())
-                .await?
-                .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
+        let normalized = PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
+            .await?
+            .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
         let staged = normalized
             .staged_identity()
             .ok_or_else(|| NookError::Database("Staged snapshots disappeared.".to_owned()))?;
@@ -371,6 +409,13 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn genesis_cleanup_preserves_pending_identity_during_fallback_migration()
     -> Result<(), NookError> {
@@ -385,13 +430,14 @@ mod tests {
         })
         .await?;
         let (signing, _) = SigningIdentity::generate()?;
-        let (pending, _, _) = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+        let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &app_key,
             signing_public_key: &signing.public_key(),
             authorizer: None,
             authorizer_signing: None,
             label: "Pending",
-        })
+        }
+        .begin_or_resume()
         .await?;
         let staged = pending
             .staged_identity()
@@ -422,7 +468,7 @@ mod tests {
         assert_eq!(published.selected()?.identity_id, pending.identity_id);
         assert!(published.selected()?.owns_vault(&pending.store_id));
         assert!(
-            identity_record::pending_simple_genesis_for_store(pending.store_id.as_str())
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
                 .await?
                 .is_none()
         );
@@ -430,6 +476,13 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn genesis_cleanup_normalizes_stale_staged_snapshots_after_live_migration()
     -> Result<(), NookError> {
@@ -474,11 +527,7 @@ mod tests {
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
         )
         .await?;
-        indexed_db::idb_put_string(
-            PENDING_SIMPLE_GENESIS_KEY,
-            &encode_pending_simple_genesis(&pending)?,
-        )
-        .await?;
+        indexed_db::idb_put_string(PENDING_SIMPLE_GENESIS_KEY, &pending.encode()?).await?;
 
         SimpleGenesisCompletion::Staged {
             pending: &pending,
@@ -492,7 +541,7 @@ mod tests {
         assert_eq!(published.selected()?.identity_id, pending_identity_id);
         assert!(published.selected()?.owns_vault(&pending.store_id));
         assert!(
-            identity_record::pending_simple_genesis_for_store(pending.store_id.as_str())
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
                 .await?
                 .is_none()
         );
@@ -500,6 +549,13 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn genesis_cleanup_rejects_candidate_only_overlap_during_legacy_migration()
     -> Result<(), NookError> {
@@ -551,11 +607,7 @@ mod tests {
                 .map_err(|error| NookError::Serialization(error.to_string()))?,
         )
         .await?;
-        indexed_db::idb_put_string(
-            PENDING_SIMPLE_GENESIS_KEY,
-            &encode_pending_simple_genesis(&pending)?,
-        )
-        .await?;
+        indexed_db::idb_put_string(PENDING_SIMPLE_GENESIS_KEY, &pending.encode()?).await?;
 
         let result = SimpleGenesisCompletion::Staged {
             pending: &pending,
@@ -573,13 +625,20 @@ mod tests {
             normalized
         );
         assert!(
-            identity_record::pending_simple_genesis_for_store(pending.store_id.as_str())
+            PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
                 .await?
                 .is_some()
         );
         identity_record::clear_identity_directory_for_test().await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn unchanged_base_rejects_invalid_staged_candidate() -> Result<(), NookError> {
         identity_record::clear_identity_directory_for_test().await?;
@@ -600,13 +659,14 @@ mod tests {
         )
         .await?;
         let (signing, _) = SigningIdentity::generate()?;
-        let pending = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+        let pending = StagedSimpleGenesisInput {
             app_key: &overlapping_key,
             signing_public_key: &signing.public_key(),
             authorizer: Some(&selected_key),
             authorizer_signing: None,
             label: "Selected",
-        })
+        }
+        .begin_or_resume()
         .await;
 
         assert!(matches!(
@@ -623,6 +683,13 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
     #[wasm_bindgen_test]
     async fn staged_signer_marker_resumes_with_authorizer_key() -> Result<(), NookError> {
         identity_record::clear_identity_directory_for_test().await?;
@@ -634,28 +701,29 @@ mod tests {
             SigningIdentity::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let authorizer_signing_pair =
             (authorizer.app_id().clone(), authorizer_signing.public_key());
-        let (pending, _, _) = begin_or_resume_staged_simple_genesis(StagedSimpleGenesisInput {
+        let (pending, _, _) = StagedSimpleGenesisInput {
             app_key: &extension,
             signing_public_key: &extension_signing.public_key(),
             authorizer: Some(&authorizer),
             authorizer_signing: Some(&authorizer_signing_pair),
             label: "Personal",
-        })
+        }
+        .begin_or_resume()
         .await?;
-        let first = identity_record::persist_simple_genesis_event(
-            &pending,
-            &extension,
-            "first-event\n".to_owned(),
-            "first-seed".to_owned(),
-        )
-        .await?;
-        let resumed = identity_record::persist_simple_genesis_event(
-            &pending,
-            &authorizer,
-            "ignored-event\n".to_owned(),
-            "ignored-seed".to_owned(),
-        )
-        .await?;
+        let first = (&pending)
+            .pin_event(SimpleGenesisEventInput {
+                app_key: &extension,
+                proposed_yaml: "first-event\n".to_owned(),
+                proposed_signing_seed: "first-seed".to_owned(),
+            })
+            .await?;
+        let resumed = (&pending)
+            .pin_event(SimpleGenesisEventInput {
+                app_key: &authorizer,
+                proposed_yaml: "ignored-event\n".to_owned(),
+                proposed_signing_seed: "ignored-seed".to_owned(),
+            })
+            .await?;
         assert_eq!(resumed.event_yaml, first.event_yaml);
         assert_eq!(resumed.signing_seed, first.signing_seed);
         identity_record::clear_identity_directory_for_test().await
