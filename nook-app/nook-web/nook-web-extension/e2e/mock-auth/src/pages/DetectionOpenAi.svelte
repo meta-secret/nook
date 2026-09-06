@@ -54,13 +54,13 @@
     // through the synthetic event, so preserve native implicit-submit
     // semantics only when this form has one unambiguous submit control.
     const form = submittedForm(event, fallbackForm)
-    if (!form) return ''
+    if (!form) return fallbackForm ? fallbackIdentity : ''
     const submitControls = Array.from(
       form.querySelectorAll<HTMLButtonElement>(
         'button[type="submit"], button:not([type])',
       ),
     ).filter((control) => !control.hasAttribute('form'))
-    return submitControls.length === 1 ? fallbackIdentity : ''
+    return submitControls.length === 1 || fallbackForm ? fallbackIdentity : ''
   }
 
   function submitChatGpt(event: SubmitEvent): void {
