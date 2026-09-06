@@ -598,7 +598,7 @@ mod browser_tests {
         };
         let token = oauth_access_token(configured.clone());
         assert_eq!(token.kind(), NookOAuthAccessTokenKind::Available);
-        assert_eq!(token.token().unwrap(), " token ");
+        assert_eq!(token.token().unwrap(), "token");
 
         let missing_selection = NookProviderSelection(None);
         assert_eq!(

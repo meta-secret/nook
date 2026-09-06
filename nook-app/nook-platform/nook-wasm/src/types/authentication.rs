@@ -422,7 +422,7 @@ mod browser_tests {
             kind: AuthenticationWorkflowKind::Login,
             stage: AuthenticationWorkflowStage::Credentials,
             action: AuthenticationWorkflowAction::ContinueWithNook,
-            current_step: 2u8.into(),
+            current_step: 1u8.into(),
             total_steps: 3u8.into(),
             approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
             saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
@@ -445,7 +445,7 @@ mod browser_tests {
             AuthenticationWorkflowAction::ContinueWithNook
         );
         assert_eq!(snapshot.action_name(), "continue-with-nook");
-        assert_eq!(snapshot.current_step(), 2);
+        assert_eq!(snapshot.current_step(), 1);
         assert_eq!(snapshot.total_steps(), 3);
         assert_eq!(
             snapshot.approval_requirement(),

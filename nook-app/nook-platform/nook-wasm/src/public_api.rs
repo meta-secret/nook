@@ -678,8 +678,9 @@ mod browser_tests {
     use nook_core::{
         GoogleDriveMode, ICloudMode, OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope,
         ReplicationType, StorageProviderData, StorageProviderType, StoredGithubPat,
-        StoredGithubRepository, StoredGoogleDriveFolder, StoredOAuthAccessCredential,
-        StoredOAuthAccountIdentity, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
+        StoredGithubRepository, StoredGoogleDriveFolder, StoredICloudShareTarget,
+        StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
+        StoredOAuthRemoteFileName,
     };
     use wasm_bindgen_test::*;
 
@@ -717,6 +718,20 @@ mod browser_tests {
         }
     }
 
+    fn shared_icloud_provider() -> StorageProviderData {
+        let mut provider = shared_oauth_provider();
+        provider.oauth_file =
+            StoredOAuthFileConfiguration::Configured(nook_core::OAuthFileConfigData {
+                preset: OauthFilePreset::ICloud,
+                drive_mode: GoogleDriveMode::Private,
+                folder_id: StoredGoogleDriveFolder::Root,
+                icloud_mode: ICloudMode::Shared,
+                icloud_share_target: StoredICloudShareTarget::SharedTarget("target-2".into()),
+                ..Default::default()
+            });
+        provider
+    }
+
     #[wasm_bindgen_test]
     fn public_helpers_project_password_totp_and_provider_credentials() {
         set_vault_session_locked(true);
@@ -732,8 +747,8 @@ mod browser_tests {
         assert!(!password.is_empty());
         assert!(vault_password_min_length() > 0);
         assert!(vault_password_recommended_min_length() >= vault_password_min_length());
-        assert!(!is_vault_password_long_enough("short"));
-        assert!(!is_vault_password_recommended_length("short"));
+        assert!(!is_vault_password_long_enough("no"));
+        assert!(!is_vault_password_recommended_length("no"));
 
         let code = generate_totp_code("JBSWY3DPEHPK3PXP", 59).unwrap();
         assert_eq!(code.len(), 6);
@@ -955,7 +970,7 @@ mod browser_tests {
         .unwrap();
         assert!(shared.is_shared_provider_grant());
         let icloud_shared = enrollment_icloud_shared_provider_for_architecture(
-            shared_oauth_provider(),
+            shared_icloud_provider(),
             &architecture,
             "target-2",
         )

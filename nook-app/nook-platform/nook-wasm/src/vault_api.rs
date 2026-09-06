@@ -842,7 +842,7 @@ mod projection_tests {
         assert!(!vault_connect_intent_permits_empty_remote_genesis("open-existing").unwrap());
         assert!(vault_connect_intent_permits_empty_remote_genesis("bad").is_err());
         assert_eq!(read_vault_version("not yaml"), 0);
-        assert!(compare_vault_sync("not yaml", "not yaml").is_err());
+        assert!(compare_vault_sync("not yaml", "also not yaml").is_err());
         assert!(
             seal_auth_providers_for_device_public_key(
                 "not a public key",

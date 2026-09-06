@@ -409,7 +409,7 @@ mod browser_tests {
         );
         assert_eq!(note.title(), "Private note");
         assert_eq!(note.note(), "contents");
-        assert_eq!(note.summary(), "contents");
+        assert_eq!(note.summary(), "Private note");
 
         let card = record(
             SecretType::CreditCard,
