@@ -46,4 +46,6 @@ Verify:
 - only one writer ran at a time;
 - focused module tests passed;
 - the shared branch contains the complete result; and
-- Gizmo owns push, pull-request, readiness, and merge actions.
+- Gizmo owns push sequencing, pull-request authorization, readiness and merge
+  verdicts. PR Steward performs the named pull-request mechanics after
+  authorization.

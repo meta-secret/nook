@@ -4,7 +4,7 @@ import {
   resolveTeamTaskContext,
 } from '../../src/team-agents/context.ts';
 import type { TeamTaskContextRequest } from '../../src/team-agents/context.ts';
-import { TeamKey } from '../../src/team-agents/catalog.ts';
+import { GizmoOwnedAgentKey, TeamKey } from '../../src/team-agents/catalog.ts';
 import { join } from 'node:path';
 import {
   mkdirSync,
@@ -22,6 +22,10 @@ const SRE_CONTEXT_PATHS = [
 ] as const;
 const SRE_DELTA_SKILL =
   '.cortex/teams/sre/dynamic-skills/github-actions-only-validation.md';
+const PR_STEWARD_CONTEXT_PATHS = [
+  '.cortex/teams/pr-steward/AGENTS.md',
+  '.cortex/teams/pr-steward/knowledge-graph.md',
+] as const;
 
 describe('team task context', () => {
   test('keeps team identity separate from dynamically selected skills', () => {
@@ -80,6 +84,21 @@ describe('team task context', () => {
     const context = resolveTeamTaskContext(request);
 
     expect(context.contextPaths).toEqual(SRE_CONTEXT_PATHS);
+    expect(context.skillPaths).toEqual([]);
+  });
+
+  test('composes the independent PR Steward Team Agent context', () => {
+    const request: TeamTaskContextRequest = {
+      repositoryRoot: REPO_ROOT,
+      team: GizmoOwnedAgentKey.PrSteward,
+      readClaims: [],
+      writeClaims: [],
+      selectedSkillPaths: [],
+    };
+    const context = resolveTeamTaskContext(request);
+
+    expect(context.team).toBe(GizmoOwnedAgentKey.PrSteward);
+    expect(context.contextPaths).toEqual(PR_STEWARD_CONTEXT_PATHS);
     expect(context.skillPaths).toEqual([]);
   });
 

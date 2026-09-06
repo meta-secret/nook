@@ -16,6 +16,8 @@ state. Delivery continues to the user-selected terminal condition.
 - Use [module-oriented development](module-oriented-development.md) for real
   provider-consumer order.
 - Use [pull request delivery](pull-requests.md) for validation and merge.
+- Use [PR Steward](../../teams/pr-steward/AGENTS.md) for the authorized external pull-request
+  mechanics within that delivery sequence.
 - Use [Workbench issue management](issues.md) for plans and worklogs.
 - Use the
   [self-improvement review](../../teams/ai/dynamic-skills/self-improvement.md#self-improvement-review)
@@ -58,18 +60,22 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Verify changed paths and focused evidence.
    - Route formatter or implementation corrections to the owning team.
    - Run `task loom:pre-push PR=<number>` before a push.
-   - Push the coherent shared branch.
+   - Push the coherent shared branch as the shared-branch owner.
+   - Give PR Steward an explicit packet for pull-request publication.
 6. **Validate and repair.**
-   - Trigger the repository-owned exact-head review and validation path.
+   - Authorize PR Steward to trigger the repository-owned exact-head review and
+     validation path.
    - Use `task remote TASK_NAME=web:build` for a remote web build.
    - Use `task remote TASK_NAME=web:e2e` for remote browser validation.
    - Route every finding to its functional owner.
    - Sequence the responsible writer in the current checkout.
    - Push the corrected head and obtain fresh exact-head evidence.
 7. **Finish delivery.**
-   - Run `task pr:ready PR=<number>`.
-   - Squash-merge when readiness succeeds.
-   - Verify remote merge state.
+   - Authorize PR Steward to run `task pr:ready PR=<number>` and return its
+     read-only evidence.
+   - Issue a separate merge authorization only after Gizmo's final readiness
+     verdict succeeds.
+   - Have PR Steward squash-merge and verify remote merge state.
    - Publish the final Workbench update.
 
 ## Prohibited complexity
@@ -87,7 +93,9 @@ Mission delivery must not introduce:
 - SRE fixes CI/CD, runners, containers, deployments, and operations.
 - Security fixes security-owned policy and reviews security acceptance.
 - AI fixes Cortex, Loom, agent skills, and AI automation.
-- Gizmo sequences the shared branch and controls external delivery state.
+- Gizmo sequences the shared branch and controls external delivery policy and
+  authorization. PR Steward performs only the named external pull-request
+  mechanics.
 
 ## Validation
 

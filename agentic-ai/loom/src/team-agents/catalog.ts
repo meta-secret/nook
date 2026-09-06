@@ -6,10 +6,26 @@ export enum TeamKey {
   WebDevelopment = 'web-development',
 }
 
+export enum GizmoOwnedAgentKey {
+  PrSteward = 'pr-steward',
+}
+
+export type TeamAgentKey = TeamKey | GizmoOwnedAgentKey;
+
 export type TeamAuthority = {
   readonly key: TeamKey;
   readonly identity: string;
   readonly description: string;
+  readonly contextPaths: readonly string[];
+  readonly capabilityBoundary: string;
+};
+
+export type GizmoOwnedAgentProfile = {
+  readonly key: GizmoOwnedAgentKey;
+  readonly identity: string;
+  readonly description: string;
+  readonly model: 'gpt-5.6-luna';
+  readonly reasoningEffort: 'xhigh';
   readonly contextPaths: readonly string[];
   readonly capabilityBoundary: string;
 };
@@ -75,11 +91,46 @@ export const TEAM_AUTHORITY_CATALOG: readonly TeamAuthority[] = [
   },
 ] as const;
 
+export const GIZMO_OWNED_AGENT_CATALOG: readonly GizmoOwnedAgentProfile[] = [
+  {
+    key: GizmoOwnedAgentKey.PrSteward,
+    identity: 'PR Steward',
+    description:
+      'Executes explicitly authorized pull-request metadata, review, validation, readiness-evidence, merge, and merge-verification operations for Gizmo Prime.',
+    model: 'gpt-5.6-luna',
+    reasoningEffort: 'xhigh',
+    contextPaths: [
+      '.cortex/teams/pr-steward/AGENTS.md',
+      '.cortex/teams/pr-steward/knowledge-graph.md',
+    ],
+    capabilityBoundary:
+      'PR Steward never edits functional code, adjudicates technical findings, sequences shared-branch writers, owns Workbench outcomes, or issues the final delivery verdict.',
+  },
+] as const;
+
 export function teamAuthority(teamKey: TeamKey): TeamAuthority | false {
   const [defaulted1 = false] = [
     TEAM_AUTHORITY_CATALOG.find((authority) => authority.key === teamKey),
   ];
   return defaulted1;
+}
+
+export function gizmoOwnedAgentProfile(
+  agentKey: GizmoOwnedAgentKey,
+): GizmoOwnedAgentProfile | false {
+  const [defaulted1 = false] = [
+    GIZMO_OWNED_AGENT_CATALOG.find((agent) => agent.key === agentKey),
+  ];
+  return defaulted1;
+}
+
+export function teamAgentProfile(
+  agentKey: TeamAgentKey,
+): TeamAuthority | GizmoOwnedAgentProfile | false {
+  if (Object.values(TeamKey).some((key) => key === agentKey)) {
+    return teamAuthority(agentKey as TeamKey);
+  }
+  return gizmoOwnedAgentProfile(agentKey as GizmoOwnedAgentKey);
 }
 
 export function teamCortexRoot(teamKey: TeamKey): string {

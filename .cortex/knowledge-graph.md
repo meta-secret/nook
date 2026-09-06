@@ -11,6 +11,12 @@ Use this file only to select one owning context. Do not preload linked graphs.
 
 - [Gizmo Prime](gizmo/knowledge-graph.md): planning, delegation, integration,
   review coordination, Workbench, pull requests, readiness, and merge.
+- [PR Steward](teams/pr-steward/knowledge-graph.md): authorized mechanical
+  pull-request operations, review and check observation, exact-head evidence,
+  and merge execution.
+  - [PR Steward contract](teams/pr-steward/AGENTS.md)
+  - [Pull-request lifecycle](teams/pr-steward/workflows/pull-request-lifecycle.md)
+  - [Authorization handshake](teams/pr-steward/workflows/authorization-handshake.md)
 - [AI](teams/ai/knowledge-graph.md): Cortex, Loom, agent skills, workflows,
   routing, and AI automation.
 - [Development core](teams/dev-core/knowledge-graph.md): portable Rust, vault

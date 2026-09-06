@@ -9,7 +9,8 @@ coordinates delivery but does not redefine a team's technical contract.
 
 ## Universal rules
 
-- Every bounded Team Agent task has exactly one team identity.
+- Every Team Agent task has exactly one team identity. PR Steward is a separate
+  operational Team Agent context for bounded pull-request mechanics.
 - The functional owner defines behavior, contracts, tests, and acceptance.
 - File location is evidence of ownership, not an exception to semantic
   ownership.
@@ -17,7 +18,9 @@ coordinates delivery but does not redefine a team's technical contract.
 - Gizmo assigns a separate task when another team's implementation is needed.
 - Security review does not transfer implementation ownership.
 - Team Agents edit the current shared checkout sequentially.
-- Gizmo owns shared-branch sequencing and external delivery state.
+- Gizmo owns shared-branch sequencing, external delivery policy, and
+  authorization. PR Steward performs only the explicitly authorized
+  pull-request mechanics.
 
 ## Teams
 
@@ -28,9 +31,20 @@ Gizmo owns:
 - mission scope and task routing;
 - shared-branch write sequencing;
 - shared-file coordination;
-- pull requests and review coordination;
-- validation, readiness, merge, and Workbench state; and
+- pull-request policy and authorization;
+- technical review-finding disposition;
+- readiness and merge verdicts;
+- Workbench state; and
 - the final delivery verdict.
+
+The separate PR Steward Team Agent performs pull-request metadata.
+It observes reviews and checks.
+It retriggers exact-head validation.
+It collects readiness evidence.
+It performs authorized squash merges.
+It verifies remote merge state.
+It is not a functional engineering team.
+It does not own technical findings.
 
 Gizmo does not become the implementation owner when a Team Agent is
 unavailable.
@@ -124,7 +138,9 @@ Within its assigned scope, a team owns:
 - review fixes; and
 - validation fixes caused by its change.
 
-Gizmo owns external delivery actions after the technical result is ready.
+Gizmo owns external delivery policy after the technical result is ready. PR
+Steward performs the named external pull-request actions after Gizmo's
+authorization.
 
 ## Validation
 

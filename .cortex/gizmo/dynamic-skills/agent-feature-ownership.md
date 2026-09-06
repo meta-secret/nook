@@ -44,8 +44,10 @@ Treat every other active task as foreign work.
   finishes.
 - The worker must not create another worker.
 - A missing dependency returns to Gizmo for assignment to its owner.
-- The worker must not mutate Workbench, branch publication, PR, review, check,
-  or merge state.
+- A functional worker must not mutate Workbench, branch publication, PR,
+  review, check, or merge state. PR Steward is the narrow operational Team
+  Agent exception and may mutate only the exact pull-request state
+  named in Gizmo's current authorization packet.
 - Its ownership ends when the result is handed back.
 
 See [subagent-delegation.md](../workflows/subagent-delegation.md).
@@ -76,7 +78,9 @@ Applies to:
 - all agent-driven Nook and Workbench changes;
 - shared worktrees and independent worktrees;
 - interactive agents, scheduled agents, and recovery agents;
-- issue, branch, pull-request, review, check, and merge operations.
+- issue, branch, pull-request, review, check, and merge operations. The
+  PR Steward exception is governed by
+  [the PR Steward contract](../../teams/pr-steward/AGENTS.md).
 
 Does not apply to:
 
