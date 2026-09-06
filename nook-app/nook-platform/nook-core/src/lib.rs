@@ -53,8 +53,8 @@ pub(crate) use vault::{
 };
 
 pub use apple_passwords_import::{
-    ApplePasswordsImportError, ApplePasswordsImportPlan, plan_apple_passwords_export,
-    plan_apple_passwords_import,
+    ApplePasswordsCsvInput, ApplePasswordsExportInput, ApplePasswordsImportError,
+    ApplePasswordsImportPlan,
 };
 pub use authenticator::{
     AuthenticatorSecret, BackupCodeAttachMode, BackupCodePersistenceVerification,
