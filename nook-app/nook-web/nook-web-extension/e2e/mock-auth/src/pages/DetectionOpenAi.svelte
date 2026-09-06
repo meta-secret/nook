@@ -51,7 +51,7 @@
       error = 'Authentication was not completed.'
       return
     }
-    location.assign(transition.url)
+    navigate(transition.url)
   }
 
   function submitOpenAi(event: SubmitEvent): void {
