@@ -1,5 +1,7 @@
 <script lang="ts">
   import DetectionCombined from './pages/DetectionCombined.svelte'
+  import DetectionApple from './pages/DetectionApple.svelte'
+  import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
   import DetectionFromFixture from './pages/DetectionFromFixture.svelte'
   import DetectionGoogle from './pages/DetectionGoogle.svelte'
   import DetectionHiddenHeaderLogin from './pages/DetectionHiddenHeaderLogin.svelte'
@@ -84,6 +86,10 @@
   <DetectionSpa />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
+{:else if pathname === '/account/sign-in'}
+  <DetectionAppleShell />
+{:else if pathname === '/appleauth/auth/authorize/signin'}
+  <DetectionApple />
 {:else if pathname === '/v3/signin/identifier' || pathname === '/v3/signin/challenge/pwd'}
   <DetectionGoogle />
 {:else if templateMatch?.[1]}

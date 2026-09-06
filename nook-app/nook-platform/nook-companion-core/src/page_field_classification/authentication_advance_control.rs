@@ -524,6 +524,32 @@ mod tests {
     }
 
     #[test]
+    fn apple_identity_authorization_signin_requires_the_exact_same_origin_route() {
+        let mut control = AuthenticationAdvanceControlObservation::login_control();
+        control.source_origin = "https://idmsa.apple.com".to_owned();
+        control.password_field_count = 0.into();
+        control.label = "Continue".to_owned();
+        control.destination_identity =
+            "https://idmsa.apple.com/appleauth/auth/authorize/signin".to_owned();
+        assert!(authentication_advance_control_is_safe(&control));
+
+        for destination in [
+            "https://idmsa.apple.com/x/appleauth/auth/authorize/signin",
+            "https://idmsa.apple.com/appleauth/auth/authorize/signin/continue",
+            "https://idmsa.apple.com/appleauth/auth/authorize/signin-now",
+            "https://idmsa.apple.com/unrelated/auth/authorize/signin",
+            "https://idmsa.apple.com/appleauth/auth/authorize/login",
+            "https://apple.attacker.test/appleauth/auth/authorize/signin",
+        ] {
+            control.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&control),
+                "{destination}"
+            );
+        }
+    }
+
+    #[test]
     fn ambiguous_semantic_submits_require_advance_label_evidence() {
         let mut verify = AuthenticationAdvanceControlObservation::login_control();
         verify.password_field_count = 0.into();

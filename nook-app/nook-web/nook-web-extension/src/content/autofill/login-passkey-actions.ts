@@ -121,6 +121,24 @@ export async function fillAndSubmitAccount({
 }: FillAndSubmitAccountArgs): Promise<boolean> {
   const approvalIsActive = () =>
     !widgetState.dismissed && continueButton.isConnected
+  const showFillFailure = () => {
+    const progressRequest: Parameters<typeof setFlightProgress>[0] = {
+      step,
+      title,
+      currentStep: 1,
+      totalSteps: 3,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+    }
+    setFlightProgress(progressRequest)
+    const statusRequest: Parameters<typeof setStatus>[0] = {
+      description,
+      continueButton,
+      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+      enableContinue: true,
+    }
+    setStatus(statusRequest)
+    return false
+  }
   let releasedObservationBinding: AuthenticationObservationBinding =
     requiredAuthenticationObservationBinding(approval.facts)
   const releaseRevalidationRequest: Parameters<
@@ -141,26 +159,8 @@ export async function fillAndSubmitAccount({
   const releaseOutcome = await performRevalidatedAuthenticationAction(
     releaseRevalidationRequest,
   )
-  if (
-    releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted
-  ) {
-    const progressRequest: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 1,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-    }
-    setFlightProgress(progressRequest)
-    const statusRequest: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(statusRequest)
-    return false
-  }
+  if (releaseOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted)
+    return showFillFailure()
   const nookTypedArgs0_2: Parameters<typeof sendLoginFillMessage>[0] = {
     type: WebsiteLoginRevealMessageType.NookWebsiteLoginFill,
     payload: {
@@ -171,24 +171,8 @@ export async function fillAndSubmitAccount({
     },
   }
   const delivery = await sendLoginFillMessage(nookTypedArgs0_2)
-  if (delivery.kind === LoginFillDeliveryKind.Unavailable) {
-    const nookTypedArgs0_0: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 1,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-    }
-    setFlightProgress(nookTypedArgs0_0)
-    const nookTypedArgs0_1: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_1)
-    return false
-  }
+  if (delivery.kind === LoginFillDeliveryKind.Unavailable)
+    return showFillFailure()
   const { response } = delivery
   if (!approvalIsActive()) {
     if (response?.ok && typeof response.password === 'string')
@@ -199,24 +183,8 @@ export async function fillAndSubmitAccount({
     !response?.ok ||
     !response.username ||
     typeof response.password !== 'string'
-  ) {
-    const nookTypedArgs0_2: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 1,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
-    }
-    setFlightProgress(nookTypedArgs0_2)
-    const nookTypedArgs0_3: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_3)
-    return false
-  }
+  )
+    return showFillFailure()
 
   const credentials = {
     username: response.username,
@@ -234,7 +202,7 @@ export async function fillAndSubmitAccount({
     expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
     observationBinding: releasedObservationBinding,
     approvalIsActive,
-    act: ({ currentWorkflow, revalidateCurrentWorkflow }) => {
+    act: ({ currentWorkflow }) => {
       const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
         credentials,
         kind: PasswordFormQueryKind.Scoped,
@@ -245,103 +213,127 @@ export async function fillAndSubmitAccount({
         return { kind: RevalidatedAuthenticationActResultKind.Failed }
       }
       filledRequest = fillRequest
-      const postFillWorkflow = revalidateCurrentWorkflow()
-      if (!postFillWorkflow) {
-        clearLoginCredentials(fillRequest)
-        return { kind: RevalidatedAuthenticationActResultKind.Failed }
-      }
-      const submissionApproval: NonNullable<
-        Parameters<typeof submitLoginForm>[0]['submissionApproval']
-      > = {
-        isApproved: () => Boolean(revalidateCurrentWorkflow()),
-        reject: () => clearLoginCredentials(fillRequest),
-      }
-      const submissionRequest: Parameters<typeof submitLoginForm>[0] = {
-        kind: PasswordFormQueryKind.Scoped,
-        root: postFillWorkflow.root,
-        formScope: postFillWorkflow.formScope,
-        submissionApproval,
-      }
-      submission.result = submitLoginForm(submissionRequest)
       return { kind: RevalidatedAuthenticationActResultKind.Acted }
     },
   }
-  const fillOutcome = await (async () => {
+  widgetState.credentialActuationInFlight = true
+  try {
+    let fillOutcome: Awaited<
+      ReturnType<typeof performRevalidatedAuthenticationAction>
+    >
     try {
-      return await performRevalidatedAuthenticationAction(
+      fillOutcome = await performRevalidatedAuthenticationAction(
         fillRevalidationRequest,
       )
+    } catch (error) {
+      if (filledRequest) clearLoginCredentials(filledRequest)
+      throw error
     } finally {
       credentials.password = ''
       credentials.username = ''
     }
-  })()
-  if (fillOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted) {
-    if (filledRequest) clearLoginCredentials(filledRequest)
-    const nookTypedArgs0_5: Parameters<typeof setFlightProgress>[0] = {
+    if (fillOutcome.kind !== RevalidatedAuthenticationActionOutcomeKind.Acted) {
+      if (filledRequest) clearLoginCredentials(filledRequest)
+      return showFillFailure()
+    }
+    const approvedFillRequest = filledRequest
+    if (!approvedFillRequest) return false
+
+    await Promise.resolve()
+    const submissionRevalidationRequest: Parameters<
+      typeof performRevalidatedAuthenticationAction
+    >[0] = {
+      workflow,
+      expectedAction: AuthenticationWorkflowAction.ContinueWithNook,
+      observationBinding: {
+        kind: AuthenticationObservationBindingKind.Unbound,
+      },
+      approvalIsActive,
+      act: ({ currentWorkflow, revalidateCurrentWorkflow }) => {
+        const submissionApproval: NonNullable<
+          Parameters<typeof submitLoginForm>[0]['submissionApproval']
+        > = {
+          isApproved: () => Boolean(revalidateCurrentWorkflow()),
+          reject: () => clearLoginCredentials(approvedFillRequest),
+        }
+        const submissionRequest: Parameters<typeof submitLoginForm>[0] = {
+          kind: PasswordFormQueryKind.Scoped,
+          root: currentWorkflow.root,
+          formScope: currentWorkflow.formScope,
+          submissionApproval,
+        }
+        submission.result = submitLoginForm(submissionRequest)
+        return { kind: RevalidatedAuthenticationActResultKind.Acted }
+      },
+    }
+    let submissionOutcome: Awaited<
+      ReturnType<typeof performRevalidatedAuthenticationAction>
+    >
+    try {
+      submissionOutcome = await performRevalidatedAuthenticationAction(
+        submissionRevalidationRequest,
+      )
+    } catch (error) {
+      clearLoginCredentials(approvedFillRequest)
+      throw error
+    }
+    if (
+      submissionOutcome.kind !==
+      RevalidatedAuthenticationActionOutcomeKind.Acted
+    ) {
+      clearLoginCredentials(approvedFillRequest)
+      return showFillFailure()
+    }
+    if (submission.result === FormSubmissionResult.Rejected) {
+      const rejectedProgress: Parameters<typeof setFlightProgress>[0] = {
+        step,
+        title,
+        currentStep: 2,
+        totalSteps: 3,
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+      }
+      setFlightProgress(rejectedProgress)
+      const rejectedStatus: Parameters<typeof setStatus>[0] = {
+        description,
+        continueButton,
+        text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
+        enableContinue: true,
+      }
+      setStatus(rejectedStatus)
+      continueButton.hidden = false
+      return false
+    }
+    if (submission.result === FormSubmissionResult.NotObserved) {
+      const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
+        step,
+        title,
+        currentStep: 2,
+        totalSteps: 3,
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
+      }
+      setFlightProgress(nookTypedArgs0_8)
+      description.textContent = translatedMessage(
+        BROWSER_MESSAGE_KEYS.WidgetFilledManual,
+      )
+      continueButton.hidden = true
+      return true
+    }
+    const nookTypedArgs0_9: Parameters<typeof setFlightProgress>[0] = {
       step,
       title,
-      currentStep: 1,
+      currentStep: 3,
       totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetLoginTitle,
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
     }
-    setFlightProgress(nookTypedArgs0_5)
-    const nookTypedArgs0_6: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(nookTypedArgs0_6)
-    return false
-  }
-  if (submission.result === FormSubmissionResult.Rejected) {
-    const rejectedProgress: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 2,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
-    }
-    setFlightProgress(rejectedProgress)
-    const rejectedStatus: Parameters<typeof setStatus>[0] = {
-      description,
-      continueButton,
-      text: translatedMessage(BROWSER_MESSAGE_KEYS.WidgetFillFailed),
-      enableContinue: true,
-    }
-    setStatus(rejectedStatus)
-    continueButton.hidden = false
-    return false
-  }
-  if (submission.result === FormSubmissionResult.NotObserved) {
-    const nookTypedArgs0_8: Parameters<typeof setFlightProgress>[0] = {
-      step,
-      title,
-      currentStep: 2,
-      totalSteps: 3,
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetFillingTitle,
-    }
-    setFlightProgress(nookTypedArgs0_8)
+    setFlightProgress(nookTypedArgs0_9)
     description.textContent = translatedMessage(
-      BROWSER_MESSAGE_KEYS.WidgetFilledManual,
+      BROWSER_MESSAGE_KEYS.WidgetSubmitted,
     )
     continueButton.hidden = true
     return true
+  } finally {
+    widgetState.credentialActuationInFlight = false
   }
-  const nookTypedArgs0_9: Parameters<typeof setFlightProgress>[0] = {
-    step,
-    title,
-    currentStep: 3,
-    totalSteps: 3,
-    titleKey: BROWSER_MESSAGE_KEYS.WidgetVerifyingTitle,
-  }
-  setFlightProgress(nookTypedArgs0_9)
-  description.textContent = translatedMessage(
-    BROWSER_MESSAGE_KEYS.WidgetSubmitted,
-  )
-  continueButton.hidden = true
-  return true
 }
 
 async function openLoginPicker({

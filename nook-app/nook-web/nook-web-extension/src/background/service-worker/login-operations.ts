@@ -19,6 +19,7 @@ import {
 } from '../../offscreen/session-request-adapter'
 import {
   AccountPickerSurfaceKind,
+  AccountPickerPageTarget,
   LoginPickerLoadKind,
   type AccountPickerSurface,
   accountPickerAuthorizationGeneration,
@@ -118,6 +119,7 @@ export async function openWebsiteLoginPicker({
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
+    frameId: AccountPickerPageTarget.senderFrameId(sender),
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + LOGIN_PICKER_TTL_MS,
   }
@@ -273,10 +275,12 @@ export async function selectLoginPicker({
         },
       },
     }
-    const response = await chrome.tabs.sendMessage(
-      request.tabId,
-      nookTypedArgs0_3,
-    )
+    const delivery: Parameters<typeof AccountPickerPageTarget.send>[0] = {
+      tabId: request.tabId,
+      frameId: request.frameId,
+      message: nookTypedArgs0_3,
+    }
+    const response = await AccountPickerPageTarget.send(delivery)
     if (!isLoginPickerPageAcknowledgement(response)) {
       return { ok: false, reason: 'login-picker-page-unavailable' }
     }
@@ -307,9 +311,17 @@ export async function cancelLoginPicker({
     sender,
     origin: request.origin,
   }
+  const websiteFrame: Parameters<
+    typeof AccountPickerPageTarget.matchesSender
+  >[0] = {
+    tabId: request.tabId,
+    frameId: request.frameId,
+    sender,
+  }
   if (
     !isLoginPickerSender(sender) &&
-    !isAuthorizedWebsiteSender(nookNamedArgs0_0)
+    (!isAuthorizedWebsiteSender(nookNamedArgs0_0) ||
+      !AccountPickerPageTarget.matchesSender(websiteFrame))
   ) {
     return { ok: false, reason: 'login-picker-forbidden' }
   }
@@ -322,7 +334,12 @@ export async function cancelLoginPicker({
         requestId: request.requestId,
       },
     }
-    await chrome.tabs.sendMessage(request.tabId, nookTypedArgs0_4)
+    const delivery: Parameters<typeof AccountPickerPageTarget.send>[0] = {
+      tabId: request.tabId,
+      frameId: request.frameId,
+      message: nookTypedArgs0_4,
+    }
+    await AccountPickerPageTarget.send(delivery)
   } catch {
     // The website may have navigated while its picker was open.
   }

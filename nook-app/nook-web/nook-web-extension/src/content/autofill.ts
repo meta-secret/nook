@@ -281,10 +281,14 @@ function handleAuthenticationMutations(
     scheduleScan()
     return
   }
+  // Filling may synchronously schedule a framework update that enables the
+  // observed advance control. Keep the mount through that update; the action
+  // path still requires a fresh domain decision and exact control identity.
   if (
     widgetState.host.kind === WidgetHostKind.Attached &&
     renderedWorkflow &&
-    impact.shouldRemountRenderedWorkflow
+    impact.shouldRemountRenderedWorkflow &&
+    !widgetState.credentialActuationInFlight
   ) {
     invalidateRenderedAuthenticationAction()
     removeScannedWidget()

@@ -220,6 +220,7 @@ function verifiedAuthenticatorBackupAttachResponse(
 
 type SelectedAuthenticatorPageAcknowledgedArgs = {
   tabId: number
+  frameId: number
   origin: string
   requestId: string
   vaultStoreId: string
@@ -229,6 +230,7 @@ type SelectedAuthenticatorPageAcknowledgedArgs = {
 
 export async function selectedAuthenticatorPageAcknowledged({
   tabId,
+  frameId,
   origin,
   requestId,
   vaultStoreId,
@@ -243,7 +245,12 @@ export async function selectedAuthenticatorPageAcknowledged({
       account: { vaultStoreId, secretId, authorizationGeneration },
     },
   }
-  const response: unknown = await chrome.tabs.sendMessage(tabId, message)
+  const options: ChromeTabMessageOptions = { frameId }
+  const response: unknown = await chrome.tabs.sendMessage(
+    tabId,
+    message,
+    options,
+  )
   return (
     !!response &&
     typeof response === 'object' &&

@@ -8,6 +8,7 @@ import {
 } from '../../lib/login-fill-messages'
 import {
   AccountPickerSurfaceKind,
+  AccountPickerPageTarget,
   AuthenticatorPickerLoadKind,
   type AccountPickerSurface,
   accountPickerAuthorizationGeneration,
@@ -193,6 +194,7 @@ export async function openWebsiteAuthenticatorPicker({
     requestId,
     origin: message.payload.origin,
     tabId: sender.tab.id,
+    frameId: AccountPickerPageTarget.senderFrameId(sender),
     allowedVaultStoreIds: access.grants.map((grant) => grant.vaultStoreId),
     expiresAt: Date.now() + AUTHENTICATOR_PICKER_TTL_MS,
   }
@@ -339,6 +341,7 @@ export async function selectAuthenticatorPicker({
       typeof selectedAuthenticatorPageAcknowledged
     >[0] = {
       tabId: request.tabId,
+      frameId: request.frameId,
       origin: request.origin,
       requestId: request.requestId,
       vaultStoreId: selected.vaultStoreId,
@@ -375,9 +378,17 @@ export async function cancelAuthenticatorPicker({
     sender,
     origin: request.origin,
   }
+  const websiteFrame: Parameters<
+    typeof AccountPickerPageTarget.matchesSender
+  >[0] = {
+    tabId: request.tabId,
+    frameId: request.frameId,
+    sender,
+  }
   if (
     !isAuthenticatorPickerSender(sender) &&
-    !isAuthorizedWebsiteSender(nookNamedArgs0_0)
+    (!isAuthorizedWebsiteSender(nookNamedArgs0_0) ||
+      !AccountPickerPageTarget.matchesSender(websiteFrame))
   ) {
     return { ok: false, reason: 'authenticator-picker-forbidden' }
   }
@@ -390,7 +401,12 @@ export async function cancelAuthenticatorPicker({
         requestId: request.requestId,
       },
     }
-    await chrome.tabs.sendMessage(request.tabId, nookTypedArgs0_5)
+    const delivery: Parameters<typeof AccountPickerPageTarget.send>[0] = {
+      tabId: request.tabId,
+      frameId: request.frameId,
+      message: nookTypedArgs0_5,
+    }
+    await AccountPickerPageTarget.send(delivery)
   } catch {
     // The website may have navigated while its picker was open. The pending
     // request is still canceled and must not remain reusable.
