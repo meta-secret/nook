@@ -374,6 +374,11 @@ mod tests {
     }
 
     #[test]
+    #[allow(
+        unknown_lints,
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes a mutating overflow rejection before handling the result"
+    )]
     fn sentinel_share_issuance_rejects_full_roster_and_reuses_existing_shares() -> anyhow::Result<()>
     {
         let first = nook_core::DeviceIdentity::generate()?;

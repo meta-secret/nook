@@ -105,7 +105,7 @@ mod browser_tests {
         let identity = nook_core::DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
-        manager.vault.store_id = "not-a-store".to_owned();
+        manager.vault.store_id = "not-a-store!".to_owned();
         assert!(manager.vault_recovery_options().await.is_err());
         assert!(manager.vault_access_diagnostics().await.is_err());
         Ok(())

@@ -891,7 +891,13 @@ mod projection_tests {
             nook_core::StorageProviderType::Local
         );
 
-        let yaml = nook_core::serialize_stored(&[], nook_core::VaultFormat::Yaml)?;
+        let yaml = nook_core::serialize_stored_yaml_with_unlock(
+            &[],
+            &nook_core::VaultUnlock::Keys,
+            &[],
+            nook_core::VaultStoreIdentityRef::Unassigned,
+            nook_core::VaultVersionWrite::Version(1.into()),
+        )?;
         assert_eq!(read_vault_version(yaml.as_str()), 1);
         Ok(())
     }

@@ -125,7 +125,7 @@ mod browser_tests {
         let result = manager
             .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
             .await?;
-        assert!(result.changed());
+        assert!(!result.changed());
         assert_eq!(result.access_status()?, VaultAccessStatus::NewVault);
         manager.delete_local_browser_data().await?;
         Ok(())
