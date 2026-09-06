@@ -308,25 +308,34 @@ mod tests {
 
     #[test]
     fn checked_classification_keeps_canonical_evidence_bound_to_the_report() -> anyhow::Result<()> {
-        let mut report = AuthenticationAdvanceControlObservation::login_control();
-        report.destination_identity =
-            "https://login.example.test/auth/%6cogin?next=%2Fcheckout".to_owned();
-        let original = report.clone();
-        let checked = report.check().ok_or_else(|| {
-            anyhow::anyhow!("same-origin login must enter checked classification")
-        })?;
-        assert_eq!(checked.destination.path_identity, "/auth/login");
-        assert_eq!(
-            checked.destination.route_identity,
-            "/auth/login?next=/checkout"
-        );
-        assert_eq!(checked.observation, &original);
-        assert_eq!(
-            checked.classify(),
-            AuthenticationAdvanceControlDecision::AdvancesAuthentication
-        );
-        assert_eq!(report, original);
-        assert_eq!(report.classify(), original.classify());
+        for (next, expected) in [
+            (
+                "home",
+                AuthenticationAdvanceControlDecision::AdvancesAuthentication,
+            ),
+            (
+                "checkout",
+                AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication,
+            ),
+        ] {
+            let mut report = AuthenticationAdvanceControlObservation::login_control();
+            report.destination_identity =
+                format!("https://login.example.test/auth/%6cogin?next=%2F{next}");
+            let original = report.clone();
+            let checked = report.check().ok_or_else(|| {
+                anyhow::anyhow!("same-origin login must enter checked classification")
+            })?;
+            assert_eq!(checked.destination.path_identity, "/auth/login");
+            assert_eq!(
+                checked.destination.route_identity,
+                format!("/auth/login?next=/{next}")
+            );
+            assert_eq!(checked.observation, &original);
+            assert_eq!(checked.classify(), expected);
+            assert_eq!(report, original);
+            assert_eq!(report.classify(), expected);
+            assert_eq!(report.classify(), original.classify());
+        }
         Ok(())
     }
 
