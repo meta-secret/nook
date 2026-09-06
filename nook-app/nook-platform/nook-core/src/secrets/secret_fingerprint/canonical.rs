@@ -280,7 +280,7 @@ mod tests {
             identity.canonical.0,
             b"5:login\x0019:https://example.com\x005:alice\x00"
         );
-        assert!(ptr::eq(identity.secrets_key, &fixture.key));
+        assert!(ptr::eq(identity.secrets_key, &raw const fixture.key));
         assert_eq!(
             identity.finish()?.as_str(),
             "hmac-sha256:v1:adcfee05e4060a40a182e52d2c882bf8695038a157c37555573b4f88586a4900"
@@ -290,7 +290,7 @@ mod tests {
             version.canonical.0,
             b"5:login\x0019:https://example.com\x005:alice\x008: secret \x00"
         );
-        assert!(ptr::eq(version.secrets_key, &fixture.key));
+        assert!(ptr::eq(version.secrets_key, &raw const fixture.key));
         assert_eq!(
             version.finish()?.as_str(),
             "hmac-sha256:v2:01f1bd07a8e721b68e5d973fe5e86917830c5081438ca066bae7acbe8bf28499"
@@ -415,7 +415,7 @@ mod tests {
         let original = fixture.value.clone();
         {
             let prepared = fixture.request().prepare(FingerprintKind::Version);
-            assert!(ptr::eq(prepared.secrets_key, &fixture.key));
+            assert!(ptr::eq(prepared.secrets_key, &raw const fixture.key));
         }
         assert_eq!(fixture.value, original);
         assert_eq!(fixture.key.as_str(), "a".repeat(64));
