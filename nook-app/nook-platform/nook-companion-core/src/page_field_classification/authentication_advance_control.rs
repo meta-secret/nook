@@ -609,6 +609,12 @@ mod tests {
         linkedin.semantic_submit_control_count = 0.into();
         assert!(authentication_advance_control_is_safe(&linkedin));
 
+        let mut owned_form = linkedin.clone();
+        owned_form.ownership = PageControlOwnership::OwnedForm;
+        assert!(!authentication_advance_control_is_safe(&owned_form));
+        owned_form.form_identity = "login-form".to_owned();
+        assert!(authentication_advance_control_is_safe(&owned_form));
+
         let mut retention = linkedin.clone();
         retention.label = "Keep me signed in".to_owned();
         assert!(!authentication_advance_control_is_safe(&retention));
