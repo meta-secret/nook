@@ -121,7 +121,7 @@ impl NookVaultManager {
 }
 
 impl NookVaultManager {
-    fn install_accepted_sentinel_delivery(
+    pub(super) fn install_accepted_sentinel_delivery(
         &mut self,
         delivery: &nook_core::SentinelGenesisShareDelivery,
         record: &nook_core::StoredSecretRecord,

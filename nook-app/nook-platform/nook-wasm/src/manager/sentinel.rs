@@ -20,6 +20,7 @@ use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
 use crate::storage::indexed_db::{
     load_sentinel_genesis_finalization_pending, load_sentinel_genesis_share_delivery,
+    save_sentinel_genesis_share_delivery,
 };
 use crate::{NookSentinelGenesisStatus, NookSentinelUnlockSessionStatus};
 use serde::{Deserialize, Serialize};
