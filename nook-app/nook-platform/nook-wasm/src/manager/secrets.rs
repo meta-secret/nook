@@ -62,23 +62,29 @@ impl NookVaultManager {
         };
         match input.verification {
             SecretProjectionVerification::None => {
-                nook_core::replace_encrypted_secret(&mut self.vault.meta, crypto, &replacement)?;
+                nook_core::EncryptedSecretSession {
+                    state: &mut self.vault.meta,
+                    crypto,
+                }
+                .prepare(&replacement)?
+                .commit();
             }
             SecretProjectionVerification::AuthenticatorBackupCodes {
                 intended,
                 reviewed,
                 mode,
             } => {
-                nook_core::replace_encrypted_authenticator_verified(
-                    &mut self.vault.meta,
+                nook_core::EncryptedSecretSession {
+                    state: &mut self.vault.meta,
                     crypto,
-                    &nook_core::VerifiedAuthenticatorReplacementInput {
-                        replacement,
-                        intended_backup_codes: intended.as_slice(),
-                        reviewed_backup_codes: reviewed.as_slice(),
-                        mode,
-                    },
-                )?;
+                }
+                .prepare_verified(&nook_core::VerifiedAuthenticatorReplacementInput {
+                    replacement,
+                    intended_backup_codes: intended.as_slice(),
+                    reviewed_backup_codes: reviewed.as_slice(),
+                    mode,
+                })?
+                .commit();
             }
         }
         let validated_new = nook_core::validate_secret_id(&input.new_id)?;

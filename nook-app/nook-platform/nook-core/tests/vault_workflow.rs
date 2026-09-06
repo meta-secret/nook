@@ -7,10 +7,10 @@ use std::io;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
-    PasswordGenerationOptions, ReplaceSecretInput, SecretId, SecretType, SecretValue,
-    StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
-    deserialize_stored, filter_secrets, generate_password, replace_secret, serialize_stored,
-    validate_connect, validate_secret_data, validate_secret_id,
+    PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
+    SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
+    deserialize_stored, filter_secrets, generate_password, serialize_stored, validate_connect,
+    validate_secret_data, validate_secret_id,
 };
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -208,17 +208,17 @@ fn incremental_replace_secret_swaps_id_and_updates_armored_cache() -> anyhow::Re
     let new_secret_id = sid("github-updated.com");
     let new_id = new_secret_id.as_str().to_owned();
     let new_yaml = api_key_yaml("new-token")?;
-    replace_secret(
-        &mut db,
-        &mut state,
-        &crypto,
-        &ReplaceSecretInput {
-            old_id: &old_id,
-            new_id: &new_id,
-            secret_type: SecretType::ApiKey,
-            data_yaml: &new_yaml,
-        },
-    )?;
+    PlaintextSecretSession {
+        database: &mut db,
+        state: &mut state,
+        crypto: &crypto,
+    }
+    .replace(&ReplaceSecretInput {
+        old_id: &old_id,
+        new_id: &new_id,
+        secret_type: SecretType::ApiKey,
+        data_yaml: &new_yaml,
+    })?;
 
     assert_eq!(db.list().len(), 1);
     assert_eq!(db.list()[0].id.as_str(), new_id);
@@ -252,17 +252,17 @@ fn incremental_replace_secret_rejects_missing_old_id() -> anyhow::Result<()> {
     let missing_id = sid("missing").into_inner();
     let new_id = sid("new-id").into_inner();
 
-    let err = replace_secret(
-        &mut db,
-        &mut state,
-        &crypto,
-        &ReplaceSecretInput {
-            old_id: &missing_id,
-            new_id: &new_id,
-            secret_type: SecretType::ApiKey,
-            data_yaml: &api_key_yaml("value")?,
-        },
-    )
+    let err = PlaintextSecretSession {
+        database: &mut db,
+        state: &mut state,
+        crypto: &crypto,
+    }
+    .replace(&ReplaceSecretInput {
+        old_id: &missing_id,
+        new_id: &new_id,
+        secret_type: SecretType::ApiKey,
+        data_yaml: &api_key_yaml("value")?,
+    })
     .err()
     .ok_or_else(|| anyhow::anyhow!("vault workflow test should reject invalid input"))?;
     assert!(err.to_string().contains("not found"));
@@ -304,17 +304,17 @@ fn incremental_replace_secret_rejects_duplicate_new_id() -> anyhow::Result<()> {
     let replace_id = sid("replace-me").into_inner();
     let keep_id = sid("keep").into_inner();
 
-    let err = replace_secret(
-        &mut db,
-        &mut state,
-        &crypto,
-        &ReplaceSecretInput {
-            old_id: &replace_id,
-            new_id: &keep_id,
-            secret_type: SecretType::ApiKey,
-            data_yaml: &api_key_yaml("c")?,
-        },
-    )
+    let err = PlaintextSecretSession {
+        database: &mut db,
+        state: &mut state,
+        crypto: &crypto,
+    }
+    .replace(&ReplaceSecretInput {
+        old_id: &replace_id,
+        new_id: &keep_id,
+        secret_type: SecretType::ApiKey,
+        data_yaml: &api_key_yaml("c")?,
+    })
     .err()
     .ok_or_else(|| anyhow::anyhow!("vault workflow test should reject invalid input"))?;
     assert!(err.to_string().contains("already exists"));

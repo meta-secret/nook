@@ -124,7 +124,8 @@ impl AuthenticatorSecret {
         self.account = self.account.trim().to_owned();
         self.website_url = self.website_url.trim().to_owned();
         self.secret = TotpSecret::parse(self.secret.as_str())?;
-        let normalized_backup_codes = backup_codes::soft_normalize_backup_codes(&self.backup_codes);
+        let normalized_backup_codes =
+            backup_codes::BackupCodeInput::new(&self.backup_codes).soft_normalized();
         self.backup_codes.zeroize();
         self.backup_codes = normalized_backup_codes;
         self.validate()

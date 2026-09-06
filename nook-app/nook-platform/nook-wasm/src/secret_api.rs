@@ -337,7 +337,8 @@ pub fn current_code_from_otpauth_uri(
 #[allow(clippy::needless_pass_by_value)]
 pub fn normalize_backup_codes(codes: Vec<String>) -> Result<Vec<String>, wasm_bindgen::JsError> {
     // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
-    nook_core::normalize_backup_codes(&codes)
+    nook_core::BackupCodeInput::new(&codes)
+        .normalize()
         .map_err(NookError::from)
         .map_err(Into::into)
 }
@@ -352,9 +353,14 @@ pub fn apply_backup_codes(
     // Owned `Vec<String>` is required by the wasm-bindgen JS array boundary.
     let mode = BackupCodeAttachMode::parse(mode)
         .map_err(|_| NookError::from(ValidationError::AuthenticatorBackupCodesInvalid))?;
-    nook_core::apply_backup_codes(&existing, &incoming, mode)
-        .map_err(NookError::from)
-        .map_err(Into::into)
+    nook_core::BackupCodeApplication {
+        existing: &existing,
+        incoming: &incoming,
+        mode,
+    }
+    .apply()
+    .map_err(NookError::from)
+    .map_err(Into::into)
 }
 
 #[cfg(all(test, target_arch = "wasm32"))]
