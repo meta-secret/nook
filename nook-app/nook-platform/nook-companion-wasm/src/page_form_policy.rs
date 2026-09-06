@@ -443,6 +443,26 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn authentication_advance_control_wasm_export_preserves_amazon_identifier_policy() {
+        let mut amazon = login_advance_observation("https://www.amazon.com/ax/claim", "Continue");
+        amazon.authentication_username =
+            nook_companion_core::AuthenticationUsernameEvidence::Generic;
+        amazon.password_field_count = 0.into();
+        amazon.source_origin = "https://www.amazon.com".to_owned();
+        amazon.form_identity = "ap_login_form signIn".to_owned();
+        amazon.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
+        assert!(authentication_advance_control_is_safe(amazon.clone()));
+
+        let mut cross_origin = amazon.clone();
+        cross_origin.destination_identity = "https://attacker.example/ax/claim".to_owned();
+        assert!(!authentication_advance_control_is_safe(cross_origin));
+
+        amazon.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
+        assert!(!authentication_advance_control_is_safe(amazon));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_facts_wasm_export_accepts_exact_login_mode_get() {
         let facts = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {

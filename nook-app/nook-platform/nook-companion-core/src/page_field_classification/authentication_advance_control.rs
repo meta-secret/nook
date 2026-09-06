@@ -478,6 +478,18 @@ mod tests {
             observation.submission_method = PageControlSubmissionMethod::Post;
             observation
         }
+
+        fn amazon_identifier_advance() -> Self {
+            let mut observation = Self::login_control();
+            observation.authentication_username = AuthenticationUsernameEvidence::Generic;
+            observation.password_field_count = 0.into();
+            observation.source_origin = "https://www.amazon.com".to_owned();
+            observation.form_identity = "ap_login_form signIn".to_owned();
+            observation.destination_identity = "https://www.amazon.com/ax/claim".to_owned();
+            observation.label = "Continue".to_owned();
+            observation.submission_method = PageControlSubmissionMethod::Post;
+            observation
+        }
     }
 
     #[test]
@@ -882,6 +894,57 @@ mod tests {
             AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
         inert.actionability = PageControlActionability::Inert;
         assert!(!authentication_advance_control_is_safe(&inert));
+    }
+
+    #[test]
+    fn amazon_owned_identifier_advance_uses_existing_authentication_policy() {
+        let amazon = AuthenticationAdvanceControlObservation::amazon_identifier_advance();
+        assert!(authentication_advance_control_is_safe(&amazon));
+
+        for form_identity in [
+            "",
+            "checkout",
+            "google-login",
+            "continue-with-passkey",
+            "saml-login",
+            "enterprise-sso",
+            "reset-password",
+            "delete-account",
+            "account-settings",
+        ] {
+            let mut rejected = amazon.clone();
+            rejected.form_identity = form_identity.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{form_identity}"
+            );
+        }
+
+        let mut cross_origin = amazon.clone();
+        cross_origin.destination_identity = "https://attacker.example/ax/claim".to_owned();
+        assert!(!authentication_advance_control_is_safe(&cross_origin));
+
+        for method in [
+            PageControlSubmissionMethod::Get,
+            PageControlSubmissionMethod::Dialog,
+        ] {
+            let mut rejected = amazon.clone();
+            rejected.submission_method = method;
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for mutation in [
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.ownership = PageControlOwnership::Unowned;
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.actionability = PageControlActionability::Inert;
+            },
+        ] {
+            let mut rejected = amazon.clone();
+            mutation(&mut rejected);
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
     }
 
     #[test]
