@@ -271,7 +271,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     await expect(
       microsoftWidget.getByRole('button', { name: 'Continue with Nook' }),
     ).toBeVisible()
-    await expect(microsoftPage.locator('[name="loginfmt"]')).toBeVisible()
+    await expect(microsoftPage.locator('#usernameEntry')).toBeVisible()
 
     const slackPage = await context.newPage()
     await slackPage.goto(`${loginServer.origin}/slack`)
