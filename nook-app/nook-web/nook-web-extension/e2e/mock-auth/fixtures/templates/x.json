@@ -6,39 +6,14 @@
       "fields": [
         {
           "type": "text",
-          "name": "text",
-          "autocomplete": "username",
-          "placeholder": "Phone, email, or username",
-          "aria-label": "Phone, email, or username",
-          "data-testid": "ocfEnterTextTextInput"
+          "name": "username_or_email",
+          "autocomplete": "username webauthn",
+          "aria-label": "Email or username"
         }
       ],
       "submit": {
-        "type": "submit",
-        "label": "Next"
-      }
-    },
-    {
-      "fields": [
-        {
-          "type": "text",
-          "name": "text",
-          "autocomplete": "username",
-          "placeholder": "Phone, email, or username",
-          "aria-label": "Phone, email, or username",
-          "data-testid": "ocfEnterTextTextInput"
-        },
-        {
-          "type": "password",
-          "name": "password",
-          "autocomplete": "current-password",
-          "placeholder": "Password",
-          "aria-label": "Password"
-        }
-      ],
-      "submit": {
-        "type": "submit",
-        "label": "Log in"
+        "type": "button",
+        "label": "Continue"
       }
     }
   ]
