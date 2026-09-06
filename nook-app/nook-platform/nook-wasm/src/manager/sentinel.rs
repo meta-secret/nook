@@ -17,7 +17,7 @@ mod unlock_finalization;
 use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::{LoadedVault, load_stored_vault};
-use crate::storage::auth_providers::save_auth_providers;
+use crate::storage::auth_providers::ProviderSnapshotPublication;
 use crate::storage::indexed_db::{
     list_sentinel_genesis_share_deliveries, load_sentinel_genesis_finalization_pending,
     load_sentinel_genesis_share_delivery, save_sentinel_genesis_share_delivery,
@@ -78,7 +78,12 @@ impl NookVaultManager {
             &stored_json,
         )
         .await?;
-        save_auth_providers(&identity, &accepted.provider_snapshot).await?;
+        ProviderSnapshotPublication {
+            identity: &identity,
+            snapshot: &accepted.provider_snapshot,
+        }
+        .save()
+        .await?;
         self.install_accepted_sentinel_delivery(&package.delivery, &accepted.share_record)?;
         self.sentinel_genesis_phase = SentinelGenesisPhase::Complete;
         self.pending_sentinel_genesis_request = CeremonyState::Inactive;
