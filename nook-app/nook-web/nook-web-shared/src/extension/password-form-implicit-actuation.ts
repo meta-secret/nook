@@ -78,7 +78,7 @@ export type ApprovedImplicitAuthenticationSubmitRequest<
   ) => AuthenticationPageObservationFacts;
   hasAuthenticationUsername: boolean;
   hasAuthenticationPassword: boolean;
-  requestedApproval: FormSubmissionApproval | undefined;
+  requestedApproval: FormSubmissionApproval | false;
 };
 
 export function requestApprovedImplicitAuthenticationSubmit<

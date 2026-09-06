@@ -994,7 +994,7 @@ export function submitLoginForm(
     },
     hasAuthenticationUsername,
     hasAuthenticationPassword: Boolean(passwordField),
-    requestedApproval: request.submissionApproval,
+    requestedApproval: ((v) => (v ? v : false))(request.submissionApproval),
   };
   return requestApprovedImplicitAuthenticationSubmit(implicitSubmitRequest);
 }
