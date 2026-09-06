@@ -66,11 +66,11 @@ template:
                   operator: In
                   values: [overflow]
     topologySpreadConstraints:
-      # Two slots per hostname let both primary nodes absorb a burst before
-      # secondary, while the tier weights keep overflow as the last choice.
+      # Prefer balanced primary placement without forcing weaker tiers toward
+      # an equal share during bursts. Tier affinity expresses primary order.
       - maxSkew: 2
         topologyKey: kubernetes.io/hostname
-        whenUnsatisfiable: DoNotSchedule
+        whenUnsatisfiable: ScheduleAnyway
         nodeAffinityPolicy: Honor
         nodeTaintsPolicy: Honor
         labelSelector:

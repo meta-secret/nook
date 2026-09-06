@@ -169,9 +169,11 @@ Main and pull requests retain separate publication refs, so concurrent PRs do
 not overwrite shared Main identity.
 
 General and Hive runners prefer either Rise-S, then the home 7950X3D worker,
-then KS-6. Hostname spreading permits at most five more runner Pods on one
-eligible node than another. This expands the aggregate burst envelope without
-changing storage or control-plane ownership.
+then KS-6. General-runner hostname spreading is soft, so it favors both primary
+nodes without forcing weaker tiers toward equal shares. The scheduler may use
+secondary or overflow when its other scores and live node pressure require it.
+This expands the aggregate burst envelope without changing storage or
+control-plane ownership.
 
 `task infra:arc:buildkit:benchmark` proves cold and warm timings on all four
 nodes. It also recreates every BuildKit Pod and requires the same node-local

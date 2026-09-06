@@ -99,8 +99,9 @@ compute. The control node is labeled
 `nook.nokey.sh/node-role=control-storage`. Neo4j, Zot, Hive, ARC controllers,
 and ARC listeners remain there. KS-6 and dedicated compute nodes may also be
 qualified with `nook.nokey.sh/arc-build=true`; general and Hive ARC scale sets
-select those nodes. They enforce a maximum hostname skew of five, then use the
-primary, secondary, and overflow tiers to assign the extra slots.
+select those nodes. General runners use soft hostname spreading with a
+preferred skew of two. Hive retains its independent maximum hostname skew of
+five. Both scale sets prefer primary, then secondary, then overflow.
 The general and Hive ARC runner containers declare no resource requests or
 limits. Support init containers and Hive sidecars retain their memory
 envelopes, without CPU requests or limits. Scale-set ceilings bound aggregate

@@ -250,7 +250,7 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "topologySpreadConstraints:",
         "maxSkew: 2",
         "topologyKey: kubernetes.io/hostname",
-        "whenUnsatisfiable: DoNotSchedule",
+        "whenUnsatisfiable: ScheduleAnyway",
         "nodeAffinityPolicy: Honor",
         "nodeTaintsPolicy: Honor",
         "weight: 100",
@@ -267,6 +267,10 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
             "ARC spreading is missing: {contract}"
         );
     }
+    assert!(
+        !values.contains("whenUnsatisfiable: DoNotSchedule"),
+        "ARC hostname spreading must not force equal cross-tier placement"
+    );
     for forbidden in ["runtimeClassName:", "podman", "docker.sock", "hostPath:"] {
         assert!(
             !values.contains(forbidden),
