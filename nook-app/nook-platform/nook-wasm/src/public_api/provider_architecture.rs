@@ -1,7 +1,5 @@
-use super::{
-    NookEnrollmentProvider, NookProviderReplicationCapability, NookProviderSelection,
-    NookVaultArchitecture, wasm_bindgen,
-};
+use super::{NookProviderSelection, wasm_bindgen};
+use crate::{NookEnrollmentProvider, NookProviderReplicationCapability, NookVaultArchitecture};
 use nook_core::{ICloudShareRole, ICloudSharedTarget, ProviderOauthPreset, VaultArchitecture};
 
 #[wasm_bindgen]
