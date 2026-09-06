@@ -723,10 +723,23 @@ mod browser_tests {
         provider.oauth_file =
             StoredOAuthFileConfiguration::Configured(nook_core::OAuthFileConfigData {
                 preset: OauthFilePreset::ICloud,
+                access_token: StoredOAuthAccessCredential::AccessToken("access-token".into()),
+                file_name: StoredOAuthRemoteFileName::FileName("Vault.yaml".into()),
                 drive_mode: GoogleDriveMode::Private,
                 folder_id: StoredGoogleDriveFolder::Root,
                 icloud_mode: ICloudMode::Shared,
-                icloud_share_target: StoredICloudShareTarget::SharedTarget("target-2".into()),
+                icloud_share_target: StoredICloudShareTarget::SharedTarget(
+                    nook_core::ICloudSharedTarget::new(
+                        nook_core::ICloudShareRole::Owner,
+                        "zone",
+                        "owner-record",
+                        "root-record",
+                        "target-2",
+                    )
+                    .unwrap()
+                    .to_storage_id()
+                    .unwrap(),
+                ),
                 ..Default::default()
             });
         provider
@@ -775,7 +788,8 @@ mod browser_tests {
             "Reconnect folder".into(),
         )
         .unwrap();
-        assert!(detail.contains("GitHub"));
+        assert!(detail.contains("work-vault"));
+        assert!(detail.contains("ghp_123456"));
         assert_eq!(
             localize_provider_label(
                 "github",

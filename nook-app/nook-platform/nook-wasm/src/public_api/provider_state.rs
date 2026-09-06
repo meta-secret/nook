@@ -646,9 +646,11 @@ mod browser_tests {
         let no_hint = mask_github_pat_hint(nook_core::StoredGithubPat::Missing);
         assert_eq!(no_hint.state(), NookGithubPatHintState::Missing);
         assert!(no_hint.value().is_err());
-        let hint = mask_github_pat_hint(nook_core::StoredGithubPat::Token("ghp_123456".into()));
+        let hint = mask_github_pat_hint(nook_core::StoredGithubPat::Token(
+            "ghp_1234567890ABCDEF".into(),
+        ));
         assert_eq!(hint.state(), NookGithubPatHintState::Available);
-        assert!(hint.value().unwrap().contains("3456"));
+        assert_eq!(hint.value().unwrap(), "ghp_123456…");
 
         assert_eq!(local_vault_storage_args().mode(), "local");
         assert_eq!(draft_local_storage_args().mode(), "local");
