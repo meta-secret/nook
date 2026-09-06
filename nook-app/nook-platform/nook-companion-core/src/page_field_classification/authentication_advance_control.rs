@@ -789,6 +789,21 @@ mod tests {
         passkey_form.form_identity = "continue-with-passkey".to_owned();
         assert!(!authentication_advance_control_is_safe(&passkey_form));
 
+        let mut saml_form =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        saml_form.form_identity = "saml-login".to_owned();
+        assert!(!authentication_advance_control_is_safe(&saml_form));
+
+        let mut sso_form =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        sso_form.form_identity = "enterprise-sso".to_owned();
+        assert!(!authentication_advance_control_is_safe(&sso_form));
+
+        let mut microsoft_primary =
+            AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();
+        microsoft_primary.form_identity = "Sign in to Microsoft".to_owned();
+        assert!(authentication_advance_control_is_safe(&microsoft_primary));
+
         for label in [
             "Continue with Google",
             "Cancel",
