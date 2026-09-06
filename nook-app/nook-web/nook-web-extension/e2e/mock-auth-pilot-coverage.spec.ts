@@ -162,6 +162,63 @@ test.describe('PIN Pilot mock-auth coverage', () => {
     }
   })
 
+  test('fills both steps of the stable Google identifier-first mock', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Mock Google auth vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      const page = await paired.context.newPage()
+      await page.goto(`${mockAuth.origin}/v3/signin/identifier`)
+      await expect(page.getByTestId('google-auth-step')).toHaveText(
+        'identifier',
+      )
+      await expect(page.locator('#identifierId')).toHaveAttribute(
+        'autocomplete',
+        'username webauthn',
+      )
+      await expect(page.locator('[name="hiddenPassword"]')).toHaveValue('')
+
+      const widget = page.locator('#nook-auth-widget')
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page).toHaveURL(/\/v3\/signin\/challenge\/pwd$/)
+      await expect(page.getByTestId('google-auth-step')).toHaveText('password')
+      await expect(page.getByTestId('google-selected-account')).toHaveText(
+        'alice@nook.test',
+      )
+      await expect(page.locator('#login_form #identifierId')).toHaveAttribute(
+        'autocomplete',
+        'username',
+      )
+      await expect(page.locator('#login_form #identifierId')).toHaveValue(
+        'alice@nook.test',
+      )
+
+      await expect(widget.getByText('Ready to sign in')).toBeVisible()
+      await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+      await expect(page.getByTestId('mock-auth-success')).toHaveText(
+        'Authentication complete',
+        { timeout: 20_000 },
+      )
+      await page.close()
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
   test('does not claim success after wrong-password autofill', async ({
     browserName,
   }, testInfo) => {
