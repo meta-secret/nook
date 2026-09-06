@@ -184,7 +184,7 @@ impl NookVaultManager {
                 JsError::new("Sentinel genesis did not issue the initiator's encrypted share.")
             })?;
         let _ = own_delivery
-            .check(nook_core::SentinelGenesisDeliveryRecipient {
+            .check(&nook_core::SentinelGenesisDeliveryRecipient {
                 expected_request: &pending.request,
                 identity: &identity,
             })

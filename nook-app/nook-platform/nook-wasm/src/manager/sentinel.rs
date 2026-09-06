@@ -98,7 +98,7 @@ impl NookVaultManager {
             // Revalidate the persisted bundle before advertising it to UI.
             let _ = stored
                 .delivery
-                .check(nook_core::SentinelGenesisDeliveryRecipient {
+                .check(&nook_core::SentinelGenesisDeliveryRecipient {
                     expected_request: &stored.request,
                     identity: &identity,
                 })
@@ -128,7 +128,7 @@ impl NookVaultManager {
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let record = stored
             .delivery
-            .check(nook_core::SentinelGenesisDeliveryRecipient {
+            .check(&nook_core::SentinelGenesisDeliveryRecipient {
                 expected_request: &stored.request,
                 identity: &identity,
             })
@@ -376,7 +376,7 @@ impl NookVaultManager {
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
             stored
                 .delivery
-                .check(nook_core::SentinelGenesisDeliveryRecipient {
+                .check(&nook_core::SentinelGenesisDeliveryRecipient {
                     expected_request: &stored.request,
                     identity: &identity,
                 })
@@ -448,7 +448,7 @@ impl NookVaultManager {
             .clone();
         let identity = self.ensure_device_identity()?;
         let record = delivery
-            .check(nook_core::SentinelGenesisDeliveryRecipient {
+            .check(&nook_core::SentinelGenesisDeliveryRecipient {
                 expected_request: &request,
                 identity: &identity,
             })

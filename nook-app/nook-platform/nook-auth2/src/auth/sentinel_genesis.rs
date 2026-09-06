@@ -81,7 +81,7 @@ pub struct CheckedSentinelGenesisResponse<'a> {
 ///
 /// ```
 /// use nook_auth2::{SentinelGenesisShareDelivery, SentinelGenesisDeliveryRecipient, MultiDeviceError};
-/// let accept = |delivery: &SentinelGenesisShareDelivery, recipient: SentinelGenesisDeliveryRecipient<'_>|
+/// let accept = |delivery: &SentinelGenesisShareDelivery, recipient: &SentinelGenesisDeliveryRecipient<'_>|
 ///     -> Result<_, MultiDeviceError> { delivery.check(recipient)?.into_record() };
 /// ```
 ///
@@ -95,7 +95,7 @@ pub struct CheckedSentinelGenesisResponse<'a> {
 ///
 /// ```compile_fail,E0502
 /// use nook_auth2::{SentinelGenesisShareDelivery, SentinelGenesisDeliveryRecipient, MultiDeviceError};
-/// let change = |delivery: &mut SentinelGenesisShareDelivery, recipient: SentinelGenesisDeliveryRecipient<'_>|
+/// let change = |delivery: &mut SentinelGenesisShareDelivery, recipient: &SentinelGenesisDeliveryRecipient<'_>|
 ///     -> Result<_, MultiDeviceError> {
 ///     let checked = delivery.check(recipient)?;
 ///     delivery.signature.clear();
@@ -213,7 +213,7 @@ impl CheckedSentinelGenesisResponse<'_> {
             signing_key,
             participant,
         } = self;
-        let bytes = participant.response_signing_bytes(ResponseSigningContext {
+        let bytes = participant.response_signing_bytes(&ResponseSigningContext {
             version: GENESIS_VERSION,
             session_id: &request.session_id,
         })?;
@@ -228,7 +228,7 @@ impl CheckedSentinelGenesisResponse<'_> {
 impl SentinelGenesisShareDelivery {
     pub fn check<'a>(
         &'a self,
-        recipient: SentinelGenesisDeliveryRecipient<'_>,
+        recipient: &SentinelGenesisDeliveryRecipient<'_>,
     ) -> MultiDeviceResult<CheckedSentinelGenesisDelivery<'a>> {
         let delivery = self;
         let SentinelGenesisDeliveryRecipient {
@@ -327,7 +327,7 @@ impl SentinelGenesisParticipantResponse {
             signature: &response.signature,
             bytes: &response
                 .participant
-                .response_signing_bytes(ResponseSigningContext {
+                .response_signing_bytes(&ResponseSigningContext {
                     version: response.version,
                     session_id: &response.session_id,
                 })?,
@@ -338,7 +338,7 @@ impl SentinelGenesisParticipantResponse {
 impl SentinelGenesisParticipant {
     fn response_signing_bytes(
         &self,
-        context: ResponseSigningContext<'_>,
+        context: &ResponseSigningContext<'_>,
     ) -> MultiDeviceResult<Vec<u8>> {
         let participant = self;
         let ResponseSigningContext {
@@ -582,7 +582,7 @@ mod tests {
             .iter()
             .find(|delivery| delivery.device_id == *peer.device_id())
             .ok_or_else(|| IoError::other("peer delivery must exist"))?;
-        let checked = delivery.check(SentinelGenesisDeliveryRecipient {
+        let checked = delivery.check(&SentinelGenesisDeliveryRecipient {
             expected_request: &request,
             identity: &peer,
         })?;
@@ -597,14 +597,16 @@ mod tests {
                 .to_stored()?
         );
         let before = delivery.clone();
-        drop(delivery.check(SentinelGenesisDeliveryRecipient {
-            expected_request: &request,
-            identity: &peer,
-        })?);
+        {
+            let _checked = delivery.check(&SentinelGenesisDeliveryRecipient {
+                expected_request: &request,
+                identity: &peer,
+            })?;
+        }
         assert_eq!(delivery, &before);
         let mut tampered = delivery.clone();
         tampered.signature.clear();
-        match tampered.check(SentinelGenesisDeliveryRecipient {
+        match tampered.check(&SentinelGenesisDeliveryRecipient {
             expected_request: &request,
             identity: &owner,
         }) {
@@ -614,7 +616,7 @@ mod tests {
             )),
             Ok(_) => anyhow::bail!("wrong recipient reached record state"),
         }
-        match tampered.check(SentinelGenesisDeliveryRecipient {
+        match tampered.check(&SentinelGenesisDeliveryRecipient {
             expected_request: &request,
             identity: &peer,
         }) {
@@ -854,7 +856,7 @@ mod tests {
             .find(|delivery| delivery.device_id == *peer.device_id())
             .ok_or_else(|| IoError::other("peer delivery must exist"))?;
         let accepted = peer_delivery
-            .check(SentinelGenesisDeliveryRecipient {
+            .check(&SentinelGenesisDeliveryRecipient {
                 expected_request: &expected_request,
                 identity: &peer,
             })
@@ -862,7 +864,7 @@ mod tests {
         assert!(issued.records.contains(&accepted));
         assert!(matches!(
             peer_delivery
-                .check(SentinelGenesisDeliveryRecipient {
+                .check(&SentinelGenesisDeliveryRecipient {
                     expected_request: &expected_request,
                     identity: &owner
                 })

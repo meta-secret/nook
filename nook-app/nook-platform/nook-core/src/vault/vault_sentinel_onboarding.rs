@@ -92,7 +92,7 @@ pub fn accept_sentinel_onboarding_package(
     validate_request_delivery(&package.request, &package.delivery)?;
     let share_record = package
         .delivery
-        .check(SentinelGenesisDeliveryRecipient {
+        .check(&SentinelGenesisDeliveryRecipient {
             expected_request: &package.request,
             identity,
         })
