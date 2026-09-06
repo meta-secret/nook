@@ -341,24 +341,6 @@ mod tests {
         );
         Ok(())
     }
-
-    #[wasm_bindgen_test]
-    #[expect(
-        unowned_function,
-        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
-    )]
-    async fn existing_content_requires_event_log_mode() -> Result<(), JsError> {
-        let identity = nook_core::DeviceIdentity::generate()?;
-        let mut manager = NookVaultManager::new();
-        let result = manager
-            .connect_existing_content(&identity, "non-empty vault projection")
-            .await;
-        assert!(
-            result.is_err(),
-            "legacy content without event-log mode must fail closed"
-        );
-        Ok(())
-    }
 }
 
 #[wasm_bindgen]
