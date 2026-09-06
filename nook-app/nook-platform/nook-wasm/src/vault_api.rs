@@ -1,4 +1,7 @@
 use super::{NookError, NookSecretRecord, NookVaultManager, application, wasm_bindgen};
+use crate::storage::auth_providers::{
+    PresealedProviderSnapshotPublication, ProviderSnapshotPublication,
+};
 use crate::storage::{auth_providers, extension_state, identity_record, indexed_db};
 use js_sys::Date;
 use nook_core::{
@@ -138,7 +141,12 @@ impl NookVaultManager {
         let (snapshot, changed) =
             nook_core::ensure_local_provider_row(&snapshot, None, &new_id, &created_at);
         if changed {
-            auth_providers::save_auth_providers(&identity, &snapshot).await?;
+            ProviderSnapshotPublication {
+                identity: &identity,
+                snapshot: &snapshot,
+            }
+            .save()
+            .await?;
         }
         Ok(snapshot)
     }
@@ -159,7 +167,12 @@ impl NookVaultManager {
         let (snapshot, changed) =
             nook_core::ensure_local_provider_row(&snapshot, None, &new_id, &created_at);
         if changed {
-            auth_providers::save_auth_providers(&identity, &snapshot).await?;
+            ProviderSnapshotPublication {
+                identity: &identity,
+                snapshot: &snapshot,
+            }
+            .save()
+            .await?;
         }
         Ok(snapshot)
     }
@@ -172,7 +185,12 @@ impl NookVaultManager {
         snapshot: nook_core::AuthProvidersSnapshotData,
     ) -> Result<(), wasm_bindgen::JsError> {
         let identity = self.device_identity()?;
-        auth_providers::save_auth_providers(&identity, &snapshot).await?;
+        ProviderSnapshotPublication {
+            identity: &identity,
+            snapshot: &snapshot,
+        }
+        .save()
+        .await?;
         Ok(())
     }
 
@@ -188,7 +206,12 @@ impl NookVaultManager {
             .await?
             .snapshot;
         let replaced = nook_core::replace_active_vault_provider_grants(&existing, &snapshot);
-        auth_providers::save_auth_providers(&identity, &replaced).await?;
+        ProviderSnapshotPublication {
+            identity: &identity,
+            snapshot: &replaced,
+        }
+        .save()
+        .await?;
         Ok(())
     }
 
@@ -211,7 +234,12 @@ impl NookVaultManager {
                 "Presealed provider snapshot has no protected local app key",
             ));
         }
-        auth_providers::save_presealed_auth_providers_for_app_id(&app_id, &snapshot).await?;
+        PresealedProviderSnapshotPublication {
+            app_id: &app_id,
+            snapshot: &snapshot,
+        }
+        .save()
+        .await?;
         Ok(())
     }
 }
@@ -225,7 +253,7 @@ pub fn seal_auth_providers_for_device_public_key(
     mut snapshot: nook_core::AuthProvidersSnapshotData,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let public_key = DevicePublicKey::parse(device_public_key)?;
-    nook_core::seal_provider_credentials_for_public_key(&public_key, &mut snapshot)?;
+    snapshot.seal_credentials_for(&public_key)?;
     Ok(snapshot)
 }
 
