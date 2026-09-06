@@ -72,7 +72,10 @@ fn passkey() -> anyhow::Result<SecretValue> {
         resident_key_required: true,
         user_verification_required: true,
     };
-    let mut passkey = nook_core::create_website_passkey(&request, &[])?.credential;
+    let mut passkey = request
+        .prepare(&[])
+        .and_then(nook_core::CheckedPasskeyRegistration::generate)?
+        .credential;
     passkey.signature_count = 7.into();
     Ok(SecretValue::Passkey(passkey))
 }

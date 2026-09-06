@@ -202,7 +202,8 @@ impl NookVaultManager {
     ) -> Result<Vec<NookPasskeyAccount>, JsError> {
         self.ensure_passkey_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        nook_core::validate_website_passkey_origin(rp_id, origin)
+        (nook_core::PasskeyOrigin { rp_id, origin })
+            .validate()
             .map_err(|error| passkey_error(&error))?;
         let passkeys = self.decrypt_passkeys()?;
         let accounts = passkeys
@@ -233,7 +234,9 @@ impl NookVaultManager {
                 .map(|(_, value)| value.clone())
                 .collect::<Vec<_>>(),
         );
-        let mut result = nook_core::create_website_passkey(&request, &existing_values)
+        let mut result = request
+            .prepare(&existing_values)
+            .and_then(nook_core::CheckedPasskeyRegistration::generate)
             .map_err(|error| passkey_error(&error))?;
         let id = nook_core::generate_secret_id()?;
         let encrypted = self.encrypt_passkey_secret(&id, &result.credential)?;
@@ -268,7 +271,9 @@ impl NookVaultManager {
                 .map(|(_, value)| value.clone())
                 .collect::<Vec<_>>(),
         );
-        let mut result = nook_core::assert_website_passkey(&request, &values)
+        let mut result = request
+            .prepare(&values)
+            .and_then(nook_core::CheckedPasskeyAssertion::sign)
             .map_err(|error| passkey_error(&error))?;
         let old_id = passkeys
             .rows
