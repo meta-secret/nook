@@ -308,7 +308,7 @@ describe('DOM-backed companion authentication simulation', () => {
       credentialFillRejection: false,
       implicitSubmissionMethod: 'get',
       advanceControl: 'implicit-submission',
-      detailedAdvanceControlKind: 'absent',
+      detailedAdvanceControlKind: 'observed',
       credentialSubmissionKind: 'observed',
       filled: true,
       submissionResult: FormSubmissionResult.Submitted,
