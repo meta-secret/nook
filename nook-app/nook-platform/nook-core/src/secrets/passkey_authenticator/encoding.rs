@@ -4,7 +4,12 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Encoded ceremony data and ES256 credential material.
-use super::*;
+use super::{
+    DecodePrivateKey, Digest, ES256_ALGORITHM, Integer, MAX_CHALLENGE_BYTES, MIN_CHALLENGE_BYTES,
+    PasskeyAuthenticatorError, PasskeyAuthenticatorResult, PasskeyPrivateKeyPkcs8,
+    PasskeyPublicKeyCose, Sec1Point, SecretKey, Serialize, Sha256, ToSec1Point, URL_SAFE_NO_PAD,
+    Value, Zeroizing, de, ser,
+};
 use base64::Engine;
 pub(super) struct CanonicalPasskeyField<'a> {
     pub(super) name: &'static str,
@@ -236,6 +241,9 @@ impl AttestationObject {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{
+        CheckedPasskeyRegistration, PasskeyCredentialKey, PasskeyRegistrationRequest,
+    };
     use super::*;
 
     #[test]
@@ -280,7 +288,7 @@ mod tests {
         for user_verified in [false, true] {
             let data = AssertionAuthenticatorData {
                 rp_id: "example.com",
-                count: 0x01020304,
+                count: 0x0102_0304,
                 user_verified,
             }
             .encode();

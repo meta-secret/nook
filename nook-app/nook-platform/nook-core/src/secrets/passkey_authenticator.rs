@@ -134,7 +134,10 @@ mod assertion;
 mod encoding;
 mod registration;
 pub use assertion::CheckedPasskeyAssertion;
-use encoding::*;
+use encoding::{
+    AssertionAuthenticatorData, AttestationObject, CanonicalPasskeyField, ClientData,
+    CoseEncodedPoint, RegistrationAuthenticatorData,
+};
 pub use registration::CheckedPasskeyRegistration;
 
 /// The relying party and the exact origin reported for one ceremony.

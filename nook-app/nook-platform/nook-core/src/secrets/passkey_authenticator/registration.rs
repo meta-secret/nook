@@ -4,7 +4,14 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Registration admission precedes credential randomness and generation.
-use super::*;
+use super::{
+    AttestationObject, CanonicalPasskeyField, ClientData, CoseEncodedPoint, ES256_ALGORITHM,
+    EncodePrivateKey, Generate, HashSet, MAX_CREDENTIAL_ID_BYTES, PASSKEY_SECRET_VERSION,
+    PasskeyAuthenticatorError, PasskeyAuthenticatorResult, PasskeyCredentialKey, PasskeyOrigin,
+    PasskeyPrivateKeyPkcs8, PasskeyPublicKeyCose, PasskeyRegistrationRequest,
+    PasskeyRegistrationResult, PasskeySecret, PasskeySignatureCount, RegistrationAuthenticatorData,
+    SecretKey, ToSec1Point, URL_SAFE_NO_PAD, Zeroize,
+};
 use base64::Engine;
 /// Admitted request data, with the original request and exclusion input still borrowed.
 /// This state does not establish user presence or durable credential persistence.
@@ -179,6 +186,7 @@ impl CheckedPasskeyRegistration<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::{Deserialize, PasskeyCredentialDescriptor, Value, de};
     use super::*;
     use std::ptr;
 
@@ -260,8 +268,18 @@ mod tests {
         let before = request.clone();
         let existing = Vec::new();
         let checked = request.prepare(&existing)?;
-        assert!(ptr::eq(checked.request, &request));
-        assert!(ptr::eq(checked._existing_credentials, existing.as_slice()));
+        assert!(ptr::eq(
+            ptr::from_ref(checked.request),
+            ptr::from_ref(&request)
+        ));
+        let CheckedPasskeyRegistration {
+            _existing_credentials: existing_evidence,
+            ..
+        } = &checked;
+        assert!(ptr::eq(
+            ptr::from_ref(*existing_evidence),
+            ptr::from_ref(existing.as_slice())
+        ));
         drop(checked);
         assert_eq!(request, before);
         assert!(existing.is_empty());

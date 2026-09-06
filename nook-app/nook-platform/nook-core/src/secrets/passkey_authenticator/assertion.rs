@@ -4,7 +4,13 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Assertion selection binds the credential, counter, and request before signing.
-use super::*;
+use super::{
+    AssertionAuthenticatorData, CanonicalPasskeyField, ClientData, DecodePrivateKey, Digest,
+    HashSet, MAX_CREDENTIAL_ID_BYTES, PasskeyAssertionRequest, PasskeyAssertionResult,
+    PasskeyAuthenticatorError, PasskeyAuthenticatorResult, PasskeyCredentialKey, PasskeyOrigin,
+    PasskeySecret, PasskeySignatureCount, SecretKey, Sha256, Signature, Signer, SigningKey,
+    URL_SAFE_NO_PAD, Zeroize, Zeroizing,
+};
 use base64::Engine;
 /// A locally selected credential and its next counter, not a global counter reservation.
 ///
@@ -177,6 +183,10 @@ impl PasskeySecret {
 
 #[cfg(test)]
 mod tests {
+    use super::super::encoding::CoseKeyBytes;
+    use super::super::{
+        CheckedPasskeyRegistration, PasskeyCredentialDescriptor, PasskeyRegistrationRequest,
+    };
     use super::*;
     use p256::ecdsa::{VerifyingKey, signature::Verifier};
     use std::ptr;
@@ -257,8 +267,14 @@ mod tests {
         let before = credentials.clone();
         let request = PasskeyAssertionRequest::fixture();
         let checked = request.prepare(&credentials)?;
-        assert!(ptr::eq(checked.request, &request));
-        assert!(ptr::eq(checked.credential, &credentials[1]));
+        assert!(ptr::eq(
+            ptr::from_ref(checked.request),
+            ptr::from_ref(&request)
+        ));
+        assert!(ptr::eq(
+            ptr::from_ref(checked.credential),
+            ptr::from_ref(&credentials[1])
+        ));
         assert_eq!(u32::from(checked.next_count), 10);
         drop(checked);
         assert_eq!(credentials, before);
