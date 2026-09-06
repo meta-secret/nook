@@ -21,8 +21,8 @@ const mockAuthVitestFiles = readdirSync(mockAuthSource, {
 describe('extension Playwright discovery', () => {
   test('ignores mock-auth Vitest files while retaining extension specs', () => {
     expect(playwrightConfig.testDir).toBe('e2e')
-    expect(playwrightConfig.testIgnore).toBe('**/mock-auth/src/**/*.test.ts')
-    expect(Object.hasOwn(playwrightConfig, 'testMatch')).toBe(false)
+    expect(playwrightConfig.testMatch).toBe('**/*.spec.ts')
+    expect(Object.hasOwn(playwrightConfig, 'testIgnore')).toBe(false)
     expect(
       existsSync(
         path.join(extensionRoot, 'e2e/mock-auth-pilot-coverage.spec.ts'),
