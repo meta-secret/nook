@@ -792,7 +792,7 @@ mod browser_tests {
         assert!(detail.contains("ghp_123456"));
         assert_eq!(
             localize_provider_label(
-                "github",
+                "GitHub",
                 "This device".into(),
                 "GitHub".into(),
                 "Local".into(),
