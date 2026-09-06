@@ -6,7 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use super::import_support;
+use super::import_support::{ImportMetadata, SourceLabelMetadata};
 
 use std::collections::HashMap;
 
@@ -99,8 +99,12 @@ struct LastPassMetadata<'a> {
 impl LastPassMetadata<'_> {
     fn append_to(&self, notes: &mut String) {
         let mut metadata = Vec::new();
-        if let Some((key, value)) =
-            import_support::source_label_metadata("name", self.name, self.website_url)
+        if let Some((key, value)) = (SourceLabelMetadata {
+            key: "name",
+            label: self.name,
+            website_url: self.website_url,
+        })
+        .entry()
         {
             metadata.push((key, value));
         }
@@ -116,7 +120,11 @@ impl LastPassMetadata<'_> {
         if !self.totp.trim().is_empty() {
             metadata.push(("totp".to_owned(), self.totp.trim().to_owned()));
         }
-        import_support::append_import_metadata(notes, "LastPass", metadata);
+        ImportMetadata {
+            heading: "LastPass",
+            entries: metadata,
+        }
+        .append_to(notes);
     }
 }
 

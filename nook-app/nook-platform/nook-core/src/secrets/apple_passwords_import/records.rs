@@ -4,10 +4,13 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Original CSV reader and admitted columns consume ordered conversion.
-use super::super::import_support::{self, MAX_CSV_BYTES};
+use super::super::import_support::{
+    CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    MAX_CSV_BYTES, SourceLabelMetadata,
+};
 use super::{ApplePasswordsImportError, ApplePasswordsImportPlan};
 use crate::{AuthenticatorSecret, LoginSecret, SecretValue};
-use csv::{Reader, StringRecord};
+use csv::StringRecord;
 #[derive(Clone, Copy)]
 struct ApplePasswordColumns {
     title: usize,
@@ -18,6 +21,32 @@ struct ApplePasswordColumns {
     otp_auth: Option<usize>,
 }
 
+/// A CSV input retains its source bytes until the admitted reader is consumed.
+/// ```
+/// use nook_core::ApplePasswordsCsvInput;
+/// let csv = "Title,URL,Username,Password\n";
+/// let plan = ApplePasswordsCsvInput::new(csv).plan()?;
+/// assert!(plan.items.is_empty());
+/// # Ok::<(), nook_core::ApplePasswordsImportError>(())
+/// ```
+/// ```compile_fail,E0382
+/// use nook_core::ApplePasswordsCsvInput;
+/// let input = ApplePasswordsCsvInput::new("Title,URL,Username,Password\n");
+/// let _first = input.plan();
+/// let _second = input.plan();
+/// ```
+/// ```compile_fail,E0502
+/// use nook_core::ApplePasswordsCsvInput;
+/// let mut csv = String::from("Title,URL,Username,Password\n");
+/// let input = ApplePasswordsCsvInput::new(&csv);
+/// csv.clear();
+/// let _result = input.plan();
+/// ```
+/// ```compile_fail,E0599
+/// use nook_core::ApplePasswordsCsvInput;
+/// let input = ApplePasswordsCsvInput::new("");
+/// let _duplicate = input.clone();
+/// ```
 pub struct ApplePasswordsCsvInput<'a> {
     text: &'a str,
 }
@@ -33,7 +62,7 @@ impl<'a> ApplePasswordsCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(ApplePasswordsImportError::CsvTooLarge);
         }
-        let mut reader = import_support::csv_reader(self.text);
+        let mut reader = CsvImportReader::new(self.text);
         let columns = ApplePasswordHeaders::new(reader.headers()?).admit()?;
         Ok(CheckedApplePasswordsCsv { reader, columns })
     }
@@ -43,16 +72,15 @@ impl<'a> ApplePasswordsCsvInput<'a> {
 /// use nook_core::apple_passwords_import::records::CheckedApplePasswordsCsv;
 /// ```
 struct CheckedApplePasswordsCsv<'a> {
-    reader: Reader<&'a [u8]>,
+    reader: CsvImportReader<'a>,
     columns: ApplePasswordColumns,
 }
 impl CheckedApplePasswordsCsv<'_> {
-    fn collect(mut self) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
-        let collection = import_support::collect_csv_records(
-            &mut self.reader,
-            ApplePasswordsImportError::TooManyRecords,
-            |record| self.columns.convert(record),
-        )?;
+    fn collect(self) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
+        let collection = self.reader.collect(CsvImportConversion {
+            too_many_records: ApplePasswordsImportError::TooManyRecords,
+            convert: |record: &StringRecord| self.columns.convert(record),
+        })?;
         Ok(ApplePasswordsImportPlan {
             items: collection.items,
             source_count: collection.source_count.into(),
@@ -68,18 +96,18 @@ impl ApplePasswordHeaders {
         Self {
             normalized: headers
                 .iter()
-                .map(import_support::normalized_csv_header)
+                .map(|header| CsvHeader::new(header).normalized())
                 .collect(),
         }
     }
     fn required(&self, name: &'static str) -> Result<usize, ApplePasswordsImportError> {
         self.normalized
             .iter()
-            .position(|header| header == &import_support::normalized_csv_header(name))
+            .position(|header| header == &CsvHeader::new(name).normalized())
             .ok_or(ApplePasswordsImportError::MissingColumn(name))
     }
     fn optional(&self, name: &str) -> Option<usize> {
-        let expected = import_support::normalized_csv_header(name);
+        let expected = CsvHeader::new(name).normalized();
         self.normalized
             .iter()
             .position(|header| header == &expected)
@@ -101,21 +129,30 @@ struct ApplePasswordTitle<'a> {
 }
 impl ApplePasswordTitle<'_> {
     fn append_to(&self, notes: &mut String) {
-        if let Some(entry) =
-            import_support::source_label_metadata("title", self.title, self.website_url)
+        if let Some(entry) = (SourceLabelMetadata {
+            key: "title",
+            label: self.title,
+            website_url: self.website_url,
+        })
+        .entry()
         {
-            import_support::append_import_metadata(notes, "Apple Passwords", [entry]);
+            ImportMetadata {
+                heading: "Apple Passwords",
+                entries: [entry],
+            }
+            .append_to(notes);
         }
     }
 }
 impl ApplePasswordColumns {
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
-        let title = import_support::csv_field(record, self.title);
-        let url = import_support::csv_field(record, self.url);
-        let username = import_support::csv_field(record, self.username);
-        let password = import_support::csv_password_field(record, self.password);
-        let mut notes = import_support::optional_csv_field(record, self.notes);
-        let otp_auth = import_support::optional_csv_field(record, self.otp_auth);
+        let csv_fields = CsvRecordFields::new(record);
+        let title = csv_fields.trimmed(self.title);
+        let url = csv_fields.trimmed(self.url);
+        let username = csv_fields.trimmed(self.username);
+        let password = csv_fields.password(self.password);
+        let mut notes = csv_fields.optional(self.notes);
+        let otp_auth = csv_fields.optional(self.otp_auth);
 
         if title.is_empty()
             && url.is_empty()

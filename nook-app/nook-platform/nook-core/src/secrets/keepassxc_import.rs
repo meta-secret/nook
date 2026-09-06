@@ -6,10 +6,13 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use csv::{Reader, StringRecord};
+use csv::StringRecord;
 use thiserror::Error;
 
-use super::import_support;
+use super::import_support::{
+    self, CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
+    SourceLabelMetadata,
+};
 use crate::{AuthenticatorSecret, LoginSecret, SecretValue, SecureNoteSecret};
 
 #[derive(Debug, Error)]
@@ -50,18 +53,18 @@ impl KeePassXcHeaders {
         Self {
             normalized: headers
                 .iter()
-                .map(import_support::normalized_csv_header)
+                .map(|header| CsvHeader::new(header).normalized())
                 .collect(),
         }
     }
     fn required(&self, name: &'static str) -> Result<usize, KeePassXcImportError> {
         self.normalized
             .iter()
-            .position(|header| header == &import_support::normalized_csv_header(name))
+            .position(|header| header == &CsvHeader::new(name).normalized())
             .ok_or(KeePassXcImportError::MissingColumn(name))
     }
     fn optional(&self, name: &str) -> Option<usize> {
-        let expected = import_support::normalized_csv_header(name);
+        let expected = CsvHeader::new(name).normalized();
         self.normalized
             .iter()
             .position(|header| header == &expected)
@@ -88,8 +91,12 @@ struct KeePassXcMetadata<'a> {
 impl KeePassXcMetadata<'_> {
     fn append_to(&self, notes: &mut String) {
         let mut metadata = Vec::new();
-        if let Some(entry) =
-            import_support::source_label_metadata("title", self.title, self.website_url)
+        if let Some(entry) = (SourceLabelMetadata {
+            key: "title",
+            label: self.title,
+            website_url: self.website_url,
+        })
+        .entry()
         {
             metadata.push(entry);
         }
@@ -99,7 +106,11 @@ impl KeePassXcMetadata<'_> {
         if !self.totp.trim().is_empty() {
             metadata.push(("totp".to_owned(), self.totp.trim().to_owned()));
         }
-        import_support::append_import_metadata(notes, "KeePassXC", metadata);
+        ImportMetadata {
+            heading: "KeePassXC",
+            entries: metadata,
+        }
+        .append_to(notes);
     }
 }
 
@@ -130,13 +141,14 @@ impl KeePassXcTotp<'_> {
 
 impl KeePassXcColumns {
     fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
-        let group = import_support::csv_field(record, self.group);
-        let title = import_support::csv_field(record, self.title);
-        let username = import_support::csv_field(record, self.username);
-        let password = import_support::csv_password_field(record, self.password);
-        let url = import_support::csv_field(record, self.url);
-        let mut notes = import_support::csv_field(record, self.notes);
-        let totp = import_support::optional_csv_field(record, self.totp);
+        let csv_fields = CsvRecordFields::new(record);
+        let group = csv_fields.trimmed(self.group);
+        let title = csv_fields.trimmed(self.title);
+        let username = csv_fields.trimmed(self.username);
+        let password = csv_fields.password(self.password);
+        let url = csv_fields.trimmed(self.url);
+        let mut notes = csv_fields.trimmed(self.notes);
+        let totp = csv_fields.optional(self.totp);
 
         if group.is_empty()
             && title.is_empty()
@@ -275,22 +287,21 @@ impl<'a> KeePassXcCsvInput<'a> {
             return Err(KeePassXcImportError::CsvTooLarge);
         }
 
-        let mut reader = import_support::csv_reader(self.text);
+        let mut reader = CsvImportReader::new(self.text);
         let columns = KeePassXcHeaders::new(reader.headers()?).admit()?;
         Ok(CheckedKeePassXcCsv { reader, columns })
     }
 }
 struct CheckedKeePassXcCsv<'a> {
-    reader: Reader<&'a [u8]>,
+    reader: CsvImportReader<'a>,
     columns: KeePassXcColumns,
 }
 impl CheckedKeePassXcCsv<'_> {
-    fn collect(mut self) -> Result<KeePassXcImportPlan, KeePassXcImportError> {
-        let collection = import_support::collect_csv_records(
-            &mut self.reader,
-            KeePassXcImportError::TooManyRecords,
-            |record| self.columns.convert(record),
-        )?;
+    fn collect(self) -> Result<KeePassXcImportPlan, KeePassXcImportError> {
+        let collection = self.reader.collect(CsvImportConversion {
+            too_many_records: KeePassXcImportError::TooManyRecords,
+            convert: |record: &StringRecord| self.columns.convert(record),
+        })?;
 
         Ok(KeePassXcImportPlan {
             items: collection.items,

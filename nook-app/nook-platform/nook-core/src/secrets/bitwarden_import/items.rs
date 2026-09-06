@@ -4,7 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Bitwarden plaintext items, nullable text and ordered metadata conversion.
-use super::super::import_support;
+use super::super::import_support::{ImportMetadata, SourceLabelMetadata};
 use super::{BitwardenImportError, BitwardenImportPlan};
 use crate::{CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
 use serde::Deserialize;
@@ -124,7 +124,12 @@ impl BitwardenItem {
             .cloned()
             .unwrap_or_else(|| self.name.trim().to_owned());
         let mut metadata = Vec::new();
-        if let Some(name) = import_support::source_label_metadata("name", &self.name, &website_url)
+        if let Some(name) = (SourceLabelMetadata {
+            key: "name",
+            label: &self.name,
+            website_url: &website_url,
+        })
+        .entry()
         {
             metadata.push(name);
         }
@@ -224,7 +229,11 @@ struct BitwardenNotes<'a> {
 }
 impl BitwardenNotes<'_> {
     fn append(self, metadata: impl IntoIterator<Item = (String, String)>) {
-        import_support::append_import_metadata(self.notes, "Bitwarden", metadata);
+        ImportMetadata {
+            heading: "Bitwarden",
+            entries: metadata,
+        }
+        .append_to(self.notes);
     }
 }
 
