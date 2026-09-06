@@ -27,12 +27,12 @@
     // through the synthetic event, so preserve native implicit-submit
     // semantics only when this form has one unambiguous submit control.
     const form = event.currentTarget
-    if (!(form instanceof HTMLFormElement)) return ''
+    if (!form || typeof form.querySelectorAll !== 'function') return ''
     const submitControls = Array.from(
       form.querySelectorAll<HTMLButtonElement>(
         'button[type="submit"], button:not([type])',
       ),
-    ).filter((control) => control.form === form)
+    ).filter((control) => !control.hasAttribute('form'))
     return submitControls.length === 1
       ? submitControls[0].getAttribute('value') || ''
       : ''
