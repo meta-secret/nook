@@ -339,10 +339,11 @@ impl NookVaultManager {
     ) -> Result<NookImportResult, JsError> {
         let json = Zeroizing::new(json);
         let password = Zeroizing::new(password);
-        let plan = nook_core::plan_bitwarden_import_with_password(
-            json.as_str(),
-            (!password.is_empty()).then_some(password.as_str()),
-        )
+        let plan = nook_core::BitwardenExport {
+            json: json.as_str(),
+            password: (!password.is_empty()).then_some(password.as_str()),
+        }
+        .plan()
         .map_err(|error| NookError::Database(error.to_string()))?;
         drop(password);
         drop(json);
