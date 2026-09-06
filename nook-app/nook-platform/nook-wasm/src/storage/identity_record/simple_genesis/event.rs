@@ -266,7 +266,8 @@ impl PreparedSimpleGenesisEvent {
 #[cfg(test)]
 mod tests {
     use super::{
-        NookError, PendingSimpleGenesis, PendingSimpleGenesisEvent, SimpleGenesisEventInput,
+        NookError, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
+        SimpleGenesisEventInput,
     };
     use crate::storage::{identity_record, indexed_db};
     use identity_record::{OrdinarySimpleGenesisRequest, genesis_flow::PendingSimpleGenesisFlow};

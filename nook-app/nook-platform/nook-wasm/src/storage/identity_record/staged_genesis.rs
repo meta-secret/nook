@@ -177,8 +177,8 @@ mod tests {
     use nook_core::{AppKey, IdentityDirectory, IsoTimestamp, SigningIdentity};
 
     use super::{
-        NookError, PendingSimpleGenesis, PendingSimpleGenesisEvent, PendingSimpleGenesisFlow,
-        StagedSimpleGenesisIdentity, StagedSimpleGenesisInput,
+        NookError, PENDING_SIMPLE_GENESIS_KEY, PendingSimpleGenesis, PendingSimpleGenesisEvent,
+        PendingSimpleGenesisFlow, StagedSimpleGenesisIdentity, StagedSimpleGenesisInput,
     };
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 

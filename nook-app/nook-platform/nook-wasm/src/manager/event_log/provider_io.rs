@@ -334,7 +334,7 @@ impl NookVaultManager {
             let pinned = (pending)
                 .pin_event(identity_record::SimpleGenesisEventInput {
                     app_key: &app_key,
-                    proposed_yaml: proposed_yaml,
+                    proposed_yaml,
                     proposed_signing_seed: self.event_log.signing_seed.clone(),
                 })
                 .await?;
