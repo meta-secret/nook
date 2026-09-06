@@ -693,6 +693,28 @@ mod tests {
     }
 
     #[test]
+    fn recovery_plan_preparation_accepts_a_matching_persisted_epoch() -> anyhow::Result<()> {
+        let plan = SecurityEpochRecoveryPlan::fixture()?;
+        let trigger_yaml = plan.trigger_event_yaml.clone();
+        let trigger_event = SecurityEpochRecoveryPlan::built_event_from_yaml(&trigger_yaml)?;
+        let persisted = IdentityVaultEventId::parse(trigger_event.event.id()?.as_str())?;
+
+        let prepared = plan.prepare_execution("store_epochstate1", Some(&persisted))?;
+
+        assert_eq!(prepared.store_id.as_str(), "store_epochstate1");
+        assert_eq!(prepared.trigger_event_id, persisted);
+        assert_eq!(
+            prepared.key_epoch.as_str(),
+            prepared.trigger_event_id.as_str()
+        );
+        assert_eq!(
+            prepared.checkpoint.as_str(),
+            prepared.checkpoint_event.event.id()?.as_str()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn classified_rotation_failures_preserve_the_original_error() {
         let before = SecurityEpochRotationFailure::before(NookError::Database("before".to_owned()));
         let after = SecurityEpochRotationFailure::after(NookError::Database("after".to_owned()));

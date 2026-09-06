@@ -207,6 +207,45 @@ mod browser_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn website_passkey_accounts_return_empty_for_an_unmatched_rp() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;
+
+        let accounts = manager
+            .list_website_passkey_accounts("example.com", "https://example.com")
+            .await?;
+        assert!(accounts.is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn website_passkey_mutations_reject_invalid_json_after_guard() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;
+        let active = Function::new_no_args("return true;");
+
+        assert!(
+            manager
+                .register_website_passkey("not-json", &active)
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .assert_website_passkey("not-json", &active)
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
 }
 
 fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {

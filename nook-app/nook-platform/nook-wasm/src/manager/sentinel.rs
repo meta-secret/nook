@@ -753,6 +753,97 @@ mod tests {
         );
         Ok(())
     }
+
+    fn sentinel_yaml(
+        keys: &nook_core::VaultKeys,
+        store_id: &'static str,
+    ) -> anyhow::Result<String> {
+        let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
+        let records = nook_core::create_sentinel_share_records(keys, &participants, 2.into())?;
+        let architecture = VaultArchitecture::sentinel_personal(
+            DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
+            },
+        );
+        Ok(
+            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+                &records,
+                &nook_core::VaultUnlock::Keys,
+                &[],
+                nook_core::VaultStoreIdentityRef::Assigned(store_id),
+                nook_core::VaultNameRef::Unnamed,
+                nook_core::VaultVersionWrite::Initial,
+                &architecture,
+            )?
+            .into_inner(),
+        )
+    }
+
+    #[test]
+    fn prepare_sentinel_ceremony_session_hydrates_valid_share_metadata() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let yaml = sentinel_yaml(&keys, "store_prepare_valid")?;
+        let mut manager = NookVaultManager::new();
+
+        manager.prepare_sentinel_ceremony_session(&yaml)?;
+
+        assert_eq!(manager.vault.store_id, "store_prepare_valid");
+        assert_eq!(manager.vault.meta.sentinel_shares.len(), 2);
+        assert_eq!(manager.vault.architecture.vault_type, VaultType::Sentinel);
+        assert!(manager.vault.secrets_key.is_empty());
+        assert!(manager.vault.members_key.is_empty());
+        assert!(matches!(manager.vault.crypto, VaultCryptoState::Locked));
+        assert_eq!(manager.vault.last_synced_content, yaml);
+        Ok(())
+    }
+
+    #[test]
+    fn prepare_sentinel_ceremony_session_rejects_non_sentinel_architecture() -> anyhow::Result<()> {
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            &[],
+            &nook_core::VaultUnlock::Keys,
+            &[],
+            nook_core::VaultStoreIdentityRef::Assigned("store_simple_arch"),
+            nook_core::VaultNameRef::Unnamed,
+            nook_core::VaultVersionWrite::Initial,
+            &VaultArchitecture::simple_personal(DeviceMode::Standard),
+        )?;
+        let mut manager = NookVaultManager::new();
+
+        assert!(matches!(
+            manager.prepare_sentinel_ceremony_session(&yaml),
+            Err(NookError::Encryption(message))
+                if message == MultiDeviceError::InvalidSentinelThreshold.to_string()
+        ));
+        assert!(manager.vault.store_id.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn loading_sentinel_content_requires_cached_keys_then_hydrates_with_them() -> anyhow::Result<()>
+    {
+        let keys = nook_core::generate_vault_keys()?;
+        let yaml = sentinel_yaml(&keys, "store_load_cached")?;
+        let identity = DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+
+        assert!(matches!(
+            manager.load_stored_vault_or_sentinel_ceremony(&yaml, &identity),
+            Err(NookError::Encryption(message))
+                if message == MultiDeviceError::SentinelCeremonyRequired.to_string()
+        ));
+
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.members_key = keys.members_key.to_string();
+        let loaded = manager.load_stored_vault_or_sentinel_ceremony(&yaml, &identity)?;
+        assert_eq!(loaded.secrets_key, keys.secrets_key);
+        assert_eq!(loaded.members_key, keys.members_key);
+        assert_eq!(loaded.meta.sentinel_shares.len(), 2);
+        Ok(())
+    }
 }
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
