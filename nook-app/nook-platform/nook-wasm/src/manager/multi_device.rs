@@ -372,6 +372,111 @@ mod tests {
         );
         Ok(())
     }
+
+    #[test]
+    #[allow(
+        unknown_lints,
+        non_local_effect_before_unhandled_error,
+        reason = "the test intentionally observes a mutating overflow rejection before handling the result"
+    )]
+    fn sentinel_share_issuance_rejects_full_roster_and_reuses_existing_shares() -> anyhow::Result<()>
+    {
+        let first = nook_core::DeviceIdentity::generate()?;
+        let second = nook_core::DeviceIdentity::generate()?;
+        let third = nook_core::DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
+            nook_core::DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 0.into(),
+            },
+        );
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.members_key = keys.members_key.to_string();
+        let roster = vec![
+            nook_core::member_from_identity(&first, "2026-09-06T00:00:00Z"),
+            nook_core::member_from_identity(&second, "2026-09-06T00:00:00Z"),
+            nook_core::member_from_identity(&third, "2026-09-06T00:00:00Z"),
+        ];
+        assert!(matches!(
+            manager.maybe_issue_sentinel_shares(&roster),
+            Err(NookError::Encryption(message))
+                if message == MultiDeviceError::SentinelGenesisRosterFull.to_string()
+        ));
+
+        let quorum_roster = roster[..2].to_vec();
+        assert!(
+            manager
+                .maybe_issue_sentinel_shares(&quorum_roster)?
+                .is_some()
+        );
+        assert!(
+            manager
+                .maybe_issue_sentinel_shares(&quorum_roster)?
+                .is_none()
+        );
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn empty_multi_device_queries_are_safe() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.vault.members_key = nook_core::generate_vault_keys()?.members_key.to_string();
+        assert!(manager.init_device().is_err());
+        assert!(manager.list_pending_joins()?.is_empty());
+        assert!(manager.list_vault_members()?.is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn guarded_multi_device_operations_fail_closed() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        assert!(
+            manager
+                .deny_join_request("not-a-device".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .rename_vault_member("not-an-auth-id".to_owned(), "x".to_owned())
+                .await
+                .is_err()
+        );
+
+        manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
+            nook_core::DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 0.into(),
+            },
+        );
+        assert!(
+            manager
+                .revoke_vault_member("key_invalid".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .enroll_with_keys(String::new(), String::new())
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
 }
 
 impl NookVaultManager {

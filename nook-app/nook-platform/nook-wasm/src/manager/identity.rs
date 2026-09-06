@@ -96,13 +96,23 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     #[wasm_bindgen_test]
-    fn identity_snapshot_requests_validate_selected_store_ids() {
-        let manager = NookVaultManager::new();
+    fn identity_snapshot_requests_validate_selected_store_ids() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.id = identity.device_id().to_string();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
         assert!(manager.identity_directory_snapshot_request().is_ok());
+        let store_id = nook_core::generate_store_id()?;
+        assert!(
+            manager
+                .selected_vault_identity_context_request(store_id.as_str())
+                .is_ok()
+        );
         assert!(
             manager
                 .selected_vault_identity_context_request("invalid-store")
                 .is_err()
         );
+        Ok(())
     }
 }

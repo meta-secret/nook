@@ -99,4 +99,15 @@ mod browser_tests {
         assert!(manager.vault_recovery_options().await.is_err());
         assert!(manager.vault_access_diagnostics().await.is_err());
     }
+
+    #[wasm_bindgen_test]
+    async fn diagnostics_reject_malformed_staged_store_ids() -> Result<(), JsError> {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.vault.store_id = "not-a-store!".to_owned();
+        assert!(manager.vault_recovery_options().await.is_err());
+        assert!(manager.vault_access_diagnostics().await.is_err());
+        Ok(())
+    }
 }
