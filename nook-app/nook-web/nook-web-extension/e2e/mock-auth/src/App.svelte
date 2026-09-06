@@ -1,6 +1,7 @@
 <script lang="ts">
   import DetectionCombined from './pages/DetectionCombined.svelte'
   import DetectionFromFixture from './pages/DetectionFromFixture.svelte'
+  import DetectionGoogle from './pages/DetectionGoogle.svelte'
   import DetectionHiddenHeaderLogin from './pages/DetectionHiddenHeaderLogin.svelte'
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
@@ -83,6 +84,8 @@
   <DetectionSpa />
 {:else if pathname === '/login-with-hidden-header'}
   <DetectionHiddenHeaderLogin />
+{:else if pathname === '/v3/signin/identifier' || pathname === '/v3/signin/challenge/pwd'}
+  <DetectionGoogle />
 {:else if templateMatch?.[1]}
   <DetectionFromFixture templateId={templateMatch[1]} />
 {:else if siteMatch?.[1]}

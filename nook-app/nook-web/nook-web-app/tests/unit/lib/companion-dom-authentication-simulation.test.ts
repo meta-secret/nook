@@ -48,6 +48,7 @@ const NAMECHEAP_PAGE_WIDE_LOGIN: DomAuthenticationFixture = {
 
 afterEach(() => {
   document.body.replaceChildren()
+  window.history.replaceState({}, '', '/')
 })
 
 function fieldValue(selector: string): string | false {
@@ -56,6 +57,135 @@ function fieldValue(selector: string): string | false {
 }
 
 describe('DOM-backed companion authentication simulation', () => {
+  test('requires the live Google sign-in route for a form-less identifier step', () => {
+    const fixture: DomAuthenticationFixture = {
+      html: `<main>
+        <h1>Sign in</h1><p>Use your Google Account</p>
+        <label for="identifierId">Email or phone</label>
+        <input id="identifierId" name="identifier" autocomplete="username webauthn" aria-label="Email or phone">
+        <input name="hiddenPassword" type="password" tabindex="-1" aria-hidden="true" hidden>
+        <button type="button">Create account</button>
+        <div id="identifierNext"><button type="button">Next</button></div>
+      </main>`,
+    }
+    const request: DomAuthenticationSimulationRequest = {
+      fixture,
+      credentials: FAKE_CREDENTIALS,
+    }
+
+    window.history.replaceState({}, '', '/google')
+    const genericRoute = simulateDomAuthentication(request)
+    expect(genericRoute).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      observationCount: 1,
+      selectedRoot: false,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+
+    window.history.replaceState({}, '', '/v3/signin/identifier')
+    const signInRoute = simulateDomAuthentication(request)
+    expect(signInRoute).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      observationCount: 1,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      implicitSubmissionMethod: 'absent',
+      detailedAdvanceControlKind: 'observed',
+      credentialSubmissionKind: 'absent',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+    })
+    expect(signInRoute.selectedRoot).toBe(document.querySelector('main'))
+    expect(fieldValue('#identifierId')).toBe(FAKE_CREDENTIALS.username)
+    expect(fieldValue('[name="hiddenPassword"]')).toBe('')
+
+    const wrongControlRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: fixture.html.replace(
+          '>Next</button>',
+          '>Create account</button>',
+        ),
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const wrongControl = simulateDomAuthentication(wrongControlRequest)
+    expect(wrongControl).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+    expect(fieldValue('#identifierId')).toBe('')
+    expect(fieldValue('[name="hiddenPassword"]')).toBe('')
+  })
+
+  test('requires the captured Google username and submit semantics for its password continuation', () => {
+    window.history.replaceState({}, '', '/v3/signin/challenge/pwd')
+    const formLessRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main>
+          <input id="password-input" name="Passwd" type="password" autocomplete="current-password" aria-label="Enter your password">
+          <div id="passwordNext"><button type="button">Next</button></div>
+        </main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const formLess = simulateDomAuthentication(formLessRequest)
+    expect(formLess).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      observationCount: 1,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+    expect(fieldValue('#password-input')).toBe('')
+
+    const anonymousOwnedRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form method="post" action="/v3/signin/challenge/pwd">
+          <input id="password-input" name="Passwd" type="password" autocomplete="current-password" aria-label="Enter your password">
+          <div id="passwordNext"><button type="submit">Next</button></div>
+        </form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const anonymousOwned = simulateDomAuthentication(anonymousOwnedRequest)
+    expect(anonymousOwned).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+    expect(fieldValue('#password-input')).toBe('')
+
+    const ownedRequest: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<main><form id="login_form" method="post" action="/auth/login">
+          <input id="identifierId" name="identifier" type="email" autocomplete="username" placeholder="Email or phone" aria-label="Email or phone">
+          <input id="password-input" name="Passwd" type="password" autocomplete="current-password" aria-label="Enter your password">
+          <div id="passwordNext"><button type="submit">Next</button></div>
+        </form></main>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const owned = simulateDomAuthentication(ownedRequest)
+    expect(owned).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      workflowAction: AuthenticationWorkflowAction.ContinueWithNook,
+      credentialFillOutcome: CredentialFillJourneyOutcomeKind.Completed,
+      credentialFillRejection: false,
+      credentialSubmissionKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+      submittedControlIdentity: 'Next',
+    })
+    expect(fieldValue('#identifierId')).toBe(FAKE_CREDENTIALS.username)
+    expect(fieldValue('#password-input')).toBe(FAKE_CREDENTIALS.password)
+  })
+
   test('runs the Namecheap shell through observation, classification, fill, and submission', () => {
     const request: DomAuthenticationSimulationRequest = {
       fixture: NAMECHEAP_PAGE_WIDE_LOGIN,
