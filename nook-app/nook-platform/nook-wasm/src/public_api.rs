@@ -826,7 +826,10 @@ mod browser_tests {
                 .provider_id()
                 .is_err()
         );
-        assert_eq!(provider_label_by_id(empty.clone(), "missing").unwrap(), "");
+        assert_eq!(
+            provider_label_by_id(empty.clone(), "missing").unwrap(),
+            "missing"
+        );
         assert!(
             providers_visible_while_device_locked(empty)
                 .providers
