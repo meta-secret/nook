@@ -929,4 +929,69 @@ mod projection_tests {
         assert_eq!(read_vault_version(yaml.as_str()), 1);
         Ok(())
     }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    async fn async_storage_adapters_fail_closed_without_a_local_identity() -> Result<(), JsError> {
+        let manager = NookVaultManager::new();
+        let empty_snapshot = nook_core::AuthProvidersSnapshotData::default();
+
+        assert!(manager.load_auth_providers_snapshot().await.is_err());
+        assert!(manager.load_auth_providers_with_local_row().await.is_err());
+        assert!(
+            manager
+                .save_auth_providers_snapshot(empty_snapshot.clone())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .replace_auth_providers_for_vault(empty_snapshot.clone())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .ensure_local_auth_provider_snapshot(empty_snapshot.clone())
+                .await
+                .is_ok()
+        );
+
+        let app_key = nook_core::AppKey::generate()?;
+        assert!(
+            manager
+                .save_presealed_auth_providers_snapshot("not-an-app-id", empty_snapshot.clone())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .save_presealed_auth_providers_snapshot(app_key.app_id().as_str(), empty_snapshot)
+                .await
+                .is_err()
+        );
+
+        assert!(delete_auth_providers_db().await.is_ok());
+        assert!(has_local_vault().await.is_ok());
+        assert!(has_active_local_vault().await.is_ok());
+        assert!(list_local_vaults().await.is_ok());
+        assert!(get_active_vault_selection().await.is_ok());
+        assert!(set_active_vault("missing-store").await.is_err());
+        assert!(
+            set_local_vault_label("missing-store".to_owned(), "label".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            import_local_vault_blob("not yaml".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            import_named_local_vault_blob("not yaml".to_owned(), "label".to_owned())
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
 }

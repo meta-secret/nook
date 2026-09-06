@@ -172,3 +172,101 @@ pub async fn verify_shared_google_drive_folder(
     let (id, name) = drive_shared::verify_shared_vault_folder(access_token, folder_ref).await?;
     Ok(NookGoogleDriveFolder::new(id, name))
 }
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen::JsError;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn google_drive_request(
+        credential: SharedStorageGrantCredential,
+        target: nook_core::SharedStorageTargetSelection,
+    ) -> nook_core::SharedStorageGrantRequest {
+        nook_core::SharedStorageGrantRequest {
+            provider_type: StorageProviderType::OauthFile,
+            oauth_preset: ProviderOauthPreset::Preset(OauthFilePreset::GoogleDrive),
+            joiner_identity_kind: nook_core::SharedJoinerIdentityKind::Email,
+            joiner_identity: "joiner@example.com".to_owned(),
+            storage_target_hint: SharedStorageTargetHint::Unspecified,
+            storage_target: target,
+            credential,
+        }
+    }
+
+    #[wasm_bindgen_test]
+    async fn shared_grant_adapter_preserves_manual_and_unsupported_policy_paths()
+    -> Result<(), JsError> {
+        let manual_request = google_drive_request(
+            SharedStorageGrantCredential::Unavailable,
+            nook_core::SharedStorageTargetSelection::Create,
+        );
+        assert!(is_google_drive_shared_grant_request(
+            manual_request.provider_type,
+            manual_request.oauth_preset
+        ));
+        let manual = prepare_shared_storage_grant(manual_request).await?;
+        assert!(matches!(
+            manual,
+            SharedStorageGrantOutcome::ManualGrantRequired {
+                target: SharedStorageGrantTarget::Unavailable,
+                ..
+            }
+        ));
+        assert!(!should_flush_shared_storage_grant(
+            manual.clone(),
+            SharedStorageGrantCredential::Unavailable
+        ));
+        assert!(should_flush_shared_storage_grant(
+            manual,
+            SharedStorageGrantCredential::AccessToken(" owner-token ".to_owned())
+        ));
+
+        let existing = prepare_shared_storage_grant(google_drive_request(
+            SharedStorageGrantCredential::AccessToken("   ".to_owned()),
+            nook_core::SharedStorageTargetSelection::Existing(" folder-1 ".to_owned()),
+        ))
+        .await?;
+        assert!(matches!(
+            existing,
+            SharedStorageGrantOutcome::ManualGrantRequired {
+                target: SharedStorageGrantTarget::Identified { ref storage_target_id },
+                ..
+            } if storage_target_id == "folder-1"
+        ));
+
+        let unsupported_request = nook_core::SharedStorageGrantRequest {
+            provider_type: StorageProviderType::Github,
+            oauth_preset: ProviderOauthPreset::NotApplicable,
+            ..google_drive_request(
+                SharedStorageGrantCredential::AccessToken("owner-token".to_owned()),
+                nook_core::SharedStorageTargetSelection::Create,
+            )
+        };
+        assert!(!is_google_drive_shared_grant_request(
+            unsupported_request.provider_type,
+            unsupported_request.oauth_preset
+        ));
+        let unsupported = prepare_shared_storage_grant(unsupported_request).await?;
+        assert!(matches!(
+            unsupported,
+            SharedStorageGrantOutcome::Unsupported { .. }
+        ));
+        assert!(!should_flush_shared_storage_grant(
+            unsupported,
+            SharedStorageGrantCredential::AccessToken("owner-token".to_owned())
+        ));
+
+        let invalid = nook_core::SharedStorageGrantRequest {
+            joiner_identity: "not-an-email".to_owned(),
+            ..google_drive_request(
+                SharedStorageGrantCredential::Unavailable,
+                nook_core::SharedStorageTargetSelection::Create,
+            )
+        };
+        assert!(prepare_shared_storage_grant(invalid).await.is_err());
+        Ok(())
+    }
+}
