@@ -264,16 +264,15 @@ mod tests {
     };
     use rexie::Rexie;
 
-    use super::{
-        AppPasskeyCreation, DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile,
-        DeviceAccessProfileDecodeResult, DeviceAccessProfileKey, DeviceAccessProfileUpdate,
-        NookError, PasskeyAccessProfile, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
-        PasskeyCreationCeremony, PasskeyLastUsedAtEvidence, PasskeyProviderLabelUpdate,
-        PasskeyRecordMetadata, SelectedPasskeyCreation, VerifiedVaultAccessUpdate,
-        WrappedDeviceIdentity, indexed_db,
-    };
     #[cfg(all(target_arch = "wasm32", feature = "browser-wasm-tests"))]
-    use super::{DeviceIdentityProtection, PasskeyProtectionInput};
+    use super::{AppPasskeyCreation, DeviceIdentityProtection, PasskeyProtectionInput};
+    use super::{
+        DEVICE_ACCESS_PROFILE_KEY, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
+        DeviceAccessProfileKey, DeviceAccessProfileUpdate, NookError, PasskeyAccessProfile,
+        PasskeyBrowserObservation, PasskeyCreatedAtEvidence, PasskeyCreationCeremony,
+        PasskeyLastUsedAtEvidence, PasskeyProviderLabelUpdate, PasskeyRecordMetadata,
+        SelectedPasskeyCreation, VerifiedVaultAccessUpdate, WrappedDeviceIdentity, indexed_db,
+    };
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
