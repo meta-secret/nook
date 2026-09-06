@@ -6,7 +6,11 @@ import {
   CompanionAuthenticationWorkflowMatchKind,
   CredentialFillRejection,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { FormSubmissionResult } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  authenticationPageObservationFacts,
+  FormSubmissionResult,
+  summarizeAuthenticationWorkflowForms,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   DomAuthenticationSimulationOutcomeKind,
   simulateDomAuthentication,
@@ -313,6 +317,39 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(result.selectedRoot).toBe(
       document.querySelector('[data-testid="x-active-form"]'),
     )
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected X authentication observation')
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: expect.arrayContaining([
+        expect.objectContaining({
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue with Apple'),
+          submissionMethod: 'absent',
+        }),
+        expect.objectContaining({
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue with phone'),
+          submissionMethod: 'absent',
+        }),
+      ]),
+    })
+    expect(facts.ceremony).toMatchObject({
+      advanceControl: 'implicit-submission',
+      implicitSubmissionMethod: 'get',
+    })
+    expect(facts.credentialSubmission).toMatchObject({
+      kind: 'observed',
+      facts: {
+        actionability: 'actionable',
+        method: 'get',
+      },
+    })
     expect(fieldValue('#x-username')).toBe(FAKE_CREDENTIALS.username)
     expect(fieldValue('#x-password')).toBe('')
     expect(fieldValue('[data-testid="x-responsive-copy"] [type="text"]')).toBe(
@@ -336,6 +373,52 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(document.querySelector('#x-phone')?.getAttribute('type')).toBe(
       'button',
     )
+  })
+
+  test('does not infer implicit submission beside a Rust-safe actionable advance', () => {
+    window.history.replaceState({}, '', '/auth/login')
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: {
+        html: `<form aria-label="Login" action="/auth/login">
+          <label for="safe-username">Username</label>
+          <input id="safe-username" name="username" autocomplete="username">
+          <button id="safe-continue" type="button">Continue</button>
+        </form>`,
+      },
+      credentials: FAKE_CREDENTIALS,
+    }
+    const result = simulateDomAuthentication(request)
+
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.Login,
+      matchKind: CompanionAuthenticationWorkflowMatchKind.Matched,
+      workflowKind: AuthenticationWorkflowKind.Login,
+      advanceControl: 'absent',
+      credentialSubmissionKind: 'absent',
+      detailedAdvanceControlKind: 'observed',
+      filled: true,
+      submissionResult: FormSubmissionResult.Submitted,
+    })
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) {
+      throw new Error('expected safe actionable authentication observation')
+    }
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(facts.ceremony.advanceControl).toBe('absent')
+    expect(facts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        expect.objectContaining({
+          actionability: 'actionable',
+          label: expect.stringContaining('Continue'),
+          submissionMethod: 'absent',
+        }),
+      ],
+    })
   })
 
   test('runs both bounded steps of the cross-origin Apple authorization surface', () => {

@@ -530,8 +530,8 @@ export function authenticationPageObservationFacts({
   const implicitSubmissionAvailable =
     observation.formScope.kind === PasswordFormScopeKind.Owned &&
     !ownedObservationIsLocallyBounded(observation) &&
-    !boundedAdvanceObservations.some(
-      ({ actionability }) => actionability === "actionable",
+    !boundedAdvanceObservations.some((candidate) =>
+      candidate.actionability === "actionable" && authentication_advance_control_is_safe(candidate)
     ) &&
     !advanceControls.some(
       (control) =>
