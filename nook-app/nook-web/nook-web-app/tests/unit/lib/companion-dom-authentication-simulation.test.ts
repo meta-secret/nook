@@ -285,7 +285,7 @@ describe('DOM-backed companion authentication simulation', () => {
           <div><input name="password" type="password"></div><div>Continue</div>
         </form></section>
         <form data-testid="x-active-form">
-          <iframe title="Continue with Google" sandbox srcdoc="<button type='button'>Continue with Google</button>"></iframe>
+          <template data-testid="x-google-frame"><iframe title="Continue with Google" sandbox srcdoc="<button type='button'>Continue with Google</button>"></iframe></template>
           <button id="x-apple" type="button">Continue with Apple</button>
           <button id="x-phone" type="button">Continue with phone</button>
           <label for="x-username">Email or username</label>
@@ -357,8 +357,11 @@ describe('DOM-backed companion authentication simulation', () => {
     )
     const activeForm = document.querySelector('[data-testid="x-active-form"]')
     const continueControl = document.querySelector('[data-testid="x-continue"]')
-    const googleFrame = document.querySelector('iframe')
-    if (!activeForm || !continueControl || !googleFrame) {
+    const googleTemplate = document.querySelector<HTMLTemplateElement>(
+      '[data-testid="x-google-frame"]',
+    )
+    const googleFrame = googleTemplate?.content.querySelector('iframe')
+    if (!activeForm || !continueControl || !googleTemplate || !googleFrame) {
       throw new Error('expected X structural evidence')
     }
     expect(activeForm.hasAttribute('method')).toBe(false)
@@ -366,6 +369,7 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(continueControl.tagName).toBe('DIV')
     expect(continueControl.hasAttribute('role')).toBe(false)
     expect(continueControl.hasAttribute('tabindex')).toBe(false)
+    expect(googleTemplate.content.contains(googleFrame)).toBe(true)
     expect(googleFrame.hasAttribute('src')).toBe(false)
     expect(document.querySelector('#x-apple')?.getAttribute('type')).toBe(
       'button',
