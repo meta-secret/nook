@@ -10,6 +10,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use nook_auth2::{ValidationError, ValidationResult};
 use nook_event_log::SecretFingerprint;
 use sha2::Sha256;
+use zeroize::{Zeroize, Zeroizing};
 const IDENTITY_DOMAIN: &[u8] = b"nook/secret-identity/v1\0";
 const VERSION_DOMAIN: &[u8] = b"nook/secret-version/v1\0";
 const IDENTITY_FINGERPRINT_SCHEME: &str = "hmac-sha256:v1:";
@@ -69,6 +70,11 @@ impl CanonicalSecretFingerprint<'_> {
     }
 }
 struct CanonicalSecretBytes(Vec<u8>);
+impl Drop for CanonicalSecretBytes {
+    fn drop(&mut self) {
+        self.0.zeroize();
+    }
+}
 impl CanonicalSecretBytes {
     fn append(&mut self, value: &str) {
         self.0.extend_from_slice(value.len().to_string().as_bytes());
@@ -151,14 +157,16 @@ impl CanonicalSecretBytes {
         match value {
             SecretValue::Login(login) => bytes.append(login.password.as_str()),
             SecretValue::ApiKey(api_key) => bytes.append(api_key.key.as_str()),
-            SecretValue::SeedPhrase(seed_phrase) => bytes.append(
-                seed_phrase
-                    .seed
-                    .split_whitespace()
-                    .collect::<Vec<_>>()
-                    .join(" ")
-                    .as_str(),
-            ),
+            SecretValue::SeedPhrase(seed_phrase) => {
+                let seed = Zeroizing::new(
+                    seed_phrase
+                        .seed
+                        .split_whitespace()
+                        .collect::<Vec<_>>()
+                        .join(" "),
+                );
+                bytes.append(seed.as_str());
+            }
             SecretValue::SecureNote(note) => {
                 bytes.append(
                     (ProviderNotes {
@@ -190,7 +198,7 @@ impl CanonicalSecretBytes {
                     .iter()
                     .map(|code| FingerprintText::new(code).normalized())
                     .collect::<Vec<_>>();
-                backup_codes.sort();
+                backup_codes.sort_by(|left, right| left.as_str().cmp(right.as_str()));
                 for code in backup_codes {
                     bytes.append(code.as_str());
                 }

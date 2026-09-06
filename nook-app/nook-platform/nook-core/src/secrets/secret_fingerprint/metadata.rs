@@ -4,6 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Provider metadata recognition and note enrichment retain exact source rules.
+use zeroize::Zeroizing;
 struct ImportMetadataMarker {
     heading: &'static str,
     key_prefixes: &'static [&'static str],
@@ -88,8 +89,9 @@ impl<'a> FingerprintText<'a> {
     pub(super) fn new(value: &'a str) -> Self {
         Self { value }
     }
-    pub(super) fn normalized(&self) -> String {
-        self.value.replace("\r\n", "\n").trim().to_owned()
+    pub(super) fn normalized(&self) -> Zeroizing<String> {
+        let replaced = Zeroizing::new(self.value.replace("\r\n", "\n"));
+        Zeroizing::new(replaced.trim().to_owned())
     }
 }
 impl ImportMetadataMarker {
@@ -122,7 +124,7 @@ pub(super) struct ProviderNotes<'a> {
     pub(super) policy: ImportMetadataPolicy,
 }
 impl ProviderNotes<'_> {
-    pub(super) fn neutral(&self) -> String {
+    pub(super) fn neutral(&self) -> Zeroizing<String> {
         let normalized = FingerprintText::new(self.text).normalized();
         let marker_index = self
             .policy
@@ -130,17 +132,18 @@ impl ProviderNotes<'_> {
             .iter()
             .filter_map(|marker| marker.section_index(&normalized))
             .min();
-        marker_index.map_or(normalized.clone(), |index| {
-            normalized[..index].trim_end().to_owned()
-        })
+        match marker_index {
+            Some(index) => Zeroizing::new(normalized[..index].trim_end().to_owned()),
+            None => normalized,
+        }
     }
     pub(super) fn merge(&self, incoming: &str) -> String {
         let existing = FingerprintText::new(self.text).normalized();
         let incoming = FingerprintText::new(incoming).normalized();
-        if incoming.is_empty() || existing == incoming || existing.contains(&incoming) {
-            existing
-        } else if existing.is_empty() || incoming.contains(&existing) {
-            incoming
+        if incoming.is_empty() || existing == incoming || existing.contains(incoming.as_str()) {
+            existing.as_str().to_owned()
+        } else if existing.is_empty() || incoming.contains(existing.as_str()) {
+            incoming.as_str().to_owned()
         } else {
             let existing_base = ProviderNotes {
                 text: &existing,
@@ -155,12 +158,12 @@ impl ProviderNotes<'_> {
             if existing_base == incoming_base {
                 let incoming_metadata = incoming[incoming_base.len()..].trim();
                 if incoming_metadata.is_empty() || existing.contains(incoming_metadata) {
-                    existing
+                    existing.as_str().to_owned()
                 } else {
-                    format!("{existing}\n\n{incoming_metadata}")
+                    format!("{}\n\n{incoming_metadata}", existing.as_str())
                 }
             } else {
-                format!("{existing}\n\n{incoming}")
+                format!("{}\n\n{}", existing.as_str(), incoming.as_str())
             }
         }
     }
@@ -173,11 +176,15 @@ mod tests {
     #[test]
     fn normalization_changes_crlf_and_edge_whitespace_only() {
         assert_eq!(
-            FingerprintText::new(" \r\nA\r\nB\rC \t").normalized(),
+            FingerprintText::new(" \r\nA\r\nB\rC \t")
+                .normalized()
+                .as_str(),
             "A\nB\rC"
         );
         assert_eq!(
-            FingerprintText::new("Mixed CASE\t inside").normalized(),
+            FingerprintText::new("Mixed CASE\t inside")
+                .normalized()
+                .as_str(),
             "Mixed CASE\t inside"
         );
     }
@@ -197,7 +204,8 @@ mod tests {
                     text,
                     policy: ImportMetadataPolicy::General
                 })
-                .neutral(),
+                .neutral()
+                .as_str(),
                 text
             );
         }
@@ -210,7 +218,8 @@ mod tests {
                     text,
                     policy: ImportMetadataPolicy::General
                 })
-                .neutral(),
+                .neutral()
+                .as_str(),
                 "user"
             );
         }
@@ -224,7 +233,8 @@ mod tests {
                 text,
                 policy: ImportMetadataPolicy::General
             })
-            .neutral(),
+            .neutral()
+            .as_str(),
             "note"
         );
         let text = "## LastPass\n- group: Work";
@@ -233,7 +243,8 @@ mod tests {
                 text,
                 policy: ImportMetadataPolicy::General
             })
-            .neutral(),
+            .neutral()
+            .as_str(),
             ""
         );
     }
@@ -256,7 +267,8 @@ mod tests {
                     text,
                     policy: ImportMetadataPolicy::General
                 })
-                .neutral(),
+                .neutral()
+                .as_str(),
                 expected
             );
         }
@@ -273,7 +285,8 @@ mod tests {
                     text,
                     policy: ImportMetadataPolicy::General
                 })
-                .neutral(),
+                .neutral()
+                .as_str(),
                 text
             );
             assert_eq!(
@@ -281,7 +294,8 @@ mod tests {
                     text,
                     policy: ImportMetadataPolicy::Login
                 })
-                .neutral(),
+                .neutral()
+                .as_str(),
                 "note"
             );
         }
