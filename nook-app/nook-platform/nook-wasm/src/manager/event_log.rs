@@ -20,20 +20,14 @@ pub(in crate::manager) use security_epoch::SecurityEpochRotationFailure;
 use super::{EventLogSyncIssueState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
 use crate::conversion::wasm_iso_timestamp;
-use crate::storage::drive_events::{
-    fetch_drive_event_optional, list_drive_event_ids, put_drive_event_if_absent,
-};
+use crate::storage::drive_events::DriveEventStore;
 use crate::storage::event_db::{
     append_outbox_index, is_event_log_mode, load_heads, load_key_epoch, load_local_event_store,
     load_outbox, load_signing_seed, queue_outbox_entry, remove_outbox_entry, save_heads,
     save_key_epoch, save_signing_seed, save_verified_event, set_event_log_mode,
 };
-use crate::storage::github_events::{
-    fetch_github_event, list_github_event_ids, put_github_event_if_absent,
-};
-use crate::storage::icloud::{
-    fetch_icloud_event, list_icloud_event_ids, put_icloud_event_if_absent,
-};
+use crate::storage::github_events::GitHubEventStore;
+use crate::storage::icloud::ICloudEventStore;
 use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
 use crate::storage::local_folder::{
     LocalFolderEventWrite, read_local_folder_event_files, write_local_folder_event_files,

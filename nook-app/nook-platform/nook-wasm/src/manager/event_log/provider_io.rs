@@ -1,3 +1,9 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::storage::event_db::save_event_bytes;
 use crate::storage::identity_record;
 use nook_core::{
@@ -7,19 +13,21 @@ use nook_core::{
 use std::collections::BTreeSet;
 
 use super::{
-    EventId, NookError, NookVaultManager, VaultOperation, fetch_drive_event_optional,
-    fetch_github_event, fetch_icloud_event, iso_timestamp, list_drive_event_ids,
-    list_github_event_ids, list_icloud_event_ids, load_local_event_store, load_signing_seed,
-    put_drive_event_if_absent, put_github_event_if_absent, put_icloud_event_if_absent, save_heads,
+    DriveEventStore, EventId, GitHubEventStore, ICloudEventStore, NookError, NookVaultManager,
+    VaultOperation, iso_timestamp, load_local_event_store, load_signing_seed, save_heads,
     save_signing_seed,
 };
 
-fn is_github_event_missing(message: &str) -> bool {
-    message.contains("Event file missing at")
+impl NookError {
+    fn is_github_event_missing(&self) -> bool {
+        matches!(self, Self::GitHub(message) if message.contains("Event file missing at"))
+    }
 }
 
-fn is_icloud_event_missing(message: &str) -> bool {
-    message.contains("is missing.")
+impl NookError {
+    fn is_icloud_event_missing(&self) -> bool {
+        matches!(self, Self::ICloud(message) if message.contains("is missing."))
+    }
 }
 
 struct SimpleGenesisOperationsInput<'a> {
@@ -30,102 +38,106 @@ struct SimpleGenesisOperationsInput<'a> {
     created_at: &'a nook_core::IsoTimestamp,
 }
 
-async fn simple_genesis_operations(
-    input: &SimpleGenesisOperationsInput<'_>,
-) -> Result<Vec<VaultOperation>, NookError> {
-    let Some(pending) = input.pending else {
-        let auth_record = nook_core::genesis_auth_record(
-            input.identity,
-            &input.keys.secrets_key,
-            &input.keys.members_key,
-        )?;
-        let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
-        return Ok(vec![VaultOperation::JoinApproved {
-            device_id: input.identity.device_id().clone(),
-            encryption_public_key: input.identity.public_key(),
-            signing_public_key: input.signing_public_key.clone(),
-            label: MemberLabel::from_trusted("genesis".to_owned()),
-            secrets_key_ciphertext: envelopes.secrets_key,
-            members_key_ciphertext: envelopes.members_key,
-        }]);
-    };
-    let identity_record = if let Some(staged) = pending.staged_identity() {
-        staged
+impl SimpleGenesisOperationsInput<'_> {
+    async fn operations(&self) -> Result<Vec<VaultOperation>, NookError> {
+        let Some(pending) = self.pending else {
+            let auth_record = nook_core::genesis_auth_record(
+                self.identity,
+                &self.keys.secrets_key,
+                &self.keys.members_key,
+            )?;
+            let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+            return Ok(vec![VaultOperation::JoinApproved {
+                device_id: self.identity.device_id().clone(),
+                encryption_public_key: self.identity.public_key(),
+                signing_public_key: self.signing_public_key.clone(),
+                label: MemberLabel::from_trusted("genesis".to_owned()),
+                secrets_key_ciphertext: envelopes.secrets_key,
+                members_key_ciphertext: envelopes.members_key,
+            }]);
+        };
+        let identity_record = if let Some(staged) = pending.staged_identity() {
+            staged
+                .directory
+                .identities()
+                .iter()
+                .find(|identity| identity.identity_id == pending.identity_id)
+                .cloned()
+                .ok_or_else(|| {
+                    NookError::Database(
+                        "Staged Simple genesis identity no longer exists.".to_owned(),
+                    )
+                })?
+        } else {
+            identity_record::set_identity_member_signing_public_key(
+                &pending.identity_id,
+                self.identity.device_id(),
+                self.signing_public_key,
+            )
+            .await?;
+            identity_record::load_identity(&pending.identity_id)
+                .await?
+                .ok_or_else(|| {
+                    NookError::Database("Simple genesis identity no longer exists.".to_owned())
+                })?
+        };
+        nook_core::simple_identity_genesis_operations(
+            &nook_core::SimpleIdentityGenesisOperationsInput {
+                identity: &identity_record,
+                keys: self.keys,
+                current_app_id: self.identity.device_id(),
+                current_signing_public_key: self.signing_public_key,
+                created_at: self.created_at.as_str(),
+            },
+        )
+        .map_err(NookError::from)
+    }
+}
+
+impl NookVaultManager {
+    async fn simple_genesis_signing_identity(
+        &mut self,
+        pending: Option<&identity_record::PendingSimpleGenesis>,
+    ) -> Result<nook_core::SigningIdentity, NookError> {
+        let Some(pending) = pending.filter(|pending| pending.is_staged()) else {
+            return self.ensure_signing_identity().await;
+        };
+        let app_key = self.device_identity()?;
+        if let Some(seed) =
+            identity_record::resume_staged_simple_genesis_signing_seed(pending, &app_key)?
+        {
+            self.event_log.signing_seed = seed;
+        }
+        if self.event_log.signing_seed.is_empty() {
+            self.event_log.signing_seed = load_signing_seed().await?.ok_or_else(|| {
+                NookError::Database(
+                    "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
+                )
+            })?;
+        }
+        let signing = SigningIdentity::from_seed_hex_stored(&self.event_log.signing_seed)?;
+        let staged = pending.staged_identity().ok_or_else(|| {
+            NookError::Database("Staged Simple genesis state disappeared.".to_owned())
+        })?;
+        let member = staged
             .directory
             .identities()
             .iter()
             .find(|identity| identity.identity_id == pending.identity_id)
-            .cloned()
-            .ok_or_else(|| {
-                NookError::Database("Staged Simple genesis identity no longer exists.".to_owned())
-            })?
-    } else {
-        identity_record::set_identity_member_signing_public_key(
-            &pending.identity_id,
-            input.identity.device_id(),
-            input.signing_public_key,
-        )
-        .await?;
-        identity_record::load_identity(&pending.identity_id)
-            .await?
-            .ok_or_else(|| {
-                NookError::Database("Simple genesis identity no longer exists.".to_owned())
-            })?
-    };
-    nook_core::simple_identity_genesis_operations(
-        &nook_core::SimpleIdentityGenesisOperationsInput {
-            identity: &identity_record,
-            keys: input.keys,
-            current_app_id: input.identity.device_id(),
-            current_signing_public_key: input.signing_public_key,
-            created_at: input.created_at.as_str(),
-        },
-    )
-    .map_err(NookError::from)
-}
-
-async fn simple_genesis_signing_identity(
-    manager: &mut NookVaultManager,
-    pending: Option<&identity_record::PendingSimpleGenesis>,
-) -> Result<nook_core::SigningIdentity, NookError> {
-    let Some(pending) = pending.filter(|pending| pending.is_staged()) else {
-        return manager.ensure_signing_identity().await;
-    };
-    let app_key = manager.device_identity()?;
-    if let Some(seed) =
-        identity_record::resume_staged_simple_genesis_signing_seed(pending, &app_key)?
-    {
-        manager.event_log.signing_seed = seed;
+            .and_then(|identity| {
+                identity
+                    .members
+                    .iter()
+                    .find(|member| member.app_id == *app_key.app_id())
+            })
+            .ok_or_else(|| NookError::Database("Staged genesis member disappeared.".to_owned()))?;
+        if member.signing_public_key != signing.public_key() {
+            return Err(NookError::Database(
+                "Staged genesis signer does not match the authorized member.".to_owned(),
+            ));
+        }
+        Ok(signing)
     }
-    if manager.event_log.signing_seed.is_empty() {
-        manager.event_log.signing_seed = load_signing_seed().await?.ok_or_else(|| {
-            NookError::Database(
-                "Staged Simple genesis requires an enrolled member signing key.".to_owned(),
-            )
-        })?;
-    }
-    let signing = SigningIdentity::from_seed_hex_stored(&manager.event_log.signing_seed)?;
-    let staged = pending.staged_identity().ok_or_else(|| {
-        NookError::Database("Staged Simple genesis state disappeared.".to_owned())
-    })?;
-    let member = staged
-        .directory
-        .identities()
-        .iter()
-        .find(|identity| identity.identity_id == pending.identity_id)
-        .and_then(|identity| {
-            identity
-                .members
-                .iter()
-                .find(|member| member.app_id == *app_key.app_id())
-        })
-        .ok_or_else(|| NookError::Database("Staged genesis member disappeared.".to_owned()))?;
-    if member.signing_public_key != signing.public_key() {
-        return Err(NookError::Database(
-            "Staged genesis signer does not match the authorized member.".to_owned(),
-        ));
-    }
-    Ok(signing)
 }
 
 impl NookVaultManager {
@@ -134,17 +146,27 @@ impl NookVaultManager {
     ) -> Result<BTreeSet<EventId>, NookError> {
         let raw_ids = match self.storage.mode {
             StorageMode::Github => {
-                list_github_event_ids(&self.storage.access_token, &self.storage.remote_ref).await?
+                (GitHubEventStore {
+                    pat: &self.storage.access_token,
+                    repo: &self.storage.remote_ref,
+                })
+                .list_github_event_ids()
+                .await?
             }
             StorageMode::GoogleDrive => {
-                list_drive_event_ids(&self.storage.access_token, &self.storage.drive_event_parent)
-                    .await?
+                (DriveEventStore {
+                    token: &self.storage.access_token,
+                    parent: &self.storage.drive_event_parent,
+                })
+                .list_drive_event_ids()
+                .await?
             }
             StorageMode::ICloud => {
-                list_icloud_event_ids(
-                    &self.storage.access_token,
-                    &self.storage.icloud_event_target,
-                )
+                (ICloudEventStore {
+                    web_auth_token: &self.storage.access_token,
+                    target: &self.storage.icloud_event_target,
+                })
+                .list_icloud_event_ids()
                 .await?
             }
             StorageMode::Local => Vec::new(),
@@ -161,40 +183,36 @@ impl NookVaultManager {
     ) -> Result<Option<Vec<u8>>, NookError> {
         match self.storage.mode {
             StorageMode::Github => {
-                match fetch_github_event(
-                    &self.storage.access_token,
-                    &self.storage.remote_ref,
-                    event_id,
-                )
+                match (GitHubEventStore {
+                    pat: &self.storage.access_token,
+                    repo: &self.storage.remote_ref,
+                })
+                .fetch_github_event(event_id)
                 .await
                 {
                     Ok(bytes) => Ok(Some(bytes)),
-                    Err(NookError::GitHub(message)) if is_github_event_missing(&message) => {
-                        Ok(None)
-                    }
+                    Err(error) if error.is_github_event_missing() => Ok(None),
                     Err(err) => Err(err),
                 }
             }
             StorageMode::GoogleDrive => {
-                fetch_drive_event_optional(
-                    &self.storage.access_token,
-                    &self.storage.drive_event_parent,
-                    event_id,
-                )
+                (DriveEventStore {
+                    token: &self.storage.access_token,
+                    parent: &self.storage.drive_event_parent,
+                })
+                .fetch_drive_event_optional(event_id)
                 .await
             }
             StorageMode::ICloud => {
-                match fetch_icloud_event(
-                    &self.storage.access_token,
-                    &self.storage.icloud_event_target,
-                    event_id,
-                )
+                match (ICloudEventStore {
+                    web_auth_token: &self.storage.access_token,
+                    target: &self.storage.icloud_event_target,
+                })
+                .fetch_icloud_event(event_id)
                 .await
                 {
                     Ok(bytes) => Ok(Some(bytes)),
-                    Err(NookError::ICloud(message)) if is_icloud_event_missing(&message) => {
-                        Ok(None)
-                    }
+                    Err(error) if error.is_icloud_event_missing() => Ok(None),
                     Err(err) => Err(err),
                 }
             }
@@ -209,29 +227,26 @@ impl NookVaultManager {
     ) -> Result<(), NookError> {
         match self.storage.mode {
             StorageMode::Github => {
-                put_github_event_if_absent(
-                    &self.storage.access_token,
-                    &self.storage.remote_ref,
-                    event_id,
-                    bytes,
-                )
+                (GitHubEventStore {
+                    pat: &self.storage.access_token,
+                    repo: &self.storage.remote_ref,
+                })
+                .put_github_event_if_absent(event_id, bytes)
                 .await
             }
-            StorageMode::GoogleDrive => put_drive_event_if_absent(
-                &self.storage.access_token,
-                &self.storage.drive_event_parent,
-                event_id,
-                bytes,
-            )
+            StorageMode::GoogleDrive => (DriveEventStore {
+                token: &self.storage.access_token,
+                parent: &self.storage.drive_event_parent,
+            })
+            .put_drive_event_if_absent(event_id, bytes)
             .await
             .map(|_| ()),
             StorageMode::ICloud => {
-                put_icloud_event_if_absent(
-                    &self.storage.access_token,
-                    &self.storage.icloud_event_target,
-                    event_id,
-                    bytes,
-                )
+                (ICloudEventStore {
+                    web_auth_token: &self.storage.access_token,
+                    target: &self.storage.icloud_event_target,
+                })
+                .put_icloud_event_if_absent(event_id, bytes)
                 .await
             }
             StorageMode::Local => Ok(()),
@@ -260,7 +275,7 @@ impl NookVaultManager {
         pending: Option<&identity_record::PendingSimpleGenesis>,
     ) -> Result<(), NookError> {
         self.activate_event_log_mode().await?;
-        let signing = simple_genesis_signing_identity(self, pending).await?;
+        let signing = self.simple_genesis_signing_identity(pending).await?;
         let actor_id = signing.actor_id()?;
         let signing_public_key = signing.public_key();
         let key_epoch = self.ensure_key_epoch().await?;
@@ -276,7 +291,7 @@ impl NookVaultManager {
             match self.vault.architecture.vault_type {
                 VaultType::Simple => {
                     operations.extend(
-                        simple_genesis_operations(&SimpleGenesisOperationsInput {
+                        SimpleGenesisOperationsInput {
                             pending,
                             identity: &identity,
                             signing_public_key: &signing_public_key,
@@ -285,7 +300,8 @@ impl NookVaultManager {
                                 members_key,
                             },
                             created_at,
-                        })
+                        }
+                        .operations()
                         .await?,
                     );
                 }
