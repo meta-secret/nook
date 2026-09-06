@@ -415,6 +415,11 @@ mod tests {
         microsoft.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
         assert!(authentication_advance_control_is_safe(microsoft.clone()));
 
+        let mut non_default_port = microsoft.clone();
+        non_default_port.source_origin = "https://login.live.com:8443".to_owned();
+        non_default_port.destination_identity = "https://login.live.com:8443/".to_owned();
+        assert!(!authentication_advance_control_is_safe(non_default_port));
+
         for destination in [
             "https://live.com/",
             "https://login.microsoftonline.com/",

@@ -722,6 +722,10 @@ mod tests {
     fn microsoft_consumer_root_requires_exact_https_authority_and_route() {
         for (source, destination) in [
             ("http://login.live.com", "http://login.live.com/"),
+            (
+                "https://login.live.com:8443",
+                "https://login.live.com:8443/",
+            ),
             ("https://login.live.com", "https://other.example/"),
             (
                 "https://login.live.com.evil.example",

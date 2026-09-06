@@ -130,6 +130,7 @@ pub fn canonicalize_control_destination(
     };
     let is_microsoft_consumer_login_root = destination.scheme() == "https"
         && destination.host_str() == Some("login.live.com")
+        && destination.port_or_known_default() == Some(443)
         && decoded_path == "/";
     let mut path_identity = decoded_path.clone();
     if let Some(fragment) = &fragment {
