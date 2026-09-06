@@ -1,6 +1,6 @@
 //! Read-only dashboard projection for browser device and vault access metadata.
 
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
 use nook_core::{
     AppId, DeviceAccessProtectionKind, PasskeyAuthenticatorAttachment, PasskeyBackupState, StoreId,

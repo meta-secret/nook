@@ -1,6 +1,6 @@
 use crate::storage::identity_record;
 use nook_core::{AppId, WrappedDeviceIdentity};
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::{DeviceIdentityProtection, PasskeyRecordMetadata};
 use rexie::TransactionMode;
 

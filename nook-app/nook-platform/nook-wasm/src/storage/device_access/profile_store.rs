@@ -2,7 +2,7 @@
 
 use crate::storage::identity_record;
 use nook_core::AppId;
-#[cfg(test)]
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 use nook_core::DeviceIdentityProtection;
 
 use crate::NookError;

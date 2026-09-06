@@ -5,10 +5,10 @@
 
 use js_sys::Date;
 use nook_core::IsoTimestamp;
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+use nook_core::{DeviceIdentityProtection, PasskeyProtectionInput};
 #[cfg(test)]
-use nook_core::{
-    DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata, WrappedDeviceIdentity,
-};
+use nook_core::{PasskeyRecordMetadata, WrappedDeviceIdentity};
 
 pub(crate) use nook_core::{
     DeviceAccessProfile, DeviceAccessProfileDecodeResult, PasskeyAccessProfile,
