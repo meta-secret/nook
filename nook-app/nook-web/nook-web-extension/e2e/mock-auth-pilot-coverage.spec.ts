@@ -268,8 +268,14 @@ test.describe('PIN Pilot mock-auth coverage', () => {
               ?.value || '',
           submitEvidence:
             sessionStorage.getItem('openai-chatgpt-submit-evidence') || '',
-          widgetText:
-            document.querySelector('#nook-auth-widget')?.textContent || '',
+          inputEvidence:
+            sessionStorage.getItem('openai-chatgpt-input-evidence') || '',
+          clickEvidence:
+            sessionStorage.getItem('openai-chatgpt-click-evidence') || '',
+          widgetText: await page
+            .locator('#nook-auth-widget')
+            .innerText()
+            .catch(() => ''),
         }))
         throw new Error(
           `${error instanceof Error ? error.message : String(error)}\nChatGPT mock evidence: ${JSON.stringify(evidence)}`,

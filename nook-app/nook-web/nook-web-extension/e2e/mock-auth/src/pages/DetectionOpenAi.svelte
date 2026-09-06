@@ -8,6 +8,8 @@
   import { navigate } from '../lib/navigation'
 
   const SUBMISSION_EVIDENCE_KEY = 'openai-submission-evidence'
+  const CHATGPT_INPUT_EVIDENCE_KEY = 'openai-chatgpt-input-evidence'
+  const CHATGPT_CLICK_EVIDENCE_KEY = 'openai-chatgpt-click-evidence'
 
   let email = $state('')
   let alternativeActivationCount = $state(0)
@@ -16,6 +18,17 @@
   function activateAlternative(event: Event): void {
     event.preventDefault()
     alternativeActivationCount += 1
+  }
+
+  function recordChatGptInput(event: Event): void {
+    const input = event.currentTarget
+    if (input instanceof HTMLInputElement) {
+      sessionStorage.setItem(CHATGPT_INPUT_EVIDENCE_KEY, input.value)
+    }
+  }
+
+  function recordChatGptClick(): void {
+    sessionStorage.setItem(CHATGPT_CLICK_EVIDENCE_KEY, 'clicked')
   }
 
   function submittedEmail(): string {
@@ -118,9 +131,13 @@
         aria-label="Email address"
         placeholder="Email address"
         bind:value={email}
+        oninput={recordChatGptInput}
       />
-      <button name="intent" type="submit" value="chatgpt-continue"
-        >Continue</button
+      <button
+        name="intent"
+        type="submit"
+        value="chatgpt-continue"
+        onclick={recordChatGptClick}>Continue</button
       >
     </form>
   </main>
