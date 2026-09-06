@@ -294,9 +294,7 @@ struct PasskeyKeyInput<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        DeviceIdentity, PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput,
-    };
+    use crate::{PasskeyRecoveryRequest, PasskeyRegistration, PasskeyRegistrationInput};
 
     struct ProtectedRecordFixture<'a> {
         record: &'a WrappedDeviceIdentity,

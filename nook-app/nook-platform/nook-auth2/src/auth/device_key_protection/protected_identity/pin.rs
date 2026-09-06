@@ -96,7 +96,7 @@ mod tests {
         WebAuthnPrfInput, WebAuthnUserHandle,
     };
     use super::*;
-    use crate::DeviceIdentity;
+    use crate::{DeviceIdentity, DeviceKeyDerivationIterations};
 
     #[test]
     fn pin_whitespace_and_minimum_length_keep_byte_semantics() -> anyhow::Result<()> {
