@@ -41,7 +41,7 @@ gh pr merge <number> --squash
 
 See [Loom tools](../../teams/ai/references/loom-tools.md).
 
-Create and refresh PR metadata using the exact
+Have PR Steward create and refresh PR metadata using the exact
 [title and description contract](../workflows/pull-requests.md#pr-title-and-description).
 Do this at publication, after a material scope change, and before readiness or
 handoff.
@@ -56,10 +56,10 @@ Delivery rules:
   [team worker contract](../../AGENTS.md#team-worker-contract). Neither bounded
   editor has independent Git authority. Gizmo continues either published head
   without duplicate integration or advisory local review.
-- `task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` summarizes
-  readiness.
+- `task loom:pr-land CONFIG=<pr-land-merge-check-request.yaml>` supplies
+  readiness evidence to Gizmo.
 - Loom never squash-merges.
-  - Gizmo merges after readiness succeeds.
+  - PR Steward merges only after Gizmo's explicit merge authorization.
 - Loom dispatches complete validation before any GitHub review wait.
   - It requests one exact-head Codex review without waiting.
   - Review and hosted checks proceed concurrently.
@@ -70,7 +70,7 @@ Delivery rules:
 - A later advance of `main` does not invalidate a successful exact-head audit
   by itself. The readiness audit still requires a mergeable PR, successful
   exact-head checks and deployment, and clean review state.
-- Keep PR monitoring in the active task with bounded direct waits. Never create
+- Keep PR Steward monitoring in the active task with bounded direct waits. Never create
   a Codex scheduled task, automation, heartbeat, reminder, or recurring
   follow-up to finish delivery later.
 - Planning a bounded polling cadence is allowed as active-task execution
@@ -134,7 +134,8 @@ Does not apply to:
       is required when no candidate qualifies.
 - [ ] If promotion changes the head, repeat hosted validation.
 - [ ] Run `task loom:pr-land CONFIG=<pr-land-ready-request.yaml>` on the exact head.
-- [ ] Squash-merge immediately when readiness succeeds, then report duration.
+- [ ] Authorize PR Steward to squash-merge immediately when Gizmo's readiness
+      verdict succeeds, then report duration.
 - [ ] Keep monitoring in the active task; do not schedule a Codex follow-up.
 - [ ] Stop at the PR merge unless Main work was explicitly assigned.
 - [ ] Publish Workbench issue, worklog, and agent statistics.
@@ -151,4 +152,5 @@ Does not apply to:
   solely for that reason when the other readiness conditions pass.
 - Initial expensive validation still requires a current base before dispatch.
 - The audit stays read-only.
-- Gizmo performs the squash merge after readiness succeeds.
+- PR Steward performs the squash merge after Gizmo's readiness verdict and
+      explicit merge authorization.

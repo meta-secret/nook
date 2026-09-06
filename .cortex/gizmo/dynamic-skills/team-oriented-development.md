@@ -24,7 +24,9 @@ simple shared-branch delivery sequence.
 - Workers stay inside their assigned scope.
 - Workers report cross-team dependencies to Gizmo.
 - Gizmo assigns one writer for shared files.
-- Workers do not push, open pull requests, resolve review threads, or merge.
+- Functional workers do not push, open pull requests, resolve review threads,
+  or merge. PR Steward performs those external mechanics only through an
+  explicit Gizmo authorization packet.
 - Do not create worker worktrees.
 - Do not add parallel Team Agent lifecycle or Git-state machinery.
 
@@ -34,4 +36,5 @@ simple shared-branch delivery sequence.
 - The accepted result is already on the shared branch.
 - Focused tests cover the changed behavior.
 - No concurrent writer touched the checkout.
-- Gizmo retains external delivery ownership.
+- Gizmo retains external delivery policy, authorization, and verdict
+  ownership. PR Steward executes only the named mechanics.

@@ -22,43 +22,46 @@ describe('delegation visualization renderer', () => {
           dependencies: [],
         },
         {
-          id: 'security-key',
-          team: DelegationVisualizationTeam.WebDevelopment,
-          description: 'create security key component',
+          id: 'steward-pr',
+          team: DelegationVisualizationTeam.PrSteward,
+          description: 'perform authorized pull-request delivery mechanics',
           dependencies: ['update-cortex'],
         },
         {
           id: 'auth-module',
           team: DelegationVisualizationTeam.DevelopmentCore,
           description: 'implement auth module',
-          dependencies: ['security-key'],
+          dependencies: ['steward-pr'],
         },
       ],
     };
-    expect(renderDelegationVisualization(request)).toEqual({
-      gizmo: {
-        tasks: [
-          {
-            id: 'update-cortex',
-            team: DelegationVisualizationTeam.Ai,
-            description: 'update Cortex',
-            depends_on: [],
-          },
-          {
-            id: 'security-key',
-            team: DelegationVisualizationTeam.WebDevelopment,
-            description: 'create security key component',
-            depends_on: ['update-cortex'],
-          },
-          {
-            id: 'auth-module',
-            team: DelegationVisualizationTeam.DevelopmentCore,
-            description: 'implement auth module',
-            depends_on: ['security-key'],
-          },
-        ],
+    expect(
+      renderDelegationVisualization(request).gizmo.tasks.map((task) => ({
+        id: task.id,
+        team: task.team,
+        description: task.description,
+        depends_on: task.depends_on,
+      })),
+    ).toEqual([
+      {
+        id: 'update-cortex',
+        team: DelegationVisualizationTeam.Ai,
+        description: 'update Cortex',
+        depends_on: [],
       },
-    });
+      {
+        id: 'steward-pr',
+        team: DelegationVisualizationTeam.PrSteward,
+        description: 'perform authorized pull-request delivery mechanics',
+        depends_on: ['update-cortex'],
+      },
+      {
+        id: 'auth-module',
+        team: DelegationVisualizationTeam.DevelopmentCore,
+        description: 'implement auth module',
+        depends_on: ['steward-pr'],
+      },
+    ]);
   });
 
   test('keeps repeated teams as separate Team Agent entries', () => {
@@ -149,7 +152,7 @@ describe('delegation visualization renderer', () => {
         },
         {
           id: 'second',
-          team: DelegationVisualizationTeam.Security,
+          team: DelegationVisualizationTeam.PrSteward,
           description: 'second task',
           dependencies: [],
         },

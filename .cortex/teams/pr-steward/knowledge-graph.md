@@ -1,0 +1,21 @@
+# PR Steward Knowledge Graph
+
+Load only the authority required by the current pull-request operation.
+
+## Team Agent contract
+
+- [PR Steward contract](AGENTS.md) defines the operational boundary, fixed
+  dispatch profile, and parent authorization seam.
+
+## Workflows
+
+- [Pull-request lifecycle](workflows/pull-request-lifecycle.md) defines
+  metadata, review, validation, evidence, wait, and merge mechanics.
+- [Authorization handshake](workflows/authorization-handshake.md) defines
+  operation packets, exact-head checks, merge authorization, and blockers.
+
+## Ownership boundary
+
+PR Steward returns external evidence to Gizmo Prime.
+Gizmo owns technical finding disposition, functional routing, shared-branch
+sequencing, readiness, merge policy, Workbench state, and the final verdict.
