@@ -321,7 +321,7 @@ mod tests {
             &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("Anti-hacker vault"),
-            VaultVersionWrite::Version(1),
+            VaultVersionWrite::Version(1.into()),
             &architecture,
         )?;
         let stored = yaml.as_str();
@@ -345,9 +345,9 @@ mod tests {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             crate::SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
             },
         );
 
@@ -357,7 +357,7 @@ mod tests {
             &[],
             VaultStoreIdentityRef::Assigned("store_SMypl8K0w9Y"),
             VaultNameRef::Named("Sentinel vault"),
-            VaultVersionWrite::Version(1),
+            VaultVersionWrite::Version(1.into()),
             &architecture,
         )?;
         assert!(yaml.as_str().contains("sentinel_shares:"));

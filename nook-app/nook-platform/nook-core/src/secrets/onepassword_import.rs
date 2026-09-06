@@ -23,6 +23,28 @@ const CREDIT_CARD_CATEGORY_UUID: &str = "002";
 const SECURE_NOTE_CATEGORY_UUID: &str = "003";
 const PASSWORD_CATEGORY_UUID: &str = "005";
 
+/// Unsupported 1PUX format version reported at the import boundary.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct UnsupportedOnePasswordExportVersion(u32);
+
+impl From<u32> for UnsupportedOnePasswordExportVersion {
+    fn from(value: u32) -> Self {
+        Self(value)
+    }
+}
+
+impl From<UnsupportedOnePasswordExportVersion> for u32 {
+    fn from(value: UnsupportedOnePasswordExportVersion) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for UnsupportedOnePasswordExportVersion {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum OnePasswordImportError {
     #[error("This is not a valid 1Password 1PUX archive: {0}")]
@@ -34,7 +56,7 @@ pub enum OnePasswordImportError {
     #[error("The 1Password export data is too large to import safely.")]
     ExportDataTooLarge,
     #[error("This 1Password export uses unsupported 1PUX version {0}.")]
-    UnsupportedVersion(u32),
+    UnsupportedVersion(UnsupportedOnePasswordExportVersion),
     #[error("The 1Password export metadata is invalid: {0}")]
     InvalidAttributes(#[source] serde_json::Error),
     #[error("The 1Password export data is invalid: {0}")]
@@ -44,8 +66,8 @@ pub enum OnePasswordImportError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct OnePasswordImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 #[derive(Debug, Deserialize)]
@@ -511,14 +533,21 @@ fn plan_export_data(json: &str) -> Result<OnePasswordImportPlan, OnePasswordImpo
     let skipped_unsupported = source_count.saturating_sub(items.len());
     Ok(OnePasswordImportPlan {
         items,
-        source_count,
-        skipped_unsupported,
+        source_count: source_count.into(),
+        skipped_unsupported: skipped_unsupported.into(),
     })
 }
 
 /// Parse a 1Password Unencrypted Export (`.1pux`) archive without extracting it
 /// to disk. Only the bounded `export.attributes` and `export.data` entries are
 /// read; attachments remain untouched and unsupported.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: accepts the original 1PUX ZIP archive bytes"
+    )
+)]
 pub fn plan_onepassword_import(
     archive_bytes: &[u8],
 ) -> Result<OnePasswordImportPlan, OnePasswordImportError> {
@@ -536,7 +565,7 @@ pub fn plan_onepassword_import(
     }
     if attributes.version != SUPPORTED_1PUX_VERSION {
         return Err(OnePasswordImportError::UnsupportedVersion(
-            attributes.version,
+            attributes.version.into(),
         ));
     }
     let export_data = read_zip_text(&mut archive, "export.data", MAX_EXPORT_DATA_BYTES)?;
@@ -616,8 +645,8 @@ mod tests {
           }]
         }"#;
         let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)?)?;
-        assert_eq!(plan.source_count, 3);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 3);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 3);
 
         let SecretValue::Login(login) = &plan.items[0] else {
@@ -668,8 +697,8 @@ mod tests {
           }]
         }"#;
         let plan = plan_onepassword_import(&build_1pux(current_attributes(), data)?)?;
-        assert_eq!(plan.source_count, 4);
-        assert_eq!(plan.skipped_unsupported, 2);
+        assert_eq!(usize::from(plan.source_count), 4);
+        assert_eq!(usize::from(plan.skipped_unsupported), 2);
         assert_eq!(plan.items.len(), 2);
         let SecretValue::CreditCard(card) = &plan.items[1] else {
             panic!("expected credit card");
@@ -702,7 +731,8 @@ mod tests {
         )?;
         assert!(matches!(
             plan_onepassword_import(&future),
-            Err(OnePasswordImportError::UnsupportedVersion(4))
+            Err(OnePasswordImportError::UnsupportedVersion(version))
+                if u32::from(version) == 4
         ));
         Ok(())
     }

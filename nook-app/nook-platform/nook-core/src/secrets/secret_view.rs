@@ -5,7 +5,8 @@ use crate::ValidationError;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{
-    AuthenticatorSecret, CreditCardSecret, SecretId, SecretRecord, SecretType, SecretValue,
+    AuthenticatorSecret, CreditCardSecret, FileAttachmentByteCount, SecretId, SecretRecord,
+    SecretType, SecretValue,
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -13,6 +14,40 @@ use url::Url;
 mod secret_presentation;
 pub use secret_presentation::*;
 mod secret_record_presentation;
+
+/// Number of words exposed by a seed-phrase list projection.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct SeedPhraseWordCount(usize);
+
+impl From<usize> for SeedPhraseWordCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SeedPhraseWordCount> for usize {
+    fn from(value: SeedPhraseWordCount) -> Self {
+        value.0
+    }
+}
+
+/// Number of backup codes exposed by an authenticator list projection.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct AuthenticatorBackupCodeCount(usize);
+
+impl From<usize> for AuthenticatorBackupCodeCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<AuthenticatorBackupCodeCount> for usize {
+    fn from(value: AuthenticatorBackupCodeCount) -> Self {
+        value.0
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type", rename_all = "kebab-case")]
@@ -27,7 +62,7 @@ pub enum SecretListItemData {
     },
     SeedPhrase {
         name: String,
-        word_count: usize,
+        word_count: SeedPhraseWordCount,
     },
     SecureNote {
         title: String,
@@ -42,7 +77,7 @@ pub enum SecretListItemData {
         issuer: String,
         account: String,
         website_url: String,
-        backup_code_count: usize,
+        backup_code_count: AuthenticatorBackupCodeCount,
     },
     CreditCard {
         title: String,
@@ -55,7 +90,7 @@ pub enum SecretListItemData {
         title: String,
         file_name: String,
         mime_type: String,
-        size_bytes: u64,
+        size_bytes: FileAttachmentByteCount,
     },
 }
 
@@ -120,7 +155,7 @@ pub struct FileAttachmentSecretForm {
     pub title: String,
     pub file_name: String,
     pub mime_type: String,
-    pub size_bytes: u64,
+    pub size_bytes: FileAttachmentByteCount,
     pub content_base64: String,
 }
 
@@ -221,7 +256,7 @@ pub fn build_secret_yaml(
                 title: string_field("title"),
                 file_name: string_field("fileName"),
                 mime_type: string_field("mimeType"),
-                size_bytes,
+                size_bytes: size_bytes.into(),
                 content_base64: string_field("contentBase64"),
             })
         }
@@ -474,7 +509,7 @@ mod tests {
         };
         assert_eq!(value.title, "notes.txt");
         assert_eq!(value.file_name, "notes.txt");
-        assert_eq!(value.size_bytes, 12);
+        assert_eq!(u64::from(value.size_bytes), 12);
 
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_file"),
@@ -490,7 +525,7 @@ mod tests {
                 title: "notes.txt".to_owned(),
                 file_name: "notes.txt".to_owned(),
                 mime_type: "text/plain".to_owned(),
-                size_bytes: 12,
+                size_bytes: 12.into(),
             }
         );
         assert!(!format!("{item:?}").contains("secret-bytes"));

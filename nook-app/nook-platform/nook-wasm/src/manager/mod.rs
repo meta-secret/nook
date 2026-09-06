@@ -304,15 +304,15 @@ impl NookVaultManager {
             && self.vault.search_catalog_store_id == self.vault.store_id
             && let SearchCatalogState::Ready(catalog) = &self.vault.search_catalog
         {
-            return Ok(catalog.query(query, secret_type_filter, offset, limit));
+            return Ok(catalog.query(query, secret_type_filter, offset.into(), limit.into()));
         }
         Ok(nook_core::query_encrypted_secrets(
             &self.vault.meta.secrets,
             crypto,
             query,
             secret_type_filter,
-            offset,
-            limit,
+            offset.into(),
+            limit.into(),
         )?)
     }
 
@@ -410,7 +410,7 @@ impl NookVaultManager {
         self.vault.password_entries = metadata.password_entries;
         self.vault.store_id = metadata.store_id;
         self.vault.vault_name = VaultNameState::Named(metadata.vault_name);
-        self.vault.vault_version = metadata.version;
+        self.vault.vault_version = metadata.version.into();
         self.vault.architecture = metadata.architecture;
         Ok(())
     }

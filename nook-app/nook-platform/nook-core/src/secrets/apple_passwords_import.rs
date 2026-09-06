@@ -43,8 +43,8 @@ pub enum ApplePasswordsImportError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ApplePasswordsImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 #[derive(Clone, Copy)]
@@ -237,6 +237,13 @@ fn plan_safari_zip_import(
 }
 
 /// Parse an Apple Passwords CSV or Safari browsing-data ZIP export in memory.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: accepts the original Apple Passwords ZIP archive bytes"
+    )
+)]
 pub fn plan_apple_passwords_export(
     export_bytes: &[u8],
 ) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
@@ -272,8 +279,8 @@ pub fn plan_apple_passwords_import(
 
     Ok(ApplePasswordsImportPlan {
         items: collection.items,
-        source_count: collection.source_count,
-        skipped_unsupported: collection.skipped_unsupported,
+        source_count: collection.source_count.into(),
+        skipped_unsupported: collection.skipped_unsupported.into(),
     })
 }
 
@@ -294,8 +301,8 @@ mod tests {
 
         let plan = plan_apple_passwords_import(csv)?;
 
-        assert_eq!(plan.source_count, 1);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(plan.items.len(), 2);
         assert_eq!(
             plan.items[0],
@@ -324,7 +331,7 @@ mod tests {
 
         let plan = plan_apple_passwords_import(csv)?;
 
-        assert_eq!(plan.source_count, 1);
+        assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(
             plan.items,
             vec![SecretValue::Login(LoginSecret {
@@ -347,9 +354,9 @@ mod tests {
 
         let plan = plan_apple_passwords_import(csv)?;
 
-        assert_eq!(plan.source_count, 2);
+        assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(plan.items.len(), 1);
-        assert_eq!(plan.skipped_unsupported, 2);
+        assert_eq!(usize::from(plan.skipped_unsupported), 2);
         Ok(())
     }
 
@@ -364,10 +371,10 @@ mod tests {
 
         let plan = plan_apple_passwords_import(csv)?;
 
-        assert_eq!(plan.source_count, 1);
+        assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(plan.items.len(), 1);
         assert!(matches!(plan.items[0], SecretValue::Authenticator(_)));
-        assert_eq!(plan.skipped_unsupported, 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 1);
         Ok(())
     }
 
@@ -429,7 +436,7 @@ mod tests {
 
         let plan = plan_apple_passwords_export(&zip)?;
 
-        assert_eq!(plan.source_count, 1);
+        assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(
             plan.items,
             vec![SecretValue::Login(LoginSecret {
@@ -473,7 +480,7 @@ mod tests {
     fn accepts_raw_csv_bytes_through_export_entry_point() -> anyhow::Result<()> {
         let csv = "Title,URL,Username,Password\nExample,https://example.com,alice,secret\n";
         let plan = plan_apple_passwords_export(csv.as_bytes())?;
-        assert_eq!(plan.source_count, 1);
+        assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(plan.items.len(), 1);
         Ok(())
     }

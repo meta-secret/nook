@@ -166,7 +166,7 @@ fn canonical_identity(value: &SecretValue) -> Vec<u8> {
             append_field(&mut bytes, normalized_text(&file.title).as_str());
             append_field(&mut bytes, normalized_text(&file.file_name).as_str());
             append_field(&mut bytes, normalized_text(&file.mime_type).as_str());
-            append_field(&mut bytes, file.size_bytes.to_string().as_str());
+            append_field(&mut bytes, u64::from(file.size_bytes).to_string().as_str());
         }
     }
     bytes

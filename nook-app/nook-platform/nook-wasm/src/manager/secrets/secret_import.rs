@@ -5,7 +5,10 @@
 )]
 use super::NookVaultManager;
 use crate::{NookError, NookImportResult};
-use nook_core::{AgeArmoredCiphertext, SecretValue, SymmetricKey, VaultOperation};
+use nook_core::{
+    AgeArmoredCiphertext, SecretImportUnsupportedRecordCount, SecretValue, SymmetricKey,
+    VaultOperation,
+};
 use std::collections::{HashMap, HashSet};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -256,7 +259,7 @@ impl NookVaultManager {
     pub(super) async fn commit_secret_import(
         &mut self,
         items: Vec<nook_core::SecretValue>,
-        skipped_unsupported: usize,
+        skipped_unsupported: SecretImportUnsupportedRecordCount,
         source: SecretImportSource,
     ) -> Result<NookImportResult, JsError> {
         let _ = self.status.tx.send(source.status().to_owned());
@@ -286,7 +289,7 @@ impl PreparedSecretImport {
         self,
         manager: &mut NookVaultManager,
         source: SecretImportSource,
-        skipped_unsupported: usize,
+        skipped_unsupported: SecretImportUnsupportedRecordCount,
     ) -> Result<NookImportResult, JsError> {
         let Self {
             operations,
@@ -310,13 +313,13 @@ impl PreparedSecretImport {
             action = source.action(),
             import_source = source.label(),
             imported,
-            skipped_unsupported,
+            skipped_unsupported = usize::from(skipped_unsupported),
             skipped_duplicates,
             "Secret import completed"
         );
         Ok(NookImportResult::new(
             imported,
-            skipped_unsupported,
+            usize::from(skipped_unsupported),
             skipped_duplicates,
         ))
     }

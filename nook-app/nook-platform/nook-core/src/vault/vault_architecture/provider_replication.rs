@@ -217,9 +217,9 @@ mod tests {
         let sentinel_ready = VaultArchitecture::sentinel_personal(
             DeviceMode::AntiHacker,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
             },
         );
         validate_architecture_for_provider(

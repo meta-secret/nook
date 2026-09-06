@@ -27,9 +27,9 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
     let architecture = VaultArchitecture::sentinel_personal(
         DeviceMode::Standard,
         SentinelPolicy {
-            threshold: 2,
-            required_participants: 3,
-            ready_participants: 3,
+            threshold: 2.into(),
+            required_participants: 3.into(),
+            ready_participants: 3.into(),
         },
     );
     assert!(!architecture.can_create_secret_with_records(&[]));

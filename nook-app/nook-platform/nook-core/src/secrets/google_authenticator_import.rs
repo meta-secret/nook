@@ -1,6 +1,6 @@
 //! Google Authenticator migration QR conversion into Nook authenticator items.
 
-use std::mem;
+use std::{fmt, mem};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use percent_encoding::percent_decode_str;
@@ -14,6 +14,28 @@ const MAX_QR_CODES: usize = 100;
 const MAX_URI_BYTES: usize = 16 * 1024;
 const MAX_PAYLOAD_BYTES: usize = 1024 * 1024;
 const MAX_ITEMS: usize = 10_000;
+
+/// Number of QR codes expected in a Google Authenticator migration batch.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct GoogleAuthenticatorMigrationQrCodeCount(usize);
+
+impl From<usize> for GoogleAuthenticatorMigrationQrCodeCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<GoogleAuthenticatorMigrationQrCodeCount> for usize {
+    fn from(value: GoogleAuthenticatorMigrationQrCodeCount) -> Self {
+        value.0
+    }
+}
+
+impl fmt::Display for GoogleAuthenticatorMigrationQrCodeCount {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(formatter)
+    }
+}
 
 #[derive(Clone, PartialEq, Message)]
 struct MigrationPayload {
@@ -107,14 +129,14 @@ pub enum GoogleAuthenticatorImportError {
     #[error(
         "This Google Authenticator export is incomplete. Scan all {0} QR codes before importing."
     )]
-    IncompleteBatch(usize),
+    IncompleteBatch(GoogleAuthenticatorMigrationQrCodeCount),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GoogleAuthenticatorImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 struct ParsedPart {
@@ -195,7 +217,7 @@ fn validate_batch(parts: &mut [ParsedPart]) -> Result<(), GoogleAuthenticatorImp
             .any(|(index, part)| index != part.batch_index)
     {
         return Err(GoogleAuthenticatorImportError::IncompleteBatch(
-            expected_size,
+            expected_size.into(),
         ));
     }
     Ok(())
@@ -314,8 +336,8 @@ pub fn plan_google_authenticator_import(
     }
     Ok(GoogleAuthenticatorImportPlan {
         items,
-        source_count,
-        skipped_unsupported,
+        source_count: source_count.into(),
+        skipped_unsupported: skipped_unsupported.into(),
     })
 }
 
@@ -382,8 +404,8 @@ mod tests {
             17,
         ))])?;
 
-        assert_eq!(plan.source_count, 1);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         let SecretValue::Authenticator(item) = &plan.items[0] else {
             panic!("expected authenticator");
         };
@@ -406,8 +428,8 @@ mod tests {
 
         let plan = plan_google_authenticator_import(&[migration_uri.to_owned()])?;
 
-        assert_eq!(plan.source_count, 1);
-        assert_eq!(plan.skipped_unsupported, 1);
+        assert_eq!(usize::from(plan.source_count), 1);
+        assert_eq!(usize::from(plan.skipped_unsupported), 1);
         assert!(plan.items.is_empty());
         Ok(())
     }
@@ -443,7 +465,7 @@ mod tests {
 
         let plan = plan_google_authenticator_import(&[second, first])?;
 
-        assert_eq!(plan.source_count, 2);
+        assert_eq!(usize::from(plan.source_count), 2);
         assert_eq!(plan.items.len(), 2);
         let SecretValue::Authenticator(first) = &plan.items[0] else {
             panic!("expected authenticator");
@@ -458,7 +480,7 @@ mod tests {
         let other = uri(&payload(Vec::new(), 2, 1, 11));
         assert_eq!(
             plan_google_authenticator_import(slice::from_ref(&first)),
-            Err(GoogleAuthenticatorImportError::IncompleteBatch(2))
+            Err(GoogleAuthenticatorImportError::IncompleteBatch(2.into()))
         );
         assert_eq!(
             plan_google_authenticator_import(&[first.clone(), first.clone()]),
@@ -520,8 +542,8 @@ mod tests {
         ];
         let plan = plan_google_authenticator_import(&[uri(&payload(entries, 1, 0, 12))])?;
         assert!(plan.items.is_empty());
-        assert_eq!(plan.source_count, 3);
-        assert_eq!(plan.skipped_unsupported, 3);
+        assert_eq!(usize::from(plan.source_count), 3);
+        assert_eq!(usize::from(plan.skipped_unsupported), 3);
         Ok(())
     }
 

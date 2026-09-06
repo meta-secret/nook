@@ -143,7 +143,7 @@ pub fn generate_totp_code(
     unix_seconds: u64,
 ) -> Result<String, wasm_bindgen::JsError> {
     Ok(authenticator_from_secret(secret)?
-        .current_code(unix_seconds)
+        .current_code(unix_seconds.into())
         .map_err(|error| JsError::new(&error.to_string()))?
         .code)
 }
@@ -175,7 +175,7 @@ pub fn verify_totp_code(
             continue;
         };
         let candidate = authenticator
-            .current_code(shifted)
+            .current_code(shifted.into())
             .map_err(|error| JsError::new(&error.to_string()))?;
         if candidate.code == trimmed {
             return Ok(true);

@@ -62,6 +62,13 @@ impl TotpSecret {
         &self.0
     }
 
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: decodes the Base32 TOTP secret into RFC algorithm key bytes"
+        )
+    )]
     pub fn decoded(&self) -> Result<Zeroizing<Vec<u8>>, ValidationError> {
         decode_base32(&self.0).map(Zeroizing::new)
     }
@@ -135,8 +142,9 @@ impl AuthenticatorSecret {
         }
     }
 
-    pub fn current_code(&self, unix_seconds: u64) -> Result<TotpCode, ValidationError> {
+    pub fn current_code(&self, unix_seconds: TotpUnixSeconds) -> Result<TotpCode, ValidationError> {
         self.validate()?;
+        let unix_seconds = u64::from(unix_seconds);
         let period = self.period.duration().as_secs();
         let counter = unix_seconds / period;
         let key = self.secret.decoded()?;
@@ -281,7 +289,7 @@ impl AuthenticatorSecret {
     /// Generate the current TOTP for a validated `otpauth://` URI without persisting it.
     pub fn current_code_from_otpauth_uri(
         uri: &str,
-        unix_seconds: u64,
+        unix_seconds: TotpUnixSeconds,
     ) -> Result<TotpCode, ValidationError> {
         Self::from_otpauth_uri(uri)?.current_code(unix_seconds)
     }
@@ -300,6 +308,22 @@ impl Zeroize for AuthenticatorSecret {
 impl Drop for AuthenticatorSecret {
     fn drop(&mut self) {
         self.zeroize();
+    }
+}
+
+/// Unix timestamp used to select a time-based one-time-password window.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TotpUnixSeconds(u64);
+
+impl From<u64> for TotpUnixSeconds {
+    fn from(value: u64) -> Self {
+        Self(value)
+    }
+}
+
+impl From<TotpUnixSeconds> for u64 {
+    fn from(value: TotpUnixSeconds) -> Self {
+        value.0
     }
 }
 
@@ -482,19 +506,19 @@ mod tests {
         for (timestamp, expected_sha1, expected_sha256, expected_sha512) in cases {
             assert_eq!(
                 fixture(TotpAlgorithm::Sha1, sha1)?
-                    .current_code(timestamp)?
+                    .current_code(timestamp.into())?
                     .code,
                 expected_sha1
             );
             assert_eq!(
                 fixture(TotpAlgorithm::Sha256, sha256)?
-                    .current_code(timestamp)?
+                    .current_code(timestamp.into())?
                     .code,
                 expected_sha256
             );
             assert_eq!(
                 fixture(TotpAlgorithm::Sha512, sha512)?
-                    .current_code(timestamp)?
+                    .current_code(timestamp.into())?
                     .code,
                 expected_sha512
             );
@@ -565,8 +589,8 @@ mod tests {
     #[test]
     fn current_code_from_otpauth_matches_persisted_secret() -> anyhow::Result<()> {
         let uri = "otpauth://totp/Mock%20Auth:alice-2fa%40nook.test?secret=JBSWY3DPEHPK3PXP&issuer=Mock%20Auth";
-        let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59)?;
-        let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)?.current_code(59)?;
+        let from_uri = AuthenticatorSecret::current_code_from_otpauth_uri(uri, 59.into())?;
+        let from_secret = AuthenticatorSecret::from_otpauth_uri(uri)?.current_code(59.into())?;
         assert_eq!(from_uri.code, from_secret.code);
         assert_eq!(u64::from(from_uri.seconds_remaining), 1);
         assert_eq!(from_uri.period, TotpPeriod::default());

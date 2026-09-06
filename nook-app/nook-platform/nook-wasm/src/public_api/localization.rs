@@ -57,8 +57,8 @@ pub fn assess_vault_security(
     enrolled_device_count: u32,
 ) -> NookVaultSecurityRecommendations {
     NookVaultSecurityRecommendations::from_core(nook_core::assess_vault_security(
-        sync_provider_count as usize,
-        enrolled_device_count as usize,
+        (sync_provider_count as usize).into(),
+        (enrolled_device_count as usize).into(),
     ))
 }
 

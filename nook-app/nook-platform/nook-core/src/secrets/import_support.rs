@@ -5,6 +5,38 @@ use csv::{Reader, ReaderBuilder, StringRecord, Trim};
 pub(crate) const MAX_CSV_BYTES: usize = 64 * 1024 * 1024;
 const MAX_CSV_RECORDS: usize = 100_000;
 
+/// Number of source records inspected while preparing a secret import.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SecretImportSourceRecordCount(usize);
+
+impl From<usize> for SecretImportSourceRecordCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SecretImportSourceRecordCount> for usize {
+    fn from(value: SecretImportSourceRecordCount) -> Self {
+        value.0
+    }
+}
+
+/// Number of unsupported source records skipped while preparing a secret import.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SecretImportUnsupportedRecordCount(usize);
+
+impl From<usize> for SecretImportUnsupportedRecordCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<SecretImportUnsupportedRecordCount> for usize {
+    fn from(value: SecretImportUnsupportedRecordCount) -> Self {
+        value.0
+    }
+}
+
 pub(crate) struct CsvImportCollection<T> {
     pub(crate) items: Vec<T>,
     pub(crate) source_count: usize,

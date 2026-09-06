@@ -189,8 +189,8 @@ pub fn project_provider_vault_decision(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ContentSyncConflict {
-    pub local_version: u64,
-    pub remote_version: u64,
+    pub local_version: crate::VaultVersion,
+    pub remote_version: crate::VaultVersion,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -301,16 +301,16 @@ mod tests {
     #[test]
     fn conflict_variants_expose_only_their_own_details() {
         let content = VaultSyncConflict::Content(ContentSyncConflict {
-            local_version: 4,
-            remote_version: 5,
+            local_version: 4.into(),
+            remote_version: 5.into(),
         });
         assert_eq!(content.kind(), VaultSyncConflictKind::Content);
         assert!(matches!(
             content,
             VaultSyncConflict::Content(ContentSyncConflict {
-                local_version: 4,
-                remote_version: 5
-            })
+                local_version,
+                remote_version
+            }) if u64::from(local_version) == 4 && u64::from(remote_version) == 5
         ));
 
         let store_id = VaultSyncConflict::StoreId(StoreIdSyncConflict {

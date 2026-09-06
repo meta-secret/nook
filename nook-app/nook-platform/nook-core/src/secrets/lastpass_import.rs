@@ -28,8 +28,8 @@ pub enum LastPassImportError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LastPassImportPlan {
     pub items: Vec<SecretValue>,
-    pub source_count: usize,
-    pub skipped_unsupported: usize,
+    pub source_count: crate::SecretImportSourceRecordCount,
+    pub skipped_unsupported: crate::SecretImportUnsupportedRecordCount,
 }
 
 fn header_indexes(
@@ -173,9 +173,9 @@ pub fn plan_lastpass_import(csv: &str) -> Result<LastPassImportPlan, LastPassImp
         }
     }
     Ok(LastPassImportPlan {
-        source_count: items.len(),
+        source_count: items.len().into(),
         items,
-        skipped_unsupported: 0,
+        skipped_unsupported: 0.into(),
     })
 }
 
@@ -191,8 +191,8 @@ mod tests {
             "http://sn,,,\"# Private note\n\nKeep offline\",Recovery,Personal,0\n",
         );
         let plan = plan_lastpass_import(export)?;
-        assert_eq!(plan.source_count, 2);
-        assert_eq!(plan.skipped_unsupported, 0);
+        assert_eq!(usize::from(plan.source_count), 2);
+        assert_eq!(usize::from(plan.skipped_unsupported), 0);
         assert_eq!(
             plan.items[0],
             SecretValue::Login(LoginSecret {
@@ -221,7 +221,7 @@ mod tests {
             ",,,,,,,,\n",
         );
         let plan = plan_lastpass_import(export)?;
-        assert_eq!(plan.source_count, 1);
+        assert_eq!(usize::from(plan.source_count), 1);
         assert_eq!(
             plan.items,
             vec![SecretValue::Login(LoginSecret {

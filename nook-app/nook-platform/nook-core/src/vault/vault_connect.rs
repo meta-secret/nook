@@ -77,7 +77,7 @@ pub struct VaultContentMetadata {
     pub password_entries: Vec<crate::PasswordUnlockEntry>,
     pub store_id: String,
     pub vault_name: String,
-    pub version: u64,
+    pub version: crate::VaultVersion,
     pub architecture: VaultArchitecture,
 }
 
@@ -244,7 +244,7 @@ pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultCont
         VaultName::Named(name) => name,
         VaultName::Unnamed => crate::default_vault_name_for_store_id(&store_id),
     };
-    let version = crate::read_vault_version(content).unwrap_or(0);
+    let version = crate::read_vault_version(content).unwrap_or_default();
     let architecture = crate::read_vault_architecture(content)?;
     Ok(VaultContentMetadata {
         unlock,
@@ -358,9 +358,9 @@ mod tests {
             vault_type: VaultType::Sentinel,
             replication_type: ReplicationType::Personal,
             sentinel: SentinelConfiguration::Enabled(SentinelPolicy {
-                threshold: 2,
-                required_participants: 2,
-                ready_participants: 2,
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
             }),
         };
         let store_id = generate_store_id()?;
@@ -405,9 +405,9 @@ mod tests {
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
-                threshold: 2,
-                required_participants: 3,
-                ready_participants: 3,
+                threshold: 2.into(),
+                required_participants: 3.into(),
+                ready_participants: 3.into(),
             },
         );
         let store_id = generate_store_id()?;

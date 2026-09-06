@@ -188,7 +188,7 @@ pub enum ProviderSyncCheckpoint {
 pub enum ProviderSyncedVaultVersion {
     #[default]
     Unknown,
-    Version(i64),
+    Version(crate::ProviderSyncedVaultVersionValue),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Tsify)]

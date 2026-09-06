@@ -34,6 +34,21 @@ impl From<Bip39WordSuggestionLimit> for usize {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bip39WordSequenceExpectedCount(usize);
+
+impl From<usize> for Bip39WordSequenceExpectedCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Bip39WordSequenceExpectedCount> for usize {
+    fn from(value: Bip39WordSequenceExpectedCount) -> Self {
+        value.0
+    }
+}
+
 /// Validates a normalized English BIP-39 mnemonic (12 or 24 words).
 pub fn validate_bip39_mnemonic(mnemonic: &str) -> ValidationResult<()> {
     let normalized = mnemonic.trim();
@@ -76,9 +91,13 @@ pub fn suggest_bip39_words(prefix: &str, limit: Bip39WordSuggestionLimit) -> Vec
 }
 
 #[must_use]
-pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: usize) -> bool {
+pub fn is_bip39_word_sequence_valid(
+    text: &str,
+    expected_word_count: Bip39WordSequenceExpectedCount,
+) -> bool {
     let words = parse_bip39_words(text);
-    words.len() == expected_word_count && words.iter().all(|word| is_known_bip39_word(word))
+    words.len() == usize::from(expected_word_count)
+        && words.iter().all(|word| is_known_bip39_word(word))
 }
 
 #[must_use]
@@ -171,10 +190,10 @@ mod tests {
     fn validates_word_sequence_membership_without_checksum() {
         assert!(is_bip39_word_sequence_valid(
             "abandon ability able about above absent absorb abstract absurd abuse access accident",
-            12
+            12.into()
         ));
-        assert!(!is_bip39_word_sequence_valid("abandon notaword", 12));
-        assert!(!is_bip39_word_sequence_valid("abandon ability", 12));
+        assert!(!is_bip39_word_sequence_valid("abandon notaword", 12.into()));
+        assert!(!is_bip39_word_sequence_valid("abandon ability", 12.into()));
     }
 
     #[test]

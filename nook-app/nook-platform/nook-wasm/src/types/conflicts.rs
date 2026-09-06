@@ -165,8 +165,8 @@ impl NookPendingSyncConflict {
             repo,
             remote_revision: remote_revision.clone(),
             conflict: VaultSyncConflict::Content(nook_core::ContentSyncConflict {
-                local_version: u64::from(local_version),
-                remote_version: u64::from(remote_version),
+                local_version: u64::from(local_version).into(),
+                remote_version: u64::from(remote_version).into(),
             }),
         }
     }
@@ -183,8 +183,8 @@ impl NookPendingSyncConflict {
         repo: String,
         remote_revision: &NookProviderSyncRevision,
     ) -> Self {
-        let local_version = nook_core::read_vault_version(&local_yaml).unwrap_or(0);
-        let remote_version = nook_core::read_vault_version(&remote_yaml).unwrap_or(0);
+        let local_version = nook_core::read_vault_version(&local_yaml).unwrap_or_default();
+        let remote_version = nook_core::read_vault_version(&remote_yaml).unwrap_or_default();
         Self {
             provider_id,
             provider_label,
@@ -327,7 +327,7 @@ impl NookPendingSyncConflict {
             return Err(JsError::new("Sync conflict is not a content conflict."));
         };
         let version = details.local_version;
-        u32::try_from(version)
+        u32::try_from(u64::from(version))
             .map_err(|_| JsError::new("Local vault version exceeds the web limit."))
     }
 
@@ -344,7 +344,7 @@ impl NookPendingSyncConflict {
             return Err(JsError::new("Sync conflict is not a content conflict."));
         };
         let version = details.remote_version;
-        u32::try_from(version)
+        u32::try_from(u64::from(version))
             .map_err(|_| JsError::new("Remote vault version exceeds the web limit."))
     }
 

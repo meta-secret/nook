@@ -130,10 +130,10 @@ impl VaultClientPolicy {
     pub const fn vault_connect_probe_decision(
         access_status: VaultAccessStatus,
         authenticated: bool,
-        sync_provider_count: usize,
+        sync_provider_count: crate::VaultSyncProviderCount,
     ) -> VaultConnectProbeDecision {
         if !authenticated
-            && sync_provider_count > 0
+            && sync_provider_count.is_nonzero()
             && matches!(
                 access_status,
                 VaultAccessStatus::NeedsEnrollment | VaultAccessStatus::JoinPending
@@ -148,9 +148,9 @@ impl VaultClientPolicy {
     #[must_use]
     pub const fn vault_connect_gate_decision(
         access_status: VaultAccessStatus,
-        password_entry_count: usize,
+        password_entry_count: crate::VaultPasswordEntryCount,
     ) -> VaultConnectGateDecision {
-        match (access_status, password_entry_count > 0) {
+        match (access_status, password_entry_count.is_nonzero()) {
             (VaultAccessStatus::NeedsEnrollment | VaultAccessStatus::JoinPending, true) => {
                 VaultConnectGateDecision::PromptForPassword
             }
@@ -245,20 +245,24 @@ mod tests {
             VaultAccessStatus::JoinPending,
         ] {
             assert_eq!(
-                VaultClientPolicy::vault_connect_probe_decision(status, false, 1),
+                VaultClientPolicy::vault_connect_probe_decision(status, false, 1.into()),
                 VaultConnectProbeDecision::ReassessFirstSyncProvider
             );
             assert_eq!(
-                VaultClientPolicy::vault_connect_probe_decision(status, true, 1),
+                VaultClientPolicy::vault_connect_probe_decision(status, true, 1.into()),
                 VaultConnectProbeDecision::UseConfiguredStorage
             );
             assert_eq!(
-                VaultClientPolicy::vault_connect_probe_decision(status, false, 0),
+                VaultClientPolicy::vault_connect_probe_decision(status, false, 0.into()),
                 VaultConnectProbeDecision::UseConfiguredStorage
             );
         }
         assert_eq!(
-            VaultClientPolicy::vault_connect_probe_decision(VaultAccessStatus::Ready, false, 1,),
+            VaultClientPolicy::vault_connect_probe_decision(
+                VaultAccessStatus::Ready,
+                false,
+                1.into(),
+            ),
             VaultConnectProbeDecision::UseConfiguredStorage
         );
     }
@@ -270,20 +274,26 @@ mod tests {
             VaultAccessStatus::JoinPending,
         ] {
             assert_eq!(
-                VaultClientPolicy::vault_connect_gate_decision(status, 1),
+                VaultClientPolicy::vault_connect_gate_decision(status, 1.into()),
                 VaultConnectGateDecision::PromptForPassword
             );
         }
         assert_eq!(
-            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::NeedsEnrollment, 0,),
+            VaultClientPolicy::vault_connect_gate_decision(
+                VaultAccessStatus::NeedsEnrollment,
+                0.into(),
+            ),
             VaultConnectGateDecision::RequestEnrollment
         );
         assert_eq!(
-            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::JoinPending, 0),
+            VaultClientPolicy::vault_connect_gate_decision(
+                VaultAccessStatus::JoinPending,
+                0.into(),
+            ),
             VaultConnectGateDecision::AwaitJoinApproval
         );
         assert_eq!(
-            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::Ready, 1),
+            VaultClientPolicy::vault_connect_gate_decision(VaultAccessStatus::Ready, 1.into()),
             VaultConnectGateDecision::Connect
         );
         assert!(VaultClientPolicy::vault_connect_password_lookup_required(

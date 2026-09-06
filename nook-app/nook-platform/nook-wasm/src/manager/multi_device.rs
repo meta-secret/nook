@@ -267,10 +267,10 @@ impl NookVaultManager {
         roster: &[nook_core::VaultMember],
     ) -> Result<Option<nook_core::VaultOperation>, NookError> {
         let policy = self.vault.architecture.sentinel.policy_or_default();
-        if roster.len() > usize::from(policy.required_participants) {
+        if roster.len() > usize::from(u8::from(policy.required_participants)) {
             return Err(MultiDeviceError::SentinelGenesisRosterFull.into());
         }
-        if roster.len() < usize::from(policy.required_participants) {
+        if roster.len() < usize::from(u8::from(policy.required_participants)) {
             return Ok(None);
         }
         if !self.vault.meta.sentinel_shares.is_empty() {
@@ -287,7 +287,7 @@ impl NookVaultManager {
         let share_records = nook_core::create_sentinel_share_records_for_recipients(
             &keys,
             &recipients,
-            policy.threshold.into(),
+            policy.threshold,
         )?;
         let mut shares = Vec::with_capacity(share_records.len());
         for record in &share_records {
@@ -311,7 +311,7 @@ impl NookVaultManager {
         }
         self.vault.architecture.sentinel =
             SentinelConfiguration::Enabled(nook_core::SentinelPolicy {
-                ready_participants: u8::try_from(shares.len()).unwrap_or(u8::MAX),
+                ready_participants: u8::try_from(shares.len()).unwrap_or(u8::MAX).into(),
                 ..policy
             });
         Ok(Some(VaultOperation::SentinelSharesIssued { shares }))

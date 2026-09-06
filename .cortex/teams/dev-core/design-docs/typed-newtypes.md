@@ -275,8 +275,12 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] passkey secrets — `PasskeySignatureCount`
 - [x] seed phrases — `Bip39MnemonicWordCount` for inferred supported lengths
 - [x] seed phrases — `Bip39WordSuggestionLimit` for completion result bounds
+- [x] seed phrases — `Bip39WordSequenceExpectedCount` for membership checks
+- [x] secret imports — typed result counts, QR batch counts, and rejected 1PUX versions
+- [x] secret presentation — typed seed-word, backup-code, and attachment-byte counts
 - [x] authenticator codes — validated `TotpPeriod`
 - [x] authenticator codes — `TotpRemainingSeconds`
+- [x] authenticator codes — `TotpUnixSeconds` for code-generation instants
 - [ ] `password_envelope` — `PasswordEnvelopeVersion`, typed `ciphertext` field on `PasswordEnvelope`
 - [ ] `multi_device` — `SentinelShareVersion`
 - [ ] `multi_device` — `MemberEntry.enrolled_at: IsoTimestamp`, `label: Option<MemberLabel>`
@@ -284,6 +288,7 @@ Reachable external reexports and inherited methods must pass before staged crate
 - [x] `vault_sync` — `VaultSyncUnixMilliseconds` for successful-sync timestamps
 - [x] `vault diagnostics` — `VaultEncryptedPayloadCount` for event payload counts
 - [x] search catalog — `SecretSearchCatalogChangeCount` for reconciliation outcomes
+- [x] Core vault and sync prerequisite — typed paging, policy counts, timings, versions, and Sentinel policy values; activation remains pending on inherited facade contracts
 - [x] `SigningIdentity::actor_id()` → `AuthKeyId`
 - [x] `access_status_for_vault_content` → `VaultAccessStatus`
 - [x] `serialize_stored_*` → `StoredVaultYaml` / `StoredVaultBlob`

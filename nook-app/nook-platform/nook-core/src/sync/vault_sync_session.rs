@@ -27,7 +27,7 @@ pub struct YamlSyncReloaded {
     pub password_entries: Vec<crate::PasswordUnlockEntry>,
     pub store_id: String,
     pub vault_name: String,
-    pub version: u64,
+    pub version: crate::VaultVersion,
 }
 
 /// Decide how to update session state when remote YAML changes (legacy blob sync path).
@@ -184,7 +184,7 @@ mod tests {
             &password_entries,
             VaultStoreIdentityRef::Assigned(store_id.as_str()),
             VaultNameRef::Named("Team Vault"),
-            VaultVersionWrite::Version(42),
+            VaultVersionWrite::Version(42.into()),
         )?;
         let mut state = VaultMetaState::default();
         let outcome = reconcile_yaml_sync(
@@ -203,7 +203,7 @@ mod tests {
                 assert_eq!(reloaded.password_entries, password_entries);
                 assert_eq!(reloaded.store_id, store_id.as_str());
                 assert_eq!(reloaded.vault_name, "Team Vault");
-                assert_eq!(reloaded.version, 42);
+                assert_eq!(u64::from(reloaded.version), 42);
             }
             other => {
                 return Err(errors::VaultSyncError::UnexpectedYamlSyncOutcome {
