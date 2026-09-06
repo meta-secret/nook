@@ -103,9 +103,7 @@ impl NookVaultManager {
             return self.ensure_signing_identity().await;
         };
         let app_key = self.device_identity()?;
-        if let Some(seed) =
-            identity_record::resume_staged_simple_genesis_signing_seed(pending, &app_key)?
-        {
+        if let Some(seed) = pending.resume_signing_seed(&app_key)? {
             self.event_log.signing_seed = seed;
         }
         if self.event_log.signing_seed.is_empty() {
@@ -333,13 +331,13 @@ impl NookVaultManager {
             let app_key = self.device_identity()?;
             let proposed_yaml = String::from_utf8(proposed_bytes)
                 .map_err(|error| NookError::Serialization(error.to_string()))?;
-            let pinned = identity_record::persist_simple_genesis_event(
-                pending,
-                &app_key,
-                proposed_yaml,
-                self.event_log.signing_seed.clone(),
-            )
-            .await?;
+            let pinned = (pending)
+                .pin_event(identity_record::SimpleGenesisEventInput {
+                    app_key: &app_key,
+                    proposed_yaml,
+                    proposed_signing_seed: self.event_log.signing_seed.clone(),
+                })
+                .await?;
             self.event_log.signing_seed.clone_from(&pinned.signing_seed);
             let keyring_backed = identity_record::load_entry_for_app_id(app_key.app_id())
                 .await?

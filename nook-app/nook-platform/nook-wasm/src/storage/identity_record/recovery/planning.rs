@@ -239,7 +239,9 @@ mod tests {
 
     use super::super::LocalIdentityRecoveryRequest;
     use crate::NookError;
-    use identity_record::{IDENTITY_DIRECTORY_KEY, RETIRED_APP_IDS_KEY, keyring};
+    use identity_record::{
+        IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis, RETIRED_APP_IDS_KEY, keyring,
+    };
     use nook_core::DeviceIdentityProtection;
 
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -261,8 +263,12 @@ mod tests {
             .with_pin("test-pin")?;
         identity_record::save_protected_local_identity(&inaccessible_key, &wrapped, "Personal")
             .await?;
-        let pending =
-            identity_record::begin_or_resume_simple_genesis(&inaccessible_key, "Personal").await?;
+        let pending = identity_record::OrdinarySimpleGenesisRequest {
+            app_key: &inaccessible_key,
+            label: "Personal",
+        }
+        .begin_or_resume()
+        .await?;
         let store_id = pending.store_id.clone();
         let _ = identity_record::generate_vault_dek_for_identity(
             &pending.identity_id,
@@ -298,7 +304,7 @@ mod tests {
         assert_ne!(replacement.identity_id, pending.identity_id);
         identity_record::validate_vault_identity_enrollment(&replacement_key, &store_id).await?;
         assert!(
-            identity_record::pending_simple_genesis_for_store(store_id.as_str())
+            PendingSimpleGenesis::load_for_store(store_id.as_str())
                 .await?
                 .is_none()
         );
@@ -756,8 +762,12 @@ mod tests {
             "Work",
         )
         .await?;
-        let pending =
-            identity_record::begin_or_resume_simple_genesis(&first_key, "Personal").await?;
+        let pending = identity_record::OrdinarySimpleGenesisRequest {
+            app_key: &first_key,
+            label: "Personal",
+        }
+        .begin_or_resume()
+        .await?;
         assert_eq!(pending.identity_id, first.identity.identity_id);
 
         let recovery = LocalIdentityRecoveryRequest {
@@ -766,12 +776,9 @@ mod tests {
         .execute()
         .await?;
 
-        let preserved =
-            identity_record::pending_simple_genesis_for_store(pending.store_id.as_str())
-                .await?
-                .ok_or_else(|| {
-                    NookError::IndexedDb("Pending Simple genesis was erased".to_owned())
-                })?;
+        let preserved = PendingSimpleGenesis::load_for_store(pending.store_id.as_str())
+            .await?
+            .ok_or_else(|| NookError::IndexedDb("Pending Simple genesis was erased".to_owned()))?;
         assert_eq!(preserved.identity_id, first.identity.identity_id);
         recovery.complete().await?;
         keyring::clear_keyring_for_test().await?;

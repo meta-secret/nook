@@ -166,7 +166,7 @@ mod tests {
     use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
     use crate::storage;
     use crate::storage::event_db;
-    use identity_record::IDENTITY_DIRECTORY_KEY;
+    use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -555,7 +555,7 @@ mod tests {
         .await?;
 
         let current = identity_record::load_identity_directory().await?;
-        let pending = identity_record::pending_simple_genesis_for_store(fixture.store_id.as_str())
+        let pending = PendingSimpleGenesis::load_for_store(fixture.store_id.as_str())
             .await?
             .ok_or_else(|| NookError::Database("Pending marker disappeared.".to_owned()))?;
         assert_eq!(current.identities().len(), 1);

@@ -547,7 +547,7 @@ impl NookVaultManager {
             .await?;
         let pending_cleanup = match match completed_genesis {
             Some(completed) => Ok(Some(completed)),
-            None => identity_record::pending_simple_genesis_for_store(&self.vault.store_id).await,
+            None => PendingSimpleGenesis::load_for_store(&self.vault.store_id).await,
         } {
             Ok(pending) => pending,
             Err(error) => {
@@ -850,22 +850,25 @@ impl NookVaultManager {
             self.event_log
                 .signing_seed
                 .clone_from(&handoff.signing_seed);
-            let (pending, identity_record, keys) =
-                identity_record::begin_or_resume_staged_simple_genesis(
-                    identity_record::StagedSimpleGenesisInput {
-                        app_key: &app_key,
-                        signing_public_key: &handoff.signing_public_key,
-                        authorizer: handoff.authorizer.as_ref(),
-                        authorizer_signing: handoff.authorizer_signing.as_ref(),
-                        label: &label,
-                    },
-                )
-                .await?;
+            let (pending, identity_record, keys) = identity_record::StagedSimpleGenesisInput {
+                app_key: &app_key,
+                signing_public_key: &handoff.signing_public_key,
+                authorizer: handoff.authorizer.as_ref(),
+                authorizer_signing: handoff.authorizer_signing.as_ref(),
+                label: &label,
+            }
+            .begin_or_resume()
+            .await?;
             self.vault.store_id = pending.store_id.to_string();
             self.apply_identity_genesis_vault_keys(&identity_record, &keys)?;
             return Ok(pending);
         }
-        let pending = identity_record::begin_or_resume_simple_genesis(identity, &label).await?;
+        let pending = identity_record::OrdinarySimpleGenesisRequest {
+            app_key: identity,
+            label: &label,
+        }
+        .begin_or_resume()
+        .await?;
         self.vault.store_id = pending.store_id.to_string();
         if let Some(staged) = pending.staged_identity() {
             let mut directory = staged.directory.clone();

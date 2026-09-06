@@ -1,7 +1,7 @@
 //! Local identity creation, selection, and session adoption.
 
 use crate::storage::{auth_providers, device_access, identity_record, indexed_db};
-use identity_record::LocalIdentityRecovery;
+use identity_record::{LocalIdentityRecovery, PendingSimpleGenesis};
 use nook_core::{AppId, IdentityId, i18n_keys};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
@@ -20,7 +20,7 @@ fn local_identity_label(label: &str) -> Result<String, &'static str> {
 }
 
 async fn ensure_no_pending_vault_creation() -> Result<(), NookError> {
-    let simple_pending = identity_record::pending_simple_genesis().await?.is_some();
+    let simple_pending = PendingSimpleGenesis::load().await?.is_some();
     let sentinel_pending = indexed_db::load_sentinel_genesis_finalization_pending()
         .await?
         .is_some();
