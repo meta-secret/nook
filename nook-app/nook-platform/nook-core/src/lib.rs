@@ -72,10 +72,7 @@ pub use bip39::{
     is_known_bip39_word, join_bip39_words, parse_bip39_words, suggest_bip39_words,
     validate_bip39_mnemonic,
 };
-pub use bitwarden_import::{
-    BitwardenImportError, BitwardenImportPlan, plan_bitwarden_import,
-    plan_bitwarden_import_with_password,
-};
+pub use bitwarden_import::{BitwardenExport, BitwardenImportError, BitwardenImportPlan};
 pub use chrome_passwords_import::{
     ChromePasswordsImportError, ChromePasswordsImportPlan, plan_chrome_passwords_import,
 };
