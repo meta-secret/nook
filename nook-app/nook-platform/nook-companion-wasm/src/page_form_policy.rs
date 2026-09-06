@@ -400,6 +400,42 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn authentication_facts_wasm_export_accepts_exact_login_mode_get() {
+        let facts = nook_companion_core::AuthenticationPageObservationFacts {
+            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                username_field_count: 1.into(),
+                ..Default::default()
+            },
+            ceremony: nook_companion_core::AuthenticationCeremonyObservationFacts {
+                authentication_context:
+                    nook_companion_core::AuthenticationCeremonyContextObservation {
+                        authentication_username:
+                            nook_companion_core::AuthenticationUsernameEvidence::Explicit,
+                        source_origin: "https://x.com".to_owned(),
+                        form_identity: String::new(),
+                        destination_identity: "https://x.com/i/jf/onboarding/web?mode=login"
+                            .to_owned(),
+                    },
+                advance_control:
+                    nook_companion_core::AuthenticationAdvanceControlEvidence::ImplicitSubmission,
+                implicit_submission_method: nook_companion_core::PageControlSubmissionMethod::Get,
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        let workflow = crate::classify_companion_authentication_workflow_facts(
+            nook_companion_core::AuthenticationPageObservationFactsBatch {
+                observations: vec![facts],
+            },
+        );
+        assert_eq!(
+            crate::companion_authentication_workflow_match_kind(workflow),
+            crate::CompanionAuthenticationWorkflowMatchKind::Matched
+        );
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_passkey_control_wasm_export_accepts_and_rejects_candidates() {
         let accepted =
             nook_companion_core::AuthenticationDetailedPasskeyControlCandidateObservation::Labeled(
