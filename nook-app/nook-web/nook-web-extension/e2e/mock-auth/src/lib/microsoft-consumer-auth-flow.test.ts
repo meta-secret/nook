@@ -1,16 +1,14 @@
 import { describe, expect, test } from 'vitest'
 
+import siteShells from '../../fixtures/site-shells.json'
+import consumerTemplate from '../../fixtures/templates/microsoft-consumer.json'
+import enterpriseTemplate from '../../fixtures/templates/microsoft.json'
 import {
   MICROSOFT_CONSUMER_MOCK_USERNAME,
   MicrosoftConsumerAuthMockScenario,
   MicrosoftConsumerAuthTransitionKind,
   type MicrosoftConsumerAuthSubmission,
 } from './microsoft-consumer-auth-flow'
-import {
-  getSiteFixture,
-  getTemplateFixture,
-  SiteFixtureLookupKind,
-} from './site-fixtures'
 
 describe('Microsoft consumer authentication mock', () => {
   const nextSubmission: MicrosoftConsumerAuthSubmission = {
@@ -45,17 +43,13 @@ describe('Microsoft consumer authentication mock', () => {
   })
 
   test('keeps the consumer catalog shell distinct from enterprise Microsoft', () => {
-    const consumer = getSiteFixture('microsoft')
-    const enterprise = getTemplateFixture('microsoft')
-    if (
-      consumer.kind !== SiteFixtureLookupKind.Found ||
-      enterprise.kind !== SiteFixtureLookupKind.Found
-    ) {
-      throw new Error('expected both Microsoft fixture families')
-    }
-    expect(consumer.fixture).toMatchObject({
+    expect(siteShells.microsoft).toEqual({
       loginUrl: 'https://login.live.com/',
+      source: 'capture',
       template: 'microsoft-consumer',
+    })
+    expect(consumerTemplate).toMatchObject({
+      id: 'microsoft-consumer',
       steps: [
         {
           fields: [
@@ -69,8 +63,8 @@ describe('Microsoft consumer authentication mock', () => {
         },
       ],
     })
-    expect(enterprise.fixture.template).toBe('microsoft')
-    expect(enterprise.fixture.steps[0]).toMatchObject({
+    expect(enterpriseTemplate.id).toBe('microsoft')
+    expect(enterpriseTemplate.steps[0]).toMatchObject({
       fields: [
         {
           type: 'email',
