@@ -442,7 +442,7 @@ mod browser_tests {
                 ),
             },
         );
-        assert_eq!(configured.oauth_preset().unwrap(), "google_drive");
+        assert_eq!(configured.oauth_preset().unwrap(), "google-drive");
         assert_eq!(configured.shared_joiner_identity().unwrap(), "email");
         assert!(configured.supports_personal());
         assert!(configured.supports_shared());

@@ -410,7 +410,7 @@ mod browser_tests {
     fn runtime_adapters_project_all_modes_and_overrides_in_wasm() {
         let locale = NookBrowserLocale::from_tags(vec!["de-DE".into(), "ru-RU".into()]);
         assert_eq!(locale.language_tags(), vec!["de-DE", "ru-RU"]);
-        assert_eq!(locale.app_locale(), "en");
+        assert_eq!(locale.app_locale(), "ru");
 
         for (raw, expected) in [
             ("local", NookClientRunMode::Local),

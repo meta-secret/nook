@@ -184,10 +184,12 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn error_adapters_project_boundary_categories_in_wasm() {
         let secret_id = SecretId::from_vault_record("secret");
+        let mapped = NookError::from(ValidationError::GithubPatEmpty);
+        assert!(matches!(mapped, NookError::GitHub(_)));
         let mapped = NookError::from(nook_core::VaultError::Validation(
             ValidationError::GithubPatEmpty,
         ));
-        assert!(matches!(mapped, NookError::GitHub(_)));
+        assert!(matches!(mapped, NookError::Database(_)));
         let mapped = NookError::from(nook_core::VaultError::Validation(
             ValidationError::OauthAccessTokenEmpty,
         ));

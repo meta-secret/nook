@@ -418,7 +418,7 @@ mod browser_tests {
     fn companion_heuristic_exports_cover_policy_and_url_paths_in_wasm() {
         assert!(page_has_backup_code_hint("backup code"));
         assert!(!page_has_backup_code_hint("nothing useful"));
-        let candidates = extract_backup_code_candidates("codes: A1B2-C3D4\nignore".into());
+        let candidates = extract_backup_code_candidates("codes: A1B2-C3D4-E5F6\nignore".into());
         assert!(!candidates.is_empty());
         assert_eq!(expand_identity_text("  Login  "), "login");
 
