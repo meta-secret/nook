@@ -3,7 +3,7 @@
     dylint_lib = "nook_domain_api",
     forbid(invalid_unowned_function_suppression)
 )]
-//! Contextual event rows and vault indexes within one live IndexedDB transaction.
+//! Contextual event rows and vault indexes within one live `IndexedDB` transaction.
 use super::VaultEventPersistence;
 use crate::{NookError, storage};
 use nook_core::{EventId, LocalEventStore};
