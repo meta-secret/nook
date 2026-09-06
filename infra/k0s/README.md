@@ -20,7 +20,7 @@ Pinned platform:
 - Kata Containers `4.0.0`
 - Neo4j Helm chart and image `2026.6.0`
 - Kata runtime-rs class `kata-dragonball` for persistent Hive workers
-- Four retained 64 GiB rootless BuildKit shards for ARC
+- Four retained 128 GiB rootless BuildKit shards for ARC
 
 Cluster roles:
 
@@ -149,7 +149,7 @@ no deprecated global `registry.configs` authentication. Zot preserves upstream
 digests and stores a missing image once for reuse by every runner and node. The
 initial SeaweedFS bucket bootstrap pulls its pinned AWS CLI image directly
 because Zot does not exist yet on a clean controller.
-ARC uses one retained 64 GiB local persistent volume per qualified build
+ARC uses one retained 128 GiB local persistent volume per qualified build
 node. The `nook-buildkit` StatefulSet has four rootless replicas with required
 hostname anti-affinity. Each replica binds to its node's
 `/var/lib/nook-arc-buildkit/state` directory.
@@ -159,9 +159,9 @@ therefore reach only the BuildKit Pod on the same node. Runner Pods mount no
 host path and receive no Kubernetes token, daemon socket, Podman service, DinD
 process, privileged context, or Kata runtime.
 
-BuildKit garbage collection targets 56 GB. Its Pod requests 4 CPU and 8 GiB.
-It has no CPU or memory limit, so large parallel solves may use available node
-memory. Multiple jobs safely share the content-addressed store on that node.
+BuildKit garbage collection targets at most 112 GB. Its Pod requests 4 CPU and
+8 GiB. It has no CPU or memory limit, so large parallel solves may use available
+node memory. Multiple jobs safely share the content-addressed store on that node.
 
 Zot carries cache state between nodes. A job on a cold shard imports only the
 referenced blobs. Later jobs on that node reuse the hydrated local snapshots.

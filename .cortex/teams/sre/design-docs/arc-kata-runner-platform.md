@@ -66,12 +66,16 @@ The four qualified nodes use tier preferences:
 2. The home 7950X3D worker is `secondary`.
 3. KS-6 is `overflow`.
 
-Topology spreading prevents all burst work from concentrating on one node. The
-target aggregate envelope remains:
+Topology spreading prevents all burst work from concentrating on one node.
+The hostname skew is limited to two Pods. Tier preferences fill both primary
+nodes first. They then fill secondary. Overflow is last. A five-job burst
+therefore prefers two jobs on each primary node and one job on secondary.
 
-- each Rise-S: about 8-10 runners;
-- home worker: about 8-10 runners; and
-- KS-6: about 5-7 runners.
+The target aggregate envelope remains:
+
+- each Rise-S: about 9-10 runners;
+- home worker: about 8 runners; and
+- KS-6: about 8 runners.
 
 The scale-set limits are queue ceilings. Disposable runner and job containers
 do not declare resource requests or limits. Kubernetes may admit Pods up to the
@@ -89,9 +93,9 @@ one replica on each qualified node.
 Each replica uses:
 
 - rootless BuildKit `v0.32.2`;
-- a retained 64 GiB local persistent volume;
+- a retained 128 GiB local persistent volume;
 - the host path `/var/lib/nook-arc-buildkit/state` behind that volume;
-- garbage collection with a 56 GB keep target;
+- garbage collection with a 112 GB maximum-use target;
 - a 4 CPU request;
 - an 8 GiB memory request; and
 - no CPU or memory limits.

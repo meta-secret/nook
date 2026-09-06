@@ -248,11 +248,14 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     for contract in [
         "maxRunners: 35",
         "topologySpreadConstraints:",
-        "maxSkew: 5",
+        "maxSkew: 2",
         "topologyKey: kubernetes.io/hostname",
         "whenUnsatisfiable: DoNotSchedule",
         "nodeAffinityPolicy: Honor",
         "nodeTaintsPolicy: Honor",
+        "weight: 100",
+        "weight: 50",
+        "weight: 1",
         "nook.nokey.sh/arc-spread-group: general",
         "values: [primary]",
         "values: [secondary]",
@@ -290,9 +293,9 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     for contract in [
         "[worker.oci]",
         "gc = true",
-        "reservedSpace = \"4GB\"",
-        "maxUsedSpace = \"56GB\"",
-        "minFreeSpace = \"8GB\"",
+        "reservedSpace = \"8GB\"",
+        "maxUsedSpace = \"112GB\"",
+        "minFreeSpace = \"16GB\"",
     ] {
         assert!(
             buildkit.contains(contract),
@@ -308,14 +311,15 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         pull_request_workflow.contains("github.event.pull_request.user.login != 'dependabot[bot]'")
     );
     assert!(tasks.contains("usable_bytes=$((available_bytes + state_bytes + legacy_bytes))"));
-    assert!(tasks.contains("test \"$((available_bytes + state_bytes))\" -ge 68719476736"));
+    assert!(tasks.contains("test \"$((available_bytes + state_bytes))\" -ge 137438953472"));
+    assert!(tasks.contains("--cascade=orphan --wait=true"));
     assert!(tasks.contains("- task: arc:auth:sync"));
     assert!(tasks.contains("nook.nokey.sh/buildkit-config-sha256"));
     assert!(tasks.contains("ARC requires exactly $expected_count build hosts"));
     assert!(tasks.contains("expected_build_nodes"));
     assert!(tasks.contains("disable --now nook-arc-buildkit-cloner.service"));
     assert!(tasks.contains("$legacy_image_next"));
-    assert!(buildkit.contains("storage: 64Gi"));
+    assert_eq!(buildkit.matches("storage: 128Gi").count(), 5);
     for contract in [
         "inotify_max_user_instances=8000",
         "inotify_max_user_watches=10485760",

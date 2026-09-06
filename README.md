@@ -659,7 +659,7 @@ job alone publishes the portable WASM dependency ref. Zot proves child manifest
 digests and sizes, then streams every declared blob to verify its size and SHA-256 before a fresh
 builder verifies dependency-vertex hits. Development deployment waits for both.
 
-The `nook-buildkit` StatefulSet keeps one 64 GiB local shard on each qualified
+The `nook-buildkit` StatefulSet keeps one 128 GiB local shard on each qualified
 node. A node-local Service prevents cross-node BuildKit traffic. Concurrent jobs
 share BuildKit's content-addressed store. Zot carries portable cache refs between
 nodes and hosted runners. A cold node imports referenced blobs once. Later jobs

@@ -55,7 +55,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - The Docker CLI connects only to the rootless BuildKit shard on its node.
   - ARC runners receive no Docker daemon, Podman API, DinD process, host runtime
     socket, host path, or Kata runtime.
-  - Every qualified node owns one retained 64 GiB BuildKit volume.
+  - Every qualified node owns one retained 128 GiB BuildKit volume.
   - The node-local Service never sends a runner to another node's shard.
   - Rust/WASM, web dependencies, browser-free web, and e2e web use separate
     versioned refs.

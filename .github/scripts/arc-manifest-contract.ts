@@ -379,14 +379,18 @@ if (!jobContainer) {
 assertNoResourceEnvelope(jobContainer, "ARC job container");
 
 runners.requireAll([
-  "maxSkew: 5",
+  "maxSkew: 2",
   "whenUnsatisfiable: DoNotSchedule",
+  "weight: 100",
+  "weight: 50",
+  "weight: 1",
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
   "ghcr.io/actions/actions-runner:2.336.0@sha256:",
   "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
 ]);
+runners.forbid("maxSkew: 5");
 runners.forbidAll([
   "runtimeClassName:",
   "privileged: true",
@@ -428,6 +432,10 @@ containerHook.requireAll([
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
+  "maxSkew: 2",
+  "weight: 100",
+  "weight: 50",
+  "weight: 1",
   'drop: ["ALL"]',
   "fsGroup: 1000",
   "fsGroupChangePolicy: OnRootMismatch",
@@ -439,6 +447,7 @@ containerHook.requireAll([
   "chmod -R g+rwX /mnt/work/nook",
 ]);
 containerHook.forbidAll([
+  "maxSkew: 5",
   "privileged: true",
   "docker.sock",
   "containerd.sock",
@@ -457,16 +466,17 @@ buildkit.requireAll([
   "--oci-worker-no-process-sandbox",
   'cpu: "4"',
   "memory: 8Gi",
-  "storage: 64Gi",
+  "storage: 128Gi",
   "type: Unconfined",
   "[worker.oci]",
   "gc = true",
-  'reservedSpace = "4GB"',
-  'maxUsedSpace = "56GB"',
-  'minFreeSpace = "8GB"',
+  'reservedSpace = "8GB"',
+  'maxUsedSpace = "112GB"',
+  'minFreeSpace = "16GB"',
   'mirrors = ["registry.dev.nokey.sh"]',
 ]);
 buildkit.forbidAll(["--oci-worker-gc", "--oci-worker-gc-keepstorage"]);
+buildkit.count({ fragment: "storage: 128Gi", expected: 5 });
 buildkit.count({ fragment: "kind: PersistentVolume\n", expected: 4 });
 buildkit.count({
   fragment: "local:\n    path: /var/lib/nook-arc-buildkit/state",
@@ -529,9 +539,13 @@ tasks.requireAll([
   "expected_build_nodes",
   "usable_bytes=$((available_bytes + state_bytes + legacy_bytes))",
   'state_bytes="${state_bytes:-0}"',
-  'test "$((available_bytes + state_bytes))" -ge 68719476736',
+  'test "$filesystem_bytes" -ge 137438953472',
+  'if test "$usable_bytes" -lt 137438953472',
+  'test "$((available_bytes + state_bytes))" -ge 137438953472',
   "- task: arc:auth:sync",
   "nook.nokey.sh/buildkit-config-sha256",
+  "current_buildkit_storage",
+  "--cascade=orphan --wait=true",
   "disable --now nook-arc-buildkit-cloner.service",
   '"$legacy_image_next"',
   "/etc/sysctl.d/91-nook-buildkit-keyring.conf",

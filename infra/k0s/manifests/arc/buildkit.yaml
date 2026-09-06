@@ -14,7 +14,7 @@ metadata:
     app.kubernetes.io/name: nook-buildkit
 spec:
   capacity:
-    storage: 64Gi
+    storage: 128Gi
   volumeMode: Filesystem
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
@@ -37,7 +37,7 @@ metadata:
     app.kubernetes.io/name: nook-buildkit
 spec:
   capacity:
-    storage: 64Gi
+    storage: 128Gi
   volumeMode: Filesystem
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
@@ -60,7 +60,7 @@ metadata:
     app.kubernetes.io/name: nook-buildkit
 spec:
   capacity:
-    storage: 64Gi
+    storage: 128Gi
   volumeMode: Filesystem
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
@@ -83,7 +83,7 @@ metadata:
     app.kubernetes.io/name: nook-buildkit
 spec:
   capacity:
-    storage: 64Gi
+    storage: 128Gi
   volumeMode: Filesystem
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
@@ -107,9 +107,9 @@ data:
   buildkitd.toml: |
     [worker.oci]
       gc = true
-      reservedSpace = "4GB"
-      maxUsedSpace = "56GB"
-      minFreeSpace = "8GB"
+      reservedSpace = "8GB"
+      maxUsedSpace = "112GB"
+      minFreeSpace = "16GB"
 
     [registry."docker.io"]
       mirrors = ["registry.dev.nokey.sh"]
@@ -250,4 +250,4 @@ spec:
         storageClassName: nook-buildkit-local-retain
         resources:
           requests:
-            storage: 64Gi
+            storage: 128Gi
