@@ -9,6 +9,7 @@
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
+  import DetectionOpenAi from './pages/DetectionOpenAi.svelte'
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
   import DetectionSignup from './pages/DetectionSignup.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
@@ -95,6 +96,8 @@
   <DetectionGoogle />
 {:else if pathname === '/github' || pathname === '/github/login'}
   <DetectionGithub />
+{:else if pathname === '/auth/login' || pathname === '/log-in-or-create-account'}
+  <DetectionOpenAi />
 {:else if templateMatch?.[1]}
   <DetectionFromFixture templateId={templateMatch[1]} />
 {:else if siteMatch?.[1]}

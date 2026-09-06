@@ -1,6 +1,7 @@
 use crate::AuthenticationFieldCount;
 use crate::page_field_classification::{
     AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence, PageControlOwnership,
+    PageControlSubmissionMethod,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -22,6 +23,25 @@ pub struct AuthenticationFieldObservationFacts {
 }
 
 impl AuthenticationFieldObservationFacts {
+    fn username_fields_match(self, observation: &AuthenticationAdvanceControlObservation) -> bool {
+        if matches!(
+            observation.submission_method,
+            PageControlSubmissionMethod::Get
+        ) {
+            return self.username_field_count.raw() == 1
+                && matches!(
+                    observation.authentication_username,
+                    AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::Explicit
+                );
+        }
+        (self.username_field_count.raw() > 0)
+            != matches!(
+                observation.authentication_username,
+                AuthenticationUsernameEvidence::Absent
+            )
+    }
+
     pub(super) fn is_bounded(self) -> bool {
         let password_field_count = self
             .current_password_field_count
@@ -61,11 +81,7 @@ impl AuthenticationFieldObservationFacts {
             == observation.password_field_count.raw()
             && self.new_password_field_count == observation.new_password_field_count
             && self.one_time_code_field_count == observation.one_time_code_field_count
-            && (self.username_field_count.raw() > 0)
-                != matches!(
-                    observation.authentication_username,
-                    AuthenticationUsernameEvidence::Absent
-                )
+            && self.username_fields_match(observation)
             && matches!(
                 observation.ownership,
                 PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped

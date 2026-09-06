@@ -214,6 +214,40 @@ mod tests {
     }
 
     #[test]
+    fn identifier_get_requires_exactly_one_bound_username_field() {
+        let mut facts = password_login();
+        facts.fields.current_password_field_count = 0.into();
+        facts.fields.actionable_password_field_count = 0.into();
+        let AuthenticationDetailedAdvanceControlObservation::Observed(controls) =
+            &mut facts.detailed_advance_control
+        else {
+            panic!("expected observed login control");
+        };
+        controls[0].password_field_count = 0.into();
+        controls[0].submission_method = PageControlSubmissionMethod::Get;
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts.clone()],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::Login
+        ));
+
+        for username_field_count in [0, 2] {
+            let mut mismatched = facts.clone();
+            mismatched.fields.username_field_count = username_field_count.into();
+            assert_eq!(
+                AuthenticationPageObservationFactsBatch {
+                    observations: vec![mismatched],
+                }
+                .classify(),
+                AuthenticationWorkflowMatch::NoMatch
+            );
+        }
+    }
+
+    #[test]
     fn reduced_and_mismatched_control_claims_fail_closed() {
         let mut reduced = password_login();
         reduced.detailed_advance_control = AuthenticationDetailedAdvanceControlObservation::Absent;

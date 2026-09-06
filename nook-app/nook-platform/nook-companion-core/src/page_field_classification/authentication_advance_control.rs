@@ -109,7 +109,7 @@ pub struct AuthenticationAdvanceControlObservation {
     /// `id` and `name=value` machine identity used by the legacy activation veto.
     #[serde(default)]
     pub machine_identity: String,
-    /// Native form submission method; GET must not activate password fill.
+    /// Native form submission method; GET is limited to identifier-only advancement.
     #[serde(default)]
     pub submission_method: PageControlSubmissionMethod,
 }
@@ -124,6 +124,23 @@ pub enum AuthenticationAdvanceControlDecision {
 }
 
 impl AuthenticationAdvanceControlObservation {
+    fn is_identifier_only_get_advance(&self) -> bool {
+        matches!(self.actionability, PageControlActionability::Actionable)
+            && matches!(
+                self.ownership,
+                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+            )
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+            )
+            && self.password_field_count.raw() == 0
+            && self.new_password_field_count.raw() == 0
+            && self.one_time_code_field_count.raw() == 0
+            && self.semantic_submit_control_count.raw() == 1
+    }
+
     /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
     #[must_use]
     pub fn is_bounded(&self) -> bool {
@@ -153,10 +170,9 @@ impl AuthenticationAdvanceControlObservation {
 
     fn check(&self) -> Option<CheckedAuthenticationControl<'_>> {
         if !self.is_bounded()
-            || matches!(
-                self.submission_method,
-                PageControlSubmissionMethod::Get | PageControlSubmissionMethod::Dialog
-            )
+            || matches!(self.submission_method, PageControlSubmissionMethod::Dialog)
+            || (matches!(self.submission_method, PageControlSubmissionMethod::Get)
+                && !self.is_identifier_only_get_advance())
         {
             return None;
         }
@@ -576,16 +592,69 @@ mod tests {
     }
 
     #[test]
-    fn get_submitters_do_not_advance_authentication() {
-        let mut control = AuthenticationAdvanceControlObservation::login_control();
-        control.submission_method = PageControlSubmissionMethod::Get;
-        assert!(!authentication_advance_control_is_safe(&control));
+    fn get_submitters_advance_only_single_identifier_authentication() {
+        let mut identifier = AuthenticationAdvanceControlObservation::login_control();
+        identifier.password_field_count = 0.into();
+        identifier.label = "Continue".to_owned();
+        identifier.submission_method = PageControlSubmissionMethod::Get;
+        assert!(authentication_advance_control_is_safe(&identifier));
 
-        control.submission_method = PageControlSubmissionMethod::Post;
-        assert!(authentication_advance_control_is_safe(&control));
+        let mut locally_scoped = identifier.clone();
+        locally_scoped.ownership = PageControlOwnership::LocallyScoped;
+        assert!(authentication_advance_control_is_safe(&locally_scoped));
 
-        control.submission_method = PageControlSubmissionMethod::Dialog;
-        assert!(!authentication_advance_control_is_safe(&control));
+        for evidence in [
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+        ] {
+            let mut rejected = identifier.clone();
+            rejected.authentication_username = evidence;
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for mutation in [
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.password_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.new_password_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.one_time_code_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.semantic_submit_control_count = 2.into();
+            },
+        ] {
+            let mut rejected = identifier.clone();
+            mutation(&mut rejected);
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        let mut unowned = identifier.clone();
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(&unowned));
+        let mut inert = identifier.clone();
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(&inert));
+        let mut activation = identifier.clone();
+        activation.semantics = PageControlSemantics::Activation;
+        assert!(!authentication_advance_control_is_safe(&activation));
+
+        for destination in [
+            "https://login.example.test/search",
+            "https://login.example.test/auth/delete-account",
+            "https://login.example.test/auth/login?provider=google",
+            "https://other.example.test/auth/login",
+        ] {
+            let mut rejected = identifier.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        identifier.submission_method = PageControlSubmissionMethod::Dialog;
+        assert!(!authentication_advance_control_is_safe(&identifier));
     }
 
     #[test]

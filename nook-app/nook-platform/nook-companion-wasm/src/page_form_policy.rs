@@ -391,6 +391,11 @@ mod tests {
         assert!(!authentication_advance_control_is_safe(
             login_advance_observation("https://login.example.test/register", "Sign in",)
         ));
+        let mut identifier_get =
+            login_advance_observation("https://login.example.test/auth/login", "Continue");
+        identifier_get.password_field_count = 0.into();
+        identifier_get.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
+        assert!(authentication_advance_control_is_safe(identifier_get));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
