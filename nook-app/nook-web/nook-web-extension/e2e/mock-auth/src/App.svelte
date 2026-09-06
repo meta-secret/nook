@@ -2,6 +2,7 @@
   import DetectionCombined from './pages/DetectionCombined.svelte'
   import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
+  import DetectionAmazon from './pages/DetectionAmazon.svelte'
   import DetectionFromFixture from './pages/DetectionFromFixture.svelte'
   import DetectionGoogle from './pages/DetectionGoogle.svelte'
   import DetectionGithub from './pages/DetectionGithub.svelte'
@@ -95,6 +96,8 @@
   <DetectionMicrosoftConsumer />
 {:else if pathname === '/account/sign-in'}
   <DetectionAppleShell />
+{:else if pathname === '/ap/signin'}
+  <DetectionAmazon />
 {:else if pathname === '/appleauth/auth/authorize/signin'}
   <DetectionApple />
 {:else if pathname === '/v3/signin/identifier' || pathname === '/v3/signin/challenge/pwd'}

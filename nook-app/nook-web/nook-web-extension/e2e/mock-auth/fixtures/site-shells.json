@@ -152,7 +152,7 @@
   "amazon": {
     "loginUrl": "https://www.amazon.com/ap/signin",
     "source": "capture",
-    "template": "email-first"
+    "template": "amazon"
   },
   "amazon-pharmacy": {
     "loginUrl": "https://www.amazon.com/login",
@@ -1707,7 +1707,7 @@
   "kindle": {
     "loginUrl": "https://www.amazon.com/ap/signin",
     "source": "research",
-    "template": "email-first"
+    "template": "amazon"
   },
   "king": {
     "loginUrl": "https://www.king.com/login",
@@ -3762,7 +3762,7 @@
   "primevideo": {
     "loginUrl": "https://www.amazon.com/ap/signin",
     "source": "capture",
-    "template": "email-first"
+    "template": "amazon"
   },
   "princess-cruises": {
     "loginUrl": "https://www.princess.com/login",
