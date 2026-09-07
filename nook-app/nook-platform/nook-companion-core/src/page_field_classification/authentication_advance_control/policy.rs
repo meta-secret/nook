@@ -37,7 +37,8 @@ impl AuthenticationAdvanceControlObservation {
                     self.form_identity.is_empty()
                         && matches!(
                             self.authentication_username,
-                            AuthenticationUsernameEvidence::Explicit
+                            AuthenticationUsernameEvidence::WebAuthnEmail
+                                | AuthenticationUsernameEvidence::Explicit
                         )
                 }
             }
@@ -88,13 +89,19 @@ impl CheckedAuthenticationControl<'_> {
         let credential_update_destination = self.credential_update_destination();
         let observation = self.observation;
         let expanded_label = expand_identity_text(&observation.label);
+        let webauthn_identifier_advance = matches!(
+            observation.authentication_username,
+            AuthenticationUsernameEvidence::WebAuthnEmail
+        ) && observation.is_identifier_only_get_advance();
         let primary_oauth_login = matches!(observation.ownership, PageControlOwnership::OwnedForm)
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
                 observation.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
+                AuthenticationUsernameEvidence::Strong
+                    | AuthenticationUsernameEvidence::WebAuthnEmail
+                    | AuthenticationUsernameEvidence::Explicit
             )
-            && observation.password_field_count.raw() > 0
+            && (observation.password_field_count.raw() > 0 || webauthn_identifier_advance)
             && AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
             && !AuthenticationControlIdentity::new(&observation.label).label_names_provider()
             && AuthenticationRouteIdentity::new(&self.destination.route_identity)
@@ -140,6 +147,7 @@ impl CheckedAuthenticationControl<'_> {
             && matches!(
                 observation.authentication_username,
                 AuthenticationUsernameEvidence::StandardsBasedEmail
+                    | AuthenticationUsernameEvidence::WebAuthnEmail
             );
         let username_only_authentication_context =
             AuthenticationRouteIdentity::new(&observation.form_identity).indicates_authentication()
@@ -201,6 +209,105 @@ mod tests {
     use crate::authentication_advance_control_is_safe;
 
     struct BookingDefaultGetScenario;
+
+    struct TeslaDefaultGetScenario;
+
+    impl TeslaDefaultGetScenario {
+        fn observation() -> AuthenticationAdvanceControlObservation {
+            AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Actionable,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::WebAuthnEmail,
+                password_field_count: 0.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://auth.tesla.com".to_owned(),
+                form_identity: String::new(),
+                destination_identity: "https://auth.tesla.com/oauth2/v1/authorize".to_owned(),
+                label: "Next".to_owned(),
+                machine_identity: String::new(),
+                submission_method: PageControlSubmissionMethod::Get,
+                submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+            }
+        }
+
+        fn assert_hostile_variants_fail_closed() {
+            for destination in [
+                "https://attacker.example/",
+                "https://auth.tesla.com/signup",
+                "https://auth.tesla.com/recover",
+                "https://auth.tesla.com/?provider=google",
+                "https://auth.tesla.com/account/delete",
+                "https://auth.tesla.com/oauth2/v/authorize",
+                "https://auth.tesla.com/oauth2/v1beta/authorize",
+                "https://auth.tesla.com/oauth2/v1234/authorize",
+                "https://auth.tesla.com/oauth2/v1/token",
+                "https://auth.tesla.com/oauth2/v1/authorize/continue",
+            ] {
+                let mut rejected = Self::observation();
+                rejected.destination_identity = destination.to_owned();
+                assert!(
+                    !authentication_advance_control_is_safe(&rejected),
+                    "{destination}"
+                );
+            }
+
+            for label in [
+                "Trouble Signing In",
+                "Create Account",
+                "Continue with Google",
+                "Use passkey",
+                "Delete account",
+            ] {
+                let mut rejected = Self::observation();
+                rejected.label = label.to_owned();
+                assert!(
+                    !authentication_advance_control_is_safe(&rejected),
+                    "{label}"
+                );
+            }
+
+            let mut ambiguous = Self::observation();
+            ambiguous.semantic_submit_control_count = 2.into();
+            assert!(!authentication_advance_control_is_safe(&ambiguous));
+
+            let mut unowned = Self::observation();
+            unowned.ownership = PageControlOwnership::Unowned;
+            assert!(!authentication_advance_control_is_safe(&unowned));
+
+            let mut inert = Self::observation();
+            inert.actionability = PageControlActionability::Inert;
+            assert!(!authentication_advance_control_is_safe(&inert));
+
+            let mut activation = Self::observation();
+            activation.semantics = PageControlSemantics::Activation;
+            assert!(!authentication_advance_control_is_safe(&activation));
+
+            let mut identified_form = Self::observation();
+            identified_form.form_identity = "sign-in-form".to_owned();
+            assert!(!authentication_advance_control_is_safe(&identified_form));
+
+            let mut authored_destination = Self::observation();
+            authored_destination.submission_destination_source =
+                PageControlSubmissionDestinationSource::Authored;
+            assert!(!authentication_advance_control_is_safe(
+                &authored_destination
+            ));
+
+            for evidence in [
+                AuthenticationUsernameEvidence::Absent,
+                AuthenticationUsernameEvidence::Generic,
+                AuthenticationUsernameEvidence::StandardsBasedEmail,
+                AuthenticationUsernameEvidence::Strong,
+            ] {
+                let mut rejected = Self::observation();
+                rejected.authentication_username = evidence;
+                assert!(!authentication_advance_control_is_safe(&rejected));
+            }
+        }
+    }
 
     impl BookingDefaultGetScenario {
         fn observation() -> AuthenticationAdvanceControlObservation {
@@ -283,6 +390,14 @@ mod tests {
     }
 
     #[test]
+    fn tesla_owned_webauthn_email_default_get_is_narrowly_admitted() {
+        assert!(authentication_advance_control_is_safe(
+            &TeslaDefaultGetScenario::observation()
+        ));
+        TeslaDefaultGetScenario::assert_hostile_variants_fail_closed();
+    }
+
+    #[test]
     fn claude_owned_email_post_uses_existing_identifier_advance_policy() -> anyhow::Result<()> {
         let claude = AuthenticationAdvanceControlObservation {
             actionability: PageControlActionability::Actionable,
@@ -302,6 +417,10 @@ mod tests {
             submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
         };
         assert!(authentication_advance_control_is_safe(&claude));
+
+        let mut generic_email_get = claude.clone();
+        generic_email_get.submission_method = PageControlSubmissionMethod::Get;
+        assert!(!authentication_advance_control_is_safe(&generic_email_get));
 
         for label in [
             "Continue with Google",

@@ -523,6 +523,7 @@ pub enum AuthenticationUsernameEvidence {
     Absent,
     Generic,
     StandardsBasedEmail,
+    WebAuthnEmail,
     Strong,
     Explicit,
 }
@@ -541,6 +542,8 @@ pub fn authentication_username_evidence(
     if has_autocomplete_token(&field.autocomplete_tokens, "email") {
         return if username_negative(&identity) {
             AuthenticationUsernameEvidence::Generic
+        } else if has_autocomplete_token(&field.autocomplete_tokens, "webauthn") {
+            AuthenticationUsernameEvidence::WebAuthnEmail
         } else if field.login_context {
             AuthenticationUsernameEvidence::Strong
         } else {
@@ -570,6 +573,8 @@ pub fn strongest_authentication_username_evidence(
 ) -> AuthenticationUsernameEvidence {
     if evidence.contains(&AuthenticationUsernameEvidence::Explicit) {
         AuthenticationUsernameEvidence::Explicit
+    } else if evidence.contains(&AuthenticationUsernameEvidence::WebAuthnEmail) {
+        AuthenticationUsernameEvidence::WebAuthnEmail
     } else if evidence.contains(&AuthenticationUsernameEvidence::Strong) {
         AuthenticationUsernameEvidence::Strong
     } else if evidence.contains(&AuthenticationUsernameEvidence::StandardsBasedEmail) {
@@ -854,6 +859,54 @@ mod tests {
             &[],
             false,
         )));
+    }
+
+    #[test]
+    fn email_webauthn_is_distinct_from_generic_standards_email() {
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Text,
+                "identity",
+                &["email", "webauthn"],
+                false,
+            )),
+            AuthenticationUsernameEvidence::WebAuthnEmail
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Text,
+                "identity",
+                &["email"],
+                false,
+            )),
+            AuthenticationUsernameEvidence::StandardsBasedEmail
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Text,
+                "newsletter-email",
+                &["email", "webauthn"],
+                false,
+            )),
+            AuthenticationUsernameEvidence::Generic
+        );
+        assert_eq!(
+            authentication_username_evidence(&field(
+                PageInputType::Text,
+                "identity",
+                &["username", "webauthn"],
+                false,
+            )),
+            AuthenticationUsernameEvidence::Explicit
+        );
+        assert_eq!(
+            strongest_authentication_username_evidence(&[
+                AuthenticationUsernameEvidence::StandardsBasedEmail,
+                AuthenticationUsernameEvidence::Strong,
+                AuthenticationUsernameEvidence::WebAuthnEmail,
+            ]),
+            AuthenticationUsernameEvidence::WebAuthnEmail
+        );
     }
 
     #[test]

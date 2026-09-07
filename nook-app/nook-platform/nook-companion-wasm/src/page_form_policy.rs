@@ -554,6 +554,61 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn authentication_advance_control_wasm_export_preserves_tesla_webauthn_email_policy() {
+        let mut tesla =
+            login_advance_observation("https://auth.tesla.com/oauth2/v1/authorize", "Next");
+        tesla.authentication_username =
+            nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail;
+        tesla.password_field_count = 0.into();
+        tesla.source_origin = "https://auth.tesla.com".to_owned();
+        tesla.form_identity.clear();
+        tesla.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
+        tesla.submission_destination_source =
+            nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
+        assert!(authentication_advance_control_is_safe(tesla.clone()));
+
+        for evidence in [
+            nook_companion_core::AuthenticationUsernameEvidence::Absent,
+            nook_companion_core::AuthenticationUsernameEvidence::Generic,
+            nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail,
+            nook_companion_core::AuthenticationUsernameEvidence::Strong,
+        ] {
+            let mut rejected = tesla.clone();
+            rejected.authentication_username = evidence;
+            assert!(!authentication_advance_control_is_safe(rejected));
+        }
+
+        for destination in [
+            "https://attacker.example/",
+            "https://auth.tesla.com/signup",
+            "https://auth.tesla.com/recover",
+            "https://auth.tesla.com/?provider=google",
+            "https://auth.tesla.com/account/delete",
+            "https://auth.tesla.com/oauth2/v1beta/authorize",
+            "https://auth.tesla.com/oauth2/v1/token",
+        ] {
+            let mut rejected = tesla.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(rejected),
+                "{destination}"
+            );
+        }
+
+        let mut ambiguous = tesla.clone();
+        ambiguous.semantic_submit_control_count = 2.into();
+        assert!(!authentication_advance_control_is_safe(ambiguous));
+
+        let mut unowned = tesla.clone();
+        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(unowned));
+
+        tesla.actionability = nook_companion_core::PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(tesla));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_advance_control_wasm_export_preserves_claude_email_policy() {
         let mut claude =
             login_advance_observation("https://claude.ai/login", "Continue with email");
@@ -564,6 +619,10 @@ mod tests {
         claude.form_identity.clear();
         claude.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
         assert!(authentication_advance_control_is_safe(claude.clone()));
+
+        let mut generic_email_get = claude.clone();
+        generic_email_get.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
+        assert!(!authentication_advance_control_is_safe(generic_email_get));
 
         for label in [
             "Continue with Google",

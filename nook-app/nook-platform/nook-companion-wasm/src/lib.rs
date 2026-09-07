@@ -462,10 +462,23 @@ mod tests {
             authentication_username_evidence(&field),
             nook_companion_core::AuthenticationUsernameEvidence::Strong
         );
+        let tesla = NookPageInputFieldObservation::new(
+            nook_companion_core::PageInputType::Text,
+            false,
+            false,
+            vec!["email".to_owned(), "webauthn".to_owned()],
+            "identity".to_owned(),
+            false,
+        );
+        assert_eq!(
+            authentication_username_evidence(&tesla),
+            nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail
+        );
         assert_eq!(
             strongest_authentication_username_evidence(vec![
                 nook_companion_core::AuthenticationUsernameEvidence::Absent,
                 nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail,
+                nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail,
                 nook_companion_core::AuthenticationUsernameEvidence::Explicit,
                 nook_companion_core::AuthenticationUsernameEvidence::Strong,
             ]),

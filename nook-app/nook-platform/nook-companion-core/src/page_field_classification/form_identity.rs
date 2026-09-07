@@ -78,9 +78,26 @@ impl AuthenticationRouteIdentity<'_> {
     pub(super) fn indicates_oauth_authorization(&self) -> bool {
         let destination_identity = self.identity;
         let route = AuthenticationRouteIdentity::new(destination_identity).normalized();
-        matches!(route.as_str(), "/oauth2/authorize" | "/oauth/authorize")
+        if matches!(route.as_str(), "/oauth2/authorize" | "/oauth/authorize")
             || route.ends_with("/oauth2/authorize")
             || route.ends_with("/oauth/authorize")
+        {
+            return true;
+        }
+        let Some((_, versioned_authorization)) = route.rsplit_once("/oauth2/") else {
+            return false;
+        };
+        let mut segments = versioned_authorization.split('/');
+        let (Some(version), Some("authorize"), None) =
+            (segments.next(), segments.next(), segments.next())
+        else {
+            return false;
+        };
+        version.strip_prefix('v').is_some_and(|digits| {
+            !digits.is_empty()
+                && digits.len() <= 3
+                && digits.bytes().all(|byte| byte.is_ascii_digit())
+        })
     }
     fn indicates_alternate_provider(&self, authorization: OAuthAuthorization) -> bool {
         let destination_identity = self.identity;
@@ -551,6 +568,7 @@ mod tests {
                 "/oauth2/authorize?response_mode=form_post&next=/checkout",
                 false,
             ),
+            ("/oauth2/v1/authorize", false),
             ("/login?provider=unknown", true),
             ("/auth/payment", true),
             ("/login#provider=unknown", true),
@@ -573,6 +591,23 @@ mod tests {
                     provider: OAuthAuthorization::Disallowed,
                 })
         );
+        for route in [
+            "/oauth2/v/authorize",
+            "/oauth2/v1beta/authorize",
+            "/oauth2/v1234/authorize",
+            "/oauth2/v1/token",
+            "/oauth2/v1/authorize/continue",
+        ] {
+            assert!(
+                AuthenticationRouteIdentity::new(route).has_disallowed_action_or_provider(
+                    DestinationPolicy {
+                        credential: CredentialDestination::Authentication,
+                        provider: OAuthAuthorization::Allowed,
+                    }
+                ),
+                "{route}"
+            );
+        }
     }
 
     #[test]
@@ -649,6 +684,7 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             assert!(
                 !OneTimeCodeContext {

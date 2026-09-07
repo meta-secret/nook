@@ -429,6 +429,7 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut ceremony = AuthenticationCeremonyObservationFacts::x_identifier_get();
             ceremony.authentication_context.authentication_username = evidence;
@@ -575,6 +576,7 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut observation =
                 AuthenticationImplicitSubmitActuationObservation::x_identifier_get();
