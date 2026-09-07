@@ -70,6 +70,15 @@ export type {
   ShellScriptLaunch,
 } from './skill-provider-command-types.ts';
 
+export function isQuotedDynamicTaskName(word: ShellWord): boolean {
+  return (
+    word.dynamic &&
+    /^"[\s\S]*"$/u.test(word.source) &&
+    !word.source.includes('$(') &&
+    !word.source.includes('`')
+  );
+}
+
 const MAX_SHELL_COMMANDS = 4_096;
 const MAX_SHELL_DEPTH = 8;
 const MAX_COMMAND_NORMALIZATIONS = 32;
@@ -883,6 +892,12 @@ function runtimeExecutable(
   if (index === request.words.length) return false;
   const executable = request.words[index] as ShellWord;
   if (!executableIsStatic(executable)) {
+    // Task targets are quoted data arguments; the Task executable remains literal.
+    if (
+      (request.runtime === 'task' || request.runtime === 'go-task') &&
+      isQuotedDynamicTaskName(executable)
+    )
+      return false;
     throw new Error(
       `Dynamic ${request.runtime} executable construction is forbidden: ${executable.source}`,
     );

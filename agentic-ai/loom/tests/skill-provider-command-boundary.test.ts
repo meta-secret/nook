@@ -152,6 +152,11 @@ test('rejects dynamic shell options before a static script target', () => {
   expect(() => inspectShell('bash "$OPTS"')).not.toThrow();
 });
 
+test('accepts quoted dynamic Task targets as data arguments', () => {
+  for (const source of ['task "$TASK_NAME"', 'go-task "$TASK_NAME"'])
+    expect(() => inspectShell(source), source).not.toThrow();
+});
+
 test('closes the exact-head shell review batch', () => {
   for (const source of [
     `ROOT=${PROTECTED_ROOT}; env ROOT=scripts true; bun "$ROOT/cli.ts"`,

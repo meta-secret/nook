@@ -1,5 +1,8 @@
 import { posix } from 'node:path';
-import { consumeEnvPrefix } from './skill-provider-command-boundary.ts';
+import {
+  consumeEnvPrefix,
+  isQuotedDynamicTaskName,
+} from './skill-provider-command-boundary.ts';
 import {
   ShellSeparator,
   type ShellToken,
@@ -264,8 +267,13 @@ function selectedTaskfileReference(
       };
       continue;
     }
-    if (word.dynamic && !taskNameSeen)
+    if (word.dynamic && !taskNameSeen) {
+      if (isQuotedDynamicTaskName(word)) {
+        taskNameSeen = true;
+        continue;
+      }
       throw new Error('Dynamic Task option construction is forbidden.');
+    }
     if (!word.value.startsWith('-')) taskNameSeen = true;
   }
   if (selection === false) return false;
