@@ -1,0 +1,20 @@
+[package]
+name = "nook-wasm-composition-tests"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Test-only direct composition coverage for Nook Rust and WASM crates."
+repository.workspace = true
+publish = false
+
+[dev-dependencies]
+anyhow = "1.0.104"
+nook-auth2 = { path = "../nook-auth2" }
+nook-companion-core = { path = "../nook-companion-core" }
+nook-companion-wasm = { path = "../nook-companion-wasm" }
+nook-core = { path = "../nook-core" }
+nook-wasm = { path = "../nook-wasm" }
+serde_json = "1.0.151"
+
+[lints]
+workspace = true
