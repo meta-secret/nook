@@ -277,6 +277,10 @@ type CurrentPairedVaultPresenceArgs = {
   nonce: string
 }
 
+type CompanionUnlockedPresenceShape = {
+  app_key: CompanionUnlockedAppKey
+}
+
 async function currentPairedVaultPresence({
   vaultStoreId,
   nonce,
@@ -507,7 +511,7 @@ export async function discoverPairedVaultIdentity(
       },
     } satisfies Extract<
       CompanionExtensionPresence,
-      { app_key: CompanionUnlockedAppKey }
+      CompanionUnlockedPresenceShape
     >
     return await discover(presence)
   } catch {

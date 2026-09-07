@@ -29,15 +29,15 @@ type ExtensionIdentityRequestBase<Scope extends string> = {
 export type PairedExtensionIdentityDiscoveryFor<Request> =
   | {
       status:
-        | ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
-        | ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+        | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+        | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     }
   | {
-      status: ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+      status: typeof ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
       connectedVaultStoreId: string
       connectedVaultName: string
     }
   | {
-      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+      status: typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
       request: Request
     }

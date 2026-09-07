@@ -19,7 +19,11 @@ type IdentityEnvelopeRequest = {
 
 import { stripBasePath } from "$lib/runtime/routes";
 import {
+  admit_companion_handoff_response,
+  admit_companion_identity_status,
   NookExtensionIdentityHandoffContext,
+  type CompanionIdentityDiscoveryObservation,
+  type CompanionIdentityDiscoveryRequest,
   type CompanionWebsiteHandoffBegin,
   type NookVaultManager,
 } from "$app-wasm";
@@ -38,12 +42,6 @@ import {
   type ExtensionPairingApprovedMessage,
   type OpenCompanionLauncherMessage,
 } from "$web-shared/extension/runtime-messages";
-import {
-  admit_companion_handoff_response,
-  admit_companion_identity_status,
-  type CompanionIdentityDiscoveryObservation,
-  type CompanionIdentityDiscoveryRequest,
-} from "$web-shared/extension/nook-companion-wasm/nook_companion_wasm.js";
 import {
   ExtensionIdentityRequestSource,
   type ExtensionConnectRequestFor,
