@@ -4,6 +4,8 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
+use std::collections::BTreeSet;
+
 use sha2::{Digest, Sha256};
 use zeroize::Zeroize;
 
@@ -116,7 +118,7 @@ impl SecretPolynomial {
         let indexes = shares
             .iter()
             .map(|share| share.index)
-            .collect::<std::collections::BTreeSet<_>>();
+            .collect::<BTreeSet<_>>();
         if indexes.len() != shares.len() || shares.iter().any(|share| share.value.len() != length) {
             return Err(MultiDeviceError::InvalidSentinelShareEncoding);
         }
