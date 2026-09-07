@@ -1,5 +1,11 @@
 //! Key-epoch rotation: fresh `secrets_key` / `members_key` for append-only security events.
 
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use crate::SecretValue;
 
 use crate::EncryptedSecretPayload;
@@ -13,100 +19,209 @@ use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, Symme
 use crate::{auth_record, build_members_records, resolve_member_roster};
 
 /// Re-encrypt user secrets under a new `secrets_key`.
-pub fn reencrypt_user_secrets_for_epoch(
-    records: &[StoredSecretRecord],
-    old_secrets_key: &SymmetricKey,
-    new_secrets_key: &SymmetricKey,
-) -> VaultEpochResult<Vec<EncryptedSecretPayload>> {
-    let old_crypto = VaultCrypto::new(old_secrets_key)?;
-    let new_crypto = VaultCrypto::new(new_secrets_key)?;
-    let mut out = Vec::new();
-    for record in records {
-        let secret_type = record
-            .secret_type
-            .ok_or(VaultEpochError::MissingSecretType {
-                key: record.key.to_string(),
-            })?;
-        let armored = AgeArmoredCiphertext::from_trusted_armored(record.value.as_str().to_owned());
-        let mut plaintext = old_crypto.decrypt_value(&armored)?;
-        let mut value = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
-        let identity_fingerprint = value.identity_fingerprint(new_secrets_key)?;
-        let fingerprint = value.fingerprint(new_secrets_key)?;
-        let ciphertext = new_crypto.encrypt_value(&plaintext)?;
-        plaintext.zeroize_plaintext();
-        value.zeroize_plaintext();
-        out.push(EncryptedSecretPayload {
-            id: record.key.clone(),
-            secret_type,
-            ciphertext: OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
-            identity_fingerprint,
-            fingerprint,
-        });
+pub struct SecretEpochReencryption<'a> {
+    records: &'a [StoredSecretRecord],
+    old_secrets_key: &'a SymmetricKey,
+    new_secrets_key: &'a SymmetricKey,
+}
+
+impl<'a> SecretEpochReencryption<'a> {
+    #[must_use]
+    pub fn new(
+        records: &'a [StoredSecretRecord],
+        old_secrets_key: &'a SymmetricKey,
+        new_secrets_key: &'a SymmetricKey,
+    ) -> Self {
+        Self {
+            records,
+            old_secrets_key,
+            new_secrets_key,
+        }
     }
-    Ok(out)
+
+    pub fn reencrypt(self) -> VaultEpochResult<Vec<EncryptedSecretPayload>> {
+        let Self {
+            records,
+            old_secrets_key,
+            new_secrets_key,
+        } = self;
+        let old_crypto = VaultCrypto::new(old_secrets_key)?;
+        let new_crypto = VaultCrypto::new(new_secrets_key)?;
+        let mut out = Vec::new();
+        for record in records {
+            let secret_type = record
+                .secret_type
+                .ok_or(VaultEpochError::MissingSecretType {
+                    key: record.key.to_string(),
+                })?;
+            let armored =
+                AgeArmoredCiphertext::from_trusted_armored(record.value.as_str().to_owned());
+            let mut plaintext = old_crypto.decrypt_value(&armored)?;
+            let mut value = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
+            let identity_fingerprint = value.identity_fingerprint(new_secrets_key)?;
+            let fingerprint = value.fingerprint(new_secrets_key)?;
+            let ciphertext = new_crypto.encrypt_value(&plaintext)?;
+            plaintext.zeroize_plaintext();
+            value.zeroize_plaintext();
+            out.push(EncryptedSecretPayload {
+                id: record.key.clone(),
+                secret_type,
+                ciphertext: OpaqueCiphertext::from_trusted(ciphertext.as_str().to_owned()),
+                identity_fingerprint,
+                fingerprint,
+            });
+        }
+        Ok(out)
+    }
 }
 
 /// Rotate vault keys and rebuild encrypted secret payloads for a new epoch.
-pub fn rotate_vault_keys_with_secrets(
-    user_records: &[StoredSecretRecord],
-    old_secrets_key: &SymmetricKey,
-) -> VaultEpochResult<(VaultKeys, Vec<EncryptedSecretPayload>)> {
-    let new_keys = crate::generate_vault_keys()?;
-    let secrets =
-        reencrypt_user_secrets_for_epoch(user_records, old_secrets_key, &new_keys.secrets_key)?;
-    Ok((new_keys, secrets))
+pub struct VaultKeyRotation<'a> {
+    user_records: &'a [StoredSecretRecord],
+    old_secrets_key: &'a SymmetricKey,
+}
+
+impl<'a> VaultKeyRotation<'a> {
+    #[must_use]
+    pub fn new(user_records: &'a [StoredSecretRecord], old_secrets_key: &'a SymmetricKey) -> Self {
+        Self {
+            user_records,
+            old_secrets_key,
+        }
+    }
+
+    pub fn rotate(self) -> VaultEpochResult<(VaultKeys, Vec<EncryptedSecretPayload>)> {
+        let Self {
+            user_records,
+            old_secrets_key,
+        } = self;
+        let new_keys = crate::generate_vault_keys()?;
+        let secrets =
+            SecretEpochReencryption::new(user_records, old_secrets_key, &new_keys.secrets_key)
+                .reencrypt()?;
+        Ok((new_keys, secrets))
+    }
 }
 
 /// Hash of member roster records after re-encrypting under a new `members_key`.
-pub fn members_checkpoint_hash_from_roster(
-    records: &[StoredSecretRecord],
-    old_members_key: &SymmetricKey,
-    new_members_key: &SymmetricKey,
-) -> VaultResult<Sha256Hex> {
-    let roster = resolve_member_roster(records, old_members_key)?;
-    let member_records = build_members_records(&roster, new_members_key)?;
-    let json =
-        serde_json::to_string(&member_records).map_err(VaultEpochError::MemberRecordsSerialize)?;
-    Ok(crate::sha256_hex(json.as_bytes()))
+pub struct MembersCheckpointHash<'a> {
+    records: &'a [StoredSecretRecord],
+    old_members_key: &'a SymmetricKey,
+    new_members_key: &'a SymmetricKey,
+}
+
+impl<'a> MembersCheckpointHash<'a> {
+    #[must_use]
+    pub fn new(
+        records: &'a [StoredSecretRecord],
+        old_members_key: &'a SymmetricKey,
+        new_members_key: &'a SymmetricKey,
+    ) -> Self {
+        Self {
+            records,
+            old_members_key,
+            new_members_key,
+        }
+    }
+
+    pub fn compute(self) -> VaultResult<Sha256Hex> {
+        let Self {
+            records,
+            old_members_key,
+            new_members_key,
+        } = self;
+        let roster = resolve_member_roster(records, old_members_key)?;
+        let member_records = build_members_records(&roster, new_members_key)?;
+        let json = serde_json::to_string(&member_records)
+            .map_err(VaultEpochError::MemberRecordsSerialize)?;
+        Ok(crate::sha256_hex(json.as_bytes()))
+    }
 }
 
 /// Build replacement auth + member rows for every active device after epoch rotation.
-pub fn rewrapped_vault_meta_records_for_epoch(
-    records_snapshot: &[StoredSecretRecord],
-    old_members_key: &SymmetricKey,
-    new_keys: &VaultKeys,
-) -> VaultResult<Vec<StoredSecretRecord>> {
-    let roster = resolve_member_roster(records_snapshot, old_members_key)?;
-    let mut records = Vec::with_capacity(roster.len().saturating_mul(2));
-    for member in &roster {
-        records.push(auth_record(
-            &member.auth_id,
-            &new_keys.secrets_key,
-            &new_keys.members_key,
-            &member.public_key,
-        )?);
+pub struct VaultMetaRecordRewrap<'a> {
+    records_snapshot: &'a [StoredSecretRecord],
+    old_members_key: &'a SymmetricKey,
+    new_keys: &'a VaultKeys,
+}
+
+impl<'a> VaultMetaRecordRewrap<'a> {
+    #[must_use]
+    pub fn new(
+        records_snapshot: &'a [StoredSecretRecord],
+        old_members_key: &'a SymmetricKey,
+        new_keys: &'a VaultKeys,
+    ) -> Self {
+        Self {
+            records_snapshot,
+            old_members_key,
+            new_keys,
+        }
     }
-    records.extend(build_members_records(&roster, &new_keys.members_key)?);
-    Ok(records)
+
+    pub fn rewrap(self) -> VaultResult<Vec<StoredSecretRecord>> {
+        let Self {
+            records_snapshot,
+            old_members_key,
+            new_keys,
+        } = self;
+        let roster = resolve_member_roster(records_snapshot, old_members_key)?;
+        let mut records = Vec::with_capacity(roster.len().saturating_mul(2));
+        for member in &roster {
+            records.push(auth_record(
+                &member.auth_id,
+                &new_keys.secrets_key,
+                &new_keys.members_key,
+                &member.public_key,
+            )?);
+        }
+        records.extend(build_members_records(&roster, &new_keys.members_key)?);
+        Ok(records)
+    }
 }
 
 /// Replace auth + member meta rows in the typed session meta state after epoch rotation.
-pub fn rewrap_vault_meta_for_epoch(
-    state: &mut crate::VaultMetaState,
-    records_snapshot: &[StoredSecretRecord],
-    old_members_key: &SymmetricKey,
-    new_keys: &VaultKeys,
-) -> VaultResult<()> {
-    let records =
-        rewrapped_vault_meta_records_for_epoch(records_snapshot, old_members_key, new_keys)?;
-    let mut replacement = state.clone();
-    replacement.auth.clear();
-    replacement.members.clear();
-    for record in &records {
-        replacement.apply_record(record)?;
+pub struct VaultMetaRewrap<'a> {
+    state: &'a mut crate::VaultMetaState,
+    records_snapshot: &'a [StoredSecretRecord],
+    old_members_key: &'a SymmetricKey,
+    new_keys: &'a VaultKeys,
+}
+
+impl<'a> VaultMetaRewrap<'a> {
+    #[must_use]
+    pub fn new(
+        state: &'a mut crate::VaultMetaState,
+        records_snapshot: &'a [StoredSecretRecord],
+        old_members_key: &'a SymmetricKey,
+        new_keys: &'a VaultKeys,
+    ) -> Self {
+        Self {
+            state,
+            records_snapshot,
+            old_members_key,
+            new_keys,
+        }
     }
-    *state = replacement;
-    Ok(())
+
+    pub fn apply(self) -> VaultResult<()> {
+        let Self {
+            state,
+            records_snapshot,
+            old_members_key,
+            new_keys,
+        } = self;
+        let records =
+            VaultMetaRecordRewrap::new(records_snapshot, old_members_key, new_keys).rewrap()?;
+        let mut replacement = state.clone();
+        replacement.auth.clear();
+        replacement.members.clear();
+        for record in &records {
+            replacement.apply_record(record)?;
+        }
+        *state = replacement;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -145,7 +260,7 @@ mod tests {
         let new_key = SymmetricKey::parse(
             "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
         )?;
-        let payloads = reencrypt_user_secrets_for_epoch(&[record], &old_key, &new_key)?;
+        let payloads = SecretEpochReencryption::new(&[record], &old_key, &new_key).reencrypt()?;
         let new_crypto = VaultCrypto::new(&new_key)?;
         let plaintext = new_crypto.decrypt_value(&AgeArmoredCiphertext::from_trusted_armored(
             payloads[0].ciphertext.as_str().to_owned(),
@@ -169,11 +284,8 @@ mod tests {
             &keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let hash = members_checkpoint_hash_from_roster(
-            &records,
-            &keys.members_key,
-            &new_keys.members_key,
-        )?;
+        let hash = MembersCheckpointHash::new(&records, &keys.members_key, &new_keys.members_key)
+            .compute()?;
         assert_eq!(hash.as_str().len(), 64);
         assert!(hash.as_str().chars().all(|c| c.is_ascii_hexdigit()));
         Ok(())
@@ -197,7 +309,7 @@ mod tests {
         let mut state = VaultMetaState::from_stored_records(&records)?;
         let old_auth_envelopes = state.auth.get(&identity.auth_id()).cloned();
 
-        rewrap_vault_meta_for_epoch(&mut state, &records, &old_keys.members_key, &new_keys)?;
+        VaultMetaRewrap::new(&mut state, &records, &old_keys.members_key, &new_keys).apply()?;
 
         assert_ne!(
             state.auth.get(&identity.auth_id()),
@@ -239,7 +351,7 @@ mod tests {
         replace_member_records(&mut records, member_records)?;
 
         let rotated_meta_records =
-            rewrapped_vault_meta_records_for_epoch(&records, &old_keys.members_key, &new_keys)?;
+            VaultMetaRecordRewrap::new(&records, &old_keys.members_key, &new_keys).rewrap()?;
         let mut state = VaultMetaState::from_stored_records(&records)?;
         crate::apply_vault_meta_operation(
             &mut state,

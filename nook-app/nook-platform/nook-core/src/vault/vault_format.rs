@@ -524,19 +524,19 @@ mod tests {
     #[test]
     fn yaml_password_entries_roundtrip_with_keys_unlock() -> anyhow::Result<()> {
         use crate::{
-            attach_password_envelope_with_work_factor, multi_device::VaultKeys,
-            resolve_keys_from_password,
+            PasswordEnvelopeAttachment, PasswordEnvelopeResolution, multi_device::VaultKeys,
         };
 
         let keys = VaultKeys {
             secrets_key: SymmetricKey::parse(&"d".repeat(64))?,
             members_key: SymmetricKey::parse(&"e".repeat(64))?,
         };
-        let envelope = attach_password_envelope_with_work_factor(
+        let envelope = PasswordEnvelopeAttachment::with_work_factor(
             &keys,
             "correct horse battery staple",
             10.into(),
-        )?;
+        )
+        .attach()?;
         let entry = PasswordUnlockEntry {
             id: "pw-1".to_owned(),
             label: "test password".to_owned(),
@@ -561,7 +561,8 @@ mod tests {
         assert_eq!(parsed_envelope.version, envelope.version);
         assert_eq!(parsed_envelope.kdf, envelope.kdf);
         assert_eq!(
-            resolve_keys_from_password(&parsed_envelope, "correct horse battery staple")?,
+            PasswordEnvelopeResolution::new(&parsed_envelope, "correct horse battery staple")
+                .resolve()?,
             keys
         );
 
