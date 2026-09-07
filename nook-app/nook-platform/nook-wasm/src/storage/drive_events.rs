@@ -298,29 +298,9 @@ impl DriveEventStore<'_> {
             Err(err) => return Err(err),
         }
         let file_name = format!("{}.yaml", event_id.encoded_digest());
-        let metadata = serde_json::json!({
-            "name": file_name,
-            "parents": [Self::parent_id_for_create(parent)],
-            "appProperties": {
-                "event_id": event_id.as_str(),
-            }
-        });
         let content = str::from_utf8(bytes)
             .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
-
-        let boundary = "nook_event_boundary";
-        let mut body = String::new();
-        body.push_str("--");
-        body.push_str(boundary);
-        body.push_str("\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n");
-        body.push_str(&metadata.to_string());
-        body.push_str("\r\n--");
-        body.push_str(boundary);
-        body.push_str("\r\nContent-Type: application/x-yaml\r\n\r\n");
-        body.push_str(content);
-        body.push_str("\r\n--");
-        body.push_str(boundary);
-        body.push_str("--");
+        let (boundary, body) = Self::event_upload_body(parent, event_id, &file_name, content);
 
         let client = Client::new();
         let response = client
@@ -352,6 +332,35 @@ impl DriveEventStore<'_> {
                 NookError::Drive("Drive event create response missing file id.".to_owned())
             })
     }
+
+    fn event_upload_body(
+        parent: &DriveEventParent,
+        event_id: &EventId,
+        file_name: &str,
+        content: &str,
+    ) -> (String, String) {
+        let metadata = serde_json::json!({
+            "name": file_name,
+            "parents": [Self::parent_id_for_create(parent)],
+            "appProperties": {
+                "event_id": event_id.as_str(),
+            }
+        });
+        let boundary = "nook_event_boundary";
+        let mut body = String::new();
+        body.push_str("--");
+        body.push_str(boundary);
+        body.push_str("\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n");
+        body.push_str(&metadata.to_string());
+        body.push_str("\r\n--");
+        body.push_str(boundary);
+        body.push_str("\r\nContent-Type: application/x-yaml\r\n\r\n");
+        body.push_str(content);
+        body.push_str("\r\n--");
+        body.push_str(boundary);
+        body.push_str("--");
+        (boundary.to_owned(), body)
+    }
 }
 
 #[cfg(test)]
@@ -361,6 +370,7 @@ mod tests {
         Ed25519Signature, EventId, GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId,
         VaultEvent, build_genesis_import_event, serialize_event_storage_yaml,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     struct EventFixture(EventId, VaultEvent, Vec<u8>);
 
@@ -430,6 +440,57 @@ mod tests {
             matches!(err, NookError::Drive(ref message) if message.contains("different events")),
             "unexpected error: {err}"
         );
+        Ok(())
+    }
+
+    #[test]
+    fn select_matching_ignores_a_valid_event_for_a_different_requested_id() -> anyhow::Result<()> {
+        let EventFixture(event_id, _, _) = EventFixture::new()?;
+        let EventFixture(other_id, _, other_bytes) = EventFixture::new()?;
+        assert_ne!(event_id, other_id);
+        let selected =
+            DriveEventStore::select_matching_drive_event_bytes(&event_id, [other_bytes])?;
+        assert_eq!(selected, None);
+        Ok(())
+    }
+
+    #[test]
+    fn multipart_upload_body_preserves_parent_event_id_and_yaml() -> anyhow::Result<()> {
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let parent = DriveEventParent::SharedFolder {
+            folder_id: "shared-folder".to_owned(),
+        };
+        let (boundary, body) =
+            DriveEventStore::event_upload_body(&parent, &event_id, "event.yaml", "event: yaml");
+        assert_eq!(boundary, "nook_event_boundary");
+        assert!(body.contains("\"name\":\"event.yaml\""));
+        assert!(body.contains("\"parents\":[\"shared-folder\"]"));
+        assert!(body.contains(&format!("\"event_id\":\"{}\"", event_id)));
+        assert!(body.contains("Content-Type: application/x-yaml"));
+        assert!(body.contains("\r\n\r\nevent: yaml\r\n--nook_event_boundary--"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
+        let EventFixture(_, _, bytes) = EventFixture::new()?;
+        let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let store = DriveEventStore {
+            token: "",
+            parent: &DriveEventParent::AppDataFolder,
+        };
+        let error = store
+            .put_drive_event_if_absent(&requested_id, &bytes)
+            .await
+            .expect_err("mismatched event id must fail before network");
+        assert!(matches!(
+            error,
+            NookError::Serialization(message) if message.contains("Drive event id mismatch")
+        ));
         Ok(())
     }
 
