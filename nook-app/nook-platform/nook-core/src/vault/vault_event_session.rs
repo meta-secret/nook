@@ -9,9 +9,9 @@ use crate::vault_ids::{AuthKeyId, StoreId};
 use crate::vault_wire::{IsoTimestamp, Sha256Hex};
 use crate::{
     AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
-    LocalEventStore, ObservedHeads, SigningIdentity, StoredSecretRecord, VaultCrypto,
-    VaultMetaState, VaultOperation, VaultProjection, build_members_records, build_signed_event,
-    project_vault, reencrypt_user_secrets_for_epoch, resolve_member_roster,
+    LocalEventStore, ObservedHeads, SecretEpochReencryption, SigningIdentity, StoredSecretRecord,
+    VaultCrypto, VaultMetaState, VaultOperation, VaultProjection, build_members_records,
+    build_signed_event, project_vault, resolve_member_roster,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -180,7 +180,8 @@ impl VaultEventSession {
             provider_id,
         } = input;
         let secrets =
-            reencrypt_user_secrets_for_epoch(user_records, old_secrets_key, &new_keys.secrets_key)?;
+            SecretEpochReencryption::new(user_records, old_secrets_key, &new_keys.secrets_key)
+                .reencrypt()?;
         let members_checkpoint_hash =
             Self::members_checkpoint_hash(members_records, &new_keys.members_key)?;
         let checkpoint = VaultOperation::EpochCheckpoint {
