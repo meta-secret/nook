@@ -170,10 +170,10 @@ impl AuthenticationAdvanceControlObservation {
                 PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
             )
             && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
-            && matches!(
-                self.submission_destination_source,
-                PageControlSubmissionDestinationSource::Authored
-            )
+            && match self.submission_destination_source {
+                PageControlSubmissionDestinationSource::Authored => true,
+                PageControlSubmissionDestinationSource::Omitted => self.form_identity.is_empty(),
+            }
             && matches!(
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
@@ -689,6 +689,8 @@ mod tests {
         assert!(!authentication_advance_control_is_safe(
             &omitted_destination
         ));
+        omitted_destination.form_identity.clear();
+        assert!(authentication_advance_control_is_safe(&omitted_destination));
 
         let mut locally_scoped = identifier.clone();
         locally_scoped.ownership = PageControlOwnership::LocallyScoped;

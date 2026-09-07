@@ -172,6 +172,85 @@ mod tests {
     use super::super::*;
     use crate::authentication_advance_control_is_safe;
 
+    struct BookingDefaultGetScenario;
+
+    impl BookingDefaultGetScenario {
+        fn observation() -> AuthenticationAdvanceControlObservation {
+            AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Actionable,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::Explicit,
+                password_field_count: 0.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://account.booking.com".to_owned(),
+                form_identity: String::new(),
+                destination_identity: "https://account.booking.com/sign-in".to_owned(),
+                label: "Continue with email".to_owned(),
+                machine_identity: String::new(),
+                submission_method: PageControlSubmissionMethod::Get,
+                submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+            }
+        }
+
+        fn assert_hostile_variants_fail_closed() {
+            for destination in [
+                "https://attacker.example/sign-in",
+                "https://account.booking.com/recover",
+                "https://account.booking.com/sign-up",
+                "https://account.booking.com/sign-in?provider=google",
+                "https://account.booking.com/account/delete",
+            ] {
+                let mut rejected = Self::observation();
+                rejected.destination_identity = destination.to_owned();
+                assert!(
+                    !authentication_advance_control_is_safe(&rejected),
+                    "{destination}"
+                );
+            }
+
+            for label in [
+                "Continue with Google",
+                "Recover your account",
+                "Create account",
+                "Delete account",
+            ] {
+                let mut rejected = Self::observation();
+                rejected.label = label.to_owned();
+                assert!(
+                    !authentication_advance_control_is_safe(&rejected),
+                    "{label}"
+                );
+            }
+
+            let mut ambiguous = Self::observation();
+            ambiguous.semantic_submit_control_count = 2.into();
+            assert!(!authentication_advance_control_is_safe(&ambiguous));
+
+            let mut unowned = Self::observation();
+            unowned.ownership = PageControlOwnership::Unowned;
+            assert!(!authentication_advance_control_is_safe(&unowned));
+
+            let mut inert = Self::observation();
+            inert.actionability = PageControlActionability::Inert;
+            assert!(!authentication_advance_control_is_safe(&inert));
+
+            let mut activation = Self::observation();
+            activation.semantics = PageControlSemantics::Activation;
+            assert!(!authentication_advance_control_is_safe(&activation));
+        }
+    }
+
+    #[test]
+    fn booking_owned_identifier_default_get_is_narrowly_admitted() {
+        assert!(authentication_advance_control_is_safe(
+            &BookingDefaultGetScenario::observation()
+        ));
+        BookingDefaultGetScenario::assert_hostile_variants_fail_closed();
+    }
+
     #[test]
     fn claude_owned_email_post_uses_existing_identifier_advance_policy() -> anyhow::Result<()> {
         let claude = AuthenticationAdvanceControlObservation {
