@@ -147,6 +147,8 @@ placement tier `primary`. The home 7950X3D node is `secondary`. KS-6 is
 `overflow`. These tiers are preferences, so node pressure exposes the next
 eligible node. Soft hostname spreading balances equal-tier nodes without
 forcing cross-tier equality.
+Deployment activates both primary nodes as one group before secondary and
+overflow, so queued work cannot observe a weaker tier first.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.

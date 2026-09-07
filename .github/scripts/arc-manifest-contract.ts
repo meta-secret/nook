@@ -136,6 +136,22 @@ class ArcPlacementScenario {
   }
 }
 
+class ArcActivationScenario {
+  constructor(
+    readonly queuedRunners: number,
+    readonly firstEligiblePrimaryNodes: number,
+    readonly firstEligibleWeakerNodes: number,
+  ) {}
+
+  preservesPrimaryFirstEligibility(): boolean {
+    return (
+      this.queuedRunners > 0 &&
+      this.firstEligiblePrimaryNodes === 2 &&
+      this.firstEligibleWeakerNodes === 0
+    );
+  }
+}
+
 function assertCpuUnconstrained(container: ArcContainer, label: string): void {
   const resources = container.resources;
   if (!resources) {
@@ -505,6 +521,15 @@ if (
   );
 }
 
+for (const queuedRunners of [22, 24]) {
+  const activation = new ArcActivationScenario(queuedRunners, 2, 0);
+  if (!activation.preservesPrimaryFirstEligibility()) {
+    throw new Error(
+      `ARC ${queuedRunners}-runner activation must expose both primaries before weaker tiers`,
+    );
+  }
+}
+
 buildkit.requireAll([
   "name: nook-buildkit-local-retain",
   "volumeBindingMode: WaitForFirstConsumer",
@@ -615,6 +640,11 @@ tasks.requireAll([
   "ARC build node $node is quarantined for convergence",
   'quarantine_failed=0',
   'test "$quarantine_failed" = 0',
+  "for tier in primary secondary overflow",
+  "primary) expected_tier_count=2",
+  'secondary|overflow) expected_tier_count=1',
+  'kubectl taint node "${tier_nodes[@]}"',
+  "ARC build tier $tier is active",
   "- task: arc:build-hosts:quarantine\n      - task: arc:buildkit:storage:prepare",
   "container-runner-scale-set-values.yaml",
   "container-hook.yaml",

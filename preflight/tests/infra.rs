@@ -347,6 +347,11 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "autoscalingrunnerset/nook-k0s",
         "autoscalingrunnerset/nook-k0s-hive",
         "arc:build-hosts:activate:",
+        "for tier in primary secondary overflow",
+        "primary) expected_tier_count=2",
+        "secondary|overflow) expected_tier_count=1",
+        "kubectl taint node \"${tier_nodes[@]}\"",
+        "ARC build tier $tier is active",
     ] {
         assert!(
             tasks.contains(contract),
@@ -366,6 +371,13 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         .rfind("- task: arc:build-hosts:activate")
         .expect("ARC deployment must activate converged nodes");
     assert!(prepare < storage && storage < rollout && rollout < activate);
+    let primary = tasks
+        .find("for tier in primary secondary overflow")
+        .expect("ARC activation must expose primary capacity first");
+    let grouped = tasks
+        .find("kubectl taint node \"${tier_nodes[@]}\"")
+        .expect("ARC activation must expose each tier as one group");
+    assert!(primary < grouped);
 }
 
 #[test]

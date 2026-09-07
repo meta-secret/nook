@@ -68,29 +68,34 @@ tasks:
           echo "ARC requires exactly $expected_count build hosts; found $target_count" >&2
           exit 1
         fi
-        while IFS=$'\t' read -r build_target build_remote_dir; do
-          test -n "$build_target"
-          test -n "$build_remote_dir"
-          node="$(ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$build_target" <<'REMOTE'
+        ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$expected_count" <<'REMOTE'
         set -euo pipefail
-        build_target="$1"
-        sudo -n k0s kubectl get nodes -l nook.nokey.sh/arc-build=true -o json |
-          jq -r --arg target "$build_target" \
-            '.items[] | select(.metadata.annotations["nook.nokey.sh/ssh-target"] == $target) | .metadata.name'
+        expected_count="$1"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        build_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true -o json)"
+        actual_count="$(jq '.items | length' <<<"$build_nodes")"
+        test "$actual_count" = "$expected_count"
+        for tier in primary secondary overflow; do
+          case "$tier" in
+            primary) expected_tier_count=2 ;;
+            secondary|overflow) expected_tier_count=1 ;;
+          esac
+          mapfile -t tier_nodes < <(jq -r --arg tier "$tier" \
+            '.items[] | select(.metadata.labels["nook.nokey.sh/arc-tier"] == $tier) | .metadata.name' \
+            <<<"$build_nodes" | sort)
+          if test "${#tier_nodes[@]}" != "$expected_tier_count"; then
+            echo "ARC requires $expected_tier_count $tier build nodes; found ${#tier_nodes[@]}" >&2
+            exit 1
+          fi
+          kubectl taint node "${tier_nodes[@]}" \
+            nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true
+          for node in "${tier_nodes[@]}"; do
+            test -z "$(kubectl get node "$node" \
+              -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
+          done
+          echo "ARC build tier $tier is active: ${tier_nodes[*]}"
+        done
         REMOTE
-          )"
-          test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
-          node="$(printf '%s\n' "$node" | sed '/^$/d')"
-          ssh -o BatchMode=yes "$controller_target" 'bash -s' -- "$node" <<'REMOTE'
-        set -euo pipefail
-        node="$1"
-        sudo -n k0s kubectl taint node "$node" \
-          nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null 2>&1 || true
-        test -z "$(sudo -n k0s kubectl get node "$node" \
-          -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
-        REMOTE
-          echo "ARC build node $node is active"
-        done < "$HOME/.nook/infra/arc-build-ssh-targets"
         BASH
 
   arc:build-hosts:quarantine:
