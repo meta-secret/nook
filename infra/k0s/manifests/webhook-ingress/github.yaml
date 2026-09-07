@@ -1,0 +1,69 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: github-webhook-eventsource
+  namespace: argo-events
+  labels:
+    app.kubernetes.io/name: github-webhook-eventsource
+spec:
+  type: ClusterIP
+  clusterIP: 10.96.90.20
+  selector:
+    eventsource-name: github-webhook
+  ports:
+    - name: github
+      protocol: TCP
+      port: 12000
+      targetPort: 12000
+---
+apiVersion: argoproj.io/v1alpha1
+kind: EventSource
+metadata:
+  name: github-webhook
+  namespace: argo-events
+spec:
+  replicas: 2
+  template:
+    serviceAccountName: argo-events-sa
+    tolerations:
+      - key: nook.nokey.sh/arc-build
+        operator: Equal
+        value: preparing
+        effect: NoSchedule
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 65532
+      runAsGroup: 65532
+      seccompProfile:
+        type: RuntimeDefault
+    container:
+      resources:
+        requests:
+          cpu: 50m
+          memory: 64Mi
+        limits:
+          cpu: 500m
+          memory: 256Mi
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+        readOnlyRootFilesystem: true
+  github:
+    ping:
+      repositories:
+        - owner: meta-secret
+          names:
+            - nook
+      webhook:
+        endpoint: /webhooks/github
+        port: "12000"
+        method: POST
+      events:
+        - ping
+      webhookSecret:
+        name: github-webhook-secret
+        key: secret
+      insecure: false
+      active: true
+      contentType: json

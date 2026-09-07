@@ -7,6 +7,11 @@ This directory owns Nook's stateful server infrastructure:
 - Traefik (host network) publishes HTTPS on port `443` with ACME for:
   - `https://sccache.dev.nokey.sh` → loopback SeaweedFS S3
   - `https://registry.dev.nokey.sh` → Zot ClusterIP `10.96.90.10:5000`
+  - `https://webhooks.dev.nokey.sh/webhooks/github` → the Argo Events GitHub
+    EventSource ClusterIP `10.96.90.20:12000`
+- Pinned Argo Events `v1.9.11` verifies GitHub webhook signatures and dispatches
+  accepted events to its private, controller-managed JetStream EventBus. Phase
+  1 has no Sensor or trigger, so it performs no operational-event processing.
 - A pinned Zot OCI registry runs in k0s with retained local storage at
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
@@ -65,6 +70,12 @@ task infra:arc:fallback
 task infra:arc:smoke
 task infra:arc:hive:smoke
 task infra:kubernetes-cache:prove
+task infra:webhook-ingress:check
+task infra:webhook-ingress:deploy
+task infra:webhook-ingress:status
+task infra:webhook-ingress:smoke
+task infra:webhook-ingress:hook:register
+task infra:webhook-ingress:hook:ping
 
 # Install or reconcile one reviewed OVH worker through provider API, host
 # bootstrap, authenticated mesh, k0s, BuildKit, and ARC readiness.
@@ -118,6 +129,14 @@ Borg public IP (DNS-only A/AAAA, not proxied) before HTTPS verification can
 succeed. Host-network Traefik requires an nftables INPUT accept for TCP `443`
 (and `22` for SSH); `task infra:deploy` ensures those edge rules stay present
 after k0s firewall updates. Public Redis `:6380` is retired.
+
+`webhooks.dev.nokey.sh` publishes only the exact `POST /webhooks/github` route. Deployment
+creates the GitHub webhook signing secret in the remote infrastructure secret
+store with mode `0600` when it does not already exist, and publishes the same
+value to Kubernetes without logging it. Hook registration uses the operator's
+authenticated GitHub CLI session, keeps no GitHub token in Argo, and refuses
+duplicate hooks for the endpoint. Argo Events' internal NATS
+ports remain ClusterIP-only and no Sensor consumes the phase-1 event stream.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
 `registry.dev.nokey.sh`. Hosted fallback jobs publish shared cache manifests;

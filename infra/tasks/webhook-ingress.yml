@@ -1,0 +1,343 @@
+version: '3'
+
+vars:
+  ARGO_EVENTS_VERSION: v1.9.11
+  ARGO_EVENTS_INSTALL_SHA256: affaae84d8d5e5c967048815d8331b7a0b66bc0ae81f81bc47c7e0b2281ebc86
+  NOOK_WEBHOOK_INGRESS_HOST: '{{default "webhooks.dev.nokey.sh" .NOOK_WEBHOOK_INGRESS_HOST}}'
+  NOOK_WEBHOOK_INGRESS_CLUSTER_IP: '{{default "10.96.90.20" .NOOK_WEBHOOK_INGRESS_CLUSTER_IP}}'
+
+tasks:
+  webhook-ingress:sync:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        case "$remote_dir" in
+          /home/*/.local/share/nook-infra) ;;
+          *)
+            echo "webhook ingress sync: refusing unexpected remote directory: $remote_dir" >&2
+            exit 2
+            ;;
+        esac
+        ssh -n -o BatchMode=yes "$ssh_target" \
+          "install -d -m 0750 \
+            '$remote_dir/infra/k0s/manifests/argo-events' \
+            '$remote_dir/infra/k0s/manifests/webhook-ingress'"
+        COPYFILE_DISABLE=1 tar --no-xattrs -C "$repo_root" -cf - \
+          infra/k0s/manifests/argo-events \
+          infra/k0s/manifests/webhook-ingress |
+          ssh -o BatchMode=yes "$ssh_target" \
+            "tar -xf - -C '$remote_dir'"
+        BASH
+
+  webhook-ingress:check:
+    desc: Validate the pinned Argo Events webhook ingress contract.
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        platform="$repo_root/infra/k0s/manifests/argo-events/platform.yaml"
+        ingress="$repo_root/infra/k0s/manifests/webhook-ingress/github.yaml"
+        traefik="$repo_root/infra/traefik-dynamic.yaml"
+        grep -F 'version: 2.10.29' "$platform" >/dev/null
+        grep -F 'replicas: 3' "$platform" >/dev/null
+        grep -F 'kind: EventSource' "$ingress" >/dev/null
+        grep -F 'replicas: 2' "$ingress" >/dev/null
+        grep -F 'endpoint: /webhooks/github' "$ingress" >/dev/null
+        grep -F 'method: POST' "$ingress" >/dev/null
+        grep -F 'name: github-webhook-secret' "$ingress" >/dev/null
+        grep -F 'key: secret' "$ingress" >/dev/null
+        grep -F 'insecure: false' "$ingress" >/dev/null
+        grep -F 'active: true' "$ingress" >/dev/null
+        grep -F -- '- ping' "$ingress" >/dev/null
+        test "$(grep -c '^kind: EventSource$' "$ingress")" -eq 1
+        ! grep -Eq '^kind: (Sensor|Workflow)$|websocket|hostPort:|type: (NodePort|LoadBalancer)' \
+          "$platform" "$ingress"
+        grep -F 'Host(`{{.NOOK_WEBHOOK_INGRESS_HOST}}`) && Path(`/webhooks/github`) && Method(`POST`)' \
+          "$traefik" >/dev/null
+        grep -F 'url: http://{{.NOOK_WEBHOOK_INGRESS_CLUSTER_IP}}:12000' \
+          "$traefik" >/dev/null
+        BASH
+
+  webhook-ingress:platform:deploy:
+    desc: Install pinned Argo Events controllers and its internal EventBus.
+    silent: true
+    cmds:
+      - task: webhook-ingress:check
+      - task: webhook-ingress:sync
+      - |
+        ssh -o BatchMode=yes \
+          -o ServerAliveInterval=15 \
+          -o ServerAliveCountMax=4 \
+          "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        version="{{.ARGO_EVENTS_VERSION}}"
+        install_sha="{{.ARGO_EVENTS_INSTALL_SHA256}}"
+        download_dir="$remote_dir/downloads"
+        install_file="$download_dir/argo-events-$version-install.yaml"
+        install_next="$install_file.next"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        install -d -m 0750 "$download_dir"
+        curl -fsSL --retry 3 -o "$install_next" \
+          "https://github.com/argoproj/argo-events/releases/download/$version/install.yaml"
+        printf '%s  %s\n' "$install_sha" "$install_next" | sha256sum -c -
+        mv "$install_next" "$install_file"
+        kubectl create namespace argo-events --dry-run=client -o yaml |
+          kubectl apply -f - >/dev/null
+        kubectl label namespace argo-events \
+          nook.nokey.sh/role=webhook-events --overwrite >/dev/null
+        kubectl apply -f "$install_file"
+        kubectl rollout status deployment/controller-manager \
+          --namespace argo-events --timeout=5m
+        kubectl wait --for=condition=Established \
+          crd/eventbus.argoproj.io \
+          crd/eventsources.argoproj.io \
+          crd/sensors.argoproj.io --timeout=2m
+        kubectl apply \
+          -f "$remote_dir/infra/k0s/manifests/argo-events/platform.yaml"
+        kubectl wait --for=condition=Deployed eventbus/default \
+          --namespace argo-events --timeout=10m
+        kubectl wait --for=condition=Configured eventbus/default \
+          --namespace argo-events --timeout=10m
+        kubectl rollout status statefulset/eventbus-default-js \
+          --namespace argo-events --timeout=10m
+        REMOTE
+
+  webhook-ingress:secret:publish:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        remote_secret="$remote_dir/secrets/github-webhook-secret"
+        ssh -o BatchMode=yes \
+          -o ServerAliveInterval=15 \
+          -o ServerAliveCountMax=4 \
+          "$ssh_target" "REMOTE_DIR='$remote_dir' bash -s" <<'REMOTE'
+        set -euo pipefail
+        secret_dir="$REMOTE_DIR/secrets"
+        remote_secret="$secret_dir/github-webhook-secret"
+        umask 077
+        install -d -m 0700 "$secret_dir"
+        if ! test -s "$remote_secret"; then
+          secret_next="$(mktemp "$secret_dir/.github-webhook-secret.XXXXXX")"
+          trap 'rm -f "$secret_next"' EXIT
+          openssl rand -hex 32 | tr -d '\n' > "$secret_next"
+          test "$(wc -c < "$secret_next" | tr -d ' ')" = 64
+          install -m 0600 "$secret_next" "$remote_secret"
+        fi
+        test "$(stat -c '%a' "$remote_secret")" = 600
+        sudo -n k0s kubectl create secret generic github-webhook-secret \
+          --namespace argo-events \
+          --from-file=secret="$remote_secret" \
+          --dry-run=client -o yaml |
+          sudo -n k0s kubectl apply --namespace argo-events -f - >/dev/null
+        REMOTE
+        BASH
+
+  webhook-ingress:deploy:
+    desc: Deploy the Argo Events endpoint with its infrastructure-owned secret.
+    silent: true
+    cmds:
+      - task: webhook-ingress:platform:deploy
+      - task: webhook-ingress:secret:publish
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        repo_root="$(git rev-parse --show-toplevel)"
+        ssh_target="{{.INFRA_SSH_TARGET}}"
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        remote_traefik="$remote_dir/traefik-dynamic.yaml"
+        remote_traefik_next="$remote_traefik.next"
+        scp -q -o BatchMode=yes \
+          "$repo_root/infra/traefik-dynamic.yaml" \
+          "$ssh_target:$remote_traefik_next"
+        ssh -o BatchMode=yes "$ssh_target" \
+          "REMOTE_DIR='$remote_dir' REMOTE_TRAEFIK='$remote_traefik' REMOTE_TRAEFIK_NEXT='$remote_traefik_next' bash -s" <<'REMOTE'
+        set -euo pipefail
+        sudo -n k0s kubectl apply \
+          -f "$REMOTE_DIR/infra/k0s/manifests/webhook-ingress/github.yaml"
+        sudo -n k0s kubectl wait --for=condition=Deployed eventsource/github-webhook \
+          --namespace argo-events --timeout=10m
+        sudo -n k0s kubectl rollout status deployment \
+          --selector eventsource-name=github-webhook \
+          --namespace argo-events --timeout=10m
+        sudo -n k0s kubectl wait --for=condition=Available deployment \
+          --selector eventsource-name=github-webhook \
+          --namespace argo-events --timeout=10m
+        test "$(sudo -n k0s kubectl get service/github-webhook-eventsource \
+          --namespace argo-events -o jsonpath='{.spec.clusterIP}')" = '{{.NOOK_WEBHOOK_INGRESS_CLUSTER_IP}}'
+        cp "$REMOTE_TRAEFIK_NEXT" "$REMOTE_TRAEFIK"
+        rm -f "$REMOTE_TRAEFIK_NEXT"
+        docker compose -f "$REMOTE_DIR/compose.yaml" up -d --wait --force-recreate traefik
+        ! docker logs nook-infra-traefik-1 --since 10s 2>&1 |
+          grep -Ei 'error|invalid|failed'
+        ! ss --tcp --listening --numeric --no-header |
+          grep -E ':(12000|4222|6222|8222)[[:space:]]' >/dev/null
+        REMOTE
+        BASH
+
+  webhook-ingress:status:
+    desc: Show the Argo Events webhook platform without secret material.
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        sudo -n k0s kubectl get deployment,statefulset,pod,service,eventbus,eventsource \
+          --namespace argo-events -o wide
+        REMOTE
+
+  webhook-ingress:smoke:
+    desc: Prove public TLS, signature rejection, and signed GitHub ping dispatch.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        endpoint="https://{{.NOOK_WEBHOOK_INGRESS_HOST}}/webhooks/github"
+        remote_secret="{{.INFRA_REMOTE_DIR}}/secrets/github-webhook-secret"
+        ping_body='{"zen":"Keep it logically awesome.","hook_id":1}'
+        ping_signature="$(printf '%s' "$ping_body" |
+          ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+            "ruby -ropenssl -e 'print \"sha256=\", OpenSSL::HMAC.hexdigest(\"SHA256\", File.binread(ARGV.fetch(0)), STDIN.read)' '$remote_secret'")"
+        before="$(ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "sudo -n k0s kubectl logs --selector eventsource-name=github-webhook \
+            --namespace argo-events --since=1m 2>/dev/null | \
+            grep -c 'successfully dispatched the request to the event bus' || true")"
+        invalid_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+          --request POST \
+          --header 'Content-Type: application/json' \
+          --header 'X-GitHub-Event: ping' \
+          --header 'X-GitHub-Delivery: smoke-invalid' \
+          --header 'X-Hub-Signature-256: sha256=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff' \
+          --data-binary "$ping_body" "$endpoint")"
+        test "$invalid_code" = 400
+        ping_code="$(curl -sS -o /dev/null -w '%{http_code}' \
+          --request POST \
+          --header 'Content-Type: application/json' \
+          --header 'X-GitHub-Event: ping' \
+          --header 'X-GitHub-Delivery: smoke-ping' \
+          --header "X-Hub-Signature-256: $ping_signature" \
+          --data-binary "$ping_body" "$endpoint")"
+        test "$ping_code" = 200
+        sleep 2
+        after="$(ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "sudo -n k0s kubectl logs --selector eventsource-name=github-webhook \
+            --namespace argo-events --since=2m 2>/dev/null | \
+            grep -c 'successfully dispatched the request to the event bus' || true")"
+        test "$after" -gt "$before"
+        printf 'invalid signature -> %s\nsigned GitHub ping -> %s\ndispatch observations -> %s to %s\n' \
+          "$invalid_code" "$ping_code" "$before" "$after"
+        BASH
+
+  webhook-ingress:hook:register:
+    desc: Idempotently register the ping-only meta-secret/nook GitHub webhook.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        endpoint="https://{{.NOOK_WEBHOOK_INGRESS_HOST}}/webhooks/github"
+        remote_secret="{{.INFRA_REMOTE_DIR}}/secrets/github-webhook-secret"
+        work_dir="$(mktemp -d)"
+        chmod 0700 "$work_dir"
+        trap 'rm -rf "$work_dir"' EXIT
+        secret_file="$work_dir/secret"
+        hooks_file="$work_dir/hooks.json"
+        response_file="$work_dir/response.json"
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "REMOTE_SECRET='$remote_secret' bash -s" > "$secret_file" <<'REMOTE'
+        set -euo pipefail
+        test "$(stat -c '%a' "$REMOTE_SECRET")" = 600
+        cat "$REMOTE_SECRET"
+        REMOTE
+        chmod 0600 "$secret_file"
+        gh api repos/meta-secret/nook/hooks > "$hooks_file"
+        hook_ids="$(ruby -rjson -e '
+          endpoint = ARGV.fetch(0)
+          hooks = JSON.parse(File.binread(ARGV.fetch(1)))
+          puts hooks.filter { |hook| hook.dig("config", "url") == endpoint }.map { |hook| hook.fetch("id") }
+        ' "$endpoint" "$hooks_file")"
+        hook_count="$(printf '%s\n' "$hook_ids" | sed '/^$/d' | wc -l | tr -d ' ')"
+        if test "$hook_count" -gt 1; then
+          echo "refusing duplicate GitHub hooks for $endpoint" >&2
+          exit 2
+        fi
+        request() {
+          ruby -rjson -e '
+            print JSON.generate({
+              name: "web",
+              active: true,
+              events: ["ping"],
+              config: {
+                url: ARGV.fetch(1),
+                content_type: "json",
+                insecure_ssl: "0",
+                secret: File.binread(ARGV.fetch(0))
+              }
+            })
+          ' "$secret_file" "$endpoint"
+        }
+        if test "$hook_count" = 0; then
+          request | gh api --method POST repos/meta-secret/nook/hooks --input - > "$response_file"
+        else
+          request | gh api --method PATCH "repos/meta-secret/nook/hooks/$hook_ids" \
+            --input - > "$response_file"
+        fi
+        hook_id="$(ruby -rjson -e 'print JSON.parse(File.binread(ARGV.fetch(0))).fetch("id")' \
+          "$response_file")"
+        test "$(ruby -rjson -e '
+          hook = JSON.parse(File.binread(ARGV.fetch(0)))
+          valid = hook.fetch("active") == true && hook.fetch("events") == ["ping"] &&
+            hook.dig("config", "url") == ARGV.fetch(1) &&
+            hook.dig("config", "content_type") == "json" &&
+            hook.dig("config", "insecure_ssl").to_s == "0"
+          print valid ? "yes" : "no"
+        ' "$response_file" "$endpoint")" = yes
+        printf 'GitHub webhook %s is active with ping-only delivery\n' "$hook_id"
+        BASH
+
+  webhook-ingress:hook:ping:
+    desc: Trigger GitHub's signed ping and wait for successful delivery.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        endpoint="https://{{.NOOK_WEBHOOK_INGRESS_HOST}}/webhooks/github"
+        hooks_file="$(mktemp)"
+        trap 'rm -f "$hooks_file"' EXIT
+        chmod 0600 "$hooks_file"
+        gh api repos/meta-secret/nook/hooks > "$hooks_file"
+        hook_id="$(ruby -rjson -e '
+          endpoint = ARGV.fetch(0)
+          hooks = JSON.parse(File.binread(ARGV.fetch(1))).filter do |hook|
+            hook.dig("config", "url") == endpoint && hook.fetch("events") == ["ping"]
+          end
+          abort("expected exactly one ping-only hook") unless hooks.length == 1
+          print hooks.first.fetch("id")
+        ' "$endpoint" "$hooks_file")"
+        gh api --method POST "repos/meta-secret/nook/hooks/$hook_id/pings" >/dev/null
+        for attempt in $(seq 1 20); do
+          delivery="$(gh api "repos/meta-secret/nook/hooks/$hook_id/deliveries?per_page=20" \
+            --jq '[.[] | select(.event == "ping")][0] | [.status_code, .status] | @tsv')"
+          if test "$delivery" = $'200\tOK'; then
+            printf 'GitHub webhook %s ping delivery -> 200 OK (waited at most %ss)\n' \
+              "$hook_id" "$((attempt * 3))"
+            exit 0
+          fi
+          sleep 3
+        done
+        echo 'GitHub ping delivery did not reach 200 OK within 60s' >&2
+        exit 1
+        BASH
