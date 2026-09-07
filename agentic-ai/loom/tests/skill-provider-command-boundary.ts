@@ -884,7 +884,8 @@ function runtimeExecutable(
   if (index === request.words.length) return false;
   const executable = request.words[index] as ShellWord;
   if (!executableIsStatic(executable)) {
-    if (isQuotedDynamicTaskName(executable, request.runtime)) return false;
+    if (isQuotedDynamicTaskName({ word: executable, runtime: request.runtime }))
+      return false;
     throw new Error(
       `Dynamic ${request.runtime} executable construction is forbidden: ${executable.source}`,
     );

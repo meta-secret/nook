@@ -1,9 +1,9 @@
 import type { ShellWord } from './skill-provider-command-types.ts';
 
-export function isQuotedDynamicTaskName(
-  word: ShellWord,
-  runtime = 'task',
-): boolean {
+type TaskNameRequest = { readonly runtime?: string; readonly word: ShellWord };
+
+export function isQuotedDynamicTaskName(request: TaskNameRequest): boolean {
+  const { runtime = 'task', word } = request;
   return (
     (runtime === 'task' || runtime === 'go-task') &&
     word.dynamic &&
