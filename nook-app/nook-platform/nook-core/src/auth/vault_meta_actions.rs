@@ -57,8 +57,8 @@ impl<'a> VaultMetaOperationApplier<'a> {
                 signing_public_key,
                 secrets_key_ciphertext,
                 members_key_ciphertext,
-                requested_at,
-            }),
+                requested_at: requested_at.as_str(),
+            })?,
             VaultOperation::SentinelParticipantEnrolled {
                 device_id,
                 encryption_public_key,

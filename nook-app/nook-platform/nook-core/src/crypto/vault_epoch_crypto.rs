@@ -16,10 +16,7 @@ use crate::secret_types::StoredRecordPayload;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, SymmetricKey};
-use crate::{
-    VaultMetaOperationApplier, VaultMetaOperationRequest, auth_record, build_members_records,
-    resolve_member_roster,
-};
+use crate::{auth_record, build_members_records, resolve_member_roster};
 
 /// Re-encrypt user secrets under a new `secrets_key`.
 pub struct SecretEpochReencryption<'a> {
@@ -236,9 +233,10 @@ mod tests {
     use super::*;
     use crate::{
         ApiKeySecret, DeviceIdentity, IsoTimestamp, JoinRequestApproval, JoinRequestIssuance,
-        SecretId, SecretValue, VaultOperation, VaultResult, generate_vault_keys,
-        genesis_auth_record, genesis_members_records, pending_join_for_device,
-        replace_member_records, resolve_members_key, resolve_secrets_key,
+        SecretId, SecretValue, VaultMetaOperationApplier, VaultMetaOperationRequest,
+        VaultOperation, VaultResult, generate_vault_keys, genesis_auth_record,
+        genesis_members_records, pending_join_for_device, replace_member_records,
+        resolve_members_key, resolve_secrets_key,
     };
 
     #[test]

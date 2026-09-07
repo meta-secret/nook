@@ -1,13 +1,13 @@
 //! Atomic core integration for provider-independent Sentinel genesis.
 
-use crate::{
-    IsoTimestamp, MemberLabel, MultiDeviceError, SentinelConfiguration, VaultMetaOperationApplier,
-    VaultMetaOperationRequest, VaultOperation,
-};
+use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation};
 
 use crate::i18n_keys;
 #[cfg(test)]
-use crate::{CheckedSentinelGenesisResponse, SentinelGenesisResponder};
+use crate::{
+    CheckedSentinelGenesisResponse, IsoTimestamp, SentinelGenesisResponder,
+    VaultMetaOperationApplier, VaultMetaOperationRequest,
+};
 use crate::{
     DeviceIdentity, DeviceMode, ReadySentinelGenesis, ReplicationType, SentinelGenesisReadiness,
     SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelParticipantCount, SentinelPolicy,
