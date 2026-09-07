@@ -43,20 +43,67 @@ fn drive_error(status: reqwest::StatusCode, body: &str) -> NookError {
     ))
 }
 
+fn shared_folder_name(name: &str) -> &str {
+    let trimmed = name.trim();
+    if trimmed.is_empty() {
+        "Nook shared vault"
+    } else {
+        trimmed
+    }
+}
+
+fn create_folder_projection(
+    parsed: DriveFileCreateResponse,
+    fallback_name: &str,
+) -> Result<(String, String), NookError> {
+    let folder_id = parsed
+        .id
+        .filter(|id| !id.trim().is_empty())
+        .ok_or_else(|| NookError::Drive("Drive folder create response missing id.".to_owned()))?;
+    let folder_name = parsed
+        .name
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or_else(|| fallback_name.to_owned());
+    Ok((folder_id, folder_name))
+}
+
+fn verify_folder_projection(
+    parsed: DriveFolderMetadataResponse,
+    fallback_id: String,
+) -> Result<(String, String), NookError> {
+    if parsed.mime_type.as_deref() != Some("application/vnd.google-apps.folder") {
+        return Err(NookError::Drive(
+            i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER.to_owned(),
+        ));
+    }
+    if parsed
+        .capabilities
+        .and_then(|capabilities| capabilities.can_add_children)
+        != Some(true)
+    {
+        return Err(NookError::Drive(
+            i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE.to_owned(),
+        ));
+    }
+    Ok((
+        parsed
+            .id
+            .filter(|id| !id.trim().is_empty())
+            .unwrap_or(fallback_id),
+        parsed
+            .name
+            .filter(|name| !name.trim().is_empty())
+            .unwrap_or_else(|| "Nook shared vault".to_owned()),
+    ))
+}
+
 /// Create a My Drive folder for a shared vault. Requires `drive.file` scope.
 pub(crate) async fn create_shared_vault_folder(
     access_token: &str,
     name: &str,
 ) -> Result<(String, String), NookError> {
     let token = nook_core::validate_oauth_access_token(access_token)?;
-    let folder_name = {
-        let trimmed = name.trim();
-        if trimmed.is_empty() {
-            "Nook shared vault"
-        } else {
-            trimmed
-        }
-    };
+    let folder_name = shared_folder_name(name);
     let client = Client::new();
     let response = client
         .post("https://www.googleapis.com/drive/v3/files")
@@ -77,15 +124,7 @@ pub(crate) async fn create_shared_vault_folder(
     let parsed: DriveFileCreateResponse = response.json().await.map_err(|e| {
         NookError::Serialization(format!("Failed to parse Drive folder create: {e}"))
     })?;
-    let folder_id = parsed
-        .id
-        .filter(|id| !id.trim().is_empty())
-        .ok_or_else(|| NookError::Drive("Drive folder create response missing id.".to_owned()))?;
-    let folder_name = parsed
-        .name
-        .filter(|name| !name.trim().is_empty())
-        .unwrap_or_else(|| folder_name.to_owned());
-    Ok((folder_id, folder_name))
+    create_folder_projection(parsed, folder_name)
 }
 
 /// Grant writer access on a shared vault folder to the joiner email.
@@ -165,30 +204,7 @@ pub(crate) async fn verify_shared_vault_folder(
     let parsed: DriveFolderMetadataResponse = response.json().await.map_err(|error| {
         NookError::Serialization(format!("Failed to parse Drive folder metadata: {error}"))
     })?;
-    if parsed.mime_type.as_deref() != Some("application/vnd.google-apps.folder") {
-        return Err(NookError::Drive(
-            i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER.to_owned(),
-        ));
-    }
-    if parsed
-        .capabilities
-        .and_then(|capabilities| capabilities.can_add_children)
-        != Some(true)
-    {
-        return Err(NookError::Drive(
-            i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE.to_owned(),
-        ));
-    }
-    Ok((
-        parsed
-            .id
-            .filter(|id| !id.trim().is_empty())
-            .unwrap_or_else(|| folder_id.into_inner()),
-        parsed
-            .name
-            .filter(|name| !name.trim().is_empty())
-            .unwrap_or_else(|| "Nook shared vault".to_owned()),
-    ))
+    verify_folder_projection(parsed, folder_id.into_inner())
 }
 
 #[cfg(test)]
@@ -235,6 +251,87 @@ mod tests {
         let missing: DriveFolderMetadataResponse = serde_json::from_str("{}")?;
         assert!(missing.id.is_none());
         assert!(missing.capabilities.is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn shared_folder_name_trims_and_defaults() {
+        assert_eq!(shared_folder_name("  Family vault  "), "Family vault");
+        assert_eq!(shared_folder_name("\t"), "Nook shared vault");
+    }
+
+    #[test]
+    fn create_folder_projection_requires_id_and_falls_back_to_name() -> anyhow::Result<()> {
+        let missing_id = create_folder_projection(
+            DriveFileCreateResponse {
+                id: Some("  ".to_owned()),
+                name: Some("Shared".to_owned()),
+            },
+            "Fallback",
+        )
+        .expect_err("a folder response without an id must be rejected");
+        assert!(matches!(missing_id, NookError::Drive(message) if message.contains("missing id")));
+
+        let projected = create_folder_projection(
+            DriveFileCreateResponse {
+                id: Some("folder-1".to_owned()),
+                name: Some("  ".to_owned()),
+            },
+            "Fallback",
+        )?;
+        assert_eq!(projected, ("folder-1".to_owned(), "Fallback".to_owned()));
+        Ok(())
+    }
+
+    #[test]
+    fn verify_folder_projection_enforces_folder_and_write_capability() -> anyhow::Result<()> {
+        let not_folder = verify_folder_projection(
+            DriveFolderMetadataResponse {
+                id: Some("folder-1".to_owned()),
+                name: Some("Shared".to_owned()),
+                mime_type: Some("text/plain".to_owned()),
+                capabilities: Some(DriveFolderCapabilities {
+                    can_add_children: Some(true),
+                }),
+            },
+            "fallback".to_owned(),
+        )
+        .expect_err("non-folder metadata must be rejected");
+        assert!(
+            matches!(not_folder, NookError::Drive(message) if message == i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_FOLDER)
+        );
+
+        let not_writable = verify_folder_projection(
+            DriveFolderMetadataResponse {
+                id: Some("folder-1".to_owned()),
+                name: Some("Shared".to_owned()),
+                mime_type: Some("application/vnd.google-apps.folder".to_owned()),
+                capabilities: Some(DriveFolderCapabilities {
+                    can_add_children: Some(false),
+                }),
+            },
+            "fallback".to_owned(),
+        )
+        .expect_err("non-writable folders must be rejected");
+        assert!(
+            matches!(not_writable, NookError::Drive(message) if message == i18n_keys::PROVIDER_SETUP_GOOGLE_SHARED_NOT_WRITABLE)
+        );
+
+        let projected = verify_folder_projection(
+            DriveFolderMetadataResponse {
+                id: None,
+                name: None,
+                mime_type: Some("application/vnd.google-apps.folder".to_owned()),
+                capabilities: Some(DriveFolderCapabilities {
+                    can_add_children: Some(true),
+                }),
+            },
+            "fallback".to_owned(),
+        )?;
+        assert_eq!(
+            projected,
+            ("fallback".to_owned(), "Nook shared vault".to_owned())
+        );
         Ok(())
     }
 }
