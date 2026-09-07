@@ -138,9 +138,9 @@ pub async fn has_active_local_vault() -> Result<bool, JsError> {
 #[wasm_bindgen]
 #[derive(Clone)]
 pub struct NookLocalVaultEntry {
-    store_id: String,
-    label: String,
-    last_unlocked_at: Option<nook_core::IsoTimestamp>,
+    pub(crate) store_id: String,
+    pub(crate) label: String,
+    pub(crate) last_unlocked_at: Option<nook_core::IsoTimestamp>,
 }
 
 #[wasm_bindgen]
@@ -214,7 +214,7 @@ pub enum NookActiveVaultSelectionState {
 }
 
 #[wasm_bindgen]
-pub struct NookActiveVaultSelection(Option<String>);
+pub struct NookActiveVaultSelection(pub(crate) Option<String>);
 
 #[wasm_bindgen]
 impl NookActiveVaultSelection {
