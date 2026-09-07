@@ -437,7 +437,9 @@ pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bind
     )
 )]
 pub fn read_vault_version(yaml: &str) -> u64 {
-    nook_core::read_vault_version(yaml).map_or(0, Into::into)
+    nook_core::VaultFormatDocument::new(yaml)
+        .version()
+        .map_or(0, Into::into)
 }
 
 #[cfg(test)]
@@ -640,7 +642,7 @@ mod projection_tests {
             nook_core::StorageProviderType::Local
         );
 
-        let yaml = nook_core::serialize_stored_yaml_with_unlock(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock(
             &[],
             &nook_core::VaultUnlock::Keys,
             &[],

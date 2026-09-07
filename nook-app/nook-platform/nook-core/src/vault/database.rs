@@ -38,7 +38,8 @@ impl Database {
     }
 
     pub fn from_stored(stored: &StoredVaultBlob, passphrase: &str) -> DatabaseResult<Self> {
-        let stored_records = vault_format::deserialize_stored(stored.as_str(), stored.format())?;
+        let stored_records =
+            vault_format::VaultFormatDocument::new(stored.as_str()).deserialize(stored.format())?;
         Self::from_stored_records(&stored_records, passphrase)
     }
 
@@ -55,7 +56,8 @@ impl Database {
 
     pub fn to_stored(&self, passphrase: &str) -> DatabaseResult<StoredVaultBlob> {
         let stored_records = self.to_stored_records(passphrase)?;
-        vault_format::serialize_stored(&stored_records, VaultFormat::Yaml).map_err(Into::into)
+        vault_format::VaultRecordSet::serialize(&stored_records, VaultFormat::Yaml)
+            .map_err(Into::into)
     }
 
     pub fn to_stored_yaml(&self, passphrase: &str) -> DatabaseResult<StoredVaultYaml> {

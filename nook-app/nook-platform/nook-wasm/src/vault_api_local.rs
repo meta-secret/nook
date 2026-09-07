@@ -4,7 +4,7 @@ use nook_core::{IsoTimestamp, VaultApplication, VaultConnectIntent, VaultType};
 use wasm_bindgen::JsError;
 
 fn validate_configured_application_for_content(content: &str) -> Result<(), crate::NookError> {
-    let architecture = nook_core::read_vault_architecture(content)?;
+    let architecture = nook_core::VaultFormatDocument::new(content).architecture()?;
     application::configured_vault_application().validate_session_access(architecture.vault_type)?;
     Ok(())
 }
@@ -113,7 +113,7 @@ async fn local_vault_matches_compiled_application(
     let Some(content) = indexed_db::load_vault_blob(store_id).await? else {
         return Ok(false);
     };
-    let architecture = nook_core::read_vault_architecture(&content)?;
+    let architecture = nook_core::VaultFormatDocument::new(&content).architecture()?;
     Ok(application::configured_vault_application().permits_vault_type(architecture.vault_type))
 }
 

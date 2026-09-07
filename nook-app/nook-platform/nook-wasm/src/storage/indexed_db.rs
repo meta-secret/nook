@@ -486,7 +486,10 @@ pub(super) async fn idb_delete_keys(keys: &[&str]) -> Result<(), NookError> {
 }
 
 fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
-    match nook_core::read_vault_store_id(content).map_err(|e| NookError::Database(e.to_string()))? {
+    match nook_core::VaultFormatDocument::new(content)
+        .store_id()
+        .map_err(|e| NookError::Database(e.to_string()))?
+    {
         VaultStoreIdentity::Assigned(store_id) => Ok(store_id),
         VaultStoreIdentity::Unassigned => Err(NookError::Database(
             "Vault YAML is missing store_id.".to_owned(),
@@ -495,14 +498,14 @@ fn store_id_from_yaml(content: &str) -> Result<String, NookError> {
 }
 
 fn label_from_yaml(content: &str) -> Option<String> {
-    match nook_core::read_vault_name(content) {
+    match nook_core::VaultFormatDocument::new(content).name() {
         Ok(VaultName::Named(name)) => Some(name),
         Ok(VaultName::Unnamed) | Err(_) => None,
     }
 }
 
 fn default_registry_label(store_id: &str) -> String {
-    nook_core::default_vault_name_for_store_id(store_id)
+    nook_core::VaultStoreIdentity::default_name_for_store_id(store_id)
 }
 
 pub(crate) async fn load_vault_registry() -> Result<VaultRegistry, NookError> {
@@ -951,7 +954,7 @@ pub(crate) async fn set_local_vault_label(store_id: &str, label: &str) -> Result
     upsert_registry_entry(&mut registry, store_id, Some(trimmed), false);
     save_vault_registry(&registry).await?;
     if let Some(content) = load_vault_blob(store_id).await? {
-        let named = nook_core::set_vault_name(&content, trimmed)?;
+        let named = nook_core::VaultFormatDocument::new(&content).rename(trimmed)?;
         idb_put_string(&vault_blob_key(store_id), named.as_str()).await?;
     }
     Ok(())

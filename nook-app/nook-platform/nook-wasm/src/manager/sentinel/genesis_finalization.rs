@@ -119,7 +119,7 @@ impl NookVaultManager {
         let participants = output.participants;
         let store_id = output.store_id.as_str().to_owned();
         let vault_name = self.vault.vault_name.clone();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &output.stored_records,
             &VaultUnlock::Keys,
             &[],
@@ -159,8 +159,8 @@ impl NookVaultManager {
         &mut self,
         pending: PendingSentinelGenesisFinalization,
     ) -> Result<NookSentinelGenesisFinalizeResult, JsError> {
-        let format = nook_core::detect_stored_format(&pending.yaml)?;
-        let records = nook_core::deserialize_stored(&pending.yaml, format)?;
+        let format = nook_core::VaultFormatDocument::new(&pending.yaml).detect()?;
+        let records = nook_core::VaultFormatDocument::new(&pending.yaml).deserialize(format)?;
         pending.architecture.validate_records(&records)?;
         let meta = VaultMetaState::from_stored_records(&records)?;
 
@@ -512,10 +512,8 @@ mod tests {
             .map_err(|_| anyhow::anyhow!("durable genesis completion failed"))?;
         assert_eq!(result.store_id(), pending.store_id);
         assert_eq!(fixture.manager.vault.store_id, pending.store_id);
-        let expected = nook_core::deserialize_stored(
-            &pending.yaml,
-            nook_core::detect_stored_format(&pending.yaml)?,
-        )?;
+        let expected = nook_core::VaultFormatDocument::new(&pending.yaml)
+            .deserialize(nook_core::VaultFormatDocument::new(&pending.yaml).detect()?)?;
         let actual = fixture.manager.stored_records_snapshot();
         assert_eq!(actual.len(), expected.len());
         assert!(expected.iter().all(|record| actual.contains(record)));

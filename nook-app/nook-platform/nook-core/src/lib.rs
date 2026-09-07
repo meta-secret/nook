@@ -361,14 +361,8 @@ pub use vault_epoch_crypto::{
 };
 pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput};
 pub use vault_format::{
-    VaultFormat, VaultName, VaultNameRef, VaultStoreIdentity, VaultStoreIdentityRef,
-    VaultVersionWrite, current_vault_schema_version, default_vault_name_for_store_id,
-    deserialize_stored, deserialize_stored_yaml_with_unlock, detect_stored_format,
-    read_vault_architecture, read_vault_name, read_vault_password_entries,
-    read_vault_schema_version, read_vault_store_id, read_vault_unlock, read_vault_version,
-    serialize_stored, serialize_stored_yaml_with_unlock,
-    serialize_stored_yaml_with_unlock_and_name,
-    serialize_stored_yaml_with_unlock_name_architecture, set_vault_name,
+    VaultFormat, VaultFormatDocument, VaultName, VaultNameRef, VaultRecordSet, VaultStoreIdentity,
+    VaultStoreIdentityRef, VaultVersionWrite,
 };
 pub use vault_ids::{
     AUTH_KEY_ID_PREFIX, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX, STORE_ID_PREFIX,
@@ -423,9 +417,8 @@ mod test_support {
     use crate::{VaultStoreIdentityRef, VaultVersionWrite};
 
     use crate::{
-        DeviceIdentity, SecretId, StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultResult,
-        VaultUnlock, generate_store_id, genesis_auth_record, genesis_members_records,
-        serialize_stored_yaml_with_unlock,
+        DeviceIdentity, SecretId, StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultRecordSet,
+        VaultResult, VaultUnlock, generate_store_id, genesis_auth_record, genesis_members_records,
     };
 
     pub(crate) fn sample_vault_yaml(
@@ -433,7 +426,7 @@ mod test_support {
         store_id: &str,
         armor_line: &str,
     ) -> VaultResult<String> {
-        Ok(serialize_stored_yaml_with_unlock(
+        Ok(VaultRecordSet::serialize_yaml_with_unlock(
             &[crate::StoredSecretRecord {
                 key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
                 secret_type: None,
@@ -464,7 +457,7 @@ mod test_support {
             "2026-06-28T00:00:00Z",
         )?);
         let store_id = generate_store_id()?;
-        let yaml = serialize_stored_yaml_with_unlock(
+        let yaml = VaultRecordSet::serialize_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,
             &[],

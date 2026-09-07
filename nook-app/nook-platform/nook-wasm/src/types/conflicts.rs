@@ -183,8 +183,12 @@ impl NookPendingSyncConflict {
         repo: String,
         remote_revision: &NookProviderSyncRevision,
     ) -> Self {
-        let local_version = nook_core::read_vault_version(&local_yaml).unwrap_or_default();
-        let remote_version = nook_core::read_vault_version(&remote_yaml).unwrap_or_default();
+        let local_version = nook_core::VaultFormatDocument::new(&local_yaml)
+            .version()
+            .unwrap_or_default();
+        let remote_version = nook_core::VaultFormatDocument::new(&remote_yaml)
+            .version()
+            .unwrap_or_default();
         Self {
             provider_id,
             provider_label,

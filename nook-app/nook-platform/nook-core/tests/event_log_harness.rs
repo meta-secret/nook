@@ -12,8 +12,8 @@ use nook_core::{
     AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventId,
     JoinRequest, LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue,
     SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection,
-    VaultProjectionCache, VaultResult, VaultUnlock, generate_store_id, generate_vault_keys,
-    genesis_auth_record, genesis_members_records, serialize_stored_yaml_with_unlock,
+    VaultProjectionCache, VaultRecordSet, VaultResult, VaultUnlock, generate_store_id,
+    generate_vault_keys, genesis_auth_record, genesis_members_records,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -238,7 +238,7 @@ fn genesis_yaml(
         &keys.members_key,
     )?];
     records.extend(genesis_members_records(identity, &keys.members_key, TS)?);
-    serialize_stored_yaml_with_unlock(
+    VaultRecordSet::serialize_yaml_with_unlock(
         &records,
         &VaultUnlock::Keys,
         &[],
@@ -374,7 +374,9 @@ pub fn sample_stored_vault_yaml(crypto: &VaultCrypto) -> VaultResult<String> {
         }),
     );
     let records = db.to_stored_records_with_crypto(crypto)?;
-    Ok(nook_core::serialize_stored(&records, VaultFormat::Yaml)?
-        .as_str()
-        .to_owned())
+    Ok(
+        nook_core::VaultRecordSet::serialize(&records, VaultFormat::Yaml)?
+            .as_str()
+            .to_owned(),
+    )
 }

@@ -9,8 +9,7 @@ use crate::SessionError;
 
 use crate::errors::{MultiDeviceError, VaultResult};
 use crate::{
-    DeviceIdentity, VaultType, deserialize_stored, detect_stored_format, resolve_members_key,
-    resolve_secrets_key,
+    DeviceIdentity, VaultFormatDocument, VaultType, resolve_members_key, resolve_secrets_key,
 };
 
 /// Borrowed projection-cache YAML awaiting a key hydration action.
@@ -29,12 +28,12 @@ impl<'a> VaultProjectionCache<'a> {
         if self.yaml.trim().is_empty() {
             return Err(SessionError::EmptyProjectionCache.into());
         }
-        let architecture = crate::read_vault_architecture(self.yaml)?;
+        let architecture = crate::VaultFormatDocument::new(self.yaml).architecture()?;
         if architecture.vault_type == VaultType::Sentinel {
             return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
-        let format = detect_stored_format(self.yaml)?;
-        let records = deserialize_stored(self.yaml, format)?;
+        let format = VaultFormatDocument::new(self.yaml).detect()?;
+        let records = VaultFormatDocument::new(self.yaml).deserialize(format)?;
         let secrets_key = resolve_secrets_key(&records, identity)?;
         let members_key = resolve_members_key(&records, identity)?;
         Ok((secrets_key.into_inner(), members_key.into_inner()))
@@ -72,9 +71,8 @@ mod tests {
     #[test]
     fn hydrate_fails_closed_for_sentinel_projection_yaml() -> anyhow::Result<()> {
         use crate::{
-            DeviceMode, SentinelPolicy, VaultArchitecture, VaultType,
+            DeviceMode, SentinelPolicy, VaultArchitecture, VaultRecordSet, VaultType,
             create_sentinel_share_records, generate_store_id, generate_vault_keys,
-            serialize_stored_yaml_with_unlock_name_architecture,
         };
 
         let keys = generate_vault_keys()?;
@@ -92,7 +90,7 @@ mod tests {
         );
         assert_eq!(architecture.vault_type, VaultType::Sentinel);
         let store_id = generate_store_id()?;
-        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &shares,
             &VaultUnlock::Keys,
             &[],

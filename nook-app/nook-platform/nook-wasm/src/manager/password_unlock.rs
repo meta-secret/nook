@@ -123,8 +123,8 @@ mod browser_tests {
     use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
     use nook_core::{
         Database, DeviceIdentity, DeviceMode, SecretId, SecretValue, SentinelPolicy,
-        VaultArchitecture, VaultCrypto, VaultNameRef, VaultStoreIdentityRef, VaultType,
-        VaultVersionWrite,
+        VaultArchitecture, VaultCrypto, VaultNameRef, VaultRecordSet, VaultStoreIdentityRef,
+        VaultType, VaultVersionWrite,
     };
     use std::slice;
     use wasm_bindgen_test::*;
@@ -168,7 +168,7 @@ mod browser_tests {
                 ready_participants: 2.into(),
             },
         );
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &records,
             &VaultUnlock::Keys,
             slice::from_ref(&password_entry),
@@ -216,7 +216,7 @@ mod browser_tests {
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let records = database.to_stored_records_with_crypto(&crypto)?;
         let store_id = nook_core::generate_store_id()?.to_string();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
+        let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Keys,
             &[],
@@ -302,7 +302,7 @@ mod browser_tests {
         let joiner = DeviceIdentity::generate()?;
         records.push(nook_core::JoinRequestIssuance::new(&joiner, "2026-09-07T00:00:00Z").issue()?);
         let store_id = nook_core::generate_store_id()?.to_string();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
+        let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Keys,
             &[],
@@ -405,8 +405,8 @@ impl NookVaultManager {
                     .to_owned(),
             ));
         }
-        let format = nook_core::detect_stored_format(content)?;
-        let records = nook_core::deserialize_stored(content, format)?;
+        let format = nook_core::VaultFormatDocument::new(content).detect()?;
+        let records = nook_core::VaultFormatDocument::new(content).deserialize(format)?;
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
             if !nook_core::is_join_stored_record(&record)? {

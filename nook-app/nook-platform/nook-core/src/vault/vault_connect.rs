@@ -10,8 +10,8 @@ use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultSt
 use crate::errors::{self, VaultResult};
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
-    VaultCrypto, VaultMetaState, VaultType, VaultUnlock, assess_connect_access, deserialize_stored,
-    detect_stored_format, resolve_members_key, resolve_secrets_key, user_stored_records,
+    VaultCrypto, VaultFormatDocument, VaultMetaState, VaultType, VaultUnlock,
+    assess_connect_access, resolve_members_key, resolve_secrets_key, user_stored_records,
     vault_has_multi_device_records,
 };
 use std::fmt;
@@ -102,8 +102,8 @@ impl<'a> VaultContent<'a> {
         if force_genesis || self.content.trim().is_empty() {
             return Ok(true);
         }
-        let format = detect_stored_format(self.content)?;
-        let records = deserialize_stored(self.content, format)?;
+        let format = VaultFormatDocument::new(self.content).detect()?;
+        let records = VaultFormatDocument::new(self.content).deserialize(format)?;
         Ok(!vault_has_multi_device_records(&records)?)
     }
 
@@ -112,8 +112,8 @@ impl<'a> VaultContent<'a> {
         if self.content.trim().is_empty() {
             return Ok(VaultAccessStatus::NewVault);
         }
-        let format = detect_stored_format(self.content)?;
-        let records = deserialize_stored(self.content, format)?;
+        let format = VaultFormatDocument::new(self.content).detect()?;
+        let records = VaultFormatDocument::new(self.content).deserialize(format)?;
         if !vault_has_multi_device_records(&records)? {
             return Ok(VaultAccessStatus::NewVault);
         }
@@ -122,20 +122,22 @@ impl<'a> VaultContent<'a> {
 
     /// Read unlock metadata without decrypting secrets.
     pub fn capture_unlock(&self) -> VaultResult<VaultContentMetadata> {
-        let unlock = crate::read_vault_unlock(self.content)?;
-        let password_entries = crate::read_vault_password_entries(self.content)?;
-        let store_id = match crate::read_vault_store_id(self.content)? {
+        let unlock = crate::VaultFormatDocument::new(self.content).unlock()?;
+        let password_entries = crate::VaultFormatDocument::new(self.content).password_entries()?;
+        let store_id = match crate::VaultFormatDocument::new(self.content).store_id()? {
             VaultStoreIdentity::Assigned(store_id) => store_id,
             VaultStoreIdentity::Unassigned => {
                 return Err(errors::VaultFormatError::YamlMissingSections.into());
             }
         };
-        let vault_name = match crate::read_vault_name(self.content)? {
+        let vault_name = match crate::VaultFormatDocument::new(self.content).name()? {
             VaultName::Named(name) => name,
-            VaultName::Unnamed => crate::default_vault_name_for_store_id(&store_id),
+            VaultName::Unnamed => crate::VaultStoreIdentity::default_name_for_store_id(&store_id),
         };
-        let version = crate::read_vault_version(self.content).unwrap_or_default();
-        let architecture = crate::read_vault_architecture(self.content)?;
+        let version = crate::VaultFormatDocument::new(self.content)
+            .version()
+            .unwrap_or_default();
+        let architecture = crate::VaultFormatDocument::new(self.content).architecture()?;
         Ok(VaultContentMetadata {
             unlock,
             password_entries,
@@ -148,12 +150,12 @@ impl<'a> VaultContent<'a> {
 
     /// Resolve keys and retain encrypted records without decrypting user items.
     pub fn unlock(self, identity: &DeviceIdentity) -> VaultResult<UnlockedVault> {
-        let format = detect_stored_format(self.content)?;
-        let architecture = crate::read_vault_architecture(self.content)?;
+        let format = VaultFormatDocument::new(self.content).detect()?;
+        let architecture = crate::VaultFormatDocument::new(self.content).architecture()?;
         if architecture.vault_type == VaultType::Sentinel {
             return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
-        let stored_records = deserialize_stored(self.content, format)?;
+        let stored_records = VaultFormatDocument::new(self.content).deserialize(format)?;
         Self::validate_user_secret_types(&stored_records)?;
         let secrets_key = resolve_secrets_key(&stored_records, identity)?;
         let members_key = resolve_members_key(&stored_records, identity)?;
@@ -204,12 +206,12 @@ impl<'a> VaultContent<'a> {
     }
 
     fn sentinel_records(&self) -> VaultResult<Vec<StoredSecretRecord>> {
-        let format = detect_stored_format(self.content)?;
-        let architecture = crate::read_vault_architecture(self.content)?;
+        let format = VaultFormatDocument::new(self.content).detect()?;
+        let architecture = crate::VaultFormatDocument::new(self.content).architecture()?;
         if architecture.vault_type != VaultType::Sentinel {
             return Err(MultiDeviceError::InvalidSentinelThreshold.into());
         }
-        let stored_records = deserialize_stored(self.content, format)?;
+        let stored_records = VaultFormatDocument::new(self.content).deserialize(format)?;
         Self::validate_user_secret_types(&stored_records)?;
         architecture.validate_records(&stored_records)?;
         Ok(stored_records)
@@ -274,9 +276,8 @@ mod tests {
         );
     }
     use crate::{
-        DeviceMode, ReplicationType, SentinelPolicy, VaultResult, generate_store_id,
-        generate_vault_keys, genesis_auth_record,
-        serialize_stored_yaml_with_unlock_name_architecture,
+        DeviceMode, ReplicationType, SentinelPolicy, VaultRecordSet, VaultResult,
+        generate_store_id, generate_vault_keys, genesis_auth_record,
     };
 
     #[test]
@@ -357,7 +358,7 @@ mod tests {
             }),
         };
         let store_id = generate_store_id()?;
-        let error = serialize_stored_yaml_with_unlock_name_architecture(
+        let error = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &records,
             &VaultUnlock::Keys,
             &[],
@@ -404,7 +405,7 @@ mod tests {
             },
         );
         let store_id = generate_store_id()?;
-        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &records,
             &VaultUnlock::Keys,
             &[],

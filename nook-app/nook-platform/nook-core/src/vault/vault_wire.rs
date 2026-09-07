@@ -132,7 +132,7 @@ impl StoredVaultBlob {
     }
 
     pub fn parse_auto(raw: &str) -> errors::DatabaseResult<Self> {
-        crate::detect_stored_format(raw)?;
+        crate::VaultFormatDocument::new(raw).detect()?;
         Ok(Self::Yaml(StoredVaultYaml::parse(raw)?))
     }
 }

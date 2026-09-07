@@ -379,7 +379,8 @@ impl NookVaultManager {
         content: &str,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<LoadedVault, NookError> {
-        let architecture = nook_core::read_vault_architecture(content)
+        let architecture = nook_core::VaultFormatDocument::new(content)
+            .architecture()
             .unwrap_or_else(|_| self.vault.architecture.clone());
         if architecture.vault_type == VaultType::Sentinel {
             if self.vault.secrets_key.is_empty() || self.vault.members_key.is_empty() {
@@ -387,8 +388,9 @@ impl NookVaultManager {
             }
             // Session already holds reconstructed keys — hydrate records without
             // resolving auth envelopes.
-            let format = nook_core::detect_stored_format(content)?;
-            let stored_records = nook_core::deserialize_stored(content, format)?;
+            let format = nook_core::VaultFormatDocument::new(content).detect()?;
+            let stored_records =
+                nook_core::VaultFormatDocument::new(content).deserialize(format)?;
             let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
             let members_key = SymmetricKey::parse(&self.vault.members_key)?;
             let meta = VaultMetaState::from_stored_records(&stored_records)?;
@@ -407,8 +409,8 @@ impl NookVaultManager {
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
-        let format = nook_core::detect_stored_format(content)?;
-        let stored_records = nook_core::deserialize_stored(content, format)?;
+        let format = nook_core::VaultFormatDocument::new(content).detect()?;
+        let stored_records = nook_core::VaultFormatDocument::new(content).deserialize(format)?;
         let meta = VaultMetaState::from_stored_records(&stored_records)?;
         let metadata = nook_core::VaultContent::new(content).capture_unlock()?;
         self.application
@@ -484,7 +486,7 @@ mod tests {
                 ready_participants: 2.into(),
             },
         );
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &records,
             &nook_core::VaultUnlock::Keys,
             &[],
@@ -642,7 +644,7 @@ mod tests {
             },
         );
         Ok(
-            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
                 &records,
                 &nook_core::VaultUnlock::Keys,
                 &[],
@@ -675,7 +677,7 @@ mod tests {
 
     #[test]
     fn prepare_sentinel_ceremony_session_rejects_non_sentinel_architecture() -> anyhow::Result<()> {
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &[],
             &nook_core::VaultUnlock::Keys,
             &[],
