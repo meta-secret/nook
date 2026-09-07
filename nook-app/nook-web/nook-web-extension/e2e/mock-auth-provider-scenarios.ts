@@ -10,6 +10,7 @@ export class MockAuthProviderScenarios {
   static register(): void {
     this.registerAmazon()
     this.registerLinkedIn()
+    this.registerNetflix()
   }
 
   private static registerAmazon(): void {
@@ -246,6 +247,121 @@ export class MockAuthProviderScenarios {
             }),
           )
         expect(interceptedLinkedInRequestCount).toBeGreaterThan(1)
+        await page.close()
+      } finally {
+        await paired.context.close()
+        await mockAuth.close()
+      }
+    })
+  }
+
+  private static registerNetflix(): void {
+    test('fills Netflix credentials and submits only Continue', async ({
+      browserName,
+    }, testInfo) => {
+      test.skip(
+        browserName !== 'chromium',
+        'Chrome extensions require Chromium',
+      )
+      const mockAuth = await startMockAuthServer()
+      const paired = await launchPairedPinExtension(testInfo, {
+        vaultName: 'Mock Netflix auth vault',
+      })
+      try {
+        await saveVaultLogin(
+          paired.vaultPage,
+          'https://www.netflix.com',
+          'alice@nook.test',
+          'extension-fill-password',
+        )
+        const page = await paired.context.newPage()
+        let interceptedNetflixRequestCount = 0
+        await page.route('https://www.netflix.com/**', async (route) => {
+          interceptedNetflixRequestCount += 1
+          const requestedUrl = new URL(route.request().url())
+          const localResponse = await page.request.get(
+            `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+          )
+          await route.fulfill({ response: localResponse })
+        })
+        await page.goto('https://www.netflix.com/login')
+        expect(interceptedNetflixRequestCount).toBeGreaterThan(0)
+        await expect(page).toHaveURL('https://www.netflix.com/login')
+        await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+          'netflix-combined',
+        )
+
+        const form = page.getByTestId('netflix-login-form')
+        expect(
+          await form.evaluate((element) => ({
+            actionAttributePresent: element.hasAttribute('action'),
+            methodAttribute: element.getAttribute('method'),
+            resolvedAction: (element as HTMLFormElement).action,
+          })),
+        ).toEqual({
+          actionAttributePresent: false,
+          methodAttribute: 'post',
+          resolvedAction: 'https://www.netflix.com/login',
+        })
+        const username = form.locator('[name="userLoginId"]')
+        const password = form.locator('[name="password"]')
+        await expect(form.locator('input')).toHaveCount(2)
+        await expect(username).toBeVisible()
+        await expect(password).toBeVisible()
+        await expect(username).toHaveAttribute('type', 'text')
+        await expect(username).toHaveAttribute('autocomplete', 'email')
+        await expect(username).toHaveAttribute(
+          'aria-label',
+          'Email or mobile number',
+        )
+        await expect(password).toHaveAttribute('type', 'password')
+        await expect(password).toHaveAttribute('autocomplete', 'password')
+        await expect(password).toHaveAttribute('aria-label', 'Password')
+        await expect(
+          form.getByRole('button', { name: 'Continue' }),
+        ).toHaveAttribute('type', 'submit')
+        await expect(
+          form.getByRole('button', { name: 'Get Help' }),
+        ).toHaveAttribute('type', 'button')
+        await expect(
+          page.getByRole('heading', { name: 'Enter your info to sign in' }),
+        ).toBeVisible()
+        await expect(
+          page.getByRole('heading', {
+            name: 'Or get started with a new account.',
+          }),
+        ).toBeVisible()
+        await expect(
+          page.getByTestId('netflix-recaptcha-disclosure'),
+        ).toBeVisible()
+        await expect(
+          page.getByRole('link', { name: 'Questions? Contact us.' }),
+        ).toBeVisible()
+        await expect(page.getByLabel('Language')).toBeVisible()
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (key) => sessionStorage.getItem(key) || '',
+              'netflix-submission-evidence',
+            ),
+          )
+          .toBe(
+            JSON.stringify({
+              submittedControl: 'Continue',
+              credentialsMatched: true,
+              postWithoutAction: true,
+              auxiliaryControlsUntouched: true,
+            }),
+          )
+        expect(interceptedNetflixRequestCount).toBeGreaterThan(1)
         await page.close()
       } finally {
         await paired.context.close()
