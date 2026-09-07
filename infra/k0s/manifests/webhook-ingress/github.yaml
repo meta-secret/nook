@@ -50,7 +50,7 @@ spec:
           drop: ["ALL"]
         readOnlyRootFilesystem: true
   github:
-    ping:
+    pr-lifecycle:
       repositories:
         - owner: meta-secret
           names:
@@ -61,6 +61,14 @@ spec:
         method: POST
       events:
         - ping
+        - pull_request
+        - pull_request_review
+        - pull_request_review_comment
+        - issue_comment
+        - check_run
+        - check_suite
+        - workflow_run
+        - status
       webhookSecret:
         name: github-webhook-secret
         key: secret
