@@ -134,7 +134,7 @@ impl NookVaultManager {
             }
             let store = load_local_event_store(&self.vault.store_id).await?;
             let graph = store.load_graph(&self.vault.store_id)?;
-            let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
+            let projection = nook_core::VaultProjection::from_graph(&graph, &self.vault.store_id)?;
             let user_records: Vec<nook_core::StoredSecretRecord> =
                 projection.live_secrets(&graph).into_values().collect();
             let mut meta = VaultMetaState::from_stored_records(&user_records)?;

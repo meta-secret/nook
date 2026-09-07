@@ -54,7 +54,6 @@ pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
     SecretReplacementConflict, SecurityConflict, VaultProjection,
-    assert_projection_permutation_invariant, current_epoch_checkpoint, project_vault,
 };
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;

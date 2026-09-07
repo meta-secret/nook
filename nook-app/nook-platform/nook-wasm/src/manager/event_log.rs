@@ -34,7 +34,7 @@ use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles};
 use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
-    VaultOperation, apply_user_records_to_encrypted_session, project_vault,
+    VaultOperation, apply_user_records_to_encrypted_session,
 };
 
 fn iso_timestamp() -> String {
@@ -59,7 +59,7 @@ impl NookVaultManager {
     > {
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        let projection = project_vault(&graph, &self.vault.store_id)?;
+        let projection = VaultProjection::from_graph(&graph, &self.vault.store_id)?;
         Ok(projection
             .secrets
             .values()
@@ -361,7 +361,7 @@ impl NookVaultManager {
         self.ensure_vault_crypto_from_cache().await?;
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        let projection = project_vault(&graph, &self.vault.store_id)?;
+        let projection = VaultProjection::from_graph(&graph, &self.vault.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
         self.vault.password_entries = projection.password_entries;
@@ -404,7 +404,7 @@ impl NookVaultManager {
         }
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        let projection = project_vault(&graph, &self.vault.store_id)?;
+        let projection = VaultProjection::from_graph(&graph, &self.vault.store_id)?;
         self.vault.password_entries = projection.password_entries;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
@@ -438,7 +438,7 @@ impl NookVaultManager {
         }
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        Ok(project_vault(&graph, &self.vault.store_id)?)
+        Ok(VaultProjection::from_graph(&graph, &self.vault.store_id)?)
     }
 }
 

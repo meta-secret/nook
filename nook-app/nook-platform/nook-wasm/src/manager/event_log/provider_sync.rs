@@ -423,7 +423,7 @@ impl NookVaultManager {
         self.event_log.heads = heads.clone();
         let graph = local.load_graph(&self.vault.store_id)?;
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
-        let projection = nook_core::project_vault(&graph, &self.vault.store_id)?;
+        let projection = nook_core::VaultProjection::from_graph(&graph, &self.vault.store_id)?;
         self.ensure_sentinel_architecture_from_shares()?;
         let unlocked =
             self.vault.crypto.is_unlocked() || self.ensure_vault_crypto_from_cache().await.is_ok();
