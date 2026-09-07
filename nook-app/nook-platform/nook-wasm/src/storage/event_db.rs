@@ -595,7 +595,7 @@ mod tests {
         let (signing, _) = SigningIdentity::generate()?;
         let actor_id = signing.actor_id()?;
         let key_epoch = EventId::parse(indexed_id)?;
-        let (_, event_bytes) = nook_core::build_signed_event(nook_core::AppendEventInput {
+        let (_, event_bytes) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &signing,

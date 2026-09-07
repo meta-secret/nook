@@ -60,6 +60,23 @@ pub struct EncryptedSecretPayload {
 
 impl EncryptedSecretPayload {
     #[must_use]
+    pub fn from_armored(
+        id: &SecretId,
+        secret_type: SecretType,
+        ciphertext: &str,
+        identity_fingerprint: SecretFingerprint,
+        fingerprint: SecretFingerprint,
+    ) -> Self {
+        Self {
+            id: id.clone(),
+            secret_type,
+            ciphertext: OpaqueCiphertext::from_trusted(ciphertext.to_owned()),
+            identity_fingerprint,
+            fingerprint,
+        }
+    }
+
+    #[must_use]
     pub fn to_stored(&self) -> StoredSecretRecord {
         StoredSecretRecord {
             key: self.id.clone(),

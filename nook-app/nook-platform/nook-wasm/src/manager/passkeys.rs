@@ -411,7 +411,7 @@ impl NookVaultManager {
         let ciphertext = self.vault.crypto.get()?.encrypt_value(yaml.as_str())?;
         yaml.zeroize_plaintext();
         value.zeroize_plaintext();
-        Ok(nook_core::encrypted_secret_from_armored(
+        Ok(nook_core::EncryptedSecretPayload::from_armored(
             id,
             SecretType::Passkey,
             ciphertext.as_str(),

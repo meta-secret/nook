@@ -482,15 +482,16 @@ mod tests {
                 let epoch = EventId::from_sha256_hex(
                     nook_core::sha256_hex(fixture.output.store_id.as_str().as_bytes()).as_str(),
                 )?;
-                let (event, bytes) = nook_core::build_signed_event(nook_core::AppendEventInput {
-                    store_id: &fixture.output.store_id,
-                    actor_id: &fixture.signer.actor_id()?,
-                    signing_identity: &fixture.signer,
-                    parents: Vec::new(),
-                    key_epoch: &epoch,
-                    created_at: &IsoTimestamp::from_trusted("2026-09-04T00:00:00Z".to_owned()),
-                    operations,
-                })?;
+                let (event, bytes) =
+                    nook_core::AppendEventInput::build(nook_core::AppendEventInput {
+                        store_id: &fixture.output.store_id,
+                        actor_id: &fixture.signer.actor_id()?,
+                        signing_identity: &fixture.signer,
+                        parents: Vec::new(),
+                        key_epoch: &epoch,
+                        created_at: &IsoTimestamp::from_trusted("2026-09-04T00:00:00Z".to_owned()),
+                        operations,
+                    })?;
                 let event_id = event.validate_envelope(&fixture.output.store_id)?;
                 event_db::save_event_bytes(
                     fixture.output.store_id.as_str(),
