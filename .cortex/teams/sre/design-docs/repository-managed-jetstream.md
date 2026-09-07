@@ -24,6 +24,14 @@ Traefik terminates trusted TLS for `wss://events.dev.nokey.sh` on public port
 NATS ports 4222, 6222, 8222, and 9222 must never be host, NodePort, or
 LoadBalancer listeners. The server permits the expected HTTPS Origin only.
 
+## Consumption model
+
+JetStream persistence is platform retention for ingress durability and final
+reconciliation. Mission-scoped PR Steward agents use Core NATS live fan-out on
+`default.github-webhook.pr-lifecycle`; they do not bind a durable consumer.
+Missing an event while disconnected is acceptable because Gizmo reconciles the
+final GitHub state before acting.
+
 ## PR Steward identity
 
 The infrastructure host owns the credential at
@@ -32,21 +40,21 @@ the containing directories use mode `0700`. Kubernetes receives the same
 material as `argo-events/jetstream-pr-steward-client`. Neither copy belongs in
 Git, command arguments, or logs.
 
-The developer-side handoff is
-`~/.nook/events/pr-steward-client.yaml`. Run
+The developer-side handoff is `~/.nook/events/pr-steward-client.yaml`. Run
 `task infra:webhook-ingress:jetstream:pr-steward:sync` to copy the exact remote
-credential over the configured SSH target. The task writes atomically, requires
-the parent directory to be owned by the current user with mode `0700`, requires
-the file to be a regular non-symlink with mode `0600`, and validates the exact
-credential YAML shape on both hosts. Consumers that require a different stable
-location set the narrowly scoped `NOOK_PR_STEWARD_CREDENTIAL_FILE` to an
-absolute path for that invocation.
+credential over the configured SSH target.
 
-The identity can subscribe to `default.github-webhook.pr-lifecycle` and its
-private inboxes. It can publish only the JetStream requests and acknowledgements
-needed for the pre-created `default/pr-steward` durable pull consumer. Publishing
-to application subjects is explicitly denied. The broad Argo client remains a
-separate internal credential.
+The sync task enforces these boundaries:
+
+- the parent directory is current-user owned with mode `0700`;
+- the credential is a regular non-symlink file with mode `0600`;
+- both remote and local files have the exact credential YAML shape; and
+- `NOOK_PR_STEWARD_CREDENTIAL_FILE` accepts an absolute path override.
+
+The identity can only subscribe to
+`default.github-webhook.pr-lifecycle`. All publishing, JetStream API access, and
+unrelated subscriptions are denied. The broad Argo client remains a separate
+internal credential.
 
 Rotate with `task infra:webhook-ingress:jetstream:pr-steward:rotate`. Rotation
 replaces only the PR Steward password, republishes the Kubernetes Secret, and
@@ -54,8 +62,7 @@ rolls the repository-owned StatefulSet so new connections require the new
 credential. Rerun the sync task after rotation; consumers must then reload the
 local handoff file.
 
-Removal is a coordinated SRE change: remove the public Traefik router, delete
-the durable consumer, remove the PR Steward user from the server authorization
-file, republish the server Secret, roll the StatefulSet, and finally delete the
-client Secret and remote handoff file. Removal must not delete the JetStream
-StatefulSet, stream data, PVCs, PVs, Argo credential, or TLS material.
+Removal is a coordinated SRE change: remove the public Traefik router and PR
+Steward user, republish the server Secret, roll the StatefulSet, and delete both
+credential handoffs. It must not delete the JetStream cluster, stream data,
+PVCs, PVs, Argo credential, or TLS material.

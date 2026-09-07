@@ -129,6 +129,11 @@ server cluster, and then rerun the sync task. See
 the [repository-managed JetStream contract](../.cortex/teams/sre/design-docs/repository-managed-jetstream.md)
 for ownership, permissions, rotation, and removal.
 
+JetStream persistence belongs to the ingress platform. PR Steward agents use
+Core NATS live fan-out on the exact lifecycle subject without a durable
+consumer; disconnected agents may miss events, and Gizmo performs final GitHub
+reconciliation before action.
+
 `task infra:sccache:credential:sync` copies the bucket-scoped build keys into
 `~/.nook/cache/` (shared across checkouts; never into the repo), then upserts
 GitHub Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,

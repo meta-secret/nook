@@ -46,7 +46,6 @@ tasks:
         storage="$repo_root/infra/k0s/manifests/argo-events/storage.yaml"
         jetstream_config="$repo_root/infra/k0s/manifests/argo-events/jetstream-config.yaml"
         jetstream_statefulset="$repo_root/infra/k0s/manifests/argo-events/jetstream-statefulset.yaml"
-        jetstream_consumer="$repo_root/infra/k0s/manifests/argo-events/jetstream-consumer.yaml"
         ingress="$repo_root/infra/k0s/manifests/webhook-ingress/github.yaml"
         traefik="$repo_root/infra/traefik-dynamic.yaml"
         grep -F 'jetstreamExotic:' "$platform" >/dev/null
@@ -75,9 +74,6 @@ tasks:
         grep -F 'storageClassName: argo-events-jetstream-local-retain' "$jetstream_statefulset" >/dev/null
         grep -F 'name: eventbus-default-js-vol' "$jetstream_statefulset" >/dev/null
         grep -F 'name: jetstream-server' "$jetstream_statefulset" >/dev/null
-        grep -F 'name: jetstream-pr-steward-consumer' "$jetstream_consumer" >/dev/null
-        grep -F 'filter_subject == "default.github-webhook.pr-lifecycle"' "$jetstream_consumer" >/dev/null
-        grep -F -- '--deliver new' "$jetstream_consumer" >/dev/null
         grep -F 'kind: EventSource' "$ingress" >/dev/null
         grep -F 'replicas: 2' "$ingress" >/dev/null
         grep -F 'endpoint: /webhooks/github' "$ingress" >/dev/null
@@ -110,7 +106,8 @@ tasks:
         ! grep -Eq '^kind: (Sensor|Workflow)$|websocket|hostPort:|type: (NodePort|LoadBalancer)' \
           "$platform" "$storage" "$ingress"
         ! grep -Eq 'hostPort:|type: (NodePort|LoadBalancer)' \
-          "$jetstream_config" "$jetstream_statefulset" "$jetstream_consumer"
+          "$jetstream_config" "$jetstream_statefulset"
+        ! test -e "$repo_root/infra/k0s/manifests/argo-events/jetstream-consumer.yaml"
         grep -F 'Host(`{{.NOOK_WEBHOOK_INGRESS_HOST}}`) && Path(`/webhooks/github`) && Method(`POST`)' \
           "$traefik" >/dev/null
         grep -F 'url: http://{{.NOOK_WEBHOOK_INGRESS_CLUSTER_IP}}:12000' \
@@ -119,6 +116,8 @@ tasks:
         grep -F 'url: http://10.96.90.30:9222' "$traefik" >/dev/null
         grep -F 'webhook-ingress:jetstream:pr-steward:sync:' "$repo_root/infra/tasks/webhook-ingress.yml" >/dev/null
         grep -F '${HOME}/.nook/events/pr-steward-client.yaml' "$repo_root/infra/tasks/webhook-ingress.yml" >/dev/null
+        grep -F 'deny: [">"]' "$repo_root/infra/tasks/webhook-ingress.yml" >/dev/null
+        grep -F 'allow: ["default.github-webhook.pr-lifecycle"]' "$repo_root/infra/tasks/webhook-ingress.yml" >/dev/null
         BASH
 
   webhook-ingress:jetstream:secrets:publish:
@@ -210,17 +209,10 @@ tasks:
                     user: "#{steward_user}", pass: "#{steward_password}"
                     permissions: {
                       publish: {
-                        allow: [
-                          "$JS.API.INFO",
-                          "$JS.API.STREAM.INFO.default",
-                          "$JS.API.CONSUMER.INFO.default.pr-steward",
-                          "$JS.API.CONSUMER.MSG.NEXT.default.pr-steward",
-                          "$JS.ACK.default.pr-steward.>"
-                        ]
-                        deny: ["default.>"]
+                        deny: [">"]
                       }
                       subscribe: {
-                        allow: ["_INBOX.>", "default.github-webhook.pr-lifecycle"]
+                        allow: ["default.github-webhook.pr-lifecycle"]
                       }
                     }
                   }
@@ -479,13 +471,6 @@ tasks:
           secret/eventbus-default-js-client-auth \
           secret/eventbus-default-js-server \
           --namespace argo-events --ignore-not-found
-        kubectl delete job/jetstream-pr-steward-consumer \
-          --namespace argo-events --ignore-not-found --wait
-        kubectl apply \
-          -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-consumer.yaml"
-        kubectl wait --for=condition=Complete job/jetstream-pr-steward-consumer \
-          --namespace argo-events --timeout=5m
-        kubectl logs job/jetstream-pr-steward-consumer --namespace argo-events
         rm -f /tmp/nook-jetstream-claims-before /tmp/nook-jetstream-claims-after
         REMOTE
 
@@ -589,7 +574,6 @@ tasks:
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
-        remote_dir="{{.INFRA_REMOTE_DIR}}"
         kubectl() { sudo -n k0s kubectl "$@"; }
         kubectl rollout restart statefulset/eventbus-default-js \
           --namespace argo-events
@@ -597,12 +581,6 @@ tasks:
           --namespace argo-events --timeout=10m
         test "$(kubectl get statefulset/eventbus-default-js \
           --namespace argo-events -o jsonpath='{.status.readyReplicas}')" = 3
-        kubectl delete job/jetstream-pr-steward-consumer \
-          --namespace argo-events --ignore-not-found --wait
-        kubectl apply \
-          -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-consumer.yaml"
-        kubectl wait --for=condition=Complete job/jetstream-pr-steward-consumer \
-          --namespace argo-events --timeout=5m
         printf '%s\n' \
           'PR Steward credential rotated; reload the infrastructure-owned handoff file.'
         REMOTE
@@ -770,13 +748,10 @@ tasks:
             !/Permissions Violation for Subscription/i.test(valid.read()); attempt += 1) await delay(50);
           if (!/Permissions Violation for Subscription/i.test(valid.read())) throw new Error("unrelated subscription was not denied");
           valid.clear();
-          const inbox = `_INBOX.${crypto.randomUUID().replaceAll("-", "")}`;
-          valid.ws.send(`SUB ${inbox} 92\r\nPUB $JS.API.CONSUMER.INFO.default.pr-steward ${inbox} 0\r\n\r\n`);
+          valid.ws.send("PUB $JS.API.INFO 0\r\n\r\n");
           for (let attempt = 0; attempt < 100 &&
-            !valid.read().includes("pr-steward"); attempt += 1) await delay(50);
-          if (!valid.read().includes("default.github-webhook.pr-lifecycle")) {
-            throw new Error("durable consumer contract was not readable");
-          }
+            !/Permissions Violation for Publish/i.test(valid.read()); attempt += 1) await delay(50);
+          if (!/Permissions Violation for Publish/i.test(valid.read())) throw new Error("JetStream API access was not denied");
           valid.clear();
           valid.ws.send("SUB default.github-webhook.pr-lifecycle 93\r\n");
           writeFileSync(`${workDir}/ready`, "ready", { mode: 0o600 });
@@ -810,7 +785,7 @@ tasks:
           'trusted WSS/auth -> accepted' \
           'missing/wrong auth -> rejected' \
           'application publish/unrelated subscribe -> denied' \
-          'durable consumer API -> authorized' \
+          'JetStream API -> denied' \
           'exact lifecycle subject -> received GitHub ping'
         BASH
 
