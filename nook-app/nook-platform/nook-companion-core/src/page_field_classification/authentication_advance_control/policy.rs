@@ -7,7 +7,7 @@
 use super::{
     AuthenticationAdvanceControlObservation, CheckedAuthenticationControl,
     PageControlActionability, PageControlOwnership, PageControlSemantics,
-    PageControlSubmissionDestinationSource,
+    PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
 };
 use crate::page_field_classification::control_identity::AuthenticationControlIdentity;
 use crate::page_field_classification::form_identity::{
