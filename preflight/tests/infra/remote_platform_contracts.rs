@@ -137,6 +137,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "operations",
         "bake-cache",
         "kubernetes-cache",
+        "webhook-ingress",
     ];
     for domain in expected_domains {
         let include = format!(
