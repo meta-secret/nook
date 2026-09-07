@@ -19,9 +19,23 @@ import {
   ClaudeAuthInteractionState,
 } from './mock-auth/src/lib/claude-auth-flow'
 
+enum BookingSubmissionEvidencePollKind {
+  Absent = 'absent',
+  Present = 'present',
+}
+
 type BookingSubmissionEvidencePollState =
-  | { readonly kind: 'absent' }
-  | { readonly kind: 'present'; readonly value: string }
+  | { readonly kind: BookingSubmissionEvidencePollKind.Absent }
+  | {
+      readonly kind: BookingSubmissionEvidencePollKind.Present
+      readonly value: string
+    }
+
+type BookingSubmissionEvidencePollRequest = {
+  readonly key: string
+  readonly absentKind: BookingSubmissionEvidencePollKind.Absent
+  readonly presentKind: BookingSubmissionEvidencePollKind.Present
+}
 
 export class MockAuthProviderScenarios {
   static register(): void {
@@ -596,15 +610,29 @@ export class MockAuthProviderScenarios {
         )
         await expect
           .poll(() =>
-            page.evaluate<BookingSubmissionEvidencePollState, string>((key) => {
-              for (const [entryKey, value] of Object.entries(sessionStorage)) {
-                if (entryKey === key) return { kind: 'present', value }
-              }
-              return { kind: 'absent' }
-            }, 'booking-submission-evidence'),
+            page.evaluate<
+              BookingSubmissionEvidencePollState,
+              BookingSubmissionEvidencePollRequest
+            >(
+              ({ key, absentKind, presentKind }) => {
+                for (const [entryKey, value] of Object.entries(
+                  sessionStorage,
+                )) {
+                  if (entryKey === key) {
+                    return { kind: presentKind, value }
+                  }
+                }
+                return { kind: absentKind }
+              },
+              {
+                key: 'booking-submission-evidence',
+                absentKind: BookingSubmissionEvidencePollKind.Absent,
+                presentKind: BookingSubmissionEvidencePollKind.Present,
+              },
+            ),
           )
           .toEqual({
-            kind: 'present',
+            kind: BookingSubmissionEvidencePollKind.Present,
             value: JSON.stringify({
               submittedControl: BookingAuthControl.ContinueWithEmail,
               emailMatch: BookingAuthEmailMatch.Matched,
