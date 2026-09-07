@@ -45,6 +45,8 @@ verdict authority.
   packet satisfies the [lifecycle authority](workflows/pull-request-lifecycle.md).
 - Return bounded evidence or a blocker to Gizmo Prime.
 - Keep all waits inside the active task.
+- Stop the reactive subscription when Gizmo directs or the task receives a
+  termination signal.
 
 ## Prohibited actions
 
@@ -60,6 +62,8 @@ verdict authority.
 - PR Steward must not merge without the separate explicit merge packet.
 - PR Steward must not use `--admin` as a generic bypass or fallback.
 - PR Steward must not fabricate deployment evidence.
+- PR Steward must not persist, replay, or claim durable ownership of reactive
+  notifications.
 - PR Steward must not add fallback, compatibility, recovery, replay, or
   reconciliation behavior when an external operation fails.
 

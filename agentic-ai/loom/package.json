@@ -17,6 +17,7 @@
     "module-delivery": "bun run src/module-delivery/cli.ts",
     "module-experts": "bun run src/module-experts/cli.ts",
     "structural-experts": "bun run src/structural-experts/cli.ts",
+    "pr-steward-events": "bun run src/pr-steward-events.ts",
     "check": "tsc --noEmit",
     "lint": "eslint src tests",
     "format": "prettier --config .prettierrc --write \"src/**/*.ts\" \"tests/**/*.ts\" \"*.{ts,json,md}\" .prettierrc",
@@ -35,6 +36,7 @@
     "typescript-eslint": "8.66.0"
   },
   "dependencies": {
+    "@nats-io/nats-core": "^3.4.0",
     "@openai/codex-sdk": "0.147.0",
     "diff": "9.0.0",
     "github-slugger": "2.0.0",

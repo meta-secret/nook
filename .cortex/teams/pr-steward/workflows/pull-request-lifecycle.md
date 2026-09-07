@@ -72,6 +72,52 @@ PR Steward returns observable evidence or a bounded blocker.
 - Do not invent a retry, broaden the operation, or create a fallback path.
 - Gizmo decides whether to route a correction, issue a fresh packet, or stop.
 
+## Reactive observation
+
+Gizmo may run PR Steward as a mission-scoped child while delivery is active.
+
+### Required actions
+
+1. Start the live subscription from the active PR Steward task.
+
+   ```bash
+   bun run --cwd agentic-ai/loom pr-steward-events
+   ```
+
+   The default credential path is
+   `~/.nook/events/pr-steward-client.yaml`. An explicit override must be an
+   absolute path passed as the only argument after `--`.
+2. Read newline-delimited JSON from standard output.
+   - Each line is one `github-pr-event` envelope.
+   - Match the packet's repository and pull-request number before notifying
+     Gizmo.
+   - Treat the notification as a prompt to perform only the next operation
+     that Gizmo authorizes.
+3. Stop when Gizmo directs the child to finish.
+   - Send `SIGINT` or `SIGTERM` to drain the NATS connection.
+   - Wait for the command and PR Steward child to exit before Gizmo finishes.
+
+### Subscription boundary
+
+- The client connects to `wss://events.dev.nokey.sh` with trusted TLS.
+- It subscribes directly to `default.github-webhook.pr-lifecycle`.
+- It uses no queue group. Concurrent Gizmo missions each receive the live
+  event.
+- The subscription is Core NATS live fan-out. It does not bind the shared
+  durable work-queue consumer.
+- JetStream persistence serves the platform. It does not make this ephemeral
+  child replay missed notifications.
+- Missed and duplicate notifications are acceptable hints.
+- Gizmo must reconcile the final GitHub state directly before its readiness
+  or completion verdict.
+
+### Output contract
+
+Standard output contains only one JSON object per received event. The object
+has required `kind`, `id`, `time`, `githubEvent`, and `deliveryId` fields. It
+may include `action`, `repository`, `pullRequest`, and `headSha`. The original
+webhook body and credential material never appear in output.
+
 ## Validation
 
 - Every external mutation used the packet's repository, pull request, and
@@ -81,3 +127,6 @@ PR Steward returns observable evidence or a bounded blocker.
 - A merge result is a verified squash merge when merge was authorized.
 - An administrator merge used the path-excluded route only with its separate
   Gizmo packet and exact-head evidence.
+- Reactive observation ended before its parent Gizmo task completed.
+- Gizmo's terminal decision used a direct GitHub reconciliation instead of
+  notification history.
