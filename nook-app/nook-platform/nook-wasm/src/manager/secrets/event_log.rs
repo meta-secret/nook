@@ -135,7 +135,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
     use super::*;
-    use js_sys::{JsString, Reflect};
+    use js_sys::{Array, JsString, Object, Reflect};
     use wasm_bindgen_test::*;
 
     #[derive(Serialize)]
@@ -176,6 +176,52 @@ mod wasm_tests {
             .ok_or_else(|| JsError::new("field is not a string"))
     }
 
+    fn get_bool(target: &js_sys::Object, field: &str) -> Result<bool, JsError> {
+        Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new("failed to read reflected boolean field"))?
+            .as_bool()
+            .ok_or_else(|| JsError::new("field is not a boolean"))
+    }
+
+    fn get_array(target: &js_sys::Object, field: &str) -> Result<Array, JsError> {
+        Reflect::get(target, &JsString::from(field))
+            .map_err(|_| JsError::new("failed to read reflected array field"))
+            .map(|value| value.unchecked_into())
+    }
+
+    fn event_fixture() -> Result<(nook_core::VaultEvent, String, String), JsError> {
+        let (signing_identity, _) = nook_core::SigningIdentity::generate()
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        let store_id =
+            nook_core::generate_store_id().map_err(|error| JsError::new(&error.to_string()))?;
+        let key_epoch = nook_core::EventId::from_sha256_hex(
+            nook_core::sha256_hex(b"nook-wasm-event-log-wrapper-test").as_str(),
+        )
+        .map_err(|error| JsError::new(&error.to_string()))?;
+        let actor_id = signing_identity
+            .actor_id()
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        let created_at = nook_core::IsoTimestamp::parse("2026-01-01T00:00:00Z")
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        let (event, bytes) = nook_core::build_signed_event(nook_core::AppendEventInput {
+            store_id: &store_id,
+            actor_id: &actor_id,
+            signing_identity: &signing_identity,
+            parents: Vec::new(),
+            key_epoch: &key_epoch,
+            created_at: &created_at,
+            operations: vec![nook_core::VaultOperation::VaultCleared],
+        })
+        .map_err(|error| JsError::new(&error.to_string()))?;
+        let event_id = event
+            .id()
+            .map_err(|error| JsError::new(&error.to_string()))?
+            .to_string();
+        let content =
+            String::from_utf8(bytes.into()).map_err(|error| JsError::new(&error.to_string()))?;
+        Ok((event, event_id, content))
+    }
+
     #[wasm_bindgen_test]
     fn event_log_export_serializes_flattened_signed_events_as_plain_objects()
     -> Result<(), wasm_bindgen::JsError> {
@@ -192,6 +238,118 @@ mod wasm_tests {
 
         assert_eq!(get_number(&event, "schema_version")?, 1.0);
         assert_eq!(get_string(&event, "signature")?, "ed25519:test-signature");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn event_log_storage_records_round_trip_through_js_wrappers() -> Result<(), JsError> {
+        let (event, event_id, content) = event_fixture()?;
+        let records = NookEventLogRecords(vec![EventLogStorageRecord {
+            event_id: event_id.clone(),
+            path: "events/fixture.yaml".to_owned(),
+            event: event.clone(),
+        }]);
+        let array = records.to_array()?;
+        assert_eq!(array.length(), 1);
+        let record: Object = array.get(0).unchecked_into();
+        assert_eq!(get_string(&record, "eventId")?, event_id);
+        assert_eq!(get_string(&record, "path")?, "events/fixture.yaml");
+        let event_object = get(&record, "event")?;
+        assert_eq!(get_number(&event_object, "schema_version")?, 1.0);
+
+        let manager = NookVaultManager::new();
+        let parsed = manager.parse_event_log_storage_record_js(
+            &get_string(&record, "eventId")?,
+            &get_string(&record, "path")?,
+            &content,
+        )?;
+        assert_eq!(
+            manager.serialize_event_log_storage_record_js(&parsed)?,
+            content
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn external_event_log_records_accept_valid_objects_and_reject_missing_events()
+    -> Result<(), JsError> {
+        let (event, event_id, _) = event_fixture()?;
+        let valid = Object::new();
+        Reflect::set(
+            &valid,
+            &JsString::from("eventId"),
+            &JsString::from(event_id.as_str()),
+        )
+        .map_err(|_| JsError::new("failed to set event id"))?;
+        let event_value = serde_wasm_bindgen::to_value(&event)?;
+        Reflect::set(&valid, &JsString::from("event"), &event_value)
+            .map_err(|_| JsError::new("failed to set event"))?;
+        let valid_records = Array::new();
+        valid_records.push(&valid);
+        assert!(NookExternalEventLogRecords::from_array(&valid_records).is_ok());
+
+        let malformed = Object::new();
+        Reflect::set(
+            &malformed,
+            &JsString::from("eventId"),
+            &JsString::from(event_id.as_str()),
+        )
+        .map_err(|_| JsError::new("failed to set malformed event id"))?;
+        let malformed_records = Array::new();
+        malformed_records.push(&malformed);
+        assert!(NookExternalEventLogRecords::from_array(&malformed_records).is_err());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn extension_import_status_projects_plain_js_values() -> Result<(), JsError> {
+        let status = NookExtensionEventLogImportStatus(ExtensionEventLogImportStatus {
+            vault_store_id: "store-fixture".to_owned(),
+            event_count: 3,
+            heads: vec!["head-a".to_owned(), "head-b".to_owned()],
+            access_granted: true,
+        });
+        let object = status.to_object()?;
+        assert_eq!(get_string(&object, "vaultStoreId")?, "store-fixture");
+        assert_eq!(get_number(&object, "eventCount")?, 3.0);
+        assert!(get_bool(&object, "accessGranted")?);
+        let heads = get_array(&object, "heads")?;
+        assert_eq!(heads.length(), 2);
+        assert_eq!(heads.get(0).as_string().as_deref(), Some("head-a"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn empty_manager_exports_no_event_log_records() -> Result<(), JsError> {
+        let manager = NookVaultManager::new();
+        let records = manager.export_event_log_records_js().await?;
+        assert_eq!(records.to_array()?.length(), 0);
+        assert!(!manager.event_log_mode());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn event_log_sync_and_extension_import_fail_closed_without_a_vault() -> Result<(), JsError>
+    {
+        let mut manager = NookVaultManager::new();
+        assert!(
+            manager
+                .sync_external_event_log_records_js(NookExternalEventLogRecords(Vec::new()))
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .import_extension_event_log_records_js(
+                    "store-fixture",
+                    "device-fixture",
+                    "public-key-fixture",
+                    "signing-key-fixture",
+                    NookExternalEventLogRecords(Vec::new()),
+                )
+                .await
+                .is_err()
+        );
         Ok(())
     }
 }
