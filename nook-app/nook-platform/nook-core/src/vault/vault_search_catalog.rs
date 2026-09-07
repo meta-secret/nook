@@ -5,11 +5,10 @@
 //! independently encrypted buckets by the WASM adapter, so a 10,000-item search
 //! avoids per-query decryption without exposing searchable metadata at rest.
 
-use super::vault_session::decrypt_encrypted_secret;
 use crate::errors::{SessionError, VaultResult};
 use crate::{
     MAX_SECRET_PAGE_SIZE, SecretId, SecretListItem, SecretPage, SecretType, SecretTypeFilter,
-    StoredRecordPayload, SymmetricKey, VaultCrypto,
+    StoredRecordPayload, SymmetricKey, VaultCrypto, VaultSecretSession,
 };
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
@@ -235,7 +234,7 @@ impl SecretSearchCatalog {
                 outcome.added.0 += 1;
             }
             outcome.changed_bucket_mask |= bucket_mask(id);
-            let mut record = decrypt_encrypted_secret(secrets, crypto, id)?;
+            let mut record = VaultSecretSession::new(secrets, crypto).decrypt(id)?;
             let item = record.list_item();
             record.zeroize_plaintext();
             next.insert(

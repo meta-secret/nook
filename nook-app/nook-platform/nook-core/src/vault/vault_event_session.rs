@@ -134,7 +134,7 @@ impl VaultEventSession {
         let projection = VaultProjection::from_graph(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<StoredSecretRecord> = live.into_values().collect();
-        crate::apply_user_records_to_armored_session(user_records, crypto, state)
+        crate::VaultUserRecordBatch::new(user_records).hydrate(crypto, state)
     }
 
     pub fn members_checkpoint_hash(

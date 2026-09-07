@@ -389,7 +389,7 @@ impl NookVaultManager {
                 continue;
             }
             let mut record =
-                nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)?;
+                nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
             if let SecretValue::Passkey(passkey) = &record.data {
                 passkeys.push((id.clone(), passkey.clone()));
             }
