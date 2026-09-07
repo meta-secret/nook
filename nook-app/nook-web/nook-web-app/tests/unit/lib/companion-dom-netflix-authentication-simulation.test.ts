@@ -114,11 +114,12 @@ function expectFailClosed(html: string): void {
     authenticatorSetupHint: false,
     backupCodesHint: false,
   })
-  if (facts.detailedAdvanceControl.kind !== 'observed') {
+  const detailedAdvanceControl = facts.detailedAdvanceControl
+  if (!detailedAdvanceControl || detailedAdvanceControl.kind !== 'observed') {
     throw new Error('expected a typed Netflix advance-control observation')
   }
   expect(
-    facts.detailedAdvanceControl.observations.some(
+    detailedAdvanceControl.observations.some(
       authentication_advance_control_is_safe,
     ),
   ).toBe(false)
@@ -217,9 +218,11 @@ describe('Netflix DOM-backed authentication simulation', () => {
     })
     expect(authentication_page_observation_facts_priority(facts)).toBe(3)
     expect(facts.ceremony).toMatchObject({
-      sourceOrigin: 'https://www.netflix.com',
-      destinationIdentity: 'https://www.netflix.com/login',
-      implicitSubmissionMethod: 'absent',
+      authenticationContext: {
+        sourceOrigin: 'https://www.netflix.com',
+        destinationIdentity: 'https://www.netflix.com/login',
+      },
+      implicitSubmissionMethod: 'post',
     })
   })
 
