@@ -77,28 +77,45 @@ payloads, authorize handoffs, or choose portable workflow outcomes.
 
 ### Direct Rust composition
 
-Rust tests create real website and extension objects.
-They call one endpoint with the other endpoint's typed result.
+Direct composition preserves these properties:
 
-There is no serialized browser hop in this mode.
-The compiler verifies every relationship between the two sides.
-The test still exercises the production protocol types and endpoint behavior.
+- Rust tests create real website and extension objects.
+- One endpoint receives the other endpoint's typed result.
+- No serialized browser hop exists.
+- The compiler verifies the relationship between both sides.
+- Production protocol types and endpoint behavior remain under test.
 
-The first framework slice proves this shape with real `NookVaultManager`
-instances and a real `NookCompanionExtensionEndpoint`.
-It also tests the portable protocol independently.
+The framework slice proves the shape with real `NookVaultManager` instances.
+It also uses a real `NookCompanionExtensionEndpoint`.
+
+The composition-test slice expands that native evidence:
+
+- The portable matrix covers presence projection, malformed observations,
+  expiry, correlation, capability scope, revocation, app-key mismatch, replay,
+  and unlock correlation.
+- The manager matrix covers successful handoff, pending-secret cleanup, failed
+  sealing, nonce consumption, forged responses, and real app-key mismatch.
 
 ### Independent WASM composition
 
-The two generated WASM modules cannot exchange module-specific object handles.
-Their common JavaScript seam is a Rust-derived structural DTO.
+Independent composition preserves these properties:
 
-Protocol DTOs use `Tsify` for that seam.
-Generated declarations remain the only TypeScript contract.
-No authored TypeScript interface may duplicate the DTO.
+- Module-specific object handles do not cross between WASM packages.
+- A Rust-derived structural DTO is the common JavaScript seam.
+- Protocol DTOs use `Tsify` for that seam.
+- Generated declarations remain the only TypeScript contract.
+- No authored TypeScript interface duplicates a DTO.
 
-An independent-WASM composition test is a follow-up deliverable.
-It must load both generated modules and execute the production endpoint path.
+The composition-test slice adds this generated-package evidence:
+
+- Both generated WASM packages initialize independently.
+- Structural DTOs move directly between them.
+- The flow executes discovery and website begin.
+- It then executes extension authorization, sealing, response admission, and
+  website finish.
+- It exercises malformed input, correlation mismatch, app-key mismatch,
+  replay, and a forged response.
+- It does not use `window` or `chrome.runtime` messaging.
 
 ### Browser delivery
 
@@ -160,17 +177,20 @@ It includes production endpoint objects and focused Rust tests.
 
 It does not migrate browser adapters or claim end-to-end browser coverage.
 
-### Adapter PR
-
-The next PR migrates browser delivery to generated DTOs and Rust admission.
-It removes TypeScript-owned companion decisions from the selected flow.
-Chrome and window messaging remain thin transport implementations.
-
 ### Composition-test PR
 
-The following PR loads both independently generated WASM artifacts.
-It exercises authorize, seal, and finish through the exact production ABI.
-It also adds reusable typed scenario builders for TypeScript tests.
+The second PR expands native scenario matrices around real protocol objects.
+It also loads both independently generated WASM artifacts.
+
+The generated test exercises the production endpoint ABI through structural
+DTO delivery.
+It does not introduce or migrate a browser transport.
+
+### Adapter PR
+
+The third PR migrates browser delivery to generated DTOs and Rust admission.
+It removes TypeScript-owned companion decisions from the selected flow.
+Chrome and window messaging remain thin transport implementations.
 
 ### Workflow-migration PRs
 
@@ -188,6 +208,14 @@ The framework slice is complete when the repository proves these facts:
 - production handoff authorization and sealing share one Rust operation;
 - replay and request mismatch fail closed;
 - generated DTOs carry the cross-WASM contract; and
-- deferred adapter and scenario work is not represented as implemented.
+- deferred adapter work is not represented as implemented.
 
-Later PRs extend this evidence at the generated ABI and browser boundaries.
+The adapter and workflow PRs extend this evidence at browser boundaries.
+
+The composition-test slice adds these evidence obligations:
+
+- native matrices exercise portable and manager-backed outcomes;
+- both generated WASM packages initialize independently;
+- their only connection is direct structural DTO delivery;
+- the production authorize, seal, and finish ABI is exercised; and
+- production browser adapter migration remains deferred.
