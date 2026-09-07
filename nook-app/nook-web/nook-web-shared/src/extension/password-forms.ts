@@ -58,8 +58,7 @@ import {
   formBlocksCredentialDisclosure,
   selectedSubmitterBlocksCredentialDisclosure,
   formSubmissionMethod,
-  FormSubmissionResult,
-  PageControlSubmissionMethod,
+  FormSubmissionResult, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, PageControlSubmissionMethod,
   isRenderedControl,
   observeSubmit,
   ownedFormIdentity,
@@ -407,8 +406,10 @@ export function authenticationPageObservationFacts({
   const advanceControls = scopedAdvanceControls(observation).sort(
     semanticSubmitControlsFirst,
   );
-  const semanticSubmitControlCount =
-    countedSemanticSubmitControls(advanceControls);
+  const semanticSubmitControlCount = Math.min(
+    advanceControls.filter((control) => control.matches(semanticSubmitControlSelector)).length,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  );
   const passkeyControls = findPasskeyControls(controlRoot).filter(
     ({ control }) => {
       const associationRequest: ControlObservationAssociationRequest = {
@@ -638,7 +639,6 @@ export function authenticationPageObservationFacts({
     detailedAdvanceControl,
   };
 }
-
 export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
   const root = document;
   const nookTypedArgs0_10: Parameters<typeof findPasswordFields>[0] = { root };

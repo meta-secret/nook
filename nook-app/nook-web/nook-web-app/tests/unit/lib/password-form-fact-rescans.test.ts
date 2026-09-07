@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
+import { authentication_advance_control_is_safe } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AUTHENTICATION_SUBMIT_VALUE_SOURCE,
   authenticationFactAttributeFilter,
@@ -348,7 +349,7 @@ describe('authentication fact rescans', () => {
     expect(afterRemove.ceremony.oneTimeCodeHandlerSignals).toEqual([])
   })
 
-  test('rescans submission method when a form method attribute changes', () => {
+  test('rescans method while Core keeps unsafe GET fail closed', () => {
     document.body.innerHTML = `
       <form id="login" method="get" action="/auth/login">
         <input autocomplete="username" />
@@ -362,7 +363,16 @@ describe('authentication fact rescans', () => {
       backupCodesHint: false,
     })
     const beforeControl = before.detailedAdvanceControl
-    expect(beforeControl ? beforeControl.kind : 'absent').toBe('absent')
+    expect(beforeControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ submissionMethod: 'get' }],
+    })
+    if (beforeControl.kind !== 'observed' || !beforeControl.observations[0]) {
+      throw new Error('expected transported GET control facts')
+    }
+    expect(
+      authentication_advance_control_is_safe(beforeControl.observations[0]),
+    ).toBe(false)
     document.querySelector('form')?.setAttribute('method', 'post')
     const after = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
@@ -373,9 +383,20 @@ describe('authentication fact rescans', () => {
       kind: 'observed',
       observations: [{ submissionMethod: 'post' }],
     })
+    if (
+      after.detailedAdvanceControl.kind !== 'observed' ||
+      !after.detailedAdvanceControl.observations[0]
+    ) {
+      throw new Error('expected rescanned POST control facts')
+    }
+    expect(
+      authentication_advance_control_is_safe(
+        after.detailedAdvanceControl.observations[0],
+      ),
+    ).toBe(true)
   })
 
-  test('transports GET only for one identifier field approved by Rust', () => {
+  test('transports GET facts only for one identifier field', () => {
     document.body.innerHTML = `
       <form id="login" method="get" action="/auth/login">
         <input id="email" type="email" autocomplete="username" />
