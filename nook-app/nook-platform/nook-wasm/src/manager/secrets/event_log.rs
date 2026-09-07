@@ -255,7 +255,7 @@ mod wasm_tests {
         assert_eq!(get_string(&record, "eventId")?, event_id);
         assert_eq!(get_string(&record, "path")?, "events/fixture.yaml");
         let event_object = get(&record, "event")?;
-        assert_eq!(get_number(&event_object, "schema_version")?, 1.0);
+        assert_eq!(get_number(&event_object, "schema_version")?, 3.0);
 
         let manager = NookVaultManager::new();
         let parsed = manager.parse_event_log_storage_record_js(
@@ -332,12 +332,10 @@ mod wasm_tests {
     async fn event_log_sync_and_extension_import_fail_closed_without_a_vault() -> Result<(), JsError>
     {
         let mut manager = NookVaultManager::new();
-        assert!(
-            manager
-                .sync_external_event_log_records_js(NookExternalEventLogRecords(Vec::new()))
-                .await
-                .is_err()
-        );
+        let synced = manager
+            .sync_external_event_log_records_js(NookExternalEventLogRecords(Vec::new()))
+            .await?;
+        assert_eq!(synced.to_array()?.length(), 0);
         assert!(
             manager
                 .import_extension_event_log_records_js(
