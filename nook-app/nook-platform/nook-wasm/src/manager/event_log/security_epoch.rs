@@ -89,7 +89,8 @@ impl PreparedEpochRotation {
             _ => {}
         }
         for entry in &mut entries {
-            entry.envelope = nook_core::rewrap_password_envelope(&entry.envelope, new_keys)
+            entry.envelope = nook_core::PasswordEnvelopeRewrap::new(&entry.envelope, new_keys)
+                .rewrap()
                 .map_err(|error| NookError::Database(error.to_string()))?;
         }
         Ok(entries)
@@ -484,11 +485,12 @@ impl NookVaultManager {
             IdentityVaultEventId::parse(&self.ensure_causal_event_checkpoint().await?)?;
         let prepared =
             self.prepare_security_epoch_rotation(previous_key_epoch, previous_checkpoint)?;
-        let envelope = nook_core::attach_password_envelope_with_work_factor(
+        let envelope = nook_core::PasswordEnvelopeAttachment::with_work_factor(
             &prepared.new_keys,
             password,
             work_factor.into(),
-        )?;
+        )
+        .attach()?;
 
         let password_entries = self.vault.password_entries.clone();
         let persisted = self
@@ -606,7 +608,8 @@ mod tests {
             "envelope": { "version": 1, "kdf": "scrypt", "work_factor": 10, "ciphertext": "old" }
         }))?;
         let envelope =
-            nook_core::attach_password_envelope_with_work_factor(&keys, "updated", 10.into())?;
+            nook_core::PasswordEnvelopeAttachment::with_work_factor(&keys, "updated", 10.into())
+                .attach()?;
         let entries = PreparedEpochRotation::rewrap_password_entries(
             &[legacy],
             &keys,
@@ -616,7 +619,7 @@ mod tests {
             },
         )?;
         assert_eq!(
-            nook_core::resolve_keys_from_entry(&entries[0], "updated")?,
+            nook_core::PasswordEntryResolution::new(&entries[0], "updated").resolve()?,
             keys
         );
         Ok(())
@@ -630,17 +633,27 @@ mod tests {
         let keep = serde_json::from_value(serde_json::json!({
             "id": "pwdentry001", "label": "Keep", "created_at": "2026-08-15T00:00:00Z",
             "envelope": serde_json::from_str::<serde_json::Value>(
-                &serde_json::to_string(&nook_core::attach_password_envelope_with_work_factor(
-                    &old_keys, "keep-password", 10.into()
-                )?)?
+                &serde_json::to_string(
+                    &nook_core::PasswordEnvelopeAttachment::with_work_factor(
+                        &old_keys,
+                        "keep-password",
+                        10.into(),
+                    )
+                    .attach()?,
+                )?
             )?
         }))?;
         let remove = serde_json::from_value(serde_json::json!({
             "id": "pwdentry002", "label": "Drop", "created_at": "2026-08-15T00:00:00Z",
             "envelope": serde_json::from_str::<serde_json::Value>(
-                &serde_json::to_string(&nook_core::attach_password_envelope_with_work_factor(
-                    &old_keys, "drop-password", 10.into()
-                )?)?
+                &serde_json::to_string(
+                    &nook_core::PasswordEnvelopeAttachment::with_work_factor(
+                        &old_keys,
+                        "drop-password",
+                        10.into(),
+                    )
+                    .attach()?,
+                )?
             )?
         }))?;
         let entries = PreparedEpochRotation::rewrap_password_entries(
@@ -653,7 +666,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].id, "pwdentry001");
         assert_eq!(
-            nook_core::resolve_keys_from_entry(&entries[0], "keep-password")?,
+            nook_core::PasswordEntryResolution::new(&entries[0], "keep-password").resolve()?,
             new_keys
         );
         Ok(())
@@ -663,7 +676,8 @@ mod tests {
     fn password_rotation_rejects_an_unknown_entry() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
         let envelope =
-            nook_core::attach_password_envelope_with_work_factor(&keys, "updated", 10.into())?;
+            nook_core::PasswordEnvelopeAttachment::with_work_factor(&keys, "updated", 10.into())
+                .attach()?;
         let error = PreparedEpochRotation::rewrap_password_entries(
             &[],
             &keys,
