@@ -352,6 +352,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     moduleRoots: [
       'nook-app/nook-platform/nook-companion-wasm',
       'nook-app/nook-platform/nook-wasm',
+      'nook-app/nook-platform/nook-wasm-composition-tests',
     ],
     scopePaths: INTERNAL_API_EXPERT_CONSUMER_SCOPE_PATHS,
     generatedScopePaths: [
@@ -429,6 +430,7 @@ export const MODULE_EXPERT_CATALOG: readonly ModuleExpertProfile[] = [
     publicEntryPoints: [
       'nook-app/nook-platform/nook-companion-wasm/src/lib.rs',
       'nook-app/nook-platform/nook-wasm/src/lib.rs',
+      'nook-app/nook-platform/nook-wasm-composition-tests/src/lib.rs',
     ],
     authorityPaths: [PACKAGE_AUTHORITY_PATH, EXPERT_AUTHORITY_PATH],
     skillPaths: [MODULE_EXPERT_SKILL_PATH, INTERNAL_API_SKILL_PATH],

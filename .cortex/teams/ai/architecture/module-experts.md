@@ -184,7 +184,8 @@ They never gate dispatch, continuation, retry, join, or completion.
 It replaces a narrow WASM-boundary role.
 No separate WASM or bridge expert is allowed.
 
-- **Module roots:** `nook-wasm` and `nook-companion-wasm`.
+- **Module roots:** `nook-wasm`, `nook-companion-wasm`, and
+  `nook-wasm-composition-tests`.
 - **Rust boundary scope:** Every registered portable Rust module root.
   The catalog derives this exact sorted scope from registered module ownership.
 - **Generated output scope:** Both binding directories in `nook-web-shared`.
@@ -192,7 +193,8 @@ No separate WASM or bridge expert is allowed.
   `wasm:build` is sealed, `wasm:build:fast` materializes workspace outputs,
   and `wasm:build:prod` is the production selector.
 - **Consumers:** All Rust or TypeScript modules that cross these boundaries.
-- **Entry points:** Both bridge crates' `src/lib.rs` files.
+- **Entry points:** The bridge crates and their composition-test crate's
+  `src/lib.rs` files.
 - **Skills:** `module-expert` and `internal-api-expert`.
 - **Validation:** `rust:lint`, `web:check`, and `web:test`.
 - **Negative space:** Product invention, presentation design, and module-internal
