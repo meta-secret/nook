@@ -888,7 +888,7 @@ mod tests {
                 &["email", "webauthn"],
                 false,
             )),
-            AuthenticationUsernameEvidence::Generic
+            AuthenticationUsernameEvidence::Absent
         );
         assert_eq!(
             authentication_username_evidence(&field(
