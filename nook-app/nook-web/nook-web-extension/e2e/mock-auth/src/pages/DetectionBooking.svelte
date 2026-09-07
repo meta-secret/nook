@@ -61,8 +61,9 @@
     languageInteraction = BookingAuthInteractionState.Activated
   }
 
-  function activateEmail(event: MouseEvent): void {
-    const control = event.currentTarget
+  function activateEmail(event: SubmitEvent): void {
+    event.preventDefault()
+    const control = event.submitter
     if (!(control instanceof HTMLButtonElement)) return
     primaryActivation =
       BookingAuthMockScenario.nextPrimaryActivation(primaryActivation)
@@ -125,31 +126,38 @@
     <p role="alert">Authentication was not completed.</p>
   {/if}
 
-  <section data-testid="booking-email-surface">
-    <label
-      >Email address<input
-        aria-label="Email address"
-        placeholder="Enter your email address"
-        bind:value={email}
-      /></label
-    >
-    <button onclick={activateEmail}>Continue with email</button>
-  </section>
+  <form data-testid="booking-auth-form" onsubmit={activateEmail}>
+    <section data-testid="booking-email-surface">
+      <label
+        >Email address<input
+          type="email"
+          name="username"
+          autocomplete="username webauthn"
+          aria-label="Email address"
+          placeholder="Enter your email address"
+          bind:value={email}
+        /></label
+      >
+      <button type="submit">Continue with email</button>
+    </section>
 
-  <p>or use one of these options</p>
-  <nav aria-label="Alternative sign-in options">
-    <a href="/social/consent/google" onclick={recordGoogle}
-      >Sign in with Google</a
-    >
-    <a href="/social/consent/apple" onclick={recordApple}>Sign in with Apple</a>
-    <a href="/social/consent/facebook" onclick={recordFacebook}
-      >Sign in with Facebook</a
-    >
-  </nav>
-  <p>
-    Lost access to your email?
-    <a href="/recover" onclick={recordRecovery}>Recover your account</a>
-  </p>
+    <p>or use one of these options</p>
+    <nav aria-label="Alternative sign-in options">
+      <a href="/social/consent/google" onclick={recordGoogle}
+        >Sign in with Google</a
+      >
+      <a href="/social/consent/apple" onclick={recordApple}
+        >Sign in with Apple</a
+      >
+      <a href="/social/consent/facebook" onclick={recordFacebook}
+        >Sign in with Facebook</a
+      >
+    </nav>
+    <p>
+      Lost access to your email?
+      <a href="/recover" onclick={recordRecovery}>Recover your account</a>
+    </p>
+  </form>
   <p data-testid="booking-disclosure">
     By signing in or creating an account, you agree with our
     <a href="/terms" onclick={recordDisclosure}>Terms & Conditions</a> and

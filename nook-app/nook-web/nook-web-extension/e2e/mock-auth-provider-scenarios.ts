@@ -532,20 +532,30 @@ export class MockAuthProviderScenarios {
         )
 
         const surface = page.getByTestId('booking-email-surface')
+        const form = page.getByTestId('booking-auth-form')
         const email = surface.getByLabel('Email address')
         const primary = surface.getByRole('button', {
           name: 'Continue with email',
         })
-        await expect(page.locator('form')).toHaveCount(0)
+        await expect(page.locator('form')).toHaveCount(1)
+        await expect(form).not.toHaveAttribute('method')
+        await expect(form).not.toHaveAttribute('action')
+        await expect(form).toHaveJSProperty('method', 'get')
+        await expect(form).toHaveJSProperty(
+          'action',
+          'https://account.booking.com/sign-in',
+        )
         await expect(surface.locator('input')).toHaveCount(1)
-        await expect(email).not.toHaveAttribute('name')
-        await expect(email).not.toHaveAttribute('type')
-        await expect(email).not.toHaveAttribute('autocomplete')
+        await expect(email).toHaveAttribute('name', 'username')
+        await expect(email).toHaveAttribute('type', 'email')
+        await expect(email).toHaveAttribute('autocomplete', 'username webauthn')
         await expect(email).toHaveAttribute(
           'placeholder',
           'Enter your email address',
         )
-        await expect(primary).not.toHaveAttribute('type')
+        await expect(primary).toHaveAttribute('type', 'submit')
+        await expect(primary).not.toHaveAttribute('formaction')
+        await expect(form.locator('button[type="submit"]')).toHaveCount(1)
         await expect(email).toHaveValue('')
         await expect(page.locator('input[type="password"]')).toHaveCount(0)
         for (const [name, href] of [
@@ -557,14 +567,14 @@ export class MockAuthProviderScenarios {
             'href',
             href,
           )
-          await expect(surface.getByRole('link', { name })).toHaveCount(0)
+          await expect(form.getByRole('link', { name })).toHaveCount(1)
         }
         await expect(
           page.getByRole('link', { name: 'Recover your account' }),
         ).toBeVisible()
         await expect(
-          surface.getByRole('link', { name: 'Recover your account' }),
-        ).toHaveCount(0)
+          form.getByRole('link', { name: 'Recover your account' }),
+        ).toHaveCount(1)
         await expect(page.getByTestId('booking-disclosure')).toBeVisible()
         await expect(
           page.getByRole('link', { name: 'Help and support' }),

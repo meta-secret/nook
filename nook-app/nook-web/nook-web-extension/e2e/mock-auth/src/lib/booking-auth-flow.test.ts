@@ -125,20 +125,23 @@ describe('Booking.com authentication mock', () => {
     expect(bookingTemplate).toEqual({
       id: 'booking',
       quirks: [
-        'formless',
-        'email-field-attributes-unobserved',
-        'provider-alternatives-outside-surface',
-        'account-recovery-outside-surface',
+        'form-method-omitted',
+        'form-action-omitted',
+        'provider-alternatives-inside-form',
+        'account-recovery-inside-form',
       ],
       steps: [
         {
           fields: [
             {
+              type: 'email',
+              name: 'username',
+              autocomplete: 'username webauthn',
               placeholder: 'Enter your email address',
               'aria-label': 'Email address',
             },
           ],
-          submit: { type: 'button', label: 'Continue with email' },
+          submit: { type: 'submit', label: 'Continue with email' },
         },
       ],
     })
