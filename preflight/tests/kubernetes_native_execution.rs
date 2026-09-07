@@ -1,4 +1,4 @@
-use std::{env, fs, mem, path::PathBuf, process::Command};
+use std::{env, fs, mem, path::PathBuf};
 
 use anyhow::Result;
 
