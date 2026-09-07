@@ -599,6 +599,39 @@ mod tests {
     }
 
     #[test]
+    fn linkedin_button_login_uses_existing_combined_credential_policy() {
+        let mut linkedin = AuthenticationAdvanceControlObservation::login_control();
+        linkedin.source_origin = "https://www.linkedin.com".to_owned();
+        linkedin.form_identity.clear();
+        linkedin.destination_identity = "https://www.linkedin.com/login/".to_owned();
+        linkedin.ownership = PageControlOwnership::LocallyScoped;
+        linkedin.semantics = PageControlSemantics::Activation;
+        linkedin.semantic_submit_control_count = 0.into();
+        assert!(authentication_advance_control_is_safe(&linkedin));
+
+        let mut owned_form = linkedin.clone();
+        owned_form.ownership = PageControlOwnership::OwnedForm;
+        assert!(!authentication_advance_control_is_safe(&owned_form));
+        owned_form.form_identity = "login-form".to_owned();
+        assert!(authentication_advance_control_is_safe(&owned_form));
+
+        let mut retention = linkedin.clone();
+        retention.label = "Keep me signed in".to_owned();
+        assert!(!authentication_advance_control_is_safe(&retention));
+
+        let mut cross_origin = linkedin.clone();
+        cross_origin.destination_identity = "https://attacker.example/login/".to_owned();
+        assert!(!authentication_advance_control_is_safe(&cross_origin));
+
+        let mut unowned = linkedin.clone();
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(&unowned));
+
+        linkedin.actionability = PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(&linkedin));
+    }
+
+    #[test]
     fn apple_identity_authorization_signin_requires_the_exact_same_origin_route() {
         let mut control = AuthenticationAdvanceControlObservation::login_control();
         control.source_origin = "https://idmsa.apple.com".to_owned();

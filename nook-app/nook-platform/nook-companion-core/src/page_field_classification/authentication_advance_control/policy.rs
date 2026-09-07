@@ -24,7 +24,14 @@ impl CheckedAuthenticationControl<'_> {
         let observation = self.observation;
         let owned_semantic_submit = authentication_scope_owns_control
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit);
+        let locally_scoped_explicit_activation =
+            matches!(observation.ownership, PageControlOwnership::LocallyScoped)
+                && matches!(observation.semantics, PageControlSemantics::Activation)
+                && AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
+                && AuthenticationRouteIdentity::new(&self.destination.path_identity)
+                    .has_safe_login_identity();
         AuthenticationRouteIdentity::new(&observation.form_identity).indicates_login()
+            || locally_scoped_explicit_activation
             || (owned_semantic_submit
                 && (AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
                     || looks_like_supported_localized_login_control_label(&observation.label)
@@ -35,6 +42,7 @@ impl CheckedAuthenticationControl<'_> {
     pub(super) fn has_unconditional_veto_identity(&self) -> bool {
         let credential_update_destination = self.credential_update_destination();
         let observation = self.observation;
+        let expanded_label = expand_identity_text(&observation.label);
         let primary_oauth_login = matches!(observation.ownership, PageControlOwnership::OwnedForm)
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
@@ -53,7 +61,11 @@ impl CheckedAuthenticationControl<'_> {
                 .indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.label).indicates_destructive_action()
             || AuthenticationRouteIdentity::new(&observation.machine_identity).has_control_veto()
-            || contains_any_word(&expand_identity_text(&observation.label), &["cancel"])
+            || contains_any_word(&expanded_label, &["cancel"])
+            || contains_any_word(
+                &expanded_label,
+                &["keep me signed in", "stay signed in", "remember me"],
+            )
             || AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .has_disallowed_action_or_provider(DestinationPolicy {
                     credential: if credential_update_destination {
