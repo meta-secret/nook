@@ -8,8 +8,8 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
     PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
-    SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultFormatDocument,
-    VaultMetaState, VaultRecordSet, filter_secrets, generate_password, validate_connect,
+    SecretValue, StorageMode, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat,
+    VaultFormatDocument, VaultMetaState, VaultRecordSet, filter_secrets, generate_password,
     validate_secret_data,
 };
 use std::collections::HashMap;
@@ -377,10 +377,14 @@ fn generated_password_can_be_stored_and_reloaded() -> anyhow::Result<()> {
 
 #[test]
 fn connect_validation_matches_ui_rules() -> anyhow::Result<()> {
-    assert!(validate_connect("dropbox", "token").is_err());
-    assert_eq!(validate_connect("local", "ignored")?, None);
+    assert!(StorageMode::parse("dropbox").is_err());
     assert_eq!(
-        validate_connect("github", "  ghp_abc  ")?
+        StorageMode::parse("local")?.validate_connect("ignored")?,
+        None
+    );
+    assert_eq!(
+        StorageMode::parse("github")?
+            .validate_connect("  ghp_abc  ")?
             .ok_or_else(|| io::Error::other("GitHub credential must be returned"))?
             .as_str(),
         "ghp_abc"

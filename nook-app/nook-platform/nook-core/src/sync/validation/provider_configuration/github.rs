@@ -1,3 +1,9 @@
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use std::fmt;
 
 use super::{DEFAULT_GITHUB_REPO_NAME, ValidationError, ValidationResult};
@@ -8,7 +14,11 @@ pub struct GithubPat(String);
 
 impl GithubPat {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        validate_github_pat(raw)
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(ValidationError::GithubPatEmpty);
+        }
+        Ok(Self(trimmed.to_owned()))
     }
 
     #[must_use]
@@ -19,6 +29,24 @@ impl GithubPat {
     #[must_use]
     pub fn into_inner(self) -> String {
         self.0
+    }
+
+    #[must_use]
+    pub fn mask(raw: &str) -> GithubPatMask {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return GithubPatMask::NoToken;
+        }
+        let prefix_len = if trimmed.starts_with("github_pat_") {
+            GITHUB_PAT_FINE_GRAINED_HINT_LEN
+        } else {
+            GITHUB_PAT_CLASSIC_HINT_LEN
+        };
+        if trimmed.chars().count() <= prefix_len {
+            return GithubPatMask::Hint(GITHUB_PAT_FULLY_HIDDEN.to_owned());
+        }
+        let hint: String = trimmed.chars().take(prefix_len).collect();
+        GithubPatMask::Hint(format!("{hint}…"))
     }
 }
 
@@ -56,34 +84,30 @@ const GITHUB_PAT_FULLY_HIDDEN: &str = "••••";
 const GITHUB_PAT_FINE_GRAINED_HINT_LEN: usize = 14;
 const GITHUB_PAT_CLASSIC_HINT_LEN: usize = 10;
 
-/// Mask a stored GitHub PAT for display. Returns a named two-state result so
-/// callers pattern-match on "no token" vs "hint" instead of guessing from a
-/// sentinel string.
-#[must_use]
-pub fn mask_github_pat(pat: &str) -> GithubPatMask {
-    let trimmed = pat.trim();
-    if trimmed.is_empty() {
-        return GithubPatMask::NoToken;
-    }
-    let prefix_len = if trimmed.starts_with("github_pat_") {
-        GITHUB_PAT_FINE_GRAINED_HINT_LEN
-    } else {
-        GITHUB_PAT_CLASSIC_HINT_LEN
-    };
-    if trimmed.chars().count() <= prefix_len {
-        return GithubPatMask::Hint(GITHUB_PAT_FULLY_HIDDEN.to_owned());
-    }
-    let hint: String = trimmed.chars().take(prefix_len).collect();
-    GithubPatMask::Hint(format!("{hint}…"))
-}
-
 /// Validated GitHub repository name (not `owner/name`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct GithubRepoName(String);
 
 impl GithubRepoName {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        validate_github_repo_name(raw)
+        let repo = if raw.trim().is_empty() {
+            DEFAULT_GITHUB_REPO_NAME.to_owned()
+        } else {
+            raw.trim().to_owned()
+        };
+        if repo.len() > 100 {
+            return Err(ValidationError::GithubRepoLength);
+        }
+        if repo == "." || repo == ".." {
+            return Err(ValidationError::GithubRepoInvalid);
+        }
+        if !repo
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        {
+            return Err(ValidationError::GithubRepoChars);
+        }
+        Ok(Self(repo))
     }
 
     #[must_use]
@@ -109,36 +133,6 @@ impl AsRef<str> for GithubRepoName {
     }
 }
 
-pub fn validate_github_pat(pat: &str) -> ValidationResult<GithubPat> {
-    let trimmed = pat.trim();
-    if trimmed.is_empty() {
-        return Err(ValidationError::GithubPatEmpty);
-    }
-    Ok(GithubPat(trimmed.to_owned()))
-}
-
-/// Validates a GitHub repository name (not `owner/name`). Empty uses [`DEFAULT_GITHUB_REPO_NAME`].
-pub fn validate_github_repo_name(name: &str) -> ValidationResult<GithubRepoName> {
-    let repo = if name.trim().is_empty() {
-        DEFAULT_GITHUB_REPO_NAME.to_owned()
-    } else {
-        name.trim().to_owned()
-    };
-    if repo.len() > 100 {
-        return Err(ValidationError::GithubRepoLength);
-    }
-    if repo == "." || repo == ".." {
-        return Err(ValidationError::GithubRepoInvalid);
-    }
-    if !repo
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-    {
-        return Err(ValidationError::GithubRepoChars);
-    }
-    Ok(GithubRepoName(repo))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -146,32 +140,29 @@ mod tests {
     #[test]
     fn validate_github_repo_name_defaults_and_rejects_invalid() -> anyhow::Result<()> {
         assert_eq!(
-            validate_github_repo_name("  ")?.as_str(),
+            GithubRepoName::parse("  ")?.as_str(),
             DEFAULT_GITHUB_REPO_NAME
         );
-        assert_eq!(
-            validate_github_repo_name("work-vault")?.as_str(),
-            "work-vault"
-        );
-        assert!(validate_github_repo_name(".").is_err());
-        assert!(validate_github_repo_name("bad name").is_err());
+        assert_eq!(GithubRepoName::parse("work-vault")?.as_str(), "work-vault");
+        assert!(GithubRepoName::parse(".").is_err());
+        assert!(GithubRepoName::parse("bad name").is_err());
         Ok(())
     }
 
     #[test]
     fn mask_github_pat_named_states() {
-        assert_eq!(mask_github_pat("   "), GithubPatMask::NoToken);
-        assert_eq!(mask_github_pat(""), GithubPatMask::NoToken);
+        assert_eq!(GithubPat::mask("   "), GithubPatMask::NoToken);
+        assert_eq!(GithubPat::mask(""), GithubPatMask::NoToken);
         assert_eq!(
-            mask_github_pat("github_pat_11AAAAAAAAAA"),
+            GithubPat::mask("github_pat_11AAAAAAAAAA"),
             GithubPatMask::Hint("github_pat_11A…".to_owned())
         );
         assert_eq!(
-            mask_github_pat("ghp_1234567890ABCDEF"),
+            GithubPat::mask("ghp_1234567890ABCDEF"),
             GithubPatMask::Hint("ghp_123456…".to_owned())
         );
         assert_eq!(
-            mask_github_pat("ghp_short"),
+            GithubPat::mask("ghp_short"),
             GithubPatMask::Hint("••••".to_owned())
         );
     }

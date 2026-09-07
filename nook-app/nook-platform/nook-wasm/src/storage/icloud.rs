@@ -319,7 +319,7 @@ impl ICloudEventStore<'_> {
     pub(crate) async fn list_icloud_event_ids(&self) -> Result<Vec<String>, NookError> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
-        let token = nook_core::validate_oauth_access_token(web_auth_token)?;
+        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
         let client = Client::new();
         let mut event_ids = Vec::new();
         let mut continuation_marker: Option<String> = None;
@@ -403,7 +403,7 @@ impl ICloudEventStore<'_> {
     ) -> Result<Vec<u8>, NookError> {
         let web_auth_token = self.web_auth_token;
         let target = self.target;
-        let token = nook_core::validate_oauth_access_token(web_auth_token)?;
+        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
         let record_name = Self::icloud_event_record_name(event_id);
         tracing::info!(
             scope = "wasm-icloud",
@@ -547,7 +547,7 @@ impl ICloudEventStore<'_> {
         bytes: &[u8],
     ) -> Result<(), NookError> {
         let web_auth_token = self.web_auth_token;
-        let token = nook_core::validate_oauth_access_token(web_auth_token)?;
+        let token = nook_core::OauthAccessToken::parse(web_auth_token)?;
         let content = str::from_utf8(bytes)
             .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))?;
         let checked = CheckedEventWrite::parse(bytes, event_id, "CloudKit")?;
@@ -872,5 +872,32 @@ mod tests {
             .sanitize(),
             "plain body"
         );
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn empty_icloud_token_is_rejected_before_network_access() -> anyhow::Result<()> {
+        let target = ICloudEventTarget::Private;
+        let store = ICloudEventStore {
+            web_auth_token: "  ",
+            target: &target,
+        };
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        assert!(store.list_icloud_event_ids().await.is_err());
+        assert!(store.fetch_icloud_event(&event_id).await.is_err());
+        assert!(
+            store
+                .put_icloud_event_if_absent(&event_id, b"event: test")
+                .await
+                .is_err()
+        );
+        Ok(())
     }
 }

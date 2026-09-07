@@ -4,7 +4,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
-use crate::{ProviderOauthPreset, ProviderSyncCheckpoint};
+use crate::{DriveBackupName, ProviderOauthPreset, ProviderSyncCheckpoint};
 
 use super::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
@@ -12,8 +12,8 @@ use super::{
     ProviderVaultScope, ReplicationType, StorageMode, StorageProviderData, StorageProviderType,
     StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
     StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
-    ValidationError, ValidationResult, format_drive_storage_ref_raw,
-    provider_replication_capability, storage_mode_for_provider, validate_provider_replication,
+    ValidationError, ValidationResult, provider_replication_capability,
+    validate_provider_replication,
 };
 
 /// Optional connection field interpreted with the persisted whitespace policy.
@@ -115,7 +115,8 @@ impl StorageProviderData {
         let provider_type = provider.provider_type;
         let oauth_preset = provider.oauth_file.as_ref().map(|oauth| oauth.preset);
         let resolved_oauth_preset = oauth_preset;
-        let mode = storage_mode_for_provider(provider_type, resolved_oauth_preset)
+        let mode = provider_type
+            .storage_mode(resolved_oauth_preset)
             .as_str()
             .to_owned();
         match provider_type {
@@ -168,7 +169,7 @@ impl StorageProviderData {
                             ConnectionField(oauth.access_token.as_deref()).non_empty()
                         })
                         .unwrap_or_default(),
-                    repo: format_drive_storage_ref_raw(&storage_id, &file_name),
+                    repo: DriveBackupName::format_storage_ref_raw(&storage_id, &file_name),
                 })
             }
         }
@@ -278,9 +279,7 @@ impl DraftStorageConnection<'_> {
             oauth_file_name,
         } = self;
 
-        let mode = storage_mode_for_provider(provider_type, oauth_preset)
-            .as_str()
-            .to_owned();
+        let mode = provider_type.storage_mode(oauth_preset).as_str().to_owned();
         if provider_type == StorageProviderType::OauthFile {
             let file_name = ConnectionField(oauth_file_name)
                 .non_empty()
@@ -291,7 +290,10 @@ impl DraftStorageConnection<'_> {
                 pat: ConnectionField(oauth_access_token)
                     .non_empty()
                     .unwrap_or_default(),
-                repo: format_drive_storage_ref_raw(oauth_file_id.unwrap_or_default(), &file_name),
+                repo: DriveBackupName::format_storage_ref_raw(
+                    oauth_file_id.unwrap_or_default(),
+                    &file_name,
+                ),
             };
         }
         StorageConnectArgs {

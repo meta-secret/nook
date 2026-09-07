@@ -113,7 +113,7 @@ impl OAuthFileConfigData {
     /// preserving its credentials and stable event filename.
     pub fn bound_google_drive_folder(&self, folder_ref: &str) -> ValidationResult<Self> {
         let config = self;
-        let folder_id = crate::normalize_google_drive_folder_ref(folder_ref)?;
+        let folder_id = crate::GoogleDriveFolderId::parse(folder_ref)?;
         let mut bound = config.clone();
         bound.drive_mode = GoogleDriveMode::Shared;
         bound.folder_id = StoredGoogleDriveFolder::FolderId(folder_id.into_inner());

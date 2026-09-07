@@ -15,12 +15,12 @@ pub fn default_drive_backup_name() -> String {
 
 #[wasm_bindgen]
 pub fn format_drive_storage_ref(file_id: &str, file_name: &str) -> String {
-    nook_core::format_drive_storage_ref_raw(file_id, file_name)
+    nook_core::DriveBackupName::format_storage_ref_raw(file_id, file_name)
 }
 
 #[wasm_bindgen]
 pub fn format_new_drive_storage_ref(file_name: &str) -> String {
-    nook_core::format_drive_storage_ref_raw("", file_name)
+    nook_core::DriveBackupName::format_storage_ref_raw("", file_name)
 }
 
 #[wasm_bindgen]
@@ -29,11 +29,10 @@ pub fn wasm_storage_mode_for_provider(
     provider_type: nook_core::StorageProviderType,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(
-        nook_core::storage_mode_for_provider(provider_type, Some(oauth_preset))
-            .as_str()
-            .to_owned(),
-    )
+    Ok(provider_type
+        .storage_mode(Some(oauth_preset))
+        .as_str()
+        .to_owned())
 }
 
 #[wasm_bindgen]
@@ -43,11 +42,7 @@ pub fn provider_default_label(
     detail: &str,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::sync_provider_default_label(
-        provider_type,
-        Some(detail),
-        Some(oauth_preset),
-    ))
+    Ok(provider_type.default_label(Some(detail), Some(oauth_preset)))
 }
 
 #[wasm_bindgen]
@@ -56,31 +51,19 @@ pub fn provider_default_label_without_detail(
     provider_type: nook_core::StorageProviderType,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::sync_provider_default_label(
-        provider_type,
-        None,
-        Some(oauth_preset),
-    ))
+    Ok(provider_type.default_label(None, Some(oauth_preset)))
 }
 
 #[wasm_bindgen]
 pub fn staged_local_provider_label(
     provider_type: nook_core::StorageProviderType,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::sync_provider_default_label(
-        provider_type,
-        None,
-        None,
-    ))
+    Ok(provider_type.default_label(None, None))
 }
 
 #[wasm_bindgen]
 pub fn staged_github_provider_label(github_repo: &str) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::sync_provider_default_label(
-        StorageProviderType::Github,
-        Some(github_repo),
-        None,
-    ))
+    Ok(StorageProviderType::Github.default_label(Some(github_repo), None))
 }
 
 #[wasm_bindgen]
@@ -88,20 +71,12 @@ pub fn staged_configured_oauth_provider_label(
     oauth_file_name: &str,
     oauth_preset: nook_core::OauthFilePreset,
 ) -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::sync_provider_default_label(
-        StorageProviderType::OauthFile,
-        Some(oauth_file_name),
-        Some(oauth_preset),
-    ))
+    Ok(StorageProviderType::OauthFile.default_label(Some(oauth_file_name), Some(oauth_preset)))
 }
 
 #[wasm_bindgen]
 pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::sync_provider_default_label(
-        StorageProviderType::OauthFile,
-        None,
-        None,
-    ))
+    Ok(StorageProviderType::OauthFile.default_label(None, None))
 }
 
 #[cfg(test)]

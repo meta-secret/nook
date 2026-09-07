@@ -102,7 +102,7 @@ pub(crate) async fn create_shared_vault_folder(
     access_token: &str,
     name: &str,
 ) -> Result<(String, String), NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token)?;
+    let token = nook_core::OauthAccessToken::parse(access_token)?;
     let folder_name = shared_folder_name(name);
     let client = Client::new();
     let response = client
@@ -133,7 +133,7 @@ pub(crate) async fn share_folder_with_email(
     folder_id: &str,
     email: &str,
 ) -> Result<(), NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token)?;
+    let token = nook_core::OauthAccessToken::parse(access_token)?;
     let folder_id = folder_id.trim();
     let email = email.trim();
     if folder_id.is_empty() {
@@ -180,8 +180,8 @@ pub(crate) async fn verify_shared_vault_folder(
     access_token: &str,
     folder_ref: &str,
 ) -> Result<(String, String), NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token)?;
-    let folder_id = nook_core::normalize_google_drive_folder_ref(folder_ref)?;
+    let token = nook_core::OauthAccessToken::parse(access_token)?;
+    let folder_id = nook_core::GoogleDriveFolderId::parse(folder_ref)?;
     let client = Client::new();
     let url = format!(
         "https://www.googleapis.com/drive/v3/files/{}",

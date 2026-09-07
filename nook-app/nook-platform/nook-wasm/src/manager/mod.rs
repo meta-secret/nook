@@ -411,11 +411,7 @@ mod tests {
         manager.storage.remote_path = "vault.yaml".to_owned();
         assert_eq!(
             manager.local_cache_ref(),
-            nook_core::format_sync_provider_cache_ref(
-                StorageMode::Github,
-                "owner/repo",
-                "vault.yaml"
-            )
+            StorageMode::Github.cache_ref("owner/repo", "vault.yaml")
         );
     }
 
@@ -522,11 +518,9 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn local_cache_ref(&self) -> String {
-        nook_core::format_sync_provider_cache_ref(
-            self.storage.mode,
-            &self.storage.remote_ref,
-            &self.storage.remote_path,
-        )
+        self.storage
+            .mode
+            .cache_ref(&self.storage.remote_ref, &self.storage.remote_path)
     }
 
     pub(crate) fn device_identity(&self) -> Result<nook_core::DeviceIdentity, NookError> {
@@ -688,8 +682,8 @@ impl NookVaultManager {
                 self.storage.icloud_event_target = ICloudEventTarget::Private;
             }
             StorageMode::Github => {
-                self.storage.access_token = nook_core::validate_github_pat(github_pat)?.to_string();
-                let repo_name = nook_core::validate_github_repo_name(github_repo_name)?;
+                self.storage.access_token = nook_core::GithubPat::parse(github_pat)?.to_string();
+                let repo_name = nook_core::GithubRepoName::parse(github_repo_name)?;
                 let _ = self.status.tx.send("GITHUB_USER_FETCH".to_owned());
                 let username = fetch_github_username(&self.storage.access_token).await?;
                 let new_repo = format!("{}/{}", username, repo_name);
@@ -706,9 +700,9 @@ impl NookVaultManager {
             }
             StorageMode::GoogleDrive => {
                 self.storage.access_token =
-                    nook_core::validate_oauth_access_token(github_pat)?.to_string();
+                    nook_core::OauthAccessToken::parse(github_pat)?.to_string();
                 let (known_file_id, file_name) =
-                    nook_core::parse_drive_storage_ref(github_repo_name)?;
+                    nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
                 self.storage.drive_event_parent = DriveEventParent::from_storage_id(&known_file_id);
                 self.storage.remote_path = file_name.to_string();
                 let _ = self.status.tx.send("DRIVE_VERIFY".to_owned());
@@ -722,9 +716,9 @@ impl NookVaultManager {
             }
             StorageMode::ICloud => {
                 self.storage.access_token =
-                    nook_core::validate_oauth_access_token(github_pat)?.to_string();
+                    nook_core::OauthAccessToken::parse(github_pat)?.to_string();
                 let (known_target, file_name) =
-                    nook_core::parse_drive_storage_ref(github_repo_name)?;
+                    nook_core::DriveBackupName::parse_storage_ref(github_repo_name)?;
                 self.storage.remote_path = file_name.to_string();
                 self.storage.icloud_event_target =
                     ICloudEventTarget::from_storage_id(&known_target)?;

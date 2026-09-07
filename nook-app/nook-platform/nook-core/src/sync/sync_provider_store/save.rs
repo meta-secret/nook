@@ -17,7 +17,7 @@ use crate::{
     OauthFilePreset, ProviderSyncCheckpoint, ProviderVaultScope, StorageProviderType,
     StoredGithubPat, StoredGithubRepository, StoredGoogleDriveFolder,
     StoredLocalFolderConfiguration, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
-    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, sync_provider_default_label,
+    StoredOAuthRemoteFileName, StoredOAuthTokenExpiry,
 };
 
 use super::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
@@ -132,7 +132,7 @@ impl ProviderSaveRequest {
         match provider_type {
             StorageProviderType::Local => Ok(request.provider_defaults(ProviderRowDefaults {
                 provider_type,
-                label: sync_provider_default_label(provider_type, None, None),
+                label: provider_type.default_label(None, None),
             })),
             StorageProviderType::Github => {
                 let repo = ConfigurationText(&request.github_repo)
@@ -140,7 +140,7 @@ impl ProviderSaveRequest {
                     .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: sync_provider_default_label(provider_type, Some(repo), None),
+                    label: provider_type.default_label(Some(repo), None),
                 });
                 provider.github_pat = StoredGithubPat::Token(request.github_pat.trim().to_owned());
                 provider.github_repo = StoredGithubRepository::Repository(repo.to_owned());
@@ -162,11 +162,8 @@ impl ProviderSaveRequest {
                 oauth.file_name = StoredOAuthRemoteFileName::FileName(drive_file.clone());
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: sync_provider_default_label(
-                        provider_type,
-                        Some(&drive_file),
-                        Some(request.oauth_preset),
-                    ),
+                    label: provider_type
+                        .default_label(Some(&drive_file), Some(request.oauth_preset)),
                 });
                 provider.oauth_file = StoredOAuthFileConfiguration::Configured(oauth);
                 Ok(provider)
@@ -182,7 +179,7 @@ impl ProviderSaveRequest {
                     .and_then(|value| ConfigurationText(value).non_empty());
                 let mut provider = request.provider_defaults(ProviderRowDefaults {
                     provider_type,
-                    label: sync_provider_default_label(provider_type, detail, None),
+                    label: provider_type.default_label(detail, None),
                 });
                 provider.local_folder = request.local_folder.clone();
                 Ok(provider)
@@ -343,7 +340,7 @@ impl ProviderSaveRequest {
         {
             providers.push(request.provider_defaults(ProviderRowDefaults {
                 provider_type: StorageProviderType::Local,
-                label: sync_provider_default_label(StorageProviderType::Local, None, None),
+                label: StorageProviderType::Local.default_label(None, None),
             }));
         } else if let Some(local_provider) = local_provider {
             for provider in &mut providers {

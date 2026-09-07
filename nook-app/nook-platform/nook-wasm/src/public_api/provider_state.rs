@@ -114,12 +114,9 @@ pub fn existing_vault_provider_readiness(
     oauth_file_configured: bool,
     local_folder_configured: bool,
 ) -> NookExistingVaultProviderReadiness {
-    nook_core::existing_vault_provider_readiness(
-        provider_type,
-        oauth_file_configured,
-        local_folder_configured,
-    )
-    .into()
+    provider_type
+        .readiness(oauth_file_configured, local_folder_configured)
+        .into()
 }
 
 #[wasm_bindgen]
@@ -422,7 +419,7 @@ pub fn draft_local_storage_args() -> NookStorageConnectArgs {
 #[allow(clippy::needless_pass_by_value)]
 pub fn mask_github_pat_hint(pat: nook_core::StoredGithubPat) -> NookGithubPatHint {
     NookGithubPatHint::new(
-        match nook_core::mask_github_pat(pat.as_deref().unwrap_or_default()) {
+        match nook_core::GithubPat::mask(pat.as_deref().unwrap_or_default()) {
             GithubPatMask::NoToken => None,
             GithubPatMask::Hint(hint) => Some(hint),
         },
