@@ -846,4 +846,27 @@ mod tests {
         assert!(manager.event_log.key_epoch.is_empty());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn local_outbox_queue_is_noop_without_a_provider_and_persists_with_one()
+    -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::Local;
+        let event_id = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+
+        manager
+            .queue_event_outbox_for_current_provider(&event_id, b"no provider")
+            .await?;
+        manager.sync_outbox.provider_id = "local-outbox-test".to_owned();
+        manager
+            .queue_event_outbox_for_current_provider(&event_id, b"queued")
+            .await?;
+        assert_eq!(
+            load_outbox("local-outbox-test").await?,
+            vec![(event_id.to_string(), b"queued".to_vec())]
+        );
+        remove_outbox_entry("local-outbox-test", event_id.as_str()).await?;
+        assert!(load_outbox("local-outbox-test").await?.is_empty());
+        Ok(())
+    }
 }
