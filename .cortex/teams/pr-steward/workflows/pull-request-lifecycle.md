@@ -127,6 +127,22 @@ has required `kind`, `id`, `time`, `githubEvent`, and `deliveryId` fields. It
 may include `action`, `repository`, `pullRequest`, and `headSha`. The original
 webhook body and credential material never appear in output.
 
+### Live reactive pipeline canary
+
+This staged canary proves that one active PR can reach its assigned Steward.
+
+1. Confirm the scoped credential file and exact pull-request number exist.
+2. Start the documented direct Bun subscription in the foreground PTY.
+3. Poll the child PTY with reads bounded to at most five seconds.
+   - Poll only the local foreground PTY and NATS stream, never GitHub.
+   - Return to reasoning after each read and notify Gizmo when matching NDJSON
+     arrives.
+4. Correlate its `deliveryId` across GitHub, Argo, and the NATS envelope.
+5. Have PR Steward send the bounded matching notification to Gizmo.
+6. Have Gizmo perform a bounded direct GitHub reconciliation.
+7. After terminal state, send Ctrl-C to the same PTY.
+   - Require the NATS drain and process exit to complete with status zero.
+
 ## Validation
 
 - Every external mutation used the packet's repository, pull request, and
