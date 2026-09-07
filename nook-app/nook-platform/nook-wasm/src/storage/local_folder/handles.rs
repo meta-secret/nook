@@ -714,7 +714,11 @@ mod tests {
         for (lookup, expected) in [(ChildLookup::Existing, false), (ChildLookup::Create, true)] {
             let options = lookup.options()?;
             assert_eq!(
-                Reflect::get(&options, &JsString::from("create"))?
+                Reflect::get(&options, &JsString::from("create"))
+                    .map_err(|error| {
+                        FolderFailure::new(&error.unchecked_into())
+                            .into_error("Could not read options object")
+                    })?
                     .as_bool()
                     .unwrap_or_default(),
                 expected
