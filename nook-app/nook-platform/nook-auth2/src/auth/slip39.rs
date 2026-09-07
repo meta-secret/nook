@@ -27,7 +27,7 @@ mod mnemonic;
 mod polynomial;
 
 use cipher::MasterSecretCipher;
-use mnemonic::{Share, WordList};
+use mnemonic::Share;
 use polynomial::{RandomBytes, RawShare, SecretPolynomial};
 
 const EXTENDABLE_CUSTOMIZATION: &[u8] = b"shamir_extendable";
@@ -116,6 +116,7 @@ impl<'a> SentinelSecretRecoveryRequest<'a> {
         }
     }
 
+    #[cfg(test)]
     #[must_use]
     pub(crate) fn with_passphrase(mnemonics: &'a [String], passphrase: &'a [u8]) -> Self {
         Self {
@@ -225,6 +226,7 @@ impl AdmittedQuorum {
 mod tests {
     use std::io;
 
+    use super::mnemonic::WordList;
     use super::*;
 
     // Official current vectors from SatoshiLabs python-shamir-mnemonic
