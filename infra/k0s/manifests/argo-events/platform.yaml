@@ -11,9 +11,11 @@ metadata:
   name: default
   namespace: argo-events
 spec:
-  jetstream:
-    version: 2.10.29
-    replicas: 3
+  jetstreamExotic:
+    url: nats://eventbus-default-js-svc.argo-events.svc:4222
+    accessSecret:
+      name: jetstream-argo-client
+      key: auth
     streamConfig: |
       maxMsgs: 1000
       maxAge: 24h
@@ -22,34 +24,7 @@ spec:
       duplicates: 300s
       retention: 0
       discard: 0
-    settings: |
-      max_memory_store: 128MB
-      max_file_store: 256MB
-    persistence:
-      storageClassName: argo-events-jetstream-local-retain
-      accessMode: ReadWriteOnce
-      volumeSize: 1Gi
-    containerTemplate:
-      resources:
-        requests:
-          cpu: 50m
-          memory: 64Mi
-        limits:
-          cpu: 500m
-          memory: 256Mi
-    reloaderContainerTemplate:
-      resources:
-        requests:
-          cpu: 10m
-          memory: 16Mi
-        limits:
-          cpu: 100m
-          memory: 64Mi
-    metricsContainerTemplate:
-      resources:
-        requests:
-          cpu: 10m
-          memory: 16Mi
-        limits:
-          cpu: 100m
-          memory: 64Mi
+    tls:
+      caCertSecret:
+        name: jetstream-server
+        key: ca-cert

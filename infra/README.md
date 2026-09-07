@@ -81,6 +81,9 @@ task infra:webhook-ingress:status
 task infra:webhook-ingress:smoke
 task infra:webhook-ingress:hook:register
 task infra:webhook-ingress:hook:ping
+task infra:webhook-ingress:jetstream:wss:smoke
+task infra:webhook-ingress:jetstream:pr-steward:sync
+task infra:webhook-ingress:jetstream:pr-steward:rotate
 
 # Install or reconcile one reviewed OVH worker through provider API, host
 # bootstrap, authenticated mesh, k0s, BuildKit, and ARC readiness.
@@ -109,6 +112,31 @@ remote deployment directory. The default target is
 registry credentials when needed and never copies them into the repository. The
 containing `secrets/` directory is mode `0700`; credential files are mode
 `0600`.
+
+The webhook ingress owns one three-replica persistent JetStream cluster. Argo
+Events connects to it with `jetstreamExotic`; it does not create another NATS
+deployment. `events.dev.nokey.sh` exposes only the native NATS WebSocket
+listener through Traefik HTTPS 443. The client, cluster, and monitoring ports
+remain private Kubernetes ports. The PR Steward credential is stored only at
+`$INFRA_REMOTE_DIR/secrets/jetstream/pr-steward-client.yaml` on the
+infrastructure host and in the `jetstream-pr-steward-client` Kubernetes Secret.
+Run the sync task to atomically copy it to the developer machine at
+`~/.nook/events/pr-steward-client.yaml` with directory mode `0700` and file mode
+`0600`. An AI consumer can set the narrowly scoped
+`NOOK_PR_STEWARD_CREDENTIAL_FILE` override to select another absolute private
+path. Use the rotation task above to replace the remote identity, restart the
+server cluster, and then rerun the sync task. See
+the [repository-managed JetStream contract](../.cortex/teams/sre/design-docs/repository-managed-jetstream.md)
+for ownership, permissions, rotation, and removal.
+
+JetStream persistence belongs to the ingress platform. PR Steward agents use
+Core NATS live fan-out on the exact lifecycle subject without a durable
+consumer; disconnected agents may miss events, and Gizmo performs final GitHub
+reconciliation before action.
+
+JetStream configuration and credential changes take effect through controlled
+StatefulSet rolling restarts. The NATS and metrics containers have separate
+non-root identities and process namespaces; only NATS mounts server secrets.
 
 `task infra:sccache:credential:sync` copies the bucket-scoped build keys into
 `~/.nook/cache/` (shared across checkouts; never into the repo), then upserts
