@@ -18,23 +18,29 @@ import {
   ClaudeAuthFormMethod,
   ClaudeAuthInteractionState,
 } from './mock-auth/src/lib/claude-auth-flow'
+import {
+  TeslaAuthControl,
+  TeslaAuthEmailMatch,
+  TeslaAuthInteractionState,
+  TeslaAuthPrimaryActivationState,
+} from './mock-auth/src/lib/tesla-auth-flow'
 
-enum BookingSubmissionEvidencePollKind {
+enum SubmissionEvidencePollKind {
   Absent = 'absent',
   Present = 'present',
 }
 
-type BookingSubmissionEvidencePollState =
-  | { readonly kind: BookingSubmissionEvidencePollKind.Absent }
+type SubmissionEvidencePollState =
+  | { readonly kind: SubmissionEvidencePollKind.Absent }
   | {
-      readonly kind: BookingSubmissionEvidencePollKind.Present
+      readonly kind: SubmissionEvidencePollKind.Present
       readonly value: string
     }
 
-type BookingSubmissionEvidencePollRequest = {
+type SubmissionEvidencePollRequest = {
   readonly key: string
-  readonly absentKind: BookingSubmissionEvidencePollKind.Absent
-  readonly presentKind: BookingSubmissionEvidencePollKind.Present
+  readonly absentKind: SubmissionEvidencePollKind.Absent
+  readonly presentKind: SubmissionEvidencePollKind.Present
 }
 
 export class MockAuthProviderScenarios {
@@ -44,6 +50,7 @@ export class MockAuthProviderScenarios {
     this.registerNetflix()
     this.registerClaude()
     this.registerBooking()
+    this.registerTesla()
   }
 
   private static registerAmazon(): void {
@@ -611,8 +618,8 @@ export class MockAuthProviderScenarios {
         await expect
           .poll(() =>
             page.evaluate<
-              BookingSubmissionEvidencePollState,
-              BookingSubmissionEvidencePollRequest
+              SubmissionEvidencePollState,
+              SubmissionEvidencePollRequest
             >(
               ({ key, absentKind, presentKind }) => {
                 for (const [entryKey, value] of Object.entries(
@@ -626,13 +633,13 @@ export class MockAuthProviderScenarios {
               },
               {
                 key: 'booking-submission-evidence',
-                absentKind: BookingSubmissionEvidencePollKind.Absent,
-                presentKind: BookingSubmissionEvidencePollKind.Present,
+                absentKind: SubmissionEvidencePollKind.Absent,
+                presentKind: SubmissionEvidencePollKind.Present,
               },
             ),
           )
           .toEqual({
-            kind: BookingSubmissionEvidencePollKind.Present,
+            kind: SubmissionEvidencePollKind.Present,
             value: JSON.stringify({
               submittedControl: BookingAuthControl.ContinueWithEmail,
               emailMatch: BookingAuthEmailMatch.Matched,
@@ -648,6 +655,140 @@ export class MockAuthProviderScenarios {
             }),
           })
         expect(interceptedBookingRequestCount).toBeGreaterThan(1)
+        await page.close()
+      } finally {
+        await paired.context.close()
+        await mockAuth.close()
+      }
+    })
+  }
+
+  private static registerTesla(): void {
+    test('fills Tesla Email and activates only Next', async ({
+      browserName,
+    }, testInfo) => {
+      test.skip(
+        browserName !== 'chromium',
+        'Chrome extensions require Chromium',
+      )
+      const mockAuth = await startMockAuthServer()
+      const paired = await launchPairedPinExtension(testInfo, {
+        vaultName: 'Mock Tesla auth vault',
+      })
+      try {
+        await saveVaultLogin(
+          paired.vaultPage,
+          'https://auth.tesla.com',
+          'alice@nook.test',
+          'extension-fill-password',
+        )
+        const page = await paired.context.newPage()
+        let interceptedTeslaRequestCount = 0
+        const forbiddenAuthenticationRequests: string[] = []
+        page.on('request', (request) => {
+          const url = request.url()
+          if (
+            /hcaptcha\.com|captcha|accounts\.google|appleid|facebook/u.test(url)
+          ) {
+            forbiddenAuthenticationRequests.push(url)
+          }
+        })
+        await page.route('https://auth.tesla.com/**', async (route) => {
+          interceptedTeslaRequestCount += 1
+          const requestedUrl = new URL(route.request().url())
+          const localResponse = await page.request.get(
+            `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+          )
+          await route.fulfill({ response: localResponse })
+        })
+        const teslaUrl = 'https://auth.tesla.com/oauth2/v1/authorize'
+        await page.goto(teslaUrl)
+        expect(interceptedTeslaRequestCount).toBeGreaterThan(0)
+        await expect(page).toHaveURL(teslaUrl)
+        await expect(page).toHaveTitle('Tesla Auth - Sign In')
+        await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+          'tesla-email-first',
+        )
+
+        const form = page.getByTestId('tesla-auth-form')
+        const email = form.getByLabel('Email')
+        const next = form.getByRole('button', { name: 'Next' })
+        await expect(page.locator('form')).toHaveCount(1)
+        await expect(form).not.toHaveAttribute('method')
+        await expect(form).not.toHaveAttribute('action')
+        await expect(form).toHaveJSProperty('method', 'get')
+        await expect(form).toHaveJSProperty('action', teslaUrl)
+        await expect(form.locator('input')).toHaveCount(1)
+        await expect(email).not.toHaveAttribute('type')
+        await expect(email).toHaveJSProperty('type', 'text')
+        await expect(email).toHaveAttribute('name', 'identity')
+        await expect(email).toHaveAttribute('autocomplete', 'email webauthn')
+        await expect(email).toHaveValue('')
+        await expect(next).toHaveAttribute('type', 'submit')
+        await expect(next).not.toHaveAttribute('formaction')
+        await expect(next).toBeDisabled()
+        await expect(form.locator('button[type="submit"]')).toHaveCount(1)
+        await expect(page.locator('input[type="password"]')).toHaveCount(0)
+        await expect(page.getByText('Trouble Signing In?')).toBeVisible()
+        await expect(
+          page.getByRole('button', { name: 'Create Account' }),
+        ).toHaveAttribute('type', 'button')
+        await expect(
+          page.getByRole('button', { name: 'Select Language' }),
+        ).toBeVisible()
+        await expect(
+          page.getByRole('link', { name: 'Tesla home' }),
+        ).toBeVisible()
+        await expect(page.getByRole('link', { name: 'Privacy' })).toBeVisible()
+        await expect(page.getByRole('link', { name: 'Contact' })).toBeVisible()
+        await expect(page.getByText('hCaptcha')).toHaveCount(0)
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        await expect
+          .poll(() =>
+            page.evaluate<
+              SubmissionEvidencePollState,
+              SubmissionEvidencePollRequest
+            >(
+              ({ key, absentKind, presentKind }) => {
+                for (const [entryKey, value] of Object.entries(
+                  sessionStorage,
+                )) {
+                  if (entryKey === key) {
+                    return { kind: presentKind, value }
+                  }
+                }
+                return { kind: absentKind }
+              },
+              {
+                key: 'tesla-submission-evidence',
+                absentKind: SubmissionEvidencePollKind.Absent,
+                presentKind: SubmissionEvidencePollKind.Present,
+              },
+            ),
+          )
+          .toEqual({
+            kind: SubmissionEvidencePollKind.Present,
+            value: JSON.stringify({
+              submittedControl: TeslaAuthControl.Next,
+              emailMatch: TeslaAuthEmailMatch.Matched,
+              primaryActivation: TeslaAuthPrimaryActivationState.Activated,
+              troubleInteraction: TeslaAuthInteractionState.Untouched,
+              createAccountInteraction: TeslaAuthInteractionState.Untouched,
+              languageInteraction: TeslaAuthInteractionState.Untouched,
+              homeInteraction: TeslaAuthInteractionState.Untouched,
+              privacyInteraction: TeslaAuthInteractionState.Untouched,
+              contactInteraction: TeslaAuthInteractionState.Untouched,
+            }),
+          })
+        expect(interceptedTeslaRequestCount).toBeGreaterThan(1)
+        expect(forbiddenAuthenticationRequests).toEqual([])
         await page.close()
       } finally {
         await paired.context.close()

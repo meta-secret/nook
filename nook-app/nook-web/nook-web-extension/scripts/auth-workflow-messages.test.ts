@@ -128,6 +128,52 @@ describe('authentication workflow snapshot messages', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
   })
 
+  test('accepts WebAuthn email evidence from the generated WASM contract', () => {
+    const observation = validMessage.payload.observations[0]
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...observation,
+              ceremony: {
+                ...observation.ceremony,
+                authenticationContext: {
+                  ...observation.ceremony.authenticationContext,
+                  authenticationUsername: 'web-authn-email',
+                },
+              },
+              detailedAdvanceControl: {
+                kind: 'observed',
+                observations: [
+                  {
+                    actionability: 'actionable',
+                    ownership: 'owned-form',
+                    semantics: 'semantic-submit',
+                    authenticationUsername: 'web-authn-email',
+                    passwordFieldCount: 0,
+                    newPasswordFieldCount: 0,
+                    oneTimeCodeFieldCount: 0,
+                    semanticSubmitControlCount: 1,
+                    sourceOrigin: 'https://auth.tesla.com',
+                    formIdentity: '',
+                    destinationIdentity:
+                      'https://auth.tesla.com/oauth2/v1/authorize',
+                    label: 'Next',
+                    submissionMethod: 'get',
+                    submissionDestinationSource: 'omitted',
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(true)
+  })
+
   test('rejects invalid or oversized recovery copy', () => {
     const observation = validMessage.payload.observations[0]
     for (const backupCodesCopy of [42, 'x'.repeat(129)]) {

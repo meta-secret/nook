@@ -19,6 +19,7 @@
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
   import DetectionSignup from './pages/DetectionSignup.svelte'
   import DetectionSpa from './pages/DetectionSpa.svelte'
+  import DetectionTesla from './pages/DetectionTesla.svelte'
   import DetectionX from './pages/DetectionX.svelte'
   import DetectionXRedirect from './pages/DetectionXRedirect.svelte'
   import NotFound from './pages/NotFound.svelte'
@@ -63,6 +64,10 @@
   const isBookingLogin = $derived(
     location.hostname === 'account.booking.com' && pathname === '/sign-in',
   )
+  const isTeslaLogin = $derived(
+    location.hostname === 'auth.tesla.com' &&
+      pathname === '/oauth2/v1/authorize',
+  )
 </script>
 
 <svelte:window onpopstate={syncPath} />
@@ -93,6 +98,8 @@
   <DetectionClaude />
 {:else if isBookingLogin}
   <DetectionBooking />
+{:else if isTeslaLogin}
+  <DetectionTesla />
 {:else if pathname === '/login' || pathname === '/linkedin'}
   <DetectionLogin />
 {:else if pathname === '/signup'}
