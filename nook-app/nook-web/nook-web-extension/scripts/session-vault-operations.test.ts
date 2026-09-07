@@ -16,7 +16,10 @@ import {
   type ImportExtensionVaultDependencies,
   type ImportExtensionVaultWithDependenciesArgs,
 } from '../src/offscreen/session-vault-operations'
-import type { CompanionExtensionPresence } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  CompanionExtensionPresence,
+  CompanionIdentityDiscoveryObservation,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ImportManagerState = {
   protection: DeviceProtectionStatus
@@ -305,6 +308,15 @@ class CompanionVaultDiscoveryScenario {
     },
   } satisfies CompanionExtensionPresence
 
+  private readonly discovery = {
+    request: {
+      requestId: 'request',
+      vaultStoreId: 'vault',
+      expiresAt: 200,
+    },
+    observedAt: 100,
+  } satisfies CompanionIdentityDiscoveryObservation
+
   private readonly activeManager = {
     open_extension_passkey_vault_js: this.openVault.bind(this),
   } as NookVaultManager
@@ -339,12 +351,15 @@ class CompanionVaultDiscoveryScenario {
   }
 
   discover() {
-    const companionDiscovery = new CompanionVaultDiscovery({
+    const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
       activeManager: this.activeManager,
       endpoint: this.endpoint,
       presence: this.presence,
-    })
-    return companionDiscovery.discover({})
+    }
+    const companionDiscovery = new CompanionVaultDiscovery(
+      companionDiscoveryArgs,
+    )
+    return companionDiscovery.discover(this.discovery)
   }
 }
 

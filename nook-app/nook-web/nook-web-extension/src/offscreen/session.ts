@@ -28,7 +28,11 @@ import {
   type SessionOperationContext,
 } from './session-operations'
 import { CompanionVaultDiscovery } from './session-vault-operations'
-import type { CompanionExtensionPresence } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  CompanionExtensionPresence,
+  CompanionIdentityDiscoveryObservation,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -271,14 +275,18 @@ async function handleCompanionIdentityDiscovery(
     // Construction above is the Rust-owned validation boundary for this
     // generated presence projection.
     const presence = message.payload.presence as CompanionExtensionPresence
-    const companionDiscovery = new CompanionVaultDiscovery({
+    const discovery = message.payload
+      .discovery as CompanionIdentityDiscoveryObservation
+    const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
       activeManager,
       endpoint,
       presence,
-    })
-    const status: CompanionIdentityStatus = await companionDiscovery.discover(
-      message.payload.discovery,
+    }
+    const companionDiscovery = new CompanionVaultDiscovery(
+      companionDiscoveryArgs,
     )
+    const status: CompanionIdentityStatus =
+      await companionDiscovery.discover(discovery)
     if (status.status !== 'unlocked') releaseCompanionEndpoint()
     return { ok: true, status }
   } catch (error) {

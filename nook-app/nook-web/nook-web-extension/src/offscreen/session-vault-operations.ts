@@ -11,7 +11,10 @@ import type {
   NookCompanionExtensionEndpoint,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { CompanionExtensionPresence } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import type {
+  CompanionExtensionPresence,
+  CompanionIdentityDiscoveryObservation,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { scrubProviderCredentials } from '../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import type { ExtensionSessionRequest } from './session-request-adapter'
@@ -209,7 +212,9 @@ export async function openPasskeyVault({
 export class CompanionVaultDiscovery {
   constructor(private readonly args: CompanionVaultDiscoveryArgs) {}
 
-  async discover(discovery: unknown): Promise<CompanionIdentityStatus> {
+  async discover(
+    discovery: CompanionIdentityDiscoveryObservation,
+  ): Promise<CompanionIdentityStatus> {
     const { activeManager, endpoint, presence } = this.args
     if (presence.kind === 'unlocked') {
       const grant: ExtensionVaultGrant = {
