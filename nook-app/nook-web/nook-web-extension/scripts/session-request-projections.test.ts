@@ -1,15 +1,20 @@
 import { describe, expect, test } from 'bun:test'
 import type {
   CompanionExtensionPresence,
+  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityHandoffAuthorization,
   CompanionIdentityHandoffRequest,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
 import { websiteLoginRevealSessionRequest } from '../src/background/service-worker/session-request-projections'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import {
+  COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
   COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
   ExtensionSessionQueueKind,
+  isCompanionIdentityDiscoverySessionTransportRequest,
   isCompanionIdentityHandoffSessionTransportRequest,
+  type CompanionIdentityDiscoverySessionTransportRequest,
   type CompanionIdentityHandoffSessionTransportRequest,
 } from '../src/offscreen/session-request-adapter'
 
@@ -33,28 +38,64 @@ describe('extension session request projections', () => {
         scopes: ['vault-access'],
       },
     } satisfies CompanionExtensionPresence
+    const discovery = {
+      request: {
+        requestId: 'request',
+        vaultStoreId: 'vault',
+        expiresAt: 200,
+      },
+      observedAt: 100,
+    } satisfies CompanionIdentityDiscoveryObservation
     const request = {
-      requestId: 'request',
-      vaultStoreId: 'vault',
+      transaction: {
+        discovery,
+        status: {
+          status: 'unlocked',
+          request_id: 'request',
+          vault_store_id: 'vault',
+          app_key: presence.app_key,
+        },
+        admittedAt: 110,
+      },
       recipientPublicKey: 'recipient',
-      nonce: 'nonce',
-      expectedAppKey: appKey,
     } satisfies CompanionIdentityHandoffRequest
+    const authorization = {
+      request,
+      observedAt: 120,
+      presence,
+    } satisfies CompanionIdentityHandoffAuthorization
+    const discoveryDelivery = {
+      type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+      payload: { presence, discovery },
+    } satisfies CompanionIdentityDiscoverySessionTransportRequest
     const delivery = {
       type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
-      payload: { presence, request },
+      payload: { authorization },
     } satisfies CompanionIdentityHandoffSessionTransportRequest
 
+    expect(
+      isCompanionIdentityDiscoverySessionTransportRequest(discoveryDelivery),
+    ).toBe(true)
+    expect(discoveryDelivery).toEqual({
+      type: 'nook:extension-session-discover-companion-identity',
+      payload: { presence, discovery },
+    })
     expect(isCompanionIdentityHandoffSessionTransportRequest(delivery)).toBe(
       true,
     )
     expect(delivery).toEqual({
       type: 'nook:extension-session-authorize-companion-identity-handoff',
-      payload: { presence, request },
+      payload: { authorization },
     })
     expect(
       isCompanionIdentityHandoffSessionTransportRequest({
         type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
+        payload: { request },
+      }),
+    ).toBe(false)
+    expect(
+      isCompanionIdentityDiscoverySessionTransportRequest({
+        type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
         payload: { presence },
       }),
     ).toBe(false)

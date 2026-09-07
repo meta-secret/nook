@@ -43,7 +43,6 @@ import {
   admit_companion_identity_status,
   type CompanionIdentityDiscoveryObservation,
   type CompanionIdentityDiscoveryRequest,
-  type CompanionIdentityStatus,
 } from "$web-shared/extension/nook-companion-wasm/nook_companion_wasm.js";
 import {
   ExtensionIdentityRequestSource,
@@ -392,9 +391,13 @@ async function discoverPairedExtensionIdentityOnce(
     vaultStoreId,
     expiresAt: Date.now() + EXTENSION_MESSAGE_TIMEOUT_MS,
   } satisfies CompanionIdentityDiscoveryRequest;
+  const protocolDiscovery = {
+    request: discoveryRequest,
+    observedAt: Date.now(),
+  } satisfies CompanionIdentityDiscoveryObservation;
   const message: ExtensionPairedVaultIdentityDiscoveryMessage = {
     type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
-    payload: discoveryRequest,
+    payload: protocolDiscovery,
   };
 
   const sendExtensionMessageArgs2: Parameters<typeof sendExtensionMessage>[0] =
@@ -420,8 +423,13 @@ async function discoverPairedExtensionIdentityOnce(
   }
   let admission: ReturnType<typeof admit_companion_identity_status>;
   try {
+    const admissionRequest = {
+      discovery: protocolDiscovery,
+      status: response.status,
+      observedAt: Date.now(),
+    };
     admission = Reflect.apply(admit_companion_identity_status, globalThis, [
-      response.status,
+      admissionRequest,
     ]);
   } catch {
     return { kind: ExtensionMessageDeliveryKind.Unavailable };
@@ -429,11 +437,8 @@ async function discoverPairedExtensionIdentityOnce(
   if (admission.kind !== "accepted") {
     return { kind: ExtensionMessageDeliveryKind.Unavailable };
   }
-  const status: CompanionIdentityStatus = admission.status;
-  const protocolDiscovery = {
-    request: discoveryRequest,
-    observedAt: Date.now(),
-  } satisfies CompanionIdentityDiscoveryObservation;
+  const transaction = admission.transaction;
+  const status = transaction.status;
   if (
     status.status !== ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
   ) {
@@ -471,8 +476,7 @@ async function discoverPairedExtensionIdentityOnce(
         deviceLabel: unlockedAppKey.appKey.installationLabel,
         nonce: unlockedAppKey.nonce,
         scopes: unlockedAppKey.scopes,
-        protocolDiscovery,
-        protocolStatus: status,
+        protocolTransaction: transaction,
       },
     },
   };
@@ -618,8 +622,7 @@ export async function adoptExtensionIdentity(
   const { manager, request } = args;
   if (request.source === ExtensionIdentityRequestSource.PairedVault) {
     const begin = {
-      discovery: request.protocolDiscovery,
-      status: request.protocolStatus,
+      transaction: request.protocolTransaction,
       context: {
         kind: "paired-vault",
         vault_store_id: request.vaultStoreId,

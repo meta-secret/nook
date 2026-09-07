@@ -98,6 +98,8 @@ test('offer browser extension install on vault home and in Devices', async ({
               JSON.stringify(routedTypes),
             )
           }
+          const discovery = Object(message.payload)
+          const discoveryRequest = Object(Reflect.get(discovery, 'request'))
           callback(
             type === messageTypes.openCompanionLauncher
               ? { ok: true }
@@ -106,8 +108,12 @@ test('offer browser extension install on vault home and in Devices', async ({
                     ok: true,
                     status: {
                       status: 'different-vault',
-                      request_id: 'extension-install-discovery',
-                      vault_store_id: 'extension-install-vault',
+                      request_id: String(
+                        Reflect.get(discoveryRequest, 'requestId'),
+                      ),
+                      vault_store_id: String(
+                        Reflect.get(discoveryRequest, 'vaultStoreId'),
+                      ),
                       connected_vault_store_id: 'store_previous_9a4f',
                       connected_vault_name: 'Previous vault',
                     } satisfies CompanionIdentityStatus,
@@ -143,7 +149,12 @@ test('offer browser extension install on vault home and in Devices', async ({
   if (!isExtensionPairedVaultIdentityDiscoveryMessage(discoveryMessage)) {
     throw new Error('Paired-vault discovery message was malformed.')
   }
-  expect(Object.keys(Reflect.get(discoveryMessage, 'payload')).sort()).toEqual([
+  const discoveryPayload = Reflect.get(discoveryMessage, 'payload')
+  expect(Object.keys(discoveryPayload).sort()).toEqual([
+    'observedAt',
+    'request',
+  ])
+  expect(Object.keys(Reflect.get(discoveryPayload, 'request')).sort()).toEqual([
     'expiresAt',
     'requestId',
     'vaultStoreId',

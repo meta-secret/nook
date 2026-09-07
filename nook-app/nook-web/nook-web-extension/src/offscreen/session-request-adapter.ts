@@ -98,10 +98,33 @@ export type ExtensionSessionTransportRequest =
 
 export const COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE =
   'nook:extension-session-authorize-companion-identity-handoff'
+export const COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE =
+  'nook:extension-session-discover-companion-identity'
+
+export type CompanionIdentityDiscoverySessionTransportRequest = {
+  type: typeof COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE
+  payload: { presence: unknown; discovery: unknown }
+}
 
 export type CompanionIdentityHandoffSessionTransportRequest = {
   type: typeof COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE
-  payload: { presence: unknown; request: unknown }
+  payload: { authorization: unknown }
+}
+
+export function isCompanionIdentityDiscoverySessionTransportRequest(
+  value: unknown,
+): value is CompanionIdentityDiscoverySessionTransportRequest {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    value.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE &&
+    'payload' in value &&
+    !!value.payload &&
+    typeof value.payload === 'object' &&
+    'presence' in value.payload &&
+    'discovery' in value.payload
+  )
 }
 
 export function isCompanionIdentityHandoffSessionTransportRequest(
@@ -115,8 +138,7 @@ export function isCompanionIdentityHandoffSessionTransportRequest(
     'payload' in value &&
     !!value.payload &&
     typeof value.payload === 'object' &&
-    'presence' in value.payload &&
-    'request' in value.payload
+    'authorization' in value.payload
   )
 }
 

@@ -15,16 +15,19 @@ import {
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import {
   clearExtensionSessionSensitiveRequest,
+  COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
   COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
   EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
   ExtensionSessionQueueKind,
   ExtensionSessionQueuePriority,
   type ExtensionSessionNonImportRequest,
   type ExtensionSessionRequest,
+  type CompanionIdentityDiscoverySessionTransportRequest,
   type CompanionIdentityHandoffSessionTransportRequest,
   type ParsedExtensionSessionTransportRequest,
   ExtensionSessionRequestParseKind,
   ExtensionSessionSensitiveStageKind,
+  isCompanionIdentityDiscoverySessionTransportRequest,
   isCompanionIdentityHandoffSessionTransportRequest,
   parseExtensionSessionRequest,
   stageExtensionSessionSensitiveRequest,
@@ -46,6 +49,9 @@ type SensitivePayloadResidency =
 
 export type SessionMessageDispatchContext<SessionResponse> = {
   handleMessage: (message: ExtensionSessionRequest) => Promise<SessionResponse>
+  handleCompanionIdentityDiscovery: (
+    message: CompanionIdentityDiscoverySessionTransportRequest,
+  ) => Promise<SessionResponse>
   handleCompanionIdentityHandoff: (
     message: CompanionIdentityHandoffSessionTransportRequest,
   ) => Promise<SessionResponse>
@@ -333,6 +339,23 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     return this.operations.enqueue(enqueueArgs)
   }
 
+  private enqueueCompanionIdentityDiscovery(
+    message: CompanionIdentityDiscoverySessionTransportRequest,
+  ): Promise<SessionResponse> {
+    const enqueueArgs: EnqueueSessionOperationArgs<SessionResponse> = {
+      operation: () => this.context.handleCompanionIdentityDiscovery(message),
+      options: {
+        priority: SessionOperationPriority.Probe,
+        expiry: {
+          kind: SessionOperationExpiryKind.Deadline,
+          expiresAt: Date.now() + EXTENSION_SESSION_INTERACTIVE_TIMEOUT_MS,
+        },
+        cleanup: { kind: SessionOperationCleanupKind.None },
+      },
+    }
+    return this.operations.enqueue(enqueueArgs)
+  }
+
   enqueue(
     message: ParsedExtensionSessionTransportRequest,
   ): Promise<ExtensionSessionDispatchResponse<SessionResponse>> {
@@ -419,6 +442,32 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         !sender.tab &&
         (!sender.url ||
           sender.url === chrome.runtime.getURL('background/service-worker.js'))
+      if (message.type === COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE) {
+        if (
+          !serviceWorkerSender ||
+          !isCompanionIdentityDiscoverySessionTransportRequest(message)
+        ) {
+          const forbiddenResponse: Parameters<typeof sendResponse>[0] = {
+            ok: false,
+            error: 'Forbidden companion identity discovery request.',
+          }
+          sendResponse(forbiddenResponse)
+          return false
+        }
+        void this.enqueueCompanionIdentityDiscovery(message)
+          .then((value) => sendResponse(value))
+          .catch((error) => {
+            const failureResponse: Parameters<typeof sendResponse>[0] = {
+              ok: false,
+              error:
+                error instanceof Error
+                  ? error.message
+                  : 'Companion identity discovery failed.',
+            }
+            return sendResponse(failureResponse)
+          })
+        return true
+      }
       if (message.type === COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE) {
         if (
           !serviceWorkerSender ||

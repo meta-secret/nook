@@ -8,6 +8,7 @@ import initNookWasm, {
 import type {
   AuthProvidersSnapshot,
   CompanionIdentityHandoffResponse,
+  CompanionIdentityStatus,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
@@ -15,6 +16,7 @@ import {
   type SessionMessageDispatchContext,
 } from './session-message-dispatch'
 import type {
+  CompanionIdentityDiscoverySessionTransportRequest,
   CompanionIdentityHandoffSessionTransportRequest,
   ExtensionSessionRequest,
 } from './session-request-adapter'
@@ -72,6 +74,32 @@ let sessionExpirySchedule: SessionExpirySchedule = {
 let sessionGeneration = 0
 let sessionDeadlineAt = 0
 
+enum CompanionEndpointAvailabilityKind {
+  Inactive = 'inactive',
+  Active = 'active',
+}
+
+type CompanionEndpointAvailability =
+  | { kind: CompanionEndpointAvailabilityKind.Inactive }
+  | {
+      kind: CompanionEndpointAvailabilityKind.Active
+      endpoint: NookCompanionExtensionEndpoint
+    }
+
+let companionEndpointAvailability: CompanionEndpointAvailability = {
+  kind: CompanionEndpointAvailabilityKind.Inactive,
+}
+
+function releaseCompanionEndpoint(): void {
+  const current = companionEndpointAvailability
+  companionEndpointAvailability = {
+    kind: CompanionEndpointAvailabilityKind.Inactive,
+  }
+  if (current.kind === CompanionEndpointAvailabilityKind.Active) {
+    current.endpoint.free()
+  }
+}
+
 function ensureWasm(): ReturnType<typeof initNookWasm> {
   if (wasmStartup.kind === WasmStartupKind.Initializing) {
     return wasmStartup.operation
@@ -119,6 +147,7 @@ function scheduleSessionExpiry(generation: number): void {
       sessionExpirySchedule = { kind: SessionExpiryScheduleKind.Stopped }
       sessionDeadlineAt = 0
       sessionGeneration += 1
+      releaseCompanionEndpoint()
       const expiredManager = managerAvailability
       managerAvailability = { kind: VaultManagerAvailabilityKind.Locked }
       if (expiredManager.kind === VaultManagerAvailabilityKind.Active) {
@@ -142,6 +171,7 @@ function scheduleSessionExpiry(generation: number): void {
 }
 
 async function activateSession(): Promise<DeviceResult> {
+  releaseCompanionEndpoint()
   sessionMessageDispatcher.resetOperations()
   const activeManager = await getManager()
   sessionGeneration += 1
@@ -167,7 +197,10 @@ const operationContext: SessionOperationContext = {
   deviceResult,
   currentGeneration: () => sessionGeneration,
   renewSessionExpiry,
-  resetOperations: (error) => sessionMessageDispatcher.replaceOperations(error),
+  resetOperations: (error) => {
+    releaseCompanionEndpoint()
+    sessionMessageDispatcher.replaceOperations(error)
+  },
 }
 
 type SessionOperationResponse = Awaited<ReturnType<typeof handleSessionMessage>>
@@ -182,17 +215,23 @@ async function handleMessage(
 async function handleCompanionIdentityHandoff(
   message: CompanionIdentityHandoffSessionTransportRequest,
 ) {
+  if (
+    companionEndpointAvailability.kind !==
+    CompanionEndpointAvailabilityKind.Active
+  ) {
+    throw new Error('Companion identity discovery is not active.')
+  }
+  const endpoint = companionEndpointAvailability.endpoint
+  companionEndpointAvailability = {
+    kind: CompanionEndpointAvailabilityKind.Inactive,
+  }
   const generation = sessionGeneration
-  const activeManager = await getManager()
-  const endpoint: NookCompanionExtensionEndpoint = Reflect.construct(
-    NookCompanionExtensionEndpoint,
-    [message.payload.presence],
-  )
   try {
+    const activeManager = await getManager()
     const response: CompanionIdentityHandoffResponse = await Reflect.apply(
       endpoint.authorize_and_seal,
       endpoint,
-      [activeManager, message.payload.request],
+      [activeManager, message.payload.authorization],
     )
     renewSessionExpiry(generation)
     return { ok: true, response }
@@ -201,13 +240,53 @@ async function handleCompanionIdentityHandoff(
   }
 }
 
+async function handleCompanionIdentityDiscovery(
+  message: CompanionIdentityDiscoverySessionTransportRequest,
+) {
+  await ensureWasm()
+  if (
+    companionEndpointAvailability.kind ===
+    CompanionEndpointAvailabilityKind.Inactive
+  ) {
+    const endpoint: NookCompanionExtensionEndpoint = Reflect.construct(
+      NookCompanionExtensionEndpoint,
+      [message.payload.presence],
+    )
+    companionEndpointAvailability = {
+      kind: CompanionEndpointAvailabilityKind.Active,
+      endpoint,
+    }
+  }
+  if (
+    companionEndpointAvailability.kind !==
+    CompanionEndpointAvailabilityKind.Active
+  ) {
+    throw new Error('Companion identity discovery endpoint is unavailable.')
+  }
+  const endpoint = companionEndpointAvailability.endpoint
+  try {
+    const status: CompanionIdentityStatus = Reflect.apply(
+      endpoint.discover,
+      endpoint,
+      [message.payload.discovery],
+    )
+    if (status.status !== 'unlocked') releaseCompanionEndpoint()
+    return { ok: true, status }
+  } catch (error) {
+    releaseCompanionEndpoint()
+    throw error
+  }
+}
+
 type ExtensionSessionResponse =
   | Awaited<ReturnType<typeof handleMessage>>
+  | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
   | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
 
 const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
   {
     handleMessage,
+    handleCompanionIdentityDiscovery,
     handleCompanionIdentityHandoff,
     decodeProviders: async (providers) => {
       const snapshot: AuthProvidersSnapshot = {

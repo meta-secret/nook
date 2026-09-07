@@ -12,18 +12,20 @@ import { companionWasmReady } from '../../../../nook-web-shared/src/extension/co
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionConnectScope } from '../../../../nook-web-shared/src/extension/extension-connect-scope'
 import {
-  NookCompanionExtensionProtocol,
+  admit_companion_identity_status,
   decode_extension_session_status_response,
   ExtensionSessionStatusAvailability,
   type CompanionExtensionPresence,
-  type CompanionIdentityStatus,
+  type CompanionIdentityStatusAdmissionRequest,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
 import {
+  COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
   COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
   extensionSessionInteractiveDeadline,
   extensionSessionProbeDeadline,
+  type CompanionIdentityDiscoverySessionTransportRequest,
   type CompanionIdentityHandoffSessionTransportRequest,
 } from '../../offscreen/session-request-adapter'
 import {
@@ -56,7 +58,6 @@ import { identityHandoffSessionRequest } from './session-request-projections'
 
 enum PendingIdentityHandoffKind {
   Pairing = 'pairing',
-  PairedVault = 'paired-vault',
 }
 
 type PendingIdentityHandoff = {
@@ -66,15 +67,7 @@ type PendingIdentityHandoff = {
   deviceSigningPublicKey: string
 }
 
-type PendingPairedIdentityHandoff = {
-  kind: PendingIdentityHandoffKind.PairedVault
-  vaultStoreId: string
-  nonce: string
-}
-
 const pendingIdentityHandoffConsumptions = new Set<string>()
-const pendingPairedIdentityHandoffStorageKey =
-  'nook.extension.identity-handoff.paired-vault'
 
 export function randomNonce(): string {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
@@ -103,21 +96,6 @@ function isPendingIdentityHandoff(
     typeof value.deviceSigningPublicKey === 'string' &&
     'kind' in value &&
     value.kind === PendingIdentityHandoffKind.Pairing
-  )
-}
-
-function isPendingPairedIdentityHandoff(
-  value: unknown,
-): value is PendingPairedIdentityHandoff {
-  return (
-    !!value &&
-    typeof value === 'object' &&
-    'kind' in value &&
-    value.kind === PendingIdentityHandoffKind.PairedVault &&
-    'vaultStoreId' in value &&
-    typeof value.vaultStoreId === 'string' &&
-    'nonce' in value &&
-    typeof value.nonce === 'string'
   )
 }
 
@@ -293,31 +271,58 @@ export async function createIdentityHandoff(
   }
 }
 
-async function currentPairedVaultPresence(
-  pending: PendingPairedIdentityHandoff,
-): Promise<CompanionExtensionPresence> {
+type CurrentPairedVaultPresenceArgs = {
+  vaultStoreId: string
+  nonce: string
+}
+
+async function currentPairedVaultPresence({
+  vaultStoreId,
+  nonce,
+}: CurrentPairedVaultPresenceArgs): Promise<CompanionExtensionPresence> {
   const pairingPolicy = await extensionPairingGrantPolicyReady
-  const key = pairingPolicy.pairingGrantStorageKey(pending.vaultStoreId)
-  const stored = await getPairingStorage(key)
+  const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
+  const stored = await getPairingStorage()
   const grant = stored[key]
   if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
     return { kind: 'unavailable' }
   }
+  const selected = pairingPolicy.selectedPairingGrant(stored)
+  const currentGrant = selected.kind === 'selected' ? selected.grant : grant
+  await ensureExtensionSessionDocument()
+  const statusRequest: Parameters<typeof sendSessionMessage>[0] = {
+    type: 'nook:extension-session-status',
+    payload: {
+      queue: extensionSessionProbeDeadline(Date.now() + 5_000),
+    },
+  }
+  const statusResponse = await sendSessionMessage(statusRequest)
+  if (
+    websiteSessionStatusTransport(statusResponse) !==
+    ExtensionSessionStatusAvailability.Unlocked
+  ) {
+    return {
+      kind: 'locked',
+      vault_type: currentGrant.vaultType,
+      vault_store_id: currentGrant.vaultStoreId,
+      vault_name: currentGrant.vaultName,
+    }
+  }
   return {
     kind: 'unlocked',
-    vault_type: grant.vaultType,
-    vault_store_id: grant.vaultStoreId,
-    vault_name: grant.vaultName,
+    vault_type: currentGrant.vaultType,
+    vault_store_id: currentGrant.vaultStoreId,
+    vault_name: currentGrant.vaultName,
     app_key: {
       extensionRuntimeId: chrome.runtime.id,
       appKey: {
-        appId: grant.deviceId,
-        encryptionPublicKey: grant.devicePublicKey,
-        signingPublicKey: grant.deviceSigningPublicKey,
-        installationLabel: grant.deviceLabel,
+        appId: currentGrant.deviceId,
+        encryptionPublicKey: currentGrant.devicePublicKey,
+        signingPublicKey: currentGrant.deviceSigningPublicKey,
+        installationLabel: currentGrant.deviceLabel,
       },
-      nonce: pending.nonce,
-      scopes: grant.scopes,
+      nonce,
+      scopes: currentGrant.scopes,
     },
   }
 }
@@ -325,28 +330,40 @@ async function currentPairedVaultPresence(
 export async function createPairedIdentityHandoff(
   message: ExtensionPairedVaultIdentityHandoffRequestMessage,
 ): Promise<CompanionIdentityHandoffTransportResponse> {
-  if (
-    pendingIdentityHandoffConsumptions.has(
-      pendingPairedIdentityHandoffStorageKey,
-    )
-  ) {
-    return { ok: false, reason: 'extension-identity-handoff-not-issued' }
-  }
-  pendingIdentityHandoffConsumptions.add(pendingPairedIdentityHandoffStorageKey)
   try {
-    const stored = await getSessionStorage(
-      pendingPairedIdentityHandoffStorageKey,
+    await companionWasmReady
+    const candidate = Object(message.payload)
+    const transaction = Object(Reflect.get(candidate, 'transaction'))
+    const admissionRequest = {
+      discovery: Reflect.get(transaction, 'discovery'),
+      status: Reflect.get(transaction, 'status'),
+      observedAt: Date.now(),
+    } satisfies CompanionIdentityStatusAdmissionRequest
+    const admission = Reflect.apply(
+      admit_companion_identity_status,
+      globalThis,
+      [admissionRequest],
     )
-    const pending = stored[pendingPairedIdentityHandoffStorageKey]
-    if (!isPendingPairedIdentityHandoff(pending)) {
+    if (
+      admission.kind !== 'accepted' ||
+      admission.transaction.status.status !== 'unlocked'
+    ) {
       return { ok: false, reason: 'extension-identity-handoff-not-issued' }
     }
-    await removeSessionStorage(pendingPairedIdentityHandoffStorageKey)
-    const presence = await currentPairedVaultPresence(pending)
+    const currentPresenceArgs: CurrentPairedVaultPresenceArgs = {
+      vaultStoreId: admission.transaction.discovery.request.vaultStoreId,
+      nonce: admission.transaction.status.app_key.nonce,
+    }
+    const presence = await currentPairedVaultPresence(currentPresenceArgs)
     await ensureExtensionSessionDocument()
+    const authorization = {
+      request: message.payload,
+      observedAt: Date.now(),
+      presence,
+    }
     const sessionRequest: CompanionIdentityHandoffSessionTransportRequest = {
       type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
-      payload: { presence, request: message.payload },
+      payload: { authorization },
     }
     const response = await sendSessionMessage(sessionRequest)
     if (
@@ -361,10 +378,6 @@ export async function createPairedIdentityHandoff(
     return { ok: false, reason: 'extension-identity-unavailable' }
   } catch {
     return { ok: false, reason: 'extension-identity-handoff-failed' }
-  } finally {
-    pendingIdentityHandoffConsumptions.delete(
-      pendingPairedIdentityHandoffStorageKey,
-    )
   }
 }
 
@@ -393,32 +406,33 @@ export function websiteSessionStatusTransport(
 export async function discoverPairedVaultIdentity(
   message: ExtensionPairedVaultIdentityDiscoveryMessage,
 ): Promise<CompanionIdentityDiscoveryTransportResponse> {
-  const observedAt = Date.now()
-  const observation = { request: message.payload, observedAt }
-  const discover = (presence: CompanionExtensionPresence) => {
-    const protocol = new NookCompanionExtensionProtocol(presence)
-    try {
-      const status: CompanionIdentityStatus = Reflect.apply(
-        protocol.discover,
-        protocol,
-        [observation],
-      )
-      return { ok: true as const, status }
-    } finally {
-      protocol.free()
+  await companionWasmReady
+  const observation = message.payload
+  const discover = async (presence: CompanionExtensionPresence) => {
+    await ensureExtensionSessionDocument()
+    const sessionRequest: CompanionIdentityDiscoverySessionTransportRequest = {
+      type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+      payload: { presence, discovery: observation },
     }
+    const response = await sendSessionMessage(sessionRequest)
+    if (
+      !!response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true &&
+      'status' in response
+    ) {
+      return { ok: true as const, status: response.status }
+    }
+    return { ok: false as const }
   }
   const unavailablePresence: CompanionExtensionPresence = {
     kind: 'unavailable',
   }
-  let admitted: ReturnType<typeof discover>
   try {
-    admitted = discover(unavailablePresence)
-  } catch {
-    return { ok: false }
-  }
-  const vaultStoreId = admitted.status.vault_store_id
-  try {
+    const discovery = Object(observation)
+    const request = Object(Reflect.get(discovery, 'request'))
+    const vaultStoreId = Reflect.get(request, 'vaultStoreId')
     const pairingPolicy = await extensionPairingGrantPolicyReady
     const key = pairingPolicy.pairingGrantStorageKey(vaultStoreId)
     const stored = await getPairingStorage()
@@ -434,7 +448,7 @@ export async function discoverPairedVaultIdentity(
         vault_store_id: selectedGrant.grant.vaultStoreId,
         vault_name: selectedGrant.grant.vaultName,
       }
-      return discover(selectedPresence)
+      return await discover(selectedPresence)
     }
     if (!pairingPolicy.isStoredExtensionPairingGrant(grant)) {
       const connectedGrant =
@@ -448,16 +462,16 @@ export async function discoverPairedVaultIdentity(
           vault_store_id: connectedGrant.grant.vaultStoreId,
           vault_name: connectedGrant.grant.vaultName,
         }
-        return discover(connectedPresence)
+        return await discover(connectedPresence)
       }
-      return discover(unavailablePresence)
+      return await discover(unavailablePresence)
     }
 
     await ensureExtensionSessionDocument()
     const nookTypedArgs0_5: Parameters<typeof sendSessionMessage>[0] = {
       type: 'nook:extension-session-status',
       payload: {
-        queue: extensionSessionProbeDeadline(observedAt + 5_000),
+        queue: extensionSessionProbeDeadline(Date.now() + 5_000),
       },
     }
     const statusResponse = await sendSessionMessage(nookTypedArgs0_5)
@@ -471,7 +485,7 @@ export async function discoverPairedVaultIdentity(
         vault_store_id: grant.vaultStoreId,
         vault_name: grant.vaultName,
       }
-      return discover(lockedPresence)
+      return await discover(lockedPresence)
     }
     const nonce = randomNonce()
     const presence = {
@@ -491,18 +505,9 @@ export async function discoverPairedVaultIdentity(
         scopes: grant.scopes,
       },
     } satisfies Extract<CompanionExtensionPresence, { kind: 'unlocked' }>
-    const pending: PendingPairedIdentityHandoff = {
-      kind: PendingIdentityHandoffKind.PairedVault,
-      vaultStoreId,
-      nonce,
-    }
-    const storageWrite: ExtensionSessionStorageWrite = {
-      [pendingPairedIdentityHandoffStorageKey]: pending,
-    }
-    await setSessionStorage(storageWrite)
-    return discover(presence)
+    return await discover(presence)
   } catch {
-    return discover(unavailablePresence)
+    return await discover(unavailablePresence)
   }
 }
 

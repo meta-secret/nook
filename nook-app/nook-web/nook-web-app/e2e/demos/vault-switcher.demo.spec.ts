@@ -41,7 +41,6 @@ type VaultSwitcherDemoBrowserGlobal = typeof globalThis & {
 
 type VaultSwitcherPairedElsewhereSimulation = {
   messageTypes: VaultSwitcherDemoMessageTypes
-  requestedVaultStoreId: string
   connectedVaultStoreId: string
   connectedVaultName: string
 }
@@ -124,7 +123,6 @@ test('list every local vault and pair the open vault with the companion', async 
 
   const pairedElsewhereSimulation: VaultSwitcherPairedElsewhereSimulation = {
     messageTypes: vaultSwitcherDemoMessageTypes,
-    requestedVaultStoreId: storeB,
     connectedVaultStoreId: storeA,
     connectedVaultName: 'Vault A',
   }
@@ -152,6 +150,8 @@ test('list every local vault and pair the open vault with the companion', async 
               JSON.stringify(routedTypes),
             )
           }
+          const discovery = Object(message.payload)
+          const discoveryRequest = Object(Reflect.get(discovery, 'request'))
           callback(
             type === simulation.messageTypes.openCompanionLauncher
               ? { ok: true }
@@ -160,8 +160,12 @@ test('list every local vault and pair the open vault with the companion', async 
                     ok: true,
                     status: {
                       status: 'different-vault',
-                      request_id: 'vault-switcher-discovery',
-                      vault_store_id: simulation.requestedVaultStoreId,
+                      request_id: String(
+                        Reflect.get(discoveryRequest, 'requestId'),
+                      ),
+                      vault_store_id: String(
+                        Reflect.get(discoveryRequest, 'vaultStoreId'),
+                      ),
                       connected_vault_store_id:
                         simulation.connectedVaultStoreId,
                       connected_vault_name: simulation.connectedVaultName,
