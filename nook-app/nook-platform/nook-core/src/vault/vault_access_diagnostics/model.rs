@@ -159,3 +159,136 @@ pub enum ProjectionDiagnosticInput<'a> {
     Unavailable,
     Available(&'a VaultProjection),
 }
+
+impl VaultKeyAccessDiagnosticStatus {
+    pub(super) fn explanation(self) -> &'static str {
+        let status = self;
+
+        match status {
+            VaultKeyAccessDiagnosticStatus::EnrolledDecryptable => {
+                "This device has a decryptable auth envelope for the current vault keys."
+            }
+            VaultKeyAccessDiagnosticStatus::AuthRowMissing => {
+                "No auth envelope is available for this device."
+            }
+            VaultKeyAccessDiagnosticStatus::JoinPending => {
+                "This device has a pending join request and is waiting for approval."
+            }
+            VaultKeyAccessDiagnosticStatus::DeviceIdentityMismatch => {
+                "Vault auth rows exist, but none match this local device identity. The local passkey or device identity may have been regenerated."
+            }
+            VaultKeyAccessDiagnosticStatus::EnvelopeDecryptFailed => {
+                "The matching auth envelope exists, but this local device identity could not decrypt the vault keys."
+            }
+            VaultKeyAccessDiagnosticStatus::UnsupportedEpoch => {
+                "The vault contains key-epoch metadata this build does not support."
+            }
+            VaultKeyAccessDiagnosticStatus::CorruptCiphertext => {
+                "The matching auth row is malformed or contains invalid ciphertext metadata."
+            }
+        }
+    }
+}
+
+impl VaultKeyAccessDiagnosticStatus {
+    pub(super) fn record_status(self) -> VaultRecordDecryptabilityStatus {
+        let status = self;
+
+        match status {
+            VaultKeyAccessDiagnosticStatus::EnrolledDecryptable => {
+                VaultRecordDecryptabilityStatus::Decryptable
+            }
+            VaultKeyAccessDiagnosticStatus::AuthRowMissing => {
+                VaultRecordDecryptabilityStatus::AuthRowMissing
+            }
+            VaultKeyAccessDiagnosticStatus::JoinPending => {
+                VaultRecordDecryptabilityStatus::JoinPending
+            }
+            VaultKeyAccessDiagnosticStatus::DeviceIdentityMismatch => {
+                VaultRecordDecryptabilityStatus::DeviceIdentityMismatch
+            }
+            VaultKeyAccessDiagnosticStatus::EnvelopeDecryptFailed => {
+                VaultRecordDecryptabilityStatus::EnvelopeDecryptFailed
+            }
+            VaultKeyAccessDiagnosticStatus::UnsupportedEpoch => {
+                VaultRecordDecryptabilityStatus::UnsupportedEpoch
+            }
+            VaultKeyAccessDiagnosticStatus::CorruptCiphertext => {
+                VaultRecordDecryptabilityStatus::CorruptCiphertext
+            }
+        }
+    }
+}
+
+impl VaultRecordDecryptabilityStatus {
+    pub(super) fn explanation(self) -> &'static str {
+        let status = self;
+
+        match status {
+            VaultRecordDecryptabilityStatus::Decryptable => {
+                "This device can decrypt the secret payload with the resolved secrets_key."
+            }
+            VaultRecordDecryptabilityStatus::AuthRowMissing => {
+                "This device cannot test the secret because its auth envelope is missing."
+            }
+            VaultRecordDecryptabilityStatus::JoinPending => {
+                "This device cannot test the secret until its join request is approved."
+            }
+            VaultRecordDecryptabilityStatus::DeviceIdentityMismatch => {
+                "This device cannot test the secret because local identity no longer matches any vault auth row."
+            }
+            VaultRecordDecryptabilityStatus::EnvelopeDecryptFailed => {
+                "This device found its auth row but could not unwrap the vault keys."
+            }
+            VaultRecordDecryptabilityStatus::UnsupportedEpoch => {
+                "This record belongs to key-epoch metadata this build does not support."
+            }
+            VaultRecordDecryptabilityStatus::UnknownEpoch => {
+                "This record has no known key-epoch metadata in the current projection."
+            }
+            VaultRecordDecryptabilityStatus::CorruptCiphertext => {
+                "The secret payload is malformed or could not be decrypted with the resolved secrets_key."
+            }
+        }
+    }
+}
+
+impl VaultEpochDiagnosticStatus {
+    pub(super) fn explanation(self) -> &'static str {
+        let status = self;
+
+        match status {
+            VaultEpochDiagnosticStatus::CurrentEpoch => {
+                "Event encrypted payloads are tagged with the current key epoch."
+            }
+            VaultEpochDiagnosticStatus::OlderEpoch => {
+                "Event encrypted payloads are tagged with a known older key epoch."
+            }
+            VaultEpochDiagnosticStatus::UnknownEpoch => {
+                "Event encrypted payloads reference an epoch missing from the projected epoch history."
+            }
+            VaultEpochDiagnosticStatus::UnsupportedEpoch => {
+                "Event encrypted payloads use unsupported schema or epoch metadata."
+            }
+        }
+    }
+}
+
+impl ProjectionDiagnosticInput<'_> {
+    pub(super) fn epoch_history(self) -> Vec<VaultEpochHistoryDiagnostic> {
+        let projection = self;
+
+        match projection {
+            ProjectionDiagnosticInput::Unavailable => Vec::new(),
+            ProjectionDiagnosticInput::Available(projection) => projection
+                .epoch_history
+                .iter()
+                .map(|record| VaultEpochHistoryDiagnostic {
+                    epoch_id: record.epoch.as_str().to_owned(),
+                    started_by: record.started_by.as_str().to_owned(),
+                    reason: record.reason.as_str().to_owned(),
+                })
+                .collect(),
+        }
+    }
+}
