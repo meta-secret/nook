@@ -176,18 +176,18 @@ impl StorageProviderData {
 }
 
 impl StorageProviderData {
-    pub fn replication_capability(&self) -> ValidationResult<ProviderReplicationCapability> {
+    pub fn replication_capability(&self) -> ProviderReplicationCapability {
         let provider = self;
 
         let provider_type = provider.provider_type;
         let oauth_preset = provider.oauth_file.as_ref().map(|oauth| oauth.preset);
-        Ok(provider_replication_capability(
+        provider_replication_capability(
             provider_type,
             match oauth_preset {
                 Some(preset) => ProviderOauthPreset::Preset(preset),
                 None => ProviderOauthPreset::NotApplicable,
             },
-        ))
+        )
     }
 }
 

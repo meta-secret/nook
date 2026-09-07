@@ -150,7 +150,7 @@ pub fn provider_replication_capability(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     Ok(NookProviderReplicationCapability::from_core(
-        provider.replication_capability()?,
+        provider.replication_capability(),
     ))
 }
 
