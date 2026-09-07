@@ -5,11 +5,10 @@ use nook_core::{VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWri
 use std::slice;
 
 use nook_core::{
-    DeviceIdentity, DeviceMode, MultiDeviceError, SentinelPolicy, VaultArchitecture, VaultType,
-    VaultUnlock, create_sentinel_share_records, generate_store_id, generate_vault_keys,
-    load_sentinel_vault, load_sentinel_vault_from_opened, load_stored_vault,
-    open_sentinel_share_for_identity, reconstruct_sentinel_vault_keys_from_opened,
-    serialize_stored_yaml_with_unlock_name_architecture,
+    DeviceIdentity, DeviceMode, MultiDeviceError, SentinelKeyReconstruction, SentinelPolicy,
+    SentinelShareOpening, VaultArchitecture, VaultType, VaultUnlock, create_sentinel_share_records,
+    generate_store_id, generate_vault_keys, load_sentinel_vault, load_sentinel_vault_from_opened,
+    load_stored_vault, serialize_stored_yaml_with_unlock_name_architecture,
 };
 
 #[test]
@@ -62,10 +61,10 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
     assert_eq!(architecture.vault_type, VaultType::Sentinel);
     // Browser path: open shares locally, reconstruct without peer identities.
     let opened = [
-        open_sentinel_share_for_identity(&shares, &first)?,
-        open_sentinel_share_for_identity(&shares, &second)?,
+        SentinelShareOpening::new(&shares, &first).open()?,
+        SentinelShareOpening::new(&shares, &second).open()?,
     ];
-    let from_opened = reconstruct_sentinel_vault_keys_from_opened(&shares, &opened)?;
+    let from_opened = SentinelKeyReconstruction::from_opened(&shares, &opened).reconstruct()?;
     assert_eq!(from_opened, keys);
 
     let loaded_opened = load_sentinel_vault_from_opened(yaml.as_str(), &opened)?;

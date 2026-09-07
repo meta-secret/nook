@@ -901,13 +901,24 @@ mod tests {
         let share_count = multi_device::count_sentinel_share_records(&issued.records)?;
         assert_eq!(usize::from(share_count), 3);
         assert!(
-            multi_device::reconstruct_sentinel_vault_keys(&issued.records, slice::from_ref(&owner))
+            multi_device::SentinelKeyReconstruction::from_identities(
+                &issued.records,
+                slice::from_ref(&owner)
+            )
+            .reconstruct()
+            .is_err()
+        );
+        let first_quorum = multi_device::SentinelKeyReconstruction::from_identities(
+            &issued.records,
+            &[owner, peer_a],
+        )
+        .reconstruct()?;
+        assert_eq!(first_quorum.secrets_key.as_str().len(), 64);
+        assert!(
+            multi_device::SentinelKeyReconstruction::from_identities(&issued.records, &[peer_b])
+                .reconstruct()
                 .is_err()
         );
-        let first_quorum =
-            multi_device::reconstruct_sentinel_vault_keys(&issued.records, &[owner, peer_a])?;
-        assert_eq!(first_quorum.secrets_key.as_str().len(), 64);
-        assert!(multi_device::reconstruct_sentinel_vault_keys(&issued.records, &[peer_b]).is_err());
         Ok(())
     }
 }

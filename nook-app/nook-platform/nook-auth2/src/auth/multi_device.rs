@@ -35,12 +35,11 @@ pub use roster::{
 };
 
 pub use sentinel::{
-    OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelShareEnvelope, SentinelShareVersion,
+    OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SentinelKeyReconstruction,
+    SentinelShareEnvelope, SentinelShareOpening, SentinelShareVersion,
     count_sentinel_share_records, create_sentinel_root_share_records_for_recipients,
     create_sentinel_share_records, create_sentinel_share_records_for_recipients,
-    is_sentinel_share_stored_record, open_sentinel_share_for_identity,
-    parse_sentinel_share_envelope, reconstruct_sentinel_vault_keys,
-    reconstruct_sentinel_vault_keys_from_opened, sentinel_share_record_key,
+    is_sentinel_share_stored_record, parse_sentinel_share_envelope, sentinel_share_record_key,
 };
 
 /// Symmetric vault key (32-byte random hex).
