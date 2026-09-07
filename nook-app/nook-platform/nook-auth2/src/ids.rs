@@ -1,3 +1,9 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 //! Prefixed vault identifiers (`store_`, `secret_`, `key_`) for typed on-disk ids.
 
 use crate::errors::{MultiDeviceResult, ValidationError, ValidationResult};
@@ -18,10 +24,18 @@ pub struct CompactToken(String);
 impl CompactToken {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
         let token = raw.trim();
-        if !is_compact_token(token) {
+        if !Self::is_valid(token) {
             return Err(ValidationError::StoreIdInvalid);
         }
         Ok(Self(token.to_owned()))
+    }
+
+    #[must_use]
+    pub fn is_valid(token: &str) -> bool {
+        token.len() == 11
+            && token
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
     }
 
     #[must_use]
@@ -60,10 +74,15 @@ pub type DeviceId = AppId;
 impl AppId {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
         let id = raw.trim();
-        if id.len() != 16 || !id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        if !Self::is_valid(id) {
             return Err(ValidationError::DeviceIdInvalid);
         }
         Ok(Self(id.to_owned()))
+    }
+
+    #[must_use]
+    pub fn is_valid(id: &str) -> bool {
+        id.len() == 16 && id.bytes().all(|byte| byte.is_ascii_hexdigit())
     }
 
     #[must_use]
@@ -110,8 +129,24 @@ impl StoreId {
         Self(format!("{STORE_ID_PREFIX}{}", token.as_str()))
     }
 
+    pub fn from_raw_token(raw: &str) -> ValidationResult<Self> {
+        let token = CompactToken::parse(raw)?;
+        if AppId::parse(token.as_str()).is_ok() {
+            return Err(ValidationError::StoreIdReserved);
+        }
+        Ok(Self::from_token(&token))
+    }
+
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        normalize_store_id(raw)
+        let trimmed = raw.trim();
+        match trimmed.strip_prefix(STORE_ID_PREFIX) {
+            Some(token) => Self::from_raw_token(token),
+            None => Self::from_raw_token(trimmed),
+        }
+    }
+
+    pub fn generate() -> MultiDeviceResult<Self> {
+        Ok(Self::from_raw_token(CompactToken::generate()?.as_str())?)
     }
 
     #[must_use]
@@ -144,11 +179,32 @@ pub struct SecretId(String);
 
 impl SecretId {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        validate_secret_id(raw)
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(ValidationError::SecretIdRequired);
+        }
+        let token = trimmed
+            .strip_prefix(SECRET_ID_PREFIX)
+            .ok_or(ValidationError::SecretIdInvalid)?;
+        if !CompactToken::is_valid(token) {
+            return Err(ValidationError::SecretIdInvalid);
+        }
+        if AppId::parse(token).is_ok() || AuthKeyId::is_valid(trimmed) {
+            return Err(ValidationError::SecretIdReserved);
+        }
+        Ok(Self(format!("{SECRET_ID_PREFIX}{token}")))
     }
 
     pub fn from_token(token: &CompactToken) -> ValidationResult<Self> {
-        format_secret_id(token.as_str())
+        Ok(Self(format!("{SECRET_ID_PREFIX}{}", token.as_str())))
+    }
+
+    pub fn from_raw_token(raw: &str) -> ValidationResult<Self> {
+        Self::from_token(&CompactToken::parse(raw)?)
+    }
+
+    pub fn generate() -> MultiDeviceResult<Self> {
+        Ok(Self::from_raw_token(CompactToken::generate()?.as_str())?)
     }
 
     #[must_use]
@@ -187,11 +243,16 @@ pub struct AuthKeyId(String);
 
 impl AuthKeyId {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        normalize_auth_key_id(raw)
+        let trimmed = raw.trim();
+        let digest = Self::digest_from(trimmed)?;
+        Self::from_digest_hex(digest)
     }
 
     pub fn from_digest_hex(digest_hex: &str) -> ValidationResult<Self> {
-        format_auth_key_id(digest_hex)
+        if !Self::is_digest(digest_hex) {
+            return Err(ValidationError::AuthKeyIdInvalid);
+        }
+        Ok(Self(format!("{AUTH_KEY_ID_PREFIX}{digest_hex}")))
     }
 
     #[must_use]
@@ -205,7 +266,26 @@ impl AuthKeyId {
     }
 
     pub fn digest(&self) -> ValidationResult<&str> {
-        auth_key_digest(self.as_str())
+        Self::digest_from(self.as_str())
+    }
+
+    #[must_use]
+    pub fn is_valid(id: &str) -> bool {
+        Self::digest_from(id).is_ok()
+    }
+
+    pub fn digest_from(id: &str) -> ValidationResult<&str> {
+        let digest = id
+            .strip_prefix(AUTH_KEY_ID_PREFIX)
+            .ok_or(ValidationError::AuthKeyIdInvalid)?;
+        if !Self::is_digest(digest) {
+            return Err(ValidationError::AuthKeyIdInvalid);
+        }
+        Ok(digest)
+    }
+
+    fn is_digest(digest: &str) -> bool {
+        digest.len() == AUTH_DIGEST_LEN && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
     }
 
     #[must_use]
@@ -224,115 +304,6 @@ impl AsRef<str> for AuthKeyId {
     fn as_ref(&self) -> &str {
         &self.0
     }
-}
-
-/// Random token suffix (`generate_id` — 11 chars, base64url).
-#[must_use]
-pub fn is_compact_token(token: &str) -> bool {
-    token.len() == 11
-        && token
-            .bytes()
-            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
-}
-
-fn is_auth_digest(digest: &str) -> bool {
-    digest.len() == AUTH_DIGEST_LEN && digest.bytes().all(|byte| byte.is_ascii_hexdigit())
-}
-
-/// `key_{sha256_hex}` or legacy bare 64-hex digest.
-#[must_use]
-pub fn is_auth_key_id(id: &str) -> bool {
-    auth_key_digest(id).is_ok()
-}
-
-pub fn auth_key_digest(id: &str) -> ValidationResult<&str> {
-    let digest = id
-        .strip_prefix(AUTH_KEY_ID_PREFIX)
-        .ok_or(ValidationError::AuthKeyIdInvalid)?;
-    if !is_auth_digest(digest) {
-        return Err(ValidationError::AuthKeyIdInvalid);
-    }
-    Ok(digest)
-}
-
-pub fn format_auth_key_id(digest_hex: &str) -> ValidationResult<AuthKeyId> {
-    if !is_auth_digest(digest_hex) {
-        return Err(ValidationError::AuthKeyIdInvalid);
-    }
-    Ok(AuthKeyId(format!("{AUTH_KEY_ID_PREFIX}{digest_hex}")))
-}
-
-pub fn normalize_auth_key_id(id: &str) -> ValidationResult<AuthKeyId> {
-    let trimmed = id.trim();
-    let digest = auth_key_digest(trimmed)?;
-    format_auth_key_id(digest)
-}
-
-pub fn format_store_id(token: &str) -> ValidationResult<StoreId> {
-    let token = CompactToken::parse(token)?;
-    if DeviceId::parse(token.as_str()).is_ok() {
-        return Err(ValidationError::StoreIdReserved);
-    }
-    Ok(StoreId::from_token(&token))
-}
-
-pub fn normalize_store_id(id: &str) -> ValidationResult<StoreId> {
-    let trimmed = id.trim();
-    if let Some(token) = trimmed.strip_prefix(STORE_ID_PREFIX) {
-        return format_store_id(token);
-    }
-    format_store_id(trimmed)
-}
-
-pub fn generate_store_id() -> MultiDeviceResult<StoreId> {
-    Ok(format_store_id(CompactToken::generate()?.as_str())?)
-}
-
-pub fn format_secret_id(token: &str) -> ValidationResult<SecretId> {
-    let token = CompactToken::parse(token)?;
-    Ok(SecretId(format!("{SECRET_ID_PREFIX}{}", token.as_str())))
-}
-
-pub fn generate_secret_id() -> MultiDeviceResult<SecretId> {
-    Ok(format_secret_id(CompactToken::generate()?.as_str())?)
-}
-
-/// Validate the current prefixed secret-id format.
-pub fn validate_secret_id(id: &str) -> ValidationResult<SecretId> {
-    let trimmed = id.trim();
-    if trimmed.is_empty() {
-        return Err(ValidationError::SecretIdRequired);
-    }
-    let token = trimmed
-        .strip_prefix(SECRET_ID_PREFIX)
-        .ok_or(ValidationError::SecretIdInvalid)?;
-    if !is_compact_token(token) {
-        return Err(ValidationError::SecretIdInvalid);
-    }
-    if DeviceId::parse(token).is_ok() || is_auth_key_id(trimmed) {
-        return Err(ValidationError::SecretIdReserved);
-    }
-    Ok(SecretId(format!("{SECRET_ID_PREFIX}{token}")))
-}
-
-/// Validate a secret id before writing it.
-pub fn normalize_secret_id_for_write(id: &str) -> ValidationResult<SecretId> {
-    validate_secret_id(id)
-}
-
-pub fn validate_store_id(id: &str) -> ValidationResult<StoreId> {
-    normalize_store_id(id)
-}
-
-#[must_use]
-pub fn is_app_id(key: &str) -> bool {
-    AppId::parse(key).is_ok()
-}
-
-/// Migration alias for [`is_app_id`].
-#[must_use]
-pub fn is_device_id(key: &str) -> bool {
-    is_app_id(key)
 }
 
 #[cfg(test)]
@@ -358,8 +329,8 @@ mod tests {
         assert_eq!(device_id.as_ref(), DEVICE_ID);
         assert_eq!(device_id.to_string(), DEVICE_ID);
         assert_eq!(device_id.clone().into_inner(), DEVICE_ID);
-        assert!(is_device_id(DEVICE_ID));
-        assert!(!is_device_id("not-a-device"));
+        assert!(AppId::is_valid(DEVICE_ID));
+        assert!(!AppId::is_valid("not-a-device"));
         Ok(())
     }
 
@@ -372,13 +343,13 @@ mod tests {
         assert_eq!(store.to_string(), store.as_str());
         assert_eq!(store.clone().into_inner(), store.as_str());
 
-        assert_eq!(format_store_id(TOKEN)?, store);
-        assert_eq!(normalize_store_id(TOKEN)?, store);
-        assert_eq!(normalize_store_id(" store_Abcdef_1234 ")?, store);
-        assert_eq!(validate_store_id(store.as_str())?, store);
-        assert!(format_store_id(DEVICE_ID).is_err());
-        assert!(normalize_store_id("store_not-valid!").is_err());
-        assert!(generate_store_id()?.as_str().starts_with(STORE_ID_PREFIX));
+        assert_eq!(StoreId::from_raw_token(TOKEN)?, store);
+        assert_eq!(StoreId::parse(TOKEN)?, store);
+        assert_eq!(StoreId::parse(" store_Abcdef_1234 ")?, store);
+        assert_eq!(StoreId::parse(store.as_str())?, store);
+        assert!(StoreId::from_raw_token(DEVICE_ID).is_err());
+        assert!(StoreId::parse("store_not-valid!").is_err());
+        assert!(StoreId::generate()?.as_str().starts_with(STORE_ID_PREFIX));
         Ok(())
     }
 
@@ -391,13 +362,13 @@ mod tests {
         assert_eq!(auth.to_string(), auth.as_str());
         assert_eq!(auth.clone().into_inner(), auth.as_str());
 
-        assert_eq!(format_auth_key_id(DIGEST)?, auth);
-        assert!(normalize_auth_key_id(DIGEST).is_err());
-        assert_eq!(normalize_auth_key_id(&format!(" key_{DIGEST} "))?, auth);
-        assert_eq!(auth_key_digest(auth.as_str())?, DIGEST);
-        assert!(auth_key_digest(DIGEST).is_err());
-        assert!(is_auth_key_id(auth.as_str()));
-        assert!(format_auth_key_id("not-hex").is_err());
+        assert_eq!(AuthKeyId::from_digest_hex(DIGEST)?, auth);
+        assert!(AuthKeyId::parse(DIGEST).is_err());
+        assert_eq!(AuthKeyId::parse(&format!(" key_{DIGEST} "))?, auth);
+        assert_eq!(auth.digest()?, DIGEST);
+        assert!(AuthKeyId::digest_from(DIGEST).is_err());
+        assert!(AuthKeyId::is_valid(auth.as_str()));
+        assert!(AuthKeyId::from_digest_hex("not-hex").is_err());
         Ok(())
     }
 
@@ -410,17 +381,17 @@ mod tests {
         assert_eq!(secret.to_string(), secret.as_str());
         assert_eq!(secret.clone().into_inner(), secret.as_str());
 
-        assert_eq!(format_secret_id(TOKEN)?, secret);
-        assert_eq!(validate_secret_id(secret.as_str())?, secret);
-        assert!(validate_secret_id("pass_Abcdef_1234").is_err());
-        assert!(normalize_secret_id_for_write(TOKEN).is_err());
-        assert!(normalize_secret_id_for_write("github.com").is_err());
+        assert_eq!(SecretId::from_raw_token(TOKEN)?, secret);
+        assert_eq!(SecretId::parse(secret.as_str())?, secret);
+        assert!(SecretId::parse("pass_Abcdef_1234").is_err());
+        assert!(SecretId::parse(TOKEN).is_err());
+        assert!(SecretId::parse("github.com").is_err());
         assert_eq!(SecretId::from_vault_record("auth:key").as_str(), "auth:key");
-        assert!(validate_secret_id("").is_err());
-        assert!(validate_secret_id(DEVICE_ID).is_err());
-        assert!(validate_secret_id(DIGEST).is_err());
-        assert!(validate_secret_id("store_Abcdef_1234").is_err());
-        assert!(generate_secret_id()?.as_str().starts_with(SECRET_ID_PREFIX));
+        assert!(SecretId::parse("").is_err());
+        assert!(SecretId::parse(DEVICE_ID).is_err());
+        assert!(SecretId::parse(DIGEST).is_err());
+        assert!(SecretId::parse("store_Abcdef_1234").is_err());
+        assert!(SecretId::generate()?.as_str().starts_with(SECRET_ID_PREFIX));
         Ok(())
     }
 }

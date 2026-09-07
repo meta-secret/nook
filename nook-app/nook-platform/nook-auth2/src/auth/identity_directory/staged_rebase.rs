@@ -96,7 +96,7 @@ mod tests {
     fn rebase_preserves_unrelated_identity_and_selection() -> anyhow::Result<()> {
         let owner = AppKey::generate()?;
         let concurrent = AppKey::generate()?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let mut base = IdentityDirectory::empty();
         let identity_id = base.create_identity("Personal", &owner, None)?;
         let mut candidate = base.clone();

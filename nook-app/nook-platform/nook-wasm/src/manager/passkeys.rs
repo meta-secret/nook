@@ -157,11 +157,11 @@ mod tests {
             .map_err(|error| anyhow::anyhow!("prepare failed: {error:?}"))?
             .generate()
             .map_err(|error| anyhow::anyhow!("generate failed: {error:?}"))?;
-        let id = nook_core::generate_secret_id()?;
+        let id = nook_core::SecretId::generate()?;
         let encrypted = manager.encrypt_passkey_secret(&id, &registration.credential)?;
         manager.vault.meta.apply_record(&encrypted.to_stored())?;
         manager.vault.meta.secrets.insert(
-            nook_core::generate_secret_id()?,
+            nook_core::SecretId::generate()?,
             (
                 SecretType::SecureNote,
                 StoredRecordPayload::from_trusted("not decrypted".to_owned()),
@@ -273,7 +273,7 @@ mod browser_tests {
     async fn opening_passkey_vault_rejects_malformed_grants_before_storage() -> Result<(), JsError>
     {
         let identity = nook_core::DeviceIdentity::generate()?;
-        let store_id = nook_core::generate_store_id()?.to_string();
+        let store_id = nook_core::StoreId::generate()?.to_string();
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
 
@@ -485,7 +485,7 @@ impl NookVaultManager {
             .prepare(&existing_values)
             .and_then(nook_core::CheckedPasskeyRegistration::generate)
             .map_err(|error| passkey_error(&error))?;
-        let id = nook_core::generate_secret_id()?;
+        let id = nook_core::SecretId::generate()?;
         let encrypted = self.encrypt_passkey_secret(&id, &result.credential)?;
         let response = NookPasskeyRegistration::new(
             result.credential.credential_id.clone(),
@@ -535,7 +535,7 @@ impl NookVaultManager {
             .filter(|(id, value)| id != &old_id && value.credential_id == result.credential_id)
             .map(|(id, _)| id.clone())
             .collect::<Vec<_>>();
-        let new_id = nook_core::generate_secret_id()?;
+        let new_id = nook_core::SecretId::generate()?;
         let encrypted = self.encrypt_passkey_secret(&new_id, &result.updated_credential)?;
         result.updated_credential.zeroize_plaintext();
         let response = NookPasskeyAssertion::new(

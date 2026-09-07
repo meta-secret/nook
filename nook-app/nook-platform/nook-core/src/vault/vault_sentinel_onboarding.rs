@@ -120,7 +120,7 @@ mod tests {
                 .and_then(CheckedSentinelGenesisResponse::sign)?;
             let session = session.collect(response)?;
             let request = session.request().clone();
-            let store_id = crate::generate_store_id()?;
+            let store_id = crate::StoreId::generate()?;
             let issued = session
                 .prepare(owner_signing.signing_key())?
                 .issue(&store_id)?;

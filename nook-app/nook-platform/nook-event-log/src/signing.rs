@@ -3,7 +3,7 @@
 use crate::canonical::Ed25519Signature;
 use crate::{CanonicalEventBodyBytes, EventError, EventResult};
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, SigningSeedHex, format_auth_key_id};
+use nook_auth2::{AuthKeyId, DeviceSigningPublicKey, SigningSeedHex};
 use sha2::{Digest, Sha256};
 
 const SIGNING_SEED_LEN: usize = 32;
@@ -58,7 +58,7 @@ impl SigningIdentity {
 
     pub fn actor_id_for_verifying_key(verifying_key: &VerifyingKey) -> EventResult<AuthKeyId> {
         let digest = hex::encode(Sha256::digest(verifying_key.as_bytes()));
-        format_auth_key_id(&digest).map_err(Into::into)
+        AuthKeyId::from_digest_hex(&digest).map_err(Into::into)
     }
 
     pub fn verifying_key_from_public_key_hex(raw: &str) -> EventResult<VerifyingKey> {

@@ -111,8 +111,8 @@ mod tests {
     use super::*;
     use crate::errors;
     use crate::{
-        PasswordEnvelope, PasswordUnlockEntry, VaultKeys, VaultRecordSet, VaultResult,
-        generate_store_id, genesis_members_records,
+        PasswordEnvelope, PasswordUnlockEntry, StoreId, VaultKeys, VaultRecordSet, VaultResult,
+        genesis_members_records,
     };
 
     struct YamlSyncTestData;
@@ -128,7 +128,7 @@ mod tests {
                 &keys.members_key,
                 "2026-06-28T00:00:00Z",
             )?);
-            let store_id = generate_store_id()?;
+            let store_id = StoreId::generate()?;
             VaultRecordSet::serialize_yaml_with_unlock(
                 &records,
                 &VaultUnlock::Keys,
@@ -187,7 +187,7 @@ mod tests {
             &keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Passwords {

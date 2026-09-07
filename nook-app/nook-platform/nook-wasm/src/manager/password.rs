@@ -408,7 +408,7 @@ mod metadata_tests {
     async fn local_password_add_and_remove_updates_the_event_log() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
@@ -456,7 +456,7 @@ mod metadata_tests {
             entries: vec![entry.clone()],
         };
         manager.vault.password_entries = vec![entry.clone()];
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.vault.last_synced_content =
             nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
                 &manager.vault.meta.to_stored_records(),
@@ -508,7 +508,7 @@ mod metadata_tests {
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
         )
         .issue()?;
-        let remote_store_id = nook_core::generate_store_id()?;
+        let remote_store_id = nook_core::StoreId::generate()?;
         let content = nook_core::VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &[],
             &VaultUnlock::Keys,
@@ -582,7 +582,7 @@ mod wasm_tests {
             entries.push(entry);
         }
         let mut manager = NookVaultManager::new();
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.vault.password_entries.clone_from(&entries);
         manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
         let identity = DeviceIdentity::generate()?;
@@ -640,7 +640,7 @@ mod wasm_tests {
         let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.vault.last_synced_content =
             nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
                 &manager.vault.meta.to_stored_records(),
@@ -711,7 +711,7 @@ mod wasm_tests {
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
         )
         .issue()?;
-        let store_id = nook_core::generate_store_id()?.to_string();
+        let store_id = nook_core::StoreId::generate()?.to_string();
         let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Keys,
@@ -753,7 +753,7 @@ mod wasm_tests {
         )
         .issue()?;
         let mut owner = NookVaultManager::new();
-        owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.vault.store_id = nook_core::StoreId::generate()?.to_string();
         owner.device.identity_private_key = identity.secret_string().into_inner();
         owner.apply_genesis_vault_keys(&identity, &keys)?;
         owner.vault.password_entries = vec![password_entry.clone()];
@@ -798,7 +798,7 @@ mod wasm_tests {
         )
         .issue()?;
         let mut owner = NookVaultManager::new();
-        owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.vault.store_id = nook_core::StoreId::generate()?.to_string();
         owner.device.identity_private_key = identity.secret_string().into_inner();
         owner.apply_genesis_vault_keys(&identity, &keys)?;
         owner.vault.password_entries = vec![password_entry.clone()];

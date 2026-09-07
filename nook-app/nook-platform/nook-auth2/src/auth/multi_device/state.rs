@@ -51,7 +51,7 @@ pub(super) fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyI
     if stored_key == entry_pk_id.member_record_key() {
         return true;
     }
-    if let Ok(normalized) = crate::normalize_auth_key_id(entry_pk_id.as_str()) {
+    if let Ok(normalized) = crate::AuthKeyId::parse(entry_pk_id.as_str()) {
         return stored_key == normalized.member_record_key();
     }
     false
@@ -99,7 +99,7 @@ impl VaultMetaRecord {
         {
             return Ok(Self::Member(auth_id, record.value.clone()));
         }
-        if crate::is_auth_key_id(record.key.as_str())
+        if crate::AuthKeyId::is_valid(record.key.as_str())
             && let Ok(envelopes) = AuthEnvelopes::parse(record.value.as_str())
             && let Ok(auth_id) = AuthKeyId::parse(record.key.as_str())
         {

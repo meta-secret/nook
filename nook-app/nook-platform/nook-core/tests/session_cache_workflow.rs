@@ -3,8 +3,8 @@
 use nook_core::{SymmetricKey, VaultError, VaultStoreIdentityRef, VaultVersionWrite};
 
 use nook_core::{
-    DeviceIdentity, VaultCrypto, VaultKeys, VaultProjectionCache, VaultRecordSet, VaultResult,
-    VaultUnlock, generate_store_id, genesis_members_records,
+    DeviceIdentity, StoreId, VaultCrypto, VaultKeys, VaultProjectionCache, VaultRecordSet,
+    VaultResult, VaultUnlock, genesis_members_records,
 };
 
 fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> VaultResult<String> {
@@ -14,7 +14,7 @@ fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> Vault
         &keys.members_key,
         "2026-06-28T00:00:00Z",
     )?);
-    let store_id = generate_store_id()?;
+    let store_id = StoreId::generate()?;
     Ok(VaultRecordSet::serialize_yaml_with_unlock(
         &records,
         &VaultUnlock::Keys,

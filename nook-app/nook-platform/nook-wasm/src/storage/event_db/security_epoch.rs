@@ -456,7 +456,7 @@ mod browser {
 
     impl EventFixture {
         fn new() -> anyhow::Result<Self> {
-            let store_id = nook_core::generate_store_id()?;
+            let store_id = nook_core::StoreId::generate()?;
             let (signing, _) = SigningIdentity::generate()?;
             let created_at = IsoTimestamp::parse("2026-08-14T00:00:00Z")?;
             let genesis = StoredEvent::new(nook_core::build_genesis_import_event(

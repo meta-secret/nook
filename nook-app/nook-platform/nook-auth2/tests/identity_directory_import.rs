@@ -1,6 +1,6 @@
 use nook_auth2::{
     AgeArmoredCiphertext, AppKey, IdentityDirectory, IdentityVaultDekEpoch,
-    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, VaultKeys, generate_store_id,
+    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, StoreId, VaultKeys,
 };
 
 fn envelopes_for(
@@ -22,13 +22,13 @@ fn imported_vault_reuses_identity_that_owns_app_key() -> anyhow::Result<()> {
     let app_key = AppKey::generate()?;
     let mut directory = IdentityDirectory::empty();
     let identity_id = directory.create_identity("Personal", &app_key, None)?;
-    let first_store = generate_store_id()?;
+    let first_store = StoreId::generate()?;
     let _ = directory.open_or_generate_vault_dek_for_identity(
         &identity_id,
         &app_key,
         first_store.clone(),
     )?;
-    let imported_store = generate_store_id()?;
+    let imported_store = StoreId::generate()?;
     let imported_keys = VaultKeys::generate()?;
     let (secrets_envelope, members_envelope) = envelopes_for(&app_key, &imported_keys)?;
 

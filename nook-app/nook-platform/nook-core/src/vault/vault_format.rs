@@ -166,7 +166,7 @@ impl<'a> VaultFormatDocument<'a> {
         Self::ensure_supported_schema(vault.schema_version.into())?;
         match vault.store_id {
             Some(id) => Ok(VaultStoreIdentity::Assigned(
-                crate::validate_store_id(&id)?.to_string(),
+                crate::StoreId::parse(&id)?.to_string(),
             )),
             None => Ok(VaultStoreIdentity::Unassigned),
         }
@@ -329,7 +329,7 @@ impl VaultRecordSet {
     ) -> VaultFormatResult<VaultStoreIdentity> {
         match store_id {
             VaultStoreIdentityRef::Assigned(id) if !id.trim().is_empty() => Ok(
-                VaultStoreIdentity::Assigned(crate::normalize_store_id(id.trim())?.to_string()),
+                VaultStoreIdentity::Assigned(crate::StoreId::parse(id.trim())?.to_string()),
             ),
             VaultStoreIdentityRef::Unassigned | VaultStoreIdentityRef::Assigned(_) => {
                 Ok(VaultStoreIdentity::Unassigned)

@@ -71,8 +71,8 @@ mod tests {
     #[test]
     fn hydrate_fails_closed_for_sentinel_projection_yaml() -> anyhow::Result<()> {
         use crate::{
-            DeviceMode, SentinelPolicy, VaultArchitecture, VaultRecordSet, VaultType,
-            create_sentinel_share_records, generate_store_id,
+            DeviceMode, SentinelPolicy, StoreId, VaultArchitecture, VaultRecordSet, VaultType,
+            create_sentinel_share_records,
         };
 
         let keys = VaultKeys::generate()?;
@@ -89,7 +89,7 @@ mod tests {
             },
         );
         assert_eq!(architecture.vault_type, VaultType::Sentinel);
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &shares,
             &VaultUnlock::Keys,

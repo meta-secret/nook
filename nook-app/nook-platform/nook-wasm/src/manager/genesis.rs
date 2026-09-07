@@ -157,7 +157,7 @@ impl NookVaultManager {
             }
         }
         if self.vault.store_id.is_empty() {
-            self.vault.store_id = nook_core::generate_store_id()?.to_string();
+            self.vault.store_id = nook_core::StoreId::generate()?.to_string();
         }
         if !self.event_log_has_events().await? {
             self.bootstrap_event_log_genesis().await?;

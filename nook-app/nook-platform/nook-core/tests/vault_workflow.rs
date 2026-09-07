@@ -10,7 +10,7 @@ use nook_core::{
     PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
     SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultFormatDocument,
     VaultMetaState, VaultRecordSet, filter_secrets, generate_password, validate_connect,
-    validate_secret_data, validate_secret_id,
+    validate_secret_data,
 };
 use std::collections::HashMap;
 use std::hash::{DefaultHasher, Hash, Hasher};
@@ -149,7 +149,7 @@ fn incremental_add_secret_matches_full_reencrypt() -> anyhow::Result<()> {
     let db = sample_db();
     let mut armored = armored_cache_from_db(&db, &crypto)?;
 
-    let label = validate_secret_id("  secret_SMypl8K0w9Y  ")?;
+    let label = SecretId::parse("  secret_SMypl8K0w9Y  ")?;
     validate_secret_data("generated-secret")?;
     armored.insert(
         label.clone(),

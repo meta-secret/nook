@@ -12,7 +12,6 @@ use crate::errors::{SessionError, SessionResult, VaultResult};
 use crate::{
     BackupCodeAttachMode, BackupCodePersistenceVerification, Database, SecretId, SecretType,
     SecretValue, StoredRecordPayload, VaultCrypto, VaultMetaState, validate_secret_data,
-    validate_secret_id,
 };
 
 /// Replacement payload admitted by a plaintext or encrypted session.
@@ -47,8 +46,8 @@ impl PlaintextSecretSession<'_> {
             state,
             crypto,
         } = self;
-        let old_id = validate_secret_id(input.old_id)?;
-        let new_id = validate_secret_id(input.new_id)?;
+        let old_id = SecretId::parse(input.old_id)?;
+        let new_id = SecretId::parse(input.new_id)?;
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
@@ -148,8 +147,8 @@ impl<'a> EncryptedSecretSession<'a> {
     ) -> SessionResult<PreparedEncryptedSecretReplacement<'a>> {
         let state = &self.state;
         let crypto = self.crypto;
-        let old_id = validate_secret_id(input.old_id)?;
-        let new_id = validate_secret_id(input.new_id)?;
+        let old_id = SecretId::parse(input.old_id)?;
+        let new_id = SecretId::parse(input.new_id)?;
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
@@ -182,8 +181,8 @@ impl<'a> EncryptedSecretSession<'a> {
     ) -> VaultResult<PreparedEncryptedSecretReplacement<'a>> {
         let state = &self.state;
         let crypto = self.crypto;
-        let old_id = validate_secret_id(input.replacement.old_id)?;
-        let new_id = validate_secret_id(input.replacement.new_id)?;
+        let old_id = SecretId::parse(input.replacement.old_id)?;
+        let new_id = SecretId::parse(input.replacement.new_id)?;
         let previous_old = state
             .secrets
             .get(&old_id)

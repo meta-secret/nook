@@ -639,7 +639,7 @@ mod tests {
 
         let later_key = AppKey::generate()?;
         let _ =
-            directory.open_or_generate_vault_dek(&extension_key, crate::generate_store_id()?)?;
+            directory.open_or_generate_vault_dek(&extension_key, crate::StoreId::generate()?)?;
         assert!(matches!(
             directory.enroll_selected_app_key_for_vault_creation(&later_key, "Personal"),
             Err(MultiDeviceError::IdentityEnrollmentRequired)
@@ -653,7 +653,7 @@ mod tests {
         let extension_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
         let owner_id = directory.create_identity("Personal", &website_key, None)?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let expected_keys = directory.open_or_generate_vault_dek(&website_key, store_id.clone())?;
         let epoch = known_epoch('a', 'b')?;
         directory.selected_mut()?.vault_deks[0].key_epoch = epoch.clone();
@@ -687,7 +687,7 @@ mod tests {
             signing_public_key: crate::DeviceSigningPublicKey::Unavailable,
             label: None,
         })?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let keys = directory.open_or_generate_vault_dek(&authorizer, store_id.clone())?;
         directory.reconcile_vault_dek(
             &authorizer,
@@ -738,7 +738,7 @@ mod tests {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
         let owner_id = directory.create_identity("Personal", &app_key, None)?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let original = directory.open_or_generate_vault_dek(&app_key, store_id.clone())?;
         directory.create_identity("Work", &app_key, None)?;
 
@@ -771,7 +771,7 @@ mod tests {
         let app_key = AppKey::generate()?;
         let mut directory = IdentityDirectory::empty();
         let personal = directory.create_identity("Personal", &app_key, None)?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let keys = crate::VaultKeys::generate()?;
         let imported = IdentityRecord::synthesize_from_legacy_vault(
             "Imported",
@@ -819,7 +819,7 @@ mod tests {
 
         directory
             .selected_mut()?
-            .generate_vault_dek(crate::generate_store_id()?)?;
+            .generate_vault_dek(crate::StoreId::generate()?)?;
         let recovered_app_key = AppKey::generate()?;
         let imported_vault = directory.selected()?.vault_deks[0].clone();
         let recovered_secrets_envelope = recovered_app_key
@@ -878,7 +878,7 @@ mod tests {
     #[test]
     fn device_recovery_removes_stale_local_ownership() -> anyhow::Result<()> {
         let inaccessible_key = AppKey::generate()?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let mut directory = IdentityDirectory::empty();
         let identity_id = directory.create_identity("Personal", &inaccessible_key, None)?;
         let peer_key = AppKey::generate()?;

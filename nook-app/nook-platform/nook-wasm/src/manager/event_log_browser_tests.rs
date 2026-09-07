@@ -597,7 +597,7 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
         .map_err(|error| anyhow::anyhow!("protect extension device identity: {error:?}"))?;
     let identity = source.device_identity()?;
     source.initialize_genesis_vault(&identity)?;
-    source.vault.store_id = nook_core::generate_store_id()?.to_string();
+    source.vault.store_id = nook_core::StoreId::generate()?.to_string();
     source.bootstrap_event_log_genesis().await?;
     source.persist_projection_cache().await?;
     if with_update {
@@ -629,7 +629,7 @@ async fn import_fixture(with_update: bool) -> anyhow::Result<ImportFixture> {
 async fn replacement_manager(
     fixture: &ImportFixture,
 ) -> anyhow::Result<(NookVaultManager, String)> {
-    let previous_store_id = nook_core::generate_store_id()?.to_string();
+    let previous_store_id = nook_core::StoreId::generate()?.to_string();
     let previous_projection =
         nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &[],
@@ -794,7 +794,7 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
         .map_err(|error| anyhow::anyhow!("protect device: {error:?}"))?;
     let identity = source.device_identity()?;
     source.initialize_genesis_vault(&identity)?;
-    source.vault.store_id = nook_core::generate_store_id()?.to_string();
+    source.vault.store_id = nook_core::StoreId::generate()?.to_string();
     source.bootstrap_event_log_genesis().await?;
     source
         .add_vault_password_for_e2e("Recovery".to_owned(), "import-backup-password".to_owned())
@@ -811,7 +811,7 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
         })
         .collect::<Vec<_>>();
 
-    let previous_store_id = nook_core::generate_store_id()?.to_string();
+    let previous_store_id = nook_core::StoreId::generate()?.to_string();
     let previous_projection =
         nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &[],

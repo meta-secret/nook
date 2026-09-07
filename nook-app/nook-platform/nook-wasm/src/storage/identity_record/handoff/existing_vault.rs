@@ -194,7 +194,7 @@ mod tests {
         fn new() -> Result<Self, NookError> {
             let identity = DeviceIdentity::generate().map_err(identity_record::map_domain_error)?;
             let store_id =
-                nook_core::generate_store_id().map_err(identity_record::map_domain_error)?;
+                nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
             let mut material = IdentityDirectory::empty();
             let identity_id = material
                 .create_identity("Imported", &identity, None)

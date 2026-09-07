@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn retry_reset_preserves_the_staged_handoff_signer() -> Result<(), NookError> {
-        let staged_store_id = nook_core::generate_store_id()?;
+        let staged_store_id = nook_core::StoreId::generate()?;
         let authorizer = AppKey::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
@@ -119,7 +119,7 @@ mod tests {
     -> Result<(), NookError> {
         let context = NookExtensionIdentityHandoffContext {
             value: ExtensionIdentityHandoffContextValue::PairedVault {
-                store_id: nook_core::generate_store_id()?,
+                store_id: nook_core::StoreId::generate()?,
             },
         };
 
@@ -150,7 +150,7 @@ mod tests {
             }
         ));
 
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let paired = NookExtensionIdentityHandoffContext {
             value: ExtensionIdentityHandoffContextValue::PairedVault {
                 store_id: store_id.clone(),

@@ -633,7 +633,7 @@ mod tests {
     )]
     async fn outbox_publication_failure_and_durable_completion() -> anyhow::Result<()> {
         let fixture = OutboxFixture {
-            provider_id: format!("outbox-lifecycle-{}", nook_core::generate_store_id()?),
+            provider_id: format!("outbox-lifecycle-{}", nook_core::StoreId::generate()?),
             event_id: EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?,
             bytes: b"invalid event fixture".to_vec(),
         };
@@ -902,7 +902,7 @@ mod tests {
     )]
     async fn wasm_current_projection_persists_its_key_epoch() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.vault.store_id = format!("store_sync_epoch_{}", nook_core::generate_store_id()?);
+        manager.vault.store_id = format!("store_sync_epoch_{}", nook_core::StoreId::generate()?);
         let epoch = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let projection = nook_core::VaultProjection {
             epoch: ProjectionEpoch::Current(nook_core::KeyEpoch(epoch.clone())),

@@ -531,7 +531,7 @@ mod tests {
             .map_err(|error| anyhow::anyhow!("protect device: {error:?}"))?;
         let identity = manager.device_identity()?;
         manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
 
         manager.bootstrap_event_log_genesis().await?;
         assert_eq!(manager.event_log.heads.len(), 1);

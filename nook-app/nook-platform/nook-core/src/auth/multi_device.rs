@@ -343,7 +343,7 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let auth = extension.auth_record(&keys.secrets_key, &keys.members_key)?;
         let envelopes = crate::AuthEnvelopes::parse(auth.value.as_str())?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let mut graph = EventGraph::new();
         let approval = signed_event(
             &signing,
@@ -439,7 +439,7 @@ mod tests {
         let keys = crate::VaultKeys::generate()?;
         let auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
         let mut meta = VaultMetaState::from_stored_records(&[auth])?;
-        let secret_id = crate::generate_secret_id()?;
+        let secret_id = crate::SecretId::generate()?;
         meta.secrets.insert(
             secret_id.clone(),
             (
@@ -531,7 +531,7 @@ mod tests {
         let extension = DeviceIdentity::generate()?;
         let (owner_signing, _) = SigningIdentity::generate()?;
         let (extension_signing, _) = SigningIdentity::generate()?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let owner_keys = crate::VaultKeys::generate()?;
         let owner_auth = crate::AuthEnvelopes::parse(
             owner

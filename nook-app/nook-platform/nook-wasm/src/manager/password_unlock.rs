@@ -160,7 +160,7 @@ mod browser_tests {
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
         )
         .issue()?;
-        let store_id = nook_core::generate_store_id()?.to_string();
+        let store_id = nook_core::StoreId::generate()?.to_string();
         let architecture = VaultArchitecture::sentinel_personal(
             DeviceMode::Standard,
             SentinelPolicy {
@@ -217,7 +217,7 @@ mod browser_tests {
         );
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let records = database.to_stored_records_with_crypto(&crypto)?;
-        let store_id = nook_core::generate_store_id()?.to_string();
+        let store_id = nook_core::StoreId::generate()?.to_string();
         let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Keys,
@@ -259,7 +259,7 @@ mod browser_tests {
         )
         .issue()?;
         let mut owner = NookVaultManager::new();
-        owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.vault.store_id = nook_core::StoreId::generate()?.to_string();
         owner.device.identity_private_key = identity.secret_string().into_inner();
         owner.apply_genesis_vault_keys(&identity, &keys)?;
         owner.vault.password_entries = vec![password_entry.clone()];
@@ -304,7 +304,7 @@ mod browser_tests {
         let mut records = database.to_stored_records_with_crypto(&crypto)?;
         let joiner = DeviceIdentity::generate()?;
         records.push(nook_core::JoinRequestIssuance::new(&joiner, "2026-09-07T00:00:00Z").issue()?);
-        let store_id = nook_core::generate_store_id()?.to_string();
+        let store_id = nook_core::StoreId::generate()?.to_string();
         let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Keys,
@@ -330,7 +330,7 @@ mod browser_tests {
         let owner_identity = DeviceIdentity::generate()?;
         let joiner_identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.device.identity_private_key = owner_identity.secret_string().into_inner();
         manager.apply_genesis_vault_keys(&owner_identity, &keys)?;
         manager.bootstrap_event_log_genesis().await?;

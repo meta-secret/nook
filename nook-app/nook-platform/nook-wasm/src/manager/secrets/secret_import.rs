@@ -123,7 +123,7 @@ impl<'a> CoalescedSecretImport<'a> {
                 let mut yaml = enriched.to_yaml()?;
                 let ciphertext = crypto.encrypt_value(yaml.as_str())?;
                 yaml.zeroize_plaintext();
-                let new_id = nook_core::generate_secret_id()?;
+                let new_id = nook_core::SecretId::generate()?;
                 ImportItemOutcome::Operation(VaultOperation::SecretReplaced {
                     old_id: record.key.clone(),
                     new_secret: nook_core::EncryptedSecretPayload::from_armored(
@@ -149,7 +149,7 @@ impl<'a> CoalescedSecretImport<'a> {
         let ciphertext = crypto.encrypt_value(yaml.as_str())?;
         yaml.zeroize_plaintext();
         value.zeroize_plaintext();
-        let id = nook_core::generate_secret_id()?;
+        let id = nook_core::SecretId::generate()?;
         Ok(ImportItemOutcome::Operation(
             VaultOperation::SecretCreated {
                 secret: nook_core::EncryptedSecretPayload::from_armored(
@@ -598,7 +598,7 @@ mod import_tests {
             let encrypted = crypto.encrypt_value(yaml.as_str())?;
             yaml.zeroize_plaintext();
             let record = StoredSecretRecord {
-                key: nook_core::generate_secret_id()?,
+                key: nook_core::SecretId::generate()?,
                 secret_type: Some(value.secret_type()),
                 value: StoredRecordPayload::from_age_armored(encrypted),
             };
@@ -797,7 +797,7 @@ mod prepared_page_tests {
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()
+        manager.vault.store_id = nook_core::StoreId::generate()
             .map_err(|error| JsError::new(&error.to_string()))?
             .to_string();
         manager.vault.last_synced_content = manager.serialize_current_projection_yaml()?;
@@ -832,7 +832,7 @@ mod secret_import_browser_tests {
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.bootstrap_event_log_genesis().await?;
         manager.drain_status_log();
         Ok(manager)

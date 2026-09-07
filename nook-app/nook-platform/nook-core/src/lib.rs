@@ -358,10 +358,7 @@ pub use vault_format::{
 };
 pub use vault_ids::{
     AUTH_KEY_ID_PREFIX, AuthKeyId, CompactToken, DeviceId, SECRET_ID_PREFIX, STORE_ID_PREFIX,
-    SecretId, StoreId, auth_key_digest, format_auth_key_id, format_secret_id, format_store_id,
-    generate_secret_id, generate_store_id, is_auth_key_id, is_compact_token, is_device_id,
-    normalize_auth_key_id, normalize_secret_id_for_write, normalize_store_id, validate_secret_id,
-    validate_store_id,
+    SecretId, StoreId,
 };
 pub use vault_runtime_policy::{
     ClientRunMode, DEFAULT_VAULT_IDLE_TIMEOUT_MS, DEFAULT_VAULT_IDLE_WARNING_MS,
@@ -409,8 +406,8 @@ mod test_support {
     use crate::{VaultStoreIdentityRef, VaultVersionWrite};
 
     use crate::{
-        DeviceIdentity, SecretId, StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultRecordSet,
-        VaultResult, VaultUnlock, generate_store_id, genesis_members_records,
+        DeviceIdentity, SecretId, StoreId, StoredRecordPayload, StoredVaultYaml, VaultKeys,
+        VaultRecordSet, VaultResult, VaultUnlock, genesis_members_records,
     };
 
     pub(crate) fn sample_vault_yaml(
@@ -444,7 +441,7 @@ mod test_support {
             &keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock(
             &records,
             &VaultUnlock::Keys,

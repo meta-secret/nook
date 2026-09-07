@@ -277,8 +277,8 @@ mod tests {
         );
     }
     use crate::{
-        DeviceMode, ReplicationType, SentinelPolicy, VaultKeys, VaultRecordSet, VaultResult,
-        generate_store_id,
+        DeviceMode, ReplicationType, SentinelPolicy, StoreId, VaultKeys, VaultRecordSet,
+        VaultResult,
     };
 
     #[test]
@@ -354,7 +354,7 @@ mod tests {
                 ready_participants: 2.into(),
             }),
         };
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let error = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &records,
             &VaultUnlock::Keys,
@@ -401,7 +401,7 @@ mod tests {
                 ready_participants: 3.into(),
             },
         );
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &records,
             &VaultUnlock::Keys,

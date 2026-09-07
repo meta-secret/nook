@@ -64,7 +64,7 @@ impl AuthYamlRecord {
         let envelopes = crate::AuthEnvelopes::parse(record.value.as_str())
             .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
         Ok(Self {
-            pk_id: crate::normalize_auth_key_id(record.key.as_str())
+            pk_id: crate::AuthKeyId::parse(record.key.as_str())
                 .map_or_else(|_| record.key.to_string(), |id| id.to_string()),
             secrets_key: envelopes.secrets_key.as_str().to_owned(),
             members_key: envelopes.members_key.as_str().to_owned(),
@@ -72,7 +72,7 @@ impl AuthYamlRecord {
     }
 
     pub(super) fn into_stored_record(self) -> VaultFormatResult<StoredSecretRecord> {
-        let pk_id = crate::normalize_auth_key_id(&self.pk_id)
+        let pk_id = crate::AuthKeyId::parse(&self.pk_id)
             .map(|id| id.to_string())
             .unwrap_or(self.pk_id);
         Ok(StoredSecretRecord {
@@ -91,7 +91,7 @@ impl AuthYamlRecord {
 
 impl MembersYamlRecord {
     pub(super) fn into_stored_record(self) -> VaultFormatResult<StoredSecretRecord> {
-        let pk_id = crate::normalize_auth_key_id(&self.pk_id)
+        let pk_id = crate::AuthKeyId::parse(&self.pk_id)
             .map(|id| id.to_string())
             .unwrap_or(self.pk_id);
         Ok(StoredSecretRecord {
@@ -133,7 +133,7 @@ impl StoredVaultYaml {
             }
         }
         for secret in &mut vault.secrets {
-            if let Ok(id) = crate::normalize_secret_id_for_write(secret.key.as_str()) {
+            if let Ok(id) = crate::SecretId::parse(secret.key.as_str()) {
                 secret.key = id;
             }
         }
