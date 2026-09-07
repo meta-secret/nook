@@ -206,6 +206,7 @@ impl AuthenticationAdvanceControlObservation {
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Generic
                     | AuthenticationUsernameEvidence::StandardsBasedEmail
+                    | AuthenticationUsernameEvidence::WebAuthnEmail
             )
         {
             return None;
@@ -381,6 +382,7 @@ mod tests {
         for evidence in [
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut report = AuthenticationAdvanceControlObservation::login_control();
             report.source_origin = "https://accounts.google.com".to_owned();
@@ -679,6 +681,7 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut rejected = identifier.clone();
             rejected.authentication_username = evidence;
@@ -855,6 +858,7 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut rejected =
                 AuthenticationAdvanceControlObservation::microsoft_consumer_identifier_advance();

@@ -1,0 +1,25 @@
+{
+  "id": "tesla",
+  "quirks": [
+    "form-method-omitted",
+    "form-action-omitted",
+    "input-type-omitted",
+    "email-webauthn-autocomplete",
+    "submit-disabled-until-input"
+  ],
+  "steps": [
+    {
+      "fields": [
+        {
+          "name": "identity",
+          "autocomplete": "email webauthn",
+          "aria-label": "Email"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Next"
+      }
+    }
+  ]
+}

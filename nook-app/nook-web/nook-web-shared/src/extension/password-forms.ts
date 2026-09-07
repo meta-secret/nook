@@ -58,8 +58,7 @@ import {
   formBlocksCredentialDisclosure,
   selectedSubmitterBlocksCredentialDisclosure,
   formSubmissionMethod,
-  FormSubmissionResult,
-  PageControlSubmissionMethod,
+  FormSubmissionResult, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT, PageControlSubmissionMethod,
   isRenderedControl,
   observeSubmit,
   ownedFormIdentity,
@@ -309,10 +308,11 @@ function transportableControlObservation(
 ): AuthenticationAdvanceControlObservation[] {
   const observation = pageControlObservation(request);
   if (observation.submissionMethod === PageControlSubmissionMethod.Dialog) return [];
-  if (observation.submissionMethod === PageControlSubmissionMethod.Get &&
-    (request.observation.summary.usernameFieldCount !== 1 ||
-      !authentication_advance_control_is_safe(observation))
-  ) return [];
+  if (
+    observation.submissionMethod === PageControlSubmissionMethod.Get &&
+    request.observation.summary.usernameFieldCount !== 1
+  )
+    return [];
   return authenticationFactStringsAreTransportable([
     observation.sourceOrigin,
     observation.formIdentity,
@@ -406,8 +406,10 @@ export function authenticationPageObservationFacts({
   const advanceControls = scopedAdvanceControls(observation).sort(
     semanticSubmitControlsFirst,
   );
-  const semanticSubmitControlCount =
-    countedSemanticSubmitControls(advanceControls);
+  const semanticSubmitControlCount = Math.min(
+    advanceControls.filter((control) => control.matches(semanticSubmitControlSelector)).length,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+  );
   const passkeyControls = findPasskeyControls(controlRoot).filter(
     ({ control }) => {
       const associationRequest: ControlObservationAssociationRequest = {
@@ -637,7 +639,6 @@ export function authenticationPageObservationFacts({
     detailedAdvanceControl,
   };
 }
-
 export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
   const root = document;
   const nookTypedArgs0_10: Parameters<typeof findPasswordFields>[0] = { root };
@@ -666,7 +667,6 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
   if (authFieldCount === 0) {
     return passkeyOnly;
   }
-
   const forms = Array.from(
     root.querySelectorAll<HTMLFormElement>("form"),
   ).filter((form) => {

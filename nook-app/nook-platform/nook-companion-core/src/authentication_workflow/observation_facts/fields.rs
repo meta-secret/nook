@@ -33,6 +33,7 @@ impl AuthenticationFieldObservationFacts {
                 && matches!(
                     observation.authentication_username,
                     AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::WebAuthnEmail
                         | AuthenticationUsernameEvidence::Explicit
                 );
         }

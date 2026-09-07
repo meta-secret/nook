@@ -812,7 +812,7 @@ describe('website one-time-code fields', () => {
     ).toEqual({ kind: 'absent' })
   })
 
-  test('counts only actionable semantic submitters for Rust ambiguity', () => {
+  test('counts structural semantic submitters for Rust ambiguity', () => {
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/auth/login">
         <input autocomplete="username" />
@@ -832,7 +832,7 @@ describe('website one-time-code fields', () => {
       observations: expect.arrayContaining([
         expect.objectContaining({
           label: expect.stringContaining('Proceed'),
-          semanticSubmitControlCount: 1,
+          semanticSubmitControlCount: 2,
         }),
       ]),
     })
