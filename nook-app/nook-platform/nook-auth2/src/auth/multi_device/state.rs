@@ -1,9 +1,14 @@
 use super::{
-    AgeArmoredCiphertext, AppId, AuthEnvelopes, AuthKeyId, Deserialize, DeviceId,
-    DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey, ExposeSecret, HashMap, Identity,
-    MultiDeviceError, MultiDeviceResult, SENTINEL_SHARE_RECORD_PREFIX, SecretId, SecretType,
+    AgeArmoredCiphertext, AuthEnvelopes, Deserialize, DeviceIdentitySecret, DevicePublicKey,
+    DeviceSigningPublicKey, SENTINEL_SHARE_RECORD_PREFIX, SecretId, SecretType,
     SentinelShareEnvelope, Serialize, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
+    parse_sentinel_share_envelope, sentinel_share_record_key,
 };
+use crate::errors::{MultiDeviceError, MultiDeviceResult};
+use crate::{AppId, AuthKeyId, DeviceId};
+use age::secrecy::ExposeSecret;
+use age::x25519::Identity;
+use std::collections::HashMap;
 
 pub const MEMBER_RECORD_PREFIX: &str = "member:";
 

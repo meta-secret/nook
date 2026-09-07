@@ -160,7 +160,7 @@ impl SentinelGenesisSession {
             threshold,
         };
         policy.validate()?;
-        let session_id = multi_device::CompactToken::generate()?;
+        let session_id = crate::CompactToken::generate()?;
         let signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
         let mut request = SentinelGenesisRequest {
             version: GENESIS_VERSION,

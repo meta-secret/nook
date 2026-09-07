@@ -9,7 +9,7 @@
 //! together only after the complete `N`-participant roster has been verified.
 //! Sentinel roots are split with the current extendable SLIP-0039 format.
 
-use super::multi_device::{self, DeviceIdentity, VaultMetaRecord};
+use super::multi_device::{DeviceIdentity, VaultMetaRecord};
 mod links;
 mod session;
 pub use super::sentinel_genesis_types::*;

@@ -5,11 +5,11 @@
 )]
 
 use super::{
-    AuthRecordIssuance, DeviceIdentity, DeviceSigningPublicKey, JoinRequest, MultiDeviceError,
-    MultiDeviceResult, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
-    build_members_records, genesis_members_records, member_from_identity, member_from_join,
-    resolve_member_roster, roster_add_member,
+    AuthRecordIssuance, DeviceIdentity, DeviceSigningPublicKey, JoinRequest, StoredRecordPayload,
+    StoredSecretRecord, SymmetricKey, build_members_records, genesis_members_records,
+    member_from_identity, member_from_join, resolve_member_roster, roster_add_member,
 };
+use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{DeviceId, SecretId};
 
 /// Borrowed identity data awaiting one consuming join-request record issuance.

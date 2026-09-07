@@ -224,7 +224,7 @@ impl<'a> VaultRecordView<'a> {
         Ok(user_records)
     }
 
-    pub fn auth_envelopes(&self, identity: &DeviceIdentity) -> MultiDeviceResult<AuthEnvelopes> {
+    pub fn auth_envelopes(&self, identity: &AppKey) -> MultiDeviceResult<AuthEnvelopes> {
         let auth_id = identity.auth_id();
         let record = self
             .records
@@ -237,12 +237,12 @@ impl<'a> VaultRecordView<'a> {
         AuthEnvelopes::parse(record.value.as_str())
     }
 
-    pub fn secrets_key(&self, identity: &DeviceIdentity) -> MultiDeviceResult<SymmetricKey> {
+    pub fn secrets_key(&self, identity: &AppKey) -> MultiDeviceResult<SymmetricKey> {
         let envelopes = self.auth_envelopes(identity)?;
         identity.decrypt_envelope(&envelopes.secrets_key)
     }
 
-    pub fn members_key(&self, identity: &DeviceIdentity) -> MultiDeviceResult<SymmetricKey> {
+    pub fn members_key(&self, identity: &AppKey) -> MultiDeviceResult<SymmetricKey> {
         let envelopes = self.auth_envelopes(identity)?;
         identity.decrypt_envelope(&envelopes.members_key)
     }

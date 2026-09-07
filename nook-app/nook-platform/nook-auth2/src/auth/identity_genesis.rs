@@ -1,9 +1,7 @@
 //! Vault authorization rows derived from an identity's complete app-key roster.
 
 use super::identity::IdentityRecord;
-use super::multi_device::{
-    AuthRecordIssuance, VaultKeys, VaultMember, VaultRecordView, build_members_records,
-};
+use super::multi_device::{AuthRecordIssuance, VaultKeys, VaultMember, build_members_records};
 use crate::{MultiDeviceError, MultiDeviceResult, StoredSecretRecord};
 
 /// Authorize every member of an identity in a new Simple vault.
@@ -51,7 +49,7 @@ pub fn identity_vault_genesis_records(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{AppKey, IdentityMember};
+    use crate::{AppKey, IdentityMember, VaultRecordView};
 
     #[test]
     fn genesis_authorizes_every_identity_member() -> anyhow::Result<()> {
