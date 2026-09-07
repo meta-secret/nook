@@ -5,7 +5,6 @@ import {
   TESLA_MOCK_EMAIL,
   TeslaAuthControl,
   TeslaAuthEmailMatch,
-  TeslaAuthInteractionState,
   TeslaAuthMockScenario,
   TeslaAuthPresentationState,
   TeslaAuthPrimaryActivationState,
@@ -18,12 +17,7 @@ describe('Tesla authentication mock', () => {
     email: TESLA_MOCK_EMAIL,
     submittedControl: TeslaAuthControl.Next,
     primaryActivation: TeslaAuthPrimaryActivationState.Activated,
-    troubleInteraction: TeslaAuthInteractionState.Untouched,
-    createAccountInteraction: TeslaAuthInteractionState.Untouched,
-    languageInteraction: TeslaAuthInteractionState.Untouched,
-    homeInteraction: TeslaAuthInteractionState.Untouched,
-    privacyInteraction: TeslaAuthInteractionState.Untouched,
-    contactInteraction: TeslaAuthInteractionState.Untouched,
+    auxiliaryActivationCount: 0,
   }
 
   test('completes only through the observed email continuation', () => {
@@ -48,30 +42,7 @@ describe('Tesla authentication mock', () => {
       'repeated activation',
       { primaryActivation: TeslaAuthPrimaryActivationState.Repeated },
     ],
-    [
-      'trouble activation',
-      { troubleInteraction: TeslaAuthInteractionState.Activated },
-    ],
-    [
-      'account creation activation',
-      { createAccountInteraction: TeslaAuthInteractionState.Activated },
-    ],
-    [
-      'language activation',
-      { languageInteraction: TeslaAuthInteractionState.Activated },
-    ],
-    [
-      'home activation',
-      { homeInteraction: TeslaAuthInteractionState.Activated },
-    ],
-    [
-      'privacy activation',
-      { privacyInteraction: TeslaAuthInteractionState.Activated },
-    ],
-    [
-      'contact activation',
-      { contactInteraction: TeslaAuthInteractionState.Activated },
-    ],
+    ['auxiliary activation', { auxiliaryActivationCount: 1 }],
   ])('rejects %s', (_, changed) => {
     expect(
       TeslaAuthMockScenario.transition({ ...emailContinuation, ...changed }),

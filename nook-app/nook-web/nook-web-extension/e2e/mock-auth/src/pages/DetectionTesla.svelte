@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    TeslaAuthInteractionState,
     TeslaAuthMockScenario,
     TeslaAuthPresentationState,
     TeslaAuthPrimaryActivationState,
@@ -12,40 +11,12 @@
 
   let email = $state('')
   let primaryActivation = $state(TeslaAuthPrimaryActivationState.Untouched)
-  let troubleInteraction = $state(TeslaAuthInteractionState.Untouched)
-  let createAccountInteraction = $state(TeslaAuthInteractionState.Untouched)
-  let languageInteraction = $state(TeslaAuthInteractionState.Untouched)
-  let homeInteraction = $state(TeslaAuthInteractionState.Untouched)
-  let privacyInteraction = $state(TeslaAuthInteractionState.Untouched)
-  let contactInteraction = $state(TeslaAuthInteractionState.Untouched)
+  let auxiliaryActivationCount = $state(0)
   let presentationState = $state(TeslaAuthPresentationState.Ready)
 
-  function recordTrouble(event: MouseEvent): void {
+  function recordAuxiliary(event: MouseEvent): void {
     event.preventDefault()
-    troubleInteraction = TeslaAuthInteractionState.Activated
-  }
-
-  function recordCreateAccount(): void {
-    createAccountInteraction = TeslaAuthInteractionState.Activated
-  }
-
-  function recordLanguage(): void {
-    languageInteraction = TeslaAuthInteractionState.Activated
-  }
-
-  function recordHome(event: MouseEvent): void {
-    event.preventDefault()
-    homeInteraction = TeslaAuthInteractionState.Activated
-  }
-
-  function recordPrivacy(event: MouseEvent): void {
-    event.preventDefault()
-    privacyInteraction = TeslaAuthInteractionState.Activated
-  }
-
-  function recordContact(event: MouseEvent): void {
-    event.preventDefault()
-    contactInteraction = TeslaAuthInteractionState.Activated
+    auxiliaryActivationCount += 1
   }
 
   function activateNext(event: SubmitEvent): void {
@@ -61,12 +32,7 @@
       email,
       submittedControl,
       primaryActivation,
-      troubleInteraction,
-      createAccountInteraction,
-      languageInteraction,
-      homeInteraction,
-      privacyInteraction,
-      contactInteraction,
+      auxiliaryActivationCount,
     })
     sessionStorage.setItem(
       EVIDENCE_KEY,
@@ -74,12 +40,7 @@
         submittedControl,
         emailMatch: TeslaAuthMockScenario.emailMatch(email),
         primaryActivation,
-        troubleInteraction,
-        createAccountInteraction,
-        languageInteraction,
-        homeInteraction,
-        privacyInteraction,
-        contactInteraction,
+        auxiliaryControlsUntouched: auxiliaryActivationCount === 0,
       }),
     )
     if (transition === TeslaAuthTransitionKind.Rejected) {
@@ -93,8 +54,10 @@
 <svelte:head><title>Tesla Auth - Sign In</title></svelte:head>
 
 <header>
-  <a href="https://www.tesla.com/" aria-label="Tesla home" onclick={recordHome}
-    >Tesla</a
+  <a
+    href="https://www.tesla.com/"
+    aria-label="Tesla home"
+    onclick={recordAuxiliary}>Tesla</a
   >
 </header>
 <main>
@@ -116,12 +79,12 @@
     <button type="submit" disabled={email.trim().length === 0}>Next</button>
   </form>
 
-  <a href="/forgot" onclick={recordTrouble}>Trouble Signing In?</a>
+  <a href="/forgot" onclick={recordAuxiliary}>Trouble Signing In?</a>
   <p>Or</p>
-  <button type="button" onclick={recordCreateAccount}>Create Account</button>
-  <button type="button" onclick={recordLanguage}>Select Language</button>
+  <button type="button" onclick={recordAuxiliary}>Create Account</button>
+  <button type="button" onclick={recordAuxiliary}>Select Language</button>
 </main>
 <footer>
-  <a href="/privacy" onclick={recordPrivacy}>Privacy</a>
-  <a href="/contact" onclick={recordContact}>Contact</a>
+  <a href="/privacy" onclick={recordAuxiliary}>Privacy</a>
+  <a href="/contact" onclick={recordAuxiliary}>Contact</a>
 </footer>

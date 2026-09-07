@@ -13,11 +13,6 @@ enum TeslaAuthControlLabel {
   CreateAccount = 'Create Account',
 }
 
-export enum TeslaAuthInteractionState {
-  Untouched = 'untouched',
-  Activated = 'activated',
-}
-
 export enum TeslaAuthPrimaryActivationState {
   Untouched = 'untouched',
   Activated = 'activated',
@@ -43,12 +38,7 @@ export type TeslaAuthSubmission = {
   readonly email: string
   readonly submittedControl: TeslaAuthControl
   readonly primaryActivation: TeslaAuthPrimaryActivationState
-  readonly troubleInteraction: TeslaAuthInteractionState
-  readonly createAccountInteraction: TeslaAuthInteractionState
-  readonly languageInteraction: TeslaAuthInteractionState
-  readonly homeInteraction: TeslaAuthInteractionState
-  readonly privacyInteraction: TeslaAuthInteractionState
-  readonly contactInteraction: TeslaAuthInteractionState
+  readonly auxiliaryActivationCount: number
 }
 
 export class TeslaAuthMockScenario {
@@ -84,13 +74,7 @@ export class TeslaAuthMockScenario {
       submission.submittedControl === TeslaAuthControl.Next &&
       submission.primaryActivation ===
         TeslaAuthPrimaryActivationState.Activated &&
-      submission.troubleInteraction === TeslaAuthInteractionState.Untouched &&
-      submission.createAccountInteraction ===
-        TeslaAuthInteractionState.Untouched &&
-      submission.languageInteraction === TeslaAuthInteractionState.Untouched &&
-      submission.homeInteraction === TeslaAuthInteractionState.Untouched &&
-      submission.privacyInteraction === TeslaAuthInteractionState.Untouched &&
-      submission.contactInteraction === TeslaAuthInteractionState.Untouched
+      submission.auxiliaryActivationCount === 0
       ? TeslaAuthTransitionKind.Completed
       : TeslaAuthTransitionKind.Rejected
   }

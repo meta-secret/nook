@@ -21,7 +21,6 @@ import {
 import {
   TeslaAuthControl,
   TeslaAuthEmailMatch,
-  TeslaAuthInteractionState,
   TeslaAuthPrimaryActivationState,
 } from './mock-auth/src/lib/tesla-auth-flow'
 
@@ -779,12 +778,7 @@ export class MockAuthProviderScenarios {
               submittedControl: TeslaAuthControl.Next,
               emailMatch: TeslaAuthEmailMatch.Matched,
               primaryActivation: TeslaAuthPrimaryActivationState.Activated,
-              troubleInteraction: TeslaAuthInteractionState.Untouched,
-              createAccountInteraction: TeslaAuthInteractionState.Untouched,
-              languageInteraction: TeslaAuthInteractionState.Untouched,
-              homeInteraction: TeslaAuthInteractionState.Untouched,
-              privacyInteraction: TeslaAuthInteractionState.Untouched,
-              contactInteraction: TeslaAuthInteractionState.Untouched,
+              auxiliaryControlsUntouched: true,
             }),
           })
         expect(interceptedTeslaRequestCount).toBeGreaterThan(1)
