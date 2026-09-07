@@ -661,9 +661,10 @@ impl NookVaultManager {
     }
 
     pub(in crate::manager) fn needs_genesis_persist(&self) -> Result<bool, NookError> {
-        Ok(!nook_core::vault_has_multi_device_records(
-            &self.stored_records_snapshot(),
-        )?)
+        Ok(
+            !nook_core::VaultRecordView::new(&self.stored_records_snapshot())
+                .has_multi_device_records()?,
+        )
     }
 
     pub(in crate::manager) async fn prepare_storage(

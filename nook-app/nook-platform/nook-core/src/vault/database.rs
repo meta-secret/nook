@@ -122,7 +122,8 @@ impl Database {
         stored_records: &[StoredSecretRecord],
         crypto: &VaultCrypto,
     ) -> DatabaseResult<Self> {
-        let user_records = multi_device::user_stored_records(stored_records)
+        let user_records = multi_device::VaultRecordView::new(stored_records)
+            .user_records()
             .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
         let mut records = HashMap::new();
         for stored in user_records {

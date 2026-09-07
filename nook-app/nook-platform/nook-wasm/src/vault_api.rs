@@ -138,7 +138,7 @@ impl NookVaultManager {
         if !has_local_vault().await? {
             return Ok(snapshot);
         }
-        let new_id = nook_core::generate_id()?.to_string();
+        let new_id = nook_core::CompactToken::generate()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
         let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
             active_store_id: None,
@@ -167,7 +167,7 @@ impl NookVaultManager {
             return Ok(snapshot);
         }
         let identity = self.device_identity()?;
-        let new_id = nook_core::generate_id()?.to_string();
+        let new_id = nook_core::CompactToken::generate()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
         let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
             active_store_id: None,
@@ -382,7 +382,7 @@ pub fn ensure_local_provider_row(
     snapshot: nook_core::AuthProvidersSnapshotData,
     active_store_id: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
-    let new_id = nook_core::generate_id()?.to_string();
+    let new_id = nook_core::CompactToken::generate()?.to_string();
     let created_at: String = Date::new_0().to_iso_string().into();
     let (next, _changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
         active_store_id: Some(active_store_id),

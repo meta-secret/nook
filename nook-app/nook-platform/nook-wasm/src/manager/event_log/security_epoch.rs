@@ -149,7 +149,7 @@ impl NookVaultManager {
         let old_secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let old_members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let records_snapshot = self.stored_records_snapshot();
-        let user_records = nook_core::user_stored_records(&records_snapshot)?;
+        let user_records = nook_core::VaultRecordView::new(&records_snapshot).user_records()?;
         let (new_keys, secrets) =
             VaultKeyRotation::new(&user_records, &old_secrets_key).rotate()?;
         let members_checkpoint_hash =
@@ -570,7 +570,7 @@ mod tests {
         let mut prepared = PreparedEpochRotation {
             previous_key_epoch: epoch.clone(),
             previous_checkpoint: epoch,
-            new_keys: nook_core::generate_vault_keys()?,
+            new_keys: nook_core::VaultKeys::generate()?,
             secrets: Vec::new(),
             members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("00".repeat(32)),
             rotated_meta_records: Vec::new(),
@@ -601,7 +601,7 @@ mod tests {
 
     #[test]
     fn replaces_a_legacy_target_before_epoch_rewrap() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let legacy = serde_json::from_value(serde_json::json!({
             "id": "pwdentry001", "label": "Legacy", "created_at": "2026-08-15T00:00:00Z",
             "envelope": { "version": 1, "kdf": "scrypt", "work_factor": 10, "ciphertext": "old" }
@@ -627,8 +627,8 @@ mod tests {
     #[test]
     fn password_removal_drops_only_the_requested_entry_and_rewraps_the_rest() -> anyhow::Result<()>
     {
-        let old_keys = nook_core::generate_vault_keys()?;
-        let new_keys = nook_core::generate_vault_keys()?;
+        let old_keys = nook_core::VaultKeys::generate()?;
+        let new_keys = nook_core::VaultKeys::generate()?;
         let keep = serde_json::from_value(serde_json::json!({
             "id": "pwdentry001", "label": "Keep", "created_at": "2026-08-15T00:00:00Z",
             "envelope": serde_json::from_str::<serde_json::Value>(
@@ -673,7 +673,7 @@ mod tests {
 
     #[test]
     fn password_rotation_rejects_an_unknown_entry() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let envelope =
             nook_core::PasswordEnvelopeAttachment::with_work_factor(&keys, "updated", 10.into())
                 .attach()?;
@@ -811,7 +811,7 @@ mod tests {
         };
         assert!(committed.projection_advanced_past(&advanced));
 
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let entries = PreparedEpochRotation::rewrap_password_entries(
             &[],
             &keys,

@@ -1,5 +1,5 @@
 use super::{
-    DeviceIdentity, JoinRequest, VaultMetaState, build_members_records, list_join_requests,
+    DeviceIdentity, JoinRequest, VaultMetaState, VaultRecordView, build_members_records,
     member_from_identity, resolve_member_roster, roster_add_member,
 };
 use crate::errors::MultiDeviceResult;
@@ -63,7 +63,8 @@ pub fn pending_join_for_device(
     records: &[StoredSecretRecord],
     device_id: &DeviceId,
 ) -> MultiDeviceResult<Option<JoinRequest>> {
-    list_join_requests(records)
+    VaultRecordView::new(records)
+        .list_join_requests()
         .map(|joins| joins.into_iter().find(|join| join.device_id == *device_id))
 }
 
@@ -72,9 +73,8 @@ mod tests {
     use std::io;
 
     use super::super::{
-        JoinRequestApproval, JoinRequestIssuance, VaultKeys, generate_vault_keys,
-        genesis_auth_record, genesis_members_records, member_stored_key, replace_member_records,
-        resolve_secrets_key,
+        JoinRequestApproval, JoinRequestIssuance, VaultKeys, VaultRecordView,
+        genesis_members_records, replace_member_records,
     };
     use super::*;
 
@@ -84,11 +84,7 @@ mod tests {
         keys: &VaultKeys,
     ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
         let genesis = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &genesis,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let mut records = vec![genesis.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.extend(genesis_members_records(
             &genesis,
             &keys.members_key,
@@ -121,7 +117,7 @@ mod tests {
 
     #[test]
     fn sentinel_member_row_without_auth_counts_as_enrolled() -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let participant = DeviceIdentity::generate()?;
         let members = genesis_members_records(&participant, &keys.members_key, ENROLLED_AT)?;
         assert!(device_is_enrolled(&members, &participant)?);
@@ -129,14 +125,18 @@ mod tests {
             assess_connect_access(&members, &participant)?,
             ConnectAccessStatus::Ready
         );
-        assert!(resolve_secrets_key(&members, &participant).is_err());
+        assert!(
+            VaultRecordView::new(&members)
+                .secrets_key(&participant)
+                .is_err()
+        );
         Ok(())
     }
 
     #[test]
     fn connect_access_status_distinguishes_ready_pending_and_unenrolled_devices()
     -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let pending = DeviceIdentity::generate()?;
         let stranger = DeviceIdentity::generate()?;
@@ -160,7 +160,7 @@ mod tests {
 
     #[test]
     fn ensure_self_in_roster_adds_missing_current_identity_once() -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
         records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
@@ -168,7 +168,7 @@ mod tests {
 
         let mut missing_joiner_roster = records
             .iter()
-            .filter(|record| record.key.as_str() != member_stored_key(&joiner.auth_id()))
+            .filter(|record| record.key.as_str() != joiner.auth_id().member_record_key())
             .cloned()
             .collect::<Vec<_>>();
         let SelfRosterSync::Updated(repaired) =

@@ -274,7 +274,7 @@ mod tests {
         let mut manager = NookVaultManager::new();
         assert!(manager.prepare_secret_search_catalog().await.is_err());
 
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let store_id = nook_core::generate_store_id()?;
         manager.vault.store_id = store_id.to_string();
         manager.vault.secrets_key = keys.secrets_key.to_string();

@@ -5,28 +5,11 @@
 //! adapter that replays core event-log operations into auth metadata state.
 
 use crate::MemberLabel;
-use nook_auth2::{
-    AgeArmoredCiphertext, DevicePublicKey, MultiDeviceError,
-    encrypt_for_recipient as encrypt_for_auth_recipient,
-};
+use nook_auth2::MultiDeviceError;
 
 pub use nook_auth2::multi_device_api::*;
 
 use crate::VaultOperation;
-
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: encrypts serialized age plaintext bytes"
-    )
-)]
-pub fn encrypt_for_recipient(
-    plaintext: &[u8],
-    recipient_public: &DevicePublicKey,
-) -> nook_auth2::MultiDeviceResult<AgeArmoredCiphertext> {
-    encrypt_for_auth_recipient(plaintext, recipient_public)
-}
 
 /// Inputs for the immutable Simple-vault identity roster written at genesis.
 pub struct SimpleIdentityGenesisOperationsInput<'a> {
@@ -69,7 +52,7 @@ pub fn simple_identity_genesis_operations(
                         "identity genesis is missing a member authorization envelope".to_owned(),
                     )
                 })?;
-            let envelopes = crate::parse_auth_envelopes(record.value.as_str())?;
+            let envelopes = crate::AuthEnvelopes::parse(record.value.as_str())?;
             Ok(VaultOperation::JoinApproved {
                 device_id: member.app_id.clone(),
                 encryption_public_key: member.public_key.clone(),
@@ -177,13 +160,10 @@ mod tests {
         parent: EventId,
         device: &DeviceIdentity,
     ) -> anyhow::Result<(EventId, AuthEnvelopes)> {
-        let replacement_keys = crate::generate_vault_keys()?;
-        let replacement_record = crate::genesis_auth_record(
-            device,
-            &replacement_keys.secrets_key,
-            &replacement_keys.members_key,
-        )?;
-        let replacement_auth = crate::parse_auth_envelopes(replacement_record.value.as_str())?;
+        let replacement_keys = crate::VaultKeys::generate()?;
+        let replacement_record =
+            device.auth_record(&replacement_keys.secrets_key, &replacement_keys.members_key)?;
+        let replacement_auth = crate::AuthEnvelopes::parse(replacement_record.value.as_str())?;
         let trigger = signed_event(
             signing,
             store_id,
@@ -266,7 +246,7 @@ mod tests {
         assert_eq!(participant.signing_public_key, signing.public_key());
         assert_eq!(participant.label, "Owner");
 
-        let members_key = crate::generate_symmetric_key()?;
+        let members_key = crate::SymmetricKey::generate_for_vault()?;
         let records = SentinelMemberRecordProjection::new(&SentinelMemberRecordProjectionRequest {
             state: &state,
             members_key: &members_key,
@@ -310,7 +290,7 @@ mod tests {
             signing_public_key: second_signing.public_key(),
             label: Some("Phone".to_owned()),
         })?;
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let operations =
             simple_identity_genesis_operations(&SimpleIdentityGenesisOperationsInput {
                 identity: &identity,
@@ -360,9 +340,9 @@ mod tests {
         let owner = DeviceIdentity::generate()?;
         let extension = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;
-        let keys = crate::generate_vault_keys()?;
-        let auth = crate::genesis_auth_record(&extension, &keys.secrets_key, &keys.members_key)?;
-        let envelopes = crate::parse_auth_envelopes(auth.value.as_str())?;
+        let keys = crate::VaultKeys::generate()?;
+        let auth = extension.auth_record(&keys.secrets_key, &keys.members_key)?;
+        let envelopes = crate::AuthEnvelopes::parse(auth.value.as_str())?;
         let store_id = crate::generate_store_id()?;
         let mut graph = EventGraph::new();
         let approval = signed_event(
@@ -397,7 +377,7 @@ mod tests {
             expected_public_key: &extension_public_key,
             expected_signing_public_key: &signing_public_key,
         })?);
-        let auth_id = dec_auth_id_from_public_key(&extension.public_key())?;
+        let auth_id = extension.public_key().auth_id()?;
         assert_eq!(
             EventGraphAuthorizationProjection::new(&graph).active_auth_ids()?,
             vec![auth_id.clone()]
@@ -456,8 +436,8 @@ mod tests {
     #[test]
     fn metadata_rebuild_discards_state_absent_from_the_accepted_graph() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
-        let keys = crate::generate_vault_keys()?;
-        let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let keys = crate::VaultKeys::generate()?;
+        let auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
         let mut meta = VaultMetaState::from_stored_records(&[auth])?;
         let secret_id = crate::generate_secret_id()?;
         meta.secrets.insert(
@@ -481,9 +461,9 @@ mod tests {
     fn explicit_empty_checkpoint_metadata_clears_live_grants() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;
-        let keys = crate::generate_vault_keys()?;
-        let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
-        let envelopes = crate::parse_auth_envelopes(auth.value.as_str())?;
+        let keys = crate::VaultKeys::generate()?;
+        let auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
+        let envelopes = crate::AuthEnvelopes::parse(auth.value.as_str())?;
         let mut meta = VaultMetaState::from_stored_records(&[auth])?;
         let operation = VaultOperation::JoinApproved {
             device_id: identity.device_id().clone(),
@@ -519,8 +499,8 @@ mod tests {
     #[test]
     fn invalid_checkpoint_sentinel_share_preserves_live_grants() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
-        let keys = crate::generate_vault_keys()?;
-        let auth = crate::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let keys = crate::VaultKeys::generate()?;
+        let auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
         let mut meta = VaultMetaState::from_stored_records(&[auth])?;
         let before = meta.clone();
         let invalid = StoredSecretRecord {
@@ -552,18 +532,20 @@ mod tests {
         let (owner_signing, _) = SigningIdentity::generate()?;
         let (extension_signing, _) = SigningIdentity::generate()?;
         let store_id = crate::generate_store_id()?;
-        let owner_keys = crate::generate_vault_keys()?;
-        let owner_auth = crate::parse_auth_envelopes(
-            crate::genesis_auth_record(&owner, &owner_keys.secrets_key, &owner_keys.members_key)?
+        let owner_keys = crate::VaultKeys::generate()?;
+        let owner_auth = crate::AuthEnvelopes::parse(
+            owner
+                .auth_record(&owner_keys.secrets_key, &owner_keys.members_key)?
                 .value
                 .as_str(),
         )?;
         let (mut graph, root_id) =
             owner_access_graph(&owner, &owner_signing, &store_id, owner_auth)?;
 
-        let old_keys = crate::generate_vault_keys()?;
-        let old_auth = crate::parse_auth_envelopes(
-            crate::genesis_auth_record(&extension, &old_keys.secrets_key, &old_keys.members_key)?
+        let old_keys = crate::VaultKeys::generate()?;
+        let old_auth = crate::AuthEnvelopes::parse(
+            extension
+                .auth_record(&old_keys.secrets_key, &old_keys.members_key)?
                 .value
                 .as_str(),
         )?;
@@ -607,15 +589,12 @@ mod tests {
         graph.insert(revocation, store_id.as_str())?;
         assert!(active_envelopes_for(&graph, &extension, &extension_signing)?.is_none());
 
-        let replacement_keys = crate::generate_vault_keys()?;
-        let replacement_auth = crate::parse_auth_envelopes(
-            crate::genesis_auth_record(
-                &extension,
-                &replacement_keys.secrets_key,
-                &replacement_keys.members_key,
-            )?
-            .value
-            .as_str(),
+        let replacement_keys = crate::VaultKeys::generate()?;
+        let replacement_auth = crate::AuthEnvelopes::parse(
+            extension
+                .auth_record(&replacement_keys.secrets_key, &replacement_keys.members_key)?
+                .value
+                .as_str(),
         )?;
         let expected = replacement_auth.clone();
         let reapproval = signed_event(

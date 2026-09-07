@@ -131,7 +131,7 @@ impl NookVaultManager {
         };
         let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             &label,
             &wasm_iso_timestamp(),
             &password,
@@ -315,7 +315,7 @@ mod metadata_tests {
     #[test]
     fn password_listing_and_verification_reject_unknown_or_wrong_credentials() -> anyhow::Result<()>
     {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             "pwdentry001",
@@ -406,7 +406,7 @@ mod metadata_tests {
 
     #[wasm_bindgen_test]
     async fn local_password_add_and_remove_updates_the_event_log() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
         manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
@@ -440,10 +440,10 @@ mod metadata_tests {
 
     #[wasm_bindgen_test]
     async fn password_provider_switch_preserves_active_vault_metadata() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             "Recovery",
             "2026-07-29T00:00:00Z",
             "correct horse battery staple",
@@ -498,10 +498,10 @@ mod metadata_tests {
     #[wasm_bindgen_test]
     async fn invalid_password_envelope_does_not_mutate_session_or_fall_back_to_events()
     -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             "Recovery",
             "2026-09-05T00:00:00Z",
             "correct horse battery staple",
@@ -563,7 +563,7 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     async fn legacy_password_entries_upgrade_sequentially_without_epoch_rotation()
     -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut entries = Vec::new();
         for (label, password) in [
             ("Primary", "legacy primary password"),
@@ -571,7 +571,7 @@ mod wasm_tests {
         ] {
             let mut entry = nook_core::PasswordEntryIssuance::with_work_factor(
                 &keys,
-                nook_core::generate_id()?.as_str(),
+                nook_core::CompactToken::generate()?.as_str(),
                 label,
                 "2026-08-15T00:00:00Z",
                 password,
@@ -637,7 +637,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn failed_sync_flush_restores_local_projection_and_storage() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
@@ -688,10 +688,11 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn password_unlock_requires_event_log() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut database = Database::new();
-        let secret_id =
-            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
+        let secret_id = SecretId::from_vault_record(
+            format!("secret_{}", nook_core::CompactToken::generate()?).as_str(),
+        );
         database.insert(
             secret_id,
             SecretValue::SecureNote(nook_core::SecureNoteSecret {
@@ -703,7 +704,7 @@ mod wasm_tests {
         let records = database.to_stored_records_with_crypto(&crypto)?;
         let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             "Recovery",
             "2026-07-13T00:00:00Z",
             "correct horse battery staple",
@@ -740,11 +741,11 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn password_unlock_succeeds_after_app_key_is_deleted() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             "Recovery",
             "2026-08-16T00:00:00Z",
             "correct horse battery staple",
@@ -785,11 +786,11 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     async fn password_entries_list_after_app_key_is_deleted() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             "Recovery",
             "2026-08-16T00:00:00Z",
             "correct horse battery staple",

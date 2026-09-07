@@ -365,7 +365,7 @@ mod tests {
                 if message == "Vault crypto not initialized."
         ));
 
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let unlocked = VaultCryptoState::Unlocked(nook_core::VaultCrypto::new(&keys.secrets_key)?);
         assert!(unlocked.is_unlocked());
         assert!(unlocked.get().is_ok());

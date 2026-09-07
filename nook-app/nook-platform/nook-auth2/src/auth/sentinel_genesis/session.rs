@@ -160,7 +160,7 @@ impl SentinelGenesisSession {
             threshold,
         };
         policy.validate()?;
-        let session_id = multi_device::generate_id()?;
+        let session_id = multi_device::CompactToken::generate()?;
         let signing_public_key = DeviceSigningPublicKey::from_signing_key(signing_key);
         let mut request = SentinelGenesisRequest {
             version: GENESIS_VERSION,
@@ -361,9 +361,7 @@ impl ReadySentinelGenesis<'_> {
             .iter()
             .map(|participant| {
                 Ok(VaultMember {
-                    auth_id: multi_device::dec_auth_id_from_public_key(
-                        &participant.encryption_public_key,
-                    )?,
+                    auth_id: participant.encryption_public_key.auth_id()?,
                     device_id: participant.device_id.clone(),
                     public_key: participant.encryption_public_key.clone(),
                     enrolled_at: String::new(),

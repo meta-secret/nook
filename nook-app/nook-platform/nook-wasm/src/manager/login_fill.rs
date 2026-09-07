@@ -108,7 +108,7 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn listing_and_reveal_enforce_origin_and_secret_type() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         insert_secret(

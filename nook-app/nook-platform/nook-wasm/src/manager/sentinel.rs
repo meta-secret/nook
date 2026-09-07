@@ -475,7 +475,7 @@ mod tests {
 
     #[test]
     fn invalid_share_version_preserves_ceremony_session() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
         let records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
         let architecture = VaultArchitecture::sentinel_personal(
@@ -659,7 +659,7 @@ mod tests {
 
     #[test]
     fn prepare_sentinel_ceremony_session_hydrates_valid_share_metadata() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let yaml = sentinel_yaml(&keys, "store_prepare0001")?;
         let mut manager = NookVaultManager::new();
 
@@ -701,7 +701,7 @@ mod tests {
     #[test]
     fn loading_sentinel_content_requires_cached_keys_then_hydrates_with_them() -> anyhow::Result<()>
     {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let yaml = sentinel_yaml(&keys, "store_loadcache01")?;
         let identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();

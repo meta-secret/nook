@@ -118,7 +118,7 @@ impl NookVaultManager {
         // meta snapshot that may disagree after quarantine filtering.
         let mut granted_meta = VaultMetaState::default();
         VaultMetaGraphProjection::new(&graph).materialize(&mut granted_meta)?;
-        let auth_id = nook_core::dec_auth_id_from_public_key(&targets.device_public_key)?;
+        let auth_id = targets.device_public_key.auth_id()?;
         let has_device_envelope = granted_meta.auth.contains_key(&auth_id);
         let access_granted = has_active_grant && has_device_envelope;
         if access_granted {

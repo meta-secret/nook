@@ -135,12 +135,13 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn password_unlock_rejects_sentinel_vaults_before_decryption() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
         let mut records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
         let mut database = Database::new();
-        let secret_id =
-            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
+        let secret_id = SecretId::from_vault_record(
+            format!("secret_{}", nook_core::CompactToken::generate()?).as_str(),
+        );
         database.insert(
             secret_id,
             SecretValue::SecureNote(nook_core::SecureNoteSecret {
@@ -152,7 +153,7 @@ mod browser_tests {
         records.extend(database.to_stored_records_with_crypto(&crypto)?);
         let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             "Recovery",
             "2026-09-07T00:00:00Z",
             "correct horse battery staple",
@@ -202,10 +203,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn password_unlock_requires_a_backup_entry() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut database = Database::new();
-        let secret_id =
-            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
+        let secret_id = SecretId::from_vault_record(
+            format!("secret_{}", nook_core::CompactToken::generate()?).as_str(),
+        );
         database.insert(
             secret_id,
             SecretValue::SecureNote(nook_core::SecureNoteSecret {
@@ -245,11 +247,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn password_unlock_uses_the_first_entry_for_an_unknown_id() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
-            nook_core::generate_id()?.as_str(),
+            nook_core::CompactToken::generate()?.as_str(),
             "Recovery",
             "2026-09-07T00:00:00Z",
             "correct horse battery staple",
@@ -286,10 +288,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn password_record_loading_filters_join_requests() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut database = Database::new();
-        let secret_id =
-            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
+        let secret_id = SecretId::from_vault_record(
+            format!("secret_{}", nook_core::CompactToken::generate()?).as_str(),
+        );
         database.insert(
             secret_id,
             SecretValue::SecureNote(nook_core::SecureNoteSecret {
@@ -323,7 +326,7 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn password_membership_persistence_adds_an_authorized_member() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let owner_identity = DeviceIdentity::generate()?;
         let joiner_identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
@@ -359,7 +362,7 @@ mod browser_tests {
     async fn password_membership_persistence_requires_an_event_log() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         let identity = DeviceIdentity::generate()?;
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let result = manager
             .persist_password_unlock_membership(&[], &identity, &keys)
             .await;
@@ -459,9 +462,8 @@ impl NookVaultManager {
 
         let operations = match self.vault.architecture.vault_type {
             VaultType::Simple => {
-                let auth_record =
-                    nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
-                let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+                let auth_record = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
+                let envelopes = nook_core::AuthEnvelopes::parse(auth_record.value.as_str())?;
                 self.vault.meta.apply_record(&auth_record)?;
                 vec![VaultOperation::JoinApproved {
                     device_id: identity.device_id().clone(),

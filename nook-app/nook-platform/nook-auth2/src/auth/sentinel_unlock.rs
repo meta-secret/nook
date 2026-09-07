@@ -16,7 +16,6 @@ pub use response::CheckedSentinelUnlockRequest;
 
 use super::multi_device::{
     DeviceIdentity, OpenedSentinelShare, SentinelKeyReconstruction, VaultKeys,
-    device_id_from_public_key, generate_id,
 };
 use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
@@ -250,7 +249,7 @@ impl SentinelUnlockSession {
         policy.validate()?;
         let mut request = SentinelUnlockRequest {
             version: UNLOCK_VERSION,
-            session_id: generate_id()?,
+            session_id: CompactToken::generate()?,
             store_id,
             policy,
             requester_device_id: requester_identity.device_id().clone(),
@@ -421,8 +420,7 @@ impl SentinelUnlockRequest {
         self.policy.validate()?;
         if self.version != UNLOCK_VERSION
             || self.requester_signing_public_key.is_empty()
-            || device_id_from_public_key(&self.requester_encryption_public_key)?
-                != self.requester_device_id
+            || self.requester_encryption_public_key.try_app_id()? != self.requester_device_id
         {
             return Err(MultiDeviceError::InvalidSentinelUnlockSession);
         }

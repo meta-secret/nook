@@ -88,7 +88,7 @@ fn unauthorized_append_and_rotation_do_not_publish() -> anyhow::Result<()> {
         .append_operations(vec![trigger.clone()], TS, Some("github"));
     device.expect_quarantine_unchanged(result.map(|_| ()), &expected_id, &before)?;
 
-    let new_keys = nook_core::generate_vault_keys()?;
+    let new_keys = nook_core::VaultKeys::generate()?;
     let old_secrets_key = SymmetricKey::parse(&device.secrets_key)?;
     let result = device
         .session
@@ -628,10 +628,10 @@ fn epoch_rotation_decrypts_under_new_key() -> VaultResult<()> {
         device_id: DeviceId::parse("abcd1234ef567890")?,
     };
     let old_secrets = SymmetricKey::parse(&device.secrets_key)?;
-    let new_keys = nook_core::generate_vault_keys()?;
+    let new_keys = nook_core::VaultKeys::generate()?;
     let before_events = device.session.store.event_ids();
     let before_outbox = device.session.store.pending_outbox("github");
-    let wrong_old_keys = nook_core::generate_vault_keys()?;
+    let wrong_old_keys = nook_core::VaultKeys::generate()?;
     assert!(
         device
             .session

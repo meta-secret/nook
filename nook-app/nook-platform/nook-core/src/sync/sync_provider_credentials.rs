@@ -158,8 +158,7 @@ impl ProviderCredentialField<'_> {
     }
     fn seal_for(&mut self, public_key: &DevicePublicKey) -> MultiDeviceResult<()> {
         if !self.value.is_empty() && !ProviderCredentialField::has_armor_marker(self.value) {
-            *self.value =
-                crate::encrypt_for_recipient(self.value.as_bytes(), public_key)?.into_inner();
+            *self.value = public_key.seal_bytes(self.value.as_bytes())?.into_inner();
         }
         Ok(())
     }

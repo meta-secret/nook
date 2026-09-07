@@ -7,12 +7,12 @@ use std::slice;
 use nook_core::{
     DeviceIdentity, DeviceMode, MultiDeviceError, SentinelKeyReconstruction, SentinelPolicy,
     SentinelShareOpening, VaultArchitecture, VaultContent, VaultRecordSet, VaultType, VaultUnlock,
-    create_sentinel_share_records, generate_store_id, generate_vault_keys,
+    create_sentinel_share_records, generate_store_id,
 };
 
 #[test]
 fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let first = DeviceIdentity::generate()?;
     let second = DeviceIdentity::generate()?;
     let third = DeviceIdentity::generate()?;

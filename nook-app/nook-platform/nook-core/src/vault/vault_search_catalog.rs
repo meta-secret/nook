@@ -316,7 +316,7 @@ fn catalog_entry_integrity_tag(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{LoginSecret, SecretRecord, SecretValue, StoredRecordPayload, generate_vault_keys};
+    use crate::{LoginSecret, SecretRecord, SecretValue, StoredRecordPayload, VaultKeys};
 
     fn login_item(index: usize, username: &str) -> SecretListItem {
         SecretRecord {
@@ -364,7 +364,7 @@ mod tests {
 
     #[test]
     fn encrypted_bucket_hides_searchable_metadata_and_secret_values() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut catalog = SecretSearchCatalog::default();
         let item = login_item(1, "visible-user");
@@ -399,7 +399,7 @@ mod tests {
 
     #[test]
     fn reconcile_decrypts_only_new_or_changed_ciphertexts() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut secrets = HashMap::new();
         for index in 0..3 {
@@ -484,7 +484,7 @@ mod tests {
 
     #[test]
     fn reconcile_rebuilds_a_tampered_cached_row() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_integrity1"),

@@ -41,12 +41,10 @@ struct SimpleGenesisOperationsInput<'a> {
 impl SimpleGenesisOperationsInput<'_> {
     async fn operations(&self) -> Result<Vec<VaultOperation>, NookError> {
         let Some(pending) = self.pending else {
-            let auth_record = nook_core::genesis_auth_record(
-                self.identity,
-                &self.keys.secrets_key,
-                &self.keys.members_key,
-            )?;
-            let envelopes = nook_core::parse_auth_envelopes(auth_record.value.as_str())?;
+            let auth_record = self
+                .identity
+                .auth_record(&self.keys.secrets_key, &self.keys.members_key)?;
+            let envelopes = nook_core::AuthEnvelopes::parse(auth_record.value.as_str())?;
             return Ok(vec![VaultOperation::JoinApproved {
                 device_id: self.identity.device_id().clone(),
                 encryption_public_key: self.identity.public_key(),

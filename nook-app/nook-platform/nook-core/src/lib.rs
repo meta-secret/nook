@@ -238,24 +238,18 @@ pub use nook_auth2::{
 };
 
 pub use multi_device::{
-    AuthEnvelopes, ConnectAccessStatus, DeviceEnrollment, DeviceIdentity, JoinRequest,
-    JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance, MEMBER_RECORD_PREFIX, MemberEntry,
-    OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync, SentinelKeyReconstruction,
-    SentinelParticipantEntry, SentinelShareEnvelope, SentinelShareOpening, SentinelShareVersion,
-    VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState, assess_connect_access, auth_record,
-    build_members_records, count_sentinel_share_records, create_sentinel_share_records,
-    create_sentinel_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
-    device_is_enrolled, encrypt_for_recipient, encrypt_member_entry, ensure_self_in_roster,
-    generate_dec, generate_id, generate_symmetric_key, generate_vault_keys, genesis_auth_record,
-    genesis_dec_record, genesis_members_records, is_auth_id, is_auth_stored_record,
-    is_dec_stored_record, is_join_stored_record, is_members_stored_record,
-    is_reserved_device_label, is_sentinel_share_stored_record, is_vault_meta_record,
-    join_record_key, list_join_requests, member_from_identity, member_from_join, member_stored_key,
-    merge_remote_join_records, parse_auth_envelopes, parse_join_request,
-    parse_sentinel_share_envelope, pending_join_for_device, rename_vault_member,
-    replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
-    resolve_secrets_key, revoke_vault_member, roster_add_member, sentinel_share_record_key,
-    user_stored_records, vault_has_multi_device_records,
+    AuthEnvelopes, AuthRecordIssuance, ConnectAccessStatus, DeviceEnrollment, DeviceIdentity,
+    JoinRequest, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance, MEMBER_RECORD_PREFIX,
+    MemberEntry, OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync,
+    SentinelKeyReconstruction, SentinelParticipantEntry, SentinelShareEnvelope,
+    SentinelShareOpening, SentinelShareVersion, VaultKeys, VaultMember, VaultMetaRecord,
+    VaultMetaState, VaultRecordView, assess_connect_access, build_members_records,
+    count_sentinel_share_records, create_sentinel_share_records,
+    create_sentinel_share_records_for_recipients, device_is_enrolled, encrypt_member_entry,
+    ensure_self_in_roster, genesis_members_records, is_sentinel_share_stored_record,
+    member_from_identity, member_from_join, parse_sentinel_share_envelope, pending_join_for_device,
+    rename_vault_member, replace_member_records, resolve_member_roster, revoke_vault_member,
+    roster_add_member, sentinel_share_record_key,
 };
 
 pub use nook_event_log::{
@@ -416,7 +410,7 @@ mod test_support {
 
     use crate::{
         DeviceIdentity, SecretId, StoredRecordPayload, StoredVaultYaml, VaultKeys, VaultRecordSet,
-        VaultResult, VaultUnlock, generate_store_id, genesis_auth_record, genesis_members_records,
+        VaultResult, VaultUnlock, generate_store_id, genesis_members_records,
     };
 
     pub(crate) fn sample_vault_yaml(
@@ -442,13 +436,9 @@ mod test_support {
 
     pub(crate) fn simple_genesis_projection()
     -> VaultResult<(VaultKeys, DeviceIdentity, StoredVaultYaml)> {
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.extend(genesis_members_records(
             &identity,
             &keys.members_key,

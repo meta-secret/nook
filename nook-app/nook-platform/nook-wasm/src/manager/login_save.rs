@@ -175,7 +175,7 @@ mod browser_tests {
     }
 
     fn manager_with_login(username: &str, password: &str) -> anyhow::Result<NookVaultManager> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         insert_login(
@@ -192,7 +192,7 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn save_plans_cover_create_update_already_saved_and_invalid() -> anyhow::Result<()> {
         let mut empty = NookVaultManager::new();
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         empty.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
         assert_eq!(
             empty
@@ -254,7 +254,7 @@ mod browser_tests {
                 .is_err()
         );
 
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut empty = NookVaultManager::new();
         empty.vault.crypto = VaultCryptoState::Unlocked(crypto);

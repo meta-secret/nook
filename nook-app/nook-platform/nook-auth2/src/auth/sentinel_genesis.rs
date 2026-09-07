@@ -304,8 +304,7 @@ impl SentinelGenesisRequest {
 impl SentinelGenesisParticipant {
     fn validate_for(&self, session_id: &CompactToken) -> MultiDeviceResult<()> {
         let participant = self;
-        if multi_device::device_id_from_public_key(&participant.encryption_public_key)?
-            != participant.device_id
+        if participant.encryption_public_key.try_app_id()? != participant.device_id
             || participant.signing_public_key.is_empty()
             || participant.fingerprint
                 != (ParticipantKeys {
@@ -416,8 +415,7 @@ impl SentinelGenesisPublicKeyAnnouncement {
         {
             return Err(MultiDeviceError::InvalidSentinelGenesisPayload);
         }
-        if multi_device::device_id_from_public_key(&announcement.encryption_public_key)?
-            != announcement.device_id
+        if announcement.encryption_public_key.try_app_id()? != announcement.device_id
             || announcement.fingerprint
                 != (ParticipantKeys {
                     encryption: &announcement.encryption_public_key,

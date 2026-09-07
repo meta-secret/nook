@@ -224,7 +224,7 @@ mod tests {
         let mut manager = NookVaultManager::new();
         manager.vault.secrets_key = "stale-secrets".to_owned();
         manager.vault.members_key = "stale-members".to_owned();
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
 
         manager.adopt_existing_vault_handoff_keys(&keys)?;
 

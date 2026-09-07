@@ -1,7 +1,6 @@
 //! Prefixed vault identifiers (`store_`, `secret_`, `key_`) for typed on-disk ids.
 
 use crate::errors::{MultiDeviceResult, ValidationError, ValidationResult};
-use crate::generate_id;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -286,7 +285,7 @@ pub fn normalize_store_id(id: &str) -> ValidationResult<StoreId> {
 }
 
 pub fn generate_store_id() -> MultiDeviceResult<StoreId> {
-    Ok(format_store_id(generate_id()?.as_str())?)
+    Ok(format_store_id(CompactToken::generate()?.as_str())?)
 }
 
 pub fn format_secret_id(token: &str) -> ValidationResult<SecretId> {
@@ -295,7 +294,7 @@ pub fn format_secret_id(token: &str) -> ValidationResult<SecretId> {
 }
 
 pub fn generate_secret_id() -> MultiDeviceResult<SecretId> {
-    Ok(format_secret_id(generate_id()?.as_str())?)
+    Ok(format_secret_id(CompactToken::generate()?.as_str())?)
 }
 
 /// Validate the current prefixed secret-id format.

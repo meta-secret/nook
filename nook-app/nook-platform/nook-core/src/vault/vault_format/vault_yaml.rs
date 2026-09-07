@@ -61,7 +61,7 @@ pub(super) struct StoredVaultYaml {
 
 impl AuthYamlRecord {
     pub(super) fn from_stored_record(record: &StoredSecretRecord) -> VaultFormatResult<Self> {
-        let envelopes = crate::parse_auth_envelopes(record.value.as_str())
+        let envelopes = crate::AuthEnvelopes::parse(record.value.as_str())
             .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
         Ok(Self {
             pk_id: crate::normalize_auth_key_id(record.key.as_str())
@@ -95,7 +95,7 @@ impl MembersYamlRecord {
             .map(|id| id.to_string())
             .unwrap_or(self.pk_id);
         Ok(StoredSecretRecord {
-            key: SecretId::from_vault_record(&crate::member_stored_key(&AuthKeyId::parse(&pk_id)?)),
+            key: SecretId::from_vault_record(&AuthKeyId::parse(&pk_id)?.member_record_key()),
             secret_type: None,
             value: StoredRecordPayload::from_trusted(self.ciphertext),
         })
@@ -416,7 +416,7 @@ mod tests {
 
     #[test]
     fn sentinel_records_use_dedicated_yaml_section() -> anyhow::Result<()> {
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
@@ -471,7 +471,7 @@ mod tests {
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), auth_id);
 
-        let envelopes = crate::parse_auth_envelopes(parsed[0].value.as_str())?;
+        let envelopes = crate::AuthEnvelopes::parse(parsed[0].value.as_str())?;
         assert!(
             envelopes
                 .secrets_key

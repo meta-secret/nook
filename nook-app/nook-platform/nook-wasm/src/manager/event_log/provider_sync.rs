@@ -676,8 +676,8 @@ mod tests {
     #[test]
     fn projected_epoch_keys_use_the_current_auth_envelopes() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
-        let keys = nook_core::generate_vault_keys()?;
-        let auth = nook_core::genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let keys = nook_core::VaultKeys::generate()?;
+        let auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
         let meta = VaultMetaState::from_stored_records(&[auth])?;
 
         let resolved = NookVaultManager::projected_epoch_keys(&meta, &identity)?;
@@ -922,7 +922,7 @@ mod tests {
     )]
     async fn wasm_adopting_the_active_epoch_is_idempotent_when_unlocked() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let epoch = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let epoch_name = epoch.to_string();
         manager.event_log.key_epoch = epoch.to_string();

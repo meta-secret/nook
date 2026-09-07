@@ -3,7 +3,7 @@ use serde::{Deserialize, Deserializer, Serialize, de};
 use zeroize::Zeroize;
 
 use super::secret_sharing::{split_secret_bytes, validate_sentinel_threshold};
-use super::{DeviceIdentity, VaultKeys, VaultMetaRecord, encrypt_for_recipient};
+use super::{DeviceIdentity, VaultKeys, VaultMetaRecord};
 use crate::auth::slip39;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
@@ -155,7 +155,7 @@ pub fn create_sentinel_share_records_for_recipients(
                 threshold,
                 required_participants,
                 share_index: share.index.into(),
-                ciphertext: encrypt_for_recipient(&json, public_key)?,
+                ciphertext: public_key.seal_bytes(&json)?,
             };
             VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
         })
@@ -206,7 +206,7 @@ pub fn create_sentinel_root_share_records_for_recipients(
                 threshold,
                 required_participants,
                 share_index,
-                ciphertext: encrypt_for_recipient(&json, public_key)?,
+                ciphertext: public_key.seal_bytes(&json)?,
             };
             VaultMetaRecord::SentinelShare(device_id.clone(), envelope).to_stored()
         })
@@ -231,15 +231,15 @@ mod tests {
     use std::slice;
 
     use super::super::{
-        ConnectAccessStatus, DeviceIdentity, assess_connect_access, device_is_enrolled,
-        generate_vault_keys, is_auth_stored_record, resolve_secrets_key,
+        ConnectAccessStatus, DeviceIdentity, VaultRecordView, assess_connect_access,
+        device_is_enrolled,
     };
     use super::*;
 
     type SentinelShareFixture = (VaultKeys, [DeviceIdentity; 3], Vec<StoredSecretRecord>);
 
     fn sentinel_share_fixture() -> anyhow::Result<SentinelShareFixture> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let identities = [
             DeviceIdentity::generate()?,
             DeviceIdentity::generate()?,
@@ -274,9 +274,9 @@ mod tests {
         assert_eq!(records.len(), 3);
         for record in &records {
             assert!(is_sentinel_share_stored_record(record)?);
-            assert!(!is_auth_stored_record(record)?);
+            assert!(!VaultMetaRecord::is_auth(record)?);
         }
-        assert!(resolve_secrets_key(&records, &first).is_err());
+        assert!(VaultRecordView::new(&records).secrets_key(&first).is_err());
         assert!(
             SentinelKeyReconstruction::from_identities(&records, slice::from_ref(&first))
                 .reconstruct()
@@ -320,7 +320,7 @@ mod tests {
             assess_connect_access(&records, &third)?,
             ConnectAccessStatus::Ready
         );
-        assert!(resolve_secrets_key(&records, &first).is_err());
+        assert!(VaultRecordView::new(&records).secrets_key(&first).is_err());
         Ok(())
     }
 

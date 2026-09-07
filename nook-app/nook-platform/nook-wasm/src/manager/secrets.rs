@@ -231,7 +231,7 @@ impl NookVaultManager {
 
     /// Compact random token (11 chars, base64url) without a type prefix.
     pub fn generate_id(&self) -> Result<String, JsError> {
-        Ok(nook_core::generate_id()?.to_string())
+        Ok(nook_core::CompactToken::generate()?.to_string())
     }
 
     // Expose status channel stream to Svelte client
@@ -477,7 +477,6 @@ mod wasm_tests {
         use nook_core::{
             EncryptedSecretPayload, LoginSecret, SecretId, SecretType, SecretValue,
             SigningIdentity, VaultCrypto, VaultEventSession, VaultOperation, generate_store_id,
-            generate_vault_keys,
         };
         use std::collections::BTreeSet;
 
@@ -515,7 +514,7 @@ mod wasm_tests {
             Ok(())
         }
 
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let store_id = generate_store_id()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;

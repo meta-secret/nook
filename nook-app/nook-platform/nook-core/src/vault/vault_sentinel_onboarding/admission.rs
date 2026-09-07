@@ -79,15 +79,17 @@ impl CheckedOnboardingRecipient<'_> {
 mod tests {
     use super::super::tests::OnboardingFixture;
     use super::SentinelOnboardingRecipient;
-    use crate::{DeviceIdentity, MultiDeviceError, encrypt_for_recipient};
+    use crate::{DeviceIdentity, MultiDeviceError};
     use std::ptr;
 
     #[test]
     fn recipient_mismatch_precedes_provider_payload_decode() -> anyhow::Result<()> {
         let fixture = OnboardingFixture::new()?;
         let mut package = fixture.package()?;
-        package.provider_snapshot =
-            encrypt_for_recipient(b"not-json", &fixture.delivery.encryption_public_key)?;
+        package.provider_snapshot = fixture
+            .delivery
+            .encryption_public_key
+            .seal_bytes(b"not-json")?;
         let stranger = DeviceIdentity::generate()?;
         assert!(matches!(
             SentinelOnboardingRecipient {
@@ -113,8 +115,10 @@ mod tests {
         let fixture = OnboardingFixture::new()?;
         let mut package = fixture.package()?;
         package.delivery.signature.clear();
-        package.provider_snapshot =
-            encrypt_for_recipient(b"not-json", &fixture.delivery.encryption_public_key)?;
+        package.provider_snapshot = fixture
+            .delivery
+            .encryption_public_key
+            .seal_bytes(b"not-json")?;
         assert!(matches!(
             SentinelOnboardingRecipient {
                 package: &package,
@@ -151,8 +155,7 @@ mod tests {
         let fixture = OnboardingFixture::new()?;
         let mut package = fixture.package()?;
         // An empty object normalizes to zero providers and must still fail admission.
-        package.provider_snapshot =
-            encrypt_for_recipient(b"{}", &fixture.delivery.encryption_public_key)?;
+        package.provider_snapshot = fixture.delivery.encryption_public_key.seal_bytes(b"{}")?;
         assert!(matches!(
             SentinelOnboardingRecipient {
                 package: &package,

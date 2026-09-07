@@ -98,10 +98,7 @@ impl PendingSimpleGenesis {
                     .map(|member| {
                         Ok(nook_core::MemberDekEnvelope {
                             app_id: member.app_id.clone(),
-                            envelope: nook_core::encrypt_for_recipient(
-                                signing_seed.as_bytes(),
-                                &member.public_key,
-                            )?,
+                            envelope: member.public_key.seal_bytes(signing_seed.as_bytes())?,
                         })
                     })
                     .collect::<Result<Vec<_>, nook_core::MultiDeviceError>>()
