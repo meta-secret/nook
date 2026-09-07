@@ -682,7 +682,7 @@ impl NookVaultManager {
             };
             let device_id = self.save_passkey_material(&material).await?;
             let credential_fingerprint =
-                nook_core::passkey_credential_identifier(credential_id.as_ref());
+                nook_core::PasskeyAccessProfile::credential_identifier(credential_id.as_ref());
             let _ = device_access::AppPasskeyCreation {
                 app_id: &device_id,
                 credential_fingerprint: &credential_fingerprint,
@@ -783,7 +783,8 @@ impl NookVaultManager {
         let credential = passkey_browser::get_credential(&request_options).await?;
         let observation = passkey_observation::observe_assertion(&credential);
         let credential_id = passkey_browser::credential_id(&credential)?;
-        let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
+        let credential_fingerprint =
+            nook_core::PasskeyAccessProfile::credential_identifier(&credential_id);
         let user_handle = passkey_browser::assertion_user_handle(&credential)?;
         let prf_output = passkey_browser::require_prf_output(&credential)?;
         self.recover_device_protection_with_passkey_material(
@@ -885,7 +886,8 @@ impl NookVaultManager {
         let credential = passkey_browser::get_credential(&request_options).await?;
         let observation = passkey_observation::observe_assertion(&credential);
         let credential_id = passkey_browser::credential_id(&credential)?;
-        let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
+        let credential_fingerprint =
+            nook_core::PasskeyAccessProfile::credential_identifier(&credential_id);
         let prf_output = passkey_browser::require_prf_output(&credential)?;
         self.unlock_device_identity(prf_output).await?;
         let app_id = self.device.public_app_id();

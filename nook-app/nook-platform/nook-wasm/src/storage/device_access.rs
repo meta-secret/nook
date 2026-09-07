@@ -161,7 +161,7 @@ impl PasskeyProviderLabelUpdate<'_> {
             label,
         } = self;
 
-        let normalized = nook_core::normalize_device_access_provider_label(label)
+        let normalized = nook_core::PasskeyAccessProfile::normalize_provider_label(label)
             .map_err(|error| NookError::Database(error.to_string()))?;
         let result = DeviceAccessProfileKey::selected()
             .await?
@@ -197,7 +197,7 @@ impl AppPasskeyNameUpdate<'_> {
             name,
         } = self;
 
-        let normalized = nook_core::normalize_device_access_passkey_name(name)
+        let normalized = nook_core::PasskeyAccessProfile::normalize_name(name)
             .map_err(|error| NookError::Database(error.to_string()))?;
         let result = DeviceAccessProfileKey::for_app_id(app_id)
             .await?
@@ -302,11 +302,11 @@ mod tests {
     #[test]
     fn corrupt_and_future_profiles_degrade_to_empty_metadata() {
         assert_eq!(
-            nook_core::decode_device_access_profile("not-json"),
+            nook_core::DeviceAccessProfile::decode("not-json"),
             DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         assert_eq!(
-            nook_core::decode_device_access_profile(r#"{"version":999,"verifiedVaults":[]}"#),
+            nook_core::DeviceAccessProfile::decode(r#"{"version":999,"verifiedVaults":[]}"#),
             DeviceAccessProfileDecodeResult::FutureVersion
         );
     }
@@ -630,7 +630,8 @@ mod tests {
             .await
             .is_err()
         );
-        let credential_fingerprint = nook_core::passkey_credential_identifier(&credential_id);
+        let credential_fingerprint =
+            nook_core::PasskeyAccessProfile::credential_identifier(&credential_id);
         PasskeyProviderLabelUpdate {
             credential_fingerprint: &credential_fingerprint,
             label: "Bitwarden",
@@ -664,7 +665,8 @@ mod tests {
         let current_credential = [8u8; 32];
         let typed_credential =
             nook_core::WebAuthnCredentialId::try_from(current_credential.to_vec())?;
-        let current_fingerprint = nook_core::passkey_credential_identifier(&current_credential);
+        let current_fingerprint =
+            nook_core::PasskeyAccessProfile::credential_identifier(&current_credential);
         let current_wrapped = WrappedDeviceIdentity::passkey_derived(&PasskeyRecordMetadata {
             credential_id: &typed_credential,
             user_handle: setup.user_handle(),
@@ -682,7 +684,9 @@ mod tests {
         .apply()
         .await?;
         SelectedPasskeyCreation {
-            credential_fingerprint: &nook_core::passkey_credential_identifier(&[7u8; 32]),
+            credential_fingerprint: &nook_core::PasskeyAccessProfile::credential_identifier(
+                &[7u8; 32],
+            ),
             nook_name: "Stale credential",
             observation: BrowserObservationFixture::SAFARI_MACOS.observe(),
             ceremony: PasskeyCreationCeremony::RegistrationOnly,
@@ -768,7 +772,8 @@ mod tests {
         )
         .await?;
 
-        let first_fingerprint = nook_core::passkey_credential_identifier(&first_credential);
+        let first_fingerprint =
+            nook_core::PasskeyAccessProfile::credential_identifier(&first_credential);
         AppPasskeyCreation {
             app_id: first_key.app_id().as_str(),
             credential_fingerprint: &first_fingerprint,

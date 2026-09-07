@@ -124,7 +124,7 @@ impl DeviceAccessProfileKey {
         let Some(raw) = raw else {
             return Ok(DeviceAccessProfile::default());
         };
-        Ok(match nook_core::decode_device_access_profile(&raw) {
+        Ok(match nook_core::DeviceAccessProfile::decode(&raw) {
             DeviceAccessProfileDecodeResult::Current(profile) => *profile,
             DeviceAccessProfileDecodeResult::RecoverableDefault
             | DeviceAccessProfileDecodeResult::FutureVersion => DeviceAccessProfile::default(),
@@ -138,7 +138,7 @@ impl DeviceAccessProfileKey {
             return Ok(());
         };
         indexed_db::idb_migrate_string_if(DEVICE_ACCESS_PROFILE_KEY, &self.value, move |legacy| {
-            match nook_core::decode_device_access_profile(legacy) {
+            match nook_core::DeviceAccessProfile::decode(legacy) {
                 DeviceAccessProfileDecodeResult::Current(profile) => {
                     migration::LegacyProfileMembership {
                         profile: &profile,
@@ -242,7 +242,7 @@ impl LegacyProfileAdmission<'_> {
         let Some(owner) = owner else {
             return false;
         };
-        match nook_core::decode_device_access_profile(raw) {
+        match nook_core::DeviceAccessProfile::decode(raw) {
             DeviceAccessProfileDecodeResult::Current(profile) => {
                 migration::LegacyProfileMembership {
                     profile: &profile,
@@ -261,7 +261,7 @@ impl DeviceAccessProfileUpdate {
         let Some(raw) = raw else {
             return DeviceAccessProfileUpdate::Writable(DeviceAccessProfile::default());
         };
-        match nook_core::decode_device_access_profile(raw) {
+        match nook_core::DeviceAccessProfile::decode(raw) {
             DeviceAccessProfileDecodeResult::Current(profile) => {
                 DeviceAccessProfileUpdate::Writable(*profile)
             }

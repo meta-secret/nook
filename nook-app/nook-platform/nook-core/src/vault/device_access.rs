@@ -6,76 +6,21 @@
 
 #[cfg(test)]
 use crate::{DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata};
-use std::{error, fmt};
-
 use serde::{Deserialize, Serialize, de::Error as _};
-use sha2::{Digest, Sha256};
+use std::{error, fmt};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-use crate::{
-    AppId, DeviceId, IdentityDirectory, IdentityRecord, IsoTimestamp, StoreId,
-    WrappedDeviceIdentity,
-};
+use crate::{DeviceId, IsoTimestamp, StoreId};
 
+mod actions;
 mod passkey_keeper;
 mod passkey_observation;
 
-pub use passkey_keeper::{PasskeyKeeperKind, passkey_keeper_kind};
+pub use actions::*;
+pub use passkey_keeper::PasskeyKeeperKind;
 pub use passkey_observation::*;
 
 pub const DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS: usize = 80;
-
-/// Return the identities whose typed DEK grants link them to the selected
-/// vault. Directory selection is intentionally irrelevant: the vault grant is
-/// the source of truth for unlock eligibility.
-#[must_use]
-pub fn identities_linked_to_vault<'a>(
-    directory: &'a IdentityDirectory,
-    store_id: &StoreId,
-) -> Vec<&'a IdentityRecord> {
-    directory
-        .identities()
-        .iter()
-        .filter(|identity| identity.owns_vault(store_id))
-        .collect()
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum IdentityVaultAppGrantKind {
-    NotLinked,
-    NotGranted,
-    Granted,
-}
-
-/// Classify whether one app is an actual recipient of both key envelopes for
-/// the selected vault. Identity membership alone is insufficient because a
-/// vault-level revocation may retain the member while removing its envelopes.
-#[must_use]
-pub fn classify_identity_vault_app_grant(
-    identity: &IdentityRecord,
-    store_id: &StoreId,
-    app_id: &AppId,
-) -> IdentityVaultAppGrantKind {
-    let Some(vault) = identity.vault_dek(store_id) else {
-        return IdentityVaultAppGrantKind::NotLinked;
-    };
-    if !identity.has_app_id(app_id) {
-        return IdentityVaultAppGrantKind::NotGranted;
-    }
-    let grants_secrets = vault
-        .secrets_envelopes
-        .iter()
-        .any(|envelope| envelope.app_id == *app_id);
-    let grants_members = vault
-        .members_envelopes
-        .iter()
-        .any(|envelope| envelope.app_id == *app_id);
-    if grants_secrets && grants_members {
-        IdentityVaultAppGrantKind::Granted
-    } else {
-        IdentityVaultAppGrantKind::NotGranted
-    }
-}
 
 #[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(transparent)]
@@ -199,30 +144,6 @@ pub enum DeviceAccessProfileDecodeResult {
 #[derive(Deserialize)]
 struct DeviceAccessProfileVersionEnvelope {
     version: DeviceAccessProfileVersion,
-}
-
-#[must_use]
-pub fn decode_device_access_profile(raw: &str) -> DeviceAccessProfileDecodeResult {
-    let Ok(envelope) = serde_json::from_str::<DeviceAccessProfileVersionEnvelope>(raw) else {
-        return DeviceAccessProfileDecodeResult::RecoverableDefault;
-    };
-    if envelope.version.is_future() {
-        return DeviceAccessProfileDecodeResult::FutureVersion;
-    }
-    if !envelope.version.is_current() {
-        return DeviceAccessProfileDecodeResult::RecoverableDefault;
-    }
-    match serde_json::from_str::<DeviceAccessProfile>(raw) {
-        Ok(profile)
-            if profile
-                .passkey
-                .as_ref()
-                .is_none_or(|passkey| !passkey.credential_fingerprint.trim().is_empty()) =>
-        {
-            DeviceAccessProfileDecodeResult::Current(Box::new(profile))
-        }
-        Ok(_) | Err(_) => DeviceAccessProfileDecodeResult::RecoverableDefault,
-    }
 }
 
 impl Default for DeviceAccessProfile {
@@ -367,93 +288,12 @@ impl DeviceAccessProfile {
     }
 }
 
-#[must_use]
-pub fn classify_device_access_protection(
-    record: Option<&WrappedDeviceIdentity>,
-) -> DeviceAccessProtectionKind {
-    match record {
-        None => DeviceAccessProtectionKind::Missing,
-        Some(WrappedDeviceIdentity::PasskeyDerived(_)) => {
-            DeviceAccessProtectionKind::PasskeyStandard
-        }
-        Some(WrappedDeviceIdentity::PasskeyWrappedLocal(_)) => {
-            DeviceAccessProtectionKind::PasskeyAntiHacker
-        }
-        Some(WrappedDeviceIdentity::Pin(_)) => DeviceAccessProtectionKind::PinOrPassphrase,
-    }
-}
-
-#[must_use]
-pub fn classify_device_access_identity_state(
-    session_unlocked: bool,
-    session_device_id: &str,
-    persisted_device_id: Option<&str>,
-) -> DeviceAccessIdentityState {
-    if session_unlocked {
-        DeviceAccessIdentityState::Unlocked
-    } else if !session_device_id.trim().is_empty() || persisted_device_id.is_some() {
-        DeviceAccessIdentityState::Locked
-    } else {
-        DeviceAccessIdentityState::Missing
-    }
-}
-
-/// Stable, non-secret correlation id for a Nook-managed `WebAuthn` credential.
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: hashes the browser WebAuthn credential-id ArrayBuffer bytes"
-    )
-)]
-pub fn passkey_credential_identifier(credential_id: &[u8]) -> String {
-    short_identifier("passkey", credential_id)
-}
-
-/// Stable, non-secret correlation id for the RP-scoped `WebAuthn` user handle.
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "FFI boundary: hashes the browser WebAuthn user-handle ArrayBuffer bytes"
-    )
-)]
-pub fn passkey_user_handle_identifier(user_handle: &[u8]) -> String {
-    short_identifier("user", user_handle)
-}
-
-pub fn normalize_device_access_provider_label(
-    value: &str,
-) -> Result<String, DeviceAccessProviderLabelError> {
-    let value = value.trim();
-    if value.chars().count() > DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS {
-        return Err(DeviceAccessProviderLabelError::TooLong);
-    }
-    if value.chars().any(char::is_control) {
-        return Err(DeviceAccessProviderLabelError::ContainsControlCharacter);
-    }
-    Ok(value.to_owned())
-}
-
-pub fn normalize_device_access_passkey_name(
-    value: &str,
-) -> Result<String, DeviceAccessProviderLabelError> {
-    normalize_device_access_provider_label(value)
-}
-
-fn short_identifier(prefix: &str, bytes: &[u8]) -> String {
-    let digest = Sha256::digest(bytes);
-    format!("{prefix}_{}", hex::encode(&digest[..8]))
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
-        AppKey, DeviceIdentity, DeviceKeyProtectionSetup, IdentityDirectory, IdentitySelection,
-        PasskeyDeviceProtectionMode, generate_store_id,
+        AppKey, DeviceIdentity, DeviceKeyProtectionSetup, IdentityDirectory, IdentityRecord,
+        IdentitySelection, PasskeyDeviceProtectionMode, WrappedDeviceIdentity, generate_store_id,
     };
 
     #[test]
@@ -472,7 +312,11 @@ mod tests {
             IdentitySelection::Selected(selected_work),
         )?;
 
-        let linked = identities_linked_to_vault(&directory, &personal_store);
+        let linked = IdentityVaultLinks::new(&IdentityVaultLinksRequest {
+            directory: &directory,
+            store_id: &personal_store,
+        })
+        .collect();
 
         assert_eq!(linked.len(), 1);
         assert_eq!(linked[0].label, "Personal");
@@ -488,7 +332,14 @@ mod tests {
         personal.generate_vault_dek(personal_store)?;
         let directory = IdentityDirectory::from_records(vec![personal], IdentitySelection::Empty)?;
 
-        assert!(identities_linked_to_vault(&directory, &unknown_store).is_empty());
+        assert!(
+            IdentityVaultLinks::new(&IdentityVaultLinksRequest {
+                directory: &directory,
+                store_id: &unknown_store,
+            })
+            .collect()
+            .is_empty()
+        );
         Ok(())
     }
 
@@ -500,7 +351,12 @@ mod tests {
         identity.generate_vault_dek(store_id.clone())?;
 
         assert_eq!(
-            classify_identity_vault_app_grant(&identity, &store_id, app_key.app_id()),
+            IdentityVaultAppGrant {
+                identity: &identity,
+                store_id: &store_id,
+                app_id: app_key.app_id(),
+            }
+            .classify(),
             IdentityVaultAppGrantKind::Granted
         );
         Ok(())
@@ -528,7 +384,12 @@ mod tests {
         assert!(identity.has_app_id(app_key.app_id()));
         assert!(identity.owns_vault(&store_id));
         assert_eq!(
-            classify_identity_vault_app_grant(&identity, &store_id, app_key.app_id()),
+            IdentityVaultAppGrant {
+                identity: &identity,
+                store_id: &store_id,
+                app_id: app_key.app_id(),
+            }
+            .classify(),
             IdentityVaultAppGrantKind::NotGranted
         );
         Ok(())
@@ -561,19 +422,19 @@ mod tests {
         let pin = DeviceIdentityProtection::new(&identity.secret_string()).with_pin("six words")?;
 
         assert_eq!(
-            classify_device_access_protection(None),
+            DeviceAccessProtectionKind::classify(None),
             DeviceAccessProtectionKind::Missing
         );
         assert_eq!(
-            classify_device_access_protection(Some(&standard)),
+            DeviceAccessProtectionKind::classify(Some(&standard)),
             DeviceAccessProtectionKind::PasskeyStandard
         );
         assert_eq!(
-            classify_device_access_protection(Some(&anti_hacker)),
+            DeviceAccessProtectionKind::classify(Some(&anti_hacker)),
             DeviceAccessProtectionKind::PasskeyAntiHacker
         );
         assert_eq!(
-            classify_device_access_protection(Some(&pin)),
+            DeviceAccessProtectionKind::classify(Some(&pin)),
             DeviceAccessProtectionKind::PinOrPassphrase
         );
         Ok(())
@@ -581,12 +442,12 @@ mod tests {
 
     #[test]
     fn safe_identifiers_are_stable_and_do_not_embed_source_bytes() {
-        let credential = passkey_credential_identifier(b"credential bytes");
-        let user = passkey_user_handle_identifier(b"user handle");
+        let credential = PasskeyAccessProfile::credential_identifier(b"credential bytes");
+        let user = PasskeyAccessProfile::user_handle_identifier(b"user handle");
 
         assert_eq!(
             credential,
-            passkey_credential_identifier(b"credential bytes")
+            PasskeyAccessProfile::credential_identifier(b"credential bytes")
         );
         assert!(credential.starts_with("passkey_"));
         assert!(user.starts_with("user_"));
@@ -614,47 +475,47 @@ mod tests {
 
         assert!(decoded.version.is_current());
         assert_eq!(
-            decode_device_access_profile(&serialized),
+            DeviceAccessProfile::decode(&serialized),
             DeviceAccessProfileDecodeResult::Current(Box::new(profile))
         );
         assert_eq!(
-            decode_device_access_profile(r#"{"version":0,"verifiedVaults":[]}"#),
+            DeviceAccessProfile::decode(r#"{"version":0,"verifiedVaults":[]}"#),
             DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         assert_eq!(
-            decode_device_access_profile(r#"{"version":999,"verifiedVaults":[]}"#),
+            DeviceAccessProfile::decode(r#"{"version":999,"verifiedVaults":[]}"#),
             DeviceAccessProfileDecodeResult::FutureVersion
         );
         assert_eq!(
-            decode_device_access_profile("not-json"),
+            DeviceAccessProfile::decode("not-json"),
             DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         assert_eq!(
-            decode_device_access_profile(
+            DeviceAccessProfile::decode(
                 r#"{"version":1,"verifiedVaults":[{"storeId":"store-one","verifiedAt":"2026-01-01T00:00:00.000Z"}]}"#,
             ),
             DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         assert_eq!(
-            decode_device_access_profile(
+            DeviceAccessProfile::decode(
                 r#"{"version":1,"verifiedVaults":[{"deviceId":"","storeId":"store-one","verifiedAt":"2026-01-01T00:00:00.000Z"}]}"#,
             ),
             DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         assert!(matches!(
-            decode_device_access_profile(
+            DeviceAccessProfile::decode(
                 r#"{"version":1,"verifiedVaults":[{"deviceId":"0123456789abcdef","storeId":"store_testtoken11","verifiedAt":"2026-01-01T00:00:00.000Z"}]}"#,
             ),
             DeviceAccessProfileDecodeResult::Current(_)
         ));
         assert_eq!(
-            decode_device_access_profile(
+            DeviceAccessProfile::decode(
                 r#"{"version":1,"verifiedVaults":[{"deviceId":"0123456789abcdef","storeId":"store-one","verifiedAt":"2026-01-01T00:00:00.000Z"}]}"#,
             ),
             DeviceAccessProfileDecodeResult::RecoverableDefault
         );
         assert_eq!(
-            decode_device_access_profile(
+            DeviceAccessProfile::decode(
                 r#"{"version":1,"passkey":{"providerLabel":"stale provider"},"verifiedVaults":[]}"#,
             ),
             DeviceAccessProfileDecodeResult::RecoverableDefault
@@ -732,31 +593,51 @@ mod tests {
     #[test]
     fn distinguishes_missing_locked_and_unlocked_identity_sessions() {
         assert_eq!(
-            classify_device_access_identity_state(false, "", None),
+            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+                session_unlocked: false,
+                session_device_id: "",
+                persisted_device_id: None,
+            }),
             DeviceAccessIdentityState::Missing
         );
         assert_eq!(
-            classify_device_access_identity_state(false, "", Some("device-persisted")),
+            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+                session_unlocked: false,
+                session_device_id: "",
+                persisted_device_id: Some("device-persisted"),
+            }),
             DeviceAccessIdentityState::Locked
         );
         assert_eq!(
-            classify_device_access_identity_state(
-                false,
-                "device-persisted",
-                Some("device-persisted")
-            ),
+            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+                session_unlocked: false,
+                session_device_id: "device-persisted",
+                persisted_device_id: Some("device-persisted"),
+            }),
             DeviceAccessIdentityState::Locked
         );
         assert_eq!(
-            classify_device_access_identity_state(true, "device-session", Some("device-persisted")),
+            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+                session_unlocked: true,
+                session_device_id: "device-session",
+                persisted_device_id: Some("device-persisted"),
+            }),
             DeviceAccessIdentityState::Unlocked
         );
         assert_eq!(
-            classify_device_access_identity_state(true, "device-companion", None),
+            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+                session_unlocked: true,
+                session_device_id: "device-companion",
+                persisted_device_id: None,
+            }),
             DeviceAccessIdentityState::Unlocked
         );
         assert_eq!(
-            classify_device_access_identity_state(false, "device-companion", None),
+            DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
+                session_unlocked: false,
+                session_device_id: "device-companion",
+                persisted_device_id: None,
+            }),
             DeviceAccessIdentityState::Locked
         );
     }
@@ -764,19 +645,19 @@ mod tests {
     #[test]
     fn normalizes_user_provider_labels_without_inventing_provider_identity() {
         assert_eq!(
-            normalize_device_access_provider_label("  Proton Pass  "),
+            PasskeyAccessProfile::normalize_provider_label("  Proton Pass  "),
             Ok("Proton Pass".to_owned())
         );
         assert_eq!(
-            normalize_device_access_provider_label("   "),
+            PasskeyAccessProfile::normalize_provider_label("   "),
             Ok(String::new())
         );
         assert_eq!(
-            normalize_device_access_provider_label(&"x".repeat(81)),
+            PasskeyAccessProfile::normalize_provider_label(&"x".repeat(81)),
             Err(DeviceAccessProviderLabelError::TooLong)
         );
         assert_eq!(
-            normalize_device_access_provider_label("Apple\nPasswords"),
+            PasskeyAccessProfile::normalize_provider_label("Apple\nPasswords"),
             Err(DeviceAccessProviderLabelError::ContainsControlCharacter)
         );
     }

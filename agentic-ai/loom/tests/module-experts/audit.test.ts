@@ -373,7 +373,7 @@ describe('module expert audit', () => {
 
     expect(report.findings).toEqual([]);
     expect(report.profileCount).toBe(9);
-    expect(report.productionModuleCount).toBe(14);
+    expect(report.productionModuleCount).toBe(15);
     expect(report.auditOk).toBe(true);
   });
 
