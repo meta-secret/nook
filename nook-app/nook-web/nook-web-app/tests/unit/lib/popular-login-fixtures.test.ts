@@ -79,13 +79,6 @@ function escapeAttr(value: string): string {
   return value.replace(/&/gu, '&amp;').replace(/"/gu, '&quot;')
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-}
-
 function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
   const [step = fixture.steps[0]] = [fixture.steps[stepIndex]]
   const fields = step.fields
@@ -112,9 +105,12 @@ function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
         .filter(Boolean)
         .join(' ')
       const input = `<input ${attrs} />`
-      return field.label
-        ? `<label>${escapeHtml(field.label)}${input}</label>`
-        : input
+      if (!field.label) return input
+      const label = field.label
+        .replace(/&/gu, '&amp;')
+        .replace(/</gu, '&lt;')
+        .replace(/>/gu, '&gt;')
+      return `<label>${label}${input}</label>`
     })
     .join('')
   const submitType = step.submit.type === 'button' ? 'button' : 'submit'

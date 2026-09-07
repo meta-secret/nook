@@ -229,7 +229,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
     if (!control) throw new Error('expected Airbnb Continue facts')
     expect(control).toMatchObject({
       actionability: 'actionable',
-      authenticationUsername: 'generic',
+      authenticationUsername: 'mixed-phone-or-email',
       destinationIdentity: 'https://www.airbnb.com/login',
       formIdentity: '',
       label: AirbnbFixtureControl.Continue,
