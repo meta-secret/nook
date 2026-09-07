@@ -208,6 +208,7 @@ describe('authentication workflow snapshot messages', () => {
                         formIdentity: 'login',
                         destinationIdentity: 'https://login.example.com/login',
                         label: 'Use passkey',
+                        submissionDestinationSource: 'omitted',
                       },
                     },
                   ],
@@ -334,6 +335,7 @@ describe('authentication workflow snapshot messages', () => {
       sourceOrigin: 'https://login.example.com',
       formIdentity: 'login',
       destinationIdentity: '/login',
+      submissionDestinationSource: 'authored',
       label: 'Sign in',
     }
     expect(
@@ -353,6 +355,47 @@ describe('authentication workflow snapshot messages', () => {
         },
       }),
     ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              detailedAdvanceControl: {
+                kind: 'observed',
+                observations: [
+                  { ...control, submissionDestinationSource: 'inferred' },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(false)
+    const missingDestinationSource = { ...control }
+    Reflect.deleteProperty(
+      missingDestinationSource,
+      'submissionDestinationSource',
+    )
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...validMessage.payload.observations[0],
+              detailedAdvanceControl: {
+                kind: 'observed',
+                observations: [missingDestinationSource],
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(false)
     expect(
       isAuthenticationWorkflowSnapshotMessage({
         ...validMessage,

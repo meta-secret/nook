@@ -33,7 +33,7 @@ describe('mock-auth Pilot expectation catalog', () => {
       }
     }
 
-    expect(continueWithNookTemplateCount).toBe(26)
+    expect(continueWithNookTemplateCount).toBe(27)
     expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
   })
 })

@@ -136,30 +136,24 @@
       hidden
       onsubmit={activateAlternative}
     ></form>
+    <button name="intent" type="submit" value="google" form="openai-social-form"
+      >Continue with Google</button
+    >
+    <button name="intent" type="submit" value="apple" form="openai-social-form"
+      >Continue with Apple</button
+    >
+    <button
+      name="intent"
+      type="submit"
+      value="microsoft"
+      form="openai-social-form">Continue with Microsoft</button
+    >
     <form
       id="openai-identifier-form"
       method="post"
       action="/log-in-or-create-account"
       onsubmit={submitOpenAi}
     >
-      <button
-        name="intent"
-        type="submit"
-        value="google"
-        form="openai-social-form">Continue with Google</button
-      >
-      <button
-        name="intent"
-        type="submit"
-        value="apple"
-        form="openai-social-form">Continue with Apple</button
-      >
-      <button
-        name="intent"
-        type="submit"
-        value="microsoft"
-        form="openai-social-form">Continue with Microsoft</button
-      >
       <button type="button" onclick={activateAlternative}
         >Continue with phone</button
       >

@@ -117,7 +117,7 @@ mod tests {
     use super::*;
     use crate::{
         AuthenticationUsernameEvidence, PageControlActionability, PageControlOwnership,
-        PageControlSemantics, PageControlSubmissionMethod,
+        PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
     };
 
     fn passkey_control(label: &str) -> AuthenticationAdvanceControlObservation {
@@ -136,6 +136,7 @@ mod tests {
             label: label.to_owned(),
             machine_identity: String::new(),
             submission_method: PageControlSubmissionMethod::Absent,
+            submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
         }
     }
 

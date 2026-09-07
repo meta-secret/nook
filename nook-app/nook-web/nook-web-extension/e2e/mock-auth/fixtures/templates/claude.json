@@ -1,0 +1,20 @@
+{
+  "id": "claude",
+  "quirks": ["post-form-without-action", "provider-alternatives-outside-form"],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "email",
+          "name": "email",
+          "autocomplete": "email",
+          "aria-label": "Email"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue with email"
+      }
+    }
+  ]
+}

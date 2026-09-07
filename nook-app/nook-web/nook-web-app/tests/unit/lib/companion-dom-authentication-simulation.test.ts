@@ -5,7 +5,9 @@ import {
   AuthenticationWorkflowKind,
   CompanionAuthenticationWorkflowMatchKind,
   CredentialFillRejection,
+  authentication_advance_control_is_safe,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
   authenticationPageObservationFacts,
   FormSubmissionResult,
@@ -223,15 +225,65 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
+    const chatGptObservation = summarizeAuthenticationWorkflowForms().find(
+      ({ formScope }) =>
+        formScope.kind === PasswordFormScopeKind.Owned &&
+        formScope.owner.querySelector('#email'),
+    )
+    if (!chatGptObservation) {
+      throw new Error('expected ChatGPT destination evidence')
+    }
+    const chatGptFacts = authenticationPageObservationFacts({
+      observation: chatGptObservation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const chatGptDetailed = chatGptFacts.detailedAdvanceControl
+    if (!chatGptDetailed || chatGptDetailed.kind !== 'observed') {
+      throw new Error('expected ChatGPT control observations')
+    }
+    const chatGptSafeControls = chatGptDetailed.observations.filter(
+      authentication_advance_control_is_safe,
+    )
+    expect(chatGptSafeControls).toHaveLength(1)
+    expect(chatGptSafeControls[0]).toMatchObject({
+      ownership: 'owned-form',
+      semantics: 'semantic-submit',
+      semanticSubmitControlCount: 1,
+      destinationIdentity: 'http://localhost:3000/auth/login',
+      submissionDestinationSource: 'authored',
+      submissionMethod: 'get',
+      label: 'Continue',
+    })
+    const chatGptAlternatives = chatGptDetailed.observations.filter(
+      (control) => !authentication_advance_control_is_safe(control),
+    )
+    expect(chatGptAlternatives).toHaveLength(3)
+    expect(chatGptAlternatives).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: 'Continue with Google' }),
+        expect.objectContaining({ label: 'Continue with Apple' }),
+        expect.objectContaining({ label: 'Continue with phone' }),
+      ]),
+    )
+    expect(
+      chatGptAlternatives.every(
+        (control) =>
+          control.ownership === 'owned-form' &&
+          control.semantics === 'activation' &&
+          control.submissionDestinationSource === 'omitted' &&
+          control.submissionMethod === 'absent',
+      ),
+    ).toBe(true)
 
     window.history.replaceState({}, '', '/log-in-or-create-account')
     const openAiRequest: DomAuthenticationSimulationRequest = {
       fixture: {
         html: `<main><form id="openai-social-form" method="post" action="/log-in-or-create-account" hidden></form>
+        <button name="intent" type="submit" value="google" form="openai-social-form">Continue with Google</button>
+        <button name="intent" type="submit" value="apple" form="openai-social-form">Continue with Apple</button>
+        <button name="intent" type="submit" value="microsoft" form="openai-social-form">Continue with Microsoft</button>
         <form id="openai-identifier-form" method="post" action="/log-in-or-create-account">
-          <button name="intent" type="submit" value="google" form="openai-social-form">Continue with Google</button>
-          <button name="intent" type="submit" value="apple" form="openai-social-form">Continue with Apple</button>
-          <button name="intent" type="submit" value="microsoft" form="openai-social-form">Continue with Microsoft</button>
           <button id="phone-alternative" type="button">Continue with phone</button>
           <input id="email" name="email" type="email" autocomplete="email" aria-label="Email address" placeholder="Email address">
           <button name="intent" type="submit" value="openai-continue">Continue</button>
@@ -254,6 +306,47 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
+    const openAiObservation = summarizeAuthenticationWorkflowForms().find(
+      ({ formScope }) =>
+        formScope.kind === PasswordFormScopeKind.Owned &&
+        formScope.owner.id === 'openai-identifier-form',
+    )
+    if (!openAiObservation) {
+      throw new Error('expected OpenAI destination evidence')
+    }
+    const openAiFacts = authenticationPageObservationFacts({
+      observation: openAiObservation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const openAiDetailed = openAiFacts.detailedAdvanceControl
+    if (!openAiDetailed || openAiDetailed.kind !== 'observed') {
+      throw new Error('expected OpenAI control observations')
+    }
+    const openAiSafeControls = openAiDetailed.observations.filter(
+      authentication_advance_control_is_safe,
+    )
+    expect(openAiSafeControls).toHaveLength(1)
+    expect(openAiSafeControls[0]).toMatchObject({
+      ownership: 'owned-form',
+      semantics: 'semantic-submit',
+      semanticSubmitControlCount: 1,
+      destinationIdentity: 'http://localhost:3000/log-in-or-create-account',
+      submissionDestinationSource: 'authored',
+      submissionMethod: 'post',
+      label: 'Continue',
+    })
+    const openAiAlternatives = openAiDetailed.observations.filter(
+      (control) => !authentication_advance_control_is_safe(control),
+    )
+    expect(openAiAlternatives).toHaveLength(1)
+    expect(openAiAlternatives[0]).toMatchObject({
+      ownership: 'owned-form',
+      semantics: 'activation',
+      submissionDestinationSource: 'omitted',
+      submissionMethod: 'absent',
+      label: 'Continue with phone',
+    })
     const identifierForm = document.querySelector('#openai-identifier-form')
     const socialForm = document.querySelector('#openai-social-form')
     const phone =
@@ -268,10 +361,12 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(socialButtons).toHaveLength(3)
     expect(
       [...socialButtons].every((button) => identifierForm.contains(button)),
-    ).toBe(true)
+    ).toBe(false)
     expect(
       [...socialButtons].every(
-        (button) => button.getAttribute('form') === socialForm.id,
+        (button) =>
+          button.getAttribute('form') === socialForm.id &&
+          button.form === socialForm,
       ),
     ).toBe(true)
   })
