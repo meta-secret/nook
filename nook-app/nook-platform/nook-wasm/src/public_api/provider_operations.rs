@@ -7,7 +7,7 @@ use nook_core::ManagerStoreScopeRef;
 pub fn provider_wasm_args(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-    Ok(nook_core::storage_args_for_provider(&provider)?.into())
+    Ok(provider.connection_args()?.into())
 }
 
 #[wasm_bindgen]
