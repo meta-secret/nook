@@ -229,7 +229,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
     if (!control) throw new Error('expected Airbnb Continue facts')
     expect(control).toMatchObject({
       actionability: 'actionable',
-      authenticationUsername: 'explicit',
+      authenticationUsername: 'generic',
       destinationIdentity: 'https://www.airbnb.com/login',
       formIdentity: '',
       label: AirbnbFixtureControl.Continue,
@@ -306,7 +306,33 @@ describe('Airbnb DOM-backed authentication simulation', () => {
   })
 
   test('rejects ambiguous semantic submits', () => {
-    AirbnbAuthenticationFixture.ambiguous().expectAdvanceRejected()
+    AirbnbAuthenticationFixture.ambiguous().install()
+    const [observation] = summarizeAuthenticationWorkflowForms()
+    if (!observation) throw new Error('expected ambiguous Airbnb observation')
+    const facts = authenticationPageObservationFacts({
+      observation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    const advance = facts.detailedAdvanceControl
+    if (!advance || advance.kind !== 'observed') {
+      throw new Error('expected ambiguous Airbnb control facts')
+    }
+    expect(advance.observations).toHaveLength(2)
+    expect(
+      advance.observations.every(
+        (control) =>
+          control.semanticSubmitControlCount === 2 &&
+          !authentication_advance_control_is_safe(control),
+      ),
+    ).toBe(true)
+    expect(
+      companion_authentication_workflow_match_kind(
+        classify_companion_authentication_workflow_facts({
+          observations: [facts],
+        }),
+      ),
+    ).toBe(CompanionAuthenticationWorkflowMatchKind.Rejected)
     expect(
       document.querySelectorAll('form button[type="submit"]'),
     ).toHaveLength(2)
