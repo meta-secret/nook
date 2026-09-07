@@ -21,13 +21,19 @@ function contentType(filePath: string): string {
 }
 
 enum StaticAssetResolutionKind {
+  NotFound = 'not-found',
   Rejected = 'rejected',
   Resolved = 'resolved',
 }
 
 type StaticAssetResolution =
+  | { kind: StaticAssetResolutionKind.NotFound }
   | { kind: StaticAssetResolutionKind.Rejected }
   | { kind: StaticAssetResolutionKind.Resolved; path: string }
+
+export function shouldUseSpaFallback(urlPath: string): boolean {
+  return path.extname(urlPath) === ''
+}
 
 async function resolveAsset(urlPath: string): Promise<StaticAssetResolution> {
   const relative = urlPath === '/' ? '/index.html' : urlPath
@@ -42,6 +48,9 @@ async function resolveAsset(urlPath: string): Promise<StaticAssetResolution> {
     }
   } catch {
     // fall through to SPA index
+  }
+  if (!shouldUseSpaFallback(urlPath)) {
+    return { kind: StaticAssetResolutionKind.NotFound }
   }
   // Client-side routes: serve the SPA shell.
   return {
@@ -71,6 +80,11 @@ export async function startMockAuthServer(): Promise<MockAuthServer> {
       )
       const asset = await resolveAsset(url.pathname)
       if (asset.kind === StaticAssetResolutionKind.Rejected) {
+        response.writeHead(404)
+        response.end('Not found')
+        return
+      }
+      if (asset.kind === StaticAssetResolutionKind.NotFound) {
         response.writeHead(404)
         response.end('Not found')
         return

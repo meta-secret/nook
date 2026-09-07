@@ -287,7 +287,11 @@ test('sets up the extension device first and sends its public keys to Simple Vau
       { path: '/apple', field: '#account_name_text_field' },
       { path: '/amazon', field: '[name="email"]' },
       { path: '/github', field: '[name="login"]' },
-      { path: '/linkedin', field: '#username' },
+      {
+        path: '/login/',
+        field:
+          '[data-testid="linkedin-active-surface"] [autocomplete="username"]',
+      },
       { path: '/x', field: '[name="username_or_email"]' },
     ]
     for (const site of tier1Sites) {

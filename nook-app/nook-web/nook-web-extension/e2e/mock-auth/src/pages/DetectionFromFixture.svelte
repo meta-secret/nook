@@ -132,7 +132,7 @@
         <p class="error" role="alert">{error}</p>
       {/if}
       <form id="login_form" method="post" action="/auth/login" {onsubmit}>
-        {#each step.fields as field (((...[v = field.placeholder]) => v)(((...[v = field.name]) => v)(field.id)))}
+        {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
           <input
             type={((...[v = 'text']) => v)(field.type)}
             name={field.name}
@@ -176,7 +176,7 @@
       <p class="error" role="alert">{error}</p>
     {/if}
     <form id="login_form" method="post" action="/auth/login" {onsubmit}>
-      {#each step.fields as field (((...[v = field.placeholder]) => v)(((...[v = field.name]) => v)(field.id)))}
+      {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
         <input
           type={((...[v = 'text']) => v)(field.type)}
           name={field.name}
