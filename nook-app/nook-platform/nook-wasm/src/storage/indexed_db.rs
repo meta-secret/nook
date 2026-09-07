@@ -294,11 +294,9 @@ where
     };
     if let Some(expected) = expected_fingerprint {
         let fingerprint = match guarded_entry {
-            Some(entry) => entry
-                .wrapped_app_key()
-                .credential_id()
-                .ok()
-                .map(|bytes| nook_core::passkey_credential_identifier(bytes.as_ref())),
+            Some(entry) => entry.wrapped_app_key().credential_id().ok().map(|bytes| {
+                nook_core::PasskeyAccessProfile::credential_identifier(bytes.as_ref())
+            }),
             None if allow_legacy_guard => read_string_preferring(
                 &store,
                 APP_KEY_WRAPPED_KEY,
@@ -308,10 +306,9 @@ where
             .await?
             .and_then(|raw| {
                 let wrapped = WrappedDeviceIdentity::parse(&raw).ok()?;
-                wrapped
-                    .credential_id()
-                    .ok()
-                    .map(|bytes| nook_core::passkey_credential_identifier(bytes.as_ref()))
+                wrapped.credential_id().ok().map(|bytes| {
+                    nook_core::PasskeyAccessProfile::credential_identifier(bytes.as_ref())
+                })
             }),
             None => None,
         };

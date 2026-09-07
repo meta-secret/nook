@@ -6,7 +6,8 @@ use crate::{
     device_access::{self, NookDeviceAccessSnapshot, NookDeviceVaultAccess},
 };
 use nook_core::{
-    AppId, DeviceAccessProtectionKind, IdentityId, IdentitySelection, IdentityVaultAppGrantKind,
+    AppId, DeviceAccessProtectionKind, IdentityId, IdentitySelection, IdentityVaultAppGrant,
+    IdentityVaultAppGrantKind, IdentityVaultLinks, IdentityVaultLinksRequest,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -59,7 +60,9 @@ fn local_app_protections(keyring: &nook_core::LocalIdentityKeyring) -> Vec<Local
         .iter()
         .map(|entry| LocalAppProtection {
             app_id: entry.app_id().clone(),
-            protection: nook_core::classify_device_access_protection(Some(entry.wrapped_app_key())),
+            protection: nook_core::DeviceAccessProtectionKind::classify(Some(
+                entry.wrapped_app_key(),
+            )),
         })
         .collect()
 }
@@ -104,19 +107,23 @@ fn provider_vault_identity_observations_from_projection(
                 .copied()
                 .find(|member| {
                     current_app_id.as_ref() == Some(&member.app_id)
-                        && nook_core::classify_identity_vault_app_grant(
+                        && IdentityVaultAppGrant {
                             identity,
                             store_id,
-                            &member.app_id,
-                        ) == IdentityVaultAppGrantKind::Granted
+                            app_id: &member.app_id,
+                        }
+                        .classify()
+                            == IdentityVaultAppGrantKind::Granted
                 })
                 .or_else(|| {
                     protected_members.iter().copied().find(|member| {
-                        nook_core::classify_identity_vault_app_grant(
+                        IdentityVaultAppGrant {
                             identity,
                             store_id,
-                            &member.app_id,
-                        ) == IdentityVaultAppGrantKind::Granted
+                            app_id: &member.app_id,
+                        }
+                        .classify()
+                            == IdentityVaultAppGrantKind::Granted
                     })
                 })
                 .or_else(|| {
@@ -135,7 +142,12 @@ fn provider_vault_identity_observations_from_projection(
                 is_current_app: candidate
                     .is_some_and(|member| current_app_id.as_ref() == Some(&member.app_id)),
                 app_grant: candidate.map_or(IdentityVaultAppGrantKind::NotGranted, |member| {
-                    nook_core::classify_identity_vault_app_grant(identity, store_id, &member.app_id)
+                    IdentityVaultAppGrant {
+                        identity,
+                        store_id,
+                        app_id: &member.app_id,
+                    }
+                    .classify()
                 }),
             }
         })
@@ -506,7 +518,13 @@ async fn identity_directory_snapshot_for_session(
         .collect::<Vec<_>>();
     let selected_identities = selected_store_id.map_or_else(
         || directory.identities().iter().collect(),
-        |store_id| nook_core::identities_linked_to_vault(&directory, store_id),
+        |store_id| {
+            IdentityVaultLinks::new(&IdentityVaultLinksRequest {
+                directory: &directory,
+                store_id,
+            })
+            .collect()
+        },
     );
     let current_app = current_app_id
         .as_deref()
@@ -551,7 +569,12 @@ fn selected_vault_current_app_granted(
         .zip(current_app_id)
         .is_some_and(|(store_id, app_id)| {
             identities.iter().any(|identity| {
-                nook_core::classify_identity_vault_app_grant(identity, store_id, app_id)
+                IdentityVaultAppGrant {
+                    identity,
+                    store_id,
+                    app_id,
+                }
+                .classify()
                     == IdentityVaultAppGrantKind::Granted
             })
         })

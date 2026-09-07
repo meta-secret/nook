@@ -21,7 +21,7 @@ impl LegacyProfileMembership<'_> {
                 .wrapped_app_key()
                 .credential_id()
                 .is_ok_and(|credential_id| {
-                    nook_core::passkey_credential_identifier(credential_id.as_ref())
+                    nook_core::PasskeyAccessProfile::credential_identifier(credential_id.as_ref())
                         == passkey.credential_fingerprint
                 })
         });

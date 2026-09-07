@@ -22,16 +22,14 @@ pub(crate) use auth::{
 pub(crate) use crypto::{vault_crypto, vault_epoch_crypto};
 pub use device_access::{
     DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
-    DeviceAccessIdentityState, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
-    DeviceAccessProfileTransitionError, DeviceAccessProfileVersion, DeviceAccessProtectionKind,
-    DeviceAccessProviderLabelError, IdentityVaultAppGrantKind, PasskeyAccessProfile,
-    PasskeyAuthenticatorAttachment, PasskeyBackupState, PasskeyBrowserObservation,
-    PasskeyCreatedAtEvidence, PasskeyCreationCeremony, PasskeyKeeperKind,
-    PasskeyLastUsedAtEvidence, PasskeyObservedBrowser, PasskeyObservedPlatform, PasskeyTransport,
-    VerifiedVaultAccess, classify_device_access_identity_state, classify_device_access_protection,
-    classify_identity_vault_app_grant, decode_device_access_profile, identities_linked_to_vault,
-    normalize_device_access_passkey_name, normalize_device_access_provider_label,
-    passkey_credential_identifier, passkey_keeper_kind, passkey_user_handle_identifier,
+    DeviceAccessIdentityObservation, DeviceAccessIdentityState, DeviceAccessProfile,
+    DeviceAccessProfileDecodeResult, DeviceAccessProfileTransitionError,
+    DeviceAccessProfileVersion, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
+    IdentityVaultAppGrant, IdentityVaultAppGrantKind, IdentityVaultLinks,
+    IdentityVaultLinksRequest, PasskeyAccessProfile, PasskeyAuthenticatorAttachment,
+    PasskeyBackupState, PasskeyBrowserObservation, PasskeyCreatedAtEvidence,
+    PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
+    PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
 };
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,

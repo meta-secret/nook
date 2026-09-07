@@ -406,10 +406,12 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
     protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
 ) -> Result<NookDeviceAccessSnapshot, wasm_bindgen::JsError> {
     let session_device_id = session_device_id.trim();
-    let identity_state = nook_core::classify_device_access_identity_state(
-        session_unlocked,
-        session_device_id,
-        protected.as_ref().map(|(device_id, _)| device_id.as_str()),
+    let identity_state = nook_core::DeviceAccessIdentityState::classify(
+        &nook_core::DeviceAccessIdentityObservation {
+            session_unlocked,
+            session_device_id,
+            persisted_device_id: protected.as_ref().map(|(device_id, _)| device_id.as_str()),
+        },
     );
     let session_uses_companion = !session_device_id.is_empty()
         && protected
@@ -418,7 +420,9 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
     let protection = if session_uses_companion {
         DeviceAccessProtectionKind::CompanionSession
     } else {
-        nook_core::classify_device_access_protection(protected.as_ref().map(|(_, record)| record))
+        nook_core::DeviceAccessProtectionKind::classify(
+            protected.as_ref().map(|(_, record)| record),
+        )
     };
     let (device_id, credential_id, user_handle_id) = if session_uses_companion {
         (session_device_id.to_owned(), String::new(), String::new())
@@ -427,11 +431,15 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
             Some((device_id, record)) => {
                 let credential_id = record
                     .credential_id()
-                    .map(|bytes| nook_core::passkey_credential_identifier(bytes.as_ref()))
+                    .map(|bytes| {
+                        nook_core::PasskeyAccessProfile::credential_identifier(bytes.as_ref())
+                    })
                     .unwrap_or_default();
                 let user_handle_id = record
                     .user_handle()
-                    .map(|bytes| nook_core::passkey_user_handle_identifier(bytes.as_ref()))
+                    .map(|bytes| {
+                        nook_core::PasskeyAccessProfile::user_handle_identifier(bytes.as_ref())
+                    })
                     .unwrap_or_default();
                 (device_id.clone(), credential_id, user_handle_id)
             }
@@ -490,7 +498,7 @@ pub(crate) async fn device_access_snapshot_for_session_with_protected(
             .collect(),
         backup_state: backup_state(passkey.observation.backup_state),
         aaguid: NookDeviceAccessText::from_option(passkey.observation.aaguid.clone()),
-        keeper: nook_core::passkey_keeper_kind(passkey.observation.aaguid.as_deref()),
+        keeper: nook_core::PasskeyKeeperKind::classify(passkey.observation.aaguid.as_deref()),
         observed_browser: passkey.observation.browser,
         observed_platform: passkey.observation.platform,
         vaults,
