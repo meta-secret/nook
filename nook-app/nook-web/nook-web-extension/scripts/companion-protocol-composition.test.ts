@@ -25,6 +25,7 @@ let extension: NookVaultManager
 let presence: CompanionExtensionPresence
 let unlockedAppKey: CompanionUnlockedAppKey
 const previousIndexedDB = globalThis.indexedDB
+const previousIDBFactory = globalThis.IDBFactory
 const compositionIndexedDB = new IDBFactory()
 
 function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
@@ -59,7 +60,10 @@ function beginHandoff(requestId: string) {
 }
 
 beforeAll(async () => {
-  Object.assign(globalThis, { indexedDB: compositionIndexedDB })
+  Object.assign(globalThis, {
+    IDBFactory,
+    indexedDB: compositionIndexedDB,
+  })
   const nookWasmBytes = await Bun.file(
     new URL(
       '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
@@ -107,7 +111,10 @@ beforeAll(async () => {
 })
 
 afterAll(() => {
-  Object.assign(globalThis, { indexedDB: previousIndexedDB })
+  Object.assign(globalThis, {
+    IDBFactory: previousIDBFactory,
+    indexedDB: previousIndexedDB,
+  })
 })
 
 describe('generated companion protocol composition', () => {
