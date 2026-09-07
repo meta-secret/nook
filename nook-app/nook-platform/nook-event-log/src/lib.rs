@@ -30,10 +30,7 @@ mod remote_epoch_visibility;
 mod signing;
 mod store;
 
-pub use builder::{
-    AppendEventInput, ObservedHeads, build_signed_event, encrypted_secret_from_armored,
-    parents_from_heads,
-};
+pub use builder::{AppendEventInput, ObservedHeads};
 pub use canonical::{
     Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
     format_ed25519_signature, parse_ed25519_signature, sha256_hex, sign_body,
@@ -57,7 +54,6 @@ pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,
     SecretReplacementConflict, SecurityConflict, VaultProjection,
-    assert_projection_permutation_invariant, current_epoch_checkpoint, project_vault,
 };
 pub use remote_epoch_visibility::RemoteEventWrites;
 pub use signing::SigningIdentity;

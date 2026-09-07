@@ -175,7 +175,7 @@ impl<'a> VaultEventPersistence<'a> {
             .collect::<Vec<_>>();
         let heads = local.union_remote_and_heads(&typed_events, store_id)?;
         let graph = local.load_graph(store_id)?;
-        if !nook_core::project_vault(&graph, store_id)?
+        if !nook_core::VaultProjection::from_graph(&graph, store_id)?
             .security_conflicts
             .is_empty()
         {
@@ -273,7 +273,7 @@ impl VaultAppendGraph<'_> {
                 }
             }
         }
-        let projection = nook_core::project_vault(graph, store_id)?;
+        let projection = nook_core::VaultProjection::from_graph(graph, store_id)?;
         if projection.security_conflicts.iter().any(|conflict| {
             conflict.events.contains(&trigger_id) || conflict.events.contains(&checkpoint_id)
         }) {

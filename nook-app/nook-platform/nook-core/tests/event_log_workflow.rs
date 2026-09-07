@@ -18,8 +18,7 @@ use harness::{
 use nook_core::{
     AppendEventInput, EncryptedSecretPayload, EventError, EventId, IsoTimestamp, OpaqueCiphertext,
     SecretFingerprint, SecretId, SecretType, SecretValue, SecureNoteSecret, StoreId, SymmetricKey,
-    VaultOperation, VaultResult, VaultSecurityEpochRotationInput, build_signed_event,
-    encrypted_secret_from_armored,
+    VaultOperation, VaultResult, VaultSecurityEpochRotationInput,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -74,7 +73,7 @@ fn unauthorized_append_and_rotation_do_not_publish() -> anyhow::Result<()> {
         device_id: DeviceId::parse("abcd1234ef567890")?,
     };
     let store_id = StoreId::parse(device.store_id())?;
-    let (event, _) = nook_core::build_signed_event(AppendEventInput {
+    let (event, _) = nook_core::AppendEventInput::build(AppendEventInput {
         store_id: &store_id,
         actor_id: &device.actor_id()?,
         signing_identity: &device.session.signing,
@@ -226,7 +225,7 @@ fn append_secure_note(
     let yaml = value.to_yaml()?;
     let ciphertext = device.crypto.encrypt_value(yaml.as_str())?;
     device.append_signed(vec![VaultOperation::SecretCreated {
-        secret: encrypted_secret_from_armored(
+        secret: EncryptedSecretPayload::from_armored(
             &SecretId::from_vault_record(secret_id),
             SecretType::SecureNote,
             ciphertext.as_str(),
@@ -252,7 +251,7 @@ fn child_event_with_genesis(
     let actor_id = device.actor_id()?;
     let key_epoch = EventId::parse(&device.session.key_epoch)?;
     let created_at = IsoTimestamp::from_trusted(TS.to_owned());
-    let (event, child_bytes) = build_signed_event(AppendEventInput {
+    let (event, child_bytes) = AppendEventInput::build(AppendEventInput {
         store_id: &store_id,
         actor_id: &actor_id,
         signing_identity: &device.session.signing,

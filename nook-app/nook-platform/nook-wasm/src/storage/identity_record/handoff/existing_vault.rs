@@ -73,7 +73,8 @@ impl<'a> ExistingVaultHandoff<'a> {
             ));
         }
         let ordered_event_ids = graph.topological_order()?;
-        let checkpoint_event_id = nook_core::current_epoch_checkpoint(&graph)?
+        let checkpoint_event_id = graph
+            .current_epoch_checkpoint()?
             .or_else(|| ordered_event_ids.last().cloned())
             .ok_or_else(|| {
                 NookError::Database(
@@ -292,7 +293,7 @@ mod tests {
                 .map_err(|error| NookError::Database(error.to_string()))?;
             let created_at = IsoTimestamp::from_trusted("2026-08-15T00:00:00Z".to_owned());
             let (approval, approval_bytes) =
-                nook_core::build_signed_event(nook_core::AppendEventInput {
+                nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                     store_id: &fixture.store_id,
                     actor_id: &actor_id,
                     signing_identity: &signing,
@@ -332,7 +333,7 @@ mod tests {
             )
             .map_err(identity_record::map_domain_error)?;
             let (replacement, replacement_bytes) =
-                nook_core::build_signed_event(nook_core::AppendEventInput {
+                nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                     store_id: &fixture.store_id,
                     actor_id: &actor_id,
                     signing_identity: &signing,
@@ -350,7 +351,7 @@ mod tests {
                 })
                 .map_err(|error| NookError::Database(error.to_string()))?;
             let (revocation, revocation_bytes) =
-                nook_core::build_signed_event(nook_core::AppendEventInput {
+                nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                     store_id: &fixture.store_id,
                     actor_id: &actor_id,
                     signing_identity: &signing,
@@ -366,7 +367,7 @@ mod tests {
                 EventId::parse("sha256u:rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrro")
                     .map_err(|error| NookError::Database(error.to_string()))?;
             let (pending_revocation, pending_revocation_bytes) =
-                nook_core::build_signed_event(nook_core::AppendEventInput {
+                nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                     store_id: &fixture.store_id,
                     actor_id: &actor_id,
                     signing_identity: &signing,

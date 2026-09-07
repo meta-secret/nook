@@ -11,7 +11,7 @@ use crate::{
     AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
     LocalEventStore, ObservedHeads, SecretEpochReencryption, SigningIdentity, StoredSecretRecord,
     VaultCrypto, VaultMetaState, VaultOperation, VaultProjection, build_members_records,
-    build_signed_event, project_vault, resolve_member_roster,
+    resolve_member_roster,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -79,7 +79,7 @@ impl VaultEventSession {
         let key_epoch = EventId::parse(&self.key_epoch)?;
         let created_at = IsoTimestamp::parse(created_at)?;
         let parents = ObservedHeads::parse(&self.heads)?.as_parents();
-        let (event, bytes) = build_signed_event(AppendEventInput {
+        let (event, bytes) = AppendEventInput::build(AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &self.signing,
@@ -123,7 +123,7 @@ impl VaultEventSession {
 
     pub fn project(&self) -> VaultResult<VaultProjection> {
         let graph = self.store.load_graph(&self.store_id)?;
-        Ok(project_vault(&graph, &self.store_id)?)
+        Ok(VaultProjection::from_graph(&graph, &self.store_id)?)
     }
 
     pub fn apply_projection_to_armored(
@@ -132,7 +132,7 @@ impl VaultEventSession {
         state: &mut VaultMetaState,
     ) -> VaultResult<Database> {
         let graph = self.store.load_graph(&self.store_id)?;
-        let projection = project_vault(&graph, &self.store_id)?;
+        let projection = VaultProjection::from_graph(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<StoredSecretRecord> = live.into_values().collect();
         crate::apply_user_records_to_armored_session(user_records, crypto, state)
