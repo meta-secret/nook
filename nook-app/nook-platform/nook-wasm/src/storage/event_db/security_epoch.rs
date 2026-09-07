@@ -418,8 +418,8 @@ mod browser {
     use super::*;
     use nook_core::{
         EpochMetadataState, EpochPasswordState, GenesisImportPayload, IsoTimestamp,
-        PasswordEntryId, Sha256Hex, SigningIdentity, StoreId, VaultEventBody,
-        VaultEventSchemaVersion, VaultOperation,
+        PasswordEntryId, SigningIdentity, StoreId, VaultEventBody, VaultEventSchemaVersion,
+        VaultOperation,
     };
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -464,7 +464,7 @@ mod browser {
                 &signing.actor_id()?,
                 &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
                 GenesisImportPayload {
-                    source_content_hash: Sha256Hex::from_trusted("00".repeat(32)),
+                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("00".repeat(32)),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 },
@@ -497,7 +497,9 @@ mod browser {
                     key_epoch: trigger.event.id()?,
                     operations: vec![VaultOperation::EpochCheckpoint {
                         secrets: Vec::new(),
-                        members_checkpoint_hash: Sha256Hex::from_trusted("00".repeat(32)),
+                        members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted(
+                            "00".repeat(32),
+                        ),
                         rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
                         password_entries: EpochPasswordState::Replace(Vec::new()),
                     }],

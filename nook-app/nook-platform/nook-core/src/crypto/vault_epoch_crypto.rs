@@ -134,7 +134,7 @@ impl<'a> MembersCheckpointHash<'a> {
         let member_records = build_members_records(&roster, new_members_key)?;
         let json = serde_json::to_string(&member_records)
             .map_err(VaultEpochError::MemberRecordsSerialize)?;
-        Ok(crate::sha256_hex(json.as_bytes()))
+        Ok(Sha256Hex::from_bytes(json.as_bytes()))
     }
 }
 
@@ -357,7 +357,7 @@ mod tests {
             &mut state,
             &VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
-                members_checkpoint_hash: crate::sha256_hex(b"members"),
+                members_checkpoint_hash: Sha256Hex::from_bytes(b"members"),
                 rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
                 password_entries: EpochPasswordState::Replace(Vec::new()),
             },

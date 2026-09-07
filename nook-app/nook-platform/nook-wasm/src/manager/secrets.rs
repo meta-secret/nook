@@ -464,7 +464,7 @@ impl NookVaultManager {
 
 #[cfg(all(test, target_arch = "wasm32"))]
 mod wasm_tests {
-    use nook_core::{AgeArmoredCiphertext, Sha256Hex};
+    use nook_core::AgeArmoredCiphertext;
     use wasm_bindgen_test::*;
 
     /// WASM-side contract for file-sync reconnect after offline concurrent creates
@@ -526,7 +526,7 @@ mod wasm_tests {
         );
         device_a.append_operations(
             vec![VaultOperation::VaultImported {
-                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }],

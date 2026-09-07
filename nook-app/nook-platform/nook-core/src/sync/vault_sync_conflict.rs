@@ -223,8 +223,8 @@ mod tests {
     use super::*;
     use crate::{
         EncryptedSecretPayload, EventGraph, EventId, GenesisImportPayload, IsoTimestamp,
-        OpaqueCiphertext, SecretFingerprint, SecretId, SecretType, Sha256Hex, SigningIdentity,
-        StoreId, build_genesis_import_event,
+        OpaqueCiphertext, SecretFingerprint, SecretId, SecretType, SigningIdentity, StoreId,
+        build_genesis_import_event,
     };
 
     const TEST_STORE_ID: &str = "store_conflictux1";
@@ -253,9 +253,11 @@ mod tests {
         let event = build_genesis_import_event(
             &StoreId::parse(TEST_STORE_ID)?,
             &signing.actor_id()?,
-            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
+            &EventId::from_sha256_hex(
+                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+            )?,
             GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets,
                 password_entries: Vec::new(),
             },
@@ -287,7 +289,7 @@ mod tests {
                 parents: vec![parent],
                 created_at: IsoTimestamp::parse("2026-09-01T00:01:00Z")?,
                 key_epoch: EventId::from_sha256_hex(
-                    Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+                    nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
                 )?,
                 operations: vec![operation],
             },
@@ -482,7 +484,7 @@ mod tests {
         let signing = SigningIdentity::generate()?.0;
         let mut graph = EventGraph::new();
         let missing_parent =
-            EventId::from_sha256_hex(Sha256Hex::from_trusted("2".repeat(64)).as_str())?;
+            EventId::from_sha256_hex(nook_auth2::Sha256Hex::from_trusted("2".repeat(64)).as_str())?;
         append_operation(
             &mut graph,
             &signing,
