@@ -632,14 +632,25 @@ mod wasm_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod projection_tests {
     use super::*;
+    use nook_core::{DeviceIdentity, LoginSecret, SecretType, SecretValue};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
     #[wasm_bindgen_test]
     fn empty_secret_session_exposes_safe_helpers() {
-        let mut manager = NookVaultManager::new();
+        let manager = NookVaultManager::new();
         assert!(manager.filter_secrets("fixture").is_err());
+        assert!(manager.decrypt_secret_js("secret_missing").is_err());
+        assert!(
+            manager
+                .current_authenticator_code("secret_missing", 1_750_000_000)
+                .is_err()
+        );
         assert!(
             manager
                 .generate_secret_id()
@@ -657,5 +668,91 @@ mod projection_tests {
             vec!["FIRST".to_owned(), "SECOND".to_owned()]
         );
         assert!(manager.drain_status_log().is_empty());
+    }
+
+    #[wasm_bindgen_test]
+    async fn secret_crud_projection_and_status_paths_round_trip() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        let identity = DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.initialize_genesis_vault(&identity)?;
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.bootstrap_event_log_genesis().await?;
+        manager.drain_status_log();
+
+        let original_id = js(manager.generate_secret_id())?;
+        let original_data = SecretValue::Login(LoginSecret {
+            website_url: "https://example.com/login".to_owned(),
+            username: "alice".to_owned(),
+            password: "first-password".to_owned(),
+            notes: "coverage fixture".to_owned(),
+        })
+        .to_yaml()?
+        .into_inner();
+        let records = js(manager
+            .add_secret(original_id.clone(), SecretType::Login, original_data)
+            .await)?;
+        assert!(records.iter().any(|record| record.id() == original_id));
+        assert_eq!(
+            manager.drain_status_log(),
+            vec!["ADD_SECRET_START".to_owned(), "READY".to_owned()]
+        );
+
+        let filtered = js(manager.filter_secrets("alice"))?;
+        assert_eq!(filtered.len(), 1);
+        assert_eq!(filtered[0].username(), "alice");
+        let decrypted = js(manager.decrypt_secret_js(&original_id))?;
+        assert_eq!(decrypted.password(), "first-password");
+        assert_eq!(decrypted.notes(), "coverage fixture");
+        assert!(
+            manager
+                .current_authenticator_code(&original_id, 1_750_000_000)
+                .is_err()
+        );
+
+        let mut page = js(manager.query_secret_page_js("", NookSecretTypeFilter::Login, 0, 10))?;
+        assert_eq!(page.total(), 1);
+        assert_eq!(page.offset(), 0);
+        assert_eq!(page.limit(), 10);
+        let items = page.take_items();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id(), original_id);
+
+        let replacement_id = js(manager.generate_secret_id())?;
+        let replacement_data = SecretValue::Login(LoginSecret {
+            website_url: "https://example.com/replaced".to_owned(),
+            username: "alice".to_owned(),
+            password: "second-password".to_owned(),
+            notes: String::new(),
+        })
+        .to_yaml()?
+        .into_inner();
+        js(manager
+            .replace_secret(
+                original_id.clone(),
+                replacement_id.clone(),
+                SecretType::Login,
+                replacement_data,
+            )
+            .await)?;
+        assert!(manager.decrypt_secret_js(&original_id).is_err());
+        assert_eq!(
+            js(manager.decrypt_secret_js(&replacement_id))?.password(),
+            "second-password"
+        );
+        js(manager.delete_secret(replacement_id.clone()).await)?;
+        assert!(manager.decrypt_secret_js(&replacement_id).is_err());
+        assert_eq!(
+            manager.drain_status_log(),
+            vec![
+                "REPLACE_SECRET_START".to_owned(),
+                "READY".to_owned(),
+                "DELETE_SECRET_START".to_owned(),
+                "READY".to_owned(),
+            ]
+        );
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
     }
 }
