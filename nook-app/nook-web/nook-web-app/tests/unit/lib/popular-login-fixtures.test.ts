@@ -2,7 +2,17 @@ import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test } from 'vitest'
-import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  FormSubmissionResult,
+  summarizeAuthenticationWorkflowForms,
+} from '../../../../nook-web-shared/src/extension/password-forms'
+import { SiteFixturePilotExpectation } from '../../../../nook-web-extension/e2e/mock-auth/src/lib/site-fixtures'
+import {
+  DomAuthenticationSimulationOutcomeKind,
+  simulateDomAuthentication,
+  type DomAuthenticationSimulationRequest,
+} from './companion-dom-authentication-simulation'
+import type { FakeLoginCredentials } from './companion-credential-fill-simulation'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
 const catalogPath = path.resolve(
@@ -15,6 +25,7 @@ const fixturesRoot = path.resolve(
 )
 const templatesDir = path.join(fixturesRoot, 'templates')
 const siteShellsPath = path.join(fixturesRoot, 'site-shells.json')
+const pilotExpectationsPath = path.join(fixturesRoot, 'pilot-expectations.json')
 
 type SiteFixtureField = {
   name?: string
@@ -47,6 +58,9 @@ const siteShells = JSON.parse(readFileSync(siteShellsPath, 'utf8')) as Record<
   string,
   SiteShellRef
 >
+const pilotExpectations = JSON.parse(
+  readFileSync(pilotExpectationsPath, 'utf8'),
+) as Record<string, SiteFixturePilotExpectation>
 const templates = new Map(
   readdirSync(templatesDir)
     .filter((name) => name.endsWith('.json'))
@@ -91,7 +105,7 @@ function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
     })
     .join('')
   const submitType = step.submit.type === 'button' ? 'button' : 'submit'
-  const inner = `<form>${fields}<button type="${submitType}">${step.submit.label}</button></form>`
+  const inner = `<form id="login_form" method="post" action="/auth/login">${fields}<button type="${submitType}">${step.submit.label}</button></form>`
   return fixture.quirks.includes('aria-hidden-ancestor')
     ? `<div aria-hidden="true">${inner}</div>`
     : inner
@@ -112,6 +126,14 @@ describe('popular login shell templates', () => {
     expect(Object.keys(siteShells)).toHaveLength(1000)
     expect(templates.size).toBeGreaterThan(0)
     expect(templates.size).toBeLessThan(catalog.length)
+    expect(Object.keys(pilotExpectations).sort()).toEqual(templateIds)
+    expect(
+      Object.values(pilotExpectations).filter(
+        (expectation) =>
+          expectation ===
+          SiteFixturePilotExpectation.FailClosedAlternateAuthentication,
+      ),
+    ).toEqual([SiteFixturePilotExpectation.FailClosedAlternateAuthentication])
     for (const site of catalog) {
       expect(siteShells[site.id]).toBeTruthy()
       expect(templates.has(siteShells[site.id].template)).toBe(true)
@@ -153,4 +175,34 @@ describe('popular login shell templates', () => {
       }
     },
   )
+
+  test('keeps the enterprise SSO identifier shell fail closed', () => {
+    const templateId = 'enterprise-sso-email'
+    const fixture = templates.get(templateId)
+    if (!fixture) throw new Error('enterprise SSO fixture is missing')
+    expect(pilotExpectations[templateId]).toBe(
+      SiteFixturePilotExpectation.FailClosedAlternateAuthentication,
+    )
+
+    const credentials: FakeLoginCredentials = {
+      username: 'enterprise-sso-user@example.test',
+      password: 'enterprise-sso-password',
+    }
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: { html: renderStepHtml(fixture, 0) },
+      credentials,
+    }
+    const result = simulateDomAuthentication(request)
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      observationCount: 1,
+      workflowAction: false,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+      submittedControlIdentity: '',
+    })
+    const email = document.querySelector<HTMLInputElement>('[name="email"]')
+    if (!email) throw new Error('enterprise SSO email field is missing')
+    expect(email.value).toBe('')
+  })
 })
