@@ -55,7 +55,7 @@ impl NookVaultManager {
         if !self.vault.store_id.trim().is_empty() {
             let store = load_local_event_store(&self.vault.store_id).await?;
             let graph = store.load_graph(&self.vault.store_id)?;
-            projection = DiagnosticProjection::Loaded(nook_core::project_vault(
+            projection = DiagnosticProjection::Loaded(nook_core::VaultProjection::from_graph(
                 &graph,
                 &self.vault.store_id,
             )?);

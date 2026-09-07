@@ -73,7 +73,8 @@ impl<'a> ExistingVaultHandoff<'a> {
             ));
         }
         let ordered_event_ids = graph.topological_order()?;
-        let checkpoint_event_id = nook_core::current_epoch_checkpoint(&graph)?
+        let checkpoint_event_id = graph
+            .current_epoch_checkpoint()?
             .or_else(|| ordered_event_ids.last().cloned())
             .ok_or_else(|| {
                 NookError::Database(

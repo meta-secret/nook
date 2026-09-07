@@ -7,7 +7,7 @@
 
 use crate::EventError;
 
-use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultResult, project_vault};
+use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultProjection, VaultResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use tsify::Tsify;
@@ -73,7 +73,7 @@ pub fn vault_recovery_options(
     graph: &EventGraph,
     store_id: &str,
 ) -> VaultResult<VaultRecoveryOptions> {
-    let projection = project_vault(graph, store_id)?;
+    let projection = VaultProjection::from_graph(graph, store_id)?;
     let mut devices = BTreeMap::<DeviceId, String>::new();
     let mut requires_sentinel_quorum = false;
 
