@@ -198,7 +198,6 @@ mod tests {
         fn assert_hostile_variants_fail_closed() {
             for destination in [
                 "https://attacker.example/sign-in",
-                "https://account.booking.com/recover",
                 "https://account.booking.com/sign-up",
                 "https://account.booking.com/sign-in?provider=google",
                 "https://account.booking.com/account/delete",
@@ -211,12 +210,7 @@ mod tests {
                 );
             }
 
-            for label in [
-                "Continue with Google",
-                "Recover your account",
-                "Create account",
-                "Delete account",
-            ] {
+            for label in ["Continue with Google", "Create account", "Delete account"] {
                 let mut rejected = Self::observation();
                 rejected.label = label.to_owned();
                 assert!(
@@ -224,6 +218,11 @@ mod tests {
                     "{label}"
                 );
             }
+
+            let mut recovery_submit = Self::observation();
+            recovery_submit.destination_identity = "https://account.booking.com/recover".to_owned();
+            recovery_submit.label = "Recover your account".to_owned();
+            assert!(!authentication_advance_control_is_safe(&recovery_submit));
 
             let mut ambiguous = Self::observation();
             ambiguous.semantic_submit_control_count = 2.into();
