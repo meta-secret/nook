@@ -571,19 +571,17 @@ mod tests {
             "",
             "owner/repo",
             "vault.yaml",
-        )
-        .expect_err("file status failures must fail closed");
+        );
         assert!(matches!(
             unavailable,
-            NookError::GitHub(message) if message.contains("status 503")
+            Err(NookError::GitHub(message)) if message.contains("status 503")
         ));
 
         let malformed =
-            github_file_response(StatusCode::OK, "not-json", "owner/repo", "vault.yaml")
-                .expect_err("malformed file JSON must fail closed");
+            github_file_response(StatusCode::OK, "not-json", "owner/repo", "vault.yaml");
         assert!(matches!(
             malformed,
-            NookError::Serialization(message) if message.contains("Failed to parse JSON")
+            Err(NookError::Serialization(message)) if message.contains("Failed to parse JSON")
         ));
 
         let invalid_utf8 = github_file_response(
@@ -591,11 +589,10 @@ mod tests {
             r#"{"content":"/w=="}"#,
             "owner/repo",
             "vault.yaml",
-        )
-        .expect_err("invalid vault UTF-8 must fail closed");
+        );
         assert!(matches!(
             invalid_utf8,
-            NookError::Serialization(message) if message.contains("not valid UTF-8")
+            Err(NookError::Serialization(message)) if message.contains("not valid UTF-8")
         ));
 
         let file = github_file_response(
