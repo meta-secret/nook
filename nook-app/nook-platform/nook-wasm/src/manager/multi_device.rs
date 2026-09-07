@@ -711,7 +711,7 @@ mod browser_tests {
             .enroll_with_keys(keys.secrets_key.to_string(), keys.members_key.to_string())
             .await)?;
         assert!(enrolled.is_empty());
-        assert!(!enrollee.list_vault_members()?.is_empty());
+        assert!(!js(enrollee.list_vault_members())?.is_empty());
 
         js(manager.delete_local_browser_data().await)?;
         Ok(())
