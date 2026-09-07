@@ -298,14 +298,7 @@ mod tests {
                 );
             }
 
-            for label in [
-                "Continue",
-                "Trouble Signing In",
-                "Create Account",
-                "Continue with Google",
-                "Use passkey",
-                "Delete account",
-            ] {
+            for label in "Continue|Trouble Signing In|Create Account|Continue with Google|Use passkey|Delete account".split('|') {
                 let mut rejected = Self::observation();
                 rejected.label = label.to_owned();
                 assert!(
