@@ -423,6 +423,7 @@ mod tests {
         }
 
         for label in [
+            "Continue",
             "Trouble Signing In",
             "Create Account",
             "Continue with Google",

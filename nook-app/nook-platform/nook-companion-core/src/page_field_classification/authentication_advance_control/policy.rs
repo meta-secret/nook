@@ -127,6 +127,9 @@ impl CheckedAuthenticationControl<'_> {
             observation.authentication_username,
             AuthenticationUsernameEvidence::WebAuthnEmail
         ) && observation.is_identifier_only_get_advance();
+        let primary_oauth_login_label = AuthenticationControlIdentity::new(&observation.label)
+            .is_explicit_advance()
+            || (webauthn_identifier_advance && expanded_label == "next");
         let primary_oauth_login = matches!(observation.ownership, PageControlOwnership::OwnedForm)
             && matches!(observation.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
@@ -136,7 +139,7 @@ impl CheckedAuthenticationControl<'_> {
                     | AuthenticationUsernameEvidence::Explicit
             )
             && (observation.password_field_count.raw() > 0 || webauthn_identifier_advance)
-            && AuthenticationControlIdentity::new(&observation.label).is_explicit_advance()
+            && primary_oauth_login_label
             && !AuthenticationControlIdentity::new(&observation.label).label_names_provider()
             && AuthenticationRouteIdentity::new(&self.destination.route_identity)
                 .indicates_oauth_authorization();
@@ -289,6 +292,7 @@ mod tests {
             }
 
             for label in [
+                "Continue",
                 "Trouble Signing In",
                 "Create Account",
                 "Continue with Google",
