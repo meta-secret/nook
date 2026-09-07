@@ -31,6 +31,10 @@
   },
   "excluded_packages": [
     {
+      "package": "nook-wasm-composition-tests",
+      "reason": "Intentional test-only composition harness; all crate modules are cfg(test), so it has no production code to measure."
+    },
+    {
       "package": "nook-fuzz",
       "reason": "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
     },
