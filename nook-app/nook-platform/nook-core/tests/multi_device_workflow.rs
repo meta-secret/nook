@@ -5,8 +5,8 @@ use std::io;
 use nook_core::{
     ApiKeySecret, Database, DeviceEnrollment, DeviceIdentity, JoinRequestApproval,
     JoinRequestIssuance, SecretId, SecretValue, VaultCrypto, VaultFormat, VaultFormatDocument,
-    VaultKeys, VaultRecordSet, VaultRecordView, genesis_members_records, list_join_requests,
-    rename_vault_member, replace_member_records, resolve_member_roster, revoke_vault_member,
+    VaultKeys, VaultRecordSet, VaultRecordView, genesis_members_records, rename_vault_member,
+    replace_member_records, resolve_member_roster, revoke_vault_member,
 };
 
 fn sid(label: &str) -> SecretId {
@@ -54,7 +54,8 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
 
     let device_two = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&device_two, "2026-06-21T00:00:00Z").issue()?);
-    let join_two = list_join_requests(&records)?
+    let join_two = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_two, join_key, member_records) = JoinRequestApproval::new(
@@ -71,7 +72,8 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
 
     let device_three = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&device_three, "2026-06-21T01:00:00Z").issue()?);
-    let join_three = list_join_requests(&records)?
+    let join_three = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_three, join_key, member_records) = JoinRequestApproval::new(
@@ -199,7 +201,8 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&joiner, "2026-06-21T04:00:00Z").issue()?);
-    let join = list_join_requests(&records)?
+    let join = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
@@ -248,7 +251,8 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&joiner, "2026-06-21T04:00:00Z").issue()?);
-    let join = list_join_requests(&records)?
+    let join = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 

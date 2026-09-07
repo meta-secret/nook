@@ -50,7 +50,7 @@ impl LoadedVault {
 pub(crate) fn pending_join_records(
     records: &[nook_core::StoredSecretRecord],
 ) -> Result<Vec<nook_core::JoinRequest>, NookError> {
-    Ok(nook_core::list_join_requests(records)?)
+    Ok(nook_core::VaultRecordView::new(records).list_join_requests()?)
 }
 
 pub(crate) fn vault_member_records(

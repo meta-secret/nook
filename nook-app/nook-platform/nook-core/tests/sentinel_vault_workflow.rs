@@ -6,8 +6,8 @@ use std::slice;
 
 use nook_core::{
     DeviceIdentity, DeviceMode, MultiDeviceError, SentinelKeyReconstruction, SentinelPolicy,
-    SentinelShareOpening, VaultArchitecture, VaultContent, VaultRecordSet, VaultType, VaultUnlock,
-    create_sentinel_share_records, generate_store_id,
+    SentinelShareOpening, VaultArchitecture, VaultContent, VaultKeys, VaultRecordSet, VaultType,
+    VaultUnlock, create_sentinel_share_records, generate_store_id,
 };
 
 #[test]

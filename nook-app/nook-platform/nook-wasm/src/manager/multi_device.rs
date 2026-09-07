@@ -196,7 +196,7 @@ impl NookVaultManager {
             .validate_session_access(self.vault.architecture.vault_type)?;
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
-        let pending = nook_core::list_join_requests(&records)?;
+        let pending = nook_core::VaultRecordView::new(&records).list_join_requests()?;
         let join_device = DeviceId::parse(&join_device_id)?;
         let join = pending
             .into_iter()
@@ -243,9 +243,7 @@ impl NookVaultManager {
                     ],
                 };
                 let member_records = nook_core::build_members_records(&roster, &members_key)?;
-                self.vault
-                    .meta
-                    .remove_key(&nook_core::join_record_key(&join.device_id));
+                self.vault.meta.remove_key(&join.device_id.as_str());
                 self.vault.meta.replace_member_records(&member_records)?;
                 operations.push(VaultOperation::SentinelParticipantEnrolled {
                     device_id: join.device_id.clone(),
@@ -793,7 +791,7 @@ impl NookVaultManager {
         let records = self.stored_records_snapshot();
         let join_device = DeviceId::parse(&join_device_id)?;
         if !records.iter().any(|record| {
-            nook_core::parse_join_request(record.value.as_str())
+            nook_core::JoinRequest::parse_json(record.value.as_str())
                 .is_ok_and(|join| join.device_id == join_device)
         }) {
             return Err(NookError::Database("Join request not found.".to_owned()).into());
