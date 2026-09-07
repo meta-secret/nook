@@ -285,23 +285,22 @@ impl OAuthUpdateTarget<'_> {
 }
 
 impl ProviderSaveRequest {
+    fn active_provider_rows(&self) -> (Vec<StorageProviderData>, Option<StorageProviderData>) {
+        let active_store_id = self.snapshot.active_vault_store_id.as_deref();
+        let rows = ProviderRows {
+            providers: &self.snapshot.providers,
+        };
+        let active = rows.for_vault(active_store_id).active();
+        let local = rows.for_vault(active_store_id).local().ok().flatten();
+        (active, local)
+    }
+
     #[must_use]
     pub fn apply(&self) -> ProviderSaveOutcome {
         let request = self;
         let provider_type = request.setup.provider_type(request.storage_mode);
         let active_store_id = request.snapshot.active_vault_store_id.as_deref();
-        let active_providers = ProviderRows {
-            providers: &request.snapshot.providers,
-        }
-        .for_vault(active_store_id)
-        .active();
-        let local_provider = ProviderRows {
-            providers: &request.snapshot.providers,
-        }
-        .for_vault(active_store_id)
-        .local()
-        .ok()
-        .flatten();
+        let (active_providers, local_provider) = request.active_provider_rows();
         let mut providers = request.snapshot.providers.clone();
         let mut oauth_update_id = None;
 
