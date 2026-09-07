@@ -44,14 +44,16 @@ tasks:
         repo_root="$(git rev-parse --show-toplevel)"
         platform="$repo_root/infra/k0s/manifests/argo-events/platform.yaml"
         storage="$repo_root/infra/k0s/manifests/argo-events/storage.yaml"
+        jetstream_config="$repo_root/infra/k0s/manifests/argo-events/jetstream-config.yaml"
+        jetstream_statefulset="$repo_root/infra/k0s/manifests/argo-events/jetstream-statefulset.yaml"
+        jetstream_consumer="$repo_root/infra/k0s/manifests/argo-events/jetstream-consumer.yaml"
         ingress="$repo_root/infra/k0s/manifests/webhook-ingress/github.yaml"
         traefik="$repo_root/infra/traefik-dynamic.yaml"
-        grep -F 'version: 2.10.29' "$platform" >/dev/null
-        grep -F 'replicas: 3' "$platform" >/dev/null
+        grep -F 'jetstreamExotic:' "$platform" >/dev/null
+        grep -F 'url: nats://eventbus-default-js-svc.argo-events.svc:4222' "$platform" >/dev/null
+        grep -F 'name: jetstream-argo-client' "$platform" >/dev/null
         grep -F 'maxAge: 24h' "$platform" >/dev/null
-        grep -F 'storageClassName: argo-events-jetstream-local-retain' "$platform" >/dev/null
-        grep -F 'accessMode: ReadWriteOnce' "$platform" >/dev/null
-        grep -F 'volumeSize: 1Gi' "$platform" >/dev/null
+        grep -F 'name: jetstream-server' "$platform" >/dev/null
         grep -F 'provisioner: kubernetes.io/no-provisioner' "$storage" >/dev/null
         grep -F 'volumeBindingMode: WaitForFirstConsumer' "$storage" >/dev/null
         grep -F 'reclaimPolicy: Retain' "$storage" >/dev/null
@@ -64,6 +66,18 @@ tasks:
         for node in bynull-servo nook-rise-s-1 ovh-us; do
           grep -F "values: [\"$node\"]" "$storage" >/dev/null
         done
+        grep -F 'name: nook-jetstream-config' "$jetstream_config" >/dev/null
+        grep -F 'port: 9222' "$jetstream_config" >/dev/null
+        grep -F 'no_tls: true' "$jetstream_config" >/dev/null
+        grep -F 'allowed_origins: ["https://events.dev.nokey.sh"]' "$jetstream_config" >/dev/null
+        grep -F 'clusterIP: 10.96.90.30' "$jetstream_config" >/dev/null
+        grep -F 'replicas: 3' "$jetstream_statefulset" >/dev/null
+        grep -F 'storageClassName: argo-events-jetstream-local-retain' "$jetstream_statefulset" >/dev/null
+        grep -F 'name: eventbus-default-js-vol' "$jetstream_statefulset" >/dev/null
+        grep -F 'name: jetstream-server' "$jetstream_statefulset" >/dev/null
+        grep -F 'name: jetstream-pr-steward-consumer' "$jetstream_consumer" >/dev/null
+        grep -F 'filter_subject == "default.github-webhook.pr-lifecycle"' "$jetstream_consumer" >/dev/null
+        grep -F -- '--deliver new' "$jetstream_consumer" >/dev/null
         grep -F 'kind: EventSource' "$ingress" >/dev/null
         grep -F 'replicas: 2' "$ingress" >/dev/null
         grep -F 'endpoint: /webhooks/github' "$ingress" >/dev/null
@@ -95,18 +109,166 @@ tasks:
         test "$(grep -c '^kind: EventSource$' "$ingress")" -eq 1
         ! grep -Eq '^kind: (Sensor|Workflow)$|websocket|hostPort:|type: (NodePort|LoadBalancer)' \
           "$platform" "$storage" "$ingress"
+        ! grep -Eq 'hostPort:|type: (NodePort|LoadBalancer)' \
+          "$jetstream_config" "$jetstream_statefulset" "$jetstream_consumer"
         grep -F 'Host(`{{.NOOK_WEBHOOK_INGRESS_HOST}}`) && Path(`/webhooks/github`) && Method(`POST`)' \
           "$traefik" >/dev/null
         grep -F 'url: http://{{.NOOK_WEBHOOK_INGRESS_CLUSTER_IP}}:12000' \
           "$traefik" >/dev/null
+        grep -F 'Host(`events.dev.nokey.sh`)' "$traefik" >/dev/null
+        grep -F 'url: http://10.96.90.30:9222' "$traefik" >/dev/null
         BASH
 
+  webhook-ingress:jetstream:secrets:publish:
+    internal: true
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes \
+          -o ServerAliveInterval=15 \
+          -o ServerAliveCountMax=4 \
+          "{{.INFRA_SSH_TARGET}}" \
+          "REMOTE_DIR='{{.INFRA_REMOTE_DIR}}' ROTATE_PR_STEWARD='{{default "false" .ROTATE_PR_STEWARD}}' bash -s" <<'REMOTE'
+        set -euo pipefail
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        secret_dir="$REMOTE_DIR/secrets/jetstream"
+        umask 077
+        install -d -m 0700 "$REMOTE_DIR/secrets" "$secret_dir"
+        kubectl create namespace argo-events --dry-run=client -o yaml |
+          kubectl apply -f - >/dev/null
+
+        preserve_key() {
+          source_secret="$1"
+          source_key="$2"
+          destination="$3"
+          if test -s "$destination"; then
+            test "$(stat -c '%a' "$destination")" = 600
+            return
+          fi
+          next="$(mktemp "$secret_dir/.preserve.XXXXXX")"
+          kubectl get secret "$source_secret" --namespace argo-events \
+            -o json |
+            SOURCE_KEY="$source_key" ruby -rbase64 -rjson -e '
+              secret = JSON.parse(STDIN.read)
+              print Base64.strict_decode64(secret.fetch("data").fetch(ENV.fetch("SOURCE_KEY")))
+            ' > "$next"
+          test -s "$next"
+          install -m 0600 "$next" "$destination"
+          rm -f "$next"
+        }
+
+        preserve_key eventbus-default-js-client-auth client-auth "$secret_dir/argo-client.yaml"
+        preserve_key eventbus-default-js-server encryption "$secret_dir/encryption"
+        preserve_key eventbus-default-js-server private-key "$secret_dir/server-private-key.pem"
+        preserve_key eventbus-default-js-server cert "$secret_dir/server-cert.pem"
+        preserve_key eventbus-default-js-server ca-cert "$secret_dir/ca-cert.pem"
+        preserve_key eventbus-default-js-server cluster-private-key "$secret_dir/cluster-private-key.pem"
+        preserve_key eventbus-default-js-server cluster-cert "$secret_dir/cluster-cert.pem"
+        preserve_key eventbus-default-js-server cluster-ca-cert "$secret_dir/cluster-ca-cert.pem"
+
+        ruby -ryaml -e '
+          auth = YAML.safe_load(File.binread(ARGV.fetch(0)))
+          File.binwrite(ARGV.fetch(1), auth.fetch("username"))
+          File.binwrite(ARGV.fetch(2), auth.fetch("password"))
+        ' "$secret_dir/argo-client.yaml" \
+          "$secret_dir/argo-username" "$secret_dir/argo-password"
+        chmod 0600 "$secret_dir/argo-username" "$secret_dir/argo-password"
+
+        if test "$ROTATE_PR_STEWARD" = true || ! test -s "$secret_dir/pr-steward-password"; then
+          next="$(mktemp "$secret_dir/.pr-steward-password.XXXXXX")"
+          openssl rand -hex 32 | tr -d '\n' > "$next"
+          install -m 0600 "$next" "$secret_dir/pr-steward-password"
+          rm -f "$next"
+        fi
+        printf 'pr-steward' > "$secret_dir/pr-steward-username"
+        chmod 0600 "$secret_dir/pr-steward-username"
+        if ! test -s "$secret_dir/system-password"; then
+          next="$(mktemp "$secret_dir/.system-password.XXXXXX")"
+          openssl rand -hex 32 | tr -d '\n' > "$next"
+          install -m 0600 "$next" "$secret_dir/system-password"
+          rm -f "$next"
+        fi
+
+        ruby -e '
+          argo_user = File.binread(ARGV.fetch(0))
+          argo_password = File.binread(ARGV.fetch(1))
+          steward_user = File.binread(ARGV.fetch(2))
+          steward_password = File.binread(ARGV.fetch(3))
+          system_password = File.binread(ARGV.fetch(4))
+          values = [argo_user, argo_password, steward_user, steward_password, system_password]
+          abort("invalid credential material") unless values.all? { |value| value.match?(/\A[A-Za-z0-9_-]+\z/) }
+          config = <<~CONF
+            system_account: sys
+            accounts: {
+              "js": {
+                jetstream: true
+                users: [
+                  {user: "#{argo_user}", pass: "#{argo_password}"},
+                  {
+                    user: "#{steward_user}", pass: "#{steward_password}"
+                    permissions: {
+                      publish: {
+                        allow: [
+                          "$JS.API.INFO",
+                          "$JS.API.STREAM.INFO.default",
+                          "$JS.API.CONSUMER.INFO.default.pr-steward",
+                          "$JS.API.CONSUMER.MSG.NEXT.default.pr-steward",
+                          "$JS.ACK.default.pr-steward.>"
+                        ]
+                        deny: ["default.>"]
+                      }
+                      subscribe: {
+                        allow: ["_INBOX.>", "default.github-webhook.pr-lifecycle"]
+                      }
+                    }
+                  }
+                ]
+              }
+              "sys": {
+                users: [{user: "sys", pass: "#{system_password}"}]
+              }
+            }
+          CONF
+          File.binwrite(ARGV.fetch(5), config)
+          File.binwrite(
+            ARGV.fetch(6),
+            "username: #{steward_user}\npassword: #{steward_password}\n"
+          )
+        ' "$secret_dir/argo-username" "$secret_dir/argo-password" \
+          "$secret_dir/pr-steward-username" "$secret_dir/pr-steward-password" \
+          "$secret_dir/system-password" "$secret_dir/auth.conf" \
+          "$secret_dir/pr-steward-client.yaml"
+        chmod 0600 "$secret_dir/auth.conf" "$secret_dir/pr-steward-client.yaml"
+
+        kubectl create secret generic jetstream-server --namespace argo-events \
+          --from-file=auth="$secret_dir/auth.conf" \
+          --from-file=encryption="$secret_dir/encryption" \
+          --from-file=private-key="$secret_dir/server-private-key.pem" \
+          --from-file=cert="$secret_dir/server-cert.pem" \
+          --from-file=ca-cert="$secret_dir/ca-cert.pem" \
+          --from-file=cluster-private-key="$secret_dir/cluster-private-key.pem" \
+          --from-file=cluster-cert="$secret_dir/cluster-cert.pem" \
+          --from-file=cluster-ca-cert="$secret_dir/cluster-ca-cert.pem" \
+          --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+        kubectl create secret generic jetstream-argo-client --namespace argo-events \
+          --from-file=auth="$secret_dir/argo-client.yaml" \
+          --from-file=username="$secret_dir/argo-username" \
+          --from-file=password="$secret_dir/argo-password" \
+          --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+        kubectl create secret generic jetstream-pr-steward-client --namespace argo-events \
+          --from-file=auth="$secret_dir/pr-steward-client.yaml" \
+          --from-file=username="$secret_dir/pr-steward-username" \
+          --from-file=password="$secret_dir/pr-steward-password" \
+          --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+        REMOTE
+
   webhook-ingress:platform:deploy:
-    desc: Install pinned Argo Events controllers and its internal EventBus.
+    desc: Install Argo Events and adopt its retained JetStream into repository ownership.
     silent: true
     cmds:
       - task: webhook-ingress:check
       - task: webhook-ingress:sync
+      - task: webhook-ingress:jetstream:secrets:publish
       - |
         ssh -o BatchMode=yes \
           -o ServerAliveInterval=15 \
@@ -191,20 +353,21 @@ tasks:
         prepare_storage_node 2 ovh-us
         kubectl apply \
           -f "$remote_dir/infra/k0s/manifests/argo-events/storage.yaml"
-        legacy_empty_dir=false
-        if kubectl get statefulset/eventbus-default-js \
-          --namespace argo-events >/dev/null 2>&1 &&
-          test "$(kubectl get statefulset/eventbus-default-js \
-            --namespace argo-events \
-            -o jsonpath='{.spec.template.spec.volumes[?(@.name=="js-data")].emptyDir}')" = '{}'; then
-          legacy_empty_dir=true
+        statefulset=statefulset/eventbus-default-js
+        eventbus_uid="$(kubectl get eventbus/default --namespace argo-events \
+          -o jsonpath='{.metadata.uid}' 2>/dev/null || true)"
+        managed_by_eventbus=false
+        if kubectl get "$statefulset" --namespace argo-events >/dev/null 2>&1; then
+          owner_uid="$(kubectl get "$statefulset" --namespace argo-events \
+            -o jsonpath='{.metadata.ownerReferences[?(@.kind=="EventBus")].uid}')"
+          if test -n "$eventbus_uid" && test "$owner_uid" = "$eventbus_uid"; then
+            managed_by_eventbus=true
+          elif test -n "$owner_uid"; then
+            echo 'refusing JetStream StatefulSet with unexpected owner' >&2
+            exit 2
+          fi
         fi
-        kubectl apply \
-          -f "$remote_dir/infra/k0s/manifests/argo-events/platform.yaml"
-        if test "$legacy_empty_dir" = true; then
-          kubectl delete statefulset/eventbus-default-js \
-            --namespace argo-events --cascade=foreground --wait
-        fi
+        : > /tmp/nook-jetstream-claims-before
         for ordinal in 0 1 2; do
           claim="persistentvolumeclaim/eventbus-default-js-vol-eventbus-default-js-$ordinal"
           for attempt in $(seq 1 60); do
@@ -217,13 +380,92 @@ tasks:
           kubectl wait --for=jsonpath='{.status.phase}'=Bound \
             "$claim" \
             --namespace argo-events --timeout=10m
+          kubectl get "$claim" --namespace argo-events \
+            -o jsonpath='{.metadata.uid}{"\t"}{.spec.volumeName}{"\n"}' \
+            >> /tmp/nook-jetstream-claims-before
         done
+        if test "$managed_by_eventbus" = true; then
+          controller_replicas="$(kubectl get deployment/controller-manager \
+            --namespace argo-events -o jsonpath='{.spec.replicas}')"
+          restore_controller() {
+            kubectl scale deployment/controller-manager --namespace argo-events \
+              --replicas="$controller_replicas" >/dev/null || true
+          }
+          trap restore_controller EXIT
+          kubectl scale deployment/controller-manager --namespace argo-events \
+            --replicas=0
+          kubectl rollout status deployment/controller-manager \
+            --namespace argo-events --timeout=5m
+          for resource in \
+            "$statefulset" \
+            service/eventbus-default-js-svc \
+            configmap/eventbus-default-js-config \
+            secret/eventbus-default-js-client-auth \
+            secret/eventbus-default-js-server; do
+            if kubectl get "$resource" --namespace argo-events >/dev/null 2>&1 &&
+              test -n "$(kubectl get "$resource" --namespace argo-events \
+                -o jsonpath='{.metadata.ownerReferences}')"; then
+              kubectl patch "$resource" --namespace argo-events --type=json \
+                -p='[{"op":"remove","path":"/metadata/ownerReferences"}]'
+            fi
+          done
+          kubectl patch eventbus/default --namespace argo-events --type=json \
+            -p='[{"op":"remove","path":"/metadata/finalizers"}]'
+          kubectl delete eventbus/default --namespace argo-events \
+            --cascade=orphan --wait
+          kubectl delete "$statefulset" --namespace argo-events \
+            --cascade=foreground --wait
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-config.yaml"
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-statefulset.yaml"
+          kubectl rollout status "$statefulset" \
+            --namespace argo-events --timeout=10m
+          restore_controller
+          trap - EXIT
+          kubectl rollout status deployment/controller-manager \
+            --namespace argo-events --timeout=5m
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/argo-events/platform.yaml"
+        else
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-config.yaml"
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-statefulset.yaml"
+          kubectl apply \
+            -f "$remote_dir/infra/k0s/manifests/argo-events/platform.yaml"
+        fi
+        kubectl rollout status "$statefulset" \
+          --namespace argo-events --timeout=10m
         kubectl wait --for=condition=Deployed eventbus/default \
           --namespace argo-events --timeout=10m
         kubectl wait --for=condition=Configured eventbus/default \
           --namespace argo-events --timeout=10m
-        kubectl rollout status statefulset/eventbus-default-js \
-          --namespace argo-events --timeout=10m
+        test "$(kubectl get eventbus/default --namespace argo-events \
+          -o jsonpath='{.status.config.jetstream.accessSecret.name}')" = \
+          jetstream-argo-client
+        test "$(kubectl get "$statefulset" --namespace argo-events \
+          -o jsonpath='{.status.readyReplicas}')" = 3
+        test -z "$(kubectl get "$statefulset" --namespace argo-events \
+          -o jsonpath='{.metadata.ownerReferences}')"
+        service_owner="$(kubectl get service/eventbus-default-js-svc \
+          --namespace argo-events -o jsonpath='{.metadata.ownerReferences}')"
+        if test -n "$service_owner"; then
+          kubectl patch service/eventbus-default-js-svc --namespace argo-events \
+            --type=json -p='[{"op":"remove","path":"/metadata/ownerReferences"}]'
+        fi
+        kubectl apply \
+          -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-config.yaml"
+        test -z "$(kubectl get service/eventbus-default-js-svc \
+          --namespace argo-events -o jsonpath='{.metadata.ownerReferences}')"
+        : > /tmp/nook-jetstream-claims-after
+        for ordinal in 0 1 2; do
+          claim="persistentvolumeclaim/eventbus-default-js-vol-eventbus-default-js-$ordinal"
+          kubectl get "$claim" --namespace argo-events \
+            -o jsonpath='{.metadata.uid}{"\t"}{.spec.volumeName}{"\n"}' \
+            >> /tmp/nook-jetstream-claims-after
+        done
+        cmp /tmp/nook-jetstream-claims-before /tmp/nook-jetstream-claims-after
         if kubectl get deployment --namespace argo-events \
           --selector eventsource-name=github-webhook -o name | grep -q .; then
           kubectl rollout restart deployment --namespace argo-events \
@@ -231,6 +473,18 @@ tasks:
           kubectl rollout status deployment --namespace argo-events \
             --selector eventsource-name=github-webhook --timeout=10m
         fi
+        kubectl delete configmap/eventbus-default-js-config \
+          secret/eventbus-default-js-client-auth \
+          secret/eventbus-default-js-server \
+          --namespace argo-events --ignore-not-found
+        kubectl delete job/jetstream-pr-steward-consumer \
+          --namespace argo-events --ignore-not-found --wait
+        kubectl apply \
+          -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-consumer.yaml"
+        kubectl wait --for=condition=Complete job/jetstream-pr-steward-consumer \
+          --namespace argo-events --timeout=5m
+        kubectl logs job/jetstream-pr-steward-consumer --namespace argo-events
+        rm -f /tmp/nook-jetstream-claims-before /tmp/nook-jetstream-claims-after
         REMOTE
 
   webhook-ingress:secret:publish:
@@ -306,7 +560,7 @@ tasks:
         ! docker logs nook-infra-traefik-1 --since 10s 2>&1 |
           grep -Ei 'error|invalid|failed'
         ! ss --tcp --listening --numeric --no-header |
-          grep -E ':(12000|4222|6222|8222)[[:space:]]' >/dev/null
+          grep -E ':(12000|4222|6222|8222|9222)[[:space:]]' >/dev/null
         REMOTE
         BASH
 
@@ -318,7 +572,164 @@ tasks:
         set -euo pipefail
         sudo -n k0s kubectl get deployment,statefulset,pod,service,eventbus,eventsource \
           --namespace argo-events -o wide
+        sudo -n k0s kubectl get persistentvolumeclaim --namespace argo-events \
+          -o custom-columns=NAME:.metadata.name,STATUS:.status.phase,PV:.spec.volumeName
         REMOTE
+
+  webhook-ingress:jetstream:pr-steward:rotate:
+    desc: Rotate the external PR Steward credential and reconcile JetStream.
+    silent: true
+    cmds:
+      - task: webhook-ingress:check
+      - task: webhook-ingress:jetstream:secrets:publish
+        vars:
+          ROTATE_PR_STEWARD: 'true'
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        kubectl rollout restart statefulset/eventbus-default-js \
+          --namespace argo-events
+        kubectl rollout status statefulset/eventbus-default-js \
+          --namespace argo-events --timeout=10m
+        test "$(kubectl get statefulset/eventbus-default-js \
+          --namespace argo-events -o jsonpath='{.status.readyReplicas}')" = 3
+        kubectl delete job/jetstream-pr-steward-consumer \
+          --namespace argo-events --ignore-not-found --wait
+        kubectl apply \
+          -f "$remote_dir/infra/k0s/manifests/argo-events/jetstream-consumer.yaml"
+        kubectl wait --for=condition=Complete job/jetstream-pr-steward-consumer \
+          --namespace argo-events --timeout=5m
+        printf '%s\n' \
+          'PR Steward credential rotated; reload the infrastructure-owned handoff file.'
+        REMOTE
+
+  webhook-ingress:jetstream:wss:smoke:
+    desc: Prove trusted WSS, scoped consumption, and authorization denials.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        endpoint=wss://events.dev.nokey.sh:443
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        work_dir="$(mktemp -d)"
+        chmod 0700 "$work_dir"
+        trap 'rm -rf "$work_dir"' EXIT
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
+          "REMOTE_DIR='$remote_dir' bash -s" > "$work_dir/credentials" <<'REMOTE'
+        set -euo pipefail
+        credential="$REMOTE_DIR/secrets/jetstream/pr-steward-client.yaml"
+        test "$(stat -c '%a' "$credential")" = 600
+        cat "$credential"
+        REMOTE
+        chmod 0600 "$work_dir/credentials"
+        ruby -ryaml -e '
+          credential = YAML.safe_load(File.binread(ARGV.fetch(0)))
+          File.binwrite(ARGV.fetch(1), credential.fetch("username"))
+          File.binwrite(ARGV.fetch(2), credential.fetch("password"))
+        ' "$work_dir/credentials" "$work_dir/user" "$work_dir/password"
+        chmod 0600 "$work_dir/user" "$work_dir/password"
+        ENDPOINT="$endpoint" WORK_DIR="$work_dir" bun -e '
+          import { readFileSync, writeFileSync } from "node:fs";
+          const endpoint = process.env.ENDPOINT;
+          const workDir = process.env.WORK_DIR;
+          const user = readFileSync(`${workDir}/user`, "utf8").trim();
+          const password = readFileSync(`${workDir}/password`, "utf8").trim();
+          const decoder = new TextDecoder();
+          const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          async function session(authUser, authPassword, expectAuthFailure = false) {
+            const ws = new WebSocket(endpoint, "nats");
+            ws.binaryType = "arraybuffer";
+            let received = "";
+            let opened;
+            let failed;
+            const open = new Promise((resolve, reject) => { opened = resolve; failed = reject; });
+            ws.onopen = opened;
+            ws.onerror = () => failed(new Error("WSS handshake failed"));
+            ws.onmessage = (event) => {
+              received += typeof event.data === "string" ? event.data : decoder.decode(event.data);
+            };
+            await Promise.race([open, delay(10000).then(() => { throw new Error("WSS open timeout"); })]);
+            ws.send(`CONNECT ${JSON.stringify({
+              verbose: false,
+              pedantic: false,
+              user: authUser,
+              pass: authPassword,
+              lang: "bun",
+              version: "1"
+            })}\r\nPING\r\n`);
+            for (let attempt = 0; attempt < 100; attempt += 1) {
+              if (expectAuthFailure && /Authorization Violation/i.test(received)) {
+                ws.close();
+                return { ws, read: () => received };
+              }
+              if (!expectAuthFailure && received.includes("PONG")) {
+                return { ws, read: () => received, clear: () => { received = ""; } };
+              }
+              await delay(50);
+            }
+            ws.close();
+            throw new Error(expectAuthFailure ? "credential was accepted" : "NATS PONG timeout");
+          }
+          await session("", "", true);
+          await session("invalid", "invalid", true);
+          const valid = await session(user, password);
+          valid.clear();
+          valid.ws.send("PUB default.github-webhook.pr-lifecycle 2\r\n{}\r\n");
+          for (let attempt = 0; attempt < 100 &&
+            !/Permissions Violation for Publish/i.test(valid.read()); attempt += 1) await delay(50);
+          if (!/Permissions Violation for Publish/i.test(valid.read())) throw new Error("application publish was not denied");
+          valid.clear();
+          valid.ws.send("SUB unrelated.subject 91\r\n");
+          for (let attempt = 0; attempt < 100 &&
+            !/Permissions Violation for Subscription/i.test(valid.read()); attempt += 1) await delay(50);
+          if (!/Permissions Violation for Subscription/i.test(valid.read())) throw new Error("unrelated subscription was not denied");
+          valid.clear();
+          const inbox = `_INBOX.${crypto.randomUUID().replaceAll("-", "")}`;
+          valid.ws.send(`SUB ${inbox} 92\r\nPUB $JS.API.CONSUMER.INFO.default.pr-steward ${inbox} 0\r\n\r\n`);
+          for (let attempt = 0; attempt < 100 &&
+            !valid.read().includes("pr-steward"); attempt += 1) await delay(50);
+          if (!valid.read().includes("default.github-webhook.pr-lifecycle")) {
+            throw new Error("durable consumer contract was not readable");
+          }
+          valid.clear();
+          valid.ws.send("SUB default.github-webhook.pr-lifecycle 93\r\n");
+          writeFileSync(`${workDir}/ready`, "ready", { mode: 0o600 });
+          for (let attempt = 0; attempt < 1800; attempt += 1) {
+            if (valid.read().includes("MSG default.github-webhook.pr-lifecycle 93")) {
+              writeFileSync(`${workDir}/received`, "received", { mode: 0o600 });
+              valid.ws.close();
+              process.exit(0);
+            }
+            await delay(50);
+          }
+          throw new Error("signed GitHub event was not received");
+        ' >"$work_dir/client-output" 2>"$work_dir/client-error" &
+        client_pid=$!
+        for attempt in $(seq 1 100); do
+          test -f "$work_dir/ready" && break
+          kill -0 "$client_pid" 2>/dev/null || {
+            cat "$work_dir/client-error" >&2
+            exit 1
+          }
+          sleep 0.1
+        done
+        test -f "$work_dir/ready"
+        task infra:webhook-ingress:hook:ping
+        wait "$client_pid" || {
+          cat "$work_dir/client-error" >&2
+          exit 1
+        }
+        test -s "$work_dir/received"
+        printf '%s\n' \
+          'trusted WSS/auth -> accepted' \
+          'missing/wrong auth -> rejected' \
+          'application publish/unrelated subscribe -> denied' \
+          'durable consumer API -> authorized' \
+          'exact lifecycle subject -> received GitHub ping'
+        BASH
 
   webhook-ingress:smoke:
     desc: Prove public TLS, signature rejection, and signed GitHub ping dispatch.

@@ -1,0 +1,98 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: jetstream-pr-steward-consumer
+  namespace: argo-events
+  labels:
+    app.kubernetes.io/name: jetstream-pr-steward-consumer
+    app.kubernetes.io/part-of: webhook-ingress
+spec:
+  backoffLimit: 2
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: jetstream-pr-steward-consumer
+        app.kubernetes.io/part-of: webhook-ingress
+    spec:
+      automountServiceAccountToken: false
+      restartPolicy: Never
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: reconcile
+          image: docker.io/natsio/nats-box:0.19.7@sha256:ffce8bd103383f179f8c7f11cf645726acf5d17280706c530c3b342dbe16334c
+          imagePullPolicy: IfNotPresent
+          command: ["sh", "-ec"]
+          args:
+            - |
+              export NATS_USER="$(cat /client/username)"
+              export NATS_PASSWORD="$(cat /client/password)"
+              server=tls://eventbus-default-js-svc.argo-events.svc:4222
+              ca=/server/ca-cert
+              info=/tmp/consumer.json
+              if nats --server "$server" --tlsca "$ca" \
+                consumer info default pr-steward --json > "$info" 2>/dev/null; then
+                jq -e '
+                  .config.durable_name == "pr-steward" and
+                  .config.filter_subject == "default.github-webhook.pr-lifecycle" and
+                  .config.ack_policy == "explicit" and
+                  .config.deliver_policy == "new" and
+                  .config.num_replicas == 3
+                ' "$info" >/dev/null
+              else
+                nats --server "$server" --tlsca "$ca" consumer add \
+                  default pr-steward \
+                  --pull \
+                  --filter default.github-webhook.pr-lifecycle \
+                  --ack explicit \
+                  --deliver new \
+                  --max-deliver 10 \
+                  --max-pending 100 \
+                  --max-waiting 10 \
+                  --max-pull-batch 1 \
+                  --max-pull-expire 1m \
+                  --wait 5m \
+                  --replicas 3 \
+                  --defaults >/dev/null
+              fi
+              echo 'PR Steward durable consumer contract is ready'
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: client
+              mountPath: /client
+              readOnly: true
+            - name: server
+              mountPath: /server
+              readOnly: true
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: client
+          secret:
+            secretName: jetstream-argo-client
+            items:
+              - key: username
+                path: username
+              - key: password
+                path: password
+        - name: server
+          secret:
+            secretName: jetstream-server
+            items:
+              - key: ca-cert
+                path: ca-cert
+        - name: tmp
+          emptyDir: {}
