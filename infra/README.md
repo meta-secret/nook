@@ -10,8 +10,11 @@ This directory owns Nook's stateful server infrastructure:
   - `https://webhooks.dev.nokey.sh/webhooks/github` → the Argo Events GitHub
     EventSource ClusterIP `10.96.90.20:12000`
 - Pinned Argo Events `v1.9.11` verifies GitHub webhook signatures and dispatches
-  accepted events to its private, controller-managed JetStream EventBus. Phase
-  1 has no Sensor or trigger, so it performs no operational-event processing.
+  accepted events to its private, controller-managed JetStream EventBus. Its
+  three replicas use dedicated 1 Gi local persistent volumes with `Retain`
+  policy on `bynull-servo`, `nook-rise-s-1`, and `ovh-us`; the stream retains
+  events for 24 hours. Phase 1 has no Sensor or trigger, so it performs no
+  operational-event processing.
 - A pinned Zot OCI registry runs in k0s with retained local storage at
   `/var/lib/hive/zot`. Zot requires htpasswd authentication. There is no host
   `:5000` listener and no `kubectl port-forward`.
@@ -137,6 +140,9 @@ value to Kubernetes without logging it. Hook registration uses the operator's
 authenticated GitHub CLI session, keeps no GitHub token in Argo, and refuses
 duplicate hooks for the endpoint. Argo Events' internal NATS
 ports remain ClusterIP-only and no Sensor consumes the phase-1 event stream.
+The retained local volumes protect a replica across pod restarts but remain
+node-local; loss of a storage node still depends on JetStream's three-way
+replication and replacement of that node's retained volume.
 
 Hosted Docker builds use BuildKit `type=registry` cache refs on
 `registry.dev.nokey.sh`. Hosted fallback jobs publish shared cache manifests;
