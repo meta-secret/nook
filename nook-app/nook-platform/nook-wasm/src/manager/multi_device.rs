@@ -9,7 +9,7 @@ use super::event_log::SecurityEpochRotationFailure;
 use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultCryptoState};
 use crate::NookError;
-use crate::conversion::{LoadedVault, apply_member_records, load_stored_vault, wasm_iso_timestamp};
+use crate::conversion::{LoadedVault, wasm_iso_timestamp};
 use crate::{NookJoinRequest, NookSecretRecord, NookVaultMember};
 use nook_core::{
     AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey, MemberLabel, MultiDeviceError,
@@ -148,7 +148,7 @@ impl NookVaultManager {
         self.persist_vault_change(Vec::new()).await?;
 
         let updated = nook_core::serialize_stored(&records, format)?;
-        let loaded = load_stored_vault(updated.as_str(), &identity)?;
+        let loaded = LoadedVault::unlock(updated.as_str(), &identity)?;
         let LoadedVault {
             meta,
             secrets_key: resolved_secrets_key,
@@ -217,7 +217,7 @@ impl NookVaultManager {
                 .approve()?;
                 self.vault.meta.remove_key(&join_key);
                 self.vault.meta.apply_record(&auth_record)?;
-                apply_member_records(&mut self.vault.meta, &member_records)?;
+                self.vault.meta.replace_member_records(&member_records)?;
                 let envelopes: nook_core::AuthEnvelopes =
                     serde_json::from_str(auth_record.value.as_str())
                         .map_err(|e| NookError::Serialization(e.to_string()))?;
@@ -246,7 +246,7 @@ impl NookVaultManager {
                 self.vault
                     .meta
                     .remove_key(&nook_core::join_record_key(&join.device_id));
-                apply_member_records(&mut self.vault.meta, &member_records)?;
+                self.vault.meta.replace_member_records(&member_records)?;
                 operations.push(VaultOperation::SentinelParticipantEnrolled {
                     device_id: join.device_id.clone(),
                     encryption_public_key: join.public_key.clone(),
@@ -703,7 +703,7 @@ impl NookVaultManager {
         )
         .approve()?;
         self.vault.meta.apply_record(&auth_record)?;
-        apply_member_records(&mut self.vault.meta, &member_records)?;
+        self.vault.meta.replace_member_records(&member_records)?;
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
             .map_err(|e| NookError::Serialization(e.to_string()))?;
         let operations = vec![VaultOperation::JoinApproved {
@@ -758,7 +758,7 @@ impl NookVaultManager {
         let members_key = SymmetricKey::parse(&self.vault.members_key)?;
         let member_records =
             nook_core::rename_vault_member(&records, &members_key, &parsed_auth_id, &label)?;
-        apply_member_records(&mut self.vault.meta, &member_records)?;
+        self.vault.meta.replace_member_records(&member_records)?;
         let roster = nook_core::resolve_member_roster(&records, &members_key)?;
         let device_id = roster
             .iter()

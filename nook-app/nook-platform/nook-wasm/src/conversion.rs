@@ -6,22 +6,6 @@ use js_sys::Date;
 use nook_core::SymmetricKey;
 use wasm_bindgen::JsError;
 
-pub(crate) fn content_requires_genesis(
-    content: &str,
-    force_genesis: bool,
-) -> Result<bool, NookError> {
-    Ok(nook_core::content_requires_genesis(content, force_genesis)?)
-}
-
-pub(crate) fn access_status_for_vault_content(
-    content: &str,
-    identity: &nook_core::DeviceIdentity,
-) -> Result<nook_core::VaultAccessStatus, NookError> {
-    Ok(nook_core::access_status_for_vault_content(
-        content, identity,
-    )?)
-}
-
 pub(crate) fn sync_result_unchanged() -> Result<NookVaultSyncResult, JsError> {
     Ok(NookVaultSyncResult::unchanged())
 }
@@ -39,13 +23,6 @@ pub(crate) fn sync_result_session(
     Ok(NookVaultSyncResult::session(manager, changed)?)
 }
 
-pub(crate) fn apply_member_records(
-    state: &mut nook_core::VaultMetaState,
-    member_records: &[nook_core::StoredSecretRecord],
-) -> Result<(), NookError> {
-    Ok(nook_core::apply_member_records(state, member_records)?)
-}
-
 pub(crate) fn wasm_iso_timestamp() -> String {
     Date::new_0().to_iso_string().into()
 }
@@ -56,16 +33,18 @@ pub(crate) struct LoadedVault {
     pub(crate) members_key: nook_core::SymmetricKey,
 }
 
-pub(crate) fn load_stored_vault(
-    content: &str,
-    identity: &nook_core::DeviceIdentity,
-) -> Result<LoadedVault, NookError> {
-    let loaded = nook_core::unlock_stored_vault(content, identity)?;
-    Ok(LoadedVault {
-        meta: loaded.meta,
-        secrets_key: loaded.secrets_key,
-        members_key: loaded.members_key,
-    })
+impl LoadedVault {
+    pub(crate) fn unlock(
+        content: &str,
+        identity: &nook_core::DeviceIdentity,
+    ) -> Result<Self, NookError> {
+        let loaded = nook_core::VaultContent::new(content).unlock(identity)?;
+        Ok(Self {
+            meta: loaded.meta,
+            secrets_key: loaded.secrets_key,
+            members_key: loaded.members_key,
+        })
+    }
 }
 
 pub(crate) fn pending_join_records(
@@ -106,7 +85,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     fn conversion_helpers_cover_content_and_empty_projection_paths() {
-        assert!(content_requires_genesis("not yaml", false).is_err());
+        assert!(
+            nook_core::VaultContent::new("not yaml")
+                .requires_genesis(false)
+                .is_err()
+        );
         assert!(sync_result_unchanged().is_ok());
         assert!(sync_result_access_status(nook_core::VaultAccessStatus::Ready).is_ok());
         assert!(wasm_iso_timestamp().ends_with('Z'));

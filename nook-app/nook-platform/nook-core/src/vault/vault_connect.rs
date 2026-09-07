@@ -1,4 +1,9 @@
 //! Connect-time vault assessment and session hydration from stored YAML.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
 use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultStoreIdentity};
 
@@ -81,181 +86,166 @@ pub struct VaultContentMetadata {
     pub architecture: VaultArchitecture,
 }
 
-/// Whether connect should bootstrap a genesis vault for this content.
-pub fn content_requires_genesis(content: &str, force_genesis: bool) -> VaultResult<bool> {
-    if force_genesis {
-        return Ok(true);
-    }
-    if content.trim().is_empty() {
-        return Ok(true);
-    }
-    let format = detect_stored_format(content)?;
-    let records = deserialize_stored(content, format)?;
-    Ok(!vault_has_multi_device_records(&records)?)
+/// Borrowed stored vault content awaiting a connect action.
+pub struct VaultContent<'a> {
+    content: &'a str,
 }
 
-/// Pre-flight connect status tag for the web layer.
-pub fn access_status_for_vault_content(
-    content: &str,
-    identity: &DeviceIdentity,
-) -> VaultResult<VaultAccessStatus> {
-    if content.trim().is_empty() {
-        return Ok(VaultAccessStatus::NewVault);
+impl<'a> VaultContent<'a> {
+    #[must_use]
+    pub fn new(content: &'a str) -> Self {
+        Self { content }
     }
-    let format = detect_stored_format(content)?;
-    let records = deserialize_stored(content, format)?;
-    if !vault_has_multi_device_records(&records)? {
-        return Ok(VaultAccessStatus::NewVault);
+
+    /// Whether connect should bootstrap a genesis vault for this content.
+    pub fn requires_genesis(&self, force_genesis: bool) -> VaultResult<bool> {
+        if force_genesis || self.content.trim().is_empty() {
+            return Ok(true);
+        }
+        let format = detect_stored_format(self.content)?;
+        let records = deserialize_stored(self.content, format)?;
+        Ok(!vault_has_multi_device_records(&records)?)
     }
-    Ok(assess_connect_access(&records, identity)?.into())
-}
 
-/// Decrypt and hydrate an in-memory session from stored vault YAML.
-///
-/// Sentinel vaults never unlock through per-device auth envelopes. A single
-/// identity is never enough for the default 2-of-N policy; use
-/// [`load_sentinel_vault`] when enough participant identities are available.
-pub fn load_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
-    let unlocked = unlock_stored_vault(content, identity)?;
-    hydrate_loaded_vault(unlocked)
-}
-
-/// Resolve vault keys and retain encrypted records without decrypting user items.
-pub fn unlock_stored_vault(content: &str, identity: &DeviceIdentity) -> VaultResult<UnlockedVault> {
-    let format = detect_stored_format(content)?;
-    let architecture = crate::read_vault_architecture(content)?;
-    if architecture.vault_type == VaultType::Sentinel {
-        return Err(MultiDeviceError::SentinelCeremonyRequired.into());
+    /// Pre-flight connect status tag for the web layer.
+    pub fn access_status(&self, identity: &DeviceIdentity) -> VaultResult<VaultAccessStatus> {
+        if self.content.trim().is_empty() {
+            return Ok(VaultAccessStatus::NewVault);
+        }
+        let format = detect_stored_format(self.content)?;
+        let records = deserialize_stored(self.content, format)?;
+        if !vault_has_multi_device_records(&records)? {
+            return Ok(VaultAccessStatus::NewVault);
+        }
+        Ok(assess_connect_access(&records, identity)?.into())
     }
-    let stored_records = deserialize_stored(content, format)?;
-    validate_user_secret_types(&stored_records)?;
-    let secrets_key = resolve_secrets_key(&stored_records, identity)?;
-    let members_key = resolve_members_key(&stored_records, identity)?;
-    Ok(UnlockedVault {
-        meta: VaultMetaState::from_stored_records(&stored_records)?,
-        secrets_key,
-        members_key,
-    })
-}
 
-fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()> {
-    for record in records {
-        if record.secret_type.is_none()
-            && matches!(
-                VaultMetaRecord::classify(record)?,
-                VaultMetaRecord::Secret(..)
-            )
-        {
-            return Err(DatabaseError::MissingSecretType {
-                key: record.key.clone(),
+    /// Read unlock metadata without decrypting secrets.
+    pub fn capture_unlock(&self) -> VaultResult<VaultContentMetadata> {
+        let unlock = crate::read_vault_unlock(self.content)?;
+        let password_entries = crate::read_vault_password_entries(self.content)?;
+        let store_id = match crate::read_vault_store_id(self.content)? {
+            VaultStoreIdentity::Assigned(store_id) => store_id,
+            VaultStoreIdentity::Unassigned => {
+                return Err(errors::VaultFormatError::YamlMissingSections.into());
             }
-            .into());
+        };
+        let vault_name = match crate::read_vault_name(self.content)? {
+            VaultName::Named(name) => name,
+            VaultName::Unnamed => crate::default_vault_name_for_store_id(&store_id),
+        };
+        let version = crate::read_vault_version(self.content).unwrap_or_default();
+        let architecture = crate::read_vault_architecture(self.content)?;
+        Ok(VaultContentMetadata {
+            unlock,
+            password_entries,
+            store_id,
+            vault_name,
+            version,
+            architecture,
+        })
+    }
+
+    /// Resolve keys and retain encrypted records without decrypting user items.
+    pub fn unlock(self, identity: &DeviceIdentity) -> VaultResult<UnlockedVault> {
+        let format = detect_stored_format(self.content)?;
+        let architecture = crate::read_vault_architecture(self.content)?;
+        if architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
+        let stored_records = deserialize_stored(self.content, format)?;
+        Self::validate_user_secret_types(&stored_records)?;
+        let secrets_key = resolve_secrets_key(&stored_records, identity)?;
+        let members_key = resolve_members_key(&stored_records, identity)?;
+        Ok(UnlockedVault {
+            meta: VaultMetaState::from_stored_records(&stored_records)?,
+            secrets_key,
+            members_key,
+        })
     }
-    Ok(())
-}
 
-/// Native/test helper: reconstruct a sentinel vault when enough participant
-/// identities can open their encrypted shares locally.
-///
-/// Browser unlock must not collect peer identities. Use
-/// [`crate::SentinelShareOpening`] on each device and
-/// [`load_sentinel_vault_from_opened`] on the reconstructing device.
-pub fn load_sentinel_vault(
-    content: &str,
-    identities: &[DeviceIdentity],
-) -> VaultResult<LoadedVault> {
-    let format = detect_stored_format(content)?;
-    let architecture = crate::read_vault_architecture(content)?;
-    if architecture.vault_type != VaultType::Sentinel {
-        return Err(MultiDeviceError::InvalidSentinelThreshold.into());
+    /// Decrypt and hydrate an in-memory session from stored vault YAML.
+    ///
+    /// Sentinel vaults never unlock through per-device auth envelopes. A
+    /// single identity is never enough for the default 2-of-N policy; use
+    /// [`Self::load_sentinel`] when enough participant identities are available.
+    pub fn load(self, identity: &DeviceIdentity) -> VaultResult<LoadedVault> {
+        self.unlock(identity)?.hydrate()
     }
-    let stored_records = deserialize_stored(content, format)?;
-    validate_user_secret_types(&stored_records)?;
-    architecture.validate_records(&stored_records)?;
-    let keys = crate::SentinelKeyReconstruction::from_identities(&stored_records, identities)
-        .reconstruct()?;
-    hydrate_loaded_vault(UnlockedVault {
-        meta: VaultMetaState::from_stored_records(&stored_records)?,
-        secrets_key: keys.secrets_key,
-        members_key: keys.members_key,
-    })
-}
 
-/// Reconstruct a sentinel vault session from opened-share ceremony contributions.
-pub fn load_sentinel_vault_from_opened(
-    content: &str,
-    opened: &[crate::OpenedSentinelShare],
-) -> VaultResult<LoadedVault> {
-    let format = detect_stored_format(content)?;
-    let architecture = crate::read_vault_architecture(content)?;
-    if architecture.vault_type != VaultType::Sentinel {
-        return Err(MultiDeviceError::InvalidSentinelThreshold.into());
-    }
-    let stored_records = deserialize_stored(content, format)?;
-    validate_user_secret_types(&stored_records)?;
-    architecture.validate_records(&stored_records)?;
-    let keys =
-        crate::SentinelKeyReconstruction::from_opened(&stored_records, opened).reconstruct()?;
-    hydrate_loaded_vault(UnlockedVault {
-        meta: VaultMetaState::from_stored_records(&stored_records)?,
-        secrets_key: keys.secrets_key,
-        members_key: keys.members_key,
-    })
-}
-
-fn hydrate_loaded_vault(unlocked: UnlockedVault) -> VaultResult<LoadedVault> {
-    let crypto = VaultCrypto::new(&unlocked.secrets_key)?;
-    let user_records = user_stored_records(&unlocked.meta.to_stored_records())?;
-    let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
-    Ok(LoadedVault {
-        database: db,
-        meta: unlocked.meta,
-        secrets_key: unlocked.secrets_key,
-        members_key: unlocked.members_key,
-    })
-}
-
-/// Replace member roster rows in the typed session meta state.
-pub fn apply_member_records(
-    state: &mut VaultMetaState,
-    member_records: &[StoredSecretRecord],
-) -> VaultResult<()> {
-    let mut members = state.members.clone();
-    members.clear();
-    for record in member_records {
-        if let VaultMetaRecord::Member(auth_id, payload) = VaultMetaRecord::classify(record)? {
-            members.insert(auth_id, payload);
+    /// Reconstruct a sentinel vault when participant identities can open their
+    /// encrypted shares locally. Browser unlock uses opened-share contributions.
+    pub fn load_sentinel(self, identities: &[DeviceIdentity]) -> VaultResult<LoadedVault> {
+        let stored_records = self.sentinel_records()?;
+        let keys = crate::SentinelKeyReconstruction::from_identities(&stored_records, identities)
+            .reconstruct()?;
+        UnlockedVault {
+            meta: VaultMetaState::from_stored_records(&stored_records)?,
+            secrets_key: keys.secrets_key,
+            members_key: keys.members_key,
         }
+        .hydrate()
     }
-    state.members = members;
-    Ok(())
+
+    /// Reconstruct a sentinel vault from opened-share ceremony contributions.
+    pub fn load_sentinel_from_opened(
+        self,
+        opened: &[crate::OpenedSentinelShare],
+    ) -> VaultResult<LoadedVault> {
+        let stored_records = self.sentinel_records()?;
+        let keys =
+            crate::SentinelKeyReconstruction::from_opened(&stored_records, opened).reconstruct()?;
+        UnlockedVault {
+            meta: VaultMetaState::from_stored_records(&stored_records)?,
+            secrets_key: keys.secrets_key,
+            members_key: keys.members_key,
+        }
+        .hydrate()
+    }
+
+    fn sentinel_records(&self) -> VaultResult<Vec<StoredSecretRecord>> {
+        let format = detect_stored_format(self.content)?;
+        let architecture = crate::read_vault_architecture(self.content)?;
+        if architecture.vault_type != VaultType::Sentinel {
+            return Err(MultiDeviceError::InvalidSentinelThreshold.into());
+        }
+        let stored_records = deserialize_stored(self.content, format)?;
+        Self::validate_user_secret_types(&stored_records)?;
+        architecture.validate_records(&stored_records)?;
+        Ok(stored_records)
+    }
+
+    fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()> {
+        for record in records {
+            if record.secret_type.is_none()
+                && matches!(
+                    VaultMetaRecord::classify(record)?,
+                    VaultMetaRecord::Secret(..)
+                )
+            {
+                return Err(DatabaseError::MissingSecretType {
+                    key: record.key.clone(),
+                }
+                .into());
+            }
+        }
+        Ok(())
+    }
 }
 
-/// Read unlock metadata from vault YAML without decrypting secrets.
-pub fn capture_vault_unlock_from_content(content: &str) -> VaultResult<VaultContentMetadata> {
-    let unlock = crate::read_vault_unlock(content)?;
-    let password_entries = crate::read_vault_password_entries(content)?;
-    let store_id = match crate::read_vault_store_id(content)? {
-        VaultStoreIdentity::Assigned(store_id) => store_id,
-        VaultStoreIdentity::Unassigned => {
-            return Err(errors::VaultFormatError::YamlMissingSections.into());
-        }
-    };
-    let vault_name = match crate::read_vault_name(content)? {
-        VaultName::Named(name) => name,
-        VaultName::Unnamed => crate::default_vault_name_for_store_id(&store_id),
-    };
-    let version = crate::read_vault_version(content).unwrap_or_default();
-    let architecture = crate::read_vault_architecture(content)?;
-    Ok(VaultContentMetadata {
-        unlock,
-        password_entries,
-        store_id,
-        vault_name,
-        version,
-        architecture,
-    })
+impl UnlockedVault {
+    /// Consume resolved keys into a hydrated plaintext session database.
+    pub fn hydrate(self) -> VaultResult<LoadedVault> {
+        let crypto = VaultCrypto::new(&self.secrets_key)?;
+        let user_records = user_stored_records(&self.meta.to_stored_records())?;
+        let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
+        Ok(LoadedVault {
+            database: db,
+            meta: self.meta,
+            secrets_key: self.secrets_key,
+            members_key: self.members_key,
+        })
+    }
 }
 
 #[cfg(test)]
@@ -285,7 +275,7 @@ mod tests {
     }
     use crate::{
         DeviceMode, ReplicationType, SentinelPolicy, VaultResult, generate_store_id,
-        generate_vault_keys, genesis_auth_record, load_sentinel_vault,
+        generate_vault_keys, genesis_auth_record,
         serialize_stored_yaml_with_unlock_name_architecture,
     };
 
@@ -299,7 +289,7 @@ mod tests {
             ),
         };
 
-        let error = validate_user_secret_types(&[record])
+        let error = VaultContent::validate_user_secret_types(&[record])
             .err()
             .ok_or_else(|| anyhow::anyhow!("vault connect test should reject invalid input"))?;
 
@@ -312,15 +302,16 @@ mod tests {
 
     #[test]
     fn empty_content_requires_genesis() -> VaultResult<()> {
-        assert!(content_requires_genesis("", false)?);
-        assert!(content_requires_genesis("  ", false)?);
+        assert!(VaultContent::new("").requires_genesis(false)?);
+        assert!(VaultContent::new("  ").requires_genesis(false)?);
         Ok(())
     }
 
     #[test]
     fn capture_rejects_unsupported_password_envelope_version() -> anyhow::Result<()> {
         let content = "schema_version: 1\nstore_id: store_testtoken11\npassword_entries:\n  - id: pwdentry001\n    label: Recovery\n    created_at: 2026-06-23T00:00:00Z\n    envelope:\n      version: 3\n      kdf: scrypt\n      work_factor: 18\n      ciphertext: invalid\n";
-        let error = capture_vault_unlock_from_content(content)
+        let error = VaultContent::new(content)
+            .capture_unlock()
             .err()
             .ok_or_else(|| anyhow::anyhow!("vault metadata capture must reject version 3"))?;
 
@@ -334,12 +325,12 @@ mod tests {
     #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
         let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
-        assert!(!content_requires_genesis(yaml.as_str(), false)?);
+        assert!(!VaultContent::new(yaml.as_str()).requires_genesis(false)?);
         assert_eq!(
-            access_status_for_vault_content(yaml.as_str(), &identity)?,
+            VaultContent::new(yaml.as_str()).access_status(&identity)?,
             VaultAccessStatus::Ready
         );
-        let loaded = load_stored_vault(yaml.as_str(), &identity)?;
+        let loaded = VaultContent::new(yaml.as_str()).load(&identity)?;
         assert_eq!(loaded.secrets_key, keys.secrets_key);
         assert!(loaded.database.list().is_empty());
         assert!(loaded.meta.auth.len() + loaded.meta.members.len() >= 2);
@@ -383,10 +374,10 @@ mod tests {
             VaultFormatError::Validation(ValidationError::SentinelVaultHasFullKeyEnvelopes)
         ));
         assert!(
-            load_stored_vault(
+            VaultContent::new(
                 "schema_version: 1\nstore_id: store_testtoken11\narchitecture:\n  device_mode: standard\n  vault_type: sentinel\n  replication_type: personal\n  sentinel:\n    threshold: 2\n    required_participants: 2\n    ready_participants: 0\nsecrets: []\n",
-                &identity,
             )
+            .load(&identity)
             .is_err(),
             "sentinel vault must reject ordinary single-device unlock even before shares exist"
         );
@@ -423,8 +414,8 @@ mod tests {
             &architecture,
         )?;
 
-        assert!(load_stored_vault(yaml.as_str(), &first).is_err());
-        let loaded = load_sentinel_vault(yaml.as_str(), &[first, second])?;
+        assert!(VaultContent::new(yaml.as_str()).load(&first).is_err());
+        let loaded = VaultContent::new(yaml.as_str()).load_sentinel(&[first, second])?;
         assert_eq!(loaded.secrets_key, keys.secrets_key);
         assert_eq!(loaded.members_key, keys.members_key);
         assert_eq!(loaded.meta.sentinel_shares.len(), 3);

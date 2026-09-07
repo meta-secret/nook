@@ -550,7 +550,7 @@ impl NookVaultManager {
         &mut self,
         content: &str,
     ) -> Result<(), NookError> {
-        let metadata = nook_core::capture_vault_unlock_from_content(content)?;
+        let metadata = nook_core::VaultContent::new(content).capture_unlock()?;
         self.application
             .validate_session_access(metadata.architecture.vault_type)?;
         self.vault.unlock = metadata.unlock;
@@ -593,10 +593,9 @@ impl NookVaultManager {
         }
         let identity = self.ensure_device_identity()?;
         if !self.vault.last_synced_content.trim().is_empty() {
-            let (secrets_key, members_key) = nook_core::hydrate_keys_from_projection_yaml(
-                &self.vault.last_synced_content,
-                &identity,
-            )?;
+            let (secrets_key, members_key) =
+                nook_core::VaultProjectionCache::new(&self.vault.last_synced_content)
+                    .unlock(&identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             return Ok(());
         }
@@ -604,7 +603,7 @@ impl NookVaultManager {
             && !cache.trim().is_empty()
         {
             let (secrets_key, members_key) =
-                nook_core::hydrate_keys_from_projection_yaml(&cache, &identity)?;
+                nook_core::VaultProjectionCache::new(&cache).unlock(&identity)?;
             self.apply_vault_keys(&secrets_key, &members_key)?;
             self.vault.last_synced_content = cache;
             return Ok(());
@@ -625,7 +624,7 @@ impl NookVaultManager {
             identity,
             &SymmetricKey::parse(&members_key)?,
         )? {
-            nook_core::apply_member_records(&mut self.vault.meta, &member_records)?;
+            self.vault.meta.replace_member_records(&member_records)?;
         }
         Ok(())
     }
