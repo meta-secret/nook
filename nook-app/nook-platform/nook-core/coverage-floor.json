@@ -32,7 +32,7 @@
   "excluded_packages": [
     {
       "package": "nook-wasm-composition-tests",
-      "reason": "Intentional test-only composition harness; all crate modules are cfg(test), so it has no production code to measure."
+      "reason": "Unpublished test-only composition harness; src/lib.rs contains no executable production code and all executable code lives in integration-test targets under tests/."
     },
     {
       "package": "nook-fuzz",
