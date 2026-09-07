@@ -201,8 +201,12 @@ pub fn create_sentinel_root_share_records_for_recipients(
     let mut root = [0_u8; 32];
     getrandom::fill(&mut root).map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
     let keys = derive_sentinel_vault_keys(&root)?;
-    let shares =
-        slip39::split_sentinel_secret(&root, threshold.into(), required_participants.into())?;
+    let shares = slip39::SentinelSecretSplitRequest::new(
+        &root,
+        threshold.into(),
+        required_participants.into(),
+    )
+    .issue()?;
     root.zeroize();
     let records = recipients
         .iter()
@@ -370,8 +374,10 @@ pub fn reconstruct_sentinel_vault_keys_from_opened(
         });
     }
     if expected_version == Some(SentinelShareVersion::CURRENT) {
-        let mut root =
-            slip39::recover_sentinel_secret(&slip39_mnemonics[..usize::from(u8::from(threshold))])?;
+        let mut root = slip39::SentinelSecretRecoveryRequest::sentinel(
+            &slip39_mnemonics[..usize::from(u8::from(threshold))],
+        )
+        .recover()?;
         let keys = derive_sentinel_vault_keys(&root);
         root.zeroize();
         return keys;
