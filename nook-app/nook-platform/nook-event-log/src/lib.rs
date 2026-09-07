@@ -30,10 +30,7 @@ mod remote_epoch_visibility;
 mod signing;
 mod store;
 
-pub use builder::{
-    AppendEventInput, ObservedHeads, build_signed_event, encrypted_secret_from_armored,
-    parents_from_heads,
-};
+pub use builder::{AppendEventInput, ObservedHeads};
 pub use canonical::{
     Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
     format_ed25519_signature, parse_ed25519_signature, sha256_hex, sign_body,

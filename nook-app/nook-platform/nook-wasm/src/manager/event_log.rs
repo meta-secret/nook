@@ -34,7 +34,7 @@ use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles};
 use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
-    VaultOperation, apply_user_records_to_encrypted_session, build_signed_event, project_vault,
+    VaultOperation, apply_user_records_to_encrypted_session, project_vault,
 };
 
 fn iso_timestamp() -> String {
@@ -306,7 +306,7 @@ impl NookVaultManager {
         let actor_id = signing.actor_id()?;
         let store_id = StoreId::parse(&self.vault.store_id)?;
         let created_at = IsoTimestamp::parse(&iso_timestamp())?;
-        let (event, bytes) = build_signed_event(AppendEventInput {
+        let (event, bytes) = AppendEventInput::build(AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &signing,

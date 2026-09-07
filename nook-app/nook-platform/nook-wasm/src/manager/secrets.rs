@@ -99,7 +99,7 @@ impl NookVaultManager {
             .unwrap_or_default();
         self.append_vault_operations(vec![VaultOperation::SecretReplaced {
             old_id: validated_old,
-            new_secret: nook_core::encrypted_secret_from_armored(
+            new_secret: nook_core::EncryptedSecretPayload::from_armored(
                 &validated_new,
                 input.secret_type,
                 &ciphertext,
@@ -298,7 +298,7 @@ impl NookVaultManager {
         self.vault.mark_search_catalog_dirty();
 
         self.append_vault_operations(vec![VaultOperation::SecretCreated {
-            secret: nook_core::encrypted_secret_from_armored(
+            secret: nook_core::EncryptedSecretPayload::from_armored(
                 &id,
                 secret_type,
                 &ciphertext,
@@ -474,8 +474,8 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn concurrent_same_identity_logins_both_survive_after_event_union() -> anyhow::Result<()> {
         use nook_core::{
-            LoginSecret, SecretId, SecretType, SecretValue, SigningIdentity, VaultCrypto,
-            VaultEventSession, VaultOperation, encrypted_secret_from_armored, generate_store_id,
+            EncryptedSecretPayload, LoginSecret, SecretId, SecretType, SecretValue,
+            SigningIdentity, VaultCrypto, VaultEventSession, VaultOperation, generate_store_id,
             generate_vault_keys,
         };
         use std::collections::BTreeSet;
@@ -500,7 +500,7 @@ mod wasm_tests {
             let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
             session.append_operations(
                 vec![VaultOperation::SecretCreated {
-                    secret: encrypted_secret_from_armored(
+                    secret: EncryptedSecretPayload::from_armored(
                         &SecretId::from_vault_record(secret_id),
                         SecretType::Login,
                         ciphertext.as_str(),
