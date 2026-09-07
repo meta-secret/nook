@@ -106,7 +106,7 @@ Planning stopped at the user-authorization boundary.
 - The user must select and request a direction.
 `
 
-function validTwoGizmoStackedPlan() {
+function validTwoGizmoSequentialPlan() {
   return validPlan
     .replace(baseOwnershipUnit, `${baseOwnershipUnit}\n${secondGizmoOwnershipUnit}`)
     .replace(
@@ -114,7 +114,7 @@ function validTwoGizmoStackedPlan() {
       'Estimated authored changed lines: 2,240',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       sequenceField(
@@ -498,7 +498,7 @@ test('accepts a one-PR plan at the 2,000-line ceiling', () => {
   assert.equal(validateAgentRecord(atCeiling, 'plan'), '')
 })
 
-test('rejects an over-budget multi-PR feature', () => {
+test('rejects independent PR delivery', () => {
   const independent = validPlan
     .replace(
       'Estimated authored changed lines: 240',
@@ -515,18 +515,18 @@ test('rejects an over-budget multi-PR feature', () => {
     )
   assert.match(
     validateAgentRecord(independent, 'plan'),
-    /only one-PR delivery is supported/,
+    /missing or empty plan field: PR sequence mode/,
   )
 })
 
-test('rejects a sequence mode that contradicts one-PR delivery', () => {
+test('rejects stacked PR delivery', () => {
   const invalid = validPlan.replace(
     'PR sequence mode: One PR',
     'PR sequence mode: Stacked PRs',
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /missing or empty plan field: PR sequence mode/,
   )
 })
 
@@ -557,12 +557,8 @@ test('rejects different feature and current PR estimates for one PR', () => {
   )
 })
 
-test('rejects a bounded current slice for a multi-PR feature', () => {
-  const multiPr = validTwoGizmoStackedPlan()
-  assert.match(
-    validateAgentRecord(multiPr, 'plan'),
-    /only one-PR delivery is supported/,
-  )
+test('accepts a bounded current slice for a necessary sequential feature', () => {
+  assert.equal(validateAgentRecord(validTwoGizmoSequentialPlan(), 'plan'), '')
 })
 
 test('rejects a multi-PR slice without an authored-line estimate', () => {
@@ -576,14 +572,14 @@ test('rejects a multi-PR slice without an authored-line estimate', () => {
       'Current PR estimated authored changed lines: 1,000',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       `- PR slices, estimates, and acceptance evidence:\n1. Gizmo ID: gizmo-1; Gizmo name: Validator; Predecessor Gizmo ID: None; Validator change; Acceptance evidence: Contract tests pass\n${sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '1,000', 'Integration checks pass.')}`,
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /PR slices must be valid and consecutively numbered/,
   )
 })
 
@@ -598,7 +594,7 @@ test('rejects undersized slice coverage for a 12,000-line feature', () => {
       'Current PR estimated authored changed lines: 1,000',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       sequenceField(
@@ -608,7 +604,7 @@ test('rejects undersized slice coverage for a 12,000-line feature', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /sequential PR slice estimates must cover the complete feature estimate/,
   )
 })
 
@@ -619,7 +615,7 @@ test('rejects an individual PR slice above 2,000 lines', () => {
       'Estimated authored changed lines: 2,241',
     )
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       sequenceField(
@@ -629,58 +625,58 @@ test('rejects an individual PR slice above 2,000 lines', () => {
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /each PR slice estimate must be at most 2,000/,
   )
 })
 
 test('rejects a zero-line PR slice estimate', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       sequenceField(
         sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '240', 'Contract tests pass'),
-        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '0', 'Integration checks pass.'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '0', 'Integration checks pass.'),
       ),
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /sequential PR slices must have positive estimates/,
   )
 })
 
 test('rejects a multi-PR current slice omitted from its ordered sequence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       sequenceField(
         sliceContract(1, 'gizmo-1', 'Storage', 'None', 'Storage schema', '120', 'Domain tests pass.'),
-        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '120', 'Integration checks pass.'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '120', 'Integration checks pass.'),
       ),
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /the first PR slice must match the current PR contract and estimate/,
   )
 })
 
 test('rejects a first slice estimate that differs from the current PR estimate', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       sequenceField(
         sliceContract(1, 'gizmo-1', 'Validator', 'None', 'Validator change', '120', 'Contract tests pass'),
-        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '120', 'Integration checks pass.'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '120', 'Integration checks pass.'),
       ),
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /the first PR slice must match the current PR contract and estimate/,
   )
 })
 
@@ -694,28 +690,28 @@ test('rejects a multi-PR plan without an ordered sequence', () => {
       'Delivery shape: One PR',
       'Delivery shape: Multiple PRs',
     )
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Stacked PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       '- PR slices, estimates, and acceptance evidence:\nNone',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /PR slices must be valid and consecutively numbered/,
   )
 })
 
 test('rejects multi-PR slices without acceptance evidence', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       '- PR slices, estimates, and acceptance evidence:\n1. Storage; Estimated authored changed lines: 120\n2. UI; Estimated authored changed lines: 120',
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /PR slices must be valid and consecutively numbered/,
   )
 })
 
@@ -726,14 +722,14 @@ for (const sequence of [
   test(`rejects nonconsecutive multi-PR sequence: ${sequence.split('\n')[1]}`, () => {
     const invalid = validPlan
       .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-      .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+      .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
       .replace(
         validSequenceField,
         `- PR slices, estimates, and acceptance evidence:\n${sequence}`,
       )
     assert.match(
       validateAgentRecord(invalid, 'plan'),
-      /only one-PR delivery is supported/,
+      /PR slices must be valid and consecutively numbered/,
     )
   })
 }
@@ -810,24 +806,24 @@ test('rejects multiple slices declared as one PR', () => {
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan requires one numbered slice matching the current PR contract/,
+    /one-PR plan requires exactly one numbered slice/,
   )
 })
 
 test('rejects a placeholder scope in a multi-PR slice', () => {
   const invalid = validPlan
     .replace('Delivery shape: One PR', 'Delivery shape: Multiple PRs')
-    .replace('PR sequence mode: One PR', 'PR sequence mode: Independent PRs')
+    .replace('PR sequence mode: One PR', 'PR sequence mode: Sequential PRs')
     .replace(
       validSequenceField,
       sequenceField(
         sliceContract(1, 'gizmo-1', 'Validator', 'None', 'None', '120', 'Contract tests pass.'),
-        sliceContract(2, 'gizmo-2', 'Publisher', 'None', 'Publisher adoption', '120', 'Integration checks pass.'),
+        sliceContract(2, 'gizmo-2', 'Publisher', 'gizmo-1', 'Publisher adoption', '120', 'Integration checks pass.'),
       ),
     )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /only one-PR delivery is supported/,
+    /PR slices must be valid and consecutively numbered/,
   )
 })
 
@@ -840,7 +836,7 @@ test('rejects a one-PR sequence that contradicts the current slice', () => {
   )
   assert.match(
     validateAgentRecord(invalid, 'plan'),
-    /one-PR plan requires one numbered slice matching the current PR contract/,
+    /the first PR slice must match the current PR contract and estimate/,
   )
 })
 

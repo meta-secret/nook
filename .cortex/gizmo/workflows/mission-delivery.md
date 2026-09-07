@@ -46,6 +46,9 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Do not count or limit deletions.
    - Warn at 1,500 additions and stop before 2,000 additions.
    - Simplify the design when growth approaches the limit.
+   - When necessary scope still cannot fit, define independently useful
+     sequential PR slices.
+   - Give every slice observable acceptance evidence.
 3. **Assign Team Agent work.**
    - Give each task one team identity.
    - Name allowed files, forbidden files, and acceptance evidence.
@@ -89,6 +92,10 @@ Report the blocker instead of reporting an intermediate state as complete.
      verdict succeeds.
    - Have PR Steward squash-merge and verify remote merge state.
    - Publish the final Workbench update.
+   - If another planned slice remains, fetch current `origin/main`.
+   - Create the next branch only after the current slice is remotely verified
+     and closed out.
+   - Begin only that next slice.
 
 ## Prohibited complexity
 
@@ -98,6 +105,8 @@ Mission delivery must not introduce:
 - parallel Team Agent lifecycle or Git-state machinery; or
 - a persistent PR Steward service, scheduler, or notification journal; or
 - deletion-report fields or schema versions.
+- stacked branches, stacked pull requests, or implementation against an
+  unmerged predecessor.
 
 ## Fix ownership
 
@@ -114,7 +123,8 @@ Mission delivery must not introduce:
 
 Delivery is complete only when:
 
-- all requested behavior is implemented by its functional owners;
+- all requested behavior is implemented by its functional owners across every
+  planned slice;
 - only one writer changed the shared checkout at a time;
 - the shared branch contains every accepted change;
 - repository-owned checks pass on the exact head;
@@ -122,5 +132,6 @@ Delivery is complete only when:
 - any reactive PR Steward child has stopped;
 - Gizmo has reconciled final GitHub state directly;
 - `task pr:ready PR=<number>` succeeds;
-- the pull request is squash-merged; and
-- Workbench completion records are published.
+- every pull request is squash-merged;
+- every remote merge is verified; and
+- Workbench completion records are published for every slice.

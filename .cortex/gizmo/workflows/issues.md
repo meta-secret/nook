@@ -39,8 +39,8 @@ index. Focused Markdown files replace sub-issues.
 ## Feature scope
 
 Create one focused issue and one immutable feature-slice Gizmo Workbench record
-for the PR. The record is not a running agent or controller. Team Agent count
-never determines PR or Gizmo count.
+for each planned PR. Use one record by default. The record is not a running
+agent or controller. Team Agent count never determines PR or Gizmo count.
 
 The feature `README.md` must record:
 
@@ -51,11 +51,14 @@ The feature `README.md` must record:
 - feature-level acceptance criteria;
 - current completion status.
 
-- The planned PR must stay at or below 2,000 authored additions.
+- Every planned PR must stay at or below 2,000 authored additions.
 - Deletions do not count and have no limit.
-- Do not create a size-driven issue sequence, successor PR, or PR stack.
-- If the planned work cannot fit, record the blocker instead of decomposing the
-  delivery automatically.
+- Simplify and redesign before dividing an oversized feature.
+- When the complete necessary implementation still cannot fit, create focused
+  issues for independently useful sequential slices.
+- Give each slice observable acceptance evidence.
+- Link each later issue to its predecessor.
+- Do not create a PR stack.
 - Review fixes use the same 2,000-authored-addition limit.
 
 See
@@ -102,7 +105,7 @@ Every focused issue follows
 - YAML frontmatter with title, lifecycle status, priority, automation mode,
   owner, timestamps, source issues, related PRs, and dependencies;
 - a canonical lowercase-hyphenated `gizmo_id` in every focused issue
-  assigned by the current one-PR plan;
+  assigned by the current plan;
 - context and an observable outcome;
 - explicit included and excluded scope;
 - testable acceptance criteria and required coverage;
@@ -124,11 +127,10 @@ owner: <nook-github-collaborator>
 ```
 
 Legacy standalone focused issues may omit `gizmo_id`. When the field is
-present, dispatch treats it as canonical trusted routing metadata: its syntax
-must be valid, it must never be changed to create a fresh identity, and the
-published per-issue plan must use it as `Current Gizmo ID` and its sole slice
-Gizmo ID. That plan must declare one PR and use the same ID on every ownership
-unit.
+present, dispatch treats it as canonical trusted routing metadata. Its syntax
+must be valid. It must never be changed to create a fresh identity. The
+published plan must use it as `Current Gizmo ID` and the first slice Gizmo ID.
+At least one ownership unit must use that ID.
 
 - The owner must be an assignable Nook GitHub collaborator with write access.
 - The dispatch must provide exactly one of `issue_path` or `prompt`.
@@ -242,17 +244,19 @@ The plan must contain:
 - an `Estimated authored changed lines` value;
 - an `Owning modules, packages, or layers` value;
 - consecutively numbered `Ownership units`, one per capability, each referencing
-  the one declared `Gizmo ID`;
+  a declared `Gizmo ID`;
 - a `Public or cross-module interfaces` value;
-- a `Delivery shape` value fixed to `One PR`;
-- a `PR sequence mode` value fixed to `One PR`;
+- a `Delivery shape` value of `One PR` or `Multiple PRs`;
+- a `PR sequence mode` value of `One PR` or `Sequential PRs`;
 - a `Current PR estimated authored changed lines` value;
 - a `Current PR slice and acceptance evidence` value;
-- a `PR slices, estimates, and acceptance evidence` value with exactly one row;
-  - the row uses the current Gizmo ID;
-  - its predecessor is `None`;
-  - its non-negative estimate is at most 2,000; and
-  - it states the PR acceptance evidence;
+- a `PR slices, estimates, and acceptance evidence` value;
+  - the first row uses the current Gizmo ID;
+  - the first predecessor is `None`;
+  - each later predecessor is the immediately preceding Gizmo ID;
+  - each estimate is at most 2,000;
+  - each scope delivers distinct observable functionality; and
+  - each row states distinct acceptance evidence;
 - expected completion evidence; and
 - a safety review confirming that no raw prompt, transcript, secret, private
   data, raw log, local path, or unnecessary infrastructure detail is present.
@@ -295,7 +299,10 @@ NOOK_WORKBENCH_ASSIGNED_GIZMO_ID=<focused-issue-gizmo-id> \
   2. validates and publishes the plan; and
   3. begins implementation only after publication.
 - A missing or rejected plan blocks implementation.
-- A plan above the 2,000-authored-addition limit blocks implementation.
+- A current PR estimate above the 2,000-authored-addition limit blocks
+  implementation.
+- A complete estimate above the limit requires simplification first.
+- If necessary scope remains above the limit, the plan must use sequential PRs.
 
 ## Worklog requirement
 

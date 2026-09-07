@@ -17,9 +17,11 @@ Use this ownership hierarchy:
   - publish a task worklog.
 - Otherwise create `issues/<feature>/README.md` and the smallest independently
   deliverable issue files.
-- Keep the feature inside one focused issue and one PR.
+- Keep the feature inside one focused issue and one PR when it fits cleanly.
 - Prefer a cohesive module, package, layer, or stable-interface boundary.
 - Do not move implemented work into a successor PR as size recovery.
+- When necessary scope remains oversized after redesign, define a sequence of
+  focused issues with independently useful outcomes.
 
 ## Scope
 
@@ -48,20 +50,24 @@ to generate bookkeeping.
 3. Treat every other active task as read-only.
 4. Update the existing record or create a focused non-duplicate.
 5. Bound the work:
-   - Record one non-negative authored-additions estimate at or below 2,000 for
-     the PR. Deletions do not count and have no limit.
-   - Keep the issue inside one cohesive module, package, layer, or
+   - Record a non-negative authored-additions estimate at or below 2,000 for
+     every PR. Deletions do not count and have no limit.
+   - Keep each issue inside one cohesive module, package, layer, or
      responsibility.
-   - Keep acceptance criteria deliverable and testable in that PR.
-   - Copy the plan's stable Gizmo ID into the canonical `gizmo_id` frontmatter.
-   - Do not split, stack, rebuild, or replace an oversized PR.
-   - If planned additions cannot fit at or below 2,000, stop and record the
-     blocker.
+   - Keep acceptance criteria independently observable and testable in that PR.
+   - Copy each slice's stable Gizmo ID into its canonical `gizmo_id` frontmatter.
+   - Simplify and redesign before creating a multi-PR sequence.
+   - Use sequential PRs only when necessary scope still exceeds 2,000 additions.
+   - Link every later issue to its immediate predecessor.
+   - Do not stack, rebuild, or replace an oversized PR.
    - Stop before review work exceeds 2,000 authored additions.
 6. Link the parent feature, dependencies, historical issue context, and Nook
    PR.
 7. Publish a worklog before completion or blocked handoff.
 8. Re-open Workbench `main` and verify links and state.
+
+Implement only the first ready slice. Do not ready or implement its successor
+until the predecessor is squash-merged, remotely verified, and closed out.
 
 ## Validation
 
