@@ -24,6 +24,7 @@ mod authentication_workflow;
 mod authenticator_code_response;
 mod companion_protocol;
 mod credential_fill;
+mod extension_persistence;
 mod grant_authority;
 mod page_form_policy;
 mod response_decoding;
@@ -34,6 +35,7 @@ pub use authentication_workflow::*;
 pub use authenticator_code_response::*;
 pub use companion_protocol::*;
 pub use credential_fill::*;
+pub use extension_persistence::*;
 pub use grant_authority::*;
 pub use page_form_policy::*;
 pub use response_decoding::*;
@@ -59,49 +61,6 @@ pub fn contains_backup_code_candidate(text: &str) -> bool {
 #[allow(clippy::needless_pass_by_value)]
 pub fn extract_backup_code_candidates(text: String) -> Vec<String> {
     nook_companion_core::extract_backup_code_candidates(&text)
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn extension_persistence_database_name(
-    area: nook_companion_core::ExtensionPersistenceArea,
-) -> String {
-    area.database_name().to_owned()
-}
-
-#[wasm_bindgen]
-#[must_use]
-pub fn extension_persistence_store_names(
-    area: nook_companion_core::ExtensionPersistenceArea,
-) -> Vec<String> {
-    area.store_names()
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn classify_extension_persistence_databases(
-    input: nook_companion_core::ExtensionPersistenceObservation,
-) -> nook_companion_core::ExtensionPersistenceDatabaseState {
-    input.area.classify_database_names(&input.observed_names)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn classify_extension_persistence_stores(
-    input: nook_companion_core::ExtensionPersistenceObservation,
-) -> nook_companion_core::ExtensionPersistenceStoreState {
-    input.area.classify_store_names(&input.observed_names)
-}
-
-#[wasm_bindgen]
-#[must_use]
-#[allow(clippy::needless_pass_by_value)]
-pub fn matching_extension_persistence_stores(
-    input: nook_companion_core::ExtensionPersistenceObservation,
-) -> Vec<String> {
-    input.area.matching_store_names(&input.observed_names)
 }
 
 #[wasm_bindgen]
@@ -451,33 +410,6 @@ pub fn belongs_to_sentinel_vault(
 mod tests {
     use super::*;
     use nook_companion_core::ExtensionEventCount;
-    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-    #[cfg_attr(not(target_arch = "wasm32"), test)]
-    fn extension_persistence_wasm_exports_match_core_policy() {
-        let area = nook_companion_core::ExtensionPersistenceArea::Pairing;
-        assert_eq!(extension_persistence_database_name(area), "nook_extension");
-        let database_observation = nook_companion_core::ExtensionPersistenceObservation {
-            area,
-            observed_names: vec!["nook_extension".to_owned()],
-        };
-        assert_eq!(
-            classify_extension_persistence_databases(database_observation.clone()),
-            nook_companion_core::ExtensionPersistenceDatabaseState::Present
-        );
-        let store_observation = nook_companion_core::ExtensionPersistenceObservation {
-            area,
-            observed_names: vec!["pairing".to_owned()],
-        };
-        assert_eq!(
-            classify_extension_persistence_stores(store_observation.clone()),
-            nook_companion_core::ExtensionPersistenceStoreState::Present
-        );
-        assert_eq!(extension_persistence_store_names(area), vec!["pairing"]);
-        assert_eq!(
-            matching_extension_persistence_stores(store_observation),
-            vec!["pairing"]
-        );
-    }
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn workflow_wasm_export_rejects_unbounded_observations() {
