@@ -94,7 +94,7 @@ impl NookProviderSaveOutcome {
 pub fn apply_provider_save_policy(
     request: nook_core::ProviderSaveRequest,
 ) -> NookProviderSaveOutcome {
-    NookProviderSaveOutcome(nook_core::apply_provider_save_policy(&request))
+    NookProviderSaveOutcome(request.apply())
 }
 
 /// Project the active provider into a portable credential draft. Browser and

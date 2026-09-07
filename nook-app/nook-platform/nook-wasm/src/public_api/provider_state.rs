@@ -384,7 +384,7 @@ pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookSto
 #[allow(clippy::needless_pass_by_value)]
 #[must_use]
 pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
-    let remote_ref = nook_core::oauth_remote_storage_ref(&config);
+    let remote_ref = config.remote_storage_ref();
     nook_core::draft_storage_args(
         StorageProviderType::OauthFile,
         None,
