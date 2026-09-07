@@ -259,10 +259,12 @@ mod tests {
         let mut materialized = VaultMetaState::default();
         let requested_at = IsoTimestamp::parse("2026-07-09T00:00:00Z")?;
         for operation in &operations {
-            VaultMetaOperationApplier::new(&mut materialized).apply(VaultMetaOperationRequest {
-                operation,
-                requested_at: &requested_at,
-            })?;
+            VaultMetaOperationApplier::new(&mut materialized).apply(
+                &VaultMetaOperationRequest {
+                    operation,
+                    requested_at: &requested_at,
+                },
+            )?;
         }
         assert_eq!(materialized.sentinel_participants.len(), 2);
         assert_eq!(materialized.sentinel_shares.len(), 2);

@@ -355,7 +355,7 @@ mod tests {
             VaultMetaRecordRewrap::new(&records, &old_keys.members_key, &new_keys).rewrap()?;
         let mut state = VaultMetaState::from_stored_records(&records)?;
         let requested_at = IsoTimestamp::parse("2026-06-28T00:02:00Z")?;
-        VaultMetaOperationApplier::new(&mut state).apply(VaultMetaOperationRequest {
+        VaultMetaOperationApplier::new(&mut state).apply(&VaultMetaOperationRequest {
             operation: &VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_bytes(b"members"),

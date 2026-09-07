@@ -254,7 +254,7 @@ mod tests {
             label: MemberLabel::from_trusted("Owner".to_owned()),
         };
         let mut state = VaultMetaState::default();
-        VaultMetaOperationApplier::new(&mut state).apply(VaultMetaOperationRequest {
+        VaultMetaOperationApplier::new(&mut state).apply(&VaultMetaOperationRequest {
             operation: &operation,
             requested_at: &IsoTimestamp::parse("2026-07-09T00:00:00Z")?,
         })?;
@@ -267,7 +267,7 @@ mod tests {
         assert_eq!(participant.label, "Owner");
 
         let members_key = crate::generate_symmetric_key()?;
-        let records = SentinelMemberRecordProjection::new(SentinelMemberRecordProjectionRequest {
+        let records = SentinelMemberRecordProjection::new(&SentinelMemberRecordProjectionRequest {
             state: &state,
             members_key: &members_key,
         })
@@ -280,7 +280,7 @@ mod tests {
             device_id: identity.device_id().clone(),
             label: MemberLabel::from_trusted("Renamed".to_owned()),
         };
-        VaultMetaOperationApplier::new(&mut state).apply(VaultMetaOperationRequest {
+        VaultMetaOperationApplier::new(&mut state).apply(&VaultMetaOperationRequest {
             operation: &operation,
             requested_at: &IsoTimestamp::parse("2026-07-09T00:01:00Z")?,
         })?;
@@ -332,7 +332,7 @@ mod tests {
         )));
         let mut state = VaultMetaState::default();
         for operation in &operations {
-            VaultMetaOperationApplier::new(&mut state).apply(VaultMetaOperationRequest {
+            VaultMetaOperationApplier::new(&mut state).apply(&VaultMetaOperationRequest {
                 operation,
                 requested_at: &IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
             })?;
@@ -493,7 +493,7 @@ mod tests {
             secrets_key_ciphertext: envelopes.secrets_key,
             members_key_ciphertext: envelopes.members_key,
         };
-        VaultMetaOperationApplier::new(&mut meta).apply(VaultMetaOperationRequest {
+        VaultMetaOperationApplier::new(&mut meta).apply(&VaultMetaOperationRequest {
             operation: &operation,
             requested_at: &IsoTimestamp::parse("2026-08-14T23:59:00Z")?,
         })?;
@@ -505,7 +505,7 @@ mod tests {
             rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
             password_entries: EpochPasswordState::LegacyRetain,
         };
-        VaultMetaOperationApplier::new(&mut meta).apply(VaultMetaOperationRequest {
+        VaultMetaOperationApplier::new(&mut meta).apply(&VaultMetaOperationRequest {
             operation: &operation,
             requested_at: &IsoTimestamp::parse("2026-08-15T00:00:00Z")?,
         })?;
@@ -534,7 +534,7 @@ mod tests {
             rotated_meta_records: EpochMetadataState::Replace(vec![invalid]),
             password_entries: EpochPasswordState::LegacyRetain,
         };
-        match VaultMetaOperationApplier::new(&mut meta).apply(VaultMetaOperationRequest {
+        match VaultMetaOperationApplier::new(&mut meta).apply(&VaultMetaOperationRequest {
             operation: &operation,
             requested_at: &IsoTimestamp::parse("2026-08-15T00:00:00Z")?,
         }) {

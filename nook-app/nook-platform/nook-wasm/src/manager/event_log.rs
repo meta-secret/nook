@@ -344,7 +344,7 @@ impl NookVaultManager {
         } else {
             for operation in &operations {
                 VaultMetaOperationApplier::new(&mut self.vault.meta).apply(
-                    VaultMetaOperationRequest {
+                    &VaultMetaOperationRequest {
                         operation,
                         requested_at: &created_at,
                     },

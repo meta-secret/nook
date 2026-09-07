@@ -27,18 +27,16 @@ impl<'a> VaultMetaOperationApplier<'a> {
     }
 
     /// Apply one core event-log metadata operation.
-    pub fn apply(&mut self, request: VaultMetaOperationRequest<'_>) -> MultiDeviceResult<()> {
-        let VaultMetaOperationRequest {
-            operation,
-            requested_at,
-        } = request;
+    pub fn apply(&mut self, request: &VaultMetaOperationRequest<'_>) -> MultiDeviceResult<()> {
+        let operation = request.operation;
+        let requested_at = request.requested_at;
         match operation {
             VaultOperation::JoinRequested {
                 device_id,
                 encryption_public_key,
                 signing_public_key,
                 ..
-            } => self.record_pending_join(PendingJoinRequest {
+            } => self.record_pending_join(&PendingJoinRequest {
                 device_id,
                 encryption_public_key,
                 signing_public_key,
@@ -64,7 +62,7 @@ impl<'a> VaultMetaOperationApplier<'a> {
                 encryption_public_key,
                 signing_public_key,
                 label,
-            } => self.record_sentinel_participant(SentinelParticipantRequest {
+            } => self.record_sentinel_participant(&SentinelParticipantRequest {
                 device_id,
                 encryption_public_key,
                 signing_public_key,
@@ -118,41 +116,28 @@ impl<'a> VaultMetaOperationApplier<'a> {
         Ok(())
     }
 
-    fn record_pending_join(&mut self, request: PendingJoinRequest<'_>) {
-        let PendingJoinRequest {
-            device_id,
-            encryption_public_key,
-            signing_public_key,
-            requested_at,
-        } = request;
+    fn record_pending_join(&mut self, request: &PendingJoinRequest<'_>) {
         self.state.joins.insert(
-            device_id.clone(),
+            request.device_id.clone(),
             JoinRequest {
-                device_id: device_id.clone(),
-                public_key: encryption_public_key.clone(),
-                signing_public_key: signing_public_key.clone(),
-                requested_at: requested_at.to_owned(),
+                device_id: request.device_id.clone(),
+                public_key: request.encryption_public_key.clone(),
+                signing_public_key: request.signing_public_key.clone(),
+                requested_at: request.requested_at.to_owned(),
             },
         );
     }
 
-    fn record_sentinel_participant(&mut self, request: SentinelParticipantRequest<'_>) {
-        let SentinelParticipantRequest {
-            device_id,
-            encryption_public_key,
-            signing_public_key,
-            label,
-            requested_at,
-        } = request;
-        self.state.joins.remove(device_id);
+    fn record_sentinel_participant(&mut self, request: &SentinelParticipantRequest<'_>) {
+        self.state.joins.remove(request.device_id);
         self.state.sentinel_participants.insert(
-            device_id.clone(),
+            request.device_id.clone(),
             SentinelParticipantEntry {
-                device_id: device_id.clone(),
-                encryption_public_key: encryption_public_key.clone(),
-                signing_public_key: signing_public_key.clone(),
-                label: label.as_str().to_owned(),
-                enrolled_at: requested_at.to_owned(),
+                device_id: request.device_id.clone(),
+                encryption_public_key: request.encryption_public_key.clone(),
+                signing_public_key: request.signing_public_key.clone(),
+                label: request.label.as_str().to_owned(),
+                enrolled_at: request.requested_at.to_owned(),
             },
         );
     }
@@ -225,6 +210,7 @@ pub struct VaultMetaGraphProjection<'a> {
 }
 
 impl<'a> VaultMetaGraphProjection<'a> {
+    #[must_use]
     pub fn new(graph: &'a EventGraph) -> Self {
         Self { graph }
     }
@@ -247,7 +233,7 @@ impl<'a> VaultMetaGraphProjection<'a> {
                 ))
             })?;
             for operation in &event.body.operations {
-                applier.apply(VaultMetaOperationRequest {
+                applier.apply(&VaultMetaOperationRequest {
                     operation,
                     requested_at: &event.body.created_at,
                 })?;
@@ -271,6 +257,7 @@ pub struct EventGraphDeviceAccess<'a> {
 }
 
 impl<'a> EventGraphDeviceAccess<'a> {
+    #[must_use]
     pub fn new(graph: &'a EventGraph) -> Self {
         Self { graph }
     }
@@ -349,6 +336,7 @@ pub struct EventGraphAuthorizationProjection<'a> {
 }
 
 impl<'a> EventGraphAuthorizationProjection<'a> {
+    #[must_use]
     pub fn new(graph: &'a EventGraph) -> Self {
         Self { graph }
     }
@@ -411,7 +399,8 @@ pub struct SentinelMemberRecordProjection<'a> {
 }
 
 impl<'a> SentinelMemberRecordProjection<'a> {
-    pub fn new(request: SentinelMemberRecordProjectionRequest<'a>) -> Self {
+    #[must_use]
+    pub fn new(request: &SentinelMemberRecordProjectionRequest<'a>) -> Self {
         Self {
             state: request.state,
             members_key: request.members_key,
