@@ -1,4 +1,4 @@
-//! IndexedDB persistence for verified Sentinel genesis deliveries.
+//! `IndexedDB` persistence for verified Sentinel genesis deliveries.
 //!
 //! This adapter owns the recipient-bound delivery catalog and its resumable
 //! finalization marker. Verification remains in `nook-core`; this module only
