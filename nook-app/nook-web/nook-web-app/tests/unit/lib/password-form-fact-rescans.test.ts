@@ -363,37 +363,33 @@ describe('authentication fact rescans', () => {
       backupCodesHint: false,
     })
     const beforeControl = before.detailedAdvanceControl
-    expect(beforeControl).toMatchObject({
-      kind: 'observed',
-      observations: [{ submissionMethod: 'get' }],
-    })
-    if (beforeControl.kind !== 'observed' || !beforeControl.observations[0]) {
+    if (!beforeControl || beforeControl.kind !== 'observed') {
       throw new Error('expected transported GET control facts')
     }
-    expect(
-      authentication_advance_control_is_safe(beforeControl.observations[0]),
-    ).toBe(false)
+    const [beforeObservation] = beforeControl.observations
+    if (!beforeObservation) {
+      throw new Error('expected transported GET control observation')
+    }
+    expect(beforeObservation.submissionMethod).toBe('get')
+    expect(authentication_advance_control_is_safe(beforeObservation)).toBe(
+      false,
+    )
     document.querySelector('form')?.setAttribute('method', 'post')
     const after = authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(after.detailedAdvanceControl).toMatchObject({
-      kind: 'observed',
-      observations: [{ submissionMethod: 'post' }],
-    })
-    if (
-      after.detailedAdvanceControl.kind !== 'observed' ||
-      !after.detailedAdvanceControl.observations[0]
-    ) {
+    const afterControl = after.detailedAdvanceControl
+    if (!afterControl || afterControl.kind !== 'observed') {
       throw new Error('expected rescanned POST control facts')
     }
-    expect(
-      authentication_advance_control_is_safe(
-        after.detailedAdvanceControl.observations[0],
-      ),
-    ).toBe(true)
+    const [afterObservation] = afterControl.observations
+    if (!afterObservation) {
+      throw new Error('expected rescanned POST control observation')
+    }
+    expect(afterObservation.submissionMethod).toBe('post')
+    expect(authentication_advance_control_is_safe(afterObservation)).toBe(true)
   })
 
   test('transports GET facts only for one identifier field', () => {
