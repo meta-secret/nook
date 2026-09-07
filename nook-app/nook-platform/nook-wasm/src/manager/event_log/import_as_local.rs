@@ -58,6 +58,52 @@ mod browser_tests {
         NookVaultManager::ensure_prior_local_vault_still_registered("", false).await?;
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn prior_vault_snapshot_trims_and_preserves_a_registered_blob() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+        let store_id = nook_core::generate_store_id()?.to_string();
+        indexed_db::save_vault_blob(&store_id, "prior vault").await?;
+
+        assert_eq!(
+            NookVaultManager::snapshot_prior_local_vault(&format!("  {store_id}  ")).await?,
+            (store_id.clone(), true)
+        );
+        NookVaultManager::ensure_prior_local_vault_still_registered(&store_id, true).await?;
+
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn prior_vault_snapshot_fails_closed_when_the_blob_disappears() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+        let store_id = nook_core::generate_store_id()?.to_string();
+        let error = NookVaultManager::ensure_prior_local_vault_still_registered(&store_id, true)
+            .await
+            .expect_err("a missing prior blob must be reported");
+        assert!(matches!(
+            error,
+            NookError::Database(message) if message.contains("removed the previous local vault")
+        ));
+
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+        Ok(())
+    }
 }
 
 #[wasm_bindgen]

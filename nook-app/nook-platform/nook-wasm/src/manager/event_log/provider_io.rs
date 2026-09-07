@@ -476,3 +476,74 @@ impl NookVaultManager {
         Ok(changed)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[test]
+    fn provider_missing_event_errors_are_classified_by_their_storage() {
+        assert!(
+            NookError::GitHub("Event file missing at path".to_owned()).is_github_event_missing()
+        );
+        assert!(!NookError::GitHub("provider unavailable".to_owned()).is_github_event_missing());
+        assert!(NookError::ICloud("event is missing.".to_owned()).is_icloud_event_missing());
+        assert!(!NookError::ICloud("provider unavailable".to_owned()).is_icloud_event_missing());
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn local_provider_io_dispatches_without_remote_access() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.storage.mode = StorageMode::Local;
+        let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+
+        assert!(manager.list_current_provider_event_ids().await?.is_empty());
+        assert_eq!(
+            manager
+                .fetch_current_provider_event_optional(&event_id)
+                .await?,
+            None
+        );
+        manager
+            .put_current_provider_event_if_absent(&event_id, b"ignored")
+            .await?;
+        assert!(!manager.sync_event_log_from_storage().await?);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn local_genesis_is_idempotently_reused_by_sentinel_guard() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+        manager
+            .finish_pin_device_protection("provider-io-test-pin".to_owned())
+            .await
+            .map_err(|error| anyhow::anyhow!("protect device: {error:?}"))?;
+        let identity = manager.device_identity()?;
+        manager.initialize_genesis_vault(&identity)?;
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+
+        manager.bootstrap_event_log_genesis().await?;
+        assert_eq!(manager.event_log.heads.len(), 1);
+        manager.ensure_sentinel_genesis_event(&[], &[]).await?;
+        assert_eq!(manager.event_log.heads.len(), 1);
+
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
+        Ok(())
+    }
+}

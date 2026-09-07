@@ -3,7 +3,9 @@
 use super::{NookVaultManager, VaultNameState};
 use crate::storage::event_db::load_local_event_store;
 use crate::types::NookVaultAccessReport;
-use nook_core::{ProjectionDiagnosticInput, StoreId, VaultRecoverySummary};
+use nook_core::{
+    ProjectionDiagnosticInput, StoreId, VaultAccessDiagnosticRequest, VaultRecoverySummary,
+};
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -79,8 +81,13 @@ impl NookVaultManager {
                 ProjectionDiagnosticInput::Available(projection)
             }
         };
-        let mut report =
-            nook_core::diagnose_vault_access(&records, &identity, projection, &events)?;
+        let mut report = VaultAccessDiagnosticRequest {
+            records: &records,
+            identity: &identity,
+            projection,
+            events: &events,
+        }
+        .diagnose()?;
         report.warnings.extend(warnings);
         Ok(NookVaultAccessReport::from_core(report)?)
     }
