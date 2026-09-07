@@ -19,6 +19,10 @@ import {
   ClaudeAuthInteractionState,
 } from './mock-auth/src/lib/claude-auth-flow'
 
+type BookingSubmissionEvidencePollState =
+  | { readonly kind: 'absent' }
+  | { readonly kind: 'present'; readonly value: string }
+
 export class MockAuthProviderScenarios {
   static register(): void {
     this.registerAmazon()
@@ -592,13 +596,16 @@ export class MockAuthProviderScenarios {
         )
         await expect
           .poll(() =>
-            page.evaluate(
-              (key) => sessionStorage.getItem(key) || '',
-              'booking-submission-evidence',
-            ),
+            page.evaluate<BookingSubmissionEvidencePollState, string>((key) => {
+              for (const [entryKey, value] of Object.entries(sessionStorage)) {
+                if (entryKey === key) return { kind: 'present', value }
+              }
+              return { kind: 'absent' }
+            }, 'booking-submission-evidence'),
           )
-          .toBe(
-            JSON.stringify({
+          .toEqual({
+            kind: 'present',
+            value: JSON.stringify({
               submittedControl: BookingAuthControl.ContinueWithEmail,
               emailMatch: BookingAuthEmailMatch.Matched,
               primaryActivation: BookingAuthPrimaryActivationState.Activated,
@@ -611,7 +618,7 @@ export class MockAuthProviderScenarios {
               helpInteraction: BookingAuthInteractionState.Untouched,
               languageInteraction: BookingAuthInteractionState.Untouched,
             }),
-          )
+          })
         expect(interceptedBookingRequestCount).toBeGreaterThan(1)
         await page.close()
       } finally {
