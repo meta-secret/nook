@@ -230,7 +230,7 @@ Use this workflow for quality, CI, and deployment changes.
     - Dirty cache recipes disable formatter publication.
     - PR jobs never import a local candidate tag.
     - Main and release jobs never import the PR-visible formatter scope.
-    - The Main-defined allowlisted Remote workflow downloads every candidate blob.
+    - The Main-defined Remote workflow downloads every candidate blob.
     - It independently fingerprints the exact committed source SHA.
     - It uploads the graph to a hosted-normalized tag and downloads it again.
     - Only after both complete reads does it atomically assign the stable

@@ -125,7 +125,7 @@ To ensure high developer velocity and agent autonomy, the repository must be sel
   - Agents avoid pushing while it runs.
   - Agents explicitly cancel an obsolete run.
 - **Remote task and PR CI.**
-  - `remote.yml` executes up to eight allowlisted Task commands per manual dispatch.
+  - `remote.yml` executes named Task targets per manual dispatch.
   - `preflight`, `rust:ci`, `loom:verify`, and `arc:runtime` may run on a fresh
     general ARC Pod.
   - `hive:verify` may run on a fresh dedicated Hive ARC Pod.

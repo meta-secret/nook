@@ -342,25 +342,19 @@ does not start Playwright.
 
 Set these environment variables in the hosted job:
 
-- `E2E_PROJECT` selects exactly one project: `stable`, `unstable`, or
-  `sync-live`.
+- `E2E_PROJECT` selects one configured Playwright project.
 - `E2E_SPECS` contains one or more comma-separated spec file names.
 - `E2E_GREP` optionally contains the JavaScript regular expression passed to
   Playwright's `--grep` selector.
 
-The runner resolves `E2E_SPECS` against the selected project's existing
-`playwright.gates.json` catalog. It rejects empty entries, duplicates, path
-traversal, unknown projects, unknown spec files, invalid regular expressions,
-and oversized input.
+The runner passes `E2E_PROJECT`, `E2E_SPECS`, and `E2E_GREP` directly to the
+selected Playwright configuration. A malformed project, spec selection, or
+regular expression fails in the remote Task/Playwright process.
 
 The runner constructs Playwright arguments as an argv array. It never embeds
 the selector in a shell command. Focused runs use one worker and request
 `retain-on-failure` traces. The existing E2E build, cleanup, and `test-results`
 artifact behavior remains active.
-
-For a static validation self-check, the hosted capability marker may be used
-with `NOOK_E2E_DEBUG_SELF_CHECK=1`. This exercises the selector and catalog
-guards without launching a browser.
 
 ## Three required pilot scenarios
 

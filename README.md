@@ -521,7 +521,6 @@ task loom:module-experts:validate # named read-only expert and production-module
 task loom:module-experts:invoke REQUEST=<request.json> # invoke one isolated named expert
 task loom:structural-experts:validate # exact structural role and bounded-scope audit
 task loom:structural-experts:invoke REQUEST=<request.json> # invoke one authorized refactoring role
-task remote:list           # allowlisted focused remote task catalog
 task remote TASK_NAME=rust:ci # BuildKit-native Rust lane on ARC when enabled
 task remote TASK_NAME=preflight # repository invariant checks on exact pushed HEAD
 task remote TASK_NAME=web:build # direct-Pod web build

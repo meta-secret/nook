@@ -104,8 +104,6 @@ const focusedProjects = projectDefinitions
     testMatch: specPaths(debugSpecs),
     ...(debugGrep ? { grep: new RegExp(debugGrep) } : {}),
   }))
-if (isFocusedDebug && (debugSpecs.length === 0 || focusedProjects.length !== 1))
-  throw new Error('Remote E2E debug configuration is incomplete.')
 const configuredProjects = isFocusedDebug ? focusedProjects : projectDefinitions
 
 /** CI runs e2e after `ci:main:parallel` — serve production dist (no Vite dev optimizer). */

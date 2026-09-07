@@ -100,7 +100,7 @@ Local ci-agent Docker tags are worktree-scoped. Another checkout cannot replace 
 
 ## 4. Remote Execution and Validation
 
-- Extension iteration and other heavy agent feedback use the allowlisted GitHub Actions remote task catalog.
+- Extension iteration and other heavy agent feedback use named GitHub Actions Task targets.
 - Required product validation runs on GitHub Actions only.
 - Validation starts after the coherent pushed iteration is explicitly selected with a validation label.
 - Every replacement PR head enumerates active validation runs associated with
