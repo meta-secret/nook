@@ -212,3 +212,46 @@ async fn device_protection_projection_and_material_guards_fail_closed() -> Resul
     manager.delete_local_browser_data().await?;
     Ok(())
 }
+
+#[wasm_bindgen_test]
+async fn pin_device_protection_roundtrip_restores_identity() -> Result<(), JsError> {
+    let mut manager = NookVaultManager::new();
+    manager.delete_local_browser_data().await?;
+
+    manager
+        .finish_pin_device_protection("coverage-pin".to_owned())
+        .await?;
+    assert_eq!(
+        manager.device_protection_device_mode().await?,
+        DeviceProtectionDeviceModeState::Pin
+    );
+    assert_eq!(
+        manager.device_protection_status().await?,
+        DeviceProtectionStatus::Unlocked
+    );
+
+    manager.lock_device_identity();
+    assert_eq!(
+        manager.device_protection_status().await?,
+        DeviceProtectionStatus::Pin
+    );
+    assert!(manager.begin_device_protection().await.is_err());
+
+    manager
+        .unlock_pin_device_identity("coverage-pin".to_owned())
+        .await?;
+    assert_eq!(
+        manager.device_protection_status().await?,
+        DeviceProtectionStatus::Unlocked
+    );
+    manager.lock_device_identity();
+    assert!(
+        manager
+            .unlock_pin_device_identity("wrong coverage pin".to_owned())
+            .await
+            .is_err()
+    );
+
+    manager.delete_local_browser_data().await?;
+    Ok(())
+}
