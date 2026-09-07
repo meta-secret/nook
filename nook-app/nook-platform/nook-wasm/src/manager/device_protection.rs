@@ -298,12 +298,13 @@ impl NookVaultManager {
         let identity = self.ensure_device_identity()?;
         self.ensure_signing_identity().await?;
         let recipient_public_key = DevicePublicKey::parse(recipient_public_key)?;
-        Ok(nook_core::seal_extension_identity_handoff(
-            &identity,
-            &self.event_log.signing_seed,
-            &recipient_public_key,
+        Ok(nook_core::ExtensionIdentityHandoffSeal {
+            identity: &identity,
+            signing_seed: &self.event_log.signing_seed,
+            recipient_public_key: &recipient_public_key,
             nonce,
-        )?
+        }
+        .seal()?
         .into_inner())
     }
 
@@ -330,14 +331,15 @@ impl NookVaultManager {
             DeviceIdentity::from_secret_str(&DeviceIdentitySecret::parse(&private_key)?)?;
         let expected_signing_public_key =
             DeviceSigningPublicKey::parse(expected_device_signing_public_key)?;
-        let material = nook_core::open_extension_identity_handoff(
-            &recipient,
-            &AgeArmoredCiphertext::parse(envelope)?,
-            nonce,
-            &DeviceId::parse(expected_device_id)?,
-            &DevicePublicKey::parse(expected_device_public_key)?,
-            &expected_signing_public_key,
-        )?;
+        let material = nook_core::ExtensionIdentityHandoffOpen {
+            recipient_identity: &recipient,
+            envelope: &AgeArmoredCiphertext::parse(envelope)?,
+            expected_nonce: nonce,
+            expected_device_id: &DeviceId::parse(expected_device_id)?,
+            expected_device_public_key: &DevicePublicKey::parse(expected_device_public_key)?,
+            expected_device_signing_public_key: &expected_signing_public_key,
+        }
+        .open()?;
         let (identity, handoff_signing_seed) = material.into_parts();
         let authorizer = if self.device.identity_private_key.is_empty() {
             None
@@ -365,11 +367,16 @@ impl NookVaultManager {
                 persist: false,
             }
         } else {
-            nook_core::choose_signing_seed_after_identity_handoff(
-                handoff_signing_seed,
+            nook_core::HandoffSigningSeedSelection {
+                handoff_seed: handoff_signing_seed,
                 stored_seed,
-                has_events,
-            )
+                event_log: if has_events {
+                    nook_core::HandoffEventLog::ExistingEvents
+                } else {
+                    nook_core::HandoffEventLog::Empty
+                },
+            }
+            .choose()
         };
         let persist_signing_seed = importing_existing_vault
             || matches!(
