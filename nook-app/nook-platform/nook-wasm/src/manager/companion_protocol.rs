@@ -2,11 +2,12 @@ use super::{NookExtensionIdentityHandoffContext, NookVaultManager};
 use crate::NookError;
 use nook_companion_core::{
     AuthorizedCompanionIdentityHandoff, CompanionExtensionHandoffEndpoint,
-    CompanionExtensionPresence, CompanionIdentityDiscoveryObservation,
-    CompanionIdentityHandoffAuthorization, CompanionIdentityHandoffContext,
-    CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse,
-    CompanionIdentityHandoffSealer, CompanionIdentityStatus, CompanionProtocolError,
-    CompanionWebsiteHandoffBegin,
+    CompanionExtensionPresence, CompanionHandoffResponseAdmission,
+    CompanionIdentityDiscoveryObservation, CompanionIdentityHandoffAuthorization,
+    CompanionIdentityHandoffContext, CompanionIdentityHandoffRequest,
+    CompanionIdentityHandoffResponse, CompanionIdentityHandoffSealer, CompanionIdentityStatus,
+    CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
+    CompanionProtocolError, CompanionWebsiteHandoffBegin,
 };
 use nook_core::{
     DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity,
@@ -35,6 +36,22 @@ enum CompanionOperationError {
 
 fn companion_js_error(error: &CompanionOperationError) -> JsError {
     JsError::new(&error.to_string())
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn admit_companion_identity_status(
+    request: CompanionIdentityStatusAdmissionRequest,
+) -> CompanionIdentityStatusAdmission {
+    CompanionIdentityStatusAdmission::admit(request)
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn admit_companion_handoff_response(
+    response: CompanionIdentityHandoffResponse,
+) -> CompanionHandoffResponseAdmission {
+    CompanionHandoffResponseAdmission::admit(response)
 }
 
 #[derive(Deserialize, Serialize)]
