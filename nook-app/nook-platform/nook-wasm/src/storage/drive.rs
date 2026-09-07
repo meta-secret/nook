@@ -66,6 +66,7 @@ pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookEr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[test]
     fn headers_trim_access_tokens_and_keep_the_product_user_agent() {
@@ -103,5 +104,21 @@ mod tests {
         let without_user: DriveAboutResponse = serde_json::from_str(r#"{}"#)?;
         assert!(without_user.user.is_none());
         Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn access_verification_rejects_empty_token_before_network() {
+        let error = verify_drive_access("  ")
+            .await
+            .expect_err("empty OAuth access token must fail closed");
+        assert!(matches!(
+            error,
+            NookError::Database(message)
+                if message == nook_core::ValidationError::OauthAccessTokenEmpty.to_string()
+        ));
     }
 }
