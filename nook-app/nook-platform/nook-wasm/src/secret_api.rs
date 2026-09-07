@@ -304,7 +304,8 @@ pub fn authenticator_setup_key_changed(
     stored_key: &str,
     candidate_key: &str,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    nook_core::authenticator_setup_key_changed(stored_key, candidate_key)
+    nook_core::TotpSecret::parse(stored_key)
+        .and_then(|stored| stored.replacement_differs(candidate_key))
         .map_err(NookError::from)
         .map_err(Into::into)
 }
