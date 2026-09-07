@@ -176,7 +176,6 @@ function pairingAttempt(requestId: string, substituteProvider: boolean) {
     authorization,
     companion_pairing_provider_manifest_digest(providers),
   )
-  websiteProtocol.free()
   if (approval.kind !== 'approved') {
     throw new Error('expected generated website pairing approval')
   }

@@ -92,7 +92,7 @@ impl NookCompanionPairingWebsiteProtocol {
 
     #[allow(clippy::needless_pass_by_value)]
     pub fn authorize(
-        &mut self,
+        self,
         authorization: CompanionPairingWebsiteAuthorization,
         provider_manifest_digest: CompanionPairingProviderManifestDigest,
     ) -> CompanionPairingWebsiteAuthorizationOutcome {

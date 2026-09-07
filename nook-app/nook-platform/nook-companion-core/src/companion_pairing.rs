@@ -389,7 +389,7 @@ impl CompanionWebsitePairingEndpoint {
     }
 
     pub fn authorize(
-        &mut self,
+        mut self,
         authorization: CompanionPairingWebsiteAuthorization,
     ) -> Result<AuthorizedCompanionWebsitePairing, CompanionPairingError> {
         let expected = self.authority.consume()?;
@@ -453,16 +453,6 @@ impl CompanionExtensionPairingEndpoint {
             PairingAuthorityState::Pending(request) => Ok(request.as_ref().clone()),
             PairingAuthorityState::Consumed => Err(CompanionPairingError::AuthorityUnavailable),
         }
-    }
-
-    pub fn authorize_approval(
-        &mut self,
-        attempt: CompanionPairingApprovalAttempt,
-    ) -> Result<AuthorizedCompanionPairingApproval, CompanionPairingFailure> {
-        let authority = self
-            .take_authority()
-            .map_err(CompanionPairingFailure::from)?;
-        authority.authorize_approval(attempt)
     }
 
     pub fn take_authority(
@@ -576,15 +566,15 @@ mod tests {
     fn real_endpoints_compose_without_transport() -> anyhow::Result<()> {
         let request = PairingFixture::request()?;
         let mut extension = CompanionExtensionPairingEndpoint::issue(request.clone())?;
-        let mut website =
-            CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
-                request,
-                observed_at: PairingFixture::epoch("125")?,
-            })?;
+        let website = CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
+            request,
+            observed_at: PairingFixture::epoch("125")?,
+        })?;
         let approval = website
             .authorize(PairingFixture::authorization()?)?
             .approve(PairingFixture::provider_manifest_digest()?);
-        let authorized = extension
+        let authority = extension.take_authority()?;
+        let authorized = authority
             .authorize_approval(CompanionPairingApprovalAttempt {
                 approval,
                 observed_at: PairingFixture::epoch("175")?,
@@ -657,14 +647,6 @@ mod tests {
                 anyhow::bail!("terminal attempt was accepted");
             };
             assert_eq!(rejected, failure);
-            match endpoint.authorize_approval(CompanionPairingApprovalAttempt {
-                approval: PairingFixture::approval()?,
-                observed_at: PairingFixture::epoch("175")?,
-            }) {
-                Err(CompanionPairingFailure::AuthorityUnavailable) => {}
-                Err(other) => anyhow::bail!("unexpected replay failure: {other:?}"),
-                Ok(_) => anyhow::bail!("replayed approval was accepted"),
-            }
         }
         Ok(())
     }
@@ -681,9 +663,9 @@ mod tests {
     }
 
     #[test]
-    fn website_authority_is_consumed_by_rejected_authorization() -> anyhow::Result<()> {
+    fn website_authorization_consumes_the_endpoint_on_rejection() -> anyhow::Result<()> {
         let request = PairingFixture::request()?;
-        let mut endpoint =
+        let endpoint =
             CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
                 request,
                 observed_at: PairingFixture::epoch("125")?,
@@ -694,11 +676,6 @@ mod tests {
             Err(CompanionPairingError::InstallationMismatch) => {}
             Err(other) => anyhow::bail!("unexpected authorization failure: {other:?}"),
             Ok(_) => anyhow::bail!("mismatched authorization was accepted"),
-        }
-        match endpoint.authorize(PairingFixture::authorization()?) {
-            Err(CompanionPairingError::AuthorityUnavailable) => {}
-            Err(other) => anyhow::bail!("unexpected replay failure: {other:?}"),
-            Ok(_) => anyhow::bail!("replayed authorization was accepted"),
         }
         Ok(())
     }
