@@ -115,6 +115,43 @@ interface ArcContainerPodTemplate {
   spec: { initContainers: ArcContainer[]; containers: ArcContainer[] };
 }
 
+class ArcPlacementScenario {
+  constructor(
+    readonly primaryOne: number,
+    readonly primaryTwo: number,
+    readonly secondary: number,
+    readonly overflow: number,
+  ) {}
+
+  tierPreferenceScore(): number {
+    return (
+      (this.primaryOne + this.primaryTwo) * 100 +
+      this.secondary * 50 +
+      this.overflow
+    );
+  }
+
+  primarySkew(): number {
+    return Math.abs(this.primaryOne - this.primaryTwo);
+  }
+}
+
+class ArcActivationScenario {
+  constructor(
+    readonly queuedRunners: number,
+    readonly firstEligiblePrimaryNodes: number,
+    readonly firstEligibleWeakerNodes: number,
+  ) {}
+
+  preservesPrimaryFirstEligibility(): boolean {
+    return (
+      this.queuedRunners > 0 &&
+      this.firstEligiblePrimaryNodes === 2 &&
+      this.firstEligibleWeakerNodes === 0
+    );
+  }
+}
+
 function assertCpuUnconstrained(container: ArcContainer, label: string): void {
   const resources = container.resources;
   if (!resources) {
@@ -380,7 +417,7 @@ assertNoResourceEnvelope(jobContainer, "ARC job container");
 
 runners.requireAll([
   "maxSkew: 2",
-  "whenUnsatisfiable: DoNotSchedule",
+  "whenUnsatisfiable: ScheduleAnyway",
   "weight: 100",
   "weight: 50",
   "weight: 1",
@@ -391,6 +428,7 @@ runners.requireAll([
   "registry.dev.nokey.sh/library/docker:29.1.3-cli@sha256:",
 ]);
 runners.forbid("maxSkew: 5");
+runners.forbid("whenUnsatisfiable: DoNotSchedule");
 runners.forbidAll([
   "runtimeClassName:",
   "privileged: true",
@@ -433,6 +471,7 @@ containerHook.requireAll([
   "values: [secondary]",
   "values: [overflow]",
   "maxSkew: 2",
+  "whenUnsatisfiable: ScheduleAnyway",
   "weight: 100",
   "weight: 50",
   "weight: 1",
@@ -448,11 +487,48 @@ containerHook.requireAll([
 ]);
 containerHook.forbidAll([
   "maxSkew: 5",
+  "whenUnsatisfiable: DoNotSchedule",
   "privileged: true",
   "docker.sock",
   "containerd.sock",
   "hostPath:",
 ]);
+
+// These scenarios compare the declared preferences; Kubernetes still combines
+// them with its other scheduler scores and live node state.
+const fiveJobPreference = new ArcPlacementScenario(2, 2, 1, 0);
+const fiveJobPrimaryPile = new ArcPlacementScenario(4, 0, 1, 0);
+if (
+  fiveJobPreference.primarySkew() >= fiveJobPrimaryPile.primarySkew() ||
+  fiveJobPreference.secondary >= fiveJobPreference.primaryOne ||
+  fiveJobPreference.overflow >= fiveJobPreference.secondary
+) {
+  throw new Error(
+    "ARC five-job intent must balance primary nodes while limiting weaker tiers",
+  );
+}
+
+const primaryDominantBurst = new ArcPlacementScenario(9, 9, 5, 1);
+const forcedEqualBurst = new ArcPlacementScenario(6, 6, 6, 6);
+if (
+  primaryDominantBurst.tierPreferenceScore() <=
+    forcedEqualBurst.tierPreferenceScore() ||
+  primaryDominantBurst.secondary >= primaryDominantBurst.primaryOne ||
+  primaryDominantBurst.overflow >= primaryDominantBurst.secondary
+) {
+  throw new Error(
+    "ARC 24-runner intent must prefer primary capacity over equal cross-tier load",
+  );
+}
+
+for (const queuedRunners of [22, 24]) {
+  const activation = new ArcActivationScenario(queuedRunners, 2, 0);
+  if (!activation.preservesPrimaryFirstEligibility()) {
+    throw new Error(
+      `ARC ${queuedRunners}-runner activation must expose both primaries before weaker tiers`,
+    );
+  }
+}
 
 buildkit.requireAll([
   "name: nook-buildkit-local-retain",
@@ -564,6 +640,11 @@ tasks.requireAll([
   "ARC build node $node is quarantined for convergence",
   'quarantine_failed=0',
   'test "$quarantine_failed" = 0',
+  "for tier in primary secondary overflow",
+  "primary) expected_tier_count=2",
+  'secondary|overflow) expected_tier_count=1',
+  'kubectl taint node "${tier_nodes[@]}"',
+  "ARC build tier $tier is active",
   "- task: arc:build-hosts:quarantine\n      - task: arc:buildkit:storage:prepare",
   "container-runner-scale-set-values.yaml",
   "container-hook.yaml",

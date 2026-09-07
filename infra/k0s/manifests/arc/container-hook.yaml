@@ -65,10 +65,10 @@ data:
                     operator: In
                     values: [overflow]
       topologySpreadConstraints:
-        # Match regular-runner capacity weighting for ordinary job Pods.
+        # Match the regular runner's soft, primary-dominant placement intent.
         - maxSkew: 2
           topologyKey: kubernetes.io/hostname
-          whenUnsatisfiable: DoNotSchedule
+          whenUnsatisfiable: ScheduleAnyway
           nodeAffinityPolicy: Honor
           nodeTaintsPolicy: Honor
           labelSelector:

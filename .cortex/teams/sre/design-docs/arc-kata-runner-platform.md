@@ -66,10 +66,26 @@ The four qualified nodes use tier preferences:
 2. The home 7950X3D worker is `secondary`.
 3. KS-6 is `overflow`.
 
-Topology spreading prevents all burst work from concentrating on one node.
-The hostname skew is limited to two Pods. Tier preferences fill both primary
-nodes first. They then fill secondary. Overflow is last. A five-job burst
-therefore prefers two jobs on each primary node and one job on secondary.
+Topology spreading discourages burst work from concentrating on one node.
+The preferred hostname skew is two Pods. It is a soft scheduler score.
+Tier affinity prefers both primary nodes over secondary.
+It prefers secondary over overflow.
+A five-job burst targets two jobs on each primary node and one on secondary.
+Kubernetes does not guarantee that exact distribution.
+Its other scheduler scores and live node pressure remain authoritative.
+
+A 24-runner burst must not be forced into six jobs per node.
+Primary-dominant distributions score above equal cross-tier distribution.
+Soft hostname spreading still discourages piling work onto one primary.
+
+Deployment activation follows these rules:
+
+- Keep every build node quarantined until all listeners are ready.
+- Validate the declared tier counts.
+- Expose both primary nodes as one group before secondary.
+- Expose overflow last.
+- Prevent a queued burst from seeing one weaker node first.
+- Do not guarantee an exact scheduler distribution.
 
 The target aggregate envelope remains:
 
