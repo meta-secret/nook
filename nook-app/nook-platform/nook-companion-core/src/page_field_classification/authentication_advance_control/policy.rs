@@ -149,3 +149,87 @@ impl CheckedAuthenticationControl<'_> {
             .has_authentication_context()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::super::*;
+    use crate::authentication_advance_control_is_safe;
+
+    #[test]
+    fn netflix_owned_post_login_uses_existing_combined_credential_policy() {
+        let netflix = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::Strong,
+            password_field_count: 1.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 1.into(),
+            source_origin: "https://www.netflix.com".to_owned(),
+            form_identity: String::new(),
+            destination_identity: "https://www.netflix.com/login".to_owned(),
+            label: "Continue".to_owned(),
+            machine_identity: String::new(),
+            submission_method: PageControlSubmissionMethod::Post,
+        };
+        assert!(authentication_advance_control_is_safe(&netflix));
+
+        for method in [
+            PageControlSubmissionMethod::Get,
+            PageControlSubmissionMethod::Dialog,
+        ] {
+            let mut rejected = netflix.clone();
+            rejected.submission_method = method;
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for label in [
+            "Get Help",
+            "Forgot password",
+            "Sign in with Google",
+            "Use passkey",
+            "Continue with SAML",
+            "Sign in with SSO",
+            "Create account",
+            "Delete account",
+        ] {
+            let mut rejected = netflix.clone();
+            rejected.label = label.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{label}"
+            );
+        }
+
+        for destination in [
+            "/login",
+            "https://attacker.example/login",
+            "https://www.netflix.com/help",
+            "https://www.netflix.com/login?provider=google",
+            "https://www.netflix.com/login?action=delete",
+        ] {
+            let mut rejected = netflix.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{destination}"
+            );
+        }
+
+        let mut unowned = netflix.clone();
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(&unowned));
+
+        let mut inert_help = netflix.clone();
+        inert_help.actionability = PageControlActionability::Inert;
+        inert_help.semantics = PageControlSemantics::Activation;
+        inert_help.label = "Get Help".to_owned();
+        assert!(!authentication_advance_control_is_safe(&inert_help));
+
+        let mut ambiguous = netflix;
+        ambiguous.semantic_submit_control_count = 2.into();
+        ambiguous.label = "Primary action".to_owned();
+        assert!(!authentication_advance_control_is_safe(&ambiguous));
+    }
+}

@@ -247,28 +247,6 @@ impl CheckedAuthenticationControl<'_> {
                     .indicates_password_update())
     }
 
-    fn is_primary_sso_submit(&self) -> bool {
-        let authentication_scope_owns_control = matches!(
-            self.observation.ownership,
-            PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-        );
-        let expanded_control_label = expand_identity_text(&self.observation.label);
-        authentication_scope_owns_control
-            && matches!(
-                self.observation.semantics,
-                PageControlSemantics::SemanticSubmit
-            )
-            && matches!(
-                self.observation.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-            )
-            && contains_any_word(&expanded_control_label, &["sso"])
-            && contains_any_word(
-                &expanded_control_label,
-                &["sign in", "signin", "continue", "next"],
-            )
-    }
-
     fn classify(self) -> AuthenticationAdvanceControlDecision {
         if matches!(
             self.observation.actionability,
@@ -305,10 +283,8 @@ impl CheckedAuthenticationControl<'_> {
         if current_password_only && !self.has_positive_login_identity() {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
-        let primary_sso_submit = self.is_primary_sso_submit();
         if AuthenticationControlIdentity::new(&self.observation.label)
             .is_alternate_authentication_route()
-            && !primary_sso_submit
         {
             return AuthenticationAdvanceControlDecision::DoesNotAdvanceAuthentication;
         }
@@ -527,7 +503,12 @@ mod tests {
 
     #[test]
     fn sso_management_and_unlabeled_activations_do_not_advance_authentication() {
-        for label in ["Configure SSO", "Manage SSO", "Enroll SSO"] {
+        for label in [
+            "Configure SSO",
+            "Manage SSO",
+            "Enroll SSO",
+            "Sign in with SSO",
+        ] {
             let mut control = AuthenticationAdvanceControlObservation::login_control();
             control.label = label.to_owned();
             assert!(!authentication_advance_control_is_safe(&control));

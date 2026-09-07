@@ -1,4 +1,5 @@
 import siteShellsJson from '../../fixtures/site-shells.json'
+import pilotExpectationsJson from '../../fixtures/pilot-expectations.json'
 
 export type SiteFixtureField = {
   name?: string
@@ -38,6 +39,11 @@ export type SiteFixture = {
   template: string
 }
 
+export enum SiteFixturePilotExpectation {
+  ContinueWithNook = 'continue-with-nook',
+  FailClosedAlternateAuthentication = 'fail-closed-alternate-authentication',
+}
+
 enum SiteFixtureSource {
   Capture = 'capture',
   Research = 'research',
@@ -56,6 +62,7 @@ type ShellTemplate = {
   id: string
   quirks: string[]
   steps: SiteFixtureStep[]
+  pilotExpectation: SiteFixturePilotExpectation
 }
 
 export enum SiteFixtureLookupKind {
@@ -85,6 +92,10 @@ type SiteShellRef = {
 }
 
 const siteShells = siteShellsJson as Record<string, SiteShellRef>
+const pilotExpectations = pilotExpectationsJson as Record<
+  string,
+  SiteFixturePilotExpectation
+>
 
 const templateModules = import.meta.glob('../../fixtures/templates/*.json', {
   eager: true,
@@ -98,7 +109,11 @@ for (const [pathKey, template] of Object.entries(templateModules)) {
     .pop()
     ?.replace(/\.json$/u, '')
   if (!id || !template || typeof template !== 'object') continue
-  templatesById.set(id, { ...template, id })
+  const pilotExpectation = pilotExpectations[id]
+  if (!pilotExpectation) {
+    throw new Error(`missing Pilot expectation for shell template ${id}`)
+  }
+  templatesById.set(id, { ...template, id, pilotExpectation })
 }
 
 function resolveSiteFixture(id: string): SiteFixtureLookup {

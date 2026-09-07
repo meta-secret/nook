@@ -11,6 +11,7 @@ import {
   getShellTemplate,
   listShellTemplateIds,
   resolveSiteFixture,
+  ShellTemplatePilotExpectation,
   siteShellCount,
 } from './mock-auth/fixtures/resolve-site-fixture.mjs'
 
@@ -24,14 +25,35 @@ type CatalogEntry = { id: string }
 
 const catalog = JSON.parse(readFileSync(catalogPath, 'utf8')) as CatalogEntry[]
 const templateIds = listShellTemplateIds()
-const singleStepPasswordTemplates = templateIds.filter((templateId) => {
+
+function requiredShellTemplate(templateId: string) {
   const template = getShellTemplate(templateId)
+  if (!template) throw new Error(`shell template ${templateId} is missing`)
+  return template
+}
+
+const continueWithNookTemplateIds = templateIds.filter((templateId) => {
+  const template = requiredShellTemplate(templateId)
   return (
-    Boolean(template) &&
-    template!.steps.length === 1 &&
-    template!.steps[0]?.fields.some((field) => field.type === 'password')
+    template.pilotExpectation === ShellTemplatePilotExpectation.ContinueWithNook
   )
 })
+const failClosedTemplateIds = templateIds.filter((templateId) => {
+  const template = requiredShellTemplate(templateId)
+  return (
+    template.pilotExpectation ===
+    ShellTemplatePilotExpectation.FailClosedAlternateAuthentication
+  )
+})
+const singleStepPasswordTemplates = continueWithNookTemplateIds.filter(
+  (templateId) => {
+    const template = requiredShellTemplate(templateId)
+    return (
+      template.steps.length === 1 &&
+      template.steps[0]?.fields.some((field) => field.type === 'password')
+    )
+  },
+)
 
 test.describe('popular login fixture coverage', () => {
   test.describe.configure({ timeout: 180_000 })
@@ -41,12 +63,14 @@ test.describe('popular login fixture coverage', () => {
     expect(siteShellCount()).toBe(1000)
     expect(templateIds.length).toBeGreaterThan(0)
     expect(templateIds.length).toBeLessThan(100)
+    expect(continueWithNookTemplateIds).toHaveLength(templateIds.length - 1)
+    expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
     for (const site of catalog) {
       expect(resolveSiteFixture(site.id)?.template).toBeTruthy()
     }
   })
 
-  test('shows Pilot Continue with Nook on every unique shell template', async ({
+  test('shows Pilot Continue with Nook on every eligible shell template', async ({
     browserName,
   }, testInfo) => {
     test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
@@ -56,7 +80,7 @@ test.describe('popular login fixture coverage', () => {
       vaultName: 'Popular login templates vault',
     })
     try {
-      for (const templateId of templateIds) {
+      for (const templateId of continueWithNookTemplateIds) {
         const page = await paired.context.newPage()
         await page.goto(`${mockAuth.origin}/template/${templateId}`)
         const widget = page.locator('#nook-auth-widget')
@@ -67,6 +91,75 @@ test.describe('popular login fixture coverage', () => {
         await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
           `${templateId}-login`,
         )
+        await page.close()
+      }
+    } finally {
+      await paired.context.close()
+      await mockAuth.close()
+    }
+  })
+
+  test('keeps alternate-auth-only shell templates fail closed', async ({
+    browserName,
+  }, testInfo) => {
+    test.skip(browserName !== 'chromium', 'Chrome extensions require Chromium')
+
+    const mockAuth = await startMockAuthServer()
+    const paired = await launchPairedPinExtension(testInfo, {
+      vaultName: 'Popular login rejected templates vault',
+    })
+    try {
+      await saveVaultLogin(
+        paired.vaultPage,
+        mockAuth.origin,
+        'alice@nook.test',
+        'extension-fill-password',
+      )
+
+      for (const templateId of failClosedTemplateIds) {
+        const page = await paired.context.newPage()
+        await page.goto(`${mockAuth.origin}/template/${templateId}`)
+        const email = page.getByRole('textbox', { name: 'Work email' })
+        const form = page.locator('#login_form')
+        await expect(email).toHaveValue('')
+        await form.evaluate((element) => {
+          if (!(element instanceof HTMLFormElement)) {
+            throw new Error('enterprise SSO fixture form is missing')
+          }
+          document.documentElement.dataset.nookPilotObservation =
+            document.querySelector('#nook-auth-widget') instanceof HTMLElement
+              ? 'observed'
+              : 'not-observed'
+          document.documentElement.dataset.nookSubmissionObservation =
+            'not-submitted'
+          const observer = new MutationObserver(() => {
+            if (
+              document.querySelector('#nook-auth-widget') instanceof HTMLElement
+            ) {
+              document.documentElement.dataset.nookPilotObservation = 'observed'
+            }
+          })
+          observer.observe(document.documentElement, {
+            childList: true,
+            subtree: true,
+          })
+          element.addEventListener('submit', () => {
+            document.documentElement.dataset.nookSubmissionObservation =
+              'submitted'
+          })
+        })
+        await page.waitForTimeout(2_000)
+        await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
+        await expect(email).toHaveValue('')
+        await expect(page.locator('html')).toHaveAttribute(
+          'data-nook-pilot-observation',
+          'not-observed',
+        )
+        await expect(page.locator('html')).toHaveAttribute(
+          'data-nook-submission-observation',
+          'not-submitted',
+        )
+        await expect(page.getByTestId('mock-auth-success')).toHaveCount(0)
         await page.close()
       }
     } finally {

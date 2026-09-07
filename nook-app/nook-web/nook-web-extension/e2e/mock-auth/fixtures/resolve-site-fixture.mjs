@@ -9,12 +9,21 @@ import { fileURLToPath } from 'node:url'
 const here = path.dirname(fileURLToPath(import.meta.url))
 const templatesDir = path.join(here, 'templates')
 const siteShellsPath = path.join(here, 'site-shells.json')
+const pilotExpectationsPath = path.join(here, 'pilot-expectations.json')
 
-/** @typedef {{ id: string, quirks: string[], steps: unknown[] }} ShellTemplate */
+export const ShellTemplatePilotExpectation = Object.freeze({
+  ContinueWithNook: 'continue-with-nook',
+  FailClosedAlternateAuthentication: 'fail-closed-alternate-authentication',
+})
+
+/** @typedef {{ id: string, quirks: string[], steps: unknown[], pilotExpectation: string }} ShellTemplate */
 /** @typedef {{ template: string, source: string, loginUrl: string, quirks?: string[], steps?: unknown[] }} SiteShellRef */
 
 const siteShells = /** @type {Record<string, SiteShellRef>} */ (
   JSON.parse(readFileSync(siteShellsPath, 'utf8'))
+)
+const pilotExpectations = /** @type {Record<string, string>} */ (
+  JSON.parse(readFileSync(pilotExpectationsPath, 'utf8'))
 )
 
 /** @type {Map<string, ShellTemplate>} */
@@ -26,7 +35,11 @@ for (const name of readdirSync(templatesDir).filter((n) =>
   const template = JSON.parse(
     readFileSync(path.join(templatesDir, name), 'utf8'),
   )
-  templatesById.set(id, { ...template, id })
+  const pilotExpectation = pilotExpectations[id]
+  if (!pilotExpectation) {
+    throw new Error(`missing Pilot expectation for shell template ${id}`)
+  }
+  templatesById.set(id, { ...template, id, pilotExpectation })
 }
 
 /**
