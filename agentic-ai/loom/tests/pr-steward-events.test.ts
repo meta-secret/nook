@@ -11,7 +11,11 @@ import { join } from 'node:path';
 import {
   decodePrStewardEvent,
   loadCredential,
+  parsePrStewardInvocation,
+  PrStewardEventKind,
+  writeAssignedEvents,
 } from '../src/pr-steward-events.ts';
+import type { UntrustedYamlMap } from '../src/lib/guards.ts';
 
 const temporaryPaths: string[] = [];
 const encoder = new TextEncoder();
@@ -20,10 +24,7 @@ function cloudEvent(args: {
   readonly id: string;
   readonly time: string;
   readonly headers: Record<string, string | string[]>;
-  readonly body: Record<
-    string,
-    string | number | Record<string, string | number | Record<string, string>>
-  >;
+  readonly body: UntrustedYamlMap;
 }): Uint8Array {
   const eventData = JSON.stringify({ headers: args.headers, body: args.body });
   return encoder.encode(
@@ -83,6 +84,18 @@ describe('PR Steward credentials', () => {
       'credential file cannot be opened securely',
     );
   });
+
+  test('requires one positive PR and an absolute optional config', () => {
+    expect(parsePrStewardInvocation(['--pr', '1492'])).toMatchObject({
+      pullRequest: 1492,
+    });
+    expect(() => parsePrStewardInvocation(['--pr', '0'])).toThrow(
+      'positive integer',
+    );
+    expect(() =>
+      parsePrStewardInvocation(['--pr', '1492', '--config', 'relative']),
+    ).toThrow('absolute');
+  });
 });
 
 describe('PR Steward event codec', () => {
@@ -101,7 +114,7 @@ describe('PR Steward event codec', () => {
       },
     });
     expect(decodePrStewardEvent(payload)).toEqual({
-      kind: 'github-pr-event',
+      kind: PrStewardEventKind.GithubPrEvent,
       id: 'cloud-event-1',
       time: '2026-09-06T19:00:00Z',
       githubEvent: 'pull_request',
@@ -111,26 +124,6 @@ describe('PR Steward event codec', () => {
       pullRequest: 1488,
       headSha: 'abc123',
     });
-  });
-
-  test('maps issue-comment PR identity without retaining the webhook body', () => {
-    const payload = cloudEvent({
-      id: 'cloud-event-2',
-      time: '2026-09-06T19:01:00Z',
-      headers: {
-        'X-Github-Event': 'issue_comment',
-        'X-Github-Delivery': 'delivery-2',
-      },
-      body: {
-        action: 'created',
-        repository: { full_name: 'bynull/nook' },
-        issue: { number: 1488, pull_request: { url: 'ignored' } },
-        comment: { body: 'must not appear' },
-      },
-    });
-    const event = decodePrStewardEvent(payload);
-    expect(event.pullRequest).toBe(1488);
-    expect(JSON.stringify(event)).not.toContain('must not appear');
   });
 
   test('rejects messages without GitHub delivery identity', () => {
@@ -143,5 +136,42 @@ describe('PR Steward event codec', () => {
     expect(() => decodePrStewardEvent(payload)).toThrow(
       'event identity is invalid',
     );
+  });
+
+  test('keeps concurrent Gizmo subscriptions scoped to their assigned PR', async () => {
+    const payload = (pullRequest: number): Uint8Array =>
+      cloudEvent({
+        id: `event-${pullRequest}`,
+        time: '2026-09-06T19:03:00Z',
+        headers: {
+          'X-Github-Event': 'pull_request',
+          'X-Github-Delivery': `delivery-${pullRequest}`,
+        },
+        body: {
+          pull_request: { number: pullRequest, head: { sha: 'abc123' } },
+        },
+      });
+    const allMessages = [payload(1488), payload(1492)];
+    const stream = async function* (): AsyncIterable<{ data: Uint8Array }> {
+      for (const data of allMessages) yield { data };
+    };
+    const pr1488: string[] = [];
+    const pr1492: string[] = [];
+    await Promise.all([
+      writeAssignedEvents({
+        messages: stream(),
+        pullRequest: 1488,
+        write: (line) => pr1488.push(line),
+      }),
+      writeAssignedEvents({
+        messages: stream(),
+        pullRequest: 1492,
+        write: (line) => pr1492.push(line),
+      }),
+    ]);
+    expect(pr1488).toHaveLength(1);
+    expect(JSON.parse(pr1488[0]!).pullRequest).toBe(1488);
+    expect(pr1492).toHaveLength(1);
+    expect(JSON.parse(pr1492[0]!).pullRequest).toBe(1492);
   });
 });

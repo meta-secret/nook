@@ -64,7 +64,10 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Give PR Steward an explicit packet for pull-request publication.
 6. **Validate and repair.**
    - Gizmo may create one mission-scoped PR Steward child with the fixed Luna
-     profile and start its reactive subscription.
+     profile and start its subscription for exactly one active pull request.
+   - Before this Gizmo advances to another pull request, stop the old child,
+     wait for its NATS drain and exit, then start a fresh child for the new PR.
+   - Never stop or switch another Gizmo's independently active child.
    - Treat each matching notification as a hint to issue a bounded PR Steward
      operation packet.
    - Authorize PR Steward to trigger the repository-owned exact-head review and

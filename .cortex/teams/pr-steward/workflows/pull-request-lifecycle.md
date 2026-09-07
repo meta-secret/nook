@@ -81,16 +81,16 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 1. Start the live subscription from the active PR Steward task.
 
    ```bash
-   bun run --cwd agentic-ai/loom pr-steward-events
+   bun run --cwd agentic-ai/loom pr-steward-events -- --pr <number>
    ```
 
    The default credential path is
-   `~/.nook/events/pr-steward-client.yaml`. An explicit override must be an
-   absolute path passed as the only argument after `--`.
+   `~/.nook/events/pr-steward-client.yaml`. Use
+   `--config <absolute-path>` after the PR number for an explicit override.
 2. Read newline-delimited JSON from standard output.
    - Each line is one `github-pr-event` envelope.
-   - Match the packet's repository and pull-request number before notifying
-     Gizmo.
+   - The command suppresses events for every pull request except its assigned
+     number.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
 3. Stop when Gizmo directs the child to finish.
@@ -103,11 +103,14 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 - It subscribes directly to `default.github-webhook.pr-lifecycle`.
 - It uses no queue group. Concurrent Gizmo missions each receive the live
   event.
+- Each Gizmo owns its own child and assigned PR filter. One Gizmo never stops,
+  switches, or consumes another Gizmo's subscription.
 - The subscription is Core NATS live fan-out. It does not bind the shared
   durable work-queue consumer.
 - JetStream persistence serves the platform. It does not make this ephemeral
   child replay missed notifications.
 - Missed and duplicate notifications are acceptable hints.
+- One child never changes its assigned PR dynamically.
 - Gizmo must reconcile the final GitHub state directly before its readiness
   or completion verdict.
 
@@ -127,6 +130,5 @@ webhook body and credential material never appear in output.
 - A merge result is a verified squash merge when merge was authorized.
 - An administrator merge used the path-excluded route only with its separate
   Gizmo packet and exact-head evidence.
-- Reactive observation ended before its parent Gizmo task completed.
 - Gizmo's terminal decision used a direct GitHub reconciliation instead of
   notification history.

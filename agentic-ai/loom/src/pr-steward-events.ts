@@ -20,13 +20,17 @@ import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
 export const PR_STEWARD_ENDPOINT = 'wss://events.dev.nokey.sh';
 export const PR_STEWARD_SUBJECT = 'default.github-webhook.pr-lifecycle';
 
+export enum PrStewardEventKind {
+  GithubPrEvent = 'github-pr-event',
+}
+
 export type PrStewardCredential = {
   readonly username: 'pr-steward';
   readonly password: string;
 };
 
 export type PrStewardEvent = {
-  readonly kind: 'github-pr-event';
+  readonly kind: PrStewardEventKind;
   readonly id: string;
   readonly time: string;
   readonly githubEvent: string;
@@ -170,7 +174,7 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
   const pullRequest = pullRequestNumber(body);
   const sha = headSha(body);
   return {
-    kind: 'github-pr-event',
+    kind: PrStewardEventKind.GithubPrEvent,
     id,
     time,
     githubEvent,
@@ -186,11 +190,54 @@ export function defaultCredentialPath(): string {
   return join(homedir(), '.nook/events/pr-steward-client.yaml');
 }
 
-export function credentialPath(argv: readonly string[]): string {
-  if (argv.length > 1) throw new Error('expected at most one credential path');
-  const path = argv[0] ?? defaultCredentialPath();
+export type PrStewardInvocation = {
+  readonly pullRequest: number;
+  readonly credentialPath: string;
+};
+
+export function parsePrStewardInvocation(
+  argv: readonly string[],
+): PrStewardInvocation {
+  if (
+    (argv.length !== 2 && argv.length !== 4) ||
+    argv[0] !== '--pr' ||
+    (argv.length === 4 && argv[2] !== '--config')
+  ) {
+    throw new Error(
+      'expected --pr <positive-number> [--config <absolute-path>]',
+    );
+  }
+  const prText = argv[1]!;
+  if (!/^[1-9][0-9]*$/.test(prText))
+    throw new Error('pull request must be a positive integer');
+  const pullRequest = Number(prText);
+  if (!Number.isSafeInteger(pullRequest))
+    throw new Error('pull request must be a positive integer');
+  const path = argv.length === 4 ? argv[3]! : defaultCredentialPath();
   if (!isAbsolute(path)) throw new Error('credential path must be absolute');
-  return path;
+  return { pullRequest, credentialPath: path };
+}
+
+export function assignedPrEvent(args: {
+  readonly data: Uint8Array;
+  readonly pullRequest: number;
+}): PrStewardEvent | false {
+  const event = decodePrStewardEvent(args.data);
+  return event.pullRequest === args.pullRequest ? event : false;
+}
+
+export async function writeAssignedEvents(args: {
+  readonly messages: AsyncIterable<{ readonly data: Uint8Array }>;
+  readonly pullRequest: number;
+  readonly write: (line: string) => void;
+}): Promise<void> {
+  for await (const message of args.messages) {
+    const event = assignedPrEvent({
+      data: message.data,
+      pullRequest: args.pullRequest,
+    });
+    if (event !== false) args.write(`${JSON.stringify(event)}\n`);
+  }
 }
 
 export function loadCredential(path: string): PrStewardCredential {
@@ -237,7 +284,8 @@ export function loadCredential(path: string): PrStewardCredential {
 }
 
 async function main(): Promise<void> {
-  const credential = loadCredential(credentialPath(process.argv.slice(2)));
+  const invocation = parsePrStewardInvocation(process.argv.slice(2));
+  const credential = loadCredential(invocation.credentialPath);
   const connection = await wsconnect({
     servers: PR_STEWARD_ENDPOINT,
     user: credential.username,
@@ -250,16 +298,20 @@ async function main(): Promise<void> {
   const stop = (): void => {
     if (stopping) return;
     stopping = true;
-    void connection.drain().catch(() => undefined);
+    void connection.drain().catch(() => {
+      process.exitCode = 1;
+    });
   };
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
   try {
-    for await (const message of subscription) {
-      process.stdout.write(
-        `${JSON.stringify(decodePrStewardEvent(message.data))}\n`,
-      );
-    }
+    await writeAssignedEvents({
+      messages: subscription,
+      pullRequest: invocation.pullRequest,
+      write: (line) => {
+        process.stdout.write(line);
+      },
+    });
     const closeError = await connection.closed();
     if (closeError) throw new Error('NATS connection closed unexpectedly');
   } finally {
