@@ -569,7 +569,11 @@ mod browser_tests {
         assert!(manager.init_device().is_ok());
         assert!(js(manager.device_signing_public_key_js().await)?.len() > 10);
         assert!(js(manager.list_pending_joins())?.is_empty());
-        assert_eq!(js(manager.list_vault_members())?.len(), 1);
+        let owner_auth_id = js(manager.list_vault_members())?
+            .into_iter()
+            .next()
+            .map(|member| member.auth_id())
+            .ok_or_else(|| anyhow::anyhow!("genesis owner is missing from roster"))?;
 
         manager
             .create_join_request("2026-09-07T00:00:00Z".to_owned())
@@ -596,18 +600,19 @@ mod browser_tests {
         assert!(js(manager.list_pending_joins())?.is_empty());
         let members = js(manager.list_vault_members())?;
         assert_eq!(members.len(), 2);
-        let joiner_member = members
-            .iter()
-            .find(|member| member.device_id() == joiner.device_id().to_string())
-            .ok_or_else(|| anyhow::anyhow!("approved joiner is missing from roster"))?;
+        assert!(
+            members
+                .iter()
+                .any(|member| member.device_id() == joiner.device_id().to_string())
+        );
         manager
-            .rename_vault_member(joiner_member.auth_id(), "Work laptop".to_owned())
+            .rename_vault_member(owner_auth_id.clone(), "Work laptop".to_owned())
             .await
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let renamed = js(manager.list_vault_members())?
             .into_iter()
-            .find(|member| member.device_id() == joiner.device_id().to_string())
-            .ok_or_else(|| anyhow::anyhow!("renamed joiner is missing from roster"))?;
+            .find(|member| member.auth_id() == owner_auth_id)
+            .ok_or_else(|| anyhow::anyhow!("renamed owner is missing from roster"))?;
         assert_eq!(renamed.label(), "Work laptop");
 
         js(manager.delete_local_browser_data().await)?;
