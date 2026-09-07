@@ -217,6 +217,7 @@ beforeAll(async () => {
   }
   const records = await extension.connect_fresh('local', '', '')
   for (const record of records) record.free()
+  await extension.set_vault_name('Composition Vault')
 
   unlockedAppKey = {
     extensionRuntimeId: 'composition-runtime',
