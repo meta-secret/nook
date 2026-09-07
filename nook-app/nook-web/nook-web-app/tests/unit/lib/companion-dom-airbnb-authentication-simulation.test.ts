@@ -332,7 +332,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
           observations: [facts],
         }),
       ),
-    ).toBe(CompanionAuthenticationWorkflowMatchKind.Rejected)
+    ).toBe(CompanionAuthenticationWorkflowMatchKind.NoMatch)
     expect(
       document.querySelectorAll('form button[type="submit"]'),
     ).toHaveLength(2)
