@@ -625,19 +625,22 @@ struct EnvelopePlaintext {
 const ENVELOPE_KDF: &str = "scrypt";
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
+impl PasswordEnvelope {
     fn sample_keys() -> anyhow::Result<VaultKeys> {
         Ok(VaultKeys {
             secrets_key: SymmetricKey::parse(&"deadbeefdeadbeefdeadbeefdeadbeef".repeat(2))?,
             members_key: SymmetricKey::parse(&"abadcafeabadcafeabadcafeabadcafe".repeat(2))?,
         })
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn roundtrip_attach_and_resolve() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let envelope =
             PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         assert_eq!(envelope.version, PasswordEnvelopeVersion::CURRENT);
@@ -657,7 +660,7 @@ mod tests {
 
     #[test]
     fn rewrap_preserves_password_and_updates_keys() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let envelope =
             PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let new_keys = VaultKeys {
@@ -679,7 +682,7 @@ mod tests {
 
     #[test]
     fn wrong_password_fails() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let envelope =
             PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let err =
@@ -692,7 +695,7 @@ mod tests {
 
     #[test]
     fn short_password_rejected() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let err = PasswordEnvelopeAttachment::new(&keys, "abc")
             .attach()
             .err()
@@ -736,7 +739,7 @@ mod tests {
 
     #[test]
     fn legacy_envelope_requires_explicit_upgrade_before_key_rewrap() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let current =
             PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let mut legacy = current.clone();
@@ -749,7 +752,7 @@ mod tests {
 
     #[test]
     fn unsupported_kdf_rejected() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let mut envelope =
             PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         envelope.kdf = "argon2".to_owned();
@@ -763,7 +766,7 @@ mod tests {
 
     #[test]
     fn ciphertext_is_nondeterministic() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let a = PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let b = PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         assert_ne!(a.ciphertext, b.ciphertext);
@@ -788,7 +791,7 @@ mod tests {
 
     #[test]
     fn vault_unlock_password_variant_roundtrips() -> anyhow::Result<()> {
-        let keys = sample_keys()?;
+        let keys = PasswordEnvelope::sample_keys()?;
         let envelope =
             PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let value = VaultUnlock::Passwords {
