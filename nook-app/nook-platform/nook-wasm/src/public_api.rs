@@ -317,7 +317,7 @@ pub fn localize_provider_label(
 pub fn oauth_remote_storage_ref(
     config: nook_core::OAuthFileConfigData,
 ) -> NookOAuthRemoteStorageReference {
-    NookOAuthRemoteStorageReference::new(nook_core::oauth_remote_storage_ref(&config))
+    NookOAuthRemoteStorageReference::new(config.remote_storage_ref())
 }
 
 #[wasm_bindgen]
@@ -326,7 +326,7 @@ pub fn update_oauth_remote_ref(
     config: nook_core::OAuthFileConfigData,
     remote_ref: &str,
 ) -> NookOAuthRemoteConfigurationUpdate {
-    NookOAuthRemoteConfigurationUpdate::new(nook_core::update_oauth_remote_ref(&config, remote_ref))
+    NookOAuthRemoteConfigurationUpdate::new(config.with_remote_ref(remote_ref))
 }
 
 #[wasm_bindgen]
