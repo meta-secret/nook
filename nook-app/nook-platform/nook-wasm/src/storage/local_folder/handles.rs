@@ -697,7 +697,7 @@ mod tests {
             FolderFailure::new(&string_error.unchecked_into())
                 .into_error("query failed")
                 .to_string(),
-            "query failed: permission denied"
+            "Database error: query failed: permission denied"
         );
         let object = Object::new();
         Reflect::set(
@@ -708,7 +708,7 @@ mod tests {
         .map_err(|error| FolderFailure::new(&error.unchecked_into()).into_error("fixture"))?;
         assert_eq!(
             FolderFailure::new(&object).into_error("open").to_string(),
-            "open: bad handle"
+            "Database error: open: bad handle"
         );
 
         for (lookup, expected) in [(ChildLookup::Existing, false), (ChildLookup::Create, true)] {
