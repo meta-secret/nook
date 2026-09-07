@@ -446,8 +446,8 @@
   },
   "booking": {
     "loginUrl": "https://account.booking.com/sign-in",
-    "source": "research",
-    "template": "email-password"
+    "source": "capture",
+    "template": "booking"
   },
   "booking-affiliate": {
     "loginUrl": "https://www.booking.com/login",

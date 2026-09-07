@@ -6,6 +6,12 @@ import {
 } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 import {
+  BookingAuthControl,
+  BookingAuthEmailMatch,
+  BookingAuthInteractionState,
+  BookingAuthPrimaryActivationState,
+} from './mock-auth/src/lib/booking-auth-flow'
+import {
   ClaudeAuthControl,
   ClaudeAuthEmailMatch,
   ClaudeAuthFormActionKind,
@@ -19,6 +25,7 @@ export class MockAuthProviderScenarios {
     this.registerLinkedIn()
     this.registerNetflix()
     this.registerClaude()
+    this.registerBooking()
   }
 
   private static registerAmazon(): void {
@@ -477,6 +484,125 @@ export class MockAuthProviderScenarios {
             }),
           )
         expect(interceptedClaudeRequestCount).toBeGreaterThan(1)
+        await page.close()
+      } finally {
+        await paired.context.close()
+        await mockAuth.close()
+      }
+    })
+  }
+
+  private static registerBooking(): void {
+    test('fills Booking.com email and activates only Continue with email', async ({
+      browserName,
+    }, testInfo) => {
+      test.skip(
+        browserName !== 'chromium',
+        'Chrome extensions require Chromium',
+      )
+      const mockAuth = await startMockAuthServer()
+      const paired = await launchPairedPinExtension(testInfo, {
+        vaultName: 'Mock Booking.com auth vault',
+      })
+      try {
+        await saveVaultLogin(
+          paired.vaultPage,
+          'https://account.booking.com',
+          'alice@nook.test',
+          'extension-fill-password',
+        )
+        const page = await paired.context.newPage()
+        let interceptedBookingRequestCount = 0
+        await page.route('https://account.booking.com/**', async (route) => {
+          interceptedBookingRequestCount += 1
+          const requestedUrl = new URL(route.request().url())
+          const localResponse = await page.request.get(
+            `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+          )
+          await route.fulfill({ response: localResponse })
+        })
+        await page.goto('https://account.booking.com/sign-in')
+        expect(interceptedBookingRequestCount).toBeGreaterThan(0)
+        await expect(page).toHaveURL('https://account.booking.com/sign-in')
+        await expect(page).toHaveTitle(
+          'Sign in or create an account | Booking.com',
+        )
+        await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+          'booking-email-first',
+        )
+
+        const surface = page.getByTestId('booking-email-surface')
+        const email = surface.getByLabel('Email address')
+        const primary = surface.getByRole('button', {
+          name: 'Continue with email',
+        })
+        await expect(page.locator('form')).toHaveCount(0)
+        await expect(surface.locator('input')).toHaveCount(1)
+        await expect(email).not.toHaveAttribute('name')
+        await expect(email).not.toHaveAttribute('type')
+        await expect(email).not.toHaveAttribute('autocomplete')
+        await expect(email).toHaveAttribute(
+          'placeholder',
+          'Enter your email address',
+        )
+        await expect(primary).not.toHaveAttribute('type')
+        await expect(email).toHaveValue('')
+        await expect(page.locator('input[type="password"]')).toHaveCount(0)
+        for (const [name, href] of [
+          ['Sign in with Google', '/social/consent/google'],
+          ['Sign in with Apple', '/social/consent/apple'],
+          ['Sign in with Facebook', '/social/consent/facebook'],
+        ] as const) {
+          await expect(page.getByRole('link', { name })).toHaveAttribute(
+            'href',
+            href,
+          )
+          await expect(surface.getByRole('link', { name })).toHaveCount(0)
+        }
+        await expect(
+          page.getByRole('link', { name: 'Recover your account' }),
+        ).toBeVisible()
+        await expect(
+          surface.getByRole('link', { name: 'Recover your account' }),
+        ).toHaveCount(0)
+        await expect(page.getByTestId('booking-disclosure')).toBeVisible()
+        await expect(
+          page.getByRole('link', { name: 'Help and support' }),
+        ).toBeVisible()
+        await expect(
+          page.getByRole('button', { name: 'Select your language' }),
+        ).toBeVisible()
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (key) => sessionStorage.getItem(key) || '',
+              'booking-submission-evidence',
+            ),
+          )
+          .toBe(
+            JSON.stringify({
+              submittedControl: BookingAuthControl.ContinueWithEmail,
+              emailMatch: BookingAuthEmailMatch.Matched,
+              primaryActivation: BookingAuthPrimaryActivationState.Activated,
+              googleInteraction: BookingAuthInteractionState.Untouched,
+              appleInteraction: BookingAuthInteractionState.Untouched,
+              facebookInteraction: BookingAuthInteractionState.Untouched,
+              recoveryInteraction: BookingAuthInteractionState.Untouched,
+              brandInteraction: BookingAuthInteractionState.Untouched,
+              disclosureInteraction: BookingAuthInteractionState.Untouched,
+              helpInteraction: BookingAuthInteractionState.Untouched,
+              languageInteraction: BookingAuthInteractionState.Untouched,
+            }),
+          )
+        expect(interceptedBookingRequestCount).toBeGreaterThan(1)
         await page.close()
       } finally {
         await paired.context.close()

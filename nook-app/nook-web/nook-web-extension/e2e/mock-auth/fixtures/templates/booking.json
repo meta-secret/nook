@@ -1,0 +1,23 @@
+{
+  "id": "booking",
+  "quirks": [
+    "formless",
+    "email-field-attributes-unobserved",
+    "provider-alternatives-outside-surface",
+    "account-recovery-outside-surface"
+  ],
+  "steps": [
+    {
+      "fields": [
+        {
+          "placeholder": "Enter your email address",
+          "aria-label": "Email address"
+        }
+      ],
+      "submit": {
+        "type": "button",
+        "label": "Continue with email"
+      }
+    }
+  ]
+}

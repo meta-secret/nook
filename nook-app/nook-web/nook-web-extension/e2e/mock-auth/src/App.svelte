@@ -4,6 +4,7 @@
   import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
   import DetectionAmazon from './pages/DetectionAmazon.svelte'
+  import DetectionBooking from './pages/DetectionBooking.svelte'
   import DetectionFromFixture from './pages/DetectionFromFixture.svelte'
   import DetectionGoogle from './pages/DetectionGoogle.svelte'
   import DetectionGithub from './pages/DetectionGithub.svelte'
@@ -59,6 +60,9 @@
   const isClaudeLogin = $derived(
     location.hostname === 'claude.ai' && pathname === '/login',
   )
+  const isBookingLogin = $derived(
+    location.hostname === 'account.booking.com' && pathname === '/sign-in',
+  )
 </script>
 
 <svelte:window onpopstate={syncPath} />
@@ -87,6 +91,8 @@
   <DetectionNetflix />
 {:else if isClaudeLogin}
   <DetectionClaude />
+{:else if isBookingLogin}
+  <DetectionBooking />
 {:else if pathname === '/login' || pathname === '/linkedin'}
   <DetectionLogin />
 {:else if pathname === '/signup'}
