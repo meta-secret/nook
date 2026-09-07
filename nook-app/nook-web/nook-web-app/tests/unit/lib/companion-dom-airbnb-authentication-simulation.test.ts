@@ -123,7 +123,7 @@ class AirbnbAuthenticationFixture {
       ownership === AirbnbFixtureOwnership.Unowned
         ? ' form="airbnb-unrelated-form"'
         : ''
-    const surface = `<label>Phone number or email<input type="text" inputmode="email" autocomplete="tel-national"></label><button type="submit"${formTarget} data-testid="airbnb-primary">${primaryLabel}</button>${submitLayout === AirbnbFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}`
+    const surface = `<label>Phone number or email<input type="text" inputmode="email" autocomplete="tel-national"></label><button type="submit"${formTarget}>${primaryLabel}</button>${submitLayout === AirbnbFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}`
     const authentication =
       ownership === AirbnbFixtureOwnership.Owned
         ? `<form${action} data-testid="airbnb-auth-form">${surface}</form>`
@@ -143,16 +143,27 @@ class AirbnbAuthenticationFixture {
         ? '[data-testid="airbnb-auth-form"]'
         : '[data-testid="airbnb-unowned"]',
     )
-    const identity = root?.querySelector<HTMLInputElement>('input')
-    const primary = root?.querySelector<HTMLButtonElement>(
-      '[data-testid="airbnb-primary"]',
-    )
+    if (!form || !root) throw new Error('expected Airbnb DOM fixture root')
+    const identity = root.querySelector<HTMLInputElement>('input')
+    const submitters = [
+      ...root.querySelectorAll<HTMLButtonElement>('button[type="submit"]'),
+    ]
+    const [primary] = submitters
+    const expectedSubmitterCount =
+      this.options.submitLayout === AirbnbFixtureSubmitLayout.Ambiguous ? 2 : 1
     const alternatives = [
       ...document.querySelectorAll<HTMLButtonElement>(
         'button[aria-label^="Continue with"]',
       ),
     ]
-    if (!form || !root || !identity || !primary || alternatives.length !== 2) {
+    if (
+      !identity ||
+      !primary ||
+      submitters.length !== expectedSubmitterCount ||
+      primary.form !== form ||
+      primary.textContent?.trim() !== this.options.primaryLabel ||
+      alternatives.length !== 2
+    ) {
       throw new Error('expected Airbnb DOM fixture')
     }
     return { form, root, identity, primary, alternatives }
@@ -210,6 +221,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
     if (!associatedLabel) throw new Error('expected associated Airbnb label')
     expect(associatedLabel.textContent?.trim()).toBe('Phone number or email')
     expect(fixture.primary).toMatchObject({ type: 'submit', disabled: false })
+    expect(fixture.primary.hasAttribute('data-testid')).toBe(false)
 
     const facts = authenticationPageObservationFacts({
       observation,
