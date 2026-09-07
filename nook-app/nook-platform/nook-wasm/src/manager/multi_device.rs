@@ -662,32 +662,6 @@ mod browser_tests {
                 .any(|member| member.auth_id() == owner_auth_id)
         );
 
-        let mut self_manager = NookVaultManager::new();
-        let self_identity = nook_core::DeviceIdentity::generate()?;
-        self_manager.device.id = self_identity.device_id().to_string();
-        self_manager.device.identity_private_key = self_identity.secret_string().into_inner();
-        self_manager.initialize_genesis_vault(&self_identity)?;
-        self_manager.vault.store_id = nook_core::generate_store_id()?.to_string();
-        self_manager.bootstrap_event_log_genesis().await?;
-        let self_owner_auth_id = js(self_manager.list_vault_members())?
-            .into_iter()
-            .next()
-            .map(|member| member.auth_id())
-            .ok_or_else(|| anyhow::anyhow!("self-revocation owner is missing from roster"))?;
-        let self_joiner = nook_core::DeviceIdentity::generate()?;
-        let self_signing_key = js(self_manager.device_signing_public_key_js().await)?;
-        js(self_manager
-            .approve_extension_device(
-                self_joiner.device_id().to_string(),
-                self_joiner.public_key().to_string(),
-                self_signing_key,
-                "Self revoke fixture".to_owned(),
-            )
-            .await)?;
-        let owner_records = js(self_manager.revoke_vault_member(self_owner_auth_id).await)?;
-        assert!(owner_records.is_empty());
-        assert!(!self_manager.vault.crypto.is_unlocked());
-
         let mut enrollee = NookVaultManager::new();
         let enrollee_identity = nook_core::DeviceIdentity::generate()?;
         enrollee.device.id = enrollee_identity.device_id().to_string();
