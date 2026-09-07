@@ -11,10 +11,10 @@ create a second JetStream cluster or regain ownership of the StatefulSet.
 The initial transition is deliberately controlled because Argo Events v1.9.11
 rejects an in-place native-to-exotic EventBus update. The deployment task first
 copies the existing encryption key, TLS material, and Argo client credential to
-the infrastructure secret store. It records all PVC identities and bindings,
-stops the controller, orphans the controller-created server resources, removes
-the native EventBus finalizer, and recreates the EventBus as exotic. The three
-PVC identities and PV bindings must be unchanged after the repository-owned
+the infrastructure secret store. It records all PVC identities and bindings.
+It then stops the controller, orphans the controller-created server resources,
+removes the native EventBus finalizer, and recreates the EventBus as exotic.
+The three PVC identities and PV bindings must be unchanged after the repository-owned
 StatefulSet starts. A mismatch fails the deployment.
 
 ## Public boundary
