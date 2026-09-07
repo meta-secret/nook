@@ -8,12 +8,11 @@ use super::NookVaultManager;
 use crate::NookError;
 use crate::NookPasswordEntrySummary;
 use crate::conversion::wasm_iso_timestamp;
-use crate::storage::event_db::load_local_event_store;
 use crate::storage::indexed_db::{get_active_vault_id, load_vault_local_cache};
 use crate::types::password_entries_to_vec;
 use nook_core::{
-    IsoTimestamp, MultiDeviceError, PasswordEntryId, StorageMode, SymmetricKey, VaultOperation,
-    VaultType, VaultUnlock,
+    IsoTimestamp, MultiDeviceError, PasswordEntryId, SymmetricKey, VaultOperation, VaultType,
+    VaultUnlock,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
