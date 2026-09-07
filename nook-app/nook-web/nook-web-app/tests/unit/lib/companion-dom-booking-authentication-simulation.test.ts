@@ -126,13 +126,17 @@ class BookingAuthenticationFixture {
       destination === BookingFixtureFormDestination.CrossOrigin
         ? ' action="https://attacker.example/sign-in"'
         : ''
-    const content = `<section data-testid="booking-email-surface"><label>Email address<input type="email" name="username" autocomplete="username webauthn" aria-label="Email address" placeholder="Enter your email address"></label><button type="submit" data-testid="booking-primary">${primaryLabel}</button>${submitLayout === BookingFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}</section>
+    const primaryFormAttribute =
+      ownership === BookingFixtureFormOwnership.Unowned
+        ? ' form="booking-unrelated-form"'
+        : ''
+    const content = `<section data-testid="booking-email-surface"><label>Email address<input type="email" name="username" autocomplete="username webauthn" aria-label="Email address" placeholder="Enter your email address"></label><button type="submit"${primaryFormAttribute} data-testid="booking-primary">${primaryLabel}</button>${submitLayout === BookingFixtureSubmitLayout.Ambiguous ? '<button type="submit">Primary action</button>' : ''}</section>
         <p>or use one of these options</p><nav aria-label="Alternative sign-in options"><a href="/social/consent/google">Sign in with Google</a><a href="/social/consent/apple">Sign in with Apple</a><a href="/social/consent/facebook">Sign in with Facebook</a></nav>
         <p>Lost access to your email? <a href="/recover">Recover your account</a></p>`
     const authenticationSurface =
       ownership === BookingFixtureFormOwnership.Owned
         ? `<form${actionAttribute} data-testid="booking-auth-form">${content}</form>`
-        : `<section data-testid="booking-unowned-surface">${content}</section>`
+        : `<form id="booking-unrelated-form" data-testid="booking-unrelated-form"></form><section data-testid="booking-unowned-surface">${content}</section>`
     return `<header><a href="/">Booking.com</a><button aria-label="Select your language">English</button><a href="/help" aria-label="Help and support">Help</a></header>
       <main><h1>Sign in or create an account</h1><p>You can sign in using your Booking.com account to access our services.</p>
         ${authenticationSurface}<p data-testid="booking-disclosure">By signing in or creating an account, you agree with our <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Statement</a>.</p>
@@ -403,6 +407,8 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     const result = BookingAuthenticationFixture.ambiguous().simulate()
     expect(result).toMatchObject({
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      observationCount: 1,
+      detailedAdvanceControlKind: 'absent',
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
     })
@@ -420,6 +426,8 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     const result = BookingAuthenticationFixture.unowned().simulate()
     expect(result).toMatchObject({
       kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      observationCount: 1,
+      detailedAdvanceControlKind: 'absent',
       filled: false,
       submissionResult: FormSubmissionResult.NotObserved,
     })
@@ -427,13 +435,22 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     const primary = document.querySelector<HTMLButtonElement>(
       '[data-testid="booking-primary"]',
     )
-    if (!email || !primary) {
+    const unrelatedForm = document.querySelector<HTMLFormElement>(
+      '[data-testid="booking-unrelated-form"]',
+    )
+    const unownedSurface = document.querySelector<HTMLElement>(
+      '[data-testid="booking-unowned-surface"]',
+    )
+    if (!email || !primary || !unrelatedForm || !unownedSurface) {
       throw new Error('expected unowned Booking.com surface')
     }
-    expect(email.closest('form')).not.toBeInstanceOf(HTMLFormElement)
+    expect(email.form).not.toBeInstanceOf(HTMLFormElement)
     expect(primary.closest('form')).not.toBeInstanceOf(HTMLFormElement)
+    expect(primary.form).toBe(unrelatedForm)
+    expect(unrelatedForm.querySelectorAll('input')).toHaveLength(0)
     const [observation] = summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected unowned Booking.com surface')
+    expect(observation.root).toBe(unownedSurface)
     expect(observation.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
     expect(email.value).toBe('')
   })
