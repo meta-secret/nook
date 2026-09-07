@@ -236,7 +236,7 @@ describe('DOM-backed companion authentication simulation', () => {
       kind: 'observed',
       observations: [
         {
-          destinationIdentity: '/auth/login',
+          destinationIdentity: 'http://localhost:3000/auth/login',
           submissionDestinationSource: 'authored',
           submissionMethod: 'get',
         },
@@ -286,7 +286,7 @@ describe('DOM-backed companion authentication simulation', () => {
       kind: 'observed',
       observations: [
         {
-          destinationIdentity: '/log-in-or-create-account',
+          destinationIdentity: 'http://localhost:3000/log-in-or-create-account',
           submissionDestinationSource: 'authored',
           submissionMethod: 'post',
         },
