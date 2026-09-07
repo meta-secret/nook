@@ -5,6 +5,7 @@ use nook_core::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, ICloudShareRole, ICloudSharedTarget,
     OAuthFileConfigData, ProviderOauthPreset, VaultArchitecture,
 };
+use nook_core::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
@@ -129,10 +130,7 @@ pub fn provider_onboarding_type(
     architecture: &NookVaultArchitecture,
 ) -> Result<nook_core::OnboardingType, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
-    Ok(nook_core::provider_onboarding_type(
-        &provider,
-        &architecture,
-    )?)
+    Ok(provider.onboarding_type(&architecture)?)
 }
 
 #[wasm_bindgen]
@@ -236,11 +234,14 @@ pub fn shared_grant_provider_id(
     preset: nook_core::OauthFilePreset,
     target: nook_core::SharedStorageTargetSelection,
 ) -> NookProviderSelection {
-    NookProviderSelection(nook_core::shared_grant_provider_id(
-        &snapshot.providers,
-        preset,
-        &target,
-    ))
+    NookProviderSelection(
+        SharedGrantProviderSelection {
+            providers: &snapshot.providers,
+            preset,
+            target: &target,
+        }
+        .select(),
+    )
 }
 
 #[wasm_bindgen]
@@ -251,12 +252,13 @@ pub fn enrollment_provider_for_architecture(
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
     Ok(NookEnrollmentProvider::from_core(
-        nook_core::enrollment_provider_for_architecture_with_storage_target(
-            &provider,
-            &architecture,
-            None,
-            None,
-        )?,
+        ProviderEnrollmentRequest {
+            provider: &provider,
+            architecture: &architecture,
+            shared_joiner_identity: None,
+            shared_storage_target_id: None,
+        }
+        .build()?,
     ))
 }
 
@@ -270,12 +272,13 @@ pub fn enrollment_shared_provider_for_architecture(
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
     Ok(NookEnrollmentProvider::from_core(
-        nook_core::enrollment_provider_for_architecture_with_storage_target(
-            &provider,
-            &architecture,
-            Some(shared_joiner_identity),
-            Some(shared_storage_target_id),
-        )?,
+        ProviderEnrollmentRequest {
+            provider: &provider,
+            architecture: &architecture,
+            shared_joiner_identity: Some(shared_joiner_identity),
+            shared_storage_target_id: Some(shared_storage_target_id),
+        }
+        .build()?,
     ))
 }
 
@@ -288,11 +291,12 @@ pub fn enrollment_icloud_shared_provider_for_architecture(
 ) -> Result<NookEnrollmentProvider, wasm_bindgen::JsError> {
     let architecture = architecture.to_core();
     Ok(NookEnrollmentProvider::from_core(
-        nook_core::enrollment_provider_for_architecture_with_storage_target(
-            &provider,
-            &architecture,
-            None,
-            Some(shared_storage_target_id),
-        )?,
+        ProviderEnrollmentRequest {
+            provider: &provider,
+            architecture: &architecture,
+            shared_joiner_identity: None,
+            shared_storage_target_id: Some(shared_storage_target_id),
+        }
+        .build()?,
     ))
 }
