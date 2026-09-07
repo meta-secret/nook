@@ -397,10 +397,9 @@ pub use vault_session::{
 };
 pub use vault_session_cache::VaultProjectionCache;
 pub use vault_sync::{
-    CommonContentHash, VaultRevision, VaultRevisionStore, VaultSyncAction, compare_vault_sync,
-    compare_vault_sync_with_common, read_vault_revision, vault_content_hash,
+    CommonContentHash, VaultRevision, VaultRevisionStore, VaultSyncAction, VaultSyncComparison,
 };
-pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, reconcile_yaml_sync};
+pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, YamlSyncSession};
 pub use vault_sync_store::{
     MemoryVaultStore, PreparedVaultSync, RevisionGuardedWrite, StoreRevision, StoreRevisionRef,
     VaultSyncFanOut, VaultSyncPair,

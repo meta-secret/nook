@@ -20,5 +20,5 @@ pub async fn write_local_vault_yaml(content: String) -> Result<(), JsError> {
 
 #[wasm_bindgen]
 pub fn vault_content_hash(content: &str) -> String {
-    nook_core::vault_content_hash(content)
+    nook_core::VaultRevision::content_hash(content)
 }

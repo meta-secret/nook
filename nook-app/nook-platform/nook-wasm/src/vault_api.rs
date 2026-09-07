@@ -416,7 +416,7 @@ pub async fn approve_extension_device(
 /// `unchanged`, `adopt_remote`, `push_local`, or `conflict`.
 #[wasm_bindgen]
 pub fn compare_vault_sync(local: &str, remote: &str) -> Result<String, wasm_bindgen::JsError> {
-    match nook_core::compare_vault_sync(local, remote) {
+    match nook_core::VaultSyncComparison::new(local, remote).decide() {
         Ok(action) => Ok(match action {
             VaultSyncAction::Unchanged => "unchanged".to_owned(),
             VaultSyncAction::AdoptRemote => "adopt_remote".to_owned(),
