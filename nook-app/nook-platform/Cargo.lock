@@ -2043,6 +2043,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "nook-wasm-composition-tests"
+version = "1.0.0"
+dependencies = [
+ "anyhow",
+ "nook-auth2",
+ "nook-companion-core",
+ "nook-companion-wasm",
+ "nook-core",
+ "nook-wasm",
+ "serde_json",
+]
+
+[[package]]
 name = "nu-ansi-term"
 version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -149,6 +149,7 @@ COPY nook-app/nook-platform/nook-companion-core/Cargo.toml nook-companion-core/C
 COPY nook-app/nook-platform/nook-core/Cargo.toml nook-core/Cargo.toml
 COPY nook-app/nook-platform/nook-companion-wasm/Cargo.toml nook-companion-wasm/Cargo.toml
 COPY nook-app/nook-platform/nook-wasm/Cargo.toml nook-wasm/Cargo.toml
+COPY nook-app/nook-platform/nook-wasm-composition-tests/Cargo.toml nook-wasm-composition-tests/Cargo.toml
 RUN mkdir -p \
       nook-app-common/src \
       nook-authenticator-domain/src \
@@ -159,6 +160,7 @@ RUN mkdir -p \
       nook-core/src \
       nook-companion-wasm/src \
       nook-wasm/src \
+      nook-wasm-composition-tests/src \
     && touch \
       nook-app-common/src/lib.rs \
       nook-authenticator-domain/src/lib.rs \
@@ -168,7 +170,8 @@ RUN mkdir -p \
       nook-companion-core/src/lib.rs \
       nook-core/src/lib.rs \
       nook-companion-wasm/src/lib.rs \
-      nook-wasm/src/lib.rs
+      nook-wasm/src/lib.rs \
+      nook-wasm-composition-tests/src/lib.rs
 RUN cargo chef prepare --recipe-path recipe.json
 RUN --network=default cargo fetch --locked
 # Stable epoch for the hosted WASM cook lineage. Bump when reseeding
@@ -226,6 +229,10 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo nextest run --no-run -p nook-core --profile ci \
     && nook-sccache-report native-core-nextest-dependencies
+RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
+    --mount=type=secret,id=sccache_s3_secret_key,required=false \
+    cargo nextest run --no-run -p nook-wasm-composition-tests --profile ci \
+    && nook-sccache-report native-composition-nextest-dependencies
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
     cargo clippy -p nook-app-common --all-targets -- -D warnings \
@@ -403,6 +410,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 COPY nook-app/nook-platform/nook-wasm nook-wasm
+COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-tests
 
 # Export only the small, already-computed coverage payload. This target deliberately branches
 # before the WASM/web production stages so a PR fallback never materializes the multi-GB app image.
@@ -462,9 +470,11 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     && nook-sccache-report focused-native-test-core
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
+COPY nook-app/nook-platform/nook-wasm nook-wasm
+COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-tests
 RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
     --mount=type=secret,id=sccache_s3_secret_key,required=false \
-    cargo nextest run -p nook-companion-wasm --profile ci --no-run \
+    cargo nextest run -p nook-companion-wasm -p nook-wasm-composition-tests --profile ci --no-run \
     && nook-sccache-report focused-native-test-compile
 
 # The full checkout is runtime input only and cannot invalidate the compile layers above.

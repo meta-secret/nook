@@ -9,6 +9,7 @@ members = [
     "nook-core",
     "nook-companion-wasm",
     "nook-wasm",
+    "nook-wasm-composition-tests",
 ]
 resolver = "3"
 

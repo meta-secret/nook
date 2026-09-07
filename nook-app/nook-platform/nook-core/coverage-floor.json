@@ -31,6 +31,10 @@
   },
   "excluded_packages": [
     {
+      "package": "nook-wasm-composition-tests",
+      "reason": "Unpublished test-only composition harness; src/lib.rs contains no executable production code and all executable code lives in integration-test targets under tests/."
+    },
+    {
       "package": "nook-fuzz",
       "reason": "Intentional non-testable cargo-fuzz harness; covered behavior belongs to nook-auth2."
     },

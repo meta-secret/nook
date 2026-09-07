@@ -43,9 +43,10 @@ pub use identity_record::{
 };
 pub use logger::{NookLogEntries, log_count, log_dump_page};
 pub use manager::{
-    NookEventLogRecords, NookEventLogStorageRecord, NookExtensionEventLogImportStatus,
-    NookExtensionIdentityHandoffContext, NookExternalEventLogRecords, NookVaultManager,
-    NookVaultNameState,
+    NookCompanionExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
+    NookExtensionEventLogImportStatus, NookExtensionIdentityHandoffContext,
+    NookExternalEventLogRecords, NookVaultManager, NookVaultNameState,
+    admit_companion_handoff_response, admit_companion_identity_status,
 };
 pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;
