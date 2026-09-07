@@ -844,16 +844,16 @@ mod tests {
 
     #[test]
     fn invalid_architecture_metadata_is_rejected() -> TestResult {
-        let invalid = "\
-    schema_version: 1
-    store_id: store_SMypl8K0w9Y
-    architecture:
-      vault_type: simple
-      sentinel:
-        threshold: 2
-        required_participants: 3
-    secrets: []
-    ";
+        let invalid = concat!(
+            "schema_version: 1\n",
+            "store_id: store_SMypl8K0w9Y\n",
+            "architecture:\n",
+            "  vault_type: simple\n",
+            "  sentinel:\n",
+            "    threshold: 2\n",
+            "    required_participants: 3\n",
+            "secrets: []\n",
+        );
         assert!(VaultFormatTestData::read_vault_architecture(invalid).is_err());
         Ok(())
     }
@@ -862,15 +862,15 @@ mod tests {
     fn unknown_architecture_mode_reports_stable_validation_key() -> TestResult {
         use error::Error;
 
-        let invalid = "\
-    schema_version: 1
-    store_id: store_SMypl8K0w9Y
-    architecture:
-      device_mode: future-device-mode
-      vault_type: simple
-      replication_type: personal
-    secrets: []
-    ";
+        let invalid = concat!(
+            "schema_version: 1\n",
+            "store_id: store_SMypl8K0w9Y\n",
+            "architecture:\n",
+            "  device_mode: future-device-mode\n",
+            "  vault_type: simple\n",
+            "  replication_type: personal\n",
+            "secrets: []\n",
+        );
         let error = VaultFormatTestData::read_vault_architecture(invalid)
             .err()
             .ok_or_else(|| io::Error::other("vault format test should reject invalid input"))?;
