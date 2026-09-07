@@ -693,6 +693,35 @@ mod tests {
     }
 
     #[test]
+    fn recovery_plan_rejects_an_invalid_store_before_event_replay() -> anyhow::Result<()> {
+        let plan = SecurityEpochRecoveryPlan::fixture()?;
+
+        let error = match plan.prepare_execution("", None) {
+            Err(error) => error,
+            Ok(_) => anyhow::bail!("invalid store ids must fail closed"),
+        };
+
+        assert!(matches!(error, NookError::Database(message) if message.contains("store_id")));
+        Ok(())
+    }
+
+    #[test]
+    fn recovery_plan_rejects_a_malformed_trigger_before_checkpoint_decode() -> anyhow::Result<()> {
+        let mut plan = SecurityEpochRecoveryPlan::fixture()?;
+        plan.trigger_event_yaml = "not an event".to_owned();
+
+        let error = match plan.prepare_execution("store_epochstate1", None) {
+            Err(error) => error,
+            Ok(_) => anyhow::bail!("malformed triggers must fail closed"),
+        };
+
+        assert!(
+            matches!(error, NookError::Database(message) if message.starts_with("failed to parse stored event:"))
+        );
+        Ok(())
+    }
+
+    #[test]
     fn recovery_plan_preparation_accepts_a_matching_persisted_epoch() -> anyhow::Result<()> {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
         let trigger_yaml = plan.trigger_event_yaml.clone();
