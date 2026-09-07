@@ -210,7 +210,7 @@ fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
     for direct_task in [
         "web:build) task _web:build",
         "web:e2e) task _web:test:e2e",
-        "web:e2e:debug) task _web:test:e2e:debug",
+        "web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug",
         "extension:e2e) task _extension:test:e2e",
         "check) task _check",
         "ci:pr) task _ci:pr",
