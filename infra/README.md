@@ -25,9 +25,10 @@ This directory owns Nook's stateful server infrastructure:
   job containers through ARC's Kubernetes lifecycle hooks. These jobs become
   ordinary short-lived Pods and never receive a Docker daemon or runtime socket.
 - Kubernetes prefers either Rise-S worker, then the home 7950X3D node, then
-  KS-6. A hostname skew of two fills both primary NVMe workers first. A
-  five-job burst prefers two jobs per primary and one on the secondary node.
-  KS-6 remains the last overflow choice.
+  KS-6. Soft hostname spreading favors both primary NVMe workers without
+  forcing weaker tiers toward equal shares. A five-job burst targets two jobs
+  per primary and one on secondary. The exact result also depends on normal
+  scheduler scoring and node pressure. KS-6 remains the last preference.
 
 Both public edge services live under the `*.dev.nokey.sh` namespace. SeaweedFS
 and private `nook/**` Zot repositories require generated credentials. Zot's
@@ -144,7 +145,10 @@ portable boundary for cold nodes and hosted builders.
 Every qualified build node owns one local PV and one BuildKit Pod. Rise-S has
 placement tier `primary`. The home 7950X3D node is `secondary`. KS-6 is
 `overflow`. These tiers are preferences, so node pressure exposes the next
-eligible node.
+eligible node. Soft hostname spreading balances equal-tier nodes without
+forcing cross-tier equality.
+Deployment activates both primary nodes as one group before secondary and
+overflow, so queued work cannot observe a weaker tier first.
 
 Node-to-node connectivity is a separate Cloudflare Mesh concern and is not used
 by the compiler cache.
