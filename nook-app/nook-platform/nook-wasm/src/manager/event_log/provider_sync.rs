@@ -604,7 +604,10 @@ mod tests {
     use crate::manager::session::NookEventLogSyncIssueState;
 
     use super::*;
-    use nook_core::{DeviceIdentity, VaultMetaState};
+    use nook_core::{
+        DeviceIdentity, IsoTimestamp, SigningIdentity, VaultEvent, VaultEventBody,
+        VaultEventSchemaVersion, VaultMetaState, VaultOperation,
+    };
     use wasm_bindgen::JsError;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -612,6 +615,26 @@ mod tests {
         provider_id: String,
         event_id: EventId,
         bytes: Vec<u8>,
+    }
+
+    fn event_fixture() -> anyhow::Result<(EventId, EventStorageBytes, VaultEvent)> {
+        let signing = SigningIdentity::generate()?.0;
+        let event = VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: nook_core::StoreId::parse("store_syncguard1")?,
+                actor_id: signing.actor_id()?,
+                actor_signing_public_key: signing.public_key(),
+                parents: Vec::new(),
+                created_at: IsoTimestamp::parse("2026-08-15T00:00:00Z")?,
+                key_epoch: EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?,
+                operations: vec![VaultOperation::VaultCleared],
+            },
+            signing.signing_key(),
+        )?;
+        let event_id = event.id()?;
+        let bytes = nook_core::serialize_event_storage_yaml(&event)?;
+        Ok((event_id, bytes, event))
     }
 
     impl OutboxFixture {
@@ -773,6 +796,55 @@ mod tests {
         Ok(())
     }
 
+    #[test]
+    fn provider_classification_errors_include_the_provider_and_store_context() {
+        let mismatch = NookVaultManager::provider_store_mismatch_error(
+            "Drive",
+            "store_local12345",
+            "store_remote1234",
+        );
+        assert!(matches!(
+            mismatch,
+            NookError::Database(message)
+                if message == "Drive already contains another vault (local store_id store_local12345, provider store_id store_remote1234). Choose which vault to use before syncing."
+        ));
+
+        let multiple = NookVaultManager::provider_multiple_stores_error(
+            "Backup folder",
+            &["store_first1234".to_owned(), "store_second12".to_owned()],
+        );
+        assert!(matches!(
+            multiple,
+            NookError::Database(message)
+                if message == "Backup folder contains multiple vault event logs (store_id: store_first1234, store_second12). Use a dedicated provider path for one vault before syncing."
+        ));
+    }
+
+    #[test]
+    fn event_export_round_trips_content_addressed_records() -> anyhow::Result<()> {
+        let (event_id, bytes, event) = event_fixture()?;
+        let mut store = nook_core::LocalEventStore::new();
+        store.put_event(event_id.clone(), bytes);
+
+        let records = NookVaultManager::export_event_records_from_store(&store)?;
+
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].event_id, event_id.as_str());
+        assert_eq!(records[0].path, event_id.storage_path());
+        assert_eq!(records[0].event.id()?, event.id()?);
+        Ok(())
+    }
+
+    #[test]
+    fn event_export_rejects_corrupt_local_bytes() -> anyhow::Result<()> {
+        let event_id = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let mut store = nook_core::LocalEventStore::new();
+        store.put_event(event_id, b"corrupt event bytes".to_vec().into());
+
+        assert!(NookVaultManager::export_event_records_from_store(&store).is_err());
+        Ok(())
+    }
+
     #[wasm_bindgen_test]
     #[expect(
         unowned_function,
@@ -844,6 +916,80 @@ mod tests {
             .persist_projected_key_epoch(&nook_core::VaultProjection::default())
             .await?;
         assert!(manager.event_log.key_epoch.is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn wasm_current_projection_persists_its_key_epoch() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = format!("store_sync_epoch_{}", nook_core::generate_store_id()?);
+        let epoch = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let projection = nook_core::VaultProjection {
+            epoch: ProjectionEpoch::Current(nook_core::KeyEpoch(epoch.clone())),
+            ..Default::default()
+        };
+
+        manager.persist_projected_key_epoch(&projection).await?;
+
+        assert_eq!(manager.event_log.key_epoch, epoch.as_str());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn wasm_adopting_the_active_epoch_is_idempotent_when_unlocked() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        let keys = nook_core::generate_vault_keys()?;
+        let epoch = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let epoch_name = epoch.to_string();
+        manager.event_log.key_epoch = epoch.to_string();
+        manager.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
+        let projection = nook_core::VaultProjection {
+            epoch: ProjectionEpoch::Current(nook_core::KeyEpoch(epoch)),
+            ..Default::default()
+        };
+
+        manager.adopt_projected_security_epoch(&projection).await?;
+
+        assert!(manager.vault.crypto.is_unlocked());
+        assert_eq!(manager.event_log.key_epoch, epoch_name);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn wasm_sentinel_epoch_adoption_fails_closed_before_key_lookup() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.vault.architecture.vault_type = VaultType::Sentinel;
+        manager.vault.secrets_key = "sentinel-secret".to_owned();
+        manager.vault.members_key = "sentinel-members".to_owned();
+        let epoch = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
+        let projection = nook_core::VaultProjection {
+            epoch: ProjectionEpoch::Current(nook_core::KeyEpoch(epoch)),
+            ..Default::default()
+        };
+
+        let error = manager
+            .adopt_projected_security_epoch(&projection)
+            .await
+            .expect_err("sentinel adoption requires the ceremony");
+
+        assert!(
+            matches!(error, NookError::Encryption(message) if message == MultiDeviceError::SentinelCeremonyRequired.to_string())
+        );
+        assert!(manager.vault.secrets_key.is_empty());
+        assert!(manager.vault.members_key.is_empty());
+        assert!(!manager.vault.crypto.is_unlocked());
         Ok(())
     }
 
