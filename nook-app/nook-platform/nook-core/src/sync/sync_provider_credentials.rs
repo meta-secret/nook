@@ -8,10 +8,11 @@
 )]
 
 use crate::{
-    AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey,
+    AgeArmoredCiphertext, AuthProvidersSnapshotData, DeviceIdentity, DevicePublicKey, Sha256Hex,
     StoredGithubPat, StoredOAuthAccessCredential, StoredOAuthRefreshCredential,
     errors::{MultiDeviceError, MultiDeviceResult},
 };
+use zeroize::Zeroizing;
 
 /// Marker substring present in every age-armored credential ciphertext.
 pub const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
@@ -80,6 +81,30 @@ impl AuthProvidersSnapshotData {
         *self = opened;
         Ok(())
     }
+
+    /// Authenticate every nonempty credential for an exact recipient without
+    /// retaining the decrypted plaintext.
+    pub fn authenticate_credentials_for(&self, identity: &DeviceIdentity) -> MultiDeviceResult<()> {
+        for provider in &self.providers {
+            if let StoredGithubPat::Token(token) = &provider.github_pat {
+                ProviderCredentialField::authenticate(token, identity)?;
+            }
+            if let Some(oauth) = provider.oauth_file.as_ref() {
+                if let StoredOAuthAccessCredential::AccessToken(token) = &oauth.access_token {
+                    ProviderCredentialField::authenticate(token, identity)?;
+                }
+                if let StoredOAuthRefreshCredential::Token(token) = &oauth.refresh_token {
+                    ProviderCredentialField::authenticate(token, identity)?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Hash the canonical typed provider snapshot, including encrypted fields.
+    pub fn companion_pairing_manifest_digest(&self) -> Result<Sha256Hex, serde_json::Error> {
+        Ok(Sha256Hex::from_bytes(&serde_json::to_vec(self)?))
+    }
 }
 
 /// Observe whether every field is empty or contains the armor marker.
@@ -144,6 +169,14 @@ struct ProviderCredentialField<'a> {
     value: &'a mut String,
 }
 impl ProviderCredentialField<'_> {
+    fn authenticate(value: &str, identity: &DeviceIdentity) -> MultiDeviceResult<()> {
+        if !value.is_empty() {
+            let ciphertext = AgeArmoredCiphertext::parse(value)?;
+            let _plaintext = Zeroizing::new(identity.open_utf8(&ciphertext)?);
+        }
+        Ok(())
+    }
+
     fn has_armor_marker(value: &str) -> bool {
         ProviderCredentialEncoding::observe(value) == ProviderCredentialEncoding::ArmorMarked
     }
@@ -403,6 +436,29 @@ mod tests {
             opened.providers[0].github_pat,
             StoredGithubPat::Token(pat.to_owned())
         );
+        Ok(())
+    }
+
+    #[test]
+    fn pairing_manifest_authenticates_recipient_and_snapshot() -> anyhow::Result<()> {
+        let recipient = DeviceIdentity::generate()?;
+        let other = DeviceIdentity::generate()?;
+        let mut snapshot = AuthProvidersSnapshotData::github_snapshot("github_pat_11PAIRING");
+        snapshot.providers.extend(
+            AuthProvidersSnapshotData::oauth_snapshot(&OAuthCredentialFixture {
+                access: "oauth-access-pairing",
+                refresh: Some("oauth-refresh-pairing"),
+            })
+            .providers,
+        );
+        snapshot.seal_credentials_for(&recipient.public_key())?;
+        let digest = snapshot.companion_pairing_manifest_digest()?;
+
+        snapshot.authenticate_credentials_for(&recipient)?;
+        ExpectedCredentialFailure::AnyError
+            .verify(snapshot.authenticate_credentials_for(&other))?;
+        snapshot.providers[0].label = "Substituted".to_owned();
+        assert_ne!(snapshot.companion_pairing_manifest_digest()?, digest);
         Ok(())
     }
 

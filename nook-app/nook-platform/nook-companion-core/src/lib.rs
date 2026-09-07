@@ -25,6 +25,7 @@ mod authenticator_options_response;
 mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
+mod companion_pairing;
 mod companion_protocol;
 pub mod credential_fill;
 mod domain_numbers;
@@ -119,6 +120,16 @@ pub use authenticator_preview_response::{
 };
 pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
+};
+pub use companion_pairing::{
+    AdmittedCompanionPairingApproval, AuthorizedCompanionPairingApproval,
+    AuthorizedCompanionWebsitePairing, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
+    CompanionPairingApprovalAttempt, CompanionPairingEpochMilliseconds, CompanionPairingError,
+    CompanionPairingFailure, CompanionPairingInstallation, CompanionPairingIssue,
+    CompanionPairingProviderManifestDigest, CompanionPairingRequest,
+    CompanionPairingRequestObservation, CompanionPairingWebsiteAuthorization,
+    CompanionPairingWebsiteAuthorizationOutcome, CompanionWebsitePairingEndpoint,
+    ConsumedCompanionPairingAuthority,
 };
 pub use companion_protocol::{
     AuthorizedCompanionIdentityHandoff, CompanionAdmittedIdentityDiscovery,

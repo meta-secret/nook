@@ -17,6 +17,8 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 import {
   admit_companion_handoff_response,
   admit_companion_identity_status,
+  NookCompanionPairingWebsiteProtocol,
+  type CompanionPairingWebsiteAuthorization,
   type CompanionExtensionPresence,
   type CompanionIdentityDiscoveryObservation,
   type CompanionIdentityHandoffAuthorization,
@@ -26,10 +28,15 @@ import {
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   default as initNookWasm,
+  companion_pairing_provider_manifest_digest,
   configure_vault_application,
   NookCompanionExtensionEndpoint,
+  NookCompanionPairingExtensionEndpoint,
   NookVaultManager,
+  NookPrevalidatedCompanionPairingApproval,
+  seal_auth_providers_for_device_public_key,
   VaultApplication,
+  type CompanionPairingRequest,
   type CompanionIdentityHandoffResponse,
   type CompanionWebsiteHandoffBegin,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
@@ -111,6 +118,78 @@ function beginHandoff(requestId: string) {
   return { authorization, endpoint, request, website }
 }
 
+function pairingAttempt(requestId: string, substituteProvider: boolean) {
+  const request = {
+    requestId,
+    nonce: `nonce-${requestId}`,
+    issuedAt: 100,
+    expiresAt: 200,
+    vaultType: 'simple',
+    installation: {
+      extensionRuntimeId: 'composition-runtime',
+      appId: extension.device_id,
+      encryptionPublicKey: extension.device_public_key,
+      signingPublicKey: unlockedAppKey.appKey.signingPublicKey,
+      installationLabel: 'Composition Extension',
+    },
+    scopes: ['vault-access', 'sync-provider-credentials'],
+  } satisfies CompanionPairingRequest
+  const extensionProtocol = new NookCompanionPairingExtensionEndpoint(request)
+  const authority = extensionProtocol.take_authority()
+  extensionProtocol.free()
+  const websiteProtocol = new NookCompanionPairingWebsiteProtocol({
+    request: structuredClone(request),
+    observedAt: 120,
+  })
+  const providers = seal_auth_providers_for_device_public_key(
+    extension.device_public_key,
+    {
+      providers: [
+        {
+          id: `github-${requestId}`,
+          type: 'github',
+          label: 'Composition GitHub',
+          githubPat: { state: 'token', value: 'github_pat_pairing_secret' },
+          githubRepo: { state: 'defaultRepository' },
+          oauthFile: { state: 'notApplicable' },
+          localFolder: { state: 'notApplicable' },
+          storeId: { state: 'storeId', value: extension.vaultStoreId },
+          syncCheckpoint: { state: 'neverSynced' },
+          createdAt: '2026-09-07T00:00:00Z',
+        },
+      ],
+      activeVaultStoreId: {
+        state: 'storeId',
+        value: extension.vaultStoreId,
+      },
+    },
+  )
+  const authorization = {
+    request: structuredClone(request),
+    observedAt: 130,
+    vaultStoreId: extension.vaultStoreId,
+    vaultName: extension.vaultName,
+    approvedAt: '2026-09-07T00:00:00Z',
+  } satisfies CompanionPairingWebsiteAuthorization
+  const approval = websiteProtocol.authorize(
+    authorization,
+    companion_pairing_provider_manifest_digest(providers),
+  )
+  if (approval.kind !== 'approved') {
+    throw new Error('expected generated website pairing approval')
+  }
+  if (substituteProvider) {
+    const provider = providers.providers[0]
+    if (!provider) throw new Error('expected pairing provider')
+    provider.label = 'Substituted Provider'
+  }
+  return authority.prevalidate(
+    extension,
+    { approval: approval.approval, observedAt: 150 },
+    providers,
+  )
+}
+
 beforeAll(async () => {
   Object.assign(globalThis, compositionIndexedDBRuntime)
   const nookWasmBytes = await Bun.file(
@@ -138,6 +217,7 @@ beforeAll(async () => {
   }
   const records = await extension.connect_fresh('local', '', '')
   for (const record of records) record.free()
+  await extension.set_vault_name('Composition Vault')
 
   unlockedAppKey = {
     extensionRuntimeId: 'composition-runtime',
@@ -154,7 +234,7 @@ beforeAll(async () => {
     kind: 'unlocked',
     vault_type: 'simple',
     vault_store_id: extension.vaultStoreId,
-    vault_name: 'Composition Vault',
+    vault_name: extension.vaultName,
     app_key: unlockedAppKey,
   } satisfies CompanionExtensionPresence
 })
@@ -164,6 +244,25 @@ afterAll(() => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('prevalidates sealed providers and rejects manifest substitution', () => {
+    for (const [requestId, substituteProvider] of [
+      ['pairing-success', false],
+      ['pairing-substitution', true],
+    ] as const) {
+      if (substituteProvider) {
+        expect(() => pairingAttempt(requestId, true)).toThrow(
+          'ProviderManifestMismatch',
+        )
+      } else {
+        const admission = pairingAttempt(requestId, false)
+        expect(admission).toBeInstanceOf(
+          NookPrevalidatedCompanionPairingApproval,
+        )
+        admission.free()
+      }
+    }
+  })
+
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {
     const { authorization, endpoint, website } = beginHandoff('request-success')
     const response = await endpoint.authorize_and_seal(

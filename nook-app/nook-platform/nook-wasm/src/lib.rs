@@ -43,10 +43,11 @@ pub use identity_record::{
 };
 pub use logger::{NookLogEntries, log_count, log_dump_page};
 pub use manager::{
-    NookCompanionExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
+    NookCompanionExtensionEndpoint, NookCompanionPairingApprovalAuthority,
+    NookCompanionPairingExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
     NookExtensionEventLogImportStatus, NookExtensionIdentityHandoffContext,
-    NookExternalEventLogRecords, NookVaultManager, NookVaultNameState,
-    admit_companion_handoff_response, admit_companion_identity_status,
+    NookExternalEventLogRecords, NookPrevalidatedCompanionPairingApproval, NookVaultManager,
+    NookVaultNameState, admit_companion_handoff_response, admit_companion_identity_status,
 };
 pub use storage::indexed_db::DeviceProtectionDeviceModeState;
 pub use storage::local_folder::NookLocalFolderConfig;
@@ -72,7 +73,7 @@ pub use types::{
     NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
     NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
 };
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 #[must_use]
@@ -102,6 +103,18 @@ pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::Exten
 #[must_use]
 pub fn is_extension_connect_scope(value: &str) -> bool {
     ExtensionConnectScope::parse(value).is_some()
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn companion_pairing_provider_manifest_digest(
+    snapshot: nook_core::AuthProvidersSnapshotData,
+) -> Result<String, JsError> {
+    Ok(snapshot
+        .companion_pairing_manifest_digest()
+        .map_err(|error| JsError::new(&error.to_string()))?
+        .as_str()
+        .to_owned())
 }
 
 #[wasm_bindgen]
