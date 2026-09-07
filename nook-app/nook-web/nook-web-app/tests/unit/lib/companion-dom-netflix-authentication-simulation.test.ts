@@ -270,13 +270,11 @@ describe('Netflix DOM-backed authentication simulation', () => {
     const [submitControl] = submitControls
     if (!submitControl) throw new Error('expected hostile Netflix submit')
     expect(submitControl.textContent).toBe(primaryLabel)
-    expect(
-      [...submitControls].some(
-        (control) =>
-          control.textContent !== null &&
-          control.textContent.trim() === 'Continue',
-      ),
-    ).toBe(false)
+    const submitLabels = [...submitControls].map((control) =>
+      ((label) => (label ? label.trim() : ''))(control.textContent),
+    )
+    expect(submitLabels).toEqual([primaryLabel])
+    expect(submitLabels).not.toContain('Continue')
   })
 
   test('rejects Get Help when it becomes the only semantic submit control', () => {
