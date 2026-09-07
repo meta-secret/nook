@@ -58,7 +58,10 @@
     if (field['data-testid']) {
       return `[data-testid="${CSS.escape(field['data-testid'])}"]`
     }
-    return 'input'
+    if (field.autocomplete) {
+      return `input[autocomplete="${CSS.escape(field.autocomplete)}"]`
+    }
+    return field.type ? `input[type="${CSS.escape(field.type)}"]` : 'input'
   }
 
   function readUsername(form: HTMLFormElement): string {
@@ -83,12 +86,9 @@
     )
   }
 
-  function onsubmit(event: SubmitEvent) {
-    event.preventDefault()
+  function advanceOrComplete(form: HTMLFormElement): void {
     if (renderState.kind === DetectionFixtureRenderKind.Missing) return
     const { fixture, step } = renderState
-    const form = event.currentTarget
-    if (!(form instanceof HTMLFormElement)) return
     const hasPassword = step.fields.some((field) => field.type === 'password')
     if (!hasPassword && stepIndex < fixture.steps.length - 1) {
       stepIndex += 1
@@ -106,13 +106,17 @@
     }
   }
 
-  function onButtonAdvance() {
-    if (renderState.kind === DetectionFixtureRenderKind.Missing) return
-    const { fixture } = renderState
-    if (stepIndex < fixture.steps.length - 1) {
-      stepIndex += 1
-      error = ''
-    }
+  function onsubmit(event: SubmitEvent): void {
+    event.preventDefault()
+    const form = event.currentTarget
+    if (!(form instanceof HTMLFormElement)) return
+    advanceOrComplete(form)
+  }
+
+  function onButtonAdvance(event: MouseEvent): void {
+    const button = event.currentTarget
+    if (!(button instanceof HTMLButtonElement) || !button.form) return
+    advanceOrComplete(button.form)
   }
 </script>
 
