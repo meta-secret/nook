@@ -3,9 +3,9 @@
 use std::io;
 
 use nook_core::{
-    ApiKeySecret, Database, DeviceIdentity, SecretId, SecretValue, VaultCrypto, VaultFormat,
-    VaultKeys, approve_join_request, create_join_request_record, deserialize_stored,
-    enroll_device_with_keys, generate_vault_keys, genesis_auth_record, genesis_members_records,
+    ApiKeySecret, Database, DeviceEnrollment, DeviceIdentity, JoinRequestApproval,
+    JoinRequestIssuance, SecretId, SecretValue, VaultCrypto, VaultFormat, VaultKeys,
+    deserialize_stored, generate_vault_keys, genesis_auth_record, genesis_members_records,
     list_join_requests, rename_vault_member, replace_member_records, resolve_member_roster,
     resolve_members_key, resolve_secrets_key, revoke_vault_member, serialize_stored,
     user_stored_records,
@@ -59,39 +59,35 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     records.extend(encrypt_user_secrets(&db, &crypto)?);
 
     let device_two = DeviceIdentity::generate()?;
-    records.push(create_join_request_record(
-        &device_two,
-        "2026-06-21T00:00:00Z",
-    )?);
+    records.push(JoinRequestIssuance::new(&device_two, "2026-06-21T00:00:00Z").issue()?);
     let join_two = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
-    let (auth_two, join_key, member_records) = approve_join_request(
+    let (auth_two, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
         &join_two,
         &genesis,
         &records,
-    )?;
+    )
+    .approve()?;
     records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_two);
     replace_member_records(&mut records, member_records)?;
 
     let device_three = DeviceIdentity::generate()?;
-    records.push(create_join_request_record(
-        &device_three,
-        "2026-06-21T01:00:00Z",
-    )?);
+    records.push(JoinRequestIssuance::new(&device_three, "2026-06-21T01:00:00Z").issue()?);
     let join_three = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
-    let (auth_three, join_key, member_records) = approve_join_request(
+    let (auth_three, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
         &join_three,
         &genesis,
         &records,
-    )?;
+    )
+    .approve()?;
     records.retain(|record| record.key.as_str() != join_key);
     records.push(auth_three);
     replace_member_records(&mut records, member_records)?;
@@ -140,12 +136,13 @@ fn vault_without_auth_envelope_fails_to_resolve_secrets_key() -> anyhow::Result<
 fn oob_enroll_writes_self_member_roster_only() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let device = DeviceIdentity::generate()?;
-    let (auth, members) = enroll_device_with_keys(
+    let (auth, members) = DeviceEnrollment::with_keys(
         &keys.secrets_key,
         &keys.members_key,
         &device,
         "2026-06-21T02:00:00Z",
-    )?;
+    )
+    .enroll()?;
     let mut records = vec![auth];
     records.extend(members);
     let roster = resolve_member_roster(&records, &keys.members_key)?;
@@ -178,12 +175,13 @@ fn resolve_members_key_fails_without_auth_envelope() -> anyhow::Result<()> {
 fn member_roster_entries_expose_pk_id_and_public_key() -> anyhow::Result<()> {
     let keys = generate_vault_keys()?;
     let device = DeviceIdentity::generate()?;
-    let (auth, members) = enroll_device_with_keys(
+    let (auth, members) = DeviceEnrollment::with_keys(
         &keys.secrets_key,
         &keys.members_key,
         &device,
         "2026-06-21T03:00:00Z",
-    )?;
+    )
+    .enroll()?;
     let mut records = vec![auth];
     records.extend(members);
 
@@ -200,18 +198,19 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
     let keys = generate_vault_keys()?;
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
-    records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z")?);
+    records.push(JoinRequestIssuance::new(&joiner, "2026-06-21T04:00:00Z").issue()?);
     let join = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
-    let (auth, join_key, _) = approve_join_request(
+    let (auth, join_key, _) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
         &join,
         &genesis,
         &records,
-    )?;
+    )
+    .approve()?;
     records.retain(|r| r.key.as_str() != join_key);
     records.push(auth.clone());
 
@@ -248,18 +247,19 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     let keys = generate_vault_keys()?;
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
-    records.push(create_join_request_record(&joiner, "2026-06-21T04:00:00Z")?);
+    records.push(JoinRequestIssuance::new(&joiner, "2026-06-21T04:00:00Z").issue()?);
     let join = list_join_requests(&records)?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
-    let (auth, join_key, member_records) = approve_join_request(
+    let (auth, join_key, member_records) = JoinRequestApproval::new(
         &keys.secrets_key,
         &keys.members_key,
         &join,
         &genesis,
         &records,
-    )?;
+    )
+    .approve()?;
     records.retain(|r| r.key.as_str() != join_key);
     records.push(auth);
     replace_member_records(&mut records, member_records)?;
