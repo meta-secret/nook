@@ -139,6 +139,7 @@ describe('authentication surface mutation filtering', () => {
   })
 
   test('observes submit destination changes', () => {
+    expect(AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER).toContain('action')
     expect(AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER).toContain('formaction')
   })
 

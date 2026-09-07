@@ -388,6 +388,8 @@ mod tests {
             label: label.to_owned(),
             machine_identity: String::new(),
             submission_method: nook_companion_core::PageControlSubmissionMethod::Absent,
+            submission_destination_source:
+                nook_companion_core::PageControlSubmissionDestinationSource::Authored,
         }
     }
 
@@ -404,7 +406,14 @@ mod tests {
             login_advance_observation("https://login.example.test/auth/login", "Continue");
         identifier_get.password_field_count = 0.into();
         identifier_get.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
-        assert!(authentication_advance_control_is_safe(identifier_get));
+        identifier_get.submission_destination_source =
+            nook_companion_core::PageControlSubmissionDestinationSource::Authored;
+        assert!(authentication_advance_control_is_safe(
+            identifier_get.clone()
+        ));
+        identifier_get.submission_destination_source =
+            nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
+        assert!(!authentication_advance_control_is_safe(identifier_get));
 
         let mut microsoft = login_advance_observation("https://login.live.com/", "Next");
         microsoft.authentication_username =
@@ -540,6 +549,58 @@ mod tests {
         linkedin.semantic_submit_control_count = 2.into();
         linkedin.label = "Primary action".to_owned();
         assert!(!authentication_advance_control_is_safe(linkedin));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn authentication_advance_control_wasm_export_preserves_claude_email_policy() {
+        let mut claude =
+            login_advance_observation("https://claude.ai/login", "Continue with email");
+        claude.authentication_username =
+            nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail;
+        claude.password_field_count = 0.into();
+        claude.source_origin = "https://claude.ai".to_owned();
+        claude.form_identity.clear();
+        claude.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
+        assert!(authentication_advance_control_is_safe(claude.clone()));
+
+        for label in [
+            "Continue with Google",
+            "Continue with SSO",
+            "Forgot password",
+            "Delete account",
+        ] {
+            let mut rejected = claude.clone();
+            rejected.label = label.to_owned();
+            assert!(!authentication_advance_control_is_safe(rejected), "{label}");
+        }
+
+        for destination in [
+            "https://attacker.example/login",
+            "https://claude.ai/signup",
+            "https://claude.ai/login?provider=google",
+            "https://claude.ai/account/delete",
+        ] {
+            let mut rejected = claude.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(rejected),
+                "{destination}"
+            );
+        }
+
+        let mut inert = claude.clone();
+        inert.actionability = nook_companion_core::PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(inert));
+
+        let mut unowned = claude.clone();
+        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(unowned));
+
+        claude.authentication_username =
+            nook_companion_core::AuthenticationUsernameEvidence::Strong;
+        claude.semantic_submit_control_count = 2.into();
+        assert!(!authentication_advance_control_is_safe(claude));
     }
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]

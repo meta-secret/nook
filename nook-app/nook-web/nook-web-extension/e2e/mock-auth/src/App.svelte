@@ -1,5 +1,6 @@
 <script lang="ts">
   import DetectionCombined from './pages/DetectionCombined.svelte'
+  import DetectionClaude from './pages/DetectionClaude.svelte'
   import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
   import DetectionAmazon from './pages/DetectionAmazon.svelte'
@@ -55,6 +56,9 @@
   const isNetflixLogin = $derived(
     location.hostname === 'www.netflix.com' && pathname === '/login',
   )
+  const isClaudeLogin = $derived(
+    location.hostname === 'claude.ai' && pathname === '/login',
+  )
 </script>
 
 <svelte:window onpopstate={syncPath} />
@@ -81,6 +85,8 @@
   <DetectionLinkedIn />
 {:else if isNetflixLogin}
   <DetectionNetflix />
+{:else if isClaudeLogin}
+  <DetectionClaude />
 {:else if pathname === '/login' || pathname === '/linkedin'}
   <DetectionLogin />
 {:else if pathname === '/signup'}

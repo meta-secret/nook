@@ -168,7 +168,7 @@ mod tests {
     use crate::{
         AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence,
         AuthenticationWorkflowKind, PageControlActionability, PageControlOwnership,
-        PageControlSemantics, PageControlSubmissionMethod,
+        PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
     };
 
     fn password_login() -> AuthenticationPageObservationFacts {
@@ -195,6 +195,7 @@ mod tests {
                     label: "Continue".to_owned(),
                     machine_identity: String::new(),
                     submission_method: PageControlSubmissionMethod::Absent,
+                    submission_destination_source: PageControlSubmissionDestinationSource::Authored,
                 },
             ),
             ..Default::default()
@@ -428,6 +429,7 @@ mod tests {
                     label: "Delete account".to_owned(),
                     machine_identity: "delete-account".to_owned(),
                     submission_method: PageControlSubmissionMethod::Absent,
+                    submission_destination_source: PageControlSubmissionDestinationSource::Authored,
                 },
             ),
             ..Default::default()
@@ -482,6 +484,7 @@ mod tests {
             label: "Continue".to_owned(),
             machine_identity: String::new(),
             submission_method: PageControlSubmissionMethod::Absent,
+            submission_destination_source: PageControlSubmissionDestinationSource::Authored,
         };
         let facts = AuthenticationPageObservationFacts {
             authenticator: AuthenticationAuthenticatorObservationFacts {
@@ -516,6 +519,7 @@ mod tests {
             label: label.to_owned(),
             machine_identity: String::new(),
             submission_method: PageControlSubmissionMethod::Absent,
+            submission_destination_source: PageControlSubmissionDestinationSource::Authored,
         };
         let facts = AuthenticationPageObservationFacts {
             authenticator: AuthenticationAuthenticatorObservationFacts {
@@ -557,6 +561,7 @@ mod tests {
                     label: "Use passkey".to_owned(),
                     machine_identity: String::new(),
                     submission_method: PageControlSubmissionMethod::Absent,
+                    submission_destination_source: PageControlSubmissionDestinationSource::Authored,
                 },
             );
 
@@ -832,6 +837,7 @@ mod tests {
             label: "Use passkey".to_owned(),
             machine_identity: String::new(),
             submission_method: PageControlSubmissionMethod::Absent,
+            submission_destination_source: PageControlSubmissionDestinationSource::Authored,
         };
         let facts = AuthenticationPageObservationFacts {
             fields: AuthenticationFieldObservationFacts {

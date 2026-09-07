@@ -200,9 +200,9 @@
     "template": "member-id-password"
   },
   "anthropic-console": {
-    "loginUrl": "https://www.anthropic.com/login",
-    "source": "research",
-    "template": "email-first"
+    "loginUrl": "https://claude.ai/login",
+    "source": "capture",
+    "template": "claude"
   },
   "apple": {
     "loginUrl": "https://appleid.apple.com/sign-in",

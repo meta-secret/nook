@@ -45,6 +45,46 @@ afterEach(() => {
 })
 
 describe('credential submission observation facts', () => {
+  test('transports submitter and form destination authorship without conflating omission', () => {
+    document.body.innerHTML = `
+      <form method="post" id="login" action="/auth/login">
+        <input autocomplete="username" />
+        <input type="password" autocomplete="current-password" />
+        <button type="submit" formaction="/login">Sign in</button>
+      </form>
+    `
+    const form = document.querySelector<HTMLFormElement>('form')
+    const submit = document.querySelector<HTMLButtonElement>('button')
+    if (!form || !submit) throw new Error('expected authored login form')
+
+    expect(authenticationFacts().detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          destinationIdentity: `${location.origin}/login`,
+          submissionDestinationSource: 'authored',
+        },
+      ],
+    })
+
+    submit.removeAttribute('formaction')
+    expect(authenticationFacts().detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          destinationIdentity: `${location.origin}/auth/login`,
+          submissionDestinationSource: 'authored',
+        },
+      ],
+    })
+
+    form.removeAttribute('action')
+    expect(authenticationFacts().detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [{ submissionDestinationSource: 'omitted' }],
+    })
+  })
+
   test('binds the selected owned POST submission', () => {
     document.body.innerHTML = `
       <form method="post" id="login" action="/login">

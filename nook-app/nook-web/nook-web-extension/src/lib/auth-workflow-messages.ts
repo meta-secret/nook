@@ -105,6 +105,7 @@ function isAdvanceControl(
       control.oneTimeCodeFieldCount,
       control.semanticSubmitControlCount,
     ].every(isCount) &&
+    ['authored', 'omitted'].includes(control.submissionDestinationSource) &&
     [
       control.sourceOrigin,
       control.formIdentity,

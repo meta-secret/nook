@@ -5,12 +5,20 @@ import {
   saveVaultLogin,
 } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
+import {
+  ClaudeAuthControl,
+  ClaudeAuthEmailMatch,
+  ClaudeAuthFormActionKind,
+  ClaudeAuthFormMethod,
+  ClaudeAuthInteractionState,
+} from './mock-auth/src/lib/claude-auth-flow'
 
 export class MockAuthProviderScenarios {
   static register(): void {
     this.registerAmazon()
     this.registerLinkedIn()
     this.registerNetflix()
+    this.registerClaude()
   }
 
   private static registerAmazon(): void {
@@ -362,6 +370,113 @@ export class MockAuthProviderScenarios {
             }),
           )
         expect(interceptedNetflixRequestCount).toBeGreaterThan(1)
+        await page.close()
+      } finally {
+        await paired.context.close()
+        await mockAuth.close()
+      }
+    })
+  }
+
+  private static registerClaude(): void {
+    test('fills Claude email and submits only Continue with email', async ({
+      browserName,
+    }, testInfo) => {
+      test.skip(
+        browserName !== 'chromium',
+        'Chrome extensions require Chromium',
+      )
+      const mockAuth = await startMockAuthServer()
+      const paired = await launchPairedPinExtension(testInfo, {
+        vaultName: 'Mock Claude auth vault',
+      })
+      try {
+        await saveVaultLogin(
+          paired.vaultPage,
+          'https://claude.ai',
+          'alice@nook.test',
+          'extension-fill-password',
+        )
+        const page = await paired.context.newPage()
+        let interceptedClaudeRequestCount = 0
+        await page.route('https://claude.ai/**', async (route) => {
+          interceptedClaudeRequestCount += 1
+          const requestedUrl = new URL(route.request().url())
+          const localResponse = await page.request.get(
+            `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+          )
+          await route.fulfill({ response: localResponse })
+        })
+        await page.goto('https://claude.ai/login')
+        expect(interceptedClaudeRequestCount).toBeGreaterThan(0)
+        await expect(page).toHaveURL('https://claude.ai/login')
+        await expect(page).toHaveTitle('Sign in - Claude')
+        await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+          'claude-email-first',
+        )
+
+        const form = page.getByTestId('claude-email-form')
+        await expect(form).not.toHaveAttribute('action')
+        await expect(form).toHaveAttribute('method', 'post')
+        expect(
+          await form.evaluate((element) => (element as HTMLFormElement).action),
+        ).toBe('https://claude.ai/login')
+        const email = form.getByLabel('Email')
+        await expect(form.locator('input')).toHaveCount(1)
+        await expect(email).toHaveAttribute('type', 'email')
+        await expect(email).toHaveAttribute('name', 'email')
+        await expect(email).toHaveAttribute('autocomplete', 'email')
+        await expect(email).toHaveValue('')
+        await expect(
+          form.getByRole('button', { name: 'Continue with email' }),
+        ).toHaveAttribute('type', 'submit')
+        const google = page.getByRole('button', {
+          name: 'Continue with Google',
+        })
+        const sso = page.getByRole('button', { name: 'Continue with SSO' })
+        await expect(google).toHaveAttribute('type', 'button')
+        await expect(sso).toHaveAttribute('type', 'button')
+        expect(
+          await google.evaluate(
+            (button) => !(button as HTMLButtonElement).form,
+          ),
+        ).toBe(true)
+        expect(
+          await sso.evaluate((button) => !(button as HTMLButtonElement).form),
+        ).toBe(true)
+        await expect(page.getByText('or', { exact: true })).toBeVisible()
+        await expect(page.getByTestId('claude-disclosure')).toBeVisible()
+        await expect(
+          page.getByRole('navigation', { name: 'Claude' }),
+        ).toBeVisible()
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        await expect
+          .poll(() =>
+            page.evaluate(
+              (key) => sessionStorage.getItem(key) || '',
+              'claude-submission-evidence',
+            ),
+          )
+          .toBe(
+            JSON.stringify({
+              submittedControl: ClaudeAuthControl.ContinueWithEmail,
+              emailMatch: ClaudeAuthEmailMatch.Matched,
+              formMethod: ClaudeAuthFormMethod.Post,
+              formAction: ClaudeAuthFormActionKind.Omitted,
+              googleInteraction: ClaudeAuthInteractionState.Untouched,
+              ssoInteraction: ClaudeAuthInteractionState.Untouched,
+              disclosureInteraction: ClaudeAuthInteractionState.Untouched,
+              marketingInteraction: ClaudeAuthInteractionState.Untouched,
+            }),
+          )
+        expect(interceptedClaudeRequestCount).toBeGreaterThan(1)
         await page.close()
       } finally {
         await paired.context.close()

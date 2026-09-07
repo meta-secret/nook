@@ -4,7 +4,10 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use super::{CheckedAuthenticationControl, PageControlOwnership, PageControlSemantics};
+use super::{
+    AuthenticationAdvanceControlObservation, CheckedAuthenticationControl, PageControlOwnership,
+    PageControlSemantics,
+};
 use crate::page_field_classification::control_identity::AuthenticationControlIdentity;
 use crate::page_field_classification::form_identity::{
     AuthenticationRouteIdentity, CredentialDestination, DestinationPolicy, OAuthAuthorization,
@@ -14,6 +17,20 @@ use crate::page_field_classification::{
     AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
     looks_like_login_advance_control_label, looks_like_supported_localized_login_control_label,
 };
+
+impl AuthenticationAdvanceControlObservation {
+    pub(super) fn has_ambiguous_identifier_only_submit(&self) -> bool {
+        matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && !matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::Absent
+            )
+            && self.password_field_count.raw() == 0
+            && self.new_password_field_count.raw() == 0
+            && self.one_time_code_field_count.raw() == 0
+            && self.semantic_submit_control_count.raw() > 1
+    }
+}
 
 impl CheckedAuthenticationControl<'_> {
     pub(super) fn has_positive_login_identity(&self) -> bool {
@@ -156,6 +173,85 @@ mod tests {
     use crate::authentication_advance_control_is_safe;
 
     #[test]
+    fn claude_owned_email_post_uses_existing_identifier_advance_policy() -> anyhow::Result<()> {
+        let claude = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::StandardsBasedEmail,
+            password_field_count: 0.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 1.into(),
+            source_origin: "https://claude.ai".to_owned(),
+            form_identity: String::new(),
+            destination_identity: "https://claude.ai/login".to_owned(),
+            label: "Continue with email".to_owned(),
+            machine_identity: String::new(),
+            submission_method: PageControlSubmissionMethod::Post,
+            submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+        };
+        assert!(authentication_advance_control_is_safe(&claude));
+
+        for label in [
+            "Continue with Google",
+            "Continue with SSO",
+            "Forgot password",
+            "Delete account",
+        ] {
+            let mut rejected = claude.clone();
+            rejected.label = label.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{label}"
+            );
+        }
+
+        for destination in [
+            "https://attacker.example/login",
+            "https://claude.ai/signup",
+            "https://claude.ai/login?provider=google",
+            "https://claude.ai/account/delete",
+        ] {
+            let mut rejected = claude.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{destination}"
+            );
+        }
+
+        let mut inert = claude.clone();
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(&inert));
+
+        let mut unowned = claude.clone();
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(&unowned));
+
+        let mut ambiguous = claude.clone();
+        ambiguous.authentication_username = AuthenticationUsernameEvidence::Strong;
+        ambiguous.semantic_submit_control_count = 2.into();
+        assert!(!authentication_advance_control_is_safe(&ambiguous));
+
+        let serialized = serde_json::to_value(&claude)?;
+        assert_eq!(
+            serde_json::from_value::<AuthenticationAdvanceControlObservation>(serialized.clone())?,
+            claude
+        );
+        let mut missing_source = serialized;
+        let serde_json::Value::Object(fields) = &mut missing_source else {
+            anyhow::bail!("advance observation must serialize as an object");
+        };
+        assert!(fields.remove("submissionDestinationSource").is_some());
+        assert!(
+            serde_json::from_value::<AuthenticationAdvanceControlObservation>(missing_source)
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
     fn netflix_owned_post_login_uses_existing_combined_credential_policy() {
         let netflix = AuthenticationAdvanceControlObservation {
             actionability: PageControlActionability::Actionable,
@@ -172,6 +268,7 @@ mod tests {
             label: "Continue".to_owned(),
             machine_identity: String::new(),
             submission_method: PageControlSubmissionMethod::Post,
+            submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
         };
         assert!(authentication_advance_control_is_safe(&netflix));
 
