@@ -119,6 +119,7 @@ impl NookVaultManager {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
     use super::*;
+    use crate::storage::event_db::load_local_event_store;
     use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
     use nook_core::{
         Database, DeviceIdentity, DeviceMode, SecretId, SecretValue, SentinelPolicy,
@@ -336,15 +337,21 @@ mod browser_tests {
             .persist_password_unlock_membership(&records, &joiner_identity, &keys)
             .await
             .map_err(|error| anyhow::anyhow!("membership persistence failed: {error:?}"))?;
-        let roster = nook_core::resolve_member_roster(
-            &manager.vault.meta.to_stored_records(),
-            &keys.members_key,
-        )?;
-        assert!(
-            roster
-                .iter()
-                .any(|member| &member.device_id == joiner_identity.device_id())
-        );
+        let graph = load_local_event_store(&manager.vault.store_id)
+            .await?
+            .load_graph(&manager.vault.store_id)?;
+        let approvals = graph
+            .events()
+            .flat_map(|(_, event)| event.body.operations.iter())
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    nook_core::VaultOperation::JoinApproved { device_id, .. }
+                        if device_id == joiner_identity.device_id()
+                )
+            })
+            .count();
+        assert_eq!(approvals, 1);
         Ok(())
     }
 
