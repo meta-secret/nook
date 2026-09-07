@@ -5,6 +5,13 @@ import {
   saveVaultLogin,
 } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
+import {
+  ClaudeAuthControl,
+  ClaudeAuthEmailMatch,
+  ClaudeAuthFormActionKind,
+  ClaudeAuthFormMethod,
+  ClaudeAuthInteractionState,
+} from './mock-auth/src/lib/claude-auth-flow'
 
 export class MockAuthProviderScenarios {
   static register(): void {
@@ -409,17 +416,11 @@ export class MockAuthProviderScenarios {
         )
 
         const form = page.getByTestId('claude-email-form')
+        await expect(form).not.toHaveAttribute('action')
+        await expect(form).toHaveAttribute('method', 'post')
         expect(
-          await form.evaluate((element) => ({
-            actionAttributePresent: element.hasAttribute('action'),
-            methodAttribute: element.getAttribute('method'),
-            resolvedAction: (element as HTMLFormElement).action,
-          })),
-        ).toEqual({
-          actionAttributePresent: false,
-          methodAttribute: 'post',
-          resolvedAction: 'https://claude.ai/login',
-        })
+          await form.evaluate((element) => (element as HTMLFormElement).action),
+        ).toBe('https://claude.ai/login')
         const email = form.getByLabel('Email')
         await expect(form.locator('input')).toHaveCount(1)
         await expect(email).toHaveAttribute('type', 'email')
@@ -465,13 +466,14 @@ export class MockAuthProviderScenarios {
           )
           .toBe(
             JSON.stringify({
-              submittedControl: 'Continue with email',
-              emailMatched: true,
-              postWithoutAction: true,
-              googleUntouched: true,
-              ssoUntouched: true,
-              disclosureUntouched: true,
-              marketingUntouched: true,
+              submittedControl: ClaudeAuthControl.ContinueWithEmail,
+              emailMatch: ClaudeAuthEmailMatch.Matched,
+              formMethod: ClaudeAuthFormMethod.Post,
+              formAction: ClaudeAuthFormActionKind.Omitted,
+              googleInteraction: ClaudeAuthInteractionState.Untouched,
+              ssoInteraction: ClaudeAuthInteractionState.Untouched,
+              disclosureInteraction: ClaudeAuthInteractionState.Untouched,
+              marketingInteraction: ClaudeAuthInteractionState.Untouched,
             }),
           )
         expect(interceptedClaudeRequestCount).toBeGreaterThan(1)

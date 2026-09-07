@@ -4,6 +4,11 @@ import siteShells from '../../fixtures/site-shells.json'
 import claudeTemplate from '../../fixtures/templates/claude.json'
 import {
   CLAUDE_MOCK_EMAIL,
+  ClaudeAuthControl,
+  ClaudeAuthEmailMatch,
+  ClaudeAuthFormActionKind,
+  ClaudeAuthFormMethod,
+  ClaudeAuthInteractionState,
   ClaudeAuthMockScenario,
   ClaudeAuthTransitionKind,
   type ClaudeAuthSubmission,
@@ -12,13 +17,13 @@ import {
 describe('Claude authentication mock', () => {
   const emailSubmission: ClaudeAuthSubmission = {
     email: CLAUDE_MOCK_EMAIL,
-    submittedControl: 'Continue with email',
-    formMethod: 'post',
-    formHasAction: false,
-    googleActivationCount: 0,
-    ssoActivationCount: 0,
-    disclosureActivationCount: 0,
-    marketingActivationCount: 0,
+    submittedControl: ClaudeAuthControl.ContinueWithEmail,
+    formMethod: ClaudeAuthFormMethod.Post,
+    formAction: ClaudeAuthFormActionKind.Omitted,
+    googleInteraction: ClaudeAuthInteractionState.Untouched,
+    ssoInteraction: ClaudeAuthInteractionState.Untouched,
+    disclosureInteraction: ClaudeAuthInteractionState.Untouched,
+    marketingInteraction: ClaudeAuthInteractionState.Untouched,
   }
 
   test('completes only through the observed email form', () => {
@@ -29,18 +34,55 @@ describe('Claude authentication mock', () => {
 
   test.each([
     ['a different email', { email: 'other@nook.test' }],
-    ['Google', { submittedControl: 'Continue with Google' }],
-    ['SSO', { submittedControl: 'Continue with SSO' }],
-    ['a GET method', { formMethod: 'get' }],
-    ['an authored action', { formHasAction: true }],
-    ['Google activation', { googleActivationCount: 1 }],
-    ['SSO activation', { ssoActivationCount: 1 }],
-    ['disclosure activation', { disclosureActivationCount: 1 }],
-    ['marketing activation', { marketingActivationCount: 1 }],
+    ['Google', { submittedControl: ClaudeAuthControl.ContinueWithGoogle }],
+    ['SSO', { submittedControl: ClaudeAuthControl.ContinueWithSso }],
+    [
+      'an unrecognized control',
+      { submittedControl: ClaudeAuthControl.Unrecognized },
+    ],
+    ['an unsupported method', { formMethod: ClaudeAuthFormMethod.Unsupported }],
+    ['an authored action', { formAction: ClaudeAuthFormActionKind.Authored }],
+    [
+      'Google activation',
+      { googleInteraction: ClaudeAuthInteractionState.Activated },
+    ],
+    [
+      'SSO activation',
+      { ssoInteraction: ClaudeAuthInteractionState.Activated },
+    ],
+    [
+      'disclosure activation',
+      { disclosureInteraction: ClaudeAuthInteractionState.Activated },
+    ],
+    [
+      'marketing activation',
+      { marketingInteraction: ClaudeAuthInteractionState.Activated },
+    ],
   ])('rejects %s', (_, changed) => {
     expect(
       ClaudeAuthMockScenario.transition({ ...emailSubmission, ...changed }),
     ).toBe(ClaudeAuthTransitionKind.Rejected)
+  })
+
+  test('normalizes email matches and submitted-control labels', () => {
+    expect(ClaudeAuthMockScenario.emailMatch(CLAUDE_MOCK_EMAIL)).toBe(
+      ClaudeAuthEmailMatch.Matched,
+    )
+    expect(ClaudeAuthMockScenario.emailMatch('other@nook.test')).toBe(
+      ClaudeAuthEmailMatch.Different,
+    )
+    expect(ClaudeAuthMockScenario.submittedControl('Continue with email')).toBe(
+      ClaudeAuthControl.ContinueWithEmail,
+    )
+    expect(
+      ClaudeAuthMockScenario.submittedControl('Continue with Google'),
+    ).toBe(ClaudeAuthControl.ContinueWithGoogle)
+    expect(ClaudeAuthMockScenario.submittedControl('Continue with SSO')).toBe(
+      ClaudeAuthControl.ContinueWithSso,
+    )
+    expect(ClaudeAuthMockScenario.submittedControl('Primary action')).toBe(
+      ClaudeAuthControl.Unrecognized,
+    )
   })
 
   test('maps the Anthropic catalog shell to the stable Claude capture', () => {

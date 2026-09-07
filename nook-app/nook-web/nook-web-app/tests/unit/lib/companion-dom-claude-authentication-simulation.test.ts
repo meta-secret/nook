@@ -16,6 +16,7 @@ import {
 import {
   DomAuthenticationSimulationOutcomeKind,
   simulateDomAuthentication,
+  type DomAuthenticationSimulationResult,
   type DomAuthenticationSimulationRequest,
 } from './companion-dom-authentication-simulation'
 import {
@@ -33,65 +34,124 @@ enum ClaudeActionKind {
   Authored = 'authored',
 }
 
+type ClaudeFixtureAction =
+  | { readonly kind: ClaudeActionKind.Omitted }
+  | { readonly kind: ClaudeActionKind.Authored; readonly destination: URL }
+
+enum ClaudeFixtureFormMethod {
+  Post = 'post',
+  Get = 'get',
+  Dialog = 'dialog',
+}
+
+enum ClaudeFixturePrimaryControl {
+  ContinueWithEmail = 'Continue with email',
+  ContinueWithGoogle = 'Continue with Google',
+  ContinueWithSso = 'Continue with SSO',
+  ForgotPassword = 'Forgot password',
+  DeleteAccount = 'Delete account',
+}
+
+enum ClaudeFixtureSubmitLayout {
+  Sole = 'sole',
+  Ambiguous = 'ambiguous',
+}
+
 type ClaudeFixtureOptions = {
-  readonly actionKind: ClaudeActionKind
-  readonly action: string
-  readonly method: string
-  readonly primaryLabel: string
-  readonly extraSubmitLabel: string
+  readonly action: ClaudeFixtureAction
+  readonly method: ClaudeFixtureFormMethod
+  readonly primaryControl: ClaudeFixturePrimaryControl
+  readonly submitLayout: ClaudeFixtureSubmitLayout
 }
 
 const CLAUDE_FIXTURE_DEFAULTS: ClaudeFixtureOptions = {
-  actionKind: ClaudeActionKind.Omitted,
-  action: '',
-  method: 'post',
-  primaryLabel: 'Continue with email',
-  extraSubmitLabel: '',
+  action: { kind: ClaudeActionKind.Omitted },
+  method: ClaudeFixtureFormMethod.Post,
+  primaryControl: ClaudeFixturePrimaryControl.ContinueWithEmail,
+  submitLayout: ClaudeFixtureSubmitLayout.Sole,
 }
 
-function claudeHtml({
-  actionKind,
-  action,
-  method,
-  primaryLabel,
-  extraSubmitLabel,
-}: ClaudeFixtureOptions = CLAUDE_FIXTURE_DEFAULTS): string {
-  const actionAttribute =
-    actionKind === ClaudeActionKind.Omitted ? '' : ` action="${action}"`
-  const extraSubmit = extraSubmitLabel
-    ? `<button type="submit">${extraSubmitLabel}</button>`
-    : ''
-  return `<header><nav aria-label="Claude"><a href="/">Claude</a><a href="/product">Product</a></nav></header>
-    <main><h1>Sign in</h1>
-      <button type="button" data-provider="google">Continue with Google</button>
-      <p aria-label="Authentication method separator">or</p>
-      <form method="${method}"${actionAttribute} data-testid="claude-email-form">
-        <label>Email<input name="email" type="email" autocomplete="email" aria-label="Email"></label>
-        <button type="submit">${primaryLabel}</button>${extraSubmit}
-      </form>
-      <button type="button" data-provider="sso">Continue with SSO</button>
-      <p data-testid="claude-disclosure">By continuing, you acknowledge our privacy policy and product update disclosure.</p>
-    </main>`
-}
+class ClaudeAuthenticationFixture {
+  private constructor(private readonly options: ClaudeFixtureOptions) {}
 
-function simulate(html: string) {
-  const request: DomAuthenticationSimulationRequest = {
-    fixture: { html },
-    credentials: FAKE_CREDENTIALS,
+  static stable(): ClaudeAuthenticationFixture {
+    return new ClaudeAuthenticationFixture(CLAUDE_FIXTURE_DEFAULTS)
   }
-  return simulateDomAuthentication(request)
-}
 
-function expectFailClosed(html: string): void {
-  const result = simulate(html)
-  expect(result).toMatchObject({
-    kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
-    filled: false,
-    submissionResult: FormSubmissionResult.NotObserved,
-  })
-  const email = document.querySelector<HTMLInputElement>('[name="email"]')
-  if (!email) throw new Error('expected rejected Claude email field')
-  expect(email.value).toBe('')
+  static withAction(destination: URL): ClaudeAuthenticationFixture {
+    return new ClaudeAuthenticationFixture({
+      ...CLAUDE_FIXTURE_DEFAULTS,
+      action: { kind: ClaudeActionKind.Authored, destination },
+    })
+  }
+
+  static withMethod(
+    method: ClaudeFixtureFormMethod,
+  ): ClaudeAuthenticationFixture {
+    return new ClaudeAuthenticationFixture({
+      ...CLAUDE_FIXTURE_DEFAULTS,
+      method,
+    })
+  }
+
+  static withPrimaryControl(
+    primaryControl: ClaudeFixturePrimaryControl,
+  ): ClaudeAuthenticationFixture {
+    return new ClaudeAuthenticationFixture({
+      ...CLAUDE_FIXTURE_DEFAULTS,
+      primaryControl,
+    })
+  }
+
+  static ambiguous(): ClaudeAuthenticationFixture {
+    return new ClaudeAuthenticationFixture({
+      ...CLAUDE_FIXTURE_DEFAULTS,
+      submitLayout: ClaudeFixtureSubmitLayout.Ambiguous,
+    })
+  }
+
+  html(): string {
+    const { action, method, primaryControl, submitLayout } = this.options
+    const actionAttribute =
+      action.kind === ClaudeActionKind.Authored
+        ? ` action="${action.destination.toString()}"`
+        : ''
+    const extraSubmit =
+      submitLayout === ClaudeFixtureSubmitLayout.Ambiguous
+        ? '<button type="submit">Primary action</button>'
+        : ''
+    return `<header><nav aria-label="Claude"><a href="/">Claude</a><a href="/product">Product</a></nav></header>
+      <main><h1>Sign in</h1>
+        <button type="button" data-provider="google">Continue with Google</button>
+        <p aria-label="Authentication method separator">or</p>
+        <form method="${method}"${actionAttribute} data-testid="claude-email-form">
+          <label>Email<input name="email" type="email" autocomplete="email" aria-label="Email"></label>
+          <button type="submit">${primaryControl}</button>${extraSubmit}
+        </form>
+        <button type="button" data-provider="sso">Continue with SSO</button>
+        <p data-testid="claude-disclosure">By continuing, you acknowledge our privacy policy and product update disclosure.</p>
+      </main>`
+  }
+
+  simulate(): DomAuthenticationSimulationResult {
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: { html: this.html() },
+      credentials: FAKE_CREDENTIALS,
+    }
+    return simulateDomAuthentication(request)
+  }
+
+  expectFailClosed(): void {
+    const result = this.simulate()
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+    const email = document.querySelector<HTMLInputElement>('[name="email"]')
+    if (!email) throw new Error('expected rejected Claude email field')
+    expect(email.value).toBe('')
+  }
 }
 
 afterEach(() => {
@@ -102,7 +162,7 @@ afterEach(() => {
 describe('Claude DOM-backed authentication simulation', () => {
   test('fills only email and submits its owned Continue with email control', () => {
     expect(location.href).toBe('https://claude.ai/login')
-    const result = simulate(claudeHtml())
+    const result = ClaudeAuthenticationFixture.stable().simulate()
 
     expect(result).toMatchObject({
       kind: DomAuthenticationSimulationOutcomeKind.Login,
@@ -181,7 +241,7 @@ describe('Claude DOM-backed authentication simulation', () => {
   })
 
   test('keeps provider alternatives outside the owned email form', () => {
-    document.body.innerHTML = claudeHtml()
+    document.body.innerHTML = ClaudeAuthenticationFixture.stable().html()
     const form = document.querySelector<HTMLFormElement>(
       '[data-testid="claude-email-form"]',
     )
@@ -193,53 +253,45 @@ describe('Claude DOM-backed authentication simulation', () => {
   })
 
   test('rejects a cross-origin destination', () => {
-    expectFailClosed(
-      claudeHtml({
-        ...CLAUDE_FIXTURE_DEFAULTS,
-        actionKind: ClaudeActionKind.Authored,
-        action: 'https://attacker.example/login',
-      }),
-    )
+    ClaudeAuthenticationFixture.withAction(
+      new URL('https://attacker.example/login'),
+    ).expectFailClosed()
   })
 
   test.each(['/signup', '/login?provider=google', '/account/delete'])(
     'rejects the unsafe same-origin action %s',
     (action) => {
-      expectFailClosed(
-        claudeHtml({
-          ...CLAUDE_FIXTURE_DEFAULTS,
-          actionKind: ClaudeActionKind.Authored,
-          action,
-        }),
-      )
+      ClaudeAuthenticationFixture.withAction(
+        new URL(action, location.origin),
+      ).expectFailClosed()
     },
   )
 
-  test.each(['get', 'dialog'])('rejects the %s form method', (method) => {
-    expectFailClosed(claudeHtml({ ...CLAUDE_FIXTURE_DEFAULTS, method }))
-  })
+  test.each([ClaudeFixtureFormMethod.Get, ClaudeFixtureFormMethod.Dialog])(
+    'rejects the %s form method',
+    (method) => {
+      ClaudeAuthenticationFixture.withMethod(method).expectFailClosed()
+    },
+  )
 
   test.each([
-    'Continue with Google',
-    'Continue with SSO',
-    'Forgot password',
-    'Delete account',
-  ])('rejects the unsafe primary control %s', (primaryLabel) => {
-    expectFailClosed(claudeHtml({ ...CLAUDE_FIXTURE_DEFAULTS, primaryLabel }))
+    ClaudeFixturePrimaryControl.ContinueWithGoogle,
+    ClaudeFixturePrimaryControl.ContinueWithSso,
+    ClaudeFixturePrimaryControl.ForgotPassword,
+    ClaudeFixturePrimaryControl.DeleteAccount,
+  ])('rejects the unsafe primary control %s', (primaryControl) => {
+    ClaudeAuthenticationFixture.withPrimaryControl(
+      primaryControl,
+    ).expectFailClosed()
     const submit = document.querySelector<HTMLButtonElement>(
       'form button[type="submit"]',
     )
     if (!submit) throw new Error('expected hostile Claude submit control')
-    expect(submit.textContent).toBe(primaryLabel)
+    expect(submit.textContent).toBe(primaryControl)
   })
 
   test('rejects an ambiguous owned form with two semantic submits', () => {
-    expectFailClosed(
-      claudeHtml({
-        ...CLAUDE_FIXTURE_DEFAULTS,
-        extraSubmitLabel: 'Primary action',
-      }),
-    )
+    ClaudeAuthenticationFixture.ambiguous().expectFailClosed()
     expect(
       document.querySelectorAll('form button[type="submit"]'),
     ).toHaveLength(2)

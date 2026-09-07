@@ -1,37 +1,44 @@
 <script lang="ts">
   import {
-    CLAUDE_MOCK_EMAIL,
+    ClaudeAuthControl,
+    ClaudeAuthInteractionState,
     ClaudeAuthMockScenario,
     ClaudeAuthTransitionKind,
   } from '../lib/claude-auth-flow'
   import { navigate } from '../lib/navigation'
 
   const EVIDENCE_KEY = 'claude-submission-evidence'
+
+  enum ClaudeAuthPresentationState {
+    Ready = 'ready',
+    Rejected = 'rejected',
+  }
+
   let email = $state('')
-  let googleActivationCount = $state(0)
-  let ssoActivationCount = $state(0)
-  let disclosureActivationCount = $state(0)
-  let marketingActivationCount = $state(0)
-  let error = $state('')
+  let googleInteraction = $state(ClaudeAuthInteractionState.Untouched)
+  let ssoInteraction = $state(ClaudeAuthInteractionState.Untouched)
+  let disclosureInteraction = $state(ClaudeAuthInteractionState.Untouched)
+  let marketingInteraction = $state(ClaudeAuthInteractionState.Untouched)
+  let presentationState = $state(ClaudeAuthPresentationState.Ready)
 
   function recordGoogle(event: Event): void {
     event.preventDefault()
-    googleActivationCount += 1
+    googleInteraction = ClaudeAuthInteractionState.Activated
   }
 
   function recordSso(event: Event): void {
     event.preventDefault()
-    ssoActivationCount += 1
+    ssoInteraction = ClaudeAuthInteractionState.Activated
   }
 
   function recordDisclosure(event: Event): void {
     event.preventDefault()
-    disclosureActivationCount += 1
+    disclosureInteraction = ClaudeAuthInteractionState.Activated
   }
 
   function recordMarketing(event: Event): void {
     event.preventDefault()
-    marketingActivationCount += 1
+    marketingInteraction = ClaudeAuthInteractionState.Activated
   }
 
   function submit(event: SubmitEvent): void {
@@ -40,34 +47,35 @@
     if (!(form instanceof HTMLFormElement)) return
     const submittedControl =
       event.submitter instanceof HTMLButtonElement
-        ? ((label) => (label ? label.trim() : ''))(event.submitter.textContent)
-        : ''
-    const completed =
-      ClaudeAuthMockScenario.transition({
-        email,
-        submittedControl,
-        formMethod: form.method,
-        formHasAction: form.hasAttribute('action'),
-        googleActivationCount,
-        ssoActivationCount,
-        disclosureActivationCount,
-        marketingActivationCount,
-      }) === ClaudeAuthTransitionKind.Completed
+        ? ClaudeAuthMockScenario.submittedControl(event.submitter.innerText)
+        : ClaudeAuthControl.Unrecognized
+    const formMethod = ClaudeAuthMockScenario.formMethod(form)
+    const formAction = ClaudeAuthMockScenario.formAction(form)
+    const transition = ClaudeAuthMockScenario.transition({
+      email,
+      submittedControl,
+      formMethod,
+      formAction,
+      googleInteraction,
+      ssoInteraction,
+      disclosureInteraction,
+      marketingInteraction,
+    })
     sessionStorage.setItem(
       EVIDENCE_KEY,
       JSON.stringify({
         submittedControl,
-        emailMatched: email === CLAUDE_MOCK_EMAIL,
-        postWithoutAction:
-          form.method === 'post' && !form.hasAttribute('action'),
-        googleUntouched: googleActivationCount === 0,
-        ssoUntouched: ssoActivationCount === 0,
-        disclosureUntouched: disclosureActivationCount === 0,
-        marketingUntouched: marketingActivationCount === 0,
+        emailMatch: ClaudeAuthMockScenario.emailMatch(email),
+        formMethod,
+        formAction,
+        googleInteraction,
+        ssoInteraction,
+        disclosureInteraction,
+        marketingInteraction,
       }),
     )
-    if (!completed) {
-      error = 'Authentication was not completed.'
+    if (transition === ClaudeAuthTransitionKind.Rejected) {
+      presentationState = ClaudeAuthPresentationState.Rejected
       return
     }
     navigate('/plain/success')
@@ -86,7 +94,9 @@
 <main>
   <h1>Sign in</h1>
   <p data-testid="mock-auth-scenario">claude-email-first</p>
-  {#if error}<p role="alert">{error}</p>{/if}
+  {#if presentationState === ClaudeAuthPresentationState.Rejected}
+    <p role="alert">Authentication was not completed.</p>
+  {/if}
 
   <button type="button" onclick={recordGoogle}>Continue with Google</button>
   <p aria-label="Authentication method separator">or</p>
