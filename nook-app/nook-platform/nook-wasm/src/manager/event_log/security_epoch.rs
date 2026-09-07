@@ -696,7 +696,7 @@ mod tests {
     fn recovery_plan_rejects_an_invalid_store_before_event_replay() -> anyhow::Result<()> {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
 
-        let error = match plan.prepare_execution("not-a-store", None) {
+        let error = match plan.prepare_execution("", None) {
             Err(error) => error,
             Ok(_) => anyhow::bail!("invalid store ids must fail closed"),
         };

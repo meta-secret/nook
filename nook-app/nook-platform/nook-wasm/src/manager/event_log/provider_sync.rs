@@ -404,24 +404,6 @@ impl NookVaultManager {
         Ok(())
     }
 
-    fn export_event_records_from_store(
-        store: &nook_core::LocalEventStore,
-    ) -> Result<Vec<EventLogStorageRecord>, NookError> {
-        let mut records = Vec::new();
-        for event_id in store.event_ids() {
-            let bytes = store.get_bytes(&event_id).ok_or_else(|| {
-                NookError::Database(format!("Event {} missing from local store.", event_id))
-            })?;
-            let event = nook_core::parse_event_storage_bytes(&bytes)?;
-            records.push(EventLogStorageRecord {
-                event_id: event_id.as_str().to_owned(),
-                path: event_id.storage_path(),
-                event,
-            });
-        }
-        Ok(records)
-    }
-
     async fn persist_merged_remote_events(
         &mut self,
         local: &mut nook_core::LocalEventStore,
@@ -476,16 +458,6 @@ impl NookVaultManager {
                 )
             })
             .collect()
-    }
-
-    pub(in crate::manager) async fn export_event_log_records(
-        &self,
-    ) -> Result<Vec<EventLogStorageRecord>, NookError> {
-        if self.vault.store_id.is_empty() {
-            return Ok(Vec::new());
-        }
-        let store = load_local_event_store(&self.vault.store_id).await?;
-        Self::export_event_records_from_store(&store)
     }
 
     pub(in crate::manager) async fn sync_external_event_log_records(
@@ -617,12 +589,16 @@ mod tests {
         bytes: Vec<u8>,
     }
 
+    #[expect(
+        unowned_function,
+        reason = "test fixture constructs a signed event for provider export coverage"
+    )]
     fn event_fixture() -> anyhow::Result<(EventId, EventStorageBytes, VaultEvent)> {
         let signing = SigningIdentity::generate()?.0;
         let event = VaultEvent::sign(
             VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: nook_core::StoreId::parse("store_syncguard1")?,
+                store_id: nook_core::StoreId::parse("store_testtoken11")?,
                 actor_id: signing.actor_id()?,
                 actor_signing_public_key: signing.public_key(),
                 parents: Vec::new(),

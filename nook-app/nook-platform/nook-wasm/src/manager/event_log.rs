@@ -10,6 +10,7 @@ mod extension_import;
 mod import_as_local;
 mod provider_io;
 mod provider_sync;
+mod provider_sync_export;
 mod records;
 mod security_epoch;
 
