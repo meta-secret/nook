@@ -523,6 +523,7 @@ pub enum AuthenticationUsernameEvidence {
     Absent,
     Generic,
     StandardsBasedEmail,
+    MixedPhoneOrEmail,
     WebAuthnEmail,
     Strong,
     Explicit,
@@ -539,6 +540,15 @@ pub fn authentication_username_evidence(
         return AuthenticationUsernameEvidence::Explicit;
     }
     let identity = expand_identity_text(&field.identity_text);
+    if field.input_type == PageInputType::Text
+        && field.login_context
+        && field.identity_text.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
+        && field.autocomplete_tokens.len() == 1
+        && has_autocomplete_token(&field.autocomplete_tokens, "tel-national")
+        && identity == "phone number or email"
+    {
+        return AuthenticationUsernameEvidence::MixedPhoneOrEmail;
+    }
     if has_autocomplete_token(&field.autocomplete_tokens, "email") {
         return if username_negative(&identity) {
             AuthenticationUsernameEvidence::Generic
@@ -575,6 +585,8 @@ pub fn strongest_authentication_username_evidence(
         AuthenticationUsernameEvidence::Explicit
     } else if evidence.contains(&AuthenticationUsernameEvidence::WebAuthnEmail) {
         AuthenticationUsernameEvidence::WebAuthnEmail
+    } else if evidence.contains(&AuthenticationUsernameEvidence::MixedPhoneOrEmail) {
+        AuthenticationUsernameEvidence::MixedPhoneOrEmail
     } else if evidence.contains(&AuthenticationUsernameEvidence::Strong) {
         AuthenticationUsernameEvidence::Strong
     } else if evidence.contains(&AuthenticationUsernameEvidence::StandardsBasedEmail) {

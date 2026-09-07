@@ -476,10 +476,23 @@ mod tests {
             authentication_username_evidence(&tesla),
             nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail
         );
+        let airbnb = NookPageInputFieldObservation::new(
+            nook_companion_core::PageInputType::Text,
+            false,
+            false,
+            vec!["tel-national".to_owned()],
+            "Phone number or email".to_owned(),
+            true,
+        );
+        assert_eq!(
+            authentication_username_evidence(&airbnb),
+            nook_companion_core::AuthenticationUsernameEvidence::MixedPhoneOrEmail
+        );
         assert_eq!(
             strongest_authentication_username_evidence(vec![
                 nook_companion_core::AuthenticationUsernameEvidence::Absent,
                 nook_companion_core::AuthenticationUsernameEvidence::StandardsBasedEmail,
+                nook_companion_core::AuthenticationUsernameEvidence::MixedPhoneOrEmail,
                 nook_companion_core::AuthenticationUsernameEvidence::WebAuthnEmail,
                 nook_companion_core::AuthenticationUsernameEvidence::Explicit,
                 nook_companion_core::AuthenticationUsernameEvidence::Strong,

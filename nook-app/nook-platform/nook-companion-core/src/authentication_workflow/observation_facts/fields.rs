@@ -33,6 +33,7 @@ impl AuthenticationFieldObservationFacts {
                 && matches!(
                     observation.authentication_username,
                     AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::MixedPhoneOrEmail
                         | AuthenticationUsernameEvidence::WebAuthnEmail
                         | AuthenticationUsernameEvidence::Explicit
                 );
@@ -88,5 +89,67 @@ impl AuthenticationFieldObservationFacts {
                 observation.ownership,
                 PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
             )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        AuthenticationDetailedAdvanceControlObservation, AuthenticationPageObservationFacts,
+        AuthenticationPageObservationFactsBatch, AuthenticationWorkflowKind,
+        AuthenticationWorkflowMatch, PageControlActionability, PageControlSemantics,
+        PageControlSubmissionDestinationSource,
+    };
+
+    #[test]
+    fn mixed_phone_or_email_get_matches_login_without_admitting_weak_evidence() {
+        let facts_for = |authentication_username| AuthenticationPageObservationFacts {
+            fields: AuthenticationFieldObservationFacts {
+                username_field_count: 1.into(),
+                ..Default::default()
+            },
+            detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
+                AuthenticationAdvanceControlObservation {
+                    actionability: PageControlActionability::Actionable,
+                    ownership: PageControlOwnership::OwnedForm,
+                    semantics: PageControlSemantics::SemanticSubmit,
+                    authentication_username,
+                    password_field_count: 0.into(),
+                    new_password_field_count: 0.into(),
+                    one_time_code_field_count: 0.into(),
+                    semantic_submit_control_count: 1.into(),
+                    source_origin: "https://www.airbnb.com".to_owned(),
+                    form_identity: String::new(),
+                    destination_identity: "https://www.airbnb.com/login".to_owned(),
+                    label: "Continue".to_owned(),
+                    machine_identity: String::new(),
+                    submission_method: PageControlSubmissionMethod::Get,
+                    submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+                },
+            ),
+            ..Default::default()
+        };
+        assert!(matches!(
+            AuthenticationPageObservationFactsBatch {
+                observations: vec![facts_for(AuthenticationUsernameEvidence::MixedPhoneOrEmail)],
+            }
+            .classify(),
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::Login
+        ));
+        for evidence in [
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+        ] {
+            assert_eq!(
+                AuthenticationPageObservationFactsBatch {
+                    observations: vec![facts_for(evidence)],
+                }
+                .classify(),
+                AuthenticationWorkflowMatch::NoMatch
+            );
+        }
     }
 }
