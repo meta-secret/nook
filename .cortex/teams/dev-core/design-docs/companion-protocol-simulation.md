@@ -34,8 +34,14 @@ infrastructure behavior is outside the test's purpose.
 - Rust DTOs define requests, observations, statuses, handoff contexts, and
   responses.
 - Rust validation admits untrusted values.
+- Status admission receives the discovery, returned status, and current
+  observation time.
+- Accepted admission returns a typed discovery transaction.
+- The handoff request carries that transaction instead of reconstructing its
+  correlation fields.
 - `CompanionExtensionProtocol` owns discovery and unlock classification.
-- The protocol owns request correlation and one-use nonce consumption.
+- `CompanionExtensionHandoffEndpoint` retains the discovery it issued.
+- That endpoint consumes the discovery when it authorizes a handoff.
 - `AuthorizedCompanionIdentityHandoff` is the capability produced by successful
   authorization.
 - `CompanionIdentityHandoffSealer` connects that capability to a real sealing
@@ -51,8 +57,11 @@ Its exports accept and return Rust-derived types.
 
 `nook-wasm` owns manager-backed website and extension endpoints.
 
-- `NookCompanionExtensionEndpoint` authorizes and seals through the same Rust
-  operation.
+- One `NookCompanionExtensionEndpoint` remains active from discovery through
+  authorization and sealing.
+- The endpoint authorizes and seals through the same Rust operation.
+- Authorization revalidates the transaction against current time.
+- Authorization also revalidates current unlocked presence.
 - `NookVaultManager` begins a website handoff and retains its pending request.
 - The manager consumes the exact pending request before finishing a handoff.
 - Pending recipient secret material is cleared on success and failure.
@@ -67,8 +76,10 @@ TypeScript owns browser lifecycle only.
 
 - It observes `window` and `chrome.runtime` events.
 - It enforces sender and origin checks at the browser boundary.
+- It supplies current time and current extension presence as observations.
 - It transports generated request and response DTOs.
 - It invokes the Rust endpoint selected by the browser event.
+- Offscreen code retains and frees the extension endpoint.
 
 TypeScript must not classify companion state, correlate requests, validate
 payloads, authorize handoffs, or choose portable workflow outcomes.
@@ -119,12 +130,22 @@ The composition-test slice adds this generated-package evidence:
 
 ### Browser delivery
 
-Production browser channels are untrusted delivery mechanisms.
+The adapter slice implements browser delivery for the identity handoff flow.
+Browser channels remain untrusted delivery mechanisms.
 They do not gain application semantics.
 
-An adapter decodes the incoming generated shape at the Rust boundary.
-Rust rejects malformed, stale, mismatched, or replayed values.
-The adapter returns the typed Rust result through the browser channel.
+The selected flow has these boundaries:
+
+- Website code sends a generated discovery DTO.
+- Rust status admission binds the discovery and returned status at receipt time.
+- The accepted transaction enters the website handoff request unchanged.
+- The service worker observes current extension presence.
+- Offscreen code delivers the authorization to the retained Rust endpoint.
+- Rust consumes the issued discovery before it authorizes and seals.
+- The typed response returns through the browser channel.
+
+Rust rejects malformed, stale, mismatched, revoked, or replayed values.
+The service worker and offscreen document own delivery and lifecycle only.
 
 Browser tests remain responsible for manifest routing, sender identity, origin
 checks, serialization delivery, and browser lifecycle behavior.
@@ -159,11 +180,17 @@ Its purpose is deterministic execution, not imitation by expectation.
 
 - Every external DTO is untrusted until Rust validation succeeds.
 - Discovery expiry is checked against an explicit observation time.
-- Request and vault correlation are carried through the Rust workflow.
+- Status admission binds discovery, status, and admission time into one typed
+  transaction.
+- The handoff request carries that exact transaction.
 - A handoff context must name the requested vault.
+- Authorization rechecks expiry against its current observation time.
+- Authorization rechecks current extension presence.
+- The retained extension endpoint must own the matching issued discovery.
 - The expected installation app key must match the unlocked extension manager.
 - Handoff authorization and sealing form one Rust-owned production operation.
-- A handoff nonce is consumed once.
+- Authorization atomically consumes the issued discovery before sealing.
+- A rejected or ambiguous authorization cannot reuse that transaction.
 - Website completion consumes the retained request before accepting a response.
 - Secret recipient material must not survive completion or rejection.
 - Sentinel extension access remains unrepresentable.
@@ -188,9 +215,14 @@ It does not introduce or migrate a browser transport.
 
 ### Adapter PR
 
-The third PR migrates browser delivery to generated DTOs and Rust admission.
+The third PR implements browser delivery through generated DTOs and Rust
+admission for the identity handoff flow.
 It removes TypeScript-owned companion decisions from the selected flow.
 Chrome and window messaging remain thin transport implementations.
+
+The service worker supplies current presence and time as observations.
+The offscreen document retains one endpoint across discovery and handoff.
+Rust owns transaction admission, revalidation, authorization, and consumption.
 
 ### Workflow-migration PRs
 
@@ -210,12 +242,21 @@ The framework slice is complete when the repository proves these facts:
 - generated DTOs carry the cross-WASM contract; and
 - deferred adapter work is not represented as implemented.
 
-The adapter and workflow PRs extend this evidence at browser boundaries.
-
 The composition-test slice adds these evidence obligations:
 
 - native matrices exercise portable and manager-backed outcomes;
 - both generated WASM packages initialize independently;
 - their only connection is direct structural DTO delivery;
 - the production authorize, seal, and finish ABI is exercised; and
-- production browser adapter migration remains deferred.
+- the composition remains independent of browser adapter behavior.
+
+The adapter slice adds these evidence obligations:
+
+- status admission binds discovery, status, and current time;
+- the accepted transaction is carried through the handoff request;
+- one extension endpoint spans discovery through authorization and sealing;
+- authorization revalidates current time and current presence;
+- transaction consumption is fail-closed and one-use; and
+- browser and offscreen code own only delivery and lifecycle.
+
+Pairing, unlock, and event-log message migrations remain deferred.
