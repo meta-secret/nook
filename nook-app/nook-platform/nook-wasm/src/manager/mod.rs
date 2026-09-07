@@ -42,6 +42,7 @@ mod login_save;
 mod multi_device;
 mod passkeys;
 mod password;
+mod password_unlock;
 mod search_catalog;
 mod secrets;
 mod sentinel;
