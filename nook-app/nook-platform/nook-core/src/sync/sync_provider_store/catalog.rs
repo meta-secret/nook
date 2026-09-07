@@ -808,7 +808,7 @@ mod tests {
     }
 
     #[test]
-    fn provider_storage_details_match_persisted_rows() -> anyhow::Result<()> {
+    fn provider_storage_details_match_persisted_rows() {
         let labels = ProviderStorageDetailLabels::catalog_fixture();
         let local = StorageProviderData {
             id: "local".to_owned(),
@@ -865,7 +865,6 @@ mod tests {
             .storage_detail(&labels),
             format!("{DEFAULT_DRIVE_BACKUP_NAME} · Signed in with iCloud")
         );
-        Ok(())
     }
 
     #[test]
