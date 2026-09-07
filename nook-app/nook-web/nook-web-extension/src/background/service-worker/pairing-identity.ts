@@ -493,7 +493,10 @@ export async function discoverPairedVaultIdentity(
       return await discover(lockedPresence)
     }
     const nonce = randomNonce()
-    const presence = {
+    const presence: Extract<
+      CompanionExtensionPresence,
+      CompanionUnlockedPresenceShape
+    > = {
       kind: 'unlocked',
       vault_type: grant.vaultType,
       vault_store_id: grant.vaultStoreId,
@@ -509,10 +512,7 @@ export async function discoverPairedVaultIdentity(
         nonce,
         scopes: grant.scopes,
       },
-    } satisfies Extract<
-      CompanionExtensionPresence,
-      CompanionUnlockedPresenceShape
-    >
+    }
     return await discover(presence)
   } catch {
     return await discover(unavailablePresence)

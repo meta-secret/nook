@@ -619,13 +619,13 @@ export async function adoptExtensionIdentity(
 ): Promise<void> {
   const { manager, request } = args;
   if (request.source === ExtensionIdentityRequestSource.PairedVault) {
-    const begin = {
+    const begin: CompanionWebsiteHandoffBegin = {
       transaction: request.protocolTransaction,
       context: {
         kind: "paired-vault",
         vault_store_id: request.vaultStoreId,
       },
-    } satisfies CompanionWebsiteHandoffBegin;
+    };
     const handoff = manager.begin_companion_identity_handoff(begin);
     const message: ExtensionPairedVaultIdentityHandoffRequestMessage = {
       type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,

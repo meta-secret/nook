@@ -3,12 +3,15 @@ import type { CompanionIdentityStatus } from './nook-companion-wasm/nook_compani
 export type ExtensionPairedVaultIdentityStatusMessageStatus =
   CompanionIdentityStatus['status']
 
-const extensionPairedVaultIdentityStatusMessageStatus = {
+const extensionPairedVaultIdentityStatusMessageStatusValues = {
   Unavailable: 'unavailable',
   Locked: 'locked',
   DifferentVault: 'different-vault',
   Unlocked: 'unlocked',
 } satisfies Record<string, ExtensionPairedVaultIdentityStatusMessageStatus>
+
+const extensionPairedVaultIdentityStatusMessageStatus: typeof extensionPairedVaultIdentityStatusMessageStatusValues =
+  extensionPairedVaultIdentityStatusMessageStatusValues
 
 export const ExtensionPairedVaultIdentityStatusMessageStatus = Object.freeze(
   extensionPairedVaultIdentityStatusMessageStatus,
