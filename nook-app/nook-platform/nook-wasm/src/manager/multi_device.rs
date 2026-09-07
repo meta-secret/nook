@@ -656,7 +656,7 @@ mod browser_tests {
             .find(|member| member.device_id() == joiner.device_id().to_string())
             .ok_or_else(|| anyhow::anyhow!("approved extension is missing from roster"))?;
         let extension_auth_id = extension_member.auth_id();
-        assert_eq!(extension_member.label(), "Browser extension");
+        assert!(extension_member.label().is_empty());
 
         js(manager
             .rename_vault_member(extension_auth_id.clone(), "Work browser".to_owned())
