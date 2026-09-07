@@ -70,7 +70,7 @@ impl NookVaultManager {
             }
         }
 
-        let auth_id = SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
+        let auth_id = SecretId::from_vault_record(identity.auth_id().as_str());
         if self
             .stored_records_snapshot()
             .iter()
@@ -126,10 +126,10 @@ impl NookVaultManager {
         let parsed_secrets = SymmetricKey::parse(&secrets_key)?;
         let parsed_members = SymmetricKey::parse(&members_key)?;
 
-        let auth_id = SecretId::from_vault_record(nook_core::dec_auth_id(&identity).as_str());
+        let auth_id = SecretId::from_vault_record(identity.auth_id().as_str());
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
-            if record.key != auth_id && !nook_core::is_members_stored_record(&record)? {
+            if record.key != auth_id && !nook_core::VaultMetaRecord::is_member(&record)? {
                 retained.push(record);
             }
         }
@@ -196,7 +196,7 @@ impl NookVaultManager {
             .validate_session_access(self.vault.architecture.vault_type)?;
         let identity = self.device_identity()?;
         let records = self.stored_records_snapshot();
-        let pending = nook_core::list_join_requests(&records)?;
+        let pending = nook_core::VaultRecordView::new(&records).list_join_requests()?;
         let join_device = DeviceId::parse(&join_device_id)?;
         let join = pending
             .into_iter()
@@ -243,9 +243,7 @@ impl NookVaultManager {
                     ],
                 };
                 let member_records = nook_core::build_members_records(&roster, &members_key)?;
-                self.vault
-                    .meta
-                    .remove_key(&nook_core::join_record_key(&join.device_id));
+                self.vault.meta.remove_key(join.device_id.as_str());
                 self.vault.meta.replace_member_records(&member_records)?;
                 operations.push(VaultOperation::SentinelParticipantEnrolled {
                     device_id: join.device_id.clone(),
@@ -327,7 +325,7 @@ mod tests {
     -> anyhow::Result<()> {
         let first = nook_core::DeviceIdentity::generate()?;
         let second = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let policy = nook_core::SentinelPolicy {
             threshold: 2.into(),
             required_participants: 2.into(),
@@ -384,7 +382,7 @@ mod tests {
         let first = nook_core::DeviceIdentity::generate()?;
         let second = nook_core::DeviceIdentity::generate()?;
         let third = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
             nook_core::DeviceMode::Standard,
@@ -436,7 +434,7 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn empty_multi_device_queries_are_safe() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
-        manager.vault.members_key = nook_core::generate_vault_keys()?.members_key.to_string();
+        manager.vault.members_key = nook_core::VaultKeys::generate()?.members_key.to_string();
         assert!(manager.init_device().is_err());
         assert!(manager.list_pending_joins()?.is_empty());
         assert!(manager.list_vault_members()?.is_empty());
@@ -518,7 +516,7 @@ mod browser_tests {
         let first = nook_core::DeviceIdentity::generate()?;
         let second = nook_core::DeviceIdentity::generate()?;
         let third = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
             nook_core::DeviceMode::Standard,
@@ -668,7 +666,7 @@ mod browser_tests {
         enrollee.device.identity_private_key = enrollee_identity.secret_string().into_inner();
         enrollee.vault.store_id = nook_core::generate_store_id()?.to_string();
         enrollee.bootstrap_event_log_genesis().await?;
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let enrolled = js(enrollee
             .enroll_with_keys(keys.secrets_key.to_string(), keys.members_key.to_string())
             .await)?;
@@ -793,7 +791,7 @@ impl NookVaultManager {
         let records = self.stored_records_snapshot();
         let join_device = DeviceId::parse(&join_device_id)?;
         if !records.iter().any(|record| {
-            nook_core::parse_join_request(record.value.as_str())
+            nook_core::JoinRequest::parse_json(record.value.as_str())
                 .is_ok_and(|join| join.device_id == join_device)
         }) {
             return Err(NookError::Database("Join request not found.".to_owned()).into());

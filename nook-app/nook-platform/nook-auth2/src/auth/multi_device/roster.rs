@@ -1,9 +1,8 @@
 //! Encrypted vault-member roster storage and member lifecycle operations.
 
 use super::{
-    DeviceIdentity, JoinRequest, MemberEntry, VaultMember, dec_auth_id_from_public_key,
-    device_id_from_public_key, is_auth_id, is_members_stored_record, member_record_key_matches,
-    member_stored_key, sentinel_share_record_key,
+    DeviceIdentity, JoinRequest, MemberEntry, VaultMember, VaultMetaRecord,
+    member_record_key_matches, sentinel_share_record_key,
 };
 use crate::{
     AgeArmoredCiphertext, AuthKeyId, MultiDeviceError, MultiDeviceResult, SecretId,
@@ -23,7 +22,7 @@ pub fn member_from_identity(identity: &DeviceIdentity, enrolled_at: &str) -> Vau
 
 pub fn member_from_join(join: &JoinRequest) -> MultiDeviceResult<VaultMember> {
     Ok(VaultMember {
-        auth_id: dec_auth_id_from_public_key(&join.public_key)?,
+        auth_id: join.public_key.auth_id()?,
         device_id: join.device_id.clone(),
         public_key: join.public_key.clone(),
         enrolled_at: join.requested_at.clone(),
@@ -43,7 +42,7 @@ fn member_to_entry(member: &VaultMember) -> MemberEntry {
 fn entry_to_member(entry: &MemberEntry) -> MultiDeviceResult<VaultMember> {
     Ok(VaultMember {
         auth_id: entry.pk_id.clone(),
-        device_id: device_id_from_public_key(&entry.pk)?,
+        device_id: entry.pk.try_app_id()?,
         public_key: entry.pk.clone(),
         enrolled_at: entry.enrolled_at.clone(),
         label: entry.label.clone(),
@@ -74,7 +73,7 @@ pub fn build_members_records(
     for member in roster {
         let entry = member_to_entry(member);
         records.push(StoredSecretRecord {
-            key: SecretId::from_vault_record(&member_stored_key(&entry.pk_id)),
+            key: SecretId::from_vault_record(&entry.pk_id.member_record_key()),
             secret_type: None,
             value: StoredRecordPayload::from_age_armored(encrypt_member_entry(
                 &entry,
@@ -91,7 +90,7 @@ pub fn resolve_member_roster(
 ) -> MultiDeviceResult<Vec<VaultMember>> {
     let mut roster = Vec::new();
     for record in records {
-        if !is_members_stored_record(record)? {
+        if !VaultMetaRecord::is_member(record)? {
             continue;
         }
         let entry = decrypt_member_entry(
@@ -101,8 +100,9 @@ pub fn resolve_member_roster(
         if !member_record_key_matches(record.key.as_str(), &entry.pk_id) {
             let pk_id = crate::normalize_auth_key_id(entry.pk_id.as_str())
                 .map_or_else(|_| entry.pk_id.to_string(), |id| id.to_string());
-            let expected_key =
-                member_stored_key(&AuthKeyId::parse(&pk_id).unwrap_or(entry.pk_id.clone()));
+            let expected_key = AuthKeyId::parse(&pk_id)
+                .unwrap_or(entry.pk_id.clone())
+                .member_record_key();
             return Err(MultiDeviceError::MemberRecordKeyMismatch {
                 expected_key,
                 actual_key: record.key.to_string(),
@@ -136,7 +136,7 @@ pub fn replace_member_records(
 ) -> MultiDeviceResult<()> {
     let mut replacement = Vec::with_capacity(records.len() + member_records.len());
     for record in records.iter() {
-        if !is_members_stored_record(record)? {
+        if !VaultMetaRecord::is_member(record)? {
             replacement.push(record.clone());
         }
     }
@@ -151,7 +151,7 @@ pub fn rename_vault_member(
     auth_id: &AuthKeyId,
     label: &str,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    if !is_auth_id(auth_id.as_str()) {
+    if !crate::is_auth_key_id(auth_id.as_str()) {
         return Err(MultiDeviceError::InvalidMemberId);
     }
     let trimmed = label.trim();
@@ -184,7 +184,7 @@ pub fn revoke_vault_member(
     members_key: &SymmetricKey,
     auth_id: &AuthKeyId,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    if !is_auth_id(auth_id.as_str()) {
+    if !crate::is_auth_key_id(auth_id.as_str()) {
         return Err(MultiDeviceError::InvalidMemberId);
     }
     let roster = resolve_member_roster(records, members_key)?;
@@ -202,7 +202,7 @@ pub fn revoke_vault_member(
         .iter()
         .filter(|record| {
             record.key.as_str() != auth_id.as_str()
-                && record.key.as_str() != member_stored_key(auth_id)
+                && record.key.as_str() != auth_id.member_record_key()
                 && record.key.as_str() != revoked_share_key
         })
         .cloned()
@@ -230,9 +230,8 @@ mod tests {
 
     use super::*;
     use crate::auth::multi_device::{
-        JoinRequestApproval, JoinRequestIssuance, MEMBER_RECORD_PREFIX, VaultKeys,
-        create_sentinel_share_records, generate_vault_keys, genesis_auth_record,
-        pending_join_for_device, resolve_members_key, resolve_secrets_key,
+        JoinRequestApproval, JoinRequestIssuance, MEMBER_RECORD_PREFIX, VaultKeys, VaultRecordView,
+        create_sentinel_share_records, pending_join_for_device,
     };
     use crate::{SecretType, StoredRecordPayload};
 
@@ -242,11 +241,7 @@ mod tests {
         keys: &VaultKeys,
     ) -> anyhow::Result<(DeviceIdentity, Vec<StoredSecretRecord>)> {
         let genesis = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &genesis,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let mut records = vec![genesis.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.extend(genesis_members_records(
             &genesis,
             &keys.members_key,
@@ -287,7 +282,7 @@ mod tests {
 
     #[test]
     fn rename_vault_member_trims_clears_and_preserves_key_access() -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
         records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
@@ -309,7 +304,10 @@ mod tests {
                 .as_deref(),
             Some("Travel iPad")
         );
-        assert_eq!(resolve_members_key(&records, &joiner)?, keys.members_key);
+        assert_eq!(
+            VaultRecordView::new(&records).members_key(&joiner)?,
+            keys.members_key
+        );
 
         let cleared = rename_vault_member(&renamed, &keys.members_key, &joiner.auth_id(), "   ")?;
         let roster = resolve_member_roster(&cleared, &keys.members_key)?;
@@ -327,7 +325,7 @@ mod tests {
     #[test]
     fn revoke_vault_member_removes_auth_and_member_rows_but_not_user_secrets() -> anyhow::Result<()>
     {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
         let user_secret = user_secret_record("secret_note001", "encrypted-user-secret");
@@ -342,8 +340,11 @@ mod tests {
 
         let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id())?;
 
-        assert!(resolve_secrets_key(&revoked, &joiner).is_err());
-        assert_eq!(resolve_secrets_key(&revoked, &genesis)?, keys.secrets_key);
+        assert!(VaultRecordView::new(&revoked).secrets_key(&joiner).is_err());
+        assert_eq!(
+            VaultRecordView::new(&revoked).secrets_key(&genesis)?,
+            keys.secrets_key
+        );
         assert!(revoked.iter().any(|record| record == &user_secret));
         assert!(!revoked.iter().any(|record| {
             record.key.as_str() == sentinel_share_record_key(joiner.device_id())
@@ -359,7 +360,7 @@ mod tests {
 
     #[test]
     fn revoke_last_access_and_missing_member_are_errors() -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let (genesis, records) = genesis_vault(&keys)?;
         let stranger = DeviceIdentity::generate()?;
 
@@ -385,7 +386,7 @@ mod tests {
 
     #[test]
     fn member_roster_rejects_mismatched_record_key() -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let (genesis, records) = genesis_vault(&keys)?;
         let mut member_record = records
             .iter()
@@ -394,7 +395,7 @@ mod tests {
             .clone();
         let other_identity = DeviceIdentity::generate()?;
         member_record.key =
-            SecretId::from_vault_record(&member_stored_key(&other_identity.auth_id()));
+            SecretId::from_vault_record(&other_identity.auth_id().member_record_key());
 
         assert!(matches!(
             resolve_member_roster(&[member_record], &keys.members_key),

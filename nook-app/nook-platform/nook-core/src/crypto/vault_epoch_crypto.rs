@@ -10,13 +10,13 @@ use crate::SecretValue;
 
 use crate::EncryptedSecretPayload;
 use crate::errors::{VaultEpochError, VaultEpochResult, VaultResult};
-use crate::multi_device::VaultKeys;
+use crate::multi_device::{AuthRecordIssuance, VaultKeys};
 #[cfg(test)]
 use crate::secret_types::StoredRecordPayload;
 use crate::secret_types::StoredSecretRecord;
 use crate::vault_crypto::VaultCrypto;
 use crate::vault_wire::{AgeArmoredCiphertext, OpaqueCiphertext, Sha256Hex, SymmetricKey};
-use crate::{auth_record, build_members_records, resolve_member_roster};
+use crate::{build_members_records, resolve_member_roster};
 
 /// Re-encrypt user secrets under a new `secrets_key`.
 pub struct SecretEpochReencryption<'a> {
@@ -95,7 +95,7 @@ impl<'a> VaultKeyRotation<'a> {
             user_records,
             old_secrets_key,
         } = self;
-        let new_keys = crate::generate_vault_keys()?;
+        let new_keys = crate::VaultKeys::generate()?;
         let secrets =
             SecretEpochReencryption::new(user_records, old_secrets_key, &new_keys.secrets_key)
                 .reencrypt()?;
@@ -168,12 +168,15 @@ impl<'a> VaultMetaRecordRewrap<'a> {
         let roster = resolve_member_roster(records_snapshot, old_members_key)?;
         let mut records = Vec::with_capacity(roster.len().saturating_mul(2));
         for member in &roster {
-            records.push(auth_record(
-                &member.auth_id,
-                &new_keys.secrets_key,
-                &new_keys.members_key,
-                &member.public_key,
-            )?);
+            records.push(
+                AuthRecordIssuance::new(
+                    &member.auth_id,
+                    &new_keys.secrets_key,
+                    &new_keys.members_key,
+                    &member.public_key,
+                )
+                .issue()?,
+            );
         }
         records.extend(build_members_records(&roster, &new_keys.members_key)?);
         Ok(records)
@@ -234,9 +237,8 @@ mod tests {
     use crate::{
         ApiKeySecret, DeviceIdentity, IsoTimestamp, JoinRequestApproval, JoinRequestIssuance,
         SecretId, SecretValue, VaultMetaOperationApplier, VaultMetaOperationRequest,
-        VaultOperation, VaultResult, generate_vault_keys, genesis_auth_record,
-        genesis_members_records, pending_join_for_device, replace_member_records,
-        resolve_members_key, resolve_secrets_key,
+        VaultOperation, VaultRecordView, VaultResult, genesis_members_records,
+        pending_join_for_device, replace_member_records,
     };
 
     #[test]
@@ -272,14 +274,10 @@ mod tests {
 
     #[test]
     fn members_checkpoint_hash_produces_hex_digest() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
-        let new_keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
+        let new_keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.extend(genesis_members_records(
             &identity,
             &keys.members_key,
@@ -294,14 +292,10 @@ mod tests {
 
     #[test]
     fn rewrap_vault_meta_updates_auth_and_member_rows() -> VaultResult<()> {
-        let old_keys = generate_vault_keys()?;
-        let new_keys = generate_vault_keys()?;
+        let old_keys = VaultKeys::generate()?;
+        let new_keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &old_keys.secrets_key,
-            &old_keys.members_key,
-        )?];
+        let mut records = vec![identity.auth_record(&old_keys.secrets_key, &old_keys.members_key)?];
         records.extend(genesis_members_records(
             &identity,
             &old_keys.members_key,
@@ -322,15 +316,11 @@ mod tests {
 
     #[test]
     fn checkpoint_meta_replay_preserves_every_device_grant() -> anyhow::Result<()> {
-        let old_keys = generate_vault_keys()?;
-        let new_keys = generate_vault_keys()?;
+        let old_keys = VaultKeys::generate()?;
+        let new_keys = VaultKeys::generate()?;
         let owner = DeviceIdentity::generate()?;
         let joiner = DeviceIdentity::generate()?;
-        let mut records = vec![genesis_auth_record(
-            &owner,
-            &old_keys.secrets_key,
-            &old_keys.members_key,
-        )?];
+        let mut records = vec![owner.auth_record(&old_keys.secrets_key, &old_keys.members_key)?];
         records.extend(genesis_members_records(
             &owner,
             &old_keys.members_key,
@@ -367,11 +357,11 @@ mod tests {
         let replayed = state.to_stored_records();
         for identity in [&owner, &joiner] {
             assert_eq!(
-                resolve_secrets_key(&replayed, identity)?,
+                VaultRecordView::new(&replayed).secrets_key(identity)?,
                 new_keys.secrets_key
             );
             assert_eq!(
-                resolve_members_key(&replayed, identity)?,
+                VaultRecordView::new(&replayed).members_key(identity)?,
                 new_keys.members_key
             );
         }

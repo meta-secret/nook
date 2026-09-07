@@ -10,9 +10,8 @@ use crate::{DatabaseError, MultiDeviceError, VaultMetaRecord, VaultName, VaultSt
 use crate::errors::{self, VaultResult};
 use crate::{
     ConnectAccessStatus, Database, DeviceIdentity, StoredSecretRecord, VaultArchitecture,
-    VaultCrypto, VaultFormatDocument, VaultMetaState, VaultType, VaultUnlock,
-    assess_connect_access, resolve_members_key, resolve_secrets_key, user_stored_records,
-    vault_has_multi_device_records,
+    VaultCrypto, VaultFormatDocument, VaultMetaState, VaultRecordView, VaultType, VaultUnlock,
+    assess_connect_access,
 };
 use std::fmt;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -104,7 +103,7 @@ impl<'a> VaultContent<'a> {
         }
         let format = VaultFormatDocument::new(self.content).detect()?;
         let records = VaultFormatDocument::new(self.content).deserialize(format)?;
-        Ok(!vault_has_multi_device_records(&records)?)
+        Ok(!VaultRecordView::new(&records).has_multi_device_records()?)
     }
 
     /// Pre-flight connect status tag for the web layer.
@@ -114,7 +113,7 @@ impl<'a> VaultContent<'a> {
         }
         let format = VaultFormatDocument::new(self.content).detect()?;
         let records = VaultFormatDocument::new(self.content).deserialize(format)?;
-        if !vault_has_multi_device_records(&records)? {
+        if !VaultRecordView::new(&records).has_multi_device_records()? {
             return Ok(VaultAccessStatus::NewVault);
         }
         Ok(assess_connect_access(&records, identity)?.into())
@@ -157,8 +156,9 @@ impl<'a> VaultContent<'a> {
         }
         let stored_records = VaultFormatDocument::new(self.content).deserialize(format)?;
         Self::validate_user_secret_types(&stored_records)?;
-        let secrets_key = resolve_secrets_key(&stored_records, identity)?;
-        let members_key = resolve_members_key(&stored_records, identity)?;
+        let record_view = VaultRecordView::new(&stored_records);
+        let secrets_key = record_view.secrets_key(identity)?;
+        let members_key = record_view.members_key(identity)?;
         Ok(UnlockedVault {
             meta: VaultMetaState::from_stored_records(&stored_records)?,
             secrets_key,
@@ -239,7 +239,8 @@ impl UnlockedVault {
     /// Consume resolved keys into a hydrated plaintext session database.
     pub fn hydrate(self) -> VaultResult<LoadedVault> {
         let crypto = VaultCrypto::new(&self.secrets_key)?;
-        let user_records = user_stored_records(&self.meta.to_stored_records())?;
+        let stored_records = self.meta.to_stored_records();
+        let user_records = VaultRecordView::new(&stored_records).user_records()?;
         let db = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
         Ok(LoadedVault {
             database: db,
@@ -276,8 +277,8 @@ mod tests {
         );
     }
     use crate::{
-        DeviceMode, ReplicationType, SentinelPolicy, VaultRecordSet, VaultResult,
-        generate_store_id, generate_vault_keys, genesis_auth_record,
+        DeviceMode, ReplicationType, SentinelPolicy, VaultKeys, VaultRecordSet, VaultResult,
+        generate_store_id,
     };
 
     #[test]
@@ -340,13 +341,9 @@ mod tests {
 
     #[test]
     fn sentinel_yaml_rejects_full_device_key_envelopes_before_write() -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
-        let records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         let architecture = VaultArchitecture {
             device_mode: DeviceMode::Standard,
             vault_type: VaultType::Sentinel,
@@ -387,7 +384,7 @@ mod tests {
 
     #[test]
     fn sentinel_yaml_reconstructs_with_threshold_identities() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let third = DeviceIdentity::generate()?;

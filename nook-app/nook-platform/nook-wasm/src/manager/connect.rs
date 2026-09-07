@@ -306,7 +306,7 @@ mod tests {
             simple
                 .stored_records_snapshot()
                 .iter()
-                .any(|record| nook_core::is_auth_stored_record(record).unwrap_or(false))
+                .any(|record| nook_core::VaultMetaRecord::is_auth(record).unwrap_or(false))
         );
         assert!(
             simple
@@ -331,7 +331,7 @@ mod tests {
             !sentinel
                 .stored_records_snapshot()
                 .iter()
-                .any(|record| nook_core::is_auth_stored_record(record).unwrap_or(false))
+                .any(|record| nook_core::VaultMetaRecord::is_auth(record).unwrap_or(false))
         );
         assert!(
             sentinel

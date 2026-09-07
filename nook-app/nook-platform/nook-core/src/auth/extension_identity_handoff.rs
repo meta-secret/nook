@@ -10,7 +10,6 @@ use std::mem;
 use crate::{
     AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, VaultResult,
-    encrypt_for_recipient,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
@@ -172,10 +171,7 @@ impl CheckedExtensionIdentitySeal<'_> {
         let plaintext = Zeroizing::new(
             serde_json::to_string(&payload).map_err(ExtensionIdentityHandoffError::Serialize)?,
         );
-        Ok(encrypt_for_recipient(
-            plaintext.as_bytes(),
-            recipient_public_key,
-        )?)
+        Ok(recipient_public_key.seal_bytes(plaintext.as_bytes())?)
     }
 }
 
@@ -258,7 +254,7 @@ mod tests {
     use crate::{
         AgeArmoredCiphertext, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
         DeviceSigningPublicKey, ExtensionIdentityHandoffError, SigningIdentity, SigningSeedHex,
-        VaultError, VaultResult, encrypt_for_recipient,
+        VaultError, VaultResult,
     };
     use std::ptr;
     use zeroize::{Zeroize, Zeroizing};
@@ -342,10 +338,7 @@ mod tests {
         }
 
         fn encrypt_text(&self, plaintext: &str) -> VaultResult<AgeArmoredCiphertext> {
-            Ok(encrypt_for_recipient(
-                plaintext.as_bytes(),
-                &self.recipient_key,
-            )?)
+            Ok(self.recipient_key.seal_bytes(plaintext.as_bytes())?)
         }
     }
 

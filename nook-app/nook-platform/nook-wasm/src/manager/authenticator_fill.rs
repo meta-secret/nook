@@ -87,7 +87,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn authenticator_listing_filters_by_type_and_non_secret_metadata() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         insert_secret(
@@ -135,7 +135,7 @@ mod wasm_tests {
 
     #[wasm_bindgen_test]
     fn authenticator_code_reveals_totp_and_rejects_other_secret_types() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         insert_secret(

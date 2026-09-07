@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
     DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, MultiDeviceResult,
-    SentinelShareOpening, StoredSecretRecord, encrypt_for_recipient,
+    SentinelShareOpening, StoredSecretRecord,
 };
 
 /// A request with a valid signature bound to the supplied expected signing key.
@@ -127,10 +127,9 @@ impl CheckedSentinelUnlockRequest {
             participant_device_id: identity.device_id().clone(),
             participant_signing_public_key,
             share_index: contribution.opened_share.share_index,
-            ciphertext: encrypt_for_recipient(
-                &plaintext,
-                &request.requester_encryption_public_key,
-            )?,
+            ciphertext: request
+                .requester_encryption_public_key
+                .seal_bytes(&plaintext)?,
             signature: String::new(),
         };
         response.signature = hex::encode(signing_key.sign(&response.signing_bytes()?).to_bytes());

@@ -7,9 +7,7 @@
 
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
-use crate::{
-    Database, DeviceIdentity, VaultContent, VaultMetaState, VaultUnlock, merge_remote_join_records,
-};
+use crate::{Database, DeviceIdentity, VaultContent, VaultMetaState, VaultUnlock};
 
 /// Outcome of comparing remote YAML against the last synced snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,7 +83,7 @@ impl<'a> YamlSyncSession<'a> {
 
         let format = crate::VaultFormatDocument::new(self.content).detect()?;
         let fresh_records = crate::VaultFormatDocument::new(self.content).deserialize(format)?;
-        merge_remote_join_records(self.state, &fresh_records)?;
+        self.state.replace_join_records(&fresh_records)?;
         Ok(YamlSyncOutcome::Reloaded(Box::new(self.reload()?)))
     }
 
@@ -114,7 +112,7 @@ mod tests {
     use crate::errors;
     use crate::{
         PasswordEnvelope, PasswordUnlockEntry, VaultKeys, VaultRecordSet, VaultResult,
-        generate_store_id, generate_vault_keys, genesis_auth_record, genesis_members_records,
+        generate_store_id, genesis_members_records,
     };
 
     struct YamlSyncTestData;
@@ -124,11 +122,7 @@ mod tests {
             keys: &VaultKeys,
             identity: &DeviceIdentity,
         ) -> VaultResult<crate::StoredVaultYaml> {
-            let mut records = vec![genesis_auth_record(
-                identity,
-                &keys.secrets_key,
-                &keys.members_key,
-            )?];
+            let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
             records.extend(genesis_members_records(
                 identity,
                 &keys.members_key,
@@ -164,7 +158,7 @@ mod tests {
 
     #[test]
     fn unchanged_when_content_matches_and_keys_present() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let yaml = YamlSyncTestData::genesis_yaml(&keys, &identity)?;
         let yaml_str = yaml.as_str();
@@ -184,14 +178,10 @@ mod tests {
 
     #[test]
     fn event_log_mode_rehydrates_when_keys_missing_but_cache_present() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let password_entries = vec![YamlSyncTestData::password_entry("backup-password")];
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.extend(genesis_members_records(
             &identity,
             &keys.members_key,

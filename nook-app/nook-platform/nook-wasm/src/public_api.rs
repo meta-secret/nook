@@ -63,7 +63,7 @@ pub async fn remove_local_folder_handle(handle_id: String) -> Result<(), wasm_bi
 
 #[wasm_bindgen]
 pub fn generate_id() -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::generate_id()?.to_string())
+    Ok(nook_core::CompactToken::generate()?.to_string())
 }
 
 #[wasm_bindgen]

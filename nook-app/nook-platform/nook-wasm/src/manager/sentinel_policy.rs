@@ -128,7 +128,7 @@ mod tests {
             SentinelVaultUnlockState::CeremonyRequired
         );
 
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         manager.vault.secrets_key = keys.secrets_key.to_string();
         manager.vault.members_key = keys.members_key.to_string();
         assert_eq!(

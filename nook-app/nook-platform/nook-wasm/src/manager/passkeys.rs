@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn passkey_crypto_round_trip_decrypts_only_passkey_records() -> anyhow::Result<()> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;
         let mut manager = NookVaultManager::new();
         manager.vault.secrets_key = keys.secrets_key.to_string();
@@ -212,7 +212,7 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn website_passkey_accounts_return_empty_for_an_unmatched_rp() -> Result<(), JsError> {
         let identity = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;
@@ -227,7 +227,7 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn website_passkey_mutations_reject_invalid_json_after_guard() -> Result<(), JsError> {
         let identity = nook_core::DeviceIdentity::generate()?;
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.apply_vault_keys(&keys.secrets_key.to_string(), &keys.members_key.to_string())?;

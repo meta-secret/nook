@@ -214,16 +214,16 @@ mod tests {
 
     use super::*;
     use crate::{
-        ApiKeySecret, LoginSecret, SecretId, SecretValue, StoredRecordPayload, VaultResult,
-        generate_vault_keys, genesis_auth_record,
+        ApiKeySecret, LoginSecret, SecretId, SecretValue, StoredRecordPayload, VaultKeys,
+        VaultResult,
     };
 
     #[test]
     fn apply_user_records_preserves_meta_and_replaces_secrets() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
-        let auth = genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
         let ciphertext = crypto.encrypt_value(
             &SecretValue::ApiKey(ApiKeySecret {
                 website_url: "https://example.com".to_owned(),
@@ -309,7 +309,7 @@ mod tests {
 
     #[test]
     fn empty_query_decrypts_only_requested_page() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut secrets = HashMap::new();
         secrets.extend([
@@ -334,7 +334,7 @@ mod tests {
 
     #[test]
     fn search_counts_matches_and_returns_requested_window() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut secrets = HashMap::new();
         secrets.extend([
@@ -358,7 +358,7 @@ mod tests {
 
     #[test]
     fn type_filter_counts_and_pages_only_matching_records() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut secrets = HashMap::new();
         secrets.extend([
@@ -383,7 +383,7 @@ mod tests {
 
     #[test]
     fn type_filter_combines_with_metadata_search() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let secrets = HashMap::from([
             VaultSessionTestData::encrypted_record(&crypto, "secret_a", "recovery-user", "hidden")?,
@@ -405,7 +405,7 @@ mod tests {
 
     #[test]
     fn page_results_never_contain_secret_plaintext() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let secrets = HashMap::from([VaultSessionTestData::encrypted_record(
             &crypto,
@@ -429,7 +429,7 @@ mod tests {
 
     #[test]
     fn explicit_decrypt_returns_only_requested_record() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let requested = VaultSessionTestData::encrypted_record(
             &crypto,
@@ -459,7 +459,7 @@ mod tests {
 
     #[test]
     fn explicit_decrypt_rejects_unknown_record() -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let secrets = HashMap::new();
         let id = SecretId::from_vault_record("secret_missing");
@@ -478,7 +478,7 @@ mod tests {
 
     #[test]
     fn search_never_matches_secret_values() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let secrets = HashMap::from([VaultSessionTestData::encrypted_record(
             &crypto,

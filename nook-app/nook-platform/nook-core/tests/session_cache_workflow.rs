@@ -4,16 +4,11 @@ use nook_core::{SymmetricKey, VaultError, VaultStoreIdentityRef, VaultVersionWri
 
 use nook_core::{
     DeviceIdentity, VaultCrypto, VaultKeys, VaultProjectionCache, VaultRecordSet, VaultResult,
-    VaultUnlock, generate_store_id, generate_vault_keys, genesis_auth_record,
-    genesis_members_records,
+    VaultUnlock, generate_store_id, genesis_members_records,
 };
 
 fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> VaultResult<String> {
-    let mut records = vec![genesis_auth_record(
-        identity,
-        &keys.secrets_key,
-        &keys.members_key,
-    )?];
+    let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
     records.extend(genesis_members_records(
         identity,
         &keys.members_key,
@@ -33,7 +28,7 @@ fn genesis_projection_yaml(keys: &VaultKeys, identity: &DeviceIdentity) -> Vault
 
 #[test]
 fn session_survives_provider_switch_simulation() -> VaultResult<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let identity = DeviceIdentity::generate()?;
     let yaml = genesis_projection_yaml(&keys, &identity)?;
 

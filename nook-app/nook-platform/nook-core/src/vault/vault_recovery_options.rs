@@ -199,7 +199,7 @@ mod tests {
         let signing = SigningIdentity::generate()?.0;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let password = PasswordEntryIssuance::with_work_factor(
             &keys,
             "pwdentry001",
@@ -344,7 +344,7 @@ mod tests {
     #[test]
     fn removed_password_is_not_reported() -> anyhow::Result<()> {
         let signing = SigningIdentity::generate()?.0;
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let password = PasswordEntryIssuance::with_work_factor(
             &keys,
             "pwdentry001",

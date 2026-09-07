@@ -4,9 +4,8 @@ use std::fmt;
 
 use crate::errors::{MultiDeviceError, MultiDeviceResult, ValidationError, ValidationResult};
 use crate::{
-    AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, DevicePublicKey, DeviceSigningPublicKey,
-    IdentityControlEpoch, IdentityVaultEventId, StoreId, VaultKeys, encrypt_for_recipient,
-    generate_id, generate_vault_keys,
+    AgeArmoredCiphertext, AppId, AppKey, AuthKeyId, CompactToken, DevicePublicKey,
+    DeviceSigningPublicKey, IdentityControlEpoch, IdentityVaultEventId, StoreId, VaultKeys,
 };
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -20,7 +19,7 @@ pub struct IdentityId(String);
 
 impl IdentityId {
     pub fn generate() -> MultiDeviceResult<Self> {
-        let token = generate_id()?;
+        let token = CompactToken::generate()?;
         Ok(Self(format!("{IDENTITY_ID_PREFIX}{}", token.as_str())))
     }
 
@@ -197,7 +196,7 @@ impl IdentityRecord {
                 "identity already holds a DEK for this vault".to_owned(),
             ));
         }
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let vault_dek = wrap_vault_keys_for_members(&keys, &self.members, store_id)?;
         self.control_epoch = self.control_epoch.next();
         self.vault_deks.push(vault_dek);
@@ -530,17 +529,15 @@ fn wrap_vault_keys_for_members(
     for member in members {
         secrets_envelopes.push(MemberDekEnvelope {
             app_id: member.app_id.clone(),
-            envelope: encrypt_for_recipient(
-                keys.secrets_key.as_str().as_bytes(),
-                &member.public_key,
-            )?,
+            envelope: member
+                .public_key
+                .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
         });
         members_envelopes.push(MemberDekEnvelope {
             app_id: member.app_id.clone(),
-            envelope: encrypt_for_recipient(
-                keys.members_key.as_str().as_bytes(),
-                &member.public_key,
-            )?,
+            envelope: member
+                .public_key
+                .seal_bytes(keys.members_key.as_str().as_bytes())?,
         });
     }
     Ok(IdentityVaultDek {
@@ -602,19 +599,17 @@ mod tests {
         let reopened = identity.open_or_generate_vault_dek(&app_key, store.clone())?;
         assert_eq!(reopened, keys);
         assert_eq!(identity.vault_deks.len(), 1);
-        let rotated = crate::generate_vault_keys()?;
+        let rotated = crate::VaultKeys::generate()?;
         identity.reconcile_legacy_vault_member(
             &app_key,
             &store,
             &IdentityVaultDekReconciliation {
-                secrets_envelope: crate::encrypt_for_recipient(
-                    rotated.secrets_key.as_str().as_bytes(),
-                    &app_key.public_key(),
-                )?,
-                members_envelope: crate::encrypt_for_recipient(
-                    rotated.members_key.as_str().as_bytes(),
-                    &app_key.public_key(),
-                )?,
+                secrets_envelope: app_key
+                    .public_key()
+                    .seal_bytes(rotated.secrets_key.as_str().as_bytes())?,
+                members_envelope: app_key
+                    .public_key()
+                    .seal_bytes(rotated.members_key.as_str().as_bytes())?,
                 epoch_update: IdentityVaultDekEpochUpdate::Observe {
                     key_epoch: IdentityVaultDekEpoch::LegacyUnknown,
                     checkpoint_ancestors: Vec::new(),
@@ -643,7 +638,7 @@ mod tests {
         let current = event_id('b')?;
         let previous_checkpoint = event_id('c')?;
         let current_checkpoint = event_id('d')?;
-        let rotated = crate::generate_vault_keys()?;
+        let rotated = crate::VaultKeys::generate()?;
         let rotated_reconciliation = reconciliation_for_keys(
             &app_key,
             &rotated,
@@ -695,7 +690,7 @@ mod tests {
         })?;
         let store = StoreId::parse("store_abcdefghijk")?;
         let _ = identity.generate_vault_dek(store.clone())?;
-        let rotated = crate::generate_vault_keys()?;
+        let rotated = crate::VaultKeys::generate()?;
         let mut reconciliation = reconciliation_for_keys(
             &active,
             &rotated,
@@ -786,14 +781,12 @@ mod tests {
         epoch_update: IdentityVaultDekEpochUpdate,
     ) -> anyhow::Result<IdentityVaultDekReconciliation> {
         Ok(IdentityVaultDekReconciliation {
-            secrets_envelope: crate::encrypt_for_recipient(
-                keys.secrets_key.as_str().as_bytes(),
-                &app_key.public_key(),
-            )?,
-            members_envelope: crate::encrypt_for_recipient(
-                keys.members_key.as_str().as_bytes(),
-                &app_key.public_key(),
-            )?,
+            secrets_envelope: app_key
+                .public_key()
+                .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
+            members_envelope: app_key
+                .public_key()
+                .seal_bytes(keys.members_key.as_str().as_bytes())?,
             epoch_update,
             authorized_auth_ids: vec![app_key.auth_id()],
         })

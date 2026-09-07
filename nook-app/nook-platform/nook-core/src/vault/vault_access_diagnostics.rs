@@ -20,8 +20,8 @@ use crate::secret_types::StoredSecretRecord;
 use crate::vault_ids::{AuthKeyId, SecretId};
 use crate::vault_wire::AgeArmoredCiphertext;
 use crate::{
-    DeviceIdentity, SymmetricKey, VaultCrypto, VaultMetaRecord, is_auth_id, parse_auth_envelopes,
-    pending_join_for_device, resolve_members_key, resolve_secrets_key,
+    AuthEnvelopes, DeviceIdentity, SymmetricKey, VaultCrypto, VaultMetaRecord, VaultRecordView,
+    pending_join_for_device,
 };
 use crate::{VaultEvent, VaultEventSchemaVersion, VaultOperation};
 use std::collections::{BTreeMap, BTreeSet};
@@ -132,7 +132,7 @@ impl VaultAccessDiagnosticRequest<'_> {
         let auth_id = identity.auth_id();
         let auth_rows: Vec<&StoredSecretRecord> = records
             .iter()
-            .filter(|record| is_auth_id(record.key.as_str()))
+            .filter(|record| crate::is_auth_key_id(record.key.as_str()))
             .collect();
         let Some(auth_record) = auth_rows
             .iter()
@@ -144,11 +144,11 @@ impl VaultAccessDiagnosticRequest<'_> {
                 VaultKeyAccessDiagnosticStatus::DeviceIdentityMismatch
             });
         };
-        if parse_auth_envelopes(auth_record.value.as_str()).is_err() {
+        if AuthEnvelopes::parse(auth_record.value.as_str()).is_err() {
             return Ok(VaultKeyAccessDiagnosticStatus::CorruptCiphertext);
         }
-        if resolve_secrets_key(records, identity).is_err()
-            || resolve_members_key(records, identity).is_err()
+        if VaultRecordView::new(records).secrets_key(identity).is_err()
+            || VaultRecordView::new(records).members_key(identity).is_err()
         {
             return Ok(VaultKeyAccessDiagnosticStatus::EnvelopeDecryptFailed);
         }
@@ -203,7 +203,7 @@ impl VaultAccessDiagnosticRequest<'_> {
 
         let mut auth_key_ids: Vec<AuthKeyId> = records
             .iter()
-            .filter(|record| is_auth_id(record.key.as_str()))
+            .filter(|record| crate::is_auth_key_id(record.key.as_str()))
             .filter_map(|record| AuthKeyId::parse(record.key.as_str()).ok())
             .collect();
         auth_key_ids.sort();
@@ -371,7 +371,7 @@ impl<'a> VaultAccessDiagnosticRequest<'a> {
             explanation: key_status.explanation().to_owned(),
         };
         let secrets_key = if key_status == VaultKeyAccessDiagnosticStatus::EnrolledDecryptable {
-            match resolve_secrets_key(records, identity) {
+            match VaultRecordView::new(records).secrets_key(identity) {
                 Ok(key) => ResolvedSecretsKey::Available(key),
                 Err(_) => ResolvedSecretsKey::Unavailable,
             }
@@ -429,8 +429,8 @@ mod tests {
     use crate::{
         ApiKeySecret, EncryptedSecretPayload, GenesisImportPayload, IsoTimestamp, KeyEpoch,
         PasswordEntryId, PasswordEnvelope, PasswordEnvelopeVersion, PasswordUnlockEntry,
-        SecretType, SecretValue, SigningIdentity, StoreId, StoredRecordPayload, VaultProjection,
-        VaultResult, build_genesis_import_event, generate_vault_keys, genesis_auth_record,
+        SecretType, SecretValue, SigningIdentity, StoreId, StoredRecordPayload, VaultKeys,
+        VaultProjection, VaultResult, build_genesis_import_event,
     };
     use ed25519_dalek::SigningKey;
     use std::ptr;
@@ -490,13 +490,9 @@ mod tests {
     #[test]
     fn enrolled_device_reports_decryptable_secret() -> VaultResult<()> {
         let identity = DeviceIdentity::generate()?;
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.push(
             EncryptedSecretFixture {
                 id: "secret_diag001",
@@ -529,12 +525,8 @@ mod tests {
     fn wrong_device_identity_reports_mismatch() -> VaultResult<()> {
         let enrolled = DeviceIdentity::generate()?;
         let current = DeviceIdentity::generate()?;
-        let keys = generate_vault_keys()?;
-        let records = vec![genesis_auth_record(
-            &enrolled,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let keys = VaultKeys::generate()?;
+        let records = vec![enrolled.auth_record(&keys.secrets_key, &keys.members_key)?];
 
         let report = VaultAccessDiagnosticRequest {
             records: &records,
@@ -574,9 +566,9 @@ mod tests {
     fn evaluation_binds_records_and_returns_sorted_metadata_without_mutation() -> anyhow::Result<()>
     {
         let identity = DeviceIdentity::generate()?;
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
-        let auth = genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
         let mut records = vec![auth.clone(), auth];
         for id in ["secret_diagzz", "secret_diagaa"] {
             records.push(
@@ -623,8 +615,8 @@ mod tests {
     #[test]
     fn unsupported_projection_precedes_corrupt_auth_envelope() -> VaultResult<()> {
         let identity = DeviceIdentity::generate()?;
-        let keys = generate_vault_keys()?;
-        let mut auth = genesis_auth_record(&identity, &keys.secrets_key, &keys.members_key)?;
+        let keys = VaultKeys::generate()?;
+        let mut auth = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
         auth.value = StoredRecordPayload::from_trusted("malformed auth".to_owned());
         let records = [auth];
         let projection = VaultProjection {
@@ -659,12 +651,8 @@ mod tests {
     #[test]
     fn corrupt_secret_ciphertext_is_reported_without_plaintext() -> VaultResult<()> {
         let identity = DeviceIdentity::generate()?;
-        let keys = generate_vault_keys()?;
-        let mut records = vec![genesis_auth_record(
-            &identity,
-            &keys.secrets_key,
-            &keys.members_key,
-        )?];
+        let keys = VaultKeys::generate()?;
+        let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
         records.push(StoredSecretRecord {
             key: SecretId::from_vault_record("secret_corrupt01"),
             secret_type: Some(SecretType::ApiKey),

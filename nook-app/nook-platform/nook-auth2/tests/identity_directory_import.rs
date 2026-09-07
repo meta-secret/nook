@@ -1,7 +1,6 @@
 use nook_auth2::{
     AgeArmoredCiphertext, AppKey, IdentityDirectory, IdentityVaultDekEpoch,
-    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, VaultKeys, encrypt_for_recipient,
-    generate_store_id, generate_vault_keys,
+    IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation, VaultKeys, generate_store_id,
 };
 
 fn envelopes_for(
@@ -9,8 +8,12 @@ fn envelopes_for(
     keys: &VaultKeys,
 ) -> anyhow::Result<(AgeArmoredCiphertext, AgeArmoredCiphertext)> {
     Ok((
-        encrypt_for_recipient(keys.secrets_key.as_str().as_bytes(), &app_key.public_key())?,
-        encrypt_for_recipient(keys.members_key.as_str().as_bytes(), &app_key.public_key())?,
+        app_key
+            .public_key()
+            .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
+        app_key
+            .public_key()
+            .seal_bytes(keys.members_key.as_str().as_bytes())?,
     ))
 }
 
@@ -26,7 +29,7 @@ fn imported_vault_reuses_identity_that_owns_app_key() -> anyhow::Result<()> {
         first_store.clone(),
     )?;
     let imported_store = generate_store_id()?;
-    let imported_keys = generate_vault_keys()?;
+    let imported_keys = VaultKeys::generate()?;
     let (secrets_envelope, members_envelope) = envelopes_for(&app_key, &imported_keys)?;
 
     let imported_identity = directory.import_legacy_vault(

@@ -131,7 +131,7 @@ mod tests {
             &fixture.keys,
             &epoch
         ));
-        let different = crate::generate_vault_keys()?;
+        let different = crate::VaultKeys::generate()?;
         let original = mem::replace(&mut fixture.keys.secrets_key, different.secrets_key);
         assert!(!fixture.matches(&fixture.grant));
         fixture.keys.secrets_key = original;
@@ -144,18 +144,16 @@ mod tests {
     fn undecryptable_current_app_envelope_is_not_a_matching_grant() -> anyhow::Result<()> {
         let fixture = GrantFixture::new()?;
         let other = AppKey::generate()?;
-        let encrypted_for_other = crate::encrypt_for_recipient(
-            fixture.keys.secrets_key.as_str().as_bytes(),
-            &other.public_key(),
-        )?;
+        let encrypted_for_other = other
+            .public_key()
+            .seal_bytes(fixture.keys.secrets_key.as_str().as_bytes())?;
         let mut unreadable = fixture.grant.clone();
         unreadable.secrets_envelopes[0].envelope = encrypted_for_other;
         assert!(!fixture.matches(&unreadable));
         let mut unreadable = fixture.grant.clone();
-        unreadable.members_envelopes[0].envelope = crate::encrypt_for_recipient(
-            fixture.keys.members_key.as_str().as_bytes(),
-            &other.public_key(),
-        )?;
+        unreadable.members_envelopes[0].envelope = other
+            .public_key()
+            .seal_bytes(fixture.keys.members_key.as_str().as_bytes())?;
         assert!(!fixture.matches(&unreadable));
         Ok(())
     }

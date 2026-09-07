@@ -13,7 +13,7 @@ use nook_core::{
     JoinRequest, LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue,
     SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection,
     VaultProjectionCache, VaultRecordSet, VaultResult, VaultUnlock, generate_store_id,
-    generate_vault_keys, genesis_auth_record, genesis_members_records,
+    genesis_members_records,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -31,7 +31,7 @@ pub struct EventLogDevice {
 
 impl EventLogDevice {
     pub fn genesis(label: &str) -> VaultResult<Self> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
         let store_id = generate_store_id()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
@@ -232,11 +232,7 @@ fn genesis_yaml(
     identity: &DeviceIdentity,
     store_id: &str,
 ) -> VaultResult<nook_core::StoredVaultYaml> {
-    let mut records = vec![genesis_auth_record(
-        identity,
-        &keys.secrets_key,
-        &keys.members_key,
-    )?];
+    let mut records = vec![identity.auth_record(&keys.secrets_key, &keys.members_key)?];
     records.extend(genesis_members_records(identity, &keys.members_key, TS)?);
     VaultRecordSet::serialize_yaml_with_unlock(
         &records,

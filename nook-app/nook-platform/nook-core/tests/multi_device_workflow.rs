@@ -5,9 +5,8 @@ use std::io;
 use nook_core::{
     ApiKeySecret, Database, DeviceEnrollment, DeviceIdentity, JoinRequestApproval,
     JoinRequestIssuance, SecretId, SecretValue, VaultCrypto, VaultFormat, VaultFormatDocument,
-    VaultKeys, VaultRecordSet, generate_vault_keys, genesis_auth_record, genesis_members_records,
-    list_join_requests, rename_vault_member, replace_member_records, resolve_member_roster,
-    resolve_members_key, resolve_secrets_key, revoke_vault_member, user_stored_records,
+    VaultKeys, VaultRecordSet, VaultRecordView, genesis_members_records, rename_vault_member,
+    replace_member_records, resolve_member_roster, revoke_vault_member,
 };
 
 fn sid(label: &str) -> SecretId {
@@ -33,11 +32,7 @@ fn genesis_vault(
     keys: &VaultKeys,
 ) -> anyhow::Result<(DeviceIdentity, Vec<nook_core::StoredSecretRecord>)> {
     let genesis = DeviceIdentity::generate()?;
-    let mut records = vec![genesis_auth_record(
-        &genesis,
-        &keys.secrets_key,
-        &keys.members_key,
-    )?];
+    let mut records = vec![genesis.auth_record(&keys.secrets_key, &keys.members_key)?];
     records.extend(genesis_members_records(
         &genesis,
         &keys.members_key,
@@ -48,7 +43,7 @@ fn genesis_vault(
 
 #[test]
 fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let crypto = VaultCrypto::new(&keys.secrets_key)?;
 
     let (genesis, mut records) = genesis_vault(&keys)?;
@@ -59,7 +54,8 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
 
     let device_two = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&device_two, "2026-06-21T00:00:00Z").issue()?);
-    let join_two = list_join_requests(&records)?
+    let join_two = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_two, join_key, member_records) = JoinRequestApproval::new(
@@ -76,7 +72,8 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
 
     let device_three = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&device_three, "2026-06-21T01:00:00Z").issue()?);
-    let join_three = list_join_requests(&records)?
+    let join_three = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
     let (auth_three, join_key, member_records) = JoinRequestApproval::new(
@@ -105,13 +102,13 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     let loaded = VaultFormatDocument::new(yaml_str).deserialize(VaultFormat::Yaml)?;
 
     for device in [&genesis, &device_two, &device_three] {
-        let resolved_secrets = resolve_secrets_key(&loaded, device)?;
-        let resolved_members = resolve_members_key(&loaded, device)?;
+        let resolved_secrets = VaultRecordView::new(&loaded).secrets_key(device)?;
+        let resolved_members = VaultRecordView::new(&loaded).members_key(device)?;
         assert_eq!(resolved_secrets, keys.secrets_key);
         assert_eq!(resolved_members, keys.members_key);
         let roster = resolve_member_roster(&loaded, &keys.members_key)?;
         assert_eq!(roster.len(), 3);
-        let user_records = user_stored_records(&loaded)?;
+        let user_records = VaultRecordView::new(&loaded).user_records()?;
         let unlocked = Database::from_stored_records_with_crypto(&user_records, &crypto)?;
         assert_eq!(unlocked.list().len(), 1);
         assert_eq!(unlocked.list()[0].data, api_key("hunter2"));
@@ -121,19 +118,19 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
 
 #[test]
 fn vault_without_auth_envelope_fails_to_resolve_secrets_key() -> anyhow::Result<()> {
-    let crypto = VaultCrypto::new(&generate_vault_keys()?.secrets_key)?;
+    let crypto = VaultCrypto::new(&VaultKeys::generate()?.secrets_key)?;
     let mut db = Database::new();
     db.insert(sid("site"), api_key("secret"));
     let records = encrypt_user_secrets(&db, &crypto)?;
 
     let device = DeviceIdentity::generate()?;
-    assert!(resolve_secrets_key(&records, &device).is_err());
+    assert!(VaultRecordView::new(&records).secrets_key(&device).is_err());
     Ok(())
 }
 
 #[test]
 fn oob_enroll_writes_self_member_roster_only() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let device = DeviceIdentity::generate()?;
     let (auth, members) = DeviceEnrollment::with_keys(
         &keys.secrets_key,
@@ -152,27 +149,33 @@ fn oob_enroll_writes_self_member_roster_only() -> anyhow::Result<()> {
 
 #[test]
 fn yaml_roundtrip_preserves_secrets_and_members_key_resolution() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let (genesis, records) = genesis_vault(&keys)?;
 
     let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
     let loaded = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
 
-    assert_eq!(resolve_secrets_key(&loaded, &genesis)?, keys.secrets_key);
-    assert_eq!(resolve_members_key(&loaded, &genesis)?, keys.members_key);
+    assert_eq!(
+        VaultRecordView::new(&loaded).secrets_key(&genesis)?,
+        keys.secrets_key
+    );
+    assert_eq!(
+        VaultRecordView::new(&loaded).members_key(&genesis)?,
+        keys.members_key
+    );
     Ok(())
 }
 
 #[test]
 fn resolve_members_key_fails_without_auth_envelope() -> anyhow::Result<()> {
     let device = DeviceIdentity::generate()?;
-    assert!(resolve_members_key(&[], &device).is_err());
+    assert!(VaultRecordView::new(&[]).members_key(&device).is_err());
     Ok(())
 }
 
 #[test]
 fn member_roster_entries_expose_pk_id_and_public_key() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let device = DeviceIdentity::generate()?;
     let (auth, members) = DeviceEnrollment::with_keys(
         &keys.secrets_key,
@@ -194,11 +197,12 @@ fn member_roster_entries_expose_pk_id_and_public_key() -> anyhow::Result<()> {
 
 #[test]
 fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&joiner, "2026-06-21T04:00:00Z").issue()?);
-    let join = list_join_requests(&records)?
+    let join = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
@@ -213,7 +217,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
     records.retain(|r| r.key.as_str() != join_key);
     records.push(auth.clone());
 
-    let env = nook_core::parse_auth_envelopes(auth.value.as_str())?;
+    let env = nook_core::AuthEnvelopes::parse(auth.value.as_str())?;
     assert_ne!(env.secrets_key, env.members_key);
     assert_eq!(joiner.decrypt_envelope(&env.secrets_key)?, keys.secrets_key);
     assert_eq!(joiner.decrypt_envelope(&env.members_key)?, keys.members_key);
@@ -222,7 +226,7 @@ fn approve_join_writes_distinct_secrets_and_members_envelopes() -> anyhow::Resul
 
 #[test]
 fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let (device, mut records) = genesis_vault(&keys)?;
     let member_records = rename_vault_member(
         &records,
@@ -243,11 +247,12 @@ fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
 
 #[test]
 fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<()> {
-    let keys = generate_vault_keys()?;
+    let keys = VaultKeys::generate()?;
     let (genesis, mut records) = genesis_vault(&keys)?;
     let joiner = DeviceIdentity::generate()?;
     records.push(JoinRequestIssuance::new(&joiner, "2026-06-21T04:00:00Z").issue()?);
-    let join = list_join_requests(&records)?
+    let join = VaultRecordView::new(&records)
+        .list_join_requests()?
         .pop()
         .ok_or_else(|| io::Error::other("test pop value must exist"))?;
 
@@ -267,8 +272,11 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     let yaml = VaultRecordSet::serialize(&revoked, VaultFormat::Yaml)?;
     let loaded = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
 
-    assert!(resolve_secrets_key(&loaded, &joiner).is_err());
-    assert_eq!(resolve_secrets_key(&loaded, &genesis)?, keys.secrets_key);
+    assert!(VaultRecordView::new(&loaded).secrets_key(&joiner).is_err());
+    assert_eq!(
+        VaultRecordView::new(&loaded).secrets_key(&genesis)?,
+        keys.secrets_key
+    );
     let roster = resolve_member_roster(&loaded, &keys.members_key)?;
     assert_eq!(roster.len(), 1);
     assert_eq!(roster[0].auth_id, genesis.auth_id());

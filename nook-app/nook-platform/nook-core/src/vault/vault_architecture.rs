@@ -538,7 +538,7 @@ mod tests {
 
     #[test]
     fn sentinel_secret_creation_requires_actual_share_records() -> anyhow::Result<()> {
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;
@@ -561,7 +561,7 @@ mod tests {
     #[test]
     fn sentinel_record_validation_rejects_full_key_envelopes_and_mixed_share_sets()
     -> anyhow::Result<()> {
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let architecture = VaultArchitecture::sentinel_personal(
@@ -579,7 +579,7 @@ mod tests {
         )?;
         architecture.validate_records(&shares)?;
 
-        let auth = crate::genesis_auth_record(&first, &keys.secrets_key, &keys.members_key)?;
+        let auth = first.auth_record(&keys.secrets_key, &keys.members_key)?;
         let mut shares_with_auth = shares.clone();
         shares_with_auth.push(auth);
         assert_eq!(
@@ -622,7 +622,7 @@ mod tests {
 
     #[test]
     fn simple_record_validation_rejects_sentinel_shares() -> anyhow::Result<()> {
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let shares = crate::create_sentinel_share_records(&keys, &[first, second], 2.into())?;

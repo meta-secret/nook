@@ -5,7 +5,6 @@ use nook_auth2::{
     AuthEnvelopes, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey, IsoTimestamp,
     JoinRequest, MultiDeviceError, MultiDeviceResult, SentinelParticipantEntry,
     SentinelShareEnvelope, VaultMember, VaultMetaState, build_members_records,
-    dec_auth_id_from_public_key, device_id_from_public_key,
 };
 
 use std::collections::BTreeMap;
@@ -153,7 +152,7 @@ impl<'a> VaultMetaOperationApplier<'a> {
                 requested_at: approved.requested_at.to_owned(),
             },
         );
-        let auth_id = dec_auth_id_from_public_key(approved.encryption_public_key)?;
+        let auth_id = approved.encryption_public_key.auth_id()?;
         self.state.auth.insert(
             auth_id,
             AuthEnvelopes {
@@ -274,13 +273,13 @@ impl<'a> EventGraphDeviceAccess<'a> {
         &self,
         request: &EventGraphDeviceAccessRequest<'_>,
     ) -> MultiDeviceResult<Option<AuthEnvelopes>> {
-        let derived_device_id = device_id_from_public_key(request.expected_public_key)?;
+        let derived_device_id = request.expected_public_key.try_app_id()?;
         if &derived_device_id != request.expected_device_id {
             return Err(MultiDeviceError::InvalidDeviceIdentity(
                 "Extension device_id does not match its encryption public key.".to_owned(),
             ));
         }
-        let expected_auth_id = dec_auth_id_from_public_key(request.expected_public_key)?;
+        let expected_auth_id = request.expected_public_key.auth_id()?;
 
         let mut active = None;
         let order = self
@@ -360,17 +359,14 @@ impl<'a> EventGraphAuthorizationProjection<'a> {
                         encryption_public_key,
                         ..
                     } => {
-                        let derived_device_id = device_id_from_public_key(encryption_public_key)?;
+                        let derived_device_id = encryption_public_key.try_app_id()?;
                         if &derived_device_id != device_id {
                             return Err(MultiDeviceError::InvalidDeviceIdentity(
                                 "Approved device id does not match its encryption public key."
                                     .to_owned(),
                             ));
                         }
-                        active.insert(
-                            device_id.clone(),
-                            dec_auth_id_from_public_key(encryption_public_key)?,
-                        );
+                        active.insert(device_id.clone(), encryption_public_key.auth_id()?);
                     }
                     VaultOperation::DeviceRevoked { device_id } => {
                         active.remove(device_id);
@@ -415,7 +411,7 @@ impl<'a> SentinelMemberRecordProjection<'a> {
             .values()
             .map(|participant| {
                 Ok(VaultMember {
-                    auth_id: dec_auth_id_from_public_key(&participant.encryption_public_key)?,
+                    auth_id: participant.encryption_public_key.auth_id()?,
                     device_id: participant.device_id.clone(),
                     public_key: participant.encryption_public_key.clone(),
                     enrolled_at: participant.enrolled_at.clone(),

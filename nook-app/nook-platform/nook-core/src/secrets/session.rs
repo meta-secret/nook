@@ -235,6 +235,7 @@ impl<'a> EncryptedSecretSession<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::VaultKeys;
     use crate::{AuthenticatorSecret, ValidationError, VaultError};
     use std::ptr;
     use zeroize::Zeroizing;
@@ -246,11 +247,11 @@ mod tests {
         BackupCodeAttachMode, SecretType, SecretValue, SessionError, StoredRecordPayload,
         VaultCrypto, VaultMetaState,
     };
-    use crate::{SecretId, VaultResult, generate_vault_keys};
+    use crate::{SecretId, VaultResult};
 
     #[test]
     fn encrypted_replace_preserves_validation_and_encrypts_new_payload() -> VaultResult<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let old_id = SecretId::from_vault_record("secret_SMypl8K0w9Y");
         let mut state = VaultMetaState::default();
@@ -301,7 +302,7 @@ mod tests {
     #[test]
     fn verified_authenticator_replace_rolls_back_mismatch_and_commits_exact_codes()
     -> anyhow::Result<()> {
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let old_id = SecretId::from_vault_record("secret_AuThOld0001");
         let new_id = SecretId::from_vault_record("secret_AuThNew0001");
@@ -382,7 +383,7 @@ mod tests {
         const OTHER: &'static str = "secret_UMypl8K0w9Y";
 
         fn new() -> VaultResult<Self> {
-            let keys = generate_vault_keys()?;
+            let keys = VaultKeys::generate()?;
             let crypto = VaultCrypto::new(&keys.secrets_key)?;
             let yaml = Zeroizing::new(
                 "websiteUrl: https://example.com\nusername: alice\npassword: fixture-only\nnotes: ''".to_owned(),

@@ -8,9 +8,7 @@
 use crate::SessionError;
 
 use crate::errors::{MultiDeviceError, VaultResult};
-use crate::{
-    DeviceIdentity, VaultFormatDocument, VaultType, resolve_members_key, resolve_secrets_key,
-};
+use crate::{DeviceIdentity, VaultFormatDocument, VaultRecordView, VaultType};
 
 /// Borrowed projection-cache YAML awaiting a key hydration action.
 pub struct VaultProjectionCache<'a> {
@@ -34,14 +32,16 @@ impl<'a> VaultProjectionCache<'a> {
         }
         let format = VaultFormatDocument::new(self.yaml).detect()?;
         let records = VaultFormatDocument::new(self.yaml).deserialize(format)?;
-        let secrets_key = resolve_secrets_key(&records, identity)?;
-        let members_key = resolve_members_key(&records, identity)?;
+        let record_view = VaultRecordView::new(&records);
+        let secrets_key = record_view.secrets_key(identity)?;
+        let members_key = record_view.members_key(identity)?;
         Ok((secrets_key.into_inner(), members_key.into_inner()))
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::VaultKeys;
     use crate::{
         MultiDeviceError, VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
     };
@@ -72,10 +72,10 @@ mod tests {
     fn hydrate_fails_closed_for_sentinel_projection_yaml() -> anyhow::Result<()> {
         use crate::{
             DeviceMode, SentinelPolicy, VaultArchitecture, VaultRecordSet, VaultType,
-            create_sentinel_share_records, generate_store_id, generate_vault_keys,
+            create_sentinel_share_records, generate_store_id,
         };
 
-        let keys = generate_vault_keys()?;
+        let keys = VaultKeys::generate()?;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
         let shares =

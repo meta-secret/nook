@@ -693,14 +693,12 @@ mod tests {
             &authorizer,
             &store_id,
             &IdentityVaultDekReconciliation {
-                secrets_envelope: crate::encrypt_for_recipient(
-                    keys.secrets_key.as_str().as_bytes(),
-                    &authorizer.public_key(),
-                )?,
-                members_envelope: crate::encrypt_for_recipient(
-                    keys.members_key.as_str().as_bytes(),
-                    &authorizer.public_key(),
-                )?,
+                secrets_envelope: authorizer
+                    .public_key()
+                    .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
+                members_envelope: authorizer
+                    .public_key()
+                    .seal_bytes(keys.members_key.as_str().as_bytes())?,
                 epoch_update: crate::IdentityVaultDekEpochUpdate::Observe {
                     key_epoch: crate::IdentityVaultDekEpoch::LegacyUnknown,
                     checkpoint_ancestors: Vec::new(),
@@ -774,7 +772,7 @@ mod tests {
         let mut directory = IdentityDirectory::empty();
         let personal = directory.create_identity("Personal", &app_key, None)?;
         let store_id = crate::generate_store_id()?;
-        let keys = crate::generate_vault_keys()?;
+        let keys = crate::VaultKeys::generate()?;
         let imported = IdentityRecord::synthesize_from_legacy_vault(
             "Imported",
             IdentityMember {
@@ -785,14 +783,12 @@ mod tests {
                 label: None,
             },
             store_id.clone(),
-            crate::encrypt_for_recipient(
-                keys.secrets_key.as_str().as_bytes(),
-                &app_key.public_key(),
-            )?,
-            crate::encrypt_for_recipient(
-                keys.members_key.as_str().as_bytes(),
-                &app_key.public_key(),
-            )?,
+            app_key
+                .public_key()
+                .seal_bytes(keys.secrets_key.as_str().as_bytes())?,
+            app_key
+                .public_key()
+                .seal_bytes(keys.members_key.as_str().as_bytes())?,
             crate::IdentityVaultDekEpoch::LegacyUnknown,
         )?;
         let secrets_envelope = imported.vault_deks[0].secrets_envelopes[0].envelope.clone();
@@ -826,14 +822,12 @@ mod tests {
             .generate_vault_dek(crate::generate_store_id()?)?;
         let recovered_app_key = AppKey::generate()?;
         let imported_vault = directory.selected()?.vault_deks[0].clone();
-        let recovered_secrets_envelope = crate::encrypt_for_recipient(
-            keys.secrets_key.as_str().as_bytes(),
-            &recovered_app_key.public_key(),
-        )?;
-        let recovered_members_envelope = crate::encrypt_for_recipient(
-            keys.members_key.as_str().as_bytes(),
-            &recovered_app_key.public_key(),
-        )?;
+        let recovered_secrets_envelope = recovered_app_key
+            .public_key()
+            .seal_bytes(keys.secrets_key.as_str().as_bytes())?;
+        let recovered_members_envelope = recovered_app_key
+            .public_key()
+            .seal_bytes(keys.members_key.as_str().as_bytes())?;
         let result = directory.import_legacy_vault(
             "Ignored",
             &recovered_app_key,

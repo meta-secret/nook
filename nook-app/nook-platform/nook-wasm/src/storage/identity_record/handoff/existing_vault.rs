@@ -327,17 +327,17 @@ mod tests {
                 .id()
                 .map_err(|error| NookError::Database(error.to_string()))?;
             let replacement_keys =
-                nook_core::generate_vault_keys().map_err(identity_record::map_domain_error)?;
-            let replacement_secrets = nook_core::encrypt_for_recipient(
-                replacement_keys.secrets_key.as_str().as_bytes(),
-                &fixture.identity.public_key(),
-            )
-            .map_err(identity_record::map_domain_error)?;
-            let replacement_members = nook_core::encrypt_for_recipient(
-                replacement_keys.members_key.as_str().as_bytes(),
-                &fixture.identity.public_key(),
-            )
-            .map_err(identity_record::map_domain_error)?;
+                nook_core::VaultKeys::generate().map_err(identity_record::map_domain_error)?;
+            let replacement_secrets = fixture
+                .identity
+                .public_key()
+                .seal_bytes(replacement_keys.secrets_key.as_str().as_bytes())
+                .map_err(identity_record::map_domain_error)?;
+            let replacement_members = fixture
+                .identity
+                .public_key()
+                .seal_bytes(replacement_keys.members_key.as_str().as_bytes())
+                .map_err(identity_record::map_domain_error)?;
             let (replacement, replacement_bytes) =
                 nook_core::AppendEventInput::build(nook_core::AppendEventInput {
                     store_id: &fixture.store_id,

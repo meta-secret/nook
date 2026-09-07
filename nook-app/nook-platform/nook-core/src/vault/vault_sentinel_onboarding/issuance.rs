@@ -3,7 +3,6 @@ use super::{OnboardingDelivery, SentinelOnboardingPackage, SentinelOnboardingVer
 use crate::{
     AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
     SentinelGenesisShareDelivery, StorageProviderType, auth_snapshot_legacy_storage_value,
-    encrypt_for_recipient,
 };
 use zeroize::Zeroizing;
 
@@ -58,8 +57,7 @@ impl PreparedOnboardingIssuance<'_> {
             serde_json::to_vec(&provider_storage)
                 .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?,
         );
-        let provider_snapshot =
-            encrypt_for_recipient(&provider_json, &delivery.encryption_public_key)?;
+        let provider_snapshot = delivery.encryption_public_key.seal_bytes(&provider_json)?;
         Ok(SentinelOnboardingPackage {
             version: SentinelOnboardingVersion::CURRENT,
             request,

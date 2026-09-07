@@ -1,12 +1,14 @@
 use super::{
-    AgeArmoredCiphertext, AppId, AuthEnvelopes, AuthKeyId, Deserialize, DeviceId,
-    DeviceIdentitySecret, DevicePublicKey, DeviceSigningPublicKey, Digest, ExposeSecret, HashMap,
-    Identity, MultiDeviceError, MultiDeviceResult, Recipient, SENTINEL_SHARE_RECORD_PREFIX,
-    SecretId, SecretType, SentinelShareEnvelope, Serialize, Sha256, StoredRecordPayload,
-    StoredSecretRecord, SymmetricKey, decrypt_with_identity, encrypt_with_recipient, is_auth_id,
-    join_record_key, parse_auth_envelopes, parse_join_request, parse_sentinel_share_envelope,
-    sentinel_share_record_key,
+    AgeArmoredCiphertext, AuthEnvelopes, Deserialize, DeviceIdentitySecret, DevicePublicKey,
+    DeviceSigningPublicKey, SENTINEL_SHARE_RECORD_PREFIX, SecretId, SecretType,
+    SentinelShareEnvelope, Serialize, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
+    parse_sentinel_share_envelope, sentinel_share_record_key,
 };
+use crate::errors::{MultiDeviceError, MultiDeviceResult};
+use crate::{AppId, AuthKeyId, DeviceId};
+use age::secrecy::ExposeSecret;
+use age::x25519::Identity;
+use std::collections::HashMap;
 
 pub const MEMBER_RECORD_PREFIX: &str = "member:";
 
@@ -42,36 +44,17 @@ pub struct SentinelParticipantEntry {
     pub enrolled_at: String,
 }
 
-#[must_use]
-pub fn member_stored_key(pk_id: &AuthKeyId) -> String {
-    format!("{MEMBER_RECORD_PREFIX}{pk_id}")
-}
-
 /// Whether a flat-record key matches the `pk_id` inside the decrypted member entry.
 /// YAML load normalizes `pk_id` to `key_{digest}` while legacy ciphertext may still
 /// store the bare 64-hex digest — accept both forms.
 pub(super) fn member_record_key_matches(stored_key: &str, entry_pk_id: &AuthKeyId) -> bool {
-    if stored_key == member_stored_key(entry_pk_id) {
+    if stored_key == entry_pk_id.member_record_key() {
         return true;
     }
     if let Ok(normalized) = crate::normalize_auth_key_id(entry_pk_id.as_str()) {
-        return stored_key == member_stored_key(&normalized);
+        return stored_key == normalized.member_record_key();
     }
     false
-}
-
-pub fn is_members_stored_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
-    Ok(matches!(
-        VaultMetaRecord::classify(record)?,
-        VaultMetaRecord::Member(..)
-    ))
-}
-
-pub fn is_vault_meta_record(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
-    Ok(!matches!(
-        VaultMetaRecord::classify(record)?,
-        VaultMetaRecord::Secret(..)
-    ))
 }
 
 /// Single classification site for the four record kinds that share the
@@ -107,7 +90,7 @@ impl VaultMetaRecord {
             let share = parse_sentinel_share_envelope(record.value.as_str())?;
             return Ok(Self::SentinelShare(device_id, share));
         }
-        if let Ok(join) = parse_join_request(record.value.as_str()) {
+        if let Ok(join) = JoinRequest::parse_json(record.value.as_str()) {
             return Ok(Self::Join(join.device_id.clone(), join));
         }
         if let Some(pk_id_str) = record.key.as_str().strip_prefix(MEMBER_RECORD_PREFIX)
@@ -116,8 +99,8 @@ impl VaultMetaRecord {
         {
             return Ok(Self::Member(auth_id, record.value.clone()));
         }
-        if is_auth_id(record.key.as_str())
-            && let Ok(envelopes) = parse_auth_envelopes(record.value.as_str())
+        if crate::is_auth_key_id(record.key.as_str())
+            && let Ok(envelopes) = AuthEnvelopes::parse(record.value.as_str())
             && let Ok(auth_id) = AuthKeyId::parse(record.key.as_str())
         {
             return Ok(Self::Auth(auth_id, envelopes));
@@ -146,14 +129,14 @@ impl VaultMetaRecord {
                 ),
             },
             Self::Join(_, join) => StoredSecretRecord {
-                key: SecretId::from_vault_record(&join_record_key(&join.device_id)),
+                key: SecretId::from_vault_record(join.device_id.as_str()),
                 secret_type: None,
                 value: StoredRecordPayload::from_trusted(
                     serde_json::to_string(join).map_err(MultiDeviceError::JoinRequestSerialize)?,
                 ),
             },
             Self::Member(auth_id, payload) => StoredSecretRecord {
-                key: SecretId::from_vault_record(&member_stored_key(auth_id)),
+                key: SecretId::from_vault_record(&auth_id.member_record_key()),
                 secret_type: None,
                 value: payload.clone(),
             },
@@ -302,7 +285,7 @@ impl VaultMetaState {
         }
         for (auth_id, payload) in &self.members {
             records.push(StoredSecretRecord {
-                key: SecretId::from_vault_record(&member_stored_key(auth_id)),
+                key: SecretId::from_vault_record(&auth_id.member_record_key()),
                 secret_type: None,
                 value: payload.clone(),
             });
@@ -343,7 +326,7 @@ pub type DeviceIdentity = AppKey;
 impl AppKey {
     pub fn generate() -> MultiDeviceResult<Self> {
         let identity = Identity::generate();
-        let app_id = app_id_from_public(&identity.to_public());
+        let app_id = super::key_actions::AppKeyDerivation::app_id(&identity.to_public());
         Ok(Self { identity, app_id })
     }
 
@@ -352,7 +335,7 @@ impl AppKey {
             .as_str()
             .parse::<Identity>()
             .map_err(|e| MultiDeviceError::InvalidDeviceIdentity(e.to_string()))?;
-        let app_id = app_id_from_public(&identity.to_public());
+        let app_id = super::key_actions::AppKeyDerivation::app_id(&identity.to_public());
         Ok(Self { identity, app_id })
     }
 
@@ -379,14 +362,14 @@ impl AppKey {
 
     #[must_use]
     pub fn auth_id(&self) -> AuthKeyId {
-        device_auth_id_from_public(&self.identity.to_public())
+        super::key_actions::AppKeyDerivation::auth_id(&self.identity.to_public())
     }
 
     pub fn decrypt_envelope(
         &self,
         envelope: &AgeArmoredCiphertext,
     ) -> MultiDeviceResult<SymmetricKey> {
-        let plaintext = decrypt_with_identity(envelope, &self.identity)?;
+        let plaintext = Self::open_identity_bytes(envelope, &self.identity)?;
         SymmetricKey::parse(&plaintext).map_err(MultiDeviceError::Validation)
     }
 
@@ -402,59 +385,11 @@ impl AppKey {
     /// this device (holding the matching identity secret) can open it later.
     /// Used to keep sync-provider credentials encrypted at rest in `IndexedDB`.
     pub fn seal_utf8(&self, plaintext: &str) -> MultiDeviceResult<AgeArmoredCiphertext> {
-        encrypt_with_recipient(plaintext.as_bytes(), &self.identity.to_public())
+        Self::seal_recipient_bytes(plaintext.as_bytes(), &self.identity.to_public())
     }
 
     /// Open a string previously sealed with [`AppKey::seal_utf8`].
     pub fn open_utf8(&self, ciphertext: &AgeArmoredCiphertext) -> MultiDeviceResult<String> {
-        decrypt_with_identity(ciphertext, &self.identity)
+        Self::open_identity_bytes(ciphertext, &self.identity)
     }
-}
-
-#[must_use]
-pub fn app_id_from_public(recipient: &Recipient) -> AppId {
-    let hash = Sha256::digest(recipient.to_string().as_bytes());
-    let mut prefix = [0_u8; 8];
-    prefix.copy_from_slice(&hash[..8]);
-    AppId::from_sha256_prefix(prefix)
-}
-
-pub fn app_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<AppId> {
-    Ok(app_id_from_public(
-        &public_key
-            .as_str()
-            .parse::<Recipient>()
-            .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?,
-    ))
-}
-
-/// Migration alias for [`app_id_from_public_key`].
-pub fn device_id_from_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<AppId> {
-    app_id_from_public_key(public_key)
-}
-
-#[must_use]
-pub fn device_auth_id_from_public(recipient: &Recipient) -> AuthKeyId {
-    let hash = Sha256::digest(recipient.to_string().as_bytes());
-    let mut digest = [0_u8; 32];
-    digest.copy_from_slice(&hash);
-    AuthKeyId::from_sha256_digest(&digest)
-}
-
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: encrypts serialized age plaintext bytes"
-    )
-)]
-pub fn encrypt_for_recipient(
-    plaintext: &[u8],
-    recipient_public: &DevicePublicKey,
-) -> MultiDeviceResult<AgeArmoredCiphertext> {
-    let recipient = recipient_public
-        .as_str()
-        .parse::<Recipient>()
-        .map_err(|e| MultiDeviceError::InvalidRecipientPublicKey(e.to_string()))?;
-    encrypt_with_recipient(plaintext, &recipient)
 }

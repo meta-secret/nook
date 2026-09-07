@@ -5,11 +5,11 @@
 )]
 
 use super::{
-    DeviceIdentity, DeviceSigningPublicKey, JoinRequest, MultiDeviceError, MultiDeviceResult,
-    StoredRecordPayload, StoredSecretRecord, SymmetricKey, auth_record, build_members_records,
-    dec_auth_id_from_public_key, genesis_auth_record, genesis_members_records, join_record_key,
+    AuthRecordIssuance, DeviceIdentity, DeviceSigningPublicKey, JoinRequest, StoredRecordPayload,
+    StoredSecretRecord, SymmetricKey, build_members_records, genesis_members_records,
     member_from_identity, member_from_join, resolve_member_roster, roster_add_member,
 };
+use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{DeviceId, SecretId};
 
 /// Borrowed identity data awaiting one consuming join-request record issuance.
@@ -51,7 +51,7 @@ impl<'a> JoinRequestIssuance<'a> {
             requested_at: self.requested_at.to_owned(),
         };
         Ok(StoredSecretRecord {
-            key: SecretId::from_vault_record(&join_record_key(self.identity.device_id())),
+            key: SecretId::from_vault_record(self.identity.device_id().as_str()),
             secret_type: None,
             value: StoredRecordPayload::from_trusted(
                 serde_json::to_string(&request).map_err(MultiDeviceError::JoinRequestSerialize)?,
@@ -91,13 +91,14 @@ impl<'a> JoinRequestApproval<'a> {
     pub fn approve(
         self,
     ) -> MultiDeviceResult<(StoredSecretRecord, String, Vec<StoredSecretRecord>)> {
-        let pk_id = dec_auth_id_from_public_key(&self.join.public_key)?;
-        let auth_record = auth_record(
+        let pk_id = self.join.public_key.auth_id()?;
+        let auth_record = AuthRecordIssuance::new(
             &pk_id,
             self.secrets_key,
             self.members_key,
             &self.join.public_key,
-        )?;
+        )
+        .issue()?;
         let new_member = member_from_join(self.join)?;
         let roster = match resolve_member_roster(self.records, self.members_key) {
             Ok(existing) => roster_add_member(existing, new_member),
@@ -107,11 +108,7 @@ impl<'a> JoinRequestApproval<'a> {
             ],
         };
         let member_records = build_members_records(&roster, self.members_key)?;
-        Ok((
-            auth_record,
-            join_record_key(&self.join.device_id),
-            member_records,
-        ))
+        Ok((auth_record, self.join.device_id.to_string(), member_records))
     }
 }
 
@@ -132,7 +129,7 @@ impl<'a> JoinRequestDenial<'a> {
 
     #[must_use]
     pub fn apply(self) -> Vec<StoredSecretRecord> {
-        let join_key = join_record_key(self.join_device_id);
+        let join_key = self.join_device_id.to_string();
         self.records
             .iter()
             .filter(|record| record.key.as_str() != join_key)
@@ -195,13 +192,13 @@ impl<'a> DeviceEnrollment<'a> {
                 secrets_key,
                 members_key,
             } => {
-                let auth = genesis_auth_record(self.identity, secrets_key, members_key)?;
+                let auth = self.identity.auth_record(secrets_key, members_key)?;
                 let members =
                     genesis_members_records(self.identity, members_key, self.enrolled_at)?;
                 Ok((auth, members))
             }
             EnrollmentKeys::Shared(shared) => {
-                let auth = genesis_auth_record(self.identity, &shared, &shared)?;
+                let auth = self.identity.auth_record(&shared, &shared)?;
                 let members = genesis_members_records(self.identity, &shared, self.enrolled_at)?;
                 Ok((auth, members))
             }

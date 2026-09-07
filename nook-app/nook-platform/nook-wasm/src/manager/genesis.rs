@@ -100,7 +100,7 @@ impl NookVaultManager {
         &mut self,
         identity: &nook_core::DeviceIdentity,
     ) -> Result<(), NookError> {
-        let keys = nook_core::generate_vault_keys()?;
+        let keys = nook_core::VaultKeys::generate()?;
         self.apply_genesis_vault_keys(identity, &keys)
     }
 
@@ -112,8 +112,7 @@ impl NookVaultManager {
         self.prepare_genesis_vault_keys(keys)?;
         match self.vault.architecture.vault_type {
             VaultType::Simple => {
-                let genesis =
-                    nook_core::genesis_auth_record(identity, &keys.secrets_key, &keys.members_key)?;
+                let genesis = identity.auth_record(&keys.secrets_key, &keys.members_key)?;
                 self.vault.meta.apply_record(&genesis)?;
             }
             VaultType::Sentinel => {
@@ -146,8 +145,7 @@ impl NookVaultManager {
             let members_key = SymmetricKey::parse(&self.vault.members_key)?;
             match self.vault.architecture.vault_type {
                 VaultType::Simple => {
-                    let genesis =
-                        nook_core::genesis_auth_record(&identity, &secrets_key, &members_key)?;
+                    let genesis = identity.auth_record(&secrets_key, &members_key)?;
                     self.vault.meta.apply_record(&genesis)?;
                 }
                 VaultType::Sentinel => {
