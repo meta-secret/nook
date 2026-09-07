@@ -2071,8 +2071,8 @@
   },
   "netflix": {
     "loginUrl": "https://www.netflix.com/login",
-    "source": "research",
-    "template": "email-password"
+    "source": "capture",
+    "template": "netflix"
   },
   "netlify": {
     "loginUrl": "https://app.netlify.com/login",

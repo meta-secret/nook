@@ -11,6 +11,7 @@
   import DetectionLogin from './pages/DetectionLogin.svelte'
   import DetectionMicrosoftConsumer from './pages/DetectionMicrosoftConsumer.svelte'
   import DetectionLinkedIn from './pages/DetectionLinkedIn.svelte'
+  import DetectionNetflix from './pages/DetectionNetflix.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
   import DetectionOpenAi from './pages/DetectionOpenAi.svelte'
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
@@ -51,6 +52,9 @@
       } as Record<string, string>
     )[pathname],
   )
+  const isNetflixLogin = $derived(
+    location.hostname === 'www.netflix.com' && pathname === '/login',
+  )
 </script>
 
 <svelte:window onpopstate={syncPath} />
@@ -75,6 +79,8 @@
   <TotpBackupCodes />
 {:else if pathname === '/login/'}
   <DetectionLinkedIn />
+{:else if isNetflixLogin}
+  <DetectionNetflix />
 {:else if pathname === '/login' || pathname === '/linkedin'}
   <DetectionLogin />
 {:else if pathname === '/signup'}

@@ -261,6 +261,20 @@ mod tests {
     }
 
     #[test]
+    fn nonstandard_password_autocomplete_remains_generic() {
+        let field = Fixture::page_input(crate::PageInputType::Password, &["password"], "password");
+        assert_eq!(
+            Classification::from_page_input(Index::ZERO, &field),
+            Observation::from(Credential {
+                field_index: Index::ZERO,
+                role: CredentialRole::Password(Password::Generic),
+                editability: Editability::Writable,
+            })
+            .into()
+        );
+    }
+
+    #[test]
     fn carries_readonly_credential_editability_but_preserves_unsafe_variants() {
         let mut password = Fixture::page_input(
             crate::PageInputType::Password,

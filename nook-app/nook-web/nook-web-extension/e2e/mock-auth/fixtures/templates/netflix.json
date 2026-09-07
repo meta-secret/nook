@@ -1,0 +1,26 @@
+{
+  "id": "netflix",
+  "quirks": ["post-form-without-action", "password-autocomplete-token"],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "name": "userLoginId",
+          "autocomplete": "email",
+          "aria-label": "Email or mobile number"
+        },
+        {
+          "type": "password",
+          "name": "password",
+          "autocomplete": "password",
+          "aria-label": "Password"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue"
+      }
+    }
+  ]
+}
