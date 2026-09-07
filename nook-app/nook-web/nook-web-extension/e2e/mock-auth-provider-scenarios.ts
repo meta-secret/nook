@@ -873,6 +873,7 @@ export class MockAuthProviderScenarios {
         const widget = page.locator('#nook-auth-widget')
         await expect(widget.getByText('Ready to sign in')).toBeVisible()
         await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(identity).toHaveValue('alice@nook.test')
         await expect(page.getByTestId('mock-auth-success')).toHaveText(
           'Authentication complete',
           { timeout: 20_000 },
@@ -907,7 +908,6 @@ export class MockAuthProviderScenarios {
               alternativeActivationCount: 0,
             }),
           })
-        await expect(identity).toHaveValue('alice@nook.test')
         expect(interceptedAirbnbRequestCount).toBeGreaterThan(1)
         expect(forbiddenAuthenticationRequests).toEqual([])
         await page.close()
