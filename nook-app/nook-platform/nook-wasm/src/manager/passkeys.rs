@@ -5,8 +5,9 @@ use crate::storage::event_db::load_local_event_store;
 use crate::{NookError, NookPasskeyAccount, NookPasskeyAssertion, NookPasskeyRegistration};
 use js_sys::Object;
 use nook_core::{
-    DeviceId, DevicePublicKey, DeviceSigningPublicKey, PasskeyAuthenticatorError, SecretType,
-    SecretValue, StoreId, SymmetricKey, VaultApplication, VaultOperation, VaultType,
+    DeviceId, DevicePublicKey, DeviceSigningPublicKey, EventGraphDeviceAccess,
+    EventGraphDeviceAccessRequest, PasskeyAuthenticatorError, SecretType, SecretValue, StoreId,
+    SymmetricKey, VaultApplication, VaultMetaGraphProjection, VaultOperation, VaultType,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroizing;
@@ -342,17 +343,16 @@ impl NookVaultManager {
         self.vault.store_id = store_id.as_str().to_owned();
         let store = load_local_event_store(store_id.as_str()).await?;
         let graph = store.load_graph(store_id.as_str())?;
-        if !nook_core::event_graph_has_active_device_access(
-            &graph,
-            &expected_device_id,
-            &expected_public_key,
-            &expected_signing_key,
-        )? {
+        if !EventGraphDeviceAccess::new(&graph).has_access(&EventGraphDeviceAccessRequest {
+            expected_device_id: &expected_device_id,
+            expected_public_key: &expected_public_key,
+            expected_signing_public_key: &expected_signing_key,
+        })? {
             return Err(NookError::Decryption(
                 "Extension vault grant is missing or revoked.".to_owned(),
             ));
         }
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
         self.ensure_vault_crypto_from_cache().await?;
         self.apply_event_projection_to_session().await?;
         Ok(())

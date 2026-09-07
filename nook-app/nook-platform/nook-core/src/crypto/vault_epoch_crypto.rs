@@ -232,8 +232,9 @@ mod tests {
 
     use super::*;
     use crate::{
-        ApiKeySecret, DeviceIdentity, JoinRequestApproval, JoinRequestIssuance, SecretId,
-        SecretValue, VaultOperation, VaultResult, generate_vault_keys, genesis_auth_record,
+        ApiKeySecret, DeviceIdentity, IsoTimestamp, JoinRequestApproval, JoinRequestIssuance,
+        SecretId, SecretValue, VaultMetaOperationApplier, VaultMetaOperationRequest,
+        VaultOperation, VaultResult, generate_vault_keys, genesis_auth_record,
         genesis_members_records, pending_join_for_device, replace_member_records,
         resolve_members_key, resolve_secrets_key,
     };
@@ -353,16 +354,16 @@ mod tests {
         let rotated_meta_records =
             VaultMetaRecordRewrap::new(&records, &old_keys.members_key, &new_keys).rewrap()?;
         let mut state = VaultMetaState::from_stored_records(&records)?;
-        crate::apply_vault_meta_operation(
-            &mut state,
-            &VaultOperation::EpochCheckpoint {
+        let requested_at = IsoTimestamp::parse("2026-06-28T00:02:00Z")?;
+        VaultMetaOperationApplier::new(&mut state).apply(&VaultMetaOperationRequest {
+            operation: &VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
                 members_checkpoint_hash: Sha256Hex::from_bytes(b"members"),
                 rotated_meta_records: EpochMetadataState::Replace(rotated_meta_records),
                 password_entries: EpochPasswordState::Replace(Vec::new()),
             },
-            "2026-06-28T00:02:00Z",
-        )?;
+            requested_at: &requested_at,
+        })?;
         let replayed = state.to_stored_records();
         for identity in [&owner, &joiner] {
             assert_eq!(

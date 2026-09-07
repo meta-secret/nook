@@ -7,7 +7,7 @@ use crate::storage::identity_record;
 use crate::storage::indexed_db::save_to_indexed_db;
 use nook_core::{
     DeviceSigningPublicKey, MemberLabel, MultiDeviceError, SecretTypeFilter, StorageMode, StoreId,
-    VaultMetaState, VaultOperation, VaultType, VaultUnlock,
+    VaultMetaGraphProjection, VaultMetaState, VaultOperation, VaultType, VaultUnlock,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -393,7 +393,7 @@ impl NookVaultManager {
             let user_records: Vec<nook_core::StoredSecretRecord> =
                 projection.live_secrets(&graph).into_values().collect();
             let mut meta = VaultMetaState::from_stored_records(&user_records)?;
-            nook_core::materialize_vault_meta_from_graph(&graph, &mut meta)?;
+            VaultMetaGraphProjection::new(&graph).materialize(&mut meta)?;
             self.vault.password_entries = projection.password_entries.clone();
             self.vault.meta = meta;
             return Ok((true, self.vault.meta.to_stored_records()));

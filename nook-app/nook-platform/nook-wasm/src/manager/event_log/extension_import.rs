@@ -6,8 +6,9 @@ use crate::storage::indexed_db;
 use nook_core::CheckedRemoteEvent;
 use nook_core::EventId;
 use nook_core::{
-    DeviceId, DevicePublicKey, DeviceSigningPublicKey, SentinelGenesisPhase, StoreId,
-    VaultApplication, VaultMetaState,
+    DeviceId, DevicePublicKey, DeviceSigningPublicKey, EventGraphDeviceAccess,
+    EventGraphDeviceAccessRequest, SentinelGenesisPhase, StoreId, VaultApplication,
+    VaultMetaGraphProjection, VaultMetaState,
 };
 use std::mem;
 
@@ -107,16 +108,16 @@ impl NookVaultManager {
 
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        let has_active_grant = nook_core::event_graph_has_active_device_access(
-            &graph,
-            &targets.device_id,
-            &targets.device_public_key,
-            &targets.device_signing_public_key,
-        )?;
+        let has_active_grant =
+            EventGraphDeviceAccess::new(&graph).has_access(&EventGraphDeviceAccessRequest {
+                expected_device_id: &targets.device_id,
+                expected_public_key: &targets.device_public_key,
+                expected_signing_public_key: &targets.device_signing_public_key,
+            })?;
         // Derive envelopes from the same loaded graph, not a prior in-memory
         // meta snapshot that may disagree after quarantine filtering.
         let mut granted_meta = VaultMetaState::default();
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut granted_meta)?;
+        VaultMetaGraphProjection::new(&graph).materialize(&mut granted_meta)?;
         let auth_id = nook_core::dec_auth_id_from_public_key(&targets.device_public_key)?;
         let has_device_envelope = granted_meta.auth.contains_key(&auth_id);
         let access_granted = has_active_grant && has_device_envelope;

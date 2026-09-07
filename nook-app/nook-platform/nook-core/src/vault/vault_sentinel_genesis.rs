@@ -4,7 +4,10 @@ use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation
 
 use crate::i18n_keys;
 #[cfg(test)]
-use crate::{CheckedSentinelGenesisResponse, SentinelGenesisResponder};
+use crate::{
+    CheckedSentinelGenesisResponse, IsoTimestamp, SentinelGenesisResponder,
+    VaultMetaOperationApplier, VaultMetaOperationRequest,
+};
 use crate::{
     DeviceIdentity, DeviceMode, ReadySentinelGenesis, ReplicationType, SentinelGenesisReadiness,
     SentinelGenesisSession, SentinelGenesisShareDelivery, SentinelParticipantCount, SentinelPolicy,
@@ -254,11 +257,13 @@ mod tests {
         let operations = sentinel_genesis_operations(&output);
         assert_eq!(operations.len(), 3);
         let mut materialized = VaultMetaState::default();
+        let requested_at = IsoTimestamp::parse("2026-07-09T00:00:00Z")?;
         for operation in &operations {
-            crate::apply_vault_meta_operation(
-                &mut materialized,
-                operation,
-                "2026-07-09T00:00:00Z",
+            VaultMetaOperationApplier::new(&mut materialized).apply(
+                &VaultMetaOperationRequest {
+                    operation,
+                    requested_at: &requested_at,
+                },
             )?;
         }
         assert_eq!(materialized.sentinel_participants.len(), 2);

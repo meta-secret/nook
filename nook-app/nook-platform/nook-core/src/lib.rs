@@ -226,10 +226,12 @@ pub use nook_auth2::{
     SentinelRecordCount, SentinelShareCount, SentinelShareIndex, SentinelThreshold,
 };
 
-pub use multi_device::{
-    SimpleIdentityGenesisOperationsInput, sentinel_member_records_from_public_roster,
-    simple_identity_genesis_operations,
+pub use auth::vault_meta_actions::{
+    EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
+    SentinelMemberRecordProjection, SentinelMemberRecordProjectionRequest,
+    VaultMetaGraphProjection, VaultMetaOperationApplier, VaultMetaOperationRequest,
 };
+pub use multi_device::{SimpleIdentityGenesisOperationsInput, simple_identity_genesis_operations};
 pub use nook_auth2::{
     AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
     IdentitySelection, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
@@ -242,22 +244,20 @@ pub use multi_device::{
     JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance, MEMBER_RECORD_PREFIX, MemberEntry,
     OpenedSentinelShare, SENTINEL_SHARE_RECORD_PREFIX, SelfRosterSync, SentinelKeyReconstruction,
     SentinelParticipantEntry, SentinelShareEnvelope, SentinelShareOpening, SentinelShareVersion,
-    VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState, apply_vault_meta_operation,
-    assess_connect_access, auth_record, build_members_records, count_sentinel_share_records,
-    create_sentinel_share_records, create_sentinel_share_records_for_recipients, dec_auth_id,
-    dec_auth_id_from_public_key, device_is_enrolled, encrypt_for_recipient, encrypt_member_entry,
-    ensure_self_in_roster, event_graph_active_auth_ids, event_graph_active_device_envelopes,
-    event_graph_has_active_device_access, generate_dec, generate_id, generate_symmetric_key,
-    generate_vault_keys, genesis_auth_record, genesis_dec_record, genesis_members_records,
-    is_auth_id, is_auth_stored_record, is_dec_stored_record, is_join_stored_record,
-    is_members_stored_record, is_reserved_device_label, is_sentinel_share_stored_record,
-    is_vault_meta_record, join_record_key, list_join_requests, materialize_vault_meta_from_graph,
-    member_from_identity, member_from_join, member_stored_key, merge_remote_join_records,
-    parse_auth_envelopes, parse_join_request, parse_sentinel_share_envelope,
-    pending_join_for_device, rename_vault_member, replace_member_records, resolve_dec, resolve_dek,
-    resolve_member_roster, resolve_members_key, resolve_secrets_key, revoke_vault_member,
-    roster_add_member, sentinel_share_record_key, user_stored_records,
-    vault_has_multi_device_records,
+    VaultKeys, VaultMember, VaultMetaRecord, VaultMetaState, assess_connect_access, auth_record,
+    build_members_records, count_sentinel_share_records, create_sentinel_share_records,
+    create_sentinel_share_records_for_recipients, dec_auth_id, dec_auth_id_from_public_key,
+    device_is_enrolled, encrypt_for_recipient, encrypt_member_entry, ensure_self_in_roster,
+    generate_dec, generate_id, generate_symmetric_key, generate_vault_keys, genesis_auth_record,
+    genesis_dec_record, genesis_members_records, is_auth_id, is_auth_stored_record,
+    is_dec_stored_record, is_join_stored_record, is_members_stored_record,
+    is_reserved_device_label, is_sentinel_share_stored_record, is_vault_meta_record,
+    join_record_key, list_join_requests, member_from_identity, member_from_join, member_stored_key,
+    merge_remote_join_records, parse_auth_envelopes, parse_join_request,
+    parse_sentinel_share_envelope, pending_join_for_device, rename_vault_member,
+    replace_member_records, resolve_dec, resolve_dek, resolve_member_roster, resolve_members_key,
+    resolve_secrets_key, revoke_vault_member, roster_add_member, sentinel_share_record_key,
+    user_stored_records, vault_has_multi_device_records,
 };
 
 pub use nook_event_log::{
