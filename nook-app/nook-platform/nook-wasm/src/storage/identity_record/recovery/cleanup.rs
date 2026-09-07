@@ -107,7 +107,6 @@ mod tests {
     use super::*;
     use crate::storage::identity_record;
     use nook_core::AppKey;
-    use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -198,8 +197,10 @@ mod tests {
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         let key = serde_wasm_bindgen::to_value(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let null = serde_wasm_bindgen::to_value(&Option::<String>::None)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         store
-            .put(&JsValue::NULL, Some(&key))
+            .put(&null, Some(&key))
             .await
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         assert_eq!(LocalIdentityRecovery::load_pending(&store).await?, None);
@@ -231,8 +232,10 @@ mod tests {
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         let key = serde_wasm_bindgen::to_value(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let malformed = serde_wasm_bindgen::to_value("{not-json")
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         store
-            .put(&JsValue::from_str("{not-json"), Some(&key))
+            .put(&malformed, Some(&key))
             .await
             .map_err(|error| NookError::IndexedDb(error.to_string()))?;
         let error = LocalIdentityRecovery::load_pending(&store)
