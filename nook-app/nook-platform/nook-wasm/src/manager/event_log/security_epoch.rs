@@ -339,7 +339,7 @@ impl CommittedSecurityEpochExecution {
     async fn complete(self, manager: &mut NookVaultManager) -> Result<(), NookError> {
         let local = load_local_event_store(&manager.vault.store_id).await?;
         let graph = local.load_graph(&manager.vault.store_id)?;
-        let projection = nook_core::project_vault(&graph, &manager.vault.store_id)?;
+        let projection = nook_core::VaultProjection::from_graph(&graph, &manager.vault.store_id)?;
         let advanced = self.projection_advanced_past(&projection);
         let PreparedSecurityEpochExecution {
             plan,

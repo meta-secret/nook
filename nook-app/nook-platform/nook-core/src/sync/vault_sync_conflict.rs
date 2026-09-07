@@ -86,7 +86,7 @@ pub fn classify_current_vault_replaceability(
     if graph.is_empty() || !graph.pending_events().is_empty() || !graph.quarantined().is_empty() {
         return CurrentVaultReplaceability::Unknown;
     }
-    let Ok(projection) = crate::project_vault(graph, store_id) else {
+    let Ok(projection) = crate::VaultProjection::from_graph(graph, store_id) else {
         return CurrentVaultReplaceability::Unknown;
     };
     if projection.unresolved_schema || projection.has_blocking_conflicts() {
