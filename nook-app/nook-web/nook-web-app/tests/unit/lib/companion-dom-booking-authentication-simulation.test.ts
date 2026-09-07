@@ -438,10 +438,7 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     const unrelatedForm = document.querySelector<HTMLFormElement>(
       '[data-testid="booking-unrelated-form"]',
     )
-    const unownedSurface = document.querySelector<HTMLElement>(
-      '[data-testid="booking-unowned-surface"]',
-    )
-    if (!email || !primary || !unrelatedForm || !unownedSurface) {
+    if (!email || !primary || !unrelatedForm) {
       throw new Error('expected unowned Booking.com surface')
     }
     expect(email.form).not.toBeInstanceOf(HTMLFormElement)
@@ -450,7 +447,11 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(unrelatedForm.querySelectorAll('input')).toHaveLength(0)
     const [observation] = summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected unowned Booking.com surface')
-    expect(observation.root).toBe(unownedSurface)
+    if (!(observation.root instanceof HTMLElement)) {
+      throw new Error('expected bounded unowned Booking.com observation')
+    }
+    expect(observation.root.querySelector('[name="username"]')).toBe(email)
+    expect(observation.root.querySelectorAll('input')).toHaveLength(1)
     expect(observation.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
     expect(email.value).toBe('')
   })
