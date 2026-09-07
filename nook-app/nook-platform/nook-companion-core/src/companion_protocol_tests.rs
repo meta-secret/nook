@@ -251,6 +251,11 @@ fn website_requires_exact_request_store_and_context_correlation() -> anyhow::Res
 }
 
 #[test]
+#[allow(
+    unknown_lints,
+    non_local_effect_before_unhandled_error,
+    reason = "the test intentionally observes replay rejection after one-shot authorization consumes endpoint state"
+)]
 fn authorization_requires_capability_and_an_issued_discovery() -> anyhow::Result<()> {
     let without_access = CompanionExtensionPresence::Unlocked {
         vault_type: ExtensionPairingVaultType::Simple,
@@ -299,6 +304,11 @@ fn authorization_requires_capability_and_an_issued_discovery() -> anyhow::Result
 }
 
 #[test]
+#[allow(
+    unknown_lints,
+    non_local_effect_before_unhandled_error,
+    reason = "the test intentionally observes fail-closed state consumption after mismatched, stale, and concurrent transactions"
+)]
 fn mismatched_stale_and_concurrent_transactions_consume_endpoint_state() -> anyhow::Result<()> {
     let mut mismatched = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
     mismatched.discover(observation())?;
