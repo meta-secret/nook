@@ -19,6 +19,33 @@ use crate::page_field_classification::{
 };
 
 impl AuthenticationAdvanceControlObservation {
+    pub(super) fn is_identifier_only_get_advance(&self) -> bool {
+        matches!(self.actionability, PageControlActionability::Actionable)
+            && matches!(
+                self.ownership,
+                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+            )
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && match self.submission_destination_source {
+                PageControlSubmissionDestinationSource::Authored => matches!(
+                    self.authentication_username,
+                    AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::Explicit
+                ),
+                PageControlSubmissionDestinationSource::Omitted => {
+                    self.form_identity.is_empty()
+                        && matches!(
+                            self.authentication_username,
+                            AuthenticationUsernameEvidence::Explicit
+                        )
+                }
+            }
+            && self.password_field_count.raw() == 0
+            && self.new_password_field_count.raw() == 0
+            && self.one_time_code_field_count.raw() == 0
+            && self.semantic_submit_control_count.raw() == 1
+    }
+
     pub(super) fn has_ambiguous_identifier_only_submit(&self) -> bool {
         matches!(self.semantics, PageControlSemantics::SemanticSubmit)
             && !matches!(
@@ -239,6 +266,10 @@ mod tests {
             let mut activation = Self::observation();
             activation.semantics = PageControlSemantics::Activation;
             assert!(!authentication_advance_control_is_safe(&activation));
+
+            let mut implicit_email = Self::observation();
+            implicit_email.authentication_username = AuthenticationUsernameEvidence::Strong;
+            assert!(!authentication_advance_control_is_safe(&implicit_email));
         }
     }
 

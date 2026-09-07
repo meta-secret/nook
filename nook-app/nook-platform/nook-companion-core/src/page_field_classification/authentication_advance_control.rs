@@ -163,27 +163,6 @@ impl AuthenticationAdvanceControlObservation {
                 || AuthenticationControlIdentity::new(&self.label).is_explicit_advance())
     }
 
-    fn is_identifier_only_get_advance(&self) -> bool {
-        matches!(self.actionability, PageControlActionability::Actionable)
-            && matches!(
-                self.ownership,
-                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
-            )
-            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
-            && match self.submission_destination_source {
-                PageControlSubmissionDestinationSource::Authored => true,
-                PageControlSubmissionDestinationSource::Omitted => self.form_identity.is_empty(),
-            }
-            && matches!(
-                self.authentication_username,
-                AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
-            )
-            && self.password_field_count.raw() == 0
-            && self.new_password_field_count.raw() == 0
-            && self.one_time_code_field_count.raw() == 0
-            && self.semantic_submit_control_count.raw() == 1
-    }
-
     /// Whether DOM-controlled text and bounded field counts fit the observation envelope.
     #[must_use]
     pub fn is_bounded(&self) -> bool {
