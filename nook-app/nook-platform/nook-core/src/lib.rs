@@ -302,8 +302,9 @@ pub use sync_provider_credentials::{
 pub use sync_provider_store::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup, ActiveVaultProviderRows,
-    ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection, GoogleOAuthTokenInput,
-    ICloudOAuthTokenInput, LocalFolderConfigData, ManagerStoreScopeRef, NormalizedAuthSnapshot,
+    ActiveVaultScope, AuthProvidersSnapshotData, DraftStorageConnection,
+    DuplicateProviderSelection, GoogleOAuthTokenInput, ICloudOAuthTokenInput,
+    LocalFolderConfigData, LocalProviderRowRequest, ManagerStoreScopeRef, NormalizedAuthSnapshot,
     OAuthAccessTokenRef, OAuthFileConfigData, ProviderEnrollmentRequest, ProviderLabelLabels,
     ProviderRows, ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup,
     ProviderSelectionRequest, ProviderStorageDetailLabels, ProviderSyncCheckpoint,
@@ -314,8 +315,6 @@ pub use sync_provider_store::{
     StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
     StoredOAuthTokenExpiry, VaultStorageConnection, auth_snapshot_legacy_storage_value,
-    ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,
-    normalize_auth_snapshot, provider_storage_detail, provider_target_key,
     update_provider_sync_metadata,
 };
 pub use validation::{

@@ -129,7 +129,7 @@ pub fn auth_snapshot_legacy_storage_value(
 
 #[cfg(test)]
 mod tests {
-    use crate::{ActiveVaultScope, StorageProviderData};
+    use crate::{ActiveVaultScope, NormalizedAuthSnapshot, StorageProviderData};
 
     use super::auth_snapshot_legacy_storage_value;
 
@@ -147,7 +147,7 @@ mod tests {
         };
 
         let value = auth_snapshot_legacy_storage_value(&snapshot)?;
-        let round_trip = crate::normalize_auth_snapshot(&value).snapshot;
+        let round_trip = NormalizedAuthSnapshot::from_wire(&value).snapshot;
         assert_eq!(round_trip, snapshot);
         Ok(())
     }

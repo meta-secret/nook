@@ -9,6 +9,7 @@ use nook_core::{
     ActiveProviderLoginSetup, AppId, DevicePublicKey, ProviderSaveOutcome, ProviderSaveSetup,
     VaultSyncAction,
 };
+use nook_core::{DuplicateProviderSelection, LocalProviderRowRequest};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -139,8 +140,11 @@ impl NookVaultManager {
         }
         let new_id = nook_core::generate_id()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
-        let (snapshot, changed) =
-            nook_core::ensure_local_provider_row(&snapshot, None, &new_id, &created_at);
+        let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
+            active_store_id: None,
+            new_id: &new_id,
+            created_at: &created_at,
+        });
         if changed {
             ProviderSnapshotPublication {
                 identity: &identity,
@@ -165,8 +169,11 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let new_id = nook_core::generate_id()?.to_string();
         let created_at: String = Date::new_0().to_iso_string().into();
-        let (snapshot, changed) =
-            nook_core::ensure_local_provider_row(&snapshot, None, &new_id, &created_at);
+        let (snapshot, changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
+            active_store_id: None,
+            new_id: &new_id,
+            created_at: &created_at,
+        });
         if changed {
             ProviderSnapshotPublication {
                 identity: &identity,
@@ -338,11 +345,14 @@ pub fn find_duplicate_sync_provider(
     snapshot: nook_core::AuthProvidersSnapshotData,
     candidate: nook_core::StorageProviderData,
 ) -> NookDuplicateSyncProvider {
-    NookDuplicateSyncProvider(nook_core::find_duplicate_sync_provider(
-        &snapshot.providers,
-        &candidate,
-        None,
-    ))
+    NookDuplicateSyncProvider(
+        DuplicateProviderSelection {
+            providers: &snapshot.providers,
+            candidate: &candidate,
+            exclude_id: None,
+        }
+        .find(),
+    )
 }
 
 /// Find a duplicate while editing an existing provider.
@@ -354,11 +364,14 @@ pub fn find_duplicate_sync_provider_excluding(
     candidate: nook_core::StorageProviderData,
     exclude_id: &str,
 ) -> NookDuplicateSyncProvider {
-    NookDuplicateSyncProvider(nook_core::find_duplicate_sync_provider(
-        &snapshot.providers,
-        &candidate,
-        Some(exclude_id),
-    ))
+    NookDuplicateSyncProvider(
+        DuplicateProviderSelection {
+            providers: &snapshot.providers,
+            candidate: &candidate,
+            exclude_id: Some(exclude_id),
+        }
+        .find(),
+    )
 }
 
 /// Ensure a `local` provider row exists for the active vault, prepending one
@@ -371,12 +384,11 @@ pub fn ensure_local_provider_row(
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
     let new_id = nook_core::generate_id()?.to_string();
     let created_at: String = Date::new_0().to_iso_string().into();
-    let (next, _changed) = nook_core::ensure_local_provider_row(
-        &snapshot,
-        Some(active_store_id),
-        &new_id,
-        &created_at,
-    );
+    let (next, _changed) = snapshot.ensure_local_row(LocalProviderRowRequest {
+        active_store_id: Some(active_store_id),
+        new_id: &new_id,
+        created_at: &created_at,
+    });
     Ok(next)
 }
 
