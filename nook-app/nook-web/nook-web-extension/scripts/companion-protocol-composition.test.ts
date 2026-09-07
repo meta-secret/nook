@@ -17,6 +17,8 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 import {
   admit_companion_handoff_response,
   admit_companion_identity_status,
+  NookCompanionPairingWebsiteProtocol,
+  type CompanionPairingWebsiteAuthorization,
   type CompanionExtensionPresence,
   type CompanionIdentityDiscoveryObservation,
   type CompanionIdentityHandoffAuthorization,
@@ -28,8 +30,12 @@ import {
   default as initNookWasm,
   configure_vault_application,
   NookCompanionExtensionEndpoint,
+  NookExternalEventLogRecords,
   NookVaultManager,
+  seal_auth_providers_for_device_public_key,
   VaultApplication,
+  type AuthProvidersSnapshot,
+  type CompanionPairingIssue,
   type CompanionIdentityHandoffResponse,
   type CompanionWebsiteHandoffBegin,
 } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm.js'
@@ -111,6 +117,90 @@ function beginHandoff(requestId: string) {
   return { authorization, endpoint, request, website }
 }
 
+async function manifestDigest(snapshot: AuthProvidersSnapshot) {
+  const bytes = new TextEncoder().encode(JSON.stringify(snapshot))
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', bytes)
+  return Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('')
+}
+
+async function pairingAttempt(requestId: string, substituteProvider: boolean) {
+  const issue = {
+    requestId,
+    nonce: `nonce-${requestId}`,
+    issuedAt: 100,
+    expiresAt: 200,
+    vaultType: 'simple',
+    extensionRuntimeId: 'composition-runtime',
+    installationLabel: 'Composition Extension',
+    scopes: ['vault-access', 'sync-provider-credentials'],
+  } satisfies CompanionPairingIssue
+  const extensionProtocol = await extension.issue_companion_pairing(issue)
+  const request = extensionProtocol.request()
+  const authority = extensionProtocol.take_authority()
+  extensionProtocol.free()
+  const websiteProtocol = new NookCompanionPairingWebsiteProtocol({
+    request: structuredClone(request),
+    observedAt: 120,
+  })
+  const providers = seal_auth_providers_for_device_public_key(
+    extension.device_public_key,
+    {
+      providers: [
+        {
+          id: `github-${requestId}`,
+          type: 'github',
+          label: 'Composition GitHub',
+          githubPat: { state: 'token', value: 'github_pat_pairing_secret' },
+          githubRepo: { state: 'defaultRepository' },
+          oauthFile: { state: 'notApplicable' },
+          localFolder: { state: 'notApplicable' },
+          storeId: { state: 'storeId', value: extension.vaultStoreId },
+          syncCheckpoint: { state: 'neverSynced' },
+          createdAt: '2026-09-07T00:00:00Z',
+        },
+      ],
+      activeVaultStoreId: {
+        state: 'storeId',
+        value: extension.vaultStoreId,
+      },
+    },
+  )
+  const authorization = {
+    request: structuredClone(request),
+    observedAt: 130,
+    vaultStoreId: extension.vaultStoreId,
+    vaultName: 'Composition Vault',
+    approvedAt: '2026-09-07T00:00:00Z',
+  } satisfies CompanionPairingWebsiteAuthorization
+  const approval = websiteProtocol.authorize(
+    authorization,
+    await manifestDigest(providers),
+  )
+  websiteProtocol.free()
+  if (approval.kind !== 'approved') {
+    throw new Error('expected generated website pairing approval')
+  }
+  if (substituteProvider) {
+    const provider = providers.providers[0]
+    if (!provider) throw new Error('expected pairing provider')
+    provider.label = 'Substituted Provider'
+  }
+  const records = await extension.export_event_log_records_js()
+  const externalRecords = NookExternalEventLogRecords.from_array(
+    records.to_array(),
+  )
+  records.free()
+  return authority.finalize(
+    extension,
+    { approval: approval.approval, observedAt: 150 },
+    externalRecords,
+    providers,
+    '2026-09-07T00:00:01Z',
+  )
+}
+
 beforeAll(async () => {
   Object.assign(globalThis, compositionIndexedDBRuntime)
   const nookWasmBytes = await Bun.file(
@@ -164,6 +254,29 @@ afterAll(() => {
 })
 
 describe('generated companion protocol composition', () => {
+  test('pairs sealed providers and rejects a substituted approval', async () => {
+    for (const [requestId, substituteProvider, outcome, failure] of [
+      ['pairing-success', false, 'accepted', undefined],
+      [
+        'pairing-substitution',
+        true,
+        'rejected',
+        'provider-manifest-mismatch',
+      ],
+    ] as const) {
+      const result = await pairingAttempt(requestId, substituteProvider)
+      expect(result.kind).toBe(outcome)
+      if (result.kind === 'rejected') {
+        expect(result.acknowledgement.failure).toBe(failure)
+      }
+    }
+    const saved = await extension.load_auth_providers_snapshot()
+    expect(saved.providers[0]?.githubPat).toEqual({
+      state: 'token',
+      value: 'github_pat_pairing_secret',
+    })
+  })
+
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {
     const { authorization, endpoint, website } = beginHandoff('request-success')
     const response = await endpoint.authorize_and_seal(

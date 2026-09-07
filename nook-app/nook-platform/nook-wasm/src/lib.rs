@@ -19,7 +19,10 @@
     clippy::items_after_statements
 )]
 
-use nook_companion_core::ExtensionConnectScope;
+use nook_companion_core::{
+    CompanionPairingAcknowledgementAdmission, CompanionPairingAcknowledgementAdmissionRequest,
+    ExtensionConnectScope,
+};
 
 mod application;
 mod conversion;
@@ -43,7 +46,9 @@ pub use identity_record::{
 };
 pub use logger::{NookLogEntries, log_count, log_dump_page};
 pub use manager::{
-    NookCompanionExtensionEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
+    NookCompanionExtensionEndpoint, NookCompanionPairingApprovalAuthority,
+    NookCompanionPairingApprovalBundle, NookCompanionPairingExtensionEndpoint,
+    NookCompanionPairingWebsiteEndpoint, NookEventLogRecords, NookEventLogStorageRecord,
     NookExtensionEventLogImportStatus, NookExtensionIdentityHandoffContext,
     NookExternalEventLogRecords, NookVaultManager, NookVaultNameState,
     admit_companion_handoff_response, admit_companion_identity_status,
@@ -102,6 +107,14 @@ pub fn extension_sync_provider_credentials_scope() -> nook_companion_core::Exten
 #[must_use]
 pub fn is_extension_connect_scope(value: &str) -> bool {
     ExtensionConnectScope::parse(value).is_some()
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn admit_companion_pairing_acknowledgement(
+    request: CompanionPairingAcknowledgementAdmissionRequest,
+) -> CompanionPairingAcknowledgementAdmission {
+    CompanionPairingAcknowledgementAdmission::admit(request)
 }
 
 #[wasm_bindgen]

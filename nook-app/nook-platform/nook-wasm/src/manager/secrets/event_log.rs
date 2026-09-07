@@ -17,7 +17,7 @@ fn serialize_js_array<T: Serialize>(value: &T) -> Result<js_sys::Array, serde_wa
 pub struct NookEventLogStorageRecord(EventLogStorageRecord);
 
 #[wasm_bindgen]
-pub struct NookEventLogRecords(Vec<EventLogStorageRecord>);
+pub struct NookEventLogRecords(pub(in crate::manager) Vec<EventLogStorageRecord>);
 
 #[wasm_bindgen]
 impl NookEventLogRecords {
@@ -28,7 +28,7 @@ impl NookEventLogRecords {
 }
 
 #[wasm_bindgen]
-pub struct NookExternalEventLogRecords(Vec<ExternalEventLogRecord>);
+pub struct NookExternalEventLogRecords(pub(in crate::manager) Vec<ExternalEventLogRecord>);
 
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
