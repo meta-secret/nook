@@ -360,6 +360,13 @@ mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
 
+    #[derive(Deserialize)]
+    struct SerializedPutBody {
+        message: String,
+        content: String,
+        sha: Option<String>,
+    }
+
     #[wasm_bindgen_test]
     fn cache_busting_appends_the_right_separator() {
         let without_query = github_cache_bust_url("https://api.github.com/repos/example");
@@ -398,6 +405,63 @@ mod tests {
         assert_eq!(put.content.sha, "abc123");
         let user: GitHubUserResponse = serde_json::from_str(r#"{"login":"nook"}"#)?;
         assert_eq!(user.login, "nook");
+        Ok(())
+    }
+
+    #[test]
+    fn github_directory_entries_and_put_body_preserve_wire_shape() -> anyhow::Result<()> {
+        let entries: Vec<GitHubDirEntry> = serde_json::from_str(
+            r#"[{"name":"vault.yaml","type":"file"},{"name":"events","type":"dir"}]"#,
+        )?;
+        assert_eq!(entries[0].name, "vault.yaml");
+        assert_eq!(entries[0].entry_type, "file");
+        assert_eq!(entries[1].entry_type, "dir");
+
+        let without_sha = serde_json::to_value(GitHubPutBody {
+            message: "Update".to_owned(),
+            content: "bm9vaw==".to_owned(),
+            sha: None,
+        })?;
+        let without_sha: SerializedPutBody = serde_json::from_value(without_sha)?;
+        assert_eq!(without_sha.message, "Update");
+        assert_eq!(without_sha.content, "bm9vaw==");
+        assert!(without_sha.sha.is_none());
+        let with_sha = serde_json::to_value(GitHubPutBody {
+            message: "Update".to_owned(),
+            content: "bm9vaw==".to_owned(),
+            sha: Some("sha-1".to_owned()),
+        })?;
+        let with_sha: SerializedPutBody = serde_json::from_value(with_sha)?;
+        assert_eq!(with_sha.sha.as_deref(), Some("sha-1"));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn username_lookup_rejects_empty_token_before_network() {
+        let error = fetch_github_username("  ")
+            .await
+            .expect_err("empty token must fail closed");
+        assert!(matches!(
+            error,
+            NookError::GitHub(message) if message == "GitHub personal access token is required."
+        ));
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn root_empty_short_circuits_vault_lookup() -> anyhow::Result<()> {
+        let mut root_empty = true;
+        let result =
+            fetch_github_vault("token", "owner/repo", "vault.yaml", Some(&mut root_empty)).await?;
+        assert!(result.is_none());
+        assert!(root_empty);
         Ok(())
     }
 }

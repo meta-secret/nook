@@ -229,6 +229,11 @@ impl GitHubEventStore<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use nook_core::{
+        GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId, build_genesis_import_event,
+        serialize_event_storage_yaml,
+    };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[test]
     fn tree_path_filter_accepts_only_flat_event_yaml_files() {
@@ -277,5 +282,52 @@ mod tests {
             None
         );
         assert!(!GitHubEventStore::is_sha256_base64url_digest("short"));
+    }
+
+    #[test]
+    fn github_tree_response_decodes_entries_and_truncation() -> anyhow::Result<()> {
+        let response: GitTreeResponse = serde_json::from_str(
+            r#"{"truncated":true,"tree":[{"path":"nook-log/v1/events/event.yaml","type":"blob"}]}"#,
+        )?;
+        assert!(response.truncated);
+        assert_eq!(response.tree.len(), 1);
+        assert_eq!(response.tree[0].path, "nook-log/v1/events/event.yaml");
+        assert_eq!(response.tree[0].entry_type, "blob");
+        let repo: GitHubRepoResponse = serde_json::from_str(r#"{"default_branch":"main"}"#)?;
+        assert_eq!(repo.default_branch, "main");
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn event_write_rejects_mismatched_event_id_before_network() -> anyhow::Result<()> {
+        let (identity, _) = SigningIdentity::generate()?;
+        let event = build_genesis_import_event(
+            &StoreId::parse("store_testtoken11")?,
+            &identity.actor_id()?,
+            &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
+            GenesisImportPayload {
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                secrets: vec![],
+                password_entries: vec![],
+            },
+            &IsoTimestamp::from_trusted("2026-06-28T00:00:00Z".to_owned()),
+            identity.signing_key(),
+        )?;
+        let bytes: Vec<u8> = serialize_event_storage_yaml(&event)?.into();
+        let requested_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
+        let store = GitHubEventStore { pat: "", repo: "" };
+        let error = store
+            .put_github_event_if_absent(&requested_id, &bytes)
+            .await
+            .expect_err("mismatched event id must fail before network");
+        assert!(matches!(
+            error,
+            NookError::Serialization(message) if message.contains("GitHub event id mismatch")
+        ));
+        Ok(())
     }
 }
