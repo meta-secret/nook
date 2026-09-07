@@ -8,7 +8,7 @@ use crate::storage::indexed_db::{
     load_vault_blob, switch_active_vault,
 };
 use crate::storage::{event_db, identity_record, indexed_db};
-use crate::vault_api::list_local_vaults;
+use crate::vault_api_local::list_local_vaults;
 use nook_core::DeviceIdentityProtection;
 use nook_core::{
     AppKey, ConnectAccessStatus, DeviceAccessIdentityState, DeviceIdentity,
