@@ -667,7 +667,6 @@ export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[
   if (authFieldCount === 0) {
     return passkeyOnly;
   }
-
   const forms = Array.from(
     root.querySelectorAll<HTMLFormElement>("form"),
   ).filter((form) => {
