@@ -21,6 +21,7 @@ type ExternalCompanionRoutingArgs = {
 
 export type ExternalCompanionRoutingDependencies = {
   createIdentityHandoff: typeof PairingIdentity.createIdentityHandoff
+  createPairedIdentityHandoff: typeof PairingIdentity.createPairedIdentityHandoff
   discoverPairedVaultIdentity: typeof PairingIdentity.discoverPairedVaultIdentity
   hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
@@ -64,6 +65,7 @@ export function routeExternalCompanionMessage({
 }: ExternalCompanionRoutingArgs): boolean {
   const {
     createIdentityHandoff,
+    createPairedIdentityHandoff,
     discoverPairedVaultIdentity,
     hasPairingApprovedType,
     importPairingAfterCompanionReady,
@@ -118,15 +120,21 @@ export function routeExternalCompanionMessage({
     return true
   }
 
-  if (
-    isExtensionIdentityHandoffRequestMessage(message) ||
-    isExtensionPairedVaultIdentityHandoffRequestMessage(message)
-  ) {
+  if (isExtensionIdentityHandoffRequestMessage(message)) {
     if (!isNokeySender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
     }
     void createIdentityHandoff(message).then(sendResponse)
+    return true
+  }
+
+  if (isExtensionPairedVaultIdentityHandoffRequestMessage(message)) {
+    if (!isNokeySender(sender)) {
+      sendResponse(forbiddenSenderResponse)
+      return false
+    }
+    void createPairedIdentityHandoff(message).then(sendResponse)
     return true
   }
 

@@ -10,10 +10,11 @@ import {
   isOpenCompanionLauncherMessage,
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
+  type CompanionIdentityDiscoveryTransportResponse,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
-  type ExtensionPairedVaultIdentityStatusMessage,
   type OpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { CompanionIdentityStatus } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type VaultSwitcherDemoMessage =
   ExtensionPairedVaultIdentityDiscoveryMessage | OpenCompanionLauncherMessage
@@ -24,7 +25,7 @@ type VaultSwitcherDemoMessageTypes = {
 }
 
 type VaultSwitcherDemoResponse =
-  { ok: true } | { ok: false } | ExtensionPairedVaultIdentityStatusMessage
+  { ok: true } | CompanionIdentityDiscoveryTransportResponse
 
 type VaultSwitcherDemoChromeRuntime = {
   sendMessage?: (
@@ -38,7 +39,7 @@ type VaultSwitcherDemoBrowserGlobal = typeof globalThis & {
   chrome?: { runtime?: VaultSwitcherDemoChromeRuntime }
 }
 
-type VaultSwitcherPairedElsewhereMock = {
+type VaultSwitcherPairedElsewhereSimulation = {
   messageTypes: VaultSwitcherDemoMessageTypes
   connectedVaultStoreId: string
   connectedVaultName: string
@@ -120,12 +121,12 @@ test('list every local vault and pair the open vault with the companion', async 
   const storeB = parseStoreId(vaultBYaml)
   await demoBeat(page)
 
-  const pairedElsewhereMock: VaultSwitcherPairedElsewhereMock = {
+  const pairedElsewhereSimulation: VaultSwitcherPairedElsewhereSimulation = {
     messageTypes: vaultSwitcherDemoMessageTypes,
     connectedVaultStoreId: storeA,
     connectedVaultName: 'Vault A',
   }
-  await page.evaluate((mock) => {
+  await page.evaluate((simulation) => {
     const browserGlobal = globalThis as VaultSwitcherDemoBrowserGlobal
     browserGlobal.chrome = {
       runtime: {
@@ -149,19 +150,26 @@ test('list every local vault and pair the open vault with the companion', async 
               JSON.stringify(routedTypes),
             )
           }
+          const discovery = Object(message.payload)
+          const discoveryRequest = Object(Reflect.get(discovery, 'request'))
           callback(
-            type === mock.messageTypes.openCompanionLauncher
+            type === simulation.messageTypes.openCompanionLauncher
               ? { ok: true }
-              : type === mock.messageTypes.pairedVaultIdentityDiscovery
+              : type === simulation.messageTypes.pairedVaultIdentityDiscovery
                 ? {
-                    type: 'nook:extension-paired-vault-identity-status',
-                    payload: {
-                      requestId: message.payload.requestId,
-                      vaultStoreId: message.payload.vaultStoreId,
+                    ok: true,
+                    status: {
                       status: 'different-vault',
-                      connectedVaultStoreId: mock.connectedVaultStoreId,
-                      connectedVaultName: mock.connectedVaultName,
-                    },
+                      request_id: String(
+                        Reflect.get(discoveryRequest, 'requestId'),
+                      ),
+                      vault_store_id: String(
+                        Reflect.get(discoveryRequest, 'vaultStoreId'),
+                      ),
+                      connected_vault_store_id:
+                        simulation.connectedVaultStoreId,
+                      connected_vault_name: simulation.connectedVaultName,
+                    } satisfies CompanionIdentityStatus,
                   }
                 : { ok: false },
           )
@@ -172,7 +180,7 @@ test('list every local vault and pair the open vault with the companion', async 
       'data-nook-extension-runtime-id',
       'demo-extension-id',
     )
-  }, pairedElsewhereMock)
+  }, pairedElsewhereSimulation)
   await demoBeat(page)
 
   await page.getByTestId('vault-switcher-trigger').click()

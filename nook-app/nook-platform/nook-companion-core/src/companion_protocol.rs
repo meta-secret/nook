@@ -1,5 +1,6 @@
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
 use serde::{Deserialize, Serialize};
+use std::mem;
 use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -107,6 +108,24 @@ pub struct CompanionIdentityDiscoveryRequest {
 pub struct CompanionIdentityDiscoveryObservation {
     pub request: CompanionIdentityDiscoveryRequest,
     pub observed_at: CompanionEpochMilliseconds,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct CompanionIdentityStatusAdmissionRequest {
+    pub discovery: CompanionIdentityDiscoveryObservation,
+    pub status: CompanionIdentityStatus,
+    pub observed_at: CompanionEpochMilliseconds,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct CompanionAdmittedIdentityDiscovery {
+    pub discovery: CompanionIdentityDiscoveryObservation,
+    pub status: CompanionIdentityStatus,
+    pub admitted_at: CompanionEpochMilliseconds,
 }
 
 impl CompanionIdentityDiscoveryRequest {
@@ -247,6 +266,42 @@ impl CompanionIdentityStatus {
     }
 }
 
+impl CompanionAdmittedIdentityDiscovery {
+    fn admit(
+        request: CompanionIdentityStatusAdmissionRequest,
+    ) -> Result<Self, CompanionProtocolError> {
+        let admitted = Self {
+            discovery: request.discovery,
+            status: request.status,
+            admitted_at: request.observed_at,
+        };
+        admitted.validate_at(admitted.admitted_at)?;
+        Ok(admitted)
+    }
+
+    fn validate_at(
+        &self,
+        observed_at: CompanionEpochMilliseconds,
+    ) -> Result<(), CompanionProtocolError> {
+        if self.admitted_at < self.discovery.observed_at || observed_at < self.admitted_at {
+            return Err(CompanionProtocolError::InvalidValue);
+        }
+        self.discovery
+            .request
+            .validate(self.discovery.observed_at)?;
+        self.discovery.request.validate(self.admitted_at)?;
+        self.discovery.request.validate(observed_at)?;
+        self.status.validate()?;
+        let correlation = self.status.correlation();
+        if correlation.request_id != self.discovery.request.request_id.as_str()
+            || correlation.vault_store_id != self.discovery.request.vault_store_id.as_str()
+        {
+            return Err(CompanionProtocolError::RequestMismatch);
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", deny_unknown_fields, rename_all = "kebab-case")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -277,24 +332,15 @@ impl CompanionIdentityHandoffContext {
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionWebsiteHandoffBegin {
-    pub discovery: CompanionIdentityDiscoveryObservation,
-    pub status: CompanionIdentityStatus,
+    pub transaction: CompanionAdmittedIdentityDiscovery,
     pub context: CompanionIdentityHandoffContext,
 }
 
 impl CompanionWebsiteHandoffBegin {
     pub fn validate(&self) -> Result<(), CompanionProtocolError> {
-        self.discovery
-            .request
-            .validate(self.discovery.observed_at)?;
-        self.status.validate()?;
-        let correlation = self.status.correlation();
-        if correlation.request_id != self.discovery.request.request_id.as_str()
-            || correlation.vault_store_id != self.discovery.request.vault_store_id.as_str()
-        {
-            return Err(CompanionProtocolError::RequestMismatch);
-        }
-        let CompanionIdentityStatus::Unlocked { vault_store_id, .. } = &self.status else {
+        self.transaction.validate_at(self.transaction.admitted_at)?;
+        let CompanionIdentityStatus::Unlocked { vault_store_id, .. } = &self.transaction.status
+        else {
             return Err(CompanionProtocolError::AppKeyUnavailable);
         };
         self.context.validate_for_store(vault_store_id)
@@ -305,54 +351,57 @@ impl CompanionWebsiteHandoffBegin {
         recipient_public_key: String,
     ) -> Result<CompanionIdentityHandoffRequest, CompanionProtocolError> {
         self.validate()?;
-        let CompanionIdentityStatus::Unlocked {
-            request_id,
-            vault_store_id,
-            app_key,
-        } = self.status
-        else {
-            return Err(CompanionProtocolError::AppKeyUnavailable);
-        };
         let request = CompanionIdentityHandoffRequest {
-            request_id,
-            vault_store_id,
+            transaction: self.transaction,
             recipient_public_key,
-            nonce: app_key.nonce,
-            expected_app_key: app_key.app_key,
         };
         request.validate()?;
         Ok(request)
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityHandoffRequest {
-    pub request_id: String,
-    pub vault_store_id: String,
+    pub transaction: CompanionAdmittedIdentityDiscovery,
     pub recipient_public_key: String,
-    pub nonce: String,
-    pub expected_app_key: CompanionInstallationAppKey,
 }
 
 impl CompanionIdentityHandoffRequest {
     pub fn validate(&self) -> Result<(), CompanionProtocolError> {
-        self.expected_app_key.validate()?;
-        if self.request_id.trim().is_empty()
-            || self.vault_store_id.trim().is_empty()
-            || self.recipient_public_key.trim().is_empty()
-            || self.nonce.trim().is_empty()
-            || self.nonce.len() > 128
-            || self.nonce.chars().any(char::is_whitespace)
-        {
+        self.transaction.validate_at(self.transaction.admitted_at)?;
+        if !matches!(
+            &self.transaction.status,
+            CompanionIdentityStatus::Unlocked { .. }
+        ) {
+            return Err(CompanionProtocolError::AppKeyUnavailable);
+        }
+        if self.recipient_public_key.trim().is_empty() {
             return Err(CompanionProtocolError::InvalidValue);
         }
         Ok(())
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
+#[serde(deny_unknown_fields, rename_all = "camelCase")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct CompanionIdentityHandoffAuthorization {
+    pub request: CompanionIdentityHandoffRequest,
+    pub observed_at: CompanionEpochMilliseconds,
+    pub presence: CompanionExtensionPresence,
+}
+
+impl CompanionIdentityHandoffAuthorization {
+    fn validate(&self) -> Result<(), CompanionProtocolError> {
+        self.request.validate()?;
+        self.request.transaction.validate_at(self.observed_at)?;
+        self.presence.validate()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionIdentityHandoffResponse {
@@ -370,12 +419,12 @@ impl CompanionIdentityHandoffResponse {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi)]
 pub enum CompanionIdentityStatusAdmission {
     Accepted {
-        status: Box<CompanionIdentityStatus>,
+        transaction: Box<CompanionAdmittedIdentityDiscovery>,
     },
     Rejected {
         failure: CompanionProtocolFailure,
@@ -384,10 +433,10 @@ pub enum CompanionIdentityStatusAdmission {
 
 impl CompanionIdentityStatusAdmission {
     #[must_use]
-    pub fn admit(status: CompanionIdentityStatus) -> Self {
-        match status.validate() {
-            Ok(()) => Self::Accepted {
-                status: Box::new(status),
+    pub fn admit(request: CompanionIdentityStatusAdmissionRequest) -> Self {
+        match CompanionAdmittedIdentityDiscovery::admit(request) {
+            Ok(transaction) => Self::Accepted {
+                transaction: Box::new(transaction),
             },
             Err(error) => Self::Rejected {
                 failure: error.into(),
@@ -396,7 +445,7 @@ impl CompanionIdentityStatusAdmission {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi)]
 pub enum CompanionHandoffResponseAdmission {
@@ -464,14 +513,6 @@ impl CompanionExtensionPresence {
 #[derive(Debug)]
 pub struct CompanionExtensionProtocol {
     presence: CompanionExtensionPresence,
-    nonce: CompanionNonceState,
-}
-
-#[derive(Debug)]
-enum CompanionNonceState {
-    Unavailable,
-    Available(String),
-    Consumed,
 }
 
 struct CompanionCorrelation {
@@ -482,15 +523,7 @@ struct CompanionCorrelation {
 impl CompanionExtensionProtocol {
     pub fn new(presence: CompanionExtensionPresence) -> Result<Self, CompanionProtocolError> {
         presence.validate()?;
-        let nonce = match &presence {
-            CompanionExtensionPresence::Unlocked { app_key, .. } => {
-                CompanionNonceState::Available(app_key.nonce.clone())
-            }
-            CompanionExtensionPresence::Unavailable | CompanionExtensionPresence::Locked { .. } => {
-                CompanionNonceState::Unavailable
-            }
-        };
-        Ok(Self { presence, nonce })
+        Ok(Self { presence })
     }
 
     pub fn discover(
@@ -557,31 +590,128 @@ impl CompanionExtensionProtocol {
             }
         }
     }
+}
+
+#[derive(Debug, PartialEq)]
+struct CompanionIssuedIdentityDiscovery {
+    discovery: CompanionIdentityDiscoveryObservation,
+    status: CompanionIdentityStatus,
+}
+
+impl CompanionIssuedIdentityDiscovery {
+    fn matches(&self, transaction: &CompanionAdmittedIdentityDiscovery) -> bool {
+        self.discovery == transaction.discovery && self.status == transaction.status
+    }
+}
+
+#[derive(Debug)]
+enum CompanionDiscoveryTransactionState {
+    Inactive,
+    Pending(Box<CompanionIssuedIdentityDiscovery>),
+    Consumed,
+}
+
+impl CompanionDiscoveryTransactionState {
+    fn observe(
+        &mut self,
+        discovery: &CompanionIdentityDiscoveryObservation,
+    ) -> Result<(), CompanionProtocolError> {
+        match self {
+            Self::Inactive => Ok(()),
+            Self::Pending(current) if &current.discovery == discovery => Ok(()),
+            Self::Pending(_) => {
+                *self = Self::Consumed;
+                Err(CompanionProtocolError::RequestMismatch)
+            }
+            Self::Consumed => Err(CompanionProtocolError::NonceUnavailable),
+        }
+    }
+
+    fn issue(
+        &mut self,
+        issued: CompanionIssuedIdentityDiscovery,
+    ) -> Result<(), CompanionProtocolError> {
+        match self {
+            Self::Inactive => {
+                *self = Self::Pending(Box::new(issued));
+                Ok(())
+            }
+            Self::Pending(current) if current.as_ref() == &issued => Ok(()),
+            Self::Pending(_) => {
+                *self = Self::Consumed;
+                Err(CompanionProtocolError::RequestMismatch)
+            }
+            Self::Consumed => Err(CompanionProtocolError::NonceUnavailable),
+        }
+    }
+
+    fn consume(&mut self) -> Result<Box<CompanionIssuedIdentityDiscovery>, CompanionProtocolError> {
+        match mem::replace(self, Self::Consumed) {
+            Self::Pending(issued) => Ok(issued),
+            Self::Inactive | Self::Consumed => Err(CompanionProtocolError::NonceUnavailable),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct CompanionExtensionHandoffEndpoint {
+    protocol: CompanionExtensionProtocol,
+    transaction: CompanionDiscoveryTransactionState,
+}
+
+impl CompanionExtensionHandoffEndpoint {
+    pub fn new(presence: CompanionExtensionPresence) -> Result<Self, CompanionProtocolError> {
+        Ok(Self {
+            protocol: CompanionExtensionProtocol::new(presence)?,
+            transaction: CompanionDiscoveryTransactionState::Inactive,
+        })
+    }
+
+    pub fn discover(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, CompanionProtocolError> {
+        self.transaction.observe(&discovery)?;
+        let status = self.protocol.discover(discovery.clone())?;
+        self.transaction.issue(CompanionIssuedIdentityDiscovery {
+            discovery,
+            status: status.clone(),
+        })?;
+        Ok(status)
+    }
 
     pub fn authorize_handoff(
         &mut self,
-        request: CompanionIdentityHandoffRequest,
+        authorization: CompanionIdentityHandoffAuthorization,
     ) -> Result<AuthorizedCompanionIdentityHandoff, CompanionProtocolError> {
-        request.validate()?;
+        let issued = self.transaction.consume()?;
+        authorization.validate()?;
+        if !issued.matches(&authorization.request.transaction) {
+            return Err(CompanionProtocolError::RequestMismatch);
+        }
         let CompanionExtensionPresence::Unlocked {
             vault_store_id,
             app_key,
             ..
-        } = &self.presence
+        } = &authorization.presence
         else {
             return Err(CompanionProtocolError::AppKeyUnavailable);
         };
-        let CompanionNonceState::Available(nonce) = &self.nonce else {
-            return Err(CompanionProtocolError::NonceUnavailable);
-        };
-        if vault_store_id != &request.vault_store_id
-            || nonce != &request.nonce
-            || app_key.app_key != request.expected_app_key
-        {
+        if authorization.presence != self.protocol.presence {
             return Err(CompanionProtocolError::HandoffBindingMismatch);
         }
-        self.nonce = CompanionNonceState::Consumed;
-        Ok(AuthorizedCompanionIdentityHandoff(request))
+        let CompanionIdentityStatus::Unlocked {
+            vault_store_id: admitted_store,
+            app_key: admitted_app_key,
+            ..
+        } = &authorization.request.transaction.status
+        else {
+            return Err(CompanionProtocolError::AppKeyUnavailable);
+        };
+        if vault_store_id != admitted_store || app_key != admitted_app_key {
+            return Err(CompanionProtocolError::HandoffBindingMismatch);
+        }
+        Ok(AuthorizedCompanionIdentityHandoff(authorization.request))
     }
 }
 

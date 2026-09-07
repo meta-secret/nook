@@ -1,42 +1,104 @@
 import { describe, expect, test } from 'bun:test'
-import {
-  ExtensionPairedVaultIdentityHandoffRequestMessageType,
-  type ExtensionPairedVaultIdentityHandoffRequestMessage,
-} from '../../nook-web-shared/src/extension/runtime-messages'
+import type {
+  CompanionExtensionPresence,
+  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityHandoffAuthorization,
+  CompanionIdentityHandoffRequest,
+} from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StoredExtensionPairingGrant } from '../src/background/pairing-grants'
-import {
-  identityHandoffSessionRequest,
-  websiteLoginRevealSessionRequest,
-} from '../src/background/service-worker/session-request-projections'
+import { websiteLoginRevealSessionRequest } from '../src/background/service-worker/session-request-projections'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
-import { ExtensionSessionQueueKind } from '../src/offscreen/session-request-adapter'
+import {
+  COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+  COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
+  ExtensionSessionQueueKind,
+  isCompanionIdentityDiscoverySessionTransportRequest,
+  isCompanionIdentityHandoffSessionTransportRequest,
+  type CompanionIdentityDiscoverySessionTransportRequest,
+  type CompanionIdentityHandoffSessionTransportRequest,
+} from '../src/offscreen/session-request-adapter'
 
 describe('extension session request projections', () => {
-  test('removes paired-vault routing fields from identity handoff', () => {
-    const message: ExtensionPairedVaultIdentityHandoffRequestMessage = {
-      type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest,
-      payload: {
-        recipientPublicKey: 'recipient',
-        nonce: 'nonce',
-        expectedDeviceId: 'device',
-        expectedDevicePublicKey: 'public',
-        expectedDeviceSigningPublicKey: 'signing',
-        vaultStoreId: 'vault-routing-only',
-      },
+  test('keeps generated companion values structural across offscreen delivery', () => {
+    const appKey = {
+      appId: 'app',
+      encryptionPublicKey: 'public',
+      signingPublicKey: 'signing',
+      installationLabel: 'Extension',
     }
-    const expected = {
-      type: ExtensionSessionMessageType.SealIdentityHandoff,
-      payload: {
-        recipientPublicKey: 'recipient',
+    const presence = {
+      kind: 'unlocked',
+      vault_type: 'simple',
+      vault_store_id: 'vault',
+      vault_name: 'Vault',
+      app_key: {
+        extensionRuntimeId: 'runtime',
+        appKey,
         nonce: 'nonce',
-        expectedDeviceId: 'device',
-        expectedDevicePublicKey: 'public',
-        expectedDeviceSigningPublicKey: 'signing',
-        queue: { kind: ExtensionSessionQueueKind.MessageDefault },
+        scopes: ['vault-access'],
       },
-    }
+    } satisfies CompanionExtensionPresence
+    const discovery = {
+      request: {
+        requestId: 'request',
+        vaultStoreId: 'vault',
+        expiresAt: 200,
+      },
+      observedAt: 100,
+    } satisfies CompanionIdentityDiscoveryObservation
+    const request = {
+      transaction: {
+        discovery,
+        status: {
+          status: 'unlocked',
+          request_id: 'request',
+          vault_store_id: 'vault',
+          app_key: presence.app_key,
+        },
+        admittedAt: 110,
+      },
+      recipientPublicKey: 'recipient',
+    } satisfies CompanionIdentityHandoffRequest
+    const authorization = {
+      request,
+      observedAt: 120,
+      presence,
+    } satisfies CompanionIdentityHandoffAuthorization
+    const discoveryDelivery = {
+      type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+      payload: { presence, discovery },
+    } satisfies CompanionIdentityDiscoverySessionTransportRequest
+    const delivery = {
+      type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
+      payload: { authorization },
+    } satisfies CompanionIdentityHandoffSessionTransportRequest
 
-    expect(identityHandoffSessionRequest(message)).toEqual(expected)
+    expect(
+      isCompanionIdentityDiscoverySessionTransportRequest(discoveryDelivery),
+    ).toBe(true)
+    expect(discoveryDelivery).toEqual({
+      type: 'nook:extension-session-discover-companion-identity',
+      payload: { presence, discovery },
+    })
+    expect(isCompanionIdentityHandoffSessionTransportRequest(delivery)).toBe(
+      true,
+    )
+    expect(delivery).toEqual({
+      type: 'nook:extension-session-authorize-companion-identity-handoff',
+      payload: { authorization },
+    })
+    expect(
+      isCompanionIdentityHandoffSessionTransportRequest({
+        type: COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE,
+        payload: { request },
+      }),
+    ).toBe(false)
+    expect(
+      isCompanionIdentityDiscoverySessionTransportRequest({
+        type: COMPANION_IDENTITY_DISCOVERY_SESSION_MESSAGE_TYPE,
+        payload: { presence },
+      }),
+    ).toBe(false)
   })
 
   test('removes stored-grant metadata from login reveal', () => {

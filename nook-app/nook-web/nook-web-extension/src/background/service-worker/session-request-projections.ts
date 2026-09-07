@@ -1,7 +1,4 @@
-import type {
-  ExtensionIdentityHandoffRequestMessage,
-  ExtensionPairedVaultIdentityHandoffRequestMessage,
-} from '../../../../nook-web-shared/src/extension/runtime-messages'
+import type { ExtensionIdentityHandoffRequestMessage } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
@@ -23,9 +20,7 @@ type WebsiteLoginRevealSessionRequest = Extract<
 >
 
 export function identityHandoffSessionRequest(
-  message:
-    | ExtensionIdentityHandoffRequestMessage
-    | ExtensionPairedVaultIdentityHandoffRequestMessage,
+  message: ExtensionIdentityHandoffRequestMessage,
 ): IdentityHandoffSessionRequest {
   return {
     type: ExtensionSessionMessageType.SealIdentityHandoff,

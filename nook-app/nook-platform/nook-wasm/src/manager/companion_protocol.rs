@@ -1,9 +1,13 @@
 use super::{NookExtensionIdentityHandoffContext, NookVaultManager};
 use crate::NookError;
 use nook_companion_core::{
-    CompanionExtensionPresence, CompanionExtensionProtocol, CompanionIdentityHandoffContext,
-    CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse,
-    CompanionIdentityHandoffSealer, CompanionProtocolError, CompanionWebsiteHandoffBegin,
+    AuthorizedCompanionIdentityHandoff, CompanionExtensionHandoffEndpoint,
+    CompanionExtensionPresence, CompanionHandoffResponseAdmission,
+    CompanionIdentityDiscoveryObservation, CompanionIdentityHandoffAuthorization,
+    CompanionIdentityHandoffContext, CompanionIdentityHandoffRequest,
+    CompanionIdentityHandoffResponse, CompanionIdentityHandoffSealer, CompanionIdentityStatus,
+    CompanionIdentityStatusAdmission, CompanionIdentityStatusAdmissionRequest,
+    CompanionProtocolError, CompanionWebsiteHandoffBegin,
 };
 use nook_core::{
     DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity,
@@ -32,6 +36,22 @@ enum CompanionOperationError {
 
 fn companion_js_error(error: &CompanionOperationError) -> JsError {
     JsError::new(&error.to_string())
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn admit_companion_identity_status(
+    request: CompanionIdentityStatusAdmissionRequest,
+) -> CompanionIdentityStatusAdmission {
+    CompanionIdentityStatusAdmission::admit(request)
+}
+
+#[wasm_bindgen]
+#[allow(clippy::needless_pass_by_value)]
+pub fn admit_companion_handoff_response(
+    response: CompanionIdentityHandoffResponse,
+) -> CompanionHandoffResponseAdmission {
+    CompanionHandoffResponseAdmission::admit(response)
 }
 
 #[derive(Deserialize, Serialize)]
@@ -64,7 +84,7 @@ impl Drop for PendingCompanionWebsiteHandoff {
 
 #[wasm_bindgen]
 pub struct NookCompanionExtensionEndpoint {
-    protocol: CompanionExtensionProtocol,
+    inner: CompanionExtensionHandoffEndpoint,
 }
 
 impl NookCompanionExtensionEndpoint {
@@ -72,24 +92,49 @@ impl NookCompanionExtensionEndpoint {
         presence: CompanionExtensionPresence,
     ) -> Result<Self, CompanionOperationError> {
         Ok(Self {
-            protocol: CompanionExtensionProtocol::new(presence)?,
+            inner: CompanionExtensionHandoffEndpoint::new(presence)?,
         })
     }
 
+    #[cfg(test)]
     fn authorize_and_seal_loaded(
         &mut self,
         operation: CompanionExtensionSealOperation<'_>,
     ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
-        let authorized = self.protocol.authorize_handoff(operation.request)?;
+        let authorized = self.inner.authorize_handoff(operation.authorization)?;
         // A valid nonce is consumed even if sealing fails: callers must perform
         // fresh discovery rather than replay an authorization after ambiguity.
-        authorized.seal(&mut CompanionManagerSealer(operation.manager))
+        Self::seal_authorized_loaded(CompanionAuthorizedSealOperation {
+            manager: operation.manager,
+            authorized,
+        })
+    }
+
+    fn discover_inner(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, CompanionOperationError> {
+        Ok(self.inner.discover(discovery)?)
+    }
+
+    fn seal_authorized_loaded(
+        operation: CompanionAuthorizedSealOperation<'_>,
+    ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
+        operation
+            .authorized
+            .seal(&mut CompanionManagerSealer(operation.manager))
     }
 }
 
+#[cfg(test)]
 struct CompanionExtensionSealOperation<'a> {
     manager: &'a mut NookVaultManager,
-    request: CompanionIdentityHandoffRequest,
+    authorization: CompanionIdentityHandoffAuthorization,
+}
+
+struct CompanionAuthorizedSealOperation<'a> {
+    manager: &'a mut NookVaultManager,
+    authorized: AuthorizedCompanionIdentityHandoff,
 }
 
 #[wasm_bindgen]
@@ -101,17 +146,33 @@ impl NookCompanionExtensionEndpoint {
     }
 
     #[allow(clippy::needless_pass_by_value)]
+    pub fn discover(
+        &mut self,
+        discovery: CompanionIdentityDiscoveryObservation,
+    ) -> Result<CompanionIdentityStatus, JsError> {
+        self.discover_inner(discovery)
+            .map_err(|error| companion_js_error(&error))
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
     pub async fn authorize_and_seal(
         &mut self,
         manager: &mut NookVaultManager,
-        request: CompanionIdentityHandoffRequest,
+        authorization: CompanionIdentityHandoffAuthorization,
     ) -> Result<CompanionIdentityHandoffResponse, JsError> {
+        let authorized = self
+            .inner
+            .authorize_handoff(authorization)
+            .map_err(|error| companion_js_error(&CompanionOperationError::Protocol(error)))?;
         manager
             .ensure_signing_identity()
             .await
             .map_err(|error| companion_js_error(&CompanionOperationError::Manager(error)))?;
-        self.authorize_and_seal_loaded(CompanionExtensionSealOperation { manager, request })
-            .map_err(|error| companion_js_error(&error))
+        Self::seal_authorized_loaded(CompanionAuthorizedSealOperation {
+            manager,
+            authorized,
+        })
+        .map_err(|error| companion_js_error(&error))
     }
 }
 
@@ -126,15 +187,23 @@ impl CompanionIdentityHandoffSealer for CompanionManagerSealer<'_> {
     ) -> Result<String, Self::Error> {
         request.validate()?;
         let manager = &mut *self.0;
+        let CompanionIdentityStatus::Unlocked {
+            vault_store_id,
+            app_key,
+            ..
+        } = &request.transaction.status
+        else {
+            return Err(CompanionProtocolError::AppKeyUnavailable.into());
+        };
         if manager.application != VaultApplication::Extension
-            || manager.vault.store_id != request.vault_store_id
+            || manager.vault.store_id != vault_store_id.as_str()
         {
             return Err(CompanionOperationError::ActiveExtensionVaultMismatch);
         }
         let identity = manager.ensure_device_identity()?;
         let signing = SigningIdentity::from_seed_hex_stored(&manager.event_log.signing_seed)
             .map_err(NookError::from)?;
-        let expected = &request.expected_app_key;
+        let expected = &app_key.app_key;
         let expected_app_id = DeviceId::parse(&expected.app_id).map_err(NookError::from)?;
         let expected_encryption_key =
             DevicePublicKey::parse(&expected.encryption_public_key).map_err(NookError::from)?;
@@ -152,7 +221,7 @@ impl CompanionIdentityHandoffSealer for CompanionManagerSealer<'_> {
             identity: &identity,
             signing_seed: &manager.event_log.signing_seed,
             recipient_public_key: &recipient,
-            nonce: &request.nonce,
+            nonce: &app_key.nonce,
         }
         .seal()
         .map_err(NookError::from)?
@@ -176,7 +245,7 @@ impl NookVaultManager {
         }
         pending
             .context
-            .validate_for_store(&pending.request.vault_store_id)?;
+            .validate_for_store(&pending.request.transaction.discovery.request.vault_store_id)?;
         Ok(pending)
     }
 
@@ -220,11 +289,18 @@ impl NookVaultManager {
             .consume_companion_website_handoff(&response)
             .map_err(|error| companion_js_error(&error))?;
         let context = NookExtensionIdentityHandoffContext::from_companion(pending.context.clone())?;
+        let CompanionIdentityStatus::Unlocked { app_key, .. } = &pending.request.transaction.status
+        else {
+            return Err(companion_js_error(&CompanionOperationError::Protocol(
+                CompanionProtocolError::AppKeyUnavailable,
+            )));
+        };
+        let app_key = app_key.clone();
         self.device.extension_handoff_private_key = pending.take_recipient_secret();
-        let expected = &pending.request.expected_app_key;
+        let expected = &app_key.app_key;
         self.finish_extension_identity_handoff(
             &response.encrypted_envelope,
-            &pending.request.nonce,
+            &app_key.nonce,
             &expected.app_id,
             &expected.encryption_public_key,
             &expected.signing_public_key,
