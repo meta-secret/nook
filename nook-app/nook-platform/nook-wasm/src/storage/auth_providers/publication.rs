@@ -252,7 +252,7 @@ mod tests {
     use nook_core::ProviderVaultScope;
     use nook_core::{
         AGE_ARMOR_MARKER, ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity,
-        ProviderCredentialStorageAdmission, StorageProviderData,
+        NormalizedAuthSnapshot, ProviderCredentialStorageAdmission, StorageProviderData,
     };
     use serde_json::Value;
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
