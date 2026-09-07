@@ -24,9 +24,7 @@ let extension: NookVaultManager
 let presence: CompanionExtensionPresence
 let unlockedAppKey: CompanionUnlockedAppKey
 
-function discovery(
-  requestId: string,
-): CompanionIdentityDiscoveryObservation {
+function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
   return {
     request: {
       requestId,
@@ -38,9 +36,7 @@ function discovery(
 }
 
 function beginHandoff(requestId: string) {
-  const protocol = new NookCompanionExtensionProtocol(
-    structuredClone(presence),
-  )
+  const protocol = new NookCompanionExtensionProtocol(structuredClone(presence))
   const observation = discovery(requestId)
   const status = protocol.discover(structuredClone(observation))
   const website = new NookVaultManager()
@@ -55,9 +51,7 @@ function beginHandoff(requestId: string) {
   const request = website.begin_companion_identity_handoff(
     structuredClone(begin),
   )
-  const endpoint = new NookCompanionExtensionEndpoint(
-    structuredClone(presence),
-  )
+  const endpoint = new NookCompanionExtensionEndpoint(structuredClone(presence))
   return { endpoint, request, website }
 }
 
