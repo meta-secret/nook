@@ -701,79 +701,8 @@ tasks:
           File.binwrite(ARGV.fetch(2), credential.fetch("password"))
         ' "$work_dir/credentials" "$work_dir/user" "$work_dir/password"
         chmod 0600 "$work_dir/user" "$work_dir/password"
-        ENDPOINT="$endpoint" WORK_DIR="$work_dir" bun -e '
-          import { readFileSync, writeFileSync } from "node:fs";
-          const endpoint = process.env.ENDPOINT;
-          const workDir = process.env.WORK_DIR;
-          const user = readFileSync(`${workDir}/user`, "utf8").trim();
-          const password = readFileSync(`${workDir}/password`, "utf8").trim();
-          const decoder = new TextDecoder();
-          const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-          async function session(authUser, authPassword, expectAuthFailure = false) {
-            const ws = new WebSocket(endpoint, "nats");
-            ws.binaryType = "arraybuffer";
-            let received = "";
-            let opened;
-            let failed;
-            const open = new Promise((resolve, reject) => { opened = resolve; failed = reject; });
-            ws.onopen = opened;
-            ws.onerror = () => failed(new Error("WSS handshake failed"));
-            ws.onmessage = (event) => {
-              received += typeof event.data === "string" ? event.data : decoder.decode(event.data);
-            };
-            await Promise.race([open, delay(10000).then(() => { throw new Error("WSS open timeout"); })]);
-            ws.send(`CONNECT ${JSON.stringify({
-              verbose: false,
-              pedantic: false,
-              user: authUser,
-              pass: authPassword,
-              lang: "bun",
-              version: "1"
-            })}\r\nPING\r\n`);
-            for (let attempt = 0; attempt < 100; attempt += 1) {
-              if (expectAuthFailure && /Authorization Violation/i.test(received)) {
-                ws.close();
-                return { ws, read: () => received };
-              }
-              if (!expectAuthFailure && received.includes("PONG")) {
-                return { ws, read: () => received, clear: () => { received = ""; } };
-              }
-              await delay(50);
-            }
-            ws.close();
-            throw new Error(expectAuthFailure ? "credential was accepted" : "NATS PONG timeout");
-          }
-          await session("", "", true);
-          await session("invalid", "invalid", true);
-          const valid = await session(user, password);
-          valid.clear();
-          valid.ws.send("PUB default.github-webhook.pr-lifecycle 2\r\n{}\r\n");
-          for (let attempt = 0; attempt < 100 &&
-            !/Permissions Violation for Publish/i.test(valid.read()); attempt += 1) await delay(50);
-          if (!/Permissions Violation for Publish/i.test(valid.read())) throw new Error("application publish was not denied");
-          valid.clear();
-          valid.ws.send("SUB unrelated.subject 91\r\n");
-          for (let attempt = 0; attempt < 100 &&
-            !/Permissions Violation for Subscription/i.test(valid.read()); attempt += 1) await delay(50);
-          if (!/Permissions Violation for Subscription/i.test(valid.read())) throw new Error("unrelated subscription was not denied");
-          valid.clear();
-          valid.ws.send("PUB $JS.API.INFO 0\r\n\r\n");
-          for (let attempt = 0; attempt < 100 &&
-            !/Permissions Violation for Publish/i.test(valid.read()); attempt += 1) await delay(50);
-          if (!/Permissions Violation for Publish/i.test(valid.read())) throw new Error("JetStream API access was not denied");
-          valid.clear();
-          valid.ws.send("SUB default.github-webhook.pr-lifecycle 93\r\n");
-          writeFileSync(`${workDir}/ready`, "ready", { mode: 0o600 });
-          for (let attempt = 0; attempt < 1800; attempt += 1) {
-            if (valid.read().includes("MSG default.github-webhook.pr-lifecycle 93")) {
-              writeFileSync(`${workDir}/received`, "received", { mode: 0o600 });
-              valid.ws.close();
-              process.exit(0);
-            }
-            await delay(50);
-          }
-          throw new Error("signed GitHub event was not received");
-        ' >"$work_dir/client-output" 2>"$work_dir/client-error" &
+        bun infra/jetstream-wss-check.ts "$endpoint" "$work_dir" \
+          >"$work_dir/client-output" 2>"$work_dir/client-error" &
         client_pid=$!
         for attempt in $(seq 1 100); do
           test -f "$work_dir/ready" && break
