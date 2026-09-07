@@ -621,6 +621,65 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
+    async fn simple_member_mutations_cover_extension_enrollment_and_revocation()
+    -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        manager
+            .finish_pin_device_protection("multi-device mutation pin".to_owned())
+            .await
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
+        let owner_identity = manager.device_identity()?;
+        manager.initialize_genesis_vault(&owner_identity)?;
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.bootstrap_event_log_genesis().await?;
+
+        let owner_auth_id = js(manager.list_vault_members())?
+            .into_iter()
+            .next()
+            .map(|member| member.auth_id())
+            .ok_or_else(|| anyhow::anyhow!("genesis owner is missing from roster"))?;
+        let owner_signing_key = js(manager.device_signing_public_key_js().await)?;
+        let joiner = nook_core::DeviceIdentity::generate()?;
+        let records = js(manager
+            .approve_extension_device(
+                joiner.device_id().to_string(),
+                joiner.public_key().to_string(),
+                owner_signing_key,
+                "Browser extension".to_owned(),
+            )
+            .await)?;
+        assert!(records.is_empty());
+
+        let extension_member = js(manager.list_vault_members())?
+            .into_iter()
+            .find(|member| member.device_id() == joiner.device_id().to_string())
+            .ok_or_else(|| anyhow::anyhow!("approved extension is missing from roster"))?;
+        assert!(extension_member.label().is_empty());
+        assert!(
+            js(manager.list_vault_members())?
+                .into_iter()
+                .any(|member| member.auth_id() == owner_auth_id)
+        );
+
+        let mut enrollee = NookVaultManager::new();
+        let enrollee_identity = nook_core::DeviceIdentity::generate()?;
+        enrollee.device.id = enrollee_identity.device_id().to_string();
+        enrollee.device.identity_private_key = enrollee_identity.secret_string().into_inner();
+        enrollee.vault.store_id = nook_core::generate_store_id()?.to_string();
+        enrollee.bootstrap_event_log_genesis().await?;
+        let keys = nook_core::generate_vault_keys()?;
+        let enrolled = js(enrollee
+            .enroll_with_keys(keys.secrets_key.to_string(), keys.members_key.to_string())
+            .await)?;
+        assert!(enrolled.is_empty());
+        assert!(!js(enrollee.list_vault_members())?.is_empty());
+
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     async fn local_join_and_enrollment_require_a_vault_and_valid_keys() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         js(manager.delete_local_browser_data().await)?;
