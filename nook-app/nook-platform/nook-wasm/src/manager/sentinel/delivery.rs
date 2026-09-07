@@ -129,7 +129,7 @@ mod tests {
         StartSentinelGenesisArgs, StoredSecretRecord,
     };
 
-    fn delivery_fixture() -> anyhow::Result<(
+    pub(crate) fn delivery_fixture() -> anyhow::Result<(
         SentinelGenesisRequest,
         SentinelGenesisShareDelivery,
         StoredSecretRecord,
@@ -173,30 +173,6 @@ mod tests {
     }
 
     #[test]
-    fn onboarding_wrapper_runs_core_validation_after_json_parsing() -> anyhow::Result<()> {
-        let (request, delivery, _) = delivery_fixture()?;
-        let manager = NookVaultManager::new();
-        let request_json = serde_json::to_string(&request)?;
-        let delivery_json = serde_json::to_string(&delivery)?;
-
-        assert!(
-            manager
-                .create_sentinel_onboarding_package(&request_json, "{}", Default::default())
-                .is_err()
-        );
-        assert!(
-            manager
-                .create_sentinel_onboarding_package(
-                    &request_json,
-                    &delivery_json,
-                    Default::default()
-                )
-                .is_err()
-        );
-        Ok(())
-    }
-
-    #[test]
     fn installation_projects_delivery_store_policy_and_share() -> anyhow::Result<()> {
         let (_, delivery, record) = delivery_fixture()?;
         let mut manager = NookVaultManager::new();
@@ -227,6 +203,33 @@ mod browser_tests {
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn onboarding_wrapper_runs_core_validation_after_json_parsing() -> Result<(), JsError> {
+        let (request, delivery, _) =
+            tests::delivery_fixture().map_err(|error| JsError::new(&error.to_string()))?;
+        let manager = NookVaultManager::new();
+        let request_json =
+            serde_json::to_string(&request).map_err(|error| JsError::new(&error.to_string()))?;
+        let delivery_json =
+            serde_json::to_string(&delivery).map_err(|error| JsError::new(&error.to_string()))?;
+
+        assert!(
+            manager
+                .create_sentinel_onboarding_package(&request_json, "{}", Default::default())
+                .is_err()
+        );
+        assert!(
+            manager
+                .create_sentinel_onboarding_package(
+                    &request_json,
+                    &delivery_json,
+                    Default::default()
+                )
+                .is_err()
+        );
+        Ok(())
+    }
 
     #[wasm_bindgen_test]
     async fn onboarding_delivery_guards_fail_closed() -> Result<(), JsError> {
