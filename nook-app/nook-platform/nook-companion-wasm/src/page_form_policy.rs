@@ -388,6 +388,8 @@ mod tests {
             label: label.to_owned(),
             machine_identity: String::new(),
             submission_method: nook_companion_core::PageControlSubmissionMethod::Absent,
+            submission_destination_source:
+                nook_companion_core::PageControlSubmissionDestinationSource::Authored,
         }
     }
 
@@ -404,7 +406,14 @@ mod tests {
             login_advance_observation("https://login.example.test/auth/login", "Continue");
         identifier_get.password_field_count = 0.into();
         identifier_get.submission_method = nook_companion_core::PageControlSubmissionMethod::Get;
-        assert!(authentication_advance_control_is_safe(identifier_get));
+        identifier_get.submission_destination_source =
+            nook_companion_core::PageControlSubmissionDestinationSource::Authored;
+        assert!(authentication_advance_control_is_safe(
+            identifier_get.clone()
+        ));
+        identifier_get.submission_destination_source =
+            nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
+        assert!(!authentication_advance_control_is_safe(identifier_get));
 
         let mut microsoft = login_advance_observation("https://login.live.com/", "Next");
         microsoft.authentication_username =
@@ -588,8 +597,9 @@ mod tests {
         unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
         assert!(!authentication_advance_control_is_safe(unowned));
 
+        claude.authentication_username =
+            nook_companion_core::AuthenticationUsernameEvidence::Strong;
         claude.semantic_submit_control_count = 2.into();
-        claude.label = "Primary action".to_owned();
         assert!(!authentication_advance_control_is_safe(claude));
     }
 

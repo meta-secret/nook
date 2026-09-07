@@ -19,6 +19,9 @@ use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod policy;
+mod submission_destination_source;
+
+pub use submission_destination_source::PageControlSubmissionDestinationSource;
 
 /// Whether a browser-observed control can currently receive user activation.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -112,6 +115,7 @@ pub struct AuthenticationAdvanceControlObservation {
     /// Native form submission method; GET is limited to identifier-only advancement.
     #[serde(default)]
     pub submission_method: PageControlSubmissionMethod,
+    pub submission_destination_source: PageControlSubmissionDestinationSource,
 }
 
 /// Portable outcome for one observed authentication advance control.
@@ -167,6 +171,10 @@ impl AuthenticationAdvanceControlObservation {
             )
             && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
             && matches!(
+                self.submission_destination_source,
+                PageControlSubmissionDestinationSource::Authored
+            )
+            && matches!(
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
             )
@@ -206,6 +214,7 @@ impl AuthenticationAdvanceControlObservation {
     fn check(&self) -> Option<CheckedAuthenticationControl<'_>> {
         if !self.is_bounded()
             || matches!(self.submission_method, PageControlSubmissionMethod::Dialog)
+            || self.has_ambiguous_identifier_only_submit()
             || (matches!(self.submission_method, PageControlSubmissionMethod::Get)
                 && !self.is_identifier_only_get_advance())
         {
@@ -440,6 +449,7 @@ mod tests {
                 label: "Sign in".to_owned(),
                 machine_identity: String::new(),
                 submission_method: PageControlSubmissionMethod::Absent,
+                submission_destination_source: PageControlSubmissionDestinationSource::Authored,
             }
         }
 
@@ -670,7 +680,15 @@ mod tests {
         identifier.password_field_count = 0.into();
         identifier.label = "Continue".to_owned();
         identifier.submission_method = PageControlSubmissionMethod::Get;
+        identifier.submission_destination_source = PageControlSubmissionDestinationSource::Authored;
         assert!(authentication_advance_control_is_safe(&identifier));
+
+        let mut omitted_destination = identifier.clone();
+        omitted_destination.submission_destination_source =
+            PageControlSubmissionDestinationSource::Omitted;
+        assert!(!authentication_advance_control_is_safe(
+            &omitted_destination
+        ));
 
         let mut locally_scoped = identifier.clone();
         locally_scoped.ownership = PageControlOwnership::LocallyScoped;
