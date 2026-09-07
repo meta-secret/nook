@@ -99,15 +99,17 @@ impl DirectHandoffScenario {
     non_local_effect_before_unhandled_error,
     reason = "the test intentionally observes one-shot mutation and pending-state clearing before handling each rejection"
 )]
-fn real_managers_complete_handoff_reject_replay_and_clear_pending_state(
-) -> Result<(), CompanionOperationError> {
+fn real_managers_complete_handoff_reject_replay_and_clear_pending_state()
+-> Result<(), CompanionOperationError> {
     let mut scenario = DirectHandoffScenario::new()?;
     let request = scenario.begin()?;
-    assert!(!scenario
-        .website
-        .device
-        .extension_handoff_private_key
-        .is_empty());
+    assert!(
+        !scenario
+            .website
+            .device
+            .extension_handoff_private_key
+            .is_empty()
+    );
     let replay = request.clone();
     let response = scenario.authorize_and_seal(request)?;
     assert!(!response.encrypted_envelope.is_empty());
@@ -121,11 +123,13 @@ fn real_managers_complete_handoff_reject_replay_and_clear_pending_state(
     let pending = scenario
         .website
         .consume_companion_website_handoff(&response)?;
-    assert!(scenario
-        .website
-        .device
-        .extension_handoff_private_key
-        .is_empty());
+    assert!(
+        scenario
+            .website
+            .device
+            .extension_handoff_private_key
+            .is_empty()
+    );
     assert!(!pending.recipient_secret.is_empty());
 
     let mut forged = scenario.begin()?;
@@ -142,11 +146,13 @@ fn real_managers_complete_handoff_reject_replay_and_clear_pending_state(
             CompanionProtocolError::RequestMismatch
         ))
     ));
-    assert!(scenario
-        .website
-        .device
-        .extension_handoff_private_key
-        .is_empty());
+    assert!(
+        scenario
+            .website
+            .device
+            .extension_handoff_private_key
+            .is_empty()
+    );
     Ok(())
 }
 
@@ -156,8 +162,8 @@ fn real_managers_complete_handoff_reject_replay_and_clear_pending_state(
     non_local_effect_before_unhandled_error,
     reason = "the test intentionally observes that every rejected begin transaction clears previously pending secret state"
 )]
-fn rejected_discovery_and_context_clear_existing_pending_secret(
-) -> Result<(), CompanionOperationError> {
+fn rejected_discovery_and_context_clear_existing_pending_secret()
+-> Result<(), CompanionOperationError> {
     let mut scenario = DirectHandoffScenario::new()?;
     let mut request = scenario.handoff_begin()?;
     request.discovery.request.request_id = "request-other".to_owned();
@@ -177,22 +183,26 @@ fn rejected_discovery_and_context_clear_existing_pending_secret(
         (expired, CompanionProtocolError::DiscoveryExpired),
     ] {
         scenario.begin()?;
-        assert!(!scenario
-            .website
-            .device
-            .extension_handoff_private_key
-            .is_empty());
+        assert!(
+            !scenario
+                .website
+                .device
+                .extension_handoff_private_key
+                .is_empty()
+        );
         assert!(matches!(
             scenario
                 .website
                 .begin_companion_identity_handoff_inner(begin),
             Err(CompanionOperationError::Protocol(error)) if error == expected
         ));
-        assert!(scenario
-            .website
-            .device
-            .extension_handoff_private_key
-            .is_empty());
+        assert!(
+            scenario
+                .website
+                .device
+                .extension_handoff_private_key
+                .is_empty()
+        );
     }
     Ok(())
 }
@@ -203,8 +213,8 @@ fn rejected_discovery_and_context_clear_existing_pending_secret(
     non_local_effect_before_unhandled_error,
     reason = "the test intentionally observes fail-closed nonce consumption after the real sealer rejects its active vault"
 )]
-fn sealing_failure_consumes_nonce_and_requires_fresh_discovery(
-) -> Result<(), CompanionOperationError> {
+fn sealing_failure_consumes_nonce_and_requires_fresh_discovery()
+-> Result<(), CompanionOperationError> {
     let mut scenario = DirectHandoffScenario::new()?;
     let request = scenario.begin()?;
     scenario.extension.vault.store_id = "store-other".to_owned();

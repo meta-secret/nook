@@ -11,7 +11,7 @@ use nook_core::{
 };
 use serde::{Deserialize, Serialize};
 use std::mem;
-use wasm_bindgen::{prelude::wasm_bindgen, JsError};
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::{Zeroize, Zeroizing};
 
 #[derive(Debug, thiserror::Error)]
