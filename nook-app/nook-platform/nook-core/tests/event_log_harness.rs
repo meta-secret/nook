@@ -12,8 +12,8 @@ use nook_core::{
     AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventId,
     JoinRequest, LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue,
     SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection,
-    VaultResult, VaultUnlock, generate_store_id, generate_vault_keys, genesis_auth_record,
-    genesis_members_records, hydrate_keys_from_projection_yaml, serialize_stored_yaml_with_unlock,
+    VaultProjectionCache, VaultResult, VaultUnlock, generate_store_id, generate_vault_keys,
+    genesis_auth_record, genesis_members_records, serialize_stored_yaml_with_unlock,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -218,7 +218,7 @@ impl EventLogDevice {
         self.secrets_key.clear();
         self.members_key.clear();
         let (secrets_key, members_key) =
-            hydrate_keys_from_projection_yaml(&self.projection_cache_yaml, &self.identity)?;
+            VaultProjectionCache::new(&self.projection_cache_yaml).unlock(&self.identity)?;
         self.secrets_key.clone_from(&secrets_key);
         self.members_key.clone_from(&members_key);
         self.crypto =

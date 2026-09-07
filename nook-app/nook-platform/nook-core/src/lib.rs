@@ -352,10 +352,7 @@ pub use vault_client_policy::{
     VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
-    LoadedVault, UnlockedVault, VaultAccessStatus, VaultContentMetadata,
-    access_status_for_vault_content, apply_member_records, capture_vault_unlock_from_content,
-    content_requires_genesis, load_sentinel_vault, load_sentinel_vault_from_opened,
-    load_stored_vault, unlock_stored_vault,
+    LoadedVault, UnlockedVault, VaultAccessStatus, VaultContent, VaultContentMetadata,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{
@@ -399,7 +396,7 @@ pub use vault_session::{
     apply_user_records_to_armored_session, apply_user_records_to_encrypted_session,
     decrypt_encrypted_secret, query_encrypted_secrets,
 };
-pub use vault_session_cache::hydrate_keys_from_projection_yaml;
+pub use vault_session_cache::VaultProjectionCache;
 pub use vault_sync::{
     CommonContentHash, VaultRevision, VaultRevisionStore, VaultSyncAction, compare_vault_sync,
     compare_vault_sync_with_common, read_vault_revision, vault_content_hash,

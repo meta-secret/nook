@@ -17,7 +17,7 @@ mod unlock_finalization;
 
 use super::{CeremonyState, NookVaultManager, VaultCryptoState, VaultNameState};
 use crate::NookError;
-use crate::conversion::{LoadedVault, load_stored_vault};
+use crate::conversion::LoadedVault;
 use crate::storage::indexed_db::{
     load_sentinel_genesis_finalization_pending, load_sentinel_genesis_share_delivery,
     save_sentinel_genesis_share_delivery,
@@ -398,7 +398,7 @@ impl NookVaultManager {
                 members_key,
             });
         }
-        load_stored_vault(content, identity)
+        LoadedVault::unlock(content, identity)
     }
 
     /// Hydrate architecture + encrypted share meta without vault keys so the
@@ -410,7 +410,7 @@ impl NookVaultManager {
         let format = nook_core::detect_stored_format(content)?;
         let stored_records = nook_core::deserialize_stored(content, format)?;
         let meta = VaultMetaState::from_stored_records(&stored_records)?;
-        let metadata = nook_core::capture_vault_unlock_from_content(content)?;
+        let metadata = nook_core::VaultContent::new(content).capture_unlock()?;
         self.application
             .validate_session_access(metadata.architecture.vault_type)?;
         let mut architecture = metadata.architecture;

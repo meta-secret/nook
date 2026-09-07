@@ -3,8 +3,7 @@
 use crate::errors::VaultResult;
 use crate::vault_connect::VaultAccessStatus;
 use crate::{
-    Database, DeviceIdentity, VaultMetaState, VaultUnlock, capture_vault_unlock_from_content,
-    load_stored_vault, merge_remote_join_records,
+    Database, DeviceIdentity, VaultContent, VaultMetaState, VaultUnlock, merge_remote_join_records,
 };
 
 /// Outcome of comparing remote YAML against the last synced snapshot.
@@ -42,8 +41,8 @@ pub fn reconcile_yaml_sync(
     if content.trim() == last_synced_content.trim() {
         if members_key.is_empty() {
             if event_log_mode && !content.trim().is_empty() {
-                let loaded = load_stored_vault(content, identity)?;
-                let metadata = capture_vault_unlock_from_content(content)?;
+                let loaded = VaultContent::new(content).load(identity)?;
+                let metadata = VaultContent::new(content).capture_unlock()?;
                 return Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
                     database: loaded.database,
                     meta: loaded.meta,
@@ -66,15 +65,15 @@ pub fn reconcile_yaml_sync(
     }
 
     if members_key.is_empty() {
-        let status = crate::access_status_for_vault_content(content, identity)?;
+        let status = VaultContent::new(content).access_status(identity)?;
         return Ok(YamlSyncOutcome::AccessStatus(status));
     }
 
     let format = crate::detect_stored_format(content)?;
     let fresh_records = crate::deserialize_stored(content, format)?;
     merge_remote_join_records(state, &fresh_records)?;
-    let loaded = load_stored_vault(content, identity)?;
-    let metadata = capture_vault_unlock_from_content(content)?;
+    let loaded = VaultContent::new(content).load(identity)?;
+    let metadata = VaultContent::new(content).capture_unlock()?;
     Ok(YamlSyncOutcome::Reloaded(Box::new(YamlSyncReloaded {
         database: loaded.database,
         meta: loaded.meta,
