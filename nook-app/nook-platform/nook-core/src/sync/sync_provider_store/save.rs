@@ -631,7 +631,7 @@ mod tests {
         let mut existing = StorageProviderData::github(
             "existing",
             "original label",
-            "old",
+            "pat",
             "owner/repo",
             "earlier",
         );
