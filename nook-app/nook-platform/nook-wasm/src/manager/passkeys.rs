@@ -246,6 +246,61 @@ mod browser_tests {
         );
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn website_passkey_mutations_fail_closed_when_ceremony_is_inactive() -> Result<(), JsError>
+    {
+        let mut manager = NookVaultManager::new();
+        let inactive = Function::new_no_args("return false;");
+
+        assert!(
+            manager
+                .register_website_passkey("not-json", &inactive)
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .assert_website_passkey("not-json", &inactive)
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn opening_passkey_vault_rejects_malformed_grants_before_storage() -> Result<(), JsError>
+    {
+        let identity = nook_core::DeviceIdentity::generate()?;
+        let store_id = nook_core::generate_store_id()?.to_string();
+        let mut manager = NookVaultManager::new();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+
+        assert!(
+            manager
+                .open_extension_passkey_vault_js("", "", "", "")
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .open_extension_passkey_vault_js(&store_id, "", "", "")
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .open_extension_passkey_vault_js(
+                    &store_id,
+                    &identity.device_id().to_string(),
+                    &identity.public_key().to_string(),
+                    "",
+                )
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
 }
 
 fn ensure_ceremony_active(ceremony_active: &js_sys::Function) -> Result<(), JsError> {
