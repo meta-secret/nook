@@ -45,6 +45,28 @@ impl DriveEventStore<'_> {
             Some(_) | None => None,
         }
     }
+
+    fn list_event_ids_from_response(body: &serde_json::Value) -> Vec<String> {
+        body.get("files")
+            .and_then(|value| value.as_array())
+            .into_iter()
+            .flatten()
+            .filter_map(|file| {
+                let name = file.get("name").and_then(|value| value.as_str())?;
+                let app_event_id = file
+                    .get("appProperties")
+                    .and_then(|properties| properties.get("event_id"))
+                    .and_then(|value| value.as_str());
+                Self::drive_listed_event_id(name, app_event_id)
+            })
+            .collect()
+    }
+
+    fn list_page_token(body: &serde_json::Value) -> Option<String> {
+        body.get("nextPageToken")
+            .and_then(|value| value.as_str())
+            .map(str::to_owned)
+    }
 }
 
 /// Select content-addressed event bytes from same-name Drive candidates.
@@ -145,24 +167,8 @@ impl DriveEventStore<'_> {
                 .json()
                 .await
                 .map_err(|e| NookError::Serialization(e.to_string()))?;
-            if let Some(files) = body.get("files").and_then(|v| v.as_array()) {
-                for file in files {
-                    let Some(name) = file.get("name").and_then(|v| v.as_str()) else {
-                        continue;
-                    };
-                    let app_event_id = file
-                        .get("appProperties")
-                        .and_then(|props| props.get("event_id"))
-                        .and_then(|value| value.as_str());
-                    if let Some(event_id) = Self::drive_listed_event_id(name, app_event_id) {
-                        event_ids.push(event_id);
-                    }
-                }
-            }
-            page_token = body
-                .get("nextPageToken")
-                .and_then(|v| v.as_str())
-                .map(str::to_owned);
+            event_ids.extend(Self::list_event_ids_from_response(&body));
+            page_token = Self::list_page_token(&body);
             if page_token.is_none() {
                 break;
             }
@@ -542,6 +548,43 @@ mod tests {
         );
         assert_eq!(
             DriveEventStore::drive_listed_event_id("notes.yaml", Some("sha256u:notes")),
+            None
+        );
+    }
+
+    #[test]
+    fn list_response_projection_accepts_only_matching_event_rows() -> anyhow::Result<()> {
+        let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
+        let event_id = format!("sha256u:{digest}");
+        let body = serde_json::json!({
+            "files": [
+                {"name": format!("{digest}.yaml"), "appProperties": {"event_id": event_id}},
+                {"name": format!("{digest}.yaml")},
+                {"name": "notes.yaml", "appProperties": {"event_id": "sha256u:notes"}},
+                {"name": 42, "appProperties": {"event_id": "ignored"}},
+                {"name": format!("{digest}.yaml"), "appProperties": {"event_id": "wrong"}}
+            ]
+        });
+        assert_eq!(
+            DriveEventStore::list_event_ids_from_response(&body),
+            vec![event_id]
+        );
+        assert_eq!(
+            DriveEventStore::list_event_ids_from_response(&serde_json::json!({})),
+            vec![]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn list_response_projection_preserves_page_token_only_when_string() {
+        let body = serde_json::json!({"nextPageToken": "page-2"});
+        assert_eq!(
+            DriveEventStore::list_page_token(&body).as_deref(),
+            Some("page-2")
+        );
+        assert_eq!(
+            DriveEventStore::list_page_token(&serde_json::json!({"nextPageToken": 2})),
             None
         );
     }
