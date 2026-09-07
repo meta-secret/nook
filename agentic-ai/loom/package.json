@@ -35,6 +35,7 @@
     "typescript-eslint": "8.66.0"
   },
   "dependencies": {
+    "@nats-io/nats-core": "^3.4.0",
     "@openai/codex-sdk": "0.147.0",
     "diff": "9.0.0",
     "github-slugger": "2.0.0",

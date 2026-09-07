@@ -63,6 +63,15 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Push the coherent shared branch as the shared-branch owner.
    - Give PR Steward an explicit packet for pull-request publication.
 6. **Validate and repair.**
+   - Gizmo may create one mission-scoped PR Steward child with the fixed Luna
+     profile and start its subscription for exactly one active pull request.
+   - Before this Gizmo advances to another pull request, stop the old child,
+     wait for its NATS drain and exit, then start a fresh child for the new PR.
+   - Launch the subscriber as the documented direct Bun process in a foreground
+     PTY. Stop it by sending Ctrl-C to that same PTY and require exit status zero.
+   - Never stop or switch another Gizmo's independently active child.
+   - Treat each matching notification as a hint to issue a bounded PR Steward
+     operation packet.
    - Authorize PR Steward to trigger the repository-owned exact-head review and
      validation path.
    - Use `task remote TASK_NAME=web:build` for a remote web build.
@@ -71,6 +80,9 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Sequence the responsible writer in the current checkout.
    - Push the corrected head and obtain fresh exact-head evidence.
 7. **Finish delivery.**
+   - Tell the reactive PR Steward child to stop and wait for its exit.
+   - Re-read the final GitHub state directly. Do this even when every expected
+     notification arrived.
    - Authorize PR Steward to run `task pr:ready PR=<number>` and return its
      read-only evidence.
    - Issue a separate merge authorization only after Gizmo's final readiness
@@ -84,6 +96,7 @@ Mission delivery must not introduce:
 
 - Team Agent worktrees;
 - parallel Team Agent lifecycle or Git-state machinery; or
+- a persistent PR Steward service, scheduler, or notification journal; or
 - deletion-report fields or schema versions.
 
 ## Fix ownership
@@ -106,6 +119,8 @@ Delivery is complete only when:
 - the shared branch contains every accepted change;
 - repository-owned checks pass on the exact head;
 - actionable review findings are resolved;
+- any reactive PR Steward child has stopped;
+- Gizmo has reconciled final GitHub state directly;
 - `task pr:ready PR=<number>` succeeds;
 - the pull request is squash-merged; and
 - Workbench completion records are published.

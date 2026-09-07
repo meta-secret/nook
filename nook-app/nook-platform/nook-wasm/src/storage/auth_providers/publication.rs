@@ -118,7 +118,7 @@ impl PresealedProviderSnapshotPublication<'_> {
                 "auth-provider-credential-must-be-encrypted".to_owned(),
             ));
         }
-        let merged = nook_core::replace_active_vault_provider_grants(&existing, snapshot);
+        let merged = existing.replace_active_vault_grants(snapshot);
         Ok(PreparedProviderSnapshotWrite {
             database: rexie,
             transaction,

@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nook-jetstream-config
+  namespace: argo-events
+  labels:
+    app.kubernetes.io/name: nook-jetstream
+    app.kubernetes.io/part-of: webhook-ingress
+data:
+  nats-js: |
+    max_payload: 1MB
+    port: 4222
+    pid_file: "/var/run/nats/nats.pid"
+    http: 8222
+    server_name: $POD_NAME
+
+    jetstream {
+      key: "$JS_KEY"
+      store_dir: "/data/jetstream/store"
+      max_memory_store: 128MB
+      max_file_store: 256MB
+    }
+
+    websocket {
+      port: 9222
+      no_tls: true
+      allowed_origins: ["https://events.dev.nokey.sh"]
+    }
+
+    cluster {
+      port: 6222
+      name: default
+      routes: [
+        nats://eventbus-default-js-0.eventbus-default-js-svc.argo-events.svc:6222,
+        nats://eventbus-default-js-1.eventbus-default-js-svc.argo-events.svc:6222,
+        nats://eventbus-default-js-2.eventbus-default-js-svc.argo-events.svc:6222
+      ]
+      cluster_advertise: $CLUSTER_ADVERTISE
+      connect_retries: 120
+      tls {
+        cert_file: "/etc/nats-config/cluster-cert.pem"
+        key_file: "/etc/nats-config/cluster-private-key.pem"
+        ca_file: "/etc/nats-config/cluster-ca-cert.pem"
+      }
+    }
+
+    tls {
+      cert_file: "/etc/nats-config/server-cert.pem"
+      key_file: "/etc/nats-config/server-private-key.pem"
+      ca_file: "/etc/nats-config/ca-cert.pem"
+    }
+
+    lame_duck_duration: 30s
+    include ./auth.conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: eventbus-default-js-svc
+  namespace: argo-events
+  labels:
+    app.kubernetes.io/name: nook-jetstream
+    app.kubernetes.io/part-of: webhook-ingress
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    controller: eventbus-controller
+    eventbus-name: default
+    owner-name: default
+  ports:
+    - name: nats-client
+      port: 4222
+      targetPort: nats-client
+    - name: nats-cluster
+      port: 6222
+      targetPort: nats-cluster
+    - name: metrics
+      port: 7777
+      targetPort: metrics
+    - name: monitor
+      port: 8222
+      targetPort: monitor
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jetstream-websocket
+  namespace: argo-events
+  labels:
+    app.kubernetes.io/name: nook-jetstream
+    app.kubernetes.io/part-of: webhook-ingress
+spec:
+  type: ClusterIP
+  clusterIP: 10.96.90.30
+  selector:
+    controller: eventbus-controller
+    eventbus-name: default
+    owner-name: default
+  ports:
+    - name: websocket
+      port: 9222
+      targetPort: websocket
