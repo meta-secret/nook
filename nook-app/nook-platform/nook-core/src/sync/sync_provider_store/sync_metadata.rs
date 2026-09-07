@@ -23,7 +23,7 @@ pub fn update_provider_sync_metadata(
         },
         Err(_) => ProviderSyncedVaultVersion::Unknown,
     };
-    let content_hash = crate::vault_content_hash(vault_yaml);
+    let content_hash = crate::VaultRevision::content_hash(vault_yaml);
     providers
         .iter()
         .cloned()
@@ -119,7 +119,7 @@ mod tests {
                 version: ProviderSyncedVaultVersion::Version(9.into()),
                 synced_at: "2026-07-17T12:00:00Z".to_owned(),
                 revision: ProviderSyncRevision::Revision("old-revision".to_owned()),
-                common_content_hash: crate::vault_content_hash(""),
+                common_content_hash: crate::VaultRevision::content_hash(""),
             }
         );
         assert_eq!(updated[0].store_id.as_deref(), Some("store-1"));

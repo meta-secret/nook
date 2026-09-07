@@ -7,8 +7,8 @@ use nook_core::{VaultStoreIdentity, VaultStoreIdentityRef, VaultVersionWrite};
 
 use nook_core::{
     MemoryVaultStore, RevisionGuardedWrite, SecretId, StoreRevision, StoreRevisionRef,
-    StoredRecordPayload, StoredSecretRecord, VaultSyncAction, VaultSyncError, VaultSyncFanOut,
-    VaultSyncPair, VaultUnlock, compare_vault_sync, read_vault_store_id, read_vault_version,
+    StoredRecordPayload, StoredSecretRecord, VaultSyncAction, VaultSyncComparison, VaultSyncError,
+    VaultSyncFanOut, VaultSyncPair, VaultUnlock, read_vault_store_id, read_vault_version,
     serialize_stored_yaml_with_unlock,
 };
 use std::collections::HashMap;
@@ -77,7 +77,7 @@ fn remote_ahead_adopts_into_local_on_reconcile() -> anyhow::Result<()> {
     assert_eq!(local.blob(), remote_blob);
     assert_eq!(u64::from(read_vault_version(local.blob())?), 4);
     assert_eq!(
-        compare_vault_sync(local.blob(), remote.blob())?,
+        VaultSyncComparison::new(local.blob(), remote.blob()).decide()?,
         VaultSyncAction::Unchanged
     );
     Ok(())
