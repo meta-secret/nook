@@ -50,7 +50,11 @@ pub use scope::{
     sync_providers_for_active_vault,
 };
 pub use state::*;
-pub use storage_args::*;
+pub use storage_args::{
+    DraftStorageConnection, ProviderLabelLabels, ProviderSelectionRequest,
+    ProviderStorageDetailLabels, StagedRemoteConnection, StorageConnectArgs,
+    VaultStorageConnection,
+};
 pub use sync_metadata::update_provider_sync_metadata;
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.

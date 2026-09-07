@@ -1,5 +1,6 @@
 use super::{NookProviderSelection, wasm_bindgen};
 use crate::{NookEnrollmentProvider, NookProviderReplicationCapability, NookVaultArchitecture};
+use nook_core::ProviderSelectionRequest;
 use nook_core::{
     GoogleOAuthTokenInput, ICloudOAuthTokenInput, ICloudShareRole, ICloudSharedTarget,
     OAuthFileConfigData, ProviderOauthPreset, VaultArchitecture,
@@ -149,7 +150,7 @@ pub fn provider_replication_capability(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     Ok(NookProviderReplicationCapability::from_core(
-        nook_core::provider_replication_capability_for_row(&provider)?,
+        provider.replication_capability()?,
     ))
 }
 
@@ -182,7 +183,7 @@ pub fn validate_provider_replication(
     replication_type: nook_core::ReplicationType,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     Ok(NookProviderReplicationCapability::from_core(
-        nook_core::validate_provider_row_replication(&provider, replication_type)?,
+        provider.validate_replication(replication_type)?,
     ))
 }
 
@@ -192,10 +193,7 @@ pub fn provider_supports_replication(
     provider: nook_core::StorageProviderData,
     replication_type: nook_core::ReplicationType,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_core::provider_supports_replication(
-        &provider,
-        replication_type,
-    ))
+    Ok(provider.supports_replication(replication_type))
 }
 
 #[wasm_bindgen]
@@ -204,11 +202,14 @@ pub fn first_compatible_provider_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
     replication_type: nook_core::ReplicationType,
 ) -> NookProviderSelection {
-    NookProviderSelection(nook_core::first_compatible_provider_id(
-        &snapshot.providers,
-        replication_type,
-        None,
-    ))
+    NookProviderSelection(
+        ProviderSelectionRequest {
+            providers: &snapshot.providers,
+            replication_type,
+            preferred_id: None,
+        }
+        .select(),
+    )
 }
 
 #[wasm_bindgen]
@@ -218,11 +219,14 @@ pub fn first_compatible_provider_id_preferred(
     replication_type: nook_core::ReplicationType,
     preferred_id: &str,
 ) -> NookProviderSelection {
-    NookProviderSelection(nook_core::first_compatible_provider_id(
-        &snapshot.providers,
-        replication_type,
-        Some(preferred_id),
-    ))
+    NookProviderSelection(
+        ProviderSelectionRequest {
+            providers: &snapshot.providers,
+            replication_type,
+            preferred_id: Some(preferred_id),
+        }
+        .select(),
+    )
 }
 
 #[wasm_bindgen]

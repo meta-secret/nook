@@ -5,7 +5,7 @@ use crate::{
     OAuthTokenExpiry,
 };
 
-use super::{StorageProviderData, validate_provider_row_replication};
+use super::StorageProviderData;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     EnrollmentProvider, GoogleDriveMode, ICloudMode, OauthFilePreset, OnboardingType,
@@ -75,7 +75,7 @@ pub fn provider_onboarding_type(
     } else {
         architecture.replication_type
     };
-    validate_provider_row_replication(provider, effective_replication)?;
+    provider.validate_replication(effective_replication)?;
     Ok(match effective_replication {
         ReplicationType::Personal => OnboardingType::PersonalCredentialTransfer,
         ReplicationType::Shared => OnboardingType::SharedProviderGrant,
@@ -118,7 +118,7 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
 ) -> ValidationResult<EnrollmentProvider> {
     match provider_onboarding_type(provider, architecture)? {
         OnboardingType::PersonalCredentialTransfer => {
-            personal_enrollment_provider(provider).map(EnrollmentProvider::personal)
+            personal_enrollment_providerprovider.map(EnrollmentProvider::personal)
         }
         OnboardingType::SharedProviderGrant => {
             shared_enrollment_provider(provider, shared_joiner_identity, shared_storage_target_id)
@@ -132,7 +132,7 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
 fn personal_enrollment_provider(
     provider: &StorageProviderData,
 ) -> ValidationResult<PersonalEnrollmentProvider> {
-    validate_provider_row_replication(provider, ReplicationType::Personal)?;
+    provider.validate_replication(ReplicationType::Personal)?;
     let provider_type = provider.provider_type;
     match provider_type {
         StorageProviderType::Local | StorageProviderType::LocalFolder => {
@@ -195,7 +195,7 @@ fn shared_enrollment_provider(
     shared_joiner_identity: Option<&str>,
     shared_storage_target_id: Option<&str>,
 ) -> ValidationResult<SharedEnrollmentProvider> {
-    validate_provider_row_replication(provider, ReplicationType::Shared)?;
+    provider.validate_replication(ReplicationType::Shared)?;
     let oauth = provider.oauth_file.as_ref();
     let preset = oauth.map(|config| config.preset);
     let storage_target_id = shared_storage_target_id
