@@ -183,7 +183,8 @@ impl NookVaultManager {
     pub fn decrypt_secret_js(&self, id: &str) -> Result<NookSecretRecord, JsError> {
         let crypto = self.vault.crypto.get()?;
         let id = SecretId::from_vault_record(id);
-        let record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
+        let record =
+            nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
         tracing::info!(
             scope = "wasm-secrets",
             action = "decrypt-secret",
@@ -209,7 +210,7 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let id = SecretId::from_vault_record(id);
         let mut record =
-            nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
+            nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
         let code = if let SecretValue::Authenticator(value) = &record.data {
             value.current_code(u64::from(unix_seconds).into())?
         } else {

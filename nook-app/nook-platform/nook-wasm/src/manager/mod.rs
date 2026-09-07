@@ -447,14 +447,14 @@ impl NookVaultManager {
         {
             return Ok(catalog.query(query, secret_type_filter, offset.into(), limit.into()));
         }
-        Ok(nook_core::query_encrypted_secrets(
-            &self.vault.meta.secrets,
-            crypto,
-            query,
-            secret_type_filter,
-            offset.into(),
-            limit.into(),
-        )?)
+        Ok(
+            nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).query(
+                query,
+                secret_type_filter,
+                offset.into(),
+                limit.into(),
+            )?,
+        )
     }
 
     /// Typed secret list for the active decrypted session.
@@ -466,7 +466,8 @@ impl NookVaultManager {
                 .secrets
                 .keys()
                 .map(|id| {
-                    nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)
+                    nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto)
+                        .decrypt(id)
                         .map_err(NookError::from)
                 })
                 .collect::<Result<Vec<_>, _>>()?,

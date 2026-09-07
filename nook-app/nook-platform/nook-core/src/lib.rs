@@ -393,8 +393,7 @@ pub use vault_sentinel_genesis::{
 pub use vault_sentinel_unlock::SentinelUnlockSigning;
 pub use vault_session::{
     DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage, SecretTypeFilter,
-    apply_user_records_to_armored_session, apply_user_records_to_encrypted_session,
-    decrypt_encrypted_secret, query_encrypted_secrets,
+    VaultSecretSession, VaultUserRecordBatch,
 };
 pub use vault_session_cache::VaultProjectionCache;
 pub use vault_sync::{
