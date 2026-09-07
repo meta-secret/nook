@@ -82,16 +82,16 @@ mod tests {
             "!".to_owned(),
             "a".repeat(super::MAX_ENCODED_PACKAGE_BYTES + 1),
         ] {
-            assert_eq!(
+            assert!(matches!(
                 SentinelOnboardingPackage::decode(&encoded),
                 Err(MultiDeviceError::InvalidSentinelGenesisPayload)
-            );
+            ));
         }
     }
 
     #[test]
     fn codec_preserves_outer_whitespace_and_rejects_invalid_json() -> anyhow::Result<()> {
-        use super::super::super::tests::OnboardingFixture;
+        use super::tests::OnboardingFixture;
         let fixture = OnboardingFixture::new()?;
         let package = fixture.package()?;
         assert_eq!(
@@ -104,17 +104,17 @@ mod tests {
             br#"{"version":2}"#.to_vec(),
         ] {
             let encoded = EncodedPackageFixture { json }.encode()?;
-            assert_eq!(
+            assert!(matches!(
                 SentinelOnboardingPackage::decode(&encoded),
                 Err(MultiDeviceError::InvalidSentinelGenesisPayload)
-            );
+            ));
         }
         Ok(())
     }
 
     #[test]
     fn decompressed_limit_accepts_exact_boundary() -> anyhow::Result<()> {
-        use super::super::super::tests::OnboardingFixture;
+        use super::tests::OnboardingFixture;
         let package = OnboardingFixture::new()?.package()?;
         let mut json = serde_json::to_vec(&package)?;
         json.resize(usize::try_from(MAX_DECOMPRESSED_PACKAGE_BYTES)?, b' ');

@@ -76,7 +76,7 @@ impl CheckedOnboardingRecipient<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::OnboardingFixture;
+    use super::tests::OnboardingFixture;
     use super::SentinelOnboardingRecipient;
     use crate::{DeviceIdentity, MultiDeviceError, encrypt_for_recipient};
     use std::ptr;
@@ -88,22 +88,22 @@ mod tests {
         package.provider_snapshot =
             encrypt_for_recipient(b"not-json", &fixture.delivery.encryption_public_key)?;
         let stranger = DeviceIdentity::generate()?;
-        assert_eq!(
+        assert!(matches!(
             SentinelOnboardingRecipient {
                 package: &package,
                 identity: &stranger
             }
             .accept(),
             Err(MultiDeviceError::SentinelGenesisDeliveryRecipientMismatch)
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             SentinelOnboardingRecipient {
                 package: &package,
                 identity: &fixture.member
             }
             .accept(),
             Err(MultiDeviceError::InvalidSentinelGenesisPayload)
-        );
+        ));
         Ok(())
     }
 
@@ -114,14 +114,14 @@ mod tests {
         package.delivery.signature.clear();
         package.provider_snapshot =
             encrypt_for_recipient(b"not-json", &fixture.delivery.encryption_public_key)?;
-        assert_eq!(
+        assert!(matches!(
             SentinelOnboardingRecipient {
                 package: &package,
                 identity: &fixture.member
             }
             .accept(),
             Err(MultiDeviceError::InvalidSentinelGenesisSignature)
-        );
+        ));
         Ok(())
     }
 
@@ -152,14 +152,14 @@ mod tests {
         // An empty object normalizes to zero providers and must still fail admission.
         package.provider_snapshot =
             encrypt_for_recipient(b"{}", &fixture.delivery.encryption_public_key)?;
-        assert_eq!(
+        assert!(matches!(
             SentinelOnboardingRecipient {
                 package: &package,
                 identity: &fixture.member
             }
             .accept(),
             Err(MultiDeviceError::InvalidSentinelGenesisPayload)
-        );
+        ));
         Ok(())
     }
 
