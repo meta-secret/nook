@@ -179,6 +179,7 @@ impl CompanionPairingIssue {
         Ok(())
     }
 
+    #[must_use]
     pub fn bind(self, installation: CompanionPairingInstallation) -> CompanionPairingRequest {
         CompanionPairingRequest {
             request_id: self.request_id,
@@ -404,14 +405,17 @@ impl CompanionWebsitePairingEndpoint {
 pub struct AuthorizedCompanionWebsitePairing(CompanionPairingWebsiteAuthorization);
 
 impl AuthorizedCompanionWebsitePairing {
+    #[must_use]
     pub fn request(&self) -> &CompanionPairingRequest {
         &self.0.request
     }
 
+    #[must_use]
     pub fn vault_store_id(&self) -> &str {
         &self.0.vault_store_id
     }
 
+    #[must_use]
     pub fn vault_name(&self) -> &str {
         &self.0.vault_name
     }
@@ -491,6 +495,7 @@ impl ConsumedCompanionPairingAuthority {
 pub struct AuthorizedCompanionPairingApproval(CompanionPairingApproval);
 
 impl AuthorizedCompanionPairingApproval {
+    #[must_use]
     pub fn approval(&self) -> &CompanionPairingApproval {
         &self.0
     }
@@ -510,74 +515,79 @@ pub struct AdmittedCompanionPairingApproval {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn epoch(value: &str) -> anyhow::Result<CompanionPairingEpochMilliseconds> {
-        Ok(serde_json::from_str(value)?)
-    }
 
-    fn provider_manifest_digest() -> anyhow::Result<CompanionPairingProviderManifestDigest> {
-        Ok(CompanionPairingProviderManifestDigest::parse(
-            &"a".repeat(64),
-        )?)
-    }
+    struct PairingFixture;
 
-    fn request() -> anyhow::Result<CompanionPairingRequest> {
-        Ok(CompanionPairingRequest {
-            request_id: "request-1".to_owned(),
-            nonce: "nonce-1".to_owned(),
-            issued_at: epoch("100")?,
-            expires_at: epoch("200")?,
-            vault_type: ExtensionPairingVaultType::Simple,
-            installation: CompanionPairingInstallation {
-                extension_runtime_id: "runtime-1".to_owned(),
-                app_id: "app-1".to_owned(),
-                encryption_public_key: "age1extension".to_owned(),
-                signing_public_key: "signing-1".to_owned(),
-                installation_label: "Nook Extension".to_owned(),
-            },
-            scopes: vec![
-                ExtensionConnectScope::VaultAccess,
-                ExtensionConnectScope::PasswordFilling,
-                ExtensionConnectScope::SyncProviderCredentials,
-            ],
-        })
-    }
+    impl PairingFixture {
+        fn epoch(value: &str) -> anyhow::Result<CompanionPairingEpochMilliseconds> {
+            Ok(serde_json::from_str(value)?)
+        }
 
-    fn authorization() -> anyhow::Result<CompanionPairingWebsiteAuthorization> {
-        Ok(CompanionPairingWebsiteAuthorization {
-            request: request()?,
-            observed_at: epoch("150")?,
-            vault_store_id: "store-1".to_owned(),
-            vault_name: "Personal".to_owned(),
-            approved_at: "2026-09-07T00:00:00Z".to_owned(),
-        })
-    }
+        fn provider_manifest_digest() -> anyhow::Result<CompanionPairingProviderManifestDigest> {
+            Ok(CompanionPairingProviderManifestDigest::parse(
+                &"a".repeat(64),
+            )?)
+        }
 
-    fn approval() -> anyhow::Result<CompanionPairingApproval> {
-        Ok(CompanionPairingApproval {
-            request: request()?,
-            vault_store_id: "store-1".to_owned(),
-            vault_name: "Personal".to_owned(),
-            approved_at: "2026-09-07T00:00:00Z".to_owned(),
-            provider_manifest_digest: provider_manifest_digest()?,
-        })
+        fn request() -> anyhow::Result<CompanionPairingRequest> {
+            Ok(CompanionPairingRequest {
+                request_id: "request-1".to_owned(),
+                nonce: "nonce-1".to_owned(),
+                issued_at: Self::epoch("100")?,
+                expires_at: Self::epoch("200")?,
+                vault_type: ExtensionPairingVaultType::Simple,
+                installation: CompanionPairingInstallation {
+                    extension_runtime_id: "runtime-1".to_owned(),
+                    app_id: "app-1".to_owned(),
+                    encryption_public_key: "age1extension".to_owned(),
+                    signing_public_key: "signing-1".to_owned(),
+                    installation_label: "Nook Extension".to_owned(),
+                },
+                scopes: vec![
+                    ExtensionConnectScope::VaultAccess,
+                    ExtensionConnectScope::PasswordFilling,
+                    ExtensionConnectScope::SyncProviderCredentials,
+                ],
+            })
+        }
+
+        fn authorization() -> anyhow::Result<CompanionPairingWebsiteAuthorization> {
+            Ok(CompanionPairingWebsiteAuthorization {
+                request: Self::request()?,
+                observed_at: Self::epoch("150")?,
+                vault_store_id: "store-1".to_owned(),
+                vault_name: "Personal".to_owned(),
+                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+            })
+        }
+
+        fn approval() -> anyhow::Result<CompanionPairingApproval> {
+            Ok(CompanionPairingApproval {
+                request: Self::request()?,
+                vault_store_id: "store-1".to_owned(),
+                vault_name: "Personal".to_owned(),
+                approved_at: "2026-09-07T00:00:00Z".to_owned(),
+                provider_manifest_digest: Self::provider_manifest_digest()?,
+            })
+        }
     }
 
     #[test]
     fn real_endpoints_compose_without_transport() -> anyhow::Result<()> {
-        let request = request()?;
+        let request = PairingFixture::request()?;
         let mut extension = CompanionExtensionPairingEndpoint::issue(request.clone())?;
         let mut website =
             CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
                 request,
-                observed_at: epoch("125")?,
+                observed_at: PairingFixture::epoch("125")?,
             })?;
         let approval = website
-            .authorize(authorization()?)?
-            .approve(provider_manifest_digest()?);
+            .authorize(PairingFixture::authorization()?)?
+            .approve(PairingFixture::provider_manifest_digest()?);
         let authorized = extension
             .authorize_approval(CompanionPairingApprovalAttempt {
                 approval,
-                observed_at: epoch("175")?,
+                observed_at: PairingFixture::epoch("175")?,
             })
             .map_err(|failure| anyhow::anyhow!("{failure:?}"))?;
         let _admitted = authorized.admit();
@@ -586,21 +596,21 @@ mod tests {
 
     #[test]
     fn invalid_request_admission_does_not_create_an_endpoint() -> anyhow::Result<()> {
-        let mut malformed = request()?;
+        let mut malformed = PairingFixture::request()?;
         malformed.scopes.push(ExtensionConnectScope::VaultAccess);
         assert!(matches!(
             CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
                 request: malformed,
-                observed_at: epoch("125")?,
+                observed_at: PairingFixture::epoch("125")?,
             }),
             Err(CompanionPairingError::ScopeMismatch)
         ));
-        let mut expired = request()?;
-        expired.expires_at = epoch("125")?;
+        let mut expired = PairingFixture::request()?;
+        expired.expires_at = PairingFixture::epoch("125")?;
         assert!(matches!(
             CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
                 request: expired,
-                observed_at: epoch("125")?,
+                observed_at: PairingFixture::epoch("125")?,
             }),
             Err(CompanionPairingError::RequestExpired)
         ));
@@ -616,22 +626,23 @@ mod tests {
             CompanionPairingFailure::InstallationMismatch,
             CompanionPairingFailure::ScopeMismatch,
         ] {
-            let mut endpoint = CompanionExtensionPairingEndpoint::issue(request()?)?;
+            let mut endpoint =
+                CompanionExtensionPairingEndpoint::issue(PairingFixture::request()?)?;
             let authority = endpoint.take_authority()?;
             assert!(matches!(
                 endpoint.take_authority(),
                 Err(CompanionPairingError::AuthorityUnavailable)
             ));
             let mut attempt = CompanionPairingApprovalAttempt {
-                approval: approval()?,
-                observed_at: epoch("175")?,
+                approval: PairingFixture::approval()?,
+                observed_at: PairingFixture::epoch("175")?,
             };
             match failure {
                 CompanionPairingFailure::RequestMismatch => {
                     attempt.approval.request.nonce = "nonce-other".to_owned();
                 }
                 CompanionPairingFailure::RequestExpired => {
-                    attempt.observed_at = epoch("200")?;
+                    attempt.observed_at = PairingFixture::epoch("200")?;
                 }
                 CompanionPairingFailure::InvalidValue => attempt.approval.vault_name.clear(),
                 CompanionPairingFailure::InstallationMismatch => {
@@ -646,20 +657,21 @@ mod tests {
                 anyhow::bail!("terminal attempt was accepted");
             };
             assert_eq!(rejected, failure);
-            assert!(matches!(
-                endpoint.authorize_approval(CompanionPairingApprovalAttempt {
-                    approval: approval()?,
-                    observed_at: epoch("175")?,
-                }),
-                Err(CompanionPairingFailure::AuthorityUnavailable)
-            ));
+            match endpoint.authorize_approval(CompanionPairingApprovalAttempt {
+                approval: PairingFixture::approval()?,
+                observed_at: PairingFixture::epoch("175")?,
+            }) {
+                Err(CompanionPairingFailure::AuthorityUnavailable) => {}
+                Err(other) => anyhow::bail!("unexpected replay failure: {other:?}"),
+                Ok(_) => anyhow::bail!("replayed approval was accepted"),
+            }
         }
         Ok(())
     }
 
     #[test]
     fn dropped_consumed_authority_cannot_be_recovered() -> anyhow::Result<()> {
-        let mut endpoint = CompanionExtensionPairingEndpoint::issue(request()?)?;
+        let mut endpoint = CompanionExtensionPairingEndpoint::issue(PairingFixture::request()?)?;
         drop(endpoint.take_authority()?);
         assert!(matches!(
             endpoint.take_authority(),
@@ -670,22 +682,24 @@ mod tests {
 
     #[test]
     fn website_authority_is_consumed_by_rejected_authorization() -> anyhow::Result<()> {
-        let request = request()?;
+        let request = PairingFixture::request()?;
         let mut endpoint =
             CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
                 request,
-                observed_at: epoch("125")?,
+                observed_at: PairingFixture::epoch("125")?,
             })?;
-        let mut mismatched = authorization()?;
+        let mut mismatched = PairingFixture::authorization()?;
         mismatched.request.installation.extension_runtime_id = "runtime-other".to_owned();
-        assert_eq!(
-            endpoint.authorize(mismatched).map(|_| ()),
-            Err(CompanionPairingError::InstallationMismatch)
-        );
-        assert!(matches!(
-            endpoint.authorize(authorization()?),
-            Err(CompanionPairingError::AuthorityUnavailable)
-        ));
+        match endpoint.authorize(mismatched) {
+            Err(CompanionPairingError::InstallationMismatch) => {}
+            Err(other) => anyhow::bail!("unexpected authorization failure: {other:?}"),
+            Ok(_) => anyhow::bail!("mismatched authorization was accepted"),
+        }
+        match endpoint.authorize(PairingFixture::authorization()?) {
+            Err(CompanionPairingError::AuthorityUnavailable) => {}
+            Err(other) => anyhow::bail!("unexpected replay failure: {other:?}"),
+            Ok(_) => anyhow::bail!("replayed authorization was accepted"),
+        }
         Ok(())
     }
 }

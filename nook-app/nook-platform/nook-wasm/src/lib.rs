@@ -73,7 +73,7 @@ pub use types::{
     NookVaultSecretAccessDiagnostic, NookVaultSecurityRecommendations, NookVaultSyncResult,
     NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan,
 };
-use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 #[wasm_bindgen]
 #[must_use]
