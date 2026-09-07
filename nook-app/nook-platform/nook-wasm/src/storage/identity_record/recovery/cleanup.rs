@@ -242,7 +242,7 @@ mod tests {
             .await
             .expect_err("malformed cleanup marker must be rejected");
         assert!(
-            matches!(error, NookError::IndexedDb(message) if message.contains("Recovery cleanup decode error")),
+            matches!(error, NookError::IndexedDb(ref message) if message.contains("Recovery cleanup decode error")),
             "unexpected error: {error}"
         );
         transaction
