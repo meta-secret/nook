@@ -95,7 +95,6 @@ impl DevicePublicKey {
 }
 
 impl AppKey {
-    #[must_use]
     pub fn auth_id_for_public_key(public_key: &DevicePublicKey) -> MultiDeviceResult<AuthKeyId> {
         public_key.auth_id()
     }
@@ -161,17 +160,14 @@ impl VaultMetaState {
 }
 
 impl VaultMetaRecord {
-    #[must_use]
     pub fn is_join(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
         Ok(matches!(Self::classify(record)?, Self::Join(..)))
     }
 
-    #[must_use]
     pub fn is_auth(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
         Ok(matches!(Self::classify(record)?, Self::Auth(..)))
     }
 
-    #[must_use]
     pub fn is_member(record: &StoredSecretRecord) -> MultiDeviceResult<bool> {
         Ok(matches!(Self::classify(record)?, Self::Member(..)))
     }
@@ -248,7 +244,7 @@ impl<'a> VaultRecordView<'a> {
     }
 }
 
-impl<'a> VaultRecordView<'a> {
+impl VaultRecordView<'_> {
     #[must_use]
     pub fn is_empty(&self) -> bool {
         self.records.is_empty()
@@ -263,6 +259,7 @@ pub struct AuthRecordIssuance<'a> {
 }
 
 impl<'a> AuthRecordIssuance<'a> {
+    #[must_use]
     pub fn new(
         auth_id: &'a AuthKeyId,
         secrets_key: &'a SymmetricKey,
