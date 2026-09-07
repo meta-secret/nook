@@ -301,8 +301,8 @@ impl VaultRecordSet {
         vault_version: VaultVersionWrite,
         architecture: &VaultArchitecture,
     ) -> VaultFormatResult<VaultYamlBlob> {
-        architecture.validate_records(self.records)?;
-        let mut vault = StoredVaultYaml::from_records(self.records)?;
+        architecture.validate_records(&self.records)?;
+        let mut vault = StoredVaultYaml::from_records(&self.records)?;
         vault.schema_version = VaultFormatDocument::current_schema_version().into();
         vault.vault_version = match vault_version {
             VaultVersionWrite::Initial => 0,
@@ -316,7 +316,7 @@ impl VaultRecordSet {
             VaultName::Named(name) => Some(name),
             VaultName::Unnamed => None,
         };
-        vault.unlock = unlock.normalized_for_write();
+        vault.unlock = Self::normalized_unlock(unlock);
         vault.architecture = architecture.clone();
         vault.password_entries = password_entries.to_vec();
         serde_yaml::to_string(&vault)
@@ -334,6 +334,12 @@ impl VaultRecordSet {
             VaultStoreIdentityRef::Unassigned | VaultStoreIdentityRef::Assigned(_) => {
                 Ok(VaultStoreIdentity::Unassigned)
             }
+        }
+    }
+
+    fn normalized_unlock(unlock: &VaultUnlock) -> VaultUnlock {
+        match unlock {
+            VaultUnlock::Passwords { .. } | VaultUnlock::Keys => VaultUnlock::Keys,
         }
     }
 
@@ -419,14 +425,6 @@ impl VaultName {
         match value {
             VaultNameRef::Named(value) => Self::from_named(value),
             VaultNameRef::Unnamed => Self::Unnamed,
-        }
-    }
-}
-
-impl VaultUnlock {
-    fn normalized_for_write(&self) -> Self {
-        match self {
-            Self::Passwords { .. } | Self::Keys => Self::Keys,
         }
     }
 }
