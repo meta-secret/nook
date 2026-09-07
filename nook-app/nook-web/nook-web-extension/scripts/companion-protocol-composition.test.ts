@@ -36,7 +36,6 @@ import {
   NookPrevalidatedCompanionPairingApproval,
   seal_auth_providers_for_device_public_key,
   VaultApplication,
-  type AuthProvidersSnapshot,
   type CompanionPairingRequest,
   type CompanionIdentityHandoffResponse,
   type CompanionWebsiteHandoffBegin,

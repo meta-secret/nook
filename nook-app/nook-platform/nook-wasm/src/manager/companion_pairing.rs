@@ -153,7 +153,8 @@ mod tests {
             },
             scopes: vec![ExtensionConnectScope::VaultAccess],
         };
-        let endpoint = NookCompanionPairingExtensionEndpoint::new(request.clone())?;
+        let endpoint = NookCompanionPairingExtensionEndpoint::new(request.clone())
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert_eq!(endpoint.inner.request()?, request);
         Ok(())
     }
