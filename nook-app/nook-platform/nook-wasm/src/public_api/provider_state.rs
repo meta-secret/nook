@@ -1,4 +1,5 @@
 use super::{NookStorageConnectArgs, wasm_bindgen};
+use nook_core::DraftStorageConnection;
 use nook_core::{
     ActiveProviderCredentialsProjection, ExistingVaultProviderReadiness, GithubPatMask,
     OAuthAccessTokenRef, StorageConnectArgs, StorageProviderType, StoredLocalFolderConfiguration,
@@ -362,21 +363,22 @@ pub fn local_vault_storage_args() -> NookStorageConnectArgs {
 pub fn authenticated_vault_storage_args(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookStorageConnectArgs, wasm_bindgen::JsError> {
-    Ok(nook_core::storage_args_for_provider(&provider)?.into())
+    Ok(provider.connection_args()?.into())
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookStorageConnectArgs {
-    nook_core::draft_storage_args(
-        StorageProviderType::Github,
-        Some(github_pat),
-        Some(github_repo),
-        None,
-        None,
-        None,
-        None,
-    )
+    DraftStorageConnection {
+        provider_type: StorageProviderType::Github,
+        github_pat: Some(github_pat),
+        github_repo: Some(github_repo),
+        oauth_preset: None,
+        oauth_access_token: None,
+        oauth_file_id: None,
+        oauth_file_name: None,
+    }
+    .project()
     .into()
 }
 
@@ -385,30 +387,32 @@ pub fn draft_github_storage_args(github_pat: &str, github_repo: &str) -> NookSto
 #[must_use]
 pub fn draft_oauth_storage_args(config: nook_core::OAuthFileConfigData) -> NookStorageConnectArgs {
     let remote_ref = config.remote_storage_ref();
-    nook_core::draft_storage_args(
-        StorageProviderType::OauthFile,
-        None,
-        None,
-        Some(config.preset),
-        config.access_token.as_deref(),
-        remote_ref.as_deref(),
-        config.file_name.as_deref(),
-    )
+    DraftStorageConnection {
+        provider_type: StorageProviderType::OauthFile,
+        github_pat: None,
+        github_repo: None,
+        oauth_preset: Some(config.preset),
+        oauth_access_token: config.access_token.as_deref(),
+        oauth_file_id: remote_ref.as_deref(),
+        oauth_file_name: config.file_name.as_deref(),
+    }
+    .project()
     .into()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn draft_local_storage_args() -> NookStorageConnectArgs {
-    nook_core::draft_storage_args(
-        StorageProviderType::Local,
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-    )
+    DraftStorageConnection {
+        provider_type: StorageProviderType::Local,
+        github_pat: None,
+        github_repo: None,
+        oauth_preset: None,
+        oauth_access_token: None,
+        oauth_file_id: None,
+        oauth_file_name: None,
+    }
+    .project()
     .into()
 }
 
