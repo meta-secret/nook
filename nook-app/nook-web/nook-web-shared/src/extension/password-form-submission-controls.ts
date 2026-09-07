@@ -432,7 +432,6 @@ export function controlSubmissionMethod(
   const method = presentHtmlSubmissionMethod(methodRequest);
   return method === false ? PageControlSubmissionMethod.Get : method;
 }
-
 export function controlMachineIdentity(control: HTMLElement): string {
   const namedValue =
     control instanceof HTMLButtonElement || control instanceof HTMLInputElement
@@ -459,9 +458,10 @@ export function controlLabel(control: HTMLElement): string {
       ? control.value || control.getAttribute("alt") || "submit"
       : "",
     labelledBy,
-  ].join(" ");
+  ]
+    .join(" ")
+    .trim();
 }
-
 export function formSubmissionMethod(
   form: HTMLFormElement,
 ): PageControlSubmissionMethod {

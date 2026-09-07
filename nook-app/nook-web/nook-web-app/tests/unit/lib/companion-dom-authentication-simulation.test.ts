@@ -223,15 +223,34 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
+    const [chatGptObservation] = summarizeAuthenticationWorkflowForms()
+    if (!chatGptObservation) {
+      throw new Error('expected ChatGPT destination evidence')
+    }
+    const chatGptFacts = authenticationPageObservationFacts({
+      observation: chatGptObservation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(chatGptFacts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          destinationIdentity: '/auth/login',
+          submissionDestinationSource: 'authored',
+          submissionMethod: 'get',
+        },
+      ],
+    })
 
     window.history.replaceState({}, '', '/log-in-or-create-account')
     const openAiRequest: DomAuthenticationSimulationRequest = {
       fixture: {
         html: `<main><form id="openai-social-form" method="post" action="/log-in-or-create-account" hidden></form>
+        <button name="intent" type="submit" value="google" form="openai-social-form">Continue with Google</button>
+        <button name="intent" type="submit" value="apple" form="openai-social-form">Continue with Apple</button>
+        <button name="intent" type="submit" value="microsoft" form="openai-social-form">Continue with Microsoft</button>
         <form id="openai-identifier-form" method="post" action="/log-in-or-create-account">
-          <button name="intent" type="submit" value="google" form="openai-social-form">Continue with Google</button>
-          <button name="intent" type="submit" value="apple" form="openai-social-form">Continue with Apple</button>
-          <button name="intent" type="submit" value="microsoft" form="openai-social-form">Continue with Microsoft</button>
           <button id="phone-alternative" type="button">Continue with phone</button>
           <input id="email" name="email" type="email" autocomplete="email" aria-label="Email address" placeholder="Email address">
           <button name="intent" type="submit" value="openai-continue">Continue</button>
@@ -254,6 +273,25 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
+    const [openAiObservation] = summarizeAuthenticationWorkflowForms()
+    if (!openAiObservation) {
+      throw new Error('expected OpenAI destination evidence')
+    }
+    const openAiFacts = authenticationPageObservationFacts({
+      observation: openAiObservation,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    })
+    expect(openAiFacts.detailedAdvanceControl).toMatchObject({
+      kind: 'observed',
+      observations: [
+        {
+          destinationIdentity: '/log-in-or-create-account',
+          submissionDestinationSource: 'authored',
+          submissionMethod: 'post',
+        },
+      ],
+    })
     const identifierForm = document.querySelector('#openai-identifier-form')
     const socialForm = document.querySelector('#openai-social-form')
     const phone =
@@ -268,10 +306,12 @@ describe('DOM-backed companion authentication simulation', () => {
     expect(socialButtons).toHaveLength(3)
     expect(
       [...socialButtons].every((button) => identifierForm.contains(button)),
-    ).toBe(true)
+    ).toBe(false)
     expect(
       [...socialButtons].every(
-        (button) => button.getAttribute('form') === socialForm.id,
+        (button) =>
+          button.getAttribute('form') === socialForm.id &&
+          button.form === socialForm,
       ),
     ).toBe(true)
   })
