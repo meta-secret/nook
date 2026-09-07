@@ -74,6 +74,15 @@ tasks:
         grep -F 'storageClassName: argo-events-jetstream-local-retain' "$jetstream_statefulset" >/dev/null
         grep -F 'name: eventbus-default-js-vol' "$jetstream_statefulset" >/dev/null
         grep -F 'name: jetstream-server' "$jetstream_statefulset" >/dev/null
+        grep -F 'fsGroup: 1000' "$jetstream_statefulset" >/dev/null
+        grep -F 'fsGroupChangePolicy: OnRootMismatch' "$jetstream_statefulset" >/dev/null
+        test "$(grep -c 'runAsNonRoot: true' "$jetstream_statefulset")" -eq 3
+        grep -F 'runAsUser: 1000' "$jetstream_statefulset" >/dev/null
+        grep -F 'runAsUser: 1001' "$jetstream_statefulset" >/dev/null
+        test "$(grep -c 'name: JS_KEY' "$jetstream_statefulset")" -eq 1
+        ! grep -F 'shareProcessNamespace:' "$jetstream_statefulset"
+        ! grep -F 'name: reloader' "$jetstream_statefulset"
+        test "$(grep -c 'mountPath: /etc/nats-config' "$jetstream_statefulset")" -eq 1
         grep -F 'kind: EventSource' "$ingress" >/dev/null
         grep -F 'replicas: 2' "$ingress" >/dev/null
         grep -F 'endpoint: /webhooks/github' "$ingress" >/dev/null

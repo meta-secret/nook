@@ -134,6 +134,10 @@ Core NATS live fan-out on the exact lifecycle subject without a durable
 consumer; disconnected agents may miss events, and Gizmo performs final GitHub
 reconciliation before action.
 
+JetStream configuration and credential changes take effect through controlled
+StatefulSet rolling restarts. The NATS and metrics containers have separate
+non-root identities and process namespaces; only NATS mounts server secrets.
+
 `task infra:sccache:credential:sync` copies the bucket-scoped build keys into
 `~/.nook/cache/` (shared across checkouts; never into the repo), then upserts
 GitHub Actions secrets `NOOK_SCCACHE_ENDPOINT`, `NOOK_SCCACHE_ACCESS_KEY`,

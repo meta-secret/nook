@@ -24,6 +24,14 @@ Traefik terminates trusted TLS for `wss://events.dev.nokey.sh` on public port
 NATS ports 4222, 6222, 8222, and 9222 must never be host, NodePort, or
 LoadBalancer listeners. The server permits the expected HTTPS Origin only.
 
+The NATS and metrics containers run under distinct non-root identities without
+a shared process namespace. Only NATS mounts the server configuration, TLS
+private keys, authentication file, and encrypted-store key projection. Metrics
+scrapes the private monitoring endpoint and receives no server Secret volume.
+Configuration and credential changes use an ordered StatefulSet rollout; no
+credential-bearing config-reloader sidecar is present. The retained PVC uses an
+explicit filesystem group with `OnRootMismatch` ownership handling.
+
 ## Consumption model
 
 JetStream persistence is platform retention for ingress durability and final
