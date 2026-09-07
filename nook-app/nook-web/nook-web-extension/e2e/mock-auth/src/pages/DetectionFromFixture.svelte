@@ -120,6 +120,36 @@
   }
 </script>
 
+{#snippet fixtureInput(field: SiteFixtureField)}
+  {#if field.label}
+    <label
+      >{field.label}<input
+        type={((...[v = 'text']) => v)(field.type)}
+        name={field.name}
+        id={field.id}
+        autocomplete={field.autocomplete}
+        inputmode={field.inputmode}
+        placeholder={field.placeholder}
+        aria-label={field['aria-label']}
+        data-qa={field['data-qa']}
+        data-testid={field['data-testid']}
+      /></label
+    >
+  {:else}
+    <input
+      type={((...[v = 'text']) => v)(field.type)}
+      name={field.name}
+      id={field.id}
+      autocomplete={field.autocomplete}
+      inputmode={field.inputmode}
+      placeholder={field.placeholder}
+      aria-label={field['aria-label']}
+      data-qa={field['data-qa']}
+      data-testid={field['data-testid']}
+    />
+  {/if}
+{/snippet}
+
 {#if renderState.kind === DetectionFixtureRenderKind.Missing}
   <main>
     <h1>Unknown site fixture</h1>
@@ -137,16 +167,7 @@
       {/if}
       <form id="login_form" method="post" action="/auth/login" {onsubmit}>
         {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
-          <input
-            type={((...[v = 'text']) => v)(field.type)}
-            name={field.name}
-            id={field.id}
-            autocomplete={field.autocomplete}
-            placeholder={field.placeholder}
-            aria-label={field['aria-label']}
-            data-qa={field['data-qa']}
-            data-testid={field['data-testid']}
-          />
+          {@render fixtureInput(field)}
         {/each}
         {#if step.submit.type === SiteFixtureSubmitType.Button}
           <button
@@ -181,16 +202,7 @@
     {/if}
     <form id="login_form" method="post" action="/auth/login" {onsubmit}>
       {#each step.fields as field, fieldIndex (`${stepIndex}:${fieldIndex}`)}
-        <input
-          type={((...[v = 'text']) => v)(field.type)}
-          name={field.name}
-          id={field.id}
-          autocomplete={field.autocomplete}
-          placeholder={field.placeholder}
-          aria-label={field['aria-label']}
-          data-qa={field['data-qa']}
-          data-testid={field['data-testid']}
-        />
+        {@render fixtureInput(field)}
       {/each}
       {#if step.submit.type === SiteFixtureSubmitType.Button}
         <button

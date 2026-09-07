@@ -8,6 +8,7 @@ import {
   getTemplateFixture,
   listShellTemplateIds,
   listSiteFixtureIds,
+  renderFixtureHtml,
 } from '../../../../nook-web-extension/e2e/mock-auth/src/lib/site-fixtures'
 import {
   CredentialFillJourneyOutcomeKind,
@@ -90,6 +91,26 @@ function assertTemplateOutcome(
 }
 
 describe('canonical mock-auth credential-fill matrix', () => {
+  test('renders the Airbnb identity with only its captured associated label', () => {
+    const lookup = getTemplateFixture('airbnb')
+    if (lookup.kind === SiteFixtureLookupKind.Missing) {
+      throw new Error('Airbnb template fixture is missing')
+    }
+    document.body.innerHTML = renderFixtureHtml(lookup.fixture)
+    const identity = document.querySelector<HTMLInputElement>('input')
+    if (!identity) throw new Error('Airbnb identity field is missing')
+    const associatedLabel = identity.labels?.[0]
+    if (!associatedLabel) throw new Error('Airbnb associated label is missing')
+    expect(associatedLabel.textContent?.trim()).toBe('Phone number or email')
+    expect(identity).toMatchObject({
+      type: 'text',
+      inputMode: 'email',
+      autocomplete: 'tel-national',
+    })
+    expect(identity.hasAttribute('name')).toBe(false)
+    expect(identity.hasAttribute('aria-label')).toBe(false)
+  })
+
   test('fills only the bounded login fields from a polluted page-wide form', () => {
     const pageIdentity = new SimulatedLoginPageIdentity('page-wide-aspnet-form')
     const fields: CredentialFillJourneyRequest['pages'][number]['fields'] = [
@@ -196,7 +217,7 @@ describe('canonical mock-auth credential-fill matrix', () => {
 
   test('simulates every template twice and covers every site mapping', () => {
     const templateIds = listShellTemplateIds()
-    expect(templateIds).toHaveLength(30)
+    expect(templateIds).toHaveLength(31)
     const templateResults = new Map<string, CredentialFillJourneyOutcome[]>()
 
     for (const templateId of templateIds) {

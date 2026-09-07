@@ -4,6 +4,7 @@
   import DetectionApple from './pages/DetectionApple.svelte'
   import DetectionAppleShell from './pages/DetectionAppleShell.svelte'
   import DetectionAmazon from './pages/DetectionAmazon.svelte'
+  import DetectionAirbnb from './pages/DetectionAirbnb.svelte'
   import DetectionBooking from './pages/DetectionBooking.svelte'
   import DetectionFromFixture from './pages/DetectionFromFixture.svelte'
   import DetectionGoogle from './pages/DetectionGoogle.svelte'
@@ -58,6 +59,9 @@
   const isNetflixLogin = $derived(
     location.hostname === 'www.netflix.com' && pathname === '/login',
   )
+  const isAirbnbLogin = $derived(
+    location.hostname === 'www.airbnb.com' && pathname === '/login',
+  )
   const isClaudeLogin = $derived(
     location.hostname === 'claude.ai' && pathname === '/login',
   )
@@ -92,6 +96,8 @@
   <TotpBackupCodes />
 {:else if pathname === '/login/'}
   <DetectionLinkedIn />
+{:else if isAirbnbLogin}
+  <DetectionAirbnb />
 {:else if isNetflixLogin}
   <DetectionNetflix />
 {:else if isClaudeLogin}

@@ -229,6 +229,7 @@ function fixtureFieldObservation(
     autocomplete = '',
     name = '',
     id = '',
+    label = '',
     placeholder = '',
     'aria-label': ariaLabel = '',
     'data-qa': dataQa = '',
@@ -248,6 +249,7 @@ function fixtureFieldObservation(
   const identityText = [
     name,
     identityId,
+    label,
     placeholder,
     ariaLabel,
     autocomplete,

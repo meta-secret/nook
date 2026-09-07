@@ -6,6 +6,11 @@ import {
 } from './helpers/paired-pin-extension'
 import { startMockAuthServer } from './mock-auth'
 import {
+  AirbnbAuthControl,
+  AirbnbAuthIdentityMatch,
+  AirbnbAuthInteractionState,
+} from './mock-auth/src/lib/airbnb-auth-flow'
+import {
   BookingAuthControl,
   BookingAuthEmailMatch,
   BookingAuthInteractionState,
@@ -50,6 +55,7 @@ export class MockAuthProviderScenarios {
     this.registerClaude()
     this.registerBooking()
     this.registerTesla()
+    this.registerAirbnb()
   }
 
   private static registerAmazon(): void {
@@ -782,6 +788,127 @@ export class MockAuthProviderScenarios {
             }),
           })
         expect(interceptedTeslaRequestCount).toBeGreaterThan(1)
+        expect(forbiddenAuthenticationRequests).toEqual([])
+        await page.close()
+      } finally {
+        await paired.context.close()
+        await mockAuth.close()
+      }
+    })
+  }
+
+  private static registerAirbnb(): void {
+    test('fills Airbnb identity and activates only Continue', async ({
+      browserName,
+    }, testInfo) => {
+      test.skip(
+        browserName !== 'chromium',
+        'Chrome extensions require Chromium',
+      )
+      const mockAuth = await startMockAuthServer()
+      const paired = await launchPairedPinExtension(testInfo, {
+        vaultName: 'Mock Airbnb auth vault',
+      })
+      try {
+        await saveVaultLogin(
+          paired.vaultPage,
+          'https://www.airbnb.com',
+          'alice@nook.test',
+          'extension-fill-password',
+        )
+        const page = await paired.context.newPage()
+        let interceptedAirbnbRequestCount = 0
+        const forbiddenAuthenticationRequests: string[] = []
+        page.on('request', (request) => {
+          const url = request.url()
+          if (/google|gstatic|apple(?:id)?\.|captcha/u.test(url)) {
+            forbiddenAuthenticationRequests.push(url)
+          }
+        })
+        await page.route('https://www.airbnb.com/**', async (route) => {
+          interceptedAirbnbRequestCount += 1
+          const requestedUrl = new URL(route.request().url())
+          const localResponse = await page.request.get(
+            `${mockAuth.origin}${requestedUrl.pathname}${requestedUrl.search}`,
+          )
+          await route.fulfill({ response: localResponse })
+        })
+        const airbnbUrl = 'https://www.airbnb.com/login'
+        await page.goto(airbnbUrl)
+        expect(interceptedAirbnbRequestCount).toBeGreaterThan(0)
+        await expect(page).toHaveURL(airbnbUrl)
+        await expect(page.getByTestId('mock-auth-scenario')).toHaveText(
+          'airbnb-identity-first',
+        )
+
+        const form = page.getByTestId('airbnb-auth-form')
+        const identity = form.getByLabel('Phone number or email')
+        const primary = form.getByRole('button', { name: 'Continue' })
+        await expect(page.locator('form')).toHaveCount(1)
+        await expect(form).not.toHaveAttribute('method')
+        await expect(form).not.toHaveAttribute('action')
+        await expect(form).toHaveJSProperty('method', 'get')
+        await expect(form).toHaveJSProperty('action', airbnbUrl)
+        await expect(form.locator('input')).toHaveCount(1)
+        await expect(identity).toHaveAttribute('type', 'text')
+        await expect(identity).not.toHaveAttribute('name')
+        await expect(identity).not.toHaveAttribute('aria-label')
+        await expect(identity).toHaveAttribute('inputmode', 'email')
+        await expect(identity).toHaveAttribute('autocomplete', 'tel-national')
+        await expect(identity).toHaveValue('')
+        await expect(primary).toHaveAttribute('type', 'submit')
+        await expect(primary).toBeEnabled()
+        await expect(form.locator('button[type="submit"]')).toHaveCount(1)
+        for (const name of ['Continue with Google', 'Continue with Apple']) {
+          const alternative = page.getByRole('button', { name })
+          await expect(alternative).toHaveAttribute('type', 'button')
+          expect(
+            await alternative.evaluate(
+              (button) => !(button as HTMLButtonElement).form,
+            ),
+          ).toBe(true)
+        }
+        await expect(page.locator('[role="dialog"]')).toHaveCount(0)
+
+        const widget = page.locator('#nook-auth-widget')
+        await expect(widget.getByText('Ready to sign in')).toBeVisible()
+        await widget.getByRole('button', { name: 'Continue with Nook' }).click()
+        await expect(page.getByTestId('mock-auth-success')).toHaveText(
+          'Authentication complete',
+          { timeout: 20_000 },
+        )
+        await expect
+          .poll(() =>
+            page.evaluate<
+              SubmissionEvidencePollState,
+              SubmissionEvidencePollRequest
+            >(
+              ({ key, absentKind, presentKind }) => {
+                for (const [entryKey, value] of Object.entries(
+                  sessionStorage,
+                )) {
+                  if (entryKey === key) return { kind: presentKind, value }
+                }
+                return { kind: absentKind }
+              },
+              {
+                key: 'airbnb-submission-evidence',
+                absentKind: SubmissionEvidencePollKind.Absent,
+                presentKind: SubmissionEvidencePollKind.Present,
+              },
+            ),
+          )
+          .toEqual({
+            kind: SubmissionEvidencePollKind.Present,
+            value: JSON.stringify({
+              submittedControl: AirbnbAuthControl.Continue,
+              identityMatch: AirbnbAuthIdentityMatch.Matched,
+              primaryActivation: AirbnbAuthInteractionState.Activated,
+              alternativeActivationCount: 0,
+            }),
+          })
+        await expect(identity).toHaveValue('alice@nook.test')
+        expect(interceptedAirbnbRequestCount).toBeGreaterThan(1)
         expect(forbiddenAuthenticationRequests).toEqual([])
         await page.close()
       } finally {
