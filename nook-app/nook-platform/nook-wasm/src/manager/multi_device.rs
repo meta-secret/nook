@@ -667,6 +667,7 @@ mod browser_tests {
         enrollee.device.id = enrollee_identity.device_id().to_string();
         enrollee.device.identity_private_key = enrollee_identity.secret_string().into_inner();
         enrollee.vault.store_id = nook_core::generate_store_id()?.to_string();
+        enrollee.bootstrap_event_log_genesis().await?;
         let keys = nook_core::generate_vault_keys()?;
         let enrolled = js(enrollee
             .enroll_with_keys(keys.secrets_key.to_string(), keys.members_key.to_string())
