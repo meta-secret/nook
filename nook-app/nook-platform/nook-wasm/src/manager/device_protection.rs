@@ -9,6 +9,7 @@ use crate::storage::{event_db, identity_record};
 use crate::{DeviceProtectionDeviceModeState, NookDeviceAccessSnapshotRequest};
 use crate::{NookError, NookPasskeySetup, NookPasskeyUnlockOptions};
 use crate::{passkey_browser, passkey_observation};
+use nook_companion_core::CompanionIdentityHandoffContext;
 use nook_core::{
     AgeArmoredCiphertext, AppId, DeviceId, DeviceIdentity, DeviceIdentityProtection,
     DeviceIdentitySecret, DeviceKeyProtectionSetup, DeviceMode, DeviceProtectionStatus,
@@ -232,6 +233,20 @@ impl NookExtensionIdentityHandoffContext {
                 store_id: StoreId::parse(store_id)?,
             },
         })
+    }
+
+    pub(in crate::manager) fn from_companion(
+        context: CompanionIdentityHandoffContext,
+    ) -> Result<Self, JsError> {
+        match context {
+            CompanionIdentityHandoffContext::VaultCreation { .. } => Ok(Self::vault_creation()),
+            CompanionIdentityHandoffContext::PairedVault { vault_store_id } => {
+                Self::paired_vault(&vault_store_id)
+            }
+            CompanionIdentityHandoffContext::ExistingVaultImport { vault_store_id } => {
+                Self::existing_vault_import(&vault_store_id)
+            }
+        }
     }
 }
 

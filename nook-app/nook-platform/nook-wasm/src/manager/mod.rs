@@ -28,6 +28,7 @@ use nook_core::{
 use std::mem;
 mod authenticator_enrollment;
 mod authenticator_fill;
+mod companion_protocol;
 mod connect;
 mod device_protection;
 mod diagnostics;

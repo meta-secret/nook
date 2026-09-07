@@ -25,6 +25,7 @@ mod authenticator_options_response;
 mod authenticator_picker_open_response;
 mod authenticator_preview_response;
 mod backup_code_candidates;
+mod companion_protocol;
 pub mod credential_fill;
 mod domain_numbers;
 mod extension_pairing_state;
@@ -118,6 +119,16 @@ pub use authenticator_preview_response::{
 };
 pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
+};
+pub use companion_protocol::{
+    AuthorizedCompanionIdentityHandoff, CompanionEpochMilliseconds, CompanionExtensionPresence,
+    CompanionExtensionProtocol, CompanionHandoffResponseAdmission,
+    CompanionIdentityDiscoveryObservation, CompanionIdentityDiscoveryRequest,
+    CompanionIdentityHandoffContext, CompanionIdentityHandoffRequest,
+    CompanionIdentityHandoffResponse, CompanionIdentityHandoffSealer, CompanionIdentityStatus,
+    CompanionIdentityStatusAdmission, CompanionIdentityUnlockRequest, CompanionInstallationAppKey,
+    CompanionProtocolError, CompanionProtocolFailure, CompanionUnlockedAppKey,
+    CompanionWebsiteHandoffBegin,
 };
 pub use domain_numbers::{
     AuthenticationFieldCount, AuthenticationOutcomeElapsedMilliseconds,
