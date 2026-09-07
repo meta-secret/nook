@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto'
-import { beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { IDBFactory } from 'fake-indexeddb'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   NookCompanionExtensionProtocol,
@@ -23,6 +24,8 @@ import {
 let extension: NookVaultManager
 let presence: CompanionExtensionPresence
 let unlockedAppKey: CompanionUnlockedAppKey
+const previousIndexedDB = globalThis.indexedDB
+const compositionIndexedDB = new IDBFactory()
 
 function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
   return {
@@ -56,6 +59,7 @@ function beginHandoff(requestId: string) {
 }
 
 beforeAll(async () => {
+  Object.assign(globalThis, { indexedDB: compositionIndexedDB })
   const nookWasmBytes = await Bun.file(
     new URL(
       '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
@@ -68,7 +72,6 @@ beforeAll(async () => {
   ])
   configure_vault_application(VaultApplication.Extension)
   extension = new NookVaultManager()
-  await extension.delete_local_browser_data()
   const setup = await extension.begin_device_protection()
   try {
     await extension.finish_device_protection(
@@ -101,6 +104,10 @@ beforeAll(async () => {
     vault_name: 'Composition Vault',
     app_key: unlockedAppKey,
   } satisfies CompanionExtensionPresence
+})
+
+afterAll(() => {
+  Object.assign(globalThis, { indexedDB: previousIndexedDB })
 })
 
 describe('generated companion protocol composition', () => {
