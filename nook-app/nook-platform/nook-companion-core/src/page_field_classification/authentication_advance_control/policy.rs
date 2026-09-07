@@ -531,13 +531,20 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
-            AuthenticationUsernameEvidence::WebAuthnEmail,
             AuthenticationUsernameEvidence::Strong,
-            AuthenticationUsernameEvidence::Explicit,
         ] {
             let mut rejected = observation.clone();
             rejected.authentication_username = evidence;
             assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for established in [
+            AuthenticationUsernameEvidence::WebAuthnEmail,
+            AuthenticationUsernameEvidence::Explicit,
+        ] {
+            let mut admitted = observation.clone();
+            admitted.authentication_username = established;
+            assert!(authentication_advance_control_is_safe(&admitted));
         }
 
         for mutation in [

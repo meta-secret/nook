@@ -83,7 +83,7 @@ mod tests {
                 disabled: false,
                 read_only: false,
                 autocomplete_tokens: vec!["tel-national".to_owned()],
-                identity_text: "Phone number or email".to_owned(),
+                identity_text: "tel-national Phone number or email".to_owned(),
                 login_context: true,
             }
         }
@@ -113,8 +113,10 @@ mod tests {
         phone_only.identity_text = "Phone number".to_owned();
         let mut email_only = PageInputFieldObservation::airbnb_mixed_identity();
         email_only.identity_text = "Email".to_owned();
+        let mut label_only = PageInputFieldObservation::airbnb_mixed_identity();
+        label_only.identity_text = "Phone number or email".to_owned();
         let mut hostile = PageInputFieldObservation::airbnb_mixed_identity();
-        hostile.identity_text = "Phone number or email delete account".to_owned();
+        hostile.identity_text = "tel-national Phone number or email delete account".to_owned();
         let mut generic = PageInputFieldObservation::airbnb_mixed_identity();
         generic.identity_text = "Generic identifier".to_owned();
         let mut tel_input = PageInputFieldObservation::airbnb_mixed_identity();
@@ -128,6 +130,7 @@ mod tests {
             extra_autocomplete,
             phone_only,
             email_only,
+            label_only,
             hostile,
             generic,
             tel_input,

@@ -545,7 +545,7 @@ pub fn authentication_username_evidence(
         && field.identity_text.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
         && field.autocomplete_tokens.len() == 1
         && has_autocomplete_token(&field.autocomplete_tokens, "tel-national")
-        && identity == "phone number or email"
+        && identity == "tel national phone number or email"
     {
         return AuthenticationUsernameEvidence::MixedPhoneOrEmail;
     }
