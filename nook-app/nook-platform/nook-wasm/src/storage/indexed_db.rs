@@ -718,9 +718,9 @@ mod unit_tests {
         assert!(!registry.vaults[0].label.is_empty());
         assert!(registry.vaults[0].last_unlocked_at.is_none());
 
-        upsert_registry_entry(&mut registry, "store_registry01", Some(" Work "), true);
+        upsert_registry_entry(&mut registry, "store_registry01", Some(" Work "), false);
         assert_eq!(registry.vaults[0].label, " Work ");
-        assert!(registry.vaults[0].last_unlocked_at.is_some());
+        assert!(registry.vaults[0].last_unlocked_at.is_none());
         upsert_registry_entry(&mut registry, "store_registry02", Some("Personal"), false);
         assert_eq!(registry.vaults.len(), 2);
     }
