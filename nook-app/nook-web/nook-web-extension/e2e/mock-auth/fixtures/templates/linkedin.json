@@ -1,28 +1,22 @@
 {
   "id": "linkedin",
-  "quirks": [],
+  "quirks": ["formless", "responsive-duplicate"],
   "steps": [
     {
       "fields": [
         {
-          "type": "text",
-          "name": "session_key",
-          "id": "username",
+          "type": "email",
           "autocomplete": "username",
-          "placeholder": "Email or phone",
           "aria-label": "Email or phone"
         },
         {
           "type": "password",
-          "name": "session_password",
-          "id": "password",
           "autocomplete": "current-password",
-          "placeholder": "Password",
           "aria-label": "Password"
         }
       ],
       "submit": {
-        "type": "submit",
+        "type": "button",
         "label": "Sign in"
       }
     }

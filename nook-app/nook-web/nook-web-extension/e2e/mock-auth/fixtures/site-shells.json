@@ -1785,7 +1785,7 @@
     "template": "email-first"
   },
   "linkedin": {
-    "loginUrl": "https://www.linkedin.com/login",
+    "loginUrl": "https://www.linkedin.com/login/",
     "source": "capture",
     "template": "linkedin"
   },

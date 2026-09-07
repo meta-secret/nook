@@ -733,6 +733,41 @@ function canActivateAuthenticationRouteControl(
     query.formScope.kind === PasswordFormScopeKind.Unowned &&
     unownedQueryHasLocalScope(unownedScopeRequest);
 
+  const passwordFields = findPasswordFields(query);
+  if (hasLocalUnownedScope && passwordFields.length > 0) {
+    const newPasswordFieldCount = passwordFields.filter((field) => {
+      const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
+        field,
+        expected: "new-password",
+      };
+      return hasAutocompleteToken(tokenRequest);
+    }).length;
+    const controls = Array.from(
+      query.root.querySelectorAll<HTMLElement>(
+        authenticationAdvanceControlSelector,
+      ),
+    );
+    const observation: AuthenticationAdvanceControlObservation = {
+      actionability: "actionable",
+      ownership: "locally-scoped",
+      semantics: control.matches(semanticSubmitControlSelector)
+        ? "semantic-submit"
+        : "activation",
+      authenticationUsername: usernameEvidence(query),
+      passwordFieldCount: passwordFields.length,
+      newPasswordFieldCount,
+      oneTimeCodeFieldCount: findOneTimeCodeFields(query).length,
+      semanticSubmitControlCount: countedSemanticSubmitControls(controls),
+      sourceOrigin,
+      formIdentity: formIdentity.trim(),
+      destinationIdentity,
+      label: controlLabel,
+      machineIdentity,
+      submissionMethod: controlSubmissionMethod(control),
+    };
+    return authentication_advance_control_is_safe(observation);
+  }
+
   return can_activate_authentication_route_control(
     sourceOrigin,
     formIdentity,

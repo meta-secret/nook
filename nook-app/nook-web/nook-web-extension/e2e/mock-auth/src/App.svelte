@@ -10,6 +10,7 @@
   import DetectionHiddenOtp from './pages/DetectionHiddenOtp.svelte'
   import DetectionLogin from './pages/DetectionLogin.svelte'
   import DetectionMicrosoftConsumer from './pages/DetectionMicrosoftConsumer.svelte'
+  import DetectionLinkedIn from './pages/DetectionLinkedIn.svelte'
   import DetectionOtp from './pages/DetectionOtp.svelte'
   import DetectionOpenAi from './pages/DetectionOpenAi.svelte'
   import DetectionPasswordChange from './pages/DetectionPasswordChange.svelte'
@@ -72,7 +73,9 @@
   <TotpEnrollSuccess />
 {:else if pathname === '/totp/backup-codes'}
   <TotpBackupCodes />
-{:else if pathname === '/login'}
+{:else if pathname === '/login/'}
+  <DetectionLinkedIn />
+{:else if pathname === '/login' || pathname === '/linkedin'}
   <DetectionLogin />
 {:else if pathname === '/signup'}
   <DetectionSignup />
