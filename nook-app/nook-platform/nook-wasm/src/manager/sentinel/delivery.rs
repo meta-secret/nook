@@ -120,6 +120,142 @@ impl NookVaultManager {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use nook_core::{
+        DeviceIdentity, SentinelGenesisDeliveryRecipient, SentinelGenesisRequest,
+        SentinelGenesisResponder, SentinelGenesisShareDelivery, SigningIdentity,
+        StartSentinelGenesisArgs, StoredSecretRecord,
+    };
+
+    pub(crate) fn delivery_fixture() -> anyhow::Result<(
+        SentinelGenesisRequest,
+        SentinelGenesisShareDelivery,
+        StoredSecretRecord,
+    )> {
+        let owner = DeviceIdentity::generate()?;
+        let member = DeviceIdentity::generate()?;
+        let owner_signing = SigningIdentity::generate()?.0;
+        let member_signing = SigningIdentity::generate()?.0;
+        let session = StartSentinelGenesisArgs {
+            label: "Owner".to_owned(),
+            participant_count: 2.into(),
+            threshold: 2.into(),
+        }
+        .start(&owner, &owner_signing)?;
+        let response = session
+            .request()
+            .prepare_response(SentinelGenesisResponder {
+                identity: &member,
+                signing_key: member_signing.signing_key(),
+                label: "Member".to_owned(),
+            })
+            .and_then(nook_core::CheckedSentinelGenesisResponse::sign)?;
+        let session = session.collect(response)?;
+        let request = session.request().clone();
+        let store_id = nook_core::generate_store_id()?;
+        let issued = session
+            .prepare(owner_signing.signing_key())?
+            .issue(&store_id)?;
+        let delivery = issued
+            .deliveries
+            .into_iter()
+            .find(|delivery| delivery.device_id == *member.device_id())
+            .ok_or_else(|| anyhow::anyhow!("member delivery must exist"))?;
+        let record = delivery
+            .check(&SentinelGenesisDeliveryRecipient {
+                expected_request: &request,
+                identity: &member,
+            })?
+            .into_record()?;
+        Ok((request, delivery, record))
+    }
+
+    #[test]
+    fn installation_projects_delivery_store_policy_and_share() -> anyhow::Result<()> {
+        let (_, delivery, record) = delivery_fixture()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = "stale-store".to_owned();
+
+        manager.install_accepted_sentinel_delivery(&delivery, &record)?;
+
+        assert_eq!(manager.vault.store_id, delivery.store_id.as_str());
+        assert_eq!(
+            manager.vault.architecture.vault_type,
+            nook_core::VaultType::Sentinel
+        );
+        assert_eq!(manager.vault.meta.sentinel_shares.len(), 1);
+        let policy = manager.vault.architecture.sentinel.policy()?;
+        assert_eq!(policy.threshold, delivery.policy.threshold);
+        assert_eq!(
+            policy.required_participants,
+            delivery.policy.participant_count
+        );
+        assert_eq!(policy.ready_participants, 1.into());
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    fn onboarding_wrapper_runs_core_validation_after_json_parsing() -> Result<(), JsError> {
+        let (request, delivery, _) =
+            tests::delivery_fixture().map_err(|error| JsError::new(&error.to_string()))?;
+        let manager = NookVaultManager::new();
+        let request_json =
+            serde_json::to_string(&request).map_err(|error| JsError::new(&error.to_string()))?;
+        let delivery_json =
+            serde_json::to_string(&delivery).map_err(|error| JsError::new(&error.to_string()))?;
+
+        assert!(
+            manager
+                .create_sentinel_onboarding_package(&request_json, "{}", Default::default())
+                .is_err()
+        );
+        assert!(
+            manager
+                .create_sentinel_onboarding_package(
+                    &request_json,
+                    &delivery_json,
+                    Default::default()
+                )
+                .is_err()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn onboarding_delivery_guards_fail_closed() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        assert!(
+            manager
+                .accept_sentinel_onboarding_package("not-a-package".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .list_sentinel_genesis_share_deliveries()
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .load_sentinel_genesis_share_delivery("store".to_owned())
+                .await
+                .is_err()
+        );
+        Ok(())
+    }
+}
+
 impl NookVaultManager {
     pub(super) fn install_accepted_sentinel_delivery(
         &mut self,
