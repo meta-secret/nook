@@ -336,10 +336,10 @@ pub use vault::vault_recovery_options::{
     recovery_device_id_hint, vault_recovery_options,
 };
 pub use vault_access_diagnostics::{
-    DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticsReport,
-    VaultEncryptedPayloadCount, VaultEpochDiagnosticStatus, VaultEpochHistoryDiagnostic,
-    VaultEventPayloadAccessDiagnostic, VaultKeyAccessDiagnostic, VaultKeyAccessDiagnosticStatus,
-    VaultRecordDecryptabilityStatus, VaultSecretAccessDiagnostic, diagnose_vault_access,
+    DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticRequest,
+    VaultAccessDiagnosticsReport, VaultEncryptedPayloadCount, VaultEpochDiagnosticStatus,
+    VaultEpochHistoryDiagnostic, VaultEventPayloadAccessDiagnostic, VaultKeyAccessDiagnostic,
+    VaultKeyAccessDiagnosticStatus, VaultRecordDecryptabilityStatus, VaultSecretAccessDiagnostic,
 };
 pub use vault_architecture::{
     DeviceMode, OnboardingType, ProviderJoinerIdentity, ProviderOauthPreset,
