@@ -54,6 +54,9 @@ function installPopupDemoRuntime(session: PopupDemoSession): void {
             device,
           })
           return
+        case 'nook:extension-session-unlock-pin':
+          callback({ ok: true, device })
+          return
         default:
           // Picker cancellation is a one-way message when the page closes.
           callback?.({ ok: true })
@@ -93,20 +96,31 @@ test('keeps mixed session status safe and actionable', async ({ page }) => {
   await demoBeat(page)
 })
 
-test('reopens an unlocked popup without another ceremony', async ({ page }) => {
+test('restores the paired companion home after a restart unlock', async ({
+  page,
+}) => {
   const session: PopupDemoSession = {
     queryMessageType: LoginPickerQueryMessageType.NookLoginPickerQuery,
-    firstStatus: DeviceProtectionStatus.Unlocked,
-    followingStatus: DeviceProtectionStatus.Unlocked,
+    firstStatus: DeviceProtectionStatus.Pin,
+    followingStatus: DeviceProtectionStatus.Pin,
   }
   await page.addInitScript(installPopupDemoRuntime, session)
   await page.goto(`${extensionRoutePrefix}popup/index.html`)
+  await expect(page.getByTestId('extension-device-setup')).toBeVisible()
+  await page.getByTestId('device-protection-pin-unlock-input').fill('123456')
+  await page.getByTestId('device-protection-pin-unlock-btn').click()
   await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
   await expect(page.getByTestId('extension-device-setup')).toHaveCount(0)
-  await page.reload()
-  await expect(page.getByTestId('extension-toolbar-menu')).toBeVisible()
-  await expect(page.getByTestId('extension-device-setup')).toHaveCount(0)
-  await expect(page.getByTestId('device-protection-unlock-btn')).toHaveCount(0)
+  await expect(page.getByTestId('companion-vault-status')).toHaveAttribute(
+    'data-connected',
+    'true',
+  )
+  await expect(page.getByTestId('companion-vault-status')).toContainText(
+    'Personal vault',
+  )
+  await expect(page.getByTestId('stay-ready-btn')).toBeVisible()
+  await expect(page.getByTestId('open-simple-vault-btn')).toBeVisible()
+  await expect(page.getByTestId('connect-simple-vault-btn')).toBeHidden()
   await demoBeat(page)
 })
 

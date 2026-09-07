@@ -10,10 +10,13 @@ import { GITHUB_PROVIDER_TYPE } from '../../nook-web-shared/src/vault-app/lib/au
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../src/offscreen/session-request-adapter'
 import {
+  CompanionVaultDiscovery,
+  type CompanionVaultDiscoveryArgs,
   importExtensionVaultWithDependencies,
   type ImportExtensionVaultDependencies,
   type ImportExtensionVaultWithDependenciesArgs,
 } from '../src/offscreen/session-vault-operations'
+import type { CompanionExtensionPresence } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type ImportManagerState = {
   protection: DeviceProtectionStatus
@@ -274,5 +277,102 @@ describe('extension vault import operations', () => {
     expect(state.saved).toBe(false)
     expect(state.operationOrder).toEqual(['activate'])
     expect(provider).not.toHaveProperty('githubPat')
+  })
+})
+
+enum CompanionVaultOpenOutcome {
+  Opened = 'opened',
+  Mismatched = 'mismatched',
+}
+
+class CompanionVaultDiscoveryScenario {
+  readonly operationOrder: string[] = []
+  readonly presence = {
+    kind: 'unlocked',
+    vault_type: 'simple',
+    vault_store_id: 'vault',
+    vault_name: 'Simple Vault',
+    app_key: {
+      extensionRuntimeId: 'runtime',
+      appKey: {
+        appId: 'device',
+        encryptionPublicKey: 'public',
+        signingPublicKey: 'signing',
+        installationLabel: 'Browser',
+      },
+      nonce: 'nonce',
+      scopes: ['vault-access'],
+    },
+  } satisfies CompanionExtensionPresence
+
+  private readonly activeManager = {
+    open_extension_passkey_vault_js: this.openVault.bind(this),
+  } as NookVaultManager
+
+  private readonly endpoint = {
+    discover: this.reportUnlocked.bind(this),
+  } as CompanionVaultDiscoveryArgs['endpoint']
+
+  constructor(private readonly openOutcome: CompanionVaultOpenOutcome) {}
+
+  private async openVault(
+    ...args: [string, string, string, string]
+  ): Promise<void> {
+    const [vaultStoreId, deviceId, devicePublicKey, deviceSigningPublicKey] =
+      args
+    this.operationOrder.push(
+      `open:${vaultStoreId}:${deviceId}:${devicePublicKey}:${deviceSigningPublicKey}`,
+    )
+    if (this.openOutcome === CompanionVaultOpenOutcome.Mismatched) {
+      throw new Error('ActiveExtensionVaultMismatch')
+    }
+  }
+
+  private reportUnlocked() {
+    this.operationOrder.push('discover')
+    return {
+      status: 'unlocked',
+      request_id: 'request',
+      vault_store_id: 'vault',
+      app_key: this.presence.app_key,
+    }
+  }
+
+  discover() {
+    const companionDiscovery = new CompanionVaultDiscovery({
+      activeManager: this.activeManager,
+      endpoint: this.endpoint,
+      presence: this.presence,
+    })
+    return companionDiscovery.discover({})
+  }
+}
+
+describe('companion discovery vault restoration', () => {
+  test('reopens a persisted paired vault before reporting unlocked after restart', async () => {
+    const scenario = new CompanionVaultDiscoveryScenario(
+      CompanionVaultOpenOutcome.Opened,
+    )
+
+    const status = await scenario.discover()
+
+    expect(status.status).toBe('unlocked')
+    expect(scenario.operationOrder).toEqual([
+      'open:vault:device:public:signing',
+      'discover',
+    ])
+  })
+
+  test('does not report unlocked when Rust rejects the persisted vault identity', async () => {
+    const scenario = new CompanionVaultDiscoveryScenario(
+      CompanionVaultOpenOutcome.Mismatched,
+    )
+
+    await expect(scenario.discover()).rejects.toThrow(
+      'ActiveExtensionVaultMismatch',
+    )
+    expect(scenario.operationOrder).toEqual([
+      'open:vault:device:public:signing',
+    ])
   })
 })
