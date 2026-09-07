@@ -141,6 +141,58 @@ tasks:
         test "$quarantine_failed" = 0
         REMOTE
 
+  arc:container-hosts:reconcile:
+    internal: true
+    deps: [k0s:sync]
+    silent: true
+    cmds:
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        set -euo pipefail
+        remote_dir="{{.INFRA_REMOTE_DIR}}"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        build_inventory="$remote_dir/infra/k0s/config/arc-build-nodes"
+        container_inventory="$remote_dir/infra/k0s/config/arc-container-job-nodes"
+        test -s "$build_inventory"
+        test -s "$container_inventory"
+        expected_build_nodes="$(sed '/^$/d' "$build_inventory" | sort)"
+        expected_container_nodes="$(sed '/^$/d' "$container_inventory" | sort)"
+        test -n "$expected_container_nodes"
+        if test "$(printf '%s\n' "$expected_container_nodes" | uniq -d | wc -l | tr -d ' ')" != 0; then
+          echo "ARC container-job eligibility inventory contains duplicate nodes" >&2
+          exit 1
+        fi
+        while IFS= read -r node; do
+          test -n "$node"
+          if ! grep -Fxq "$node" "$build_inventory"; then
+            echo "ARC container-job node $node is not in the build-node inventory" >&2
+            exit 1
+          fi
+        done <<< "$expected_container_nodes"
+        actual_build_nodes="$(kubectl get nodes -l nook.nokey.sh/arc-build=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
+        if test "$actual_build_nodes" != "$expected_build_nodes"; then
+          echo "ARC cannot reconcile container-job eligibility on an incomplete build-node inventory" >&2
+          exit 1
+        fi
+        while IFS= read -r node; do
+          test -n "$node"
+          kubectl label node "$node" nook.nokey.sh/arc-container-job- >/dev/null
+        done <<< "$expected_build_nodes"
+        while IFS= read -r node; do
+          test -n "$node"
+          kubectl label node "$node" \
+            nook.nokey.sh/arc-container-job=true --overwrite >/dev/null
+        done <<< "$expected_container_nodes"
+        actual_container_nodes="$(kubectl get nodes \
+          -l nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-container-job=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
+        if test "$actual_container_nodes" != "$expected_container_nodes"; then
+          echo "ARC container-job labels do not match the declared eligibility inventory" >&2
+          exit 1
+        fi
+        echo "ARC container-job eligibility is active: $(tr '\n' ' ' <<< "$actual_container_nodes" | sed 's/ $//')"
+        REMOTE
 
   arc:build-host:resolve:
     desc: Resolve and persist every Kubernetes ARC build SSH target.
@@ -477,6 +529,7 @@ tasks:
       - task: arc:controller-build:prepare
       - task: arc:build-host:resolve
       - task: arc:build-hosts:quarantine
+      - task: arc:container-hosts:reconcile
       - task: arc:buildkit:storage:prepare
       - task: arc:render:check
       - |
@@ -501,6 +554,17 @@ tasks:
         if test "$actual_build_nodes" != "$expected_build_nodes"; then
           echo "ARC BuildKit manifest does not match the declared build-node inventory" >&2
           printf 'Actual qualified nodes:\n%s\n' "$actual_build_nodes" >&2
+          exit 1
+        fi
+        expected_container_nodes="$(sed '/^$/d' \
+          "$remote_dir/infra/k0s/config/arc-container-job-nodes" | sort)"
+        actual_container_nodes="$(kubectl get nodes \
+          -l nook.nokey.sh/arc-build=true,nook.nokey.sh/arc-container-job=true \
+          -o jsonpath='{range .items[*]}{.metadata.name}{"\n"}{end}' | sort)"
+        if test -z "$expected_container_nodes" \
+          || test "$actual_container_nodes" != "$expected_container_nodes"; then
+          echo "ARC container-job labels do not match the declared eligibility inventory" >&2
+          printf 'Actual eligible nodes:\n%s\n' "$actual_container_nodes" >&2
           exit 1
         fi
 
