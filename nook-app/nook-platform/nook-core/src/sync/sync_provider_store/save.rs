@@ -5,6 +5,7 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use super::oauth::ConfigurationText;
+use crate::ProviderRows;
 use crate::StoredICloudShareTarget;
 
 use serde::{Deserialize, Serialize};
@@ -19,9 +20,8 @@ use crate::{
 };
 
 use super::{
-    AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData, active_vault_providers,
-    ensure_local_provider_row, find_duplicate_sync_provider, local_provider_for_active_vault,
-    sync_providers_for_active_vault,
+    AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData, ensure_local_provider_row,
+    find_duplicate_sync_provider,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -276,22 +276,38 @@ impl OAuthUpdateTarget<'_> {
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: String::new(),
         };
-        let sync_providers = sync_providers_for_active_vault(providers, active_store_id).ok()?;
+        let sync_providers = ProviderRows { providers }
+            .for_vault(active_store_id)
+            .sync()
+            .ok()?;
         find_duplicate_sync_provider(&sync_providers, &candidate, None).map(|provider| provider.id)
     }
 }
 
 impl ProviderSaveRequest {
+    fn active_provider_rows(&self) -> (Vec<StorageProviderData>, Option<StorageProviderData>) {
+        let active_store_id = self.snapshot.active_vault_store_id.as_deref();
+        let active = ProviderRows {
+            providers: &self.snapshot.providers,
+        }
+        .for_vault(active_store_id)
+        .active();
+        let local = ProviderRows {
+            providers: &self.snapshot.providers,
+        }
+        .for_vault(active_store_id)
+        .local()
+        .ok()
+        .flatten();
+        (active, local)
+    }
+
     #[must_use]
     pub fn apply(&self) -> ProviderSaveOutcome {
         let request = self;
         let provider_type = request.setup.provider_type(request.storage_mode);
         let active_store_id = request.snapshot.active_vault_store_id.as_deref();
-        let active_providers = active_vault_providers(&request.snapshot.providers, active_store_id);
-        let local_provider =
-            local_provider_for_active_vault(&request.snapshot.providers, active_store_id)
-                .ok()
-                .flatten();
+        let (active_providers, local_provider) = request.active_provider_rows();
         let mut providers = request.snapshot.providers.clone();
         let mut oauth_update_id = None;
 

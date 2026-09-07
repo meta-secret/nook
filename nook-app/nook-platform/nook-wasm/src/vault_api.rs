@@ -206,7 +206,7 @@ impl NookVaultManager {
         let existing = auth_providers::load_auth_providers(&identity)
             .await?
             .snapshot;
-        let replaced = nook_core::replace_active_vault_provider_grants(&existing, &snapshot);
+        let replaced = existing.replace_active_vault_grants(&snapshot);
         ProviderSnapshotPublication {
             identity: &identity,
             snapshot: &replaced,
