@@ -145,7 +145,9 @@ ownership until merge or a concrete blocked handoff:
    - Fetch `origin/main`.
    - Estimate authored additions.
    - Define the module boundary.
-   - Confirm the complete PR can stay within the 2,000-addition limit.
+   - Confirm the current PR can stay within the 2,000-addition limit.
+   - When the complete feature cannot fit after simplification, record the
+     ordered sequential slices before implementation.
    - Create the first feature branch.
    - Define the first PR's title, body, and scope under
      [PR title and description](#pr-title-and-description).
@@ -247,20 +249,42 @@ ownership until merge or a concrete blocked handoff:
 - Stop before exceeding 2,000 authored additions.
 - Treat unexpected growth as a reason to simplify scope and architecture.
 - Do not compress code or remove required behavior merely to fit the limit.
-- Do not split, stack, rebuild, or replace pull requests to evade the limit.
+- Split only when the complete necessary implementation still exceeds the
+  limit after simplification and redesign.
+- Do not preserve unnecessary complexity by distributing it across slices.
+- Do not split, rebuild, or replace pull requests to evade the limit.
+- Do not create stacked branches or pull requests.
 - Do not create a deletion-report field or change a Workbench schema for this
   rule. Existing plan estimate labels record the additions estimate.
 
-### Adaptive Gizmo cardinality
+### Delivery cardinality
 
-- One feature uses one PR and one feature-slice Gizmo.
-- Gizmo Prime does not add records because the PR approaches or exceeds a line
-  limit.
+- One feature uses one PR and one feature-slice Gizmo by default.
+- A necessary feature that still exceeds 2,000 additions after redesign uses a
+  planned series of feature-slice Gizmo records.
 - Team Agent count never determines PR or Gizmo count. Do not fragment a small
   feature merely because multiple teams or agents contribute to it.
+- Each slice must deliver distinct observable functionality.
+- Each slice must be independently mergeable and have its own acceptance
+  evidence.
 - Gizmo Prime alone owns the readiness and merge verdict and Workbench
   lifecycle. PR Steward performs the authorized readiness-evidence and squash
   merge mechanics.
+
+### Sequential delivery
+
+For a planned series, complete this procedure for every slice:
+
+1. Implement only the current slice.
+2. Validate its exact head and settle its review findings.
+3. Squash-merge the pull request.
+4. Verify the remote merge and publish its Workbench closeout.
+5. Fetch the new `origin/main`.
+6. Create the next branch from that exact `origin/main` state.
+7. Begin the next slice only after the new branch exists.
+
+Do not create a successor branch or begin successor implementation while its
+predecessor is unmerged. Do not open or maintain a stacked pull request.
 
 ### Required plan
 
@@ -271,16 +295,18 @@ The Workbench task plan must state:
 - the estimated authored changed lines;
 - the files, packages, modules, or layers expected to change;
 - the public or cross-module interfaces involved;
-- confirmation that the one PR estimate is at most 2,000 lines;
+- confirmation that every PR estimate is at most 2,000 lines;
 - the current PR scope and acceptance evidence;
-- the required PR sequence mode fixed to `One PR`;
-- exactly one PR-slice row with predecessor `None` for Workbench compatibility;
+- a sequence mode of `One PR` or `Sequential PRs`;
+- one row for each planned slice;
+- `None` as the first predecessor;
+- the immediately preceding Gizmo ID as every later predecessor;
 - one declared Gizmo ID on every ownership unit;
 - permission for multiple Team Agent units to map to that same Gizmo ID;
 - a superseding immutable plan when scope or the estimate materially changes.
 
-A plan bound to a trusted focused-issue `gizmo_id` must declare one PR, one
-slice, and that same ID on the current slice and every ownership unit.
+A plan bound to a trusted focused-issue `gizmo_id` must use that ID for the
+current and first slice. At least one ownership unit must use that ID.
 
 An estimate is a design tool.
 
@@ -311,6 +337,8 @@ Each slice must be:
 - covered at the owning boundary;
 - compatible with the previous merged slice;
 - small enough for focused review and repair.
+- distinct from every other slice in observable capability and acceptance
+  evidence.
 
 - The PR may prepare an interface or migrate one module before the complete
   user flow exists.
@@ -360,9 +388,10 @@ flowchart TD
   R -->|blocked| H
   R -->|ready| M[Authorize PR Steward squash merge]
   M --> S[Publish Workbench issue + worklog + stats]
-  S --> J{Feature acceptance complete?}
-  J -->|no| B[Stop and report incomplete mission]
-  J -->|yes| K[Done]
+  S --> J{Planned slice remains?}
+  J -->|yes| B[Fetch current origin/main; create next branch]
+  B --> A
+  J -->|no| K[Done]
 ```
 
 ### 0. Fetch and branch

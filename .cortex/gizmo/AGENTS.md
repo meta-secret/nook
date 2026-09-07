@@ -58,15 +58,23 @@ the final delivery verdict.
 
 ## Pull-request size
 
-One feature uses one pull request unless the user explicitly chooses another
-delivery shape.
+One feature uses one pull request when the complete necessary implementation
+fits cleanly.
 
 - Count authored additions only.
 - Deletions do not count toward the limit and have no limit.
 - Warn at 1,500 authored additions.
 - Stop before exceeding 2,000 authored additions.
 - Treat growth near the limit as a reason to simplify the design.
-- Do not create another pull request merely to evade the limit.
+- Redesign an oversized solution before considering multiple pull requests.
+- When the simplified necessary implementation still cannot fit, plan
+  independently useful pull-request slices.
+- Deliver those slices strictly one by one from current `origin/main`.
+- Finish merge verification and Workbench closeout before starting the next
+  slice.
+- Stacked branches and pull requests are prohibited.
+- Do not split overengineering or create another pull request merely to evade
+  the limit.
 
 No deletion-report field or schema change is required. Normal Git diff totals
 are sufficient evidence.

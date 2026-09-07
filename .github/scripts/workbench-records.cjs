@@ -53,8 +53,7 @@ const planBudgetFields = [
   },
   {
     label: 'PR sequence mode',
-    pattern:
-      /^- PR sequence mode:\s*(?:One PR|Independent PRs|Stacked PRs)\s*$/m,
+    pattern: /^- PR sequence mode:\s*(?:One PR|Sequential PRs)\s*$/m,
   },
   {
     label: 'Current PR estimated authored changed lines',
@@ -376,21 +375,11 @@ function validateTrustedGizmoAssignment(
   assignedGizmoId,
 ) {
   if (!assignedGizmoId) return ''
-  if (
-    budgetFields.deliveryShape !== 'One PR' ||
-    budgetFields.sequenceMode !== 'One PR'
-  ) {
-    return 'trusted focused-issue Gizmo ID requires one-PR delivery'
+  if (slices.length === 0 || slices[0].gizmoId !== assignedGizmoId) {
+    return 'the current PR slice must use the trusted focused-issue Gizmo ID'
   }
-  if (slices.length !== 1 || slices[0].gizmoId !== assignedGizmoId) {
-    return 'the sole PR slice must use the trusted focused-issue Gizmo ID'
-  }
-  if (
-    ownershipGizmoIds(budgetFields.ownershipBody).some(
-      (gizmoId) => gizmoId !== assignedGizmoId,
-    )
-  ) {
-    return 'every ownership unit must use the trusted focused-issue Gizmo ID'
+  if (!ownershipGizmoIds(budgetFields.ownershipBody).includes(assignedGizmoId)) {
+    return 'a current-slice ownership unit must use the trusted focused-issue Gizmo ID'
   }
   return ''
 }
@@ -408,8 +397,13 @@ function validateGizmoMapping(budgetFields, slices) {
     return 'current Gizmo ID must match the first PR slice Gizmo ID'
   }
 
-  if (slices.some((slice) => slice.predecessorGizmoId !== 'None')) {
-    return 'the one PR slice must not declare a predecessor Gizmo'
+  if (slices[0].predecessorGizmoId !== 'None') {
+    return 'the first PR slice must not declare a predecessor Gizmo'
+  }
+  for (let index = 1; index < slices.length; index += 1) {
+    if (slices[index].predecessorGizmoId !== slices[index - 1].gizmoId) {
+      return 'each later PR slice must name the immediately preceding Gizmo ID'
+    }
   }
 
   const mappedOwnershipGizmoIds = ownershipGizmoIds(budgetFields.ownershipBody)
@@ -593,51 +587,77 @@ function validateAgentRecord(
     if (estimate < 0 || currentPrEstimate < 0) {
       return 'authored changed-line estimates must be non-negative integers'
     }
-    if (deliveryShape !== 'One PR' || sequenceMode !== 'One PR') {
-      return 'only one-PR delivery is supported'
-    }
     if (currentPrEstimate > 2_000) {
       return 'current PR estimate exceeds 2,000 authored changed lines'
-    }
-    if (estimate > 2_000) {
-      return 'one-PR plan exceeds 2,000 authored changed lines'
-    }
-    if (estimate !== currentPrEstimate) {
-      return 'one-PR feature and current PR estimates must match'
     }
     const sequenceBody = budgetFields.sequenceBody
     const sliceLines = sequenceBody
       .trim()
       .split('\n')
       .filter((line) => line.trim())
-    let sequenceSlice = {
-      valid: false,
-      number: 0,
-      scope: '',
-      estimate: 0,
-      evidence: '',
-    }
-    if (sliceLines.length === 1) {
-      sequenceSlice = parseSliceContract(sliceLines[0], true)
-    }
-    const listedSlices = [sequenceSlice]
+    const listedSlices = sliceLines.map((line) => parseSliceContract(line, true))
     if (
-      sliceLines.length !== 1 ||
-      !sequenceSlice.valid ||
-      sequenceSlice.number !== 1 ||
-      normalizedContractValue(sequenceSlice.scope) !==
+      listedSlices.length === 0 ||
+      listedSlices.some(
+        (slice, index) => !slice.valid || slice.number !== index + 1,
+      )
+    ) {
+      return 'PR slices must be valid and consecutively numbered'
+    }
+    if (deliveryShape === 'One PR' && sequenceMode === 'One PR') {
+      if (listedSlices.length !== 1) {
+        return 'one-PR plan requires exactly one numbered slice'
+      }
+      if (estimate > 2_000) {
+        return 'one-PR plan exceeds 2,000 authored changed lines'
+      }
+      if (estimate !== currentPrEstimate) {
+        return 'one-PR feature and current PR estimates must match'
+      }
+    }
+    const firstSlice = listedSlices[0]
+    if (
+      normalizedContractValue(firstSlice.scope) !==
         normalizedContractValue(currentSlice.scope) ||
-      normalizedContractValue(sequenceSlice.evidence) !==
-        normalizedContractValue(currentSlice.evidence)
+      normalizedContractValue(firstSlice.evidence) !==
+        normalizedContractValue(currentSlice.evidence) ||
+      firstSlice.estimate !== currentPrEstimate
     ) {
-      return 'one-PR plan requires one numbered slice matching the current PR contract'
+      return 'the first PR slice must match the current PR contract and estimate'
+    }
+    if (listedSlices.some((slice) => slice.estimate > 2_000)) {
+      return 'each PR slice estimate must be at most 2,000 authored changed lines'
     }
     if (
-      sequenceSlice.estimate < 0 ||
-      sequenceSlice.estimate > 2_000 ||
-      sequenceSlice.estimate !== currentPrEstimate
+      deliveryShape === 'Multiple PRs' &&
+      sequenceMode === 'Sequential PRs'
     ) {
-      return 'one-PR slice estimate must match the current PR estimate and be between 0 and 2,000'
+      if (listedSlices.some((slice) => slice.estimate === 0)) {
+        return 'sequential PR slices must have positive estimates'
+      }
+      if (estimate <= 2_000 || listedSlices.length < 2) {
+        return 'sequential delivery requires a necessary feature estimate above 2,000 and at least two slices'
+      }
+      if (
+        listedSlices.reduce((total, slice) => total + slice.estimate, 0) !==
+        estimate
+      ) {
+        return 'sequential PR slice estimates must cover the complete feature estimate'
+      }
+      const sliceScopes = listedSlices.map((slice) =>
+        normalizedContractValue(slice.scope),
+      )
+      if (new Set(sliceScopes).size !== sliceScopes.length) {
+        return 'sequential PR slices must declare distinct observable functionality'
+      }
+      const sliceEvidence = listedSlices.map((slice) =>
+        normalizedContractValue(slice.evidence),
+      )
+      if (new Set(sliceEvidence).size !== sliceEvidence.length) {
+        return 'sequential PR slices must declare distinct acceptance evidence'
+      }
+    } else if (deliveryShape !== 'One PR' || sequenceMode !== 'One PR') {
+      return 'delivery shape and PR sequence mode must be One PR or Multiple PRs with Sequential PRs'
     }
 
     const trustedGizmoRejection = validateTrustedGizmoAssignment(

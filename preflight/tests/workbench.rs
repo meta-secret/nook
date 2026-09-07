@@ -623,7 +623,7 @@ fn feature_slice_gizmos_are_passive_workbench_records() {
 }
 
 #[test]
-fn pr_workbench_suite_loads_split_contract_tests() {
+fn pr_workbench_suite_loads_sequential_contract_tests() {
     let pr_workflow = read(".github/workflows/pr.yml");
     let pr_suite = read(".github/scripts/workbench-records.test.cjs");
     let mapping_suite = read(".github/scripts/workbench-gizmo-mapping.test.cjs");
@@ -641,14 +641,15 @@ fn pr_workbench_suite_loads_split_contract_tests() {
         "the PR-invoked Workbench suite must load publisher tests"
     );
     assert!(
-        mapping_suite.contains("rejects multiple PR rows")
-            && mapping_suite.contains("['Multiple PRs', 'Stacked PRs']"),
-        "the transitively loaded suite must retain bounded Gizmo mapping regressions"
+        mapping_suite.contains("accepts a strictly sequential multi-PR feature plan")
+            && mapping_suite.contains("['Multiple PRs', 'Stacked PRs']")
+            && mapping_suite.contains("immediately preceding Gizmo ID"),
+        "the transitively loaded suite must enforce sequential Gizmo mapping"
     );
 }
 
 #[test]
-fn workbench_plans_bind_trusted_slices_to_one_pr() {
+fn workbench_plans_enforce_one_or_strictly_sequential_prs() {
     let validator = read(".github/scripts/workbench-records.cjs");
     let prompt = read(".github/prompts/agent-plan.md");
     let pull_requests = read(".cortex/gizmo/workflows/pull-requests.md");
@@ -660,10 +661,11 @@ fn workbench_plans_bind_trusted_slices_to_one_pr() {
 
     for required in [
         "validateTrustedGizmoAssignment",
-        "trusted focused-issue Gizmo ID requires one-PR delivery",
-        "the sole PR slice must use the trusted focused-issue Gizmo ID",
-        "every ownership unit must use the trusted focused-issue Gizmo ID",
-        "only one-PR delivery is supported",
+        "the current PR slice must use the trusted focused-issue Gizmo ID",
+        "a current-slice ownership unit must use the trusted focused-issue Gizmo ID",
+        "sequential PR slices must have positive estimates",
+        "each later PR slice must name the immediately preceding Gizmo ID",
+        "sequential PR slice estimates must cover the complete feature estimate",
     ] {
         assert!(
             validator.contains(required),
@@ -671,14 +673,12 @@ fn workbench_plans_bind_trusted_slices_to_one_pr() {
         );
     }
     assert!(
-        normalized_prompt
-            .contains("Set `Delivery shape` and `PR sequence mode` to exactly `One PR`")
-            && normalized_prompt.contains("a blocker. Report that the complete requested outcome")
-            && normalized_prompt.contains("Do not create slices, successor PRs, or a stack")
-            && normalized_pull_requests
-                .contains("Do not split, stack, rebuild, or replace pull requests")
-            && normalized_pull_requests.contains("One feature uses one PR"),
-        "planning policy must require one bounded PR and prohibit stack recovery"
+        normalized_prompt.contains("`PR sequence mode: Sequential PRs`")
+            && normalized_prompt.contains("Never use independent or stacked PRs")
+            && normalized_prompt.contains("next branch starts from current `origin/main`")
+            && normalized_pull_requests.contains("Do not create stacked branches or pull requests")
+            && normalized_pull_requests.contains("complete this procedure for every slice"),
+        "planning policy must enforce bounded sequential delivery without stacks"
     );
 }
 
@@ -831,7 +831,8 @@ fn agent_prompt_requires_a_publishable_worklog() -> anyhow::Result<()> {
         "Current PR slice and acceptance evidence",
         "PR slices, estimates, and acceptance evidence",
         "Predecessor Gizmo ID",
-        "The sole slice estimate must equal",
+        "The first slice estimate must equal",
+        "PR sequence mode: Sequential PRs",
         "Team Agent count never determines",
         "Functional owner` to exactly `Gizmo Prime`",
         "canonical `gizmo_id`",

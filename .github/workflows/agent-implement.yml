@@ -815,7 +815,7 @@ jobs:
                 '',
                 '## Decisions',
                 '',
-                '- Delivery stopped at the trusted authored-line budget; no split or successor PR was created.',
+                '- Delivery stopped at the trusted authored-line budget; no successor branch or PR was created before the current slice could be redesigned.',
                 '',
                 '## Validation',
                 '',
@@ -823,7 +823,7 @@ jobs:
                 '',
                 '## Remaining work',
                 '',
-                '- Re-scope or simplify the task before returning it to ready.',
+                '- Simplify or redesign the task. If necessary scope remains oversized, publish a sequential plan before returning only its first slice to ready.',
               ].join('\n')
             }
             const worklogPath = `worklogs/${feature}/${timestamp}-run-${context.runId}.md`
