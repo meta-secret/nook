@@ -5,7 +5,7 @@ import {
   MockAuthStaticAssetResolutionKind,
   MockAuthStaticAssetResolver,
   type MockAuthFileInspector,
-} from './static-host'
+} from '../e2e/mock-auth/static-host'
 
 class MockAuthRequestPathTestOwner {
   static admitted(urlPath: string): AdmittedMockAuthRequestPath {
