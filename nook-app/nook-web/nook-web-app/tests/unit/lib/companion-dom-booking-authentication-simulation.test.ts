@@ -20,6 +20,18 @@ import {
   summarizeAuthenticationWorkflowForms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { clickAdvanceControl } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
+import {
+  DomAuthenticationSimulationOutcomeKind,
+  simulateDomAuthentication,
+  type DomAuthenticationSimulationResult,
+  type DomAuthenticationSimulationRequest,
+} from './companion-dom-authentication-simulation'
+import type { FakeLoginCredentials } from './companion-credential-fill-simulation'
+
+const BOOKING_FAKE_CREDENTIALS: FakeLoginCredentials = {
+  username: 'pilot@nook.test',
+  password: 'extension-fill-password',
+}
 
 enum BookingFixturePrimaryControl {
   ContinueWithEmail = 'Continue with email',
@@ -108,7 +120,7 @@ class BookingAuthenticationFixture {
     })
   }
 
-  install(): BookingDomElements {
+  html(): string {
     const { destination, ownership, primaryLabel, submitLayout } = this.options
     const actionAttribute =
       destination === BookingFixtureFormDestination.CrossOrigin
@@ -121,10 +133,15 @@ class BookingAuthenticationFixture {
       ownership === BookingFixtureFormOwnership.Owned
         ? `<form${actionAttribute} data-testid="booking-auth-form">${content}</form>`
         : `<section data-testid="booking-unowned-surface">${content}</section>`
-    document.body.innerHTML = `<header><a href="/">Booking.com</a><button aria-label="Select your language">English</button><a href="/help" aria-label="Help and support">Help</a></header>
+    return `<header><a href="/">Booking.com</a><button aria-label="Select your language">English</button><a href="/help" aria-label="Help and support">Help</a></header>
       <main><h1>Sign in or create an account</h1><p>You can sign in using your Booking.com account to access our services.</p>
         ${authenticationSurface}<p data-testid="booking-disclosure">By signing in or creating an account, you agree with our <a href="/terms">Terms &amp; Conditions</a> and <a href="/privacy">Privacy Statement</a>.</p>
       </main>`
+  }
+
+  install(): BookingDomElements {
+    const { ownership } = this.options
+    document.body.innerHTML = this.html()
     const root = document.querySelector<HTMLElement>(
       ownership === BookingFixtureFormOwnership.Owned
         ? '[data-testid="booking-auth-form"]'
@@ -150,6 +167,14 @@ class BookingAuthenticationFixture {
       ],
     }
   }
+
+  simulate(): DomAuthenticationSimulationResult {
+    const request: DomAuthenticationSimulationRequest = {
+      fixture: { html: this.html() },
+      credentials: BOOKING_FAKE_CREDENTIALS,
+    }
+    return simulateDomAuthentication(request)
+  }
 }
 
 afterEach(() => {
@@ -165,8 +190,12 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(observations).toHaveLength(1)
     const [observation] = observations
     if (!observation) throw new Error('expected Booking.com observation')
-    expect(observation.root === fixture.root).toBe(true)
+    expect(observation.root).toBe(document)
     expect(observation.formScope.kind).toBe(PasswordFormScopeKind.Owned)
+    if (observation.formScope.kind !== PasswordFormScopeKind.Owned) {
+      throw new Error('expected owned Booking.com observation')
+    }
+    expect(observation.formScope.owner).toBe(fixture.root)
     const form = fixture.root
     if (!(form instanceof HTMLFormElement)) {
       throw new Error('expected owned Booking.com form')
@@ -201,6 +230,9 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     }
     expect(detailedAdvanceControl.observations).toEqual([
       expect.objectContaining({
+        authenticationUsername: 'explicit',
+        destinationIdentity: 'https://account.booking.com/sign-in',
+        formIdentity: '',
         label: BookingFixturePrimaryControl.ContinueWithEmail,
         ownership: 'owned-form',
         semanticSubmitControlCount: 1,
@@ -229,10 +261,7 @@ describe('Booking.com DOM-backed authentication simulation', () => {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
-      credentials: {
-        username: 'pilot@nook.test',
-        password: 'extension-fill-password',
-      },
+      credentials: BOOKING_FAKE_CREDENTIALS,
     }
     expect(fillLoginCredentials(fillRequest)).toBe(true)
     let primaryState = BookingFixtureControlState.Untouched
@@ -261,7 +290,7 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     )
     expect(primaryState).toBe(BookingFixtureControlState.Activated)
     expect(alternativeState).toBe(BookingFixtureControlState.Untouched)
-    expect(fixture.email.value).toBe('pilot@nook.test')
+    expect(fixture.email.value).toBe(BOOKING_FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('form')).toHaveLength(1)
     expect(fixture.email).toMatchObject({
       name: 'username',
@@ -371,31 +400,41 @@ describe('Booking.com DOM-backed authentication simulation', () => {
   })
 
   test('rejects ambiguous semantic submits', () => {
-    const fixture = BookingAuthenticationFixture.ambiguous().install()
-    const [observation] = summarizeAuthenticationWorkflowForms()
-    if (!observation) throw new Error('expected ambiguous Booking.com form')
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: observation.root,
-      formScope: observation.formScope,
-      usernameField: fixture.email,
-    }
-    expect(clickAdvanceControl(request)).toBe(false)
-    expect(fixture.email.value).toBe('')
+    const result = BookingAuthenticationFixture.ambiguous().simulate()
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+    const form = document.querySelector<HTMLFormElement>(
+      '[data-testid="booking-auth-form"]',
+    )
+    const email = document.querySelector<HTMLInputElement>('[name="username"]')
+    if (!form || !email) throw new Error('expected ambiguous Booking.com form')
+    expect(form.querySelectorAll('button[type="submit"]')).toHaveLength(2)
+    expect(email.form).toBe(form)
+    expect(email.value).toBe('')
   })
 
   test('rejects the formerly modeled unowned surface', () => {
-    const fixture = BookingAuthenticationFixture.unowned().install()
+    const result = BookingAuthenticationFixture.unowned().simulate()
+    expect(result).toMatchObject({
+      kind: DomAuthenticationSimulationOutcomeKind.FailClosed,
+      filled: false,
+      submissionResult: FormSubmissionResult.NotObserved,
+    })
+    const email = document.querySelector<HTMLInputElement>('[name="username"]')
+    const primary = document.querySelector<HTMLButtonElement>(
+      '[data-testid="booking-primary"]',
+    )
+    if (!email || !primary) {
+      throw new Error('expected unowned Booking.com surface')
+    }
+    expect(email.closest('form')).not.toBeInstanceOf(HTMLFormElement)
+    expect(primary.closest('form')).not.toBeInstanceOf(HTMLFormElement)
     const [observation] = summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected unowned Booking.com surface')
     expect(observation.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: observation.root,
-      formScope: observation.formScope,
-      usernameField: fixture.email,
-    }
-    expect(clickAdvanceControl(request)).toBe(false)
-    expect(fixture.email.value).toBe('')
+    expect(email.value).toBe('')
   })
 })
