@@ -680,8 +680,11 @@ mod projection_tests {
         manager
             .connect_fresh("local".to_owned(), String::new(), String::new())
             .await?;
-        let store_id = manager.vault.store_id.clone();
-        let content = manager.vault.last_synced_content.clone();
+        let store_id = manager.vault_store_id();
+        let content = crate::storage::indexed_db::load_vault_blob(&store_id)
+            .await
+            .map_err(|error| JsError::new(&error.to_string()))?
+            .ok_or_else(|| JsError::new("connected local vault blob was not persisted"))?;
         assert!(!store_id.is_empty());
         assert!(!content.is_empty());
 
