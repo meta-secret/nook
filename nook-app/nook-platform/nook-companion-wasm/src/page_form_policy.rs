@@ -567,6 +567,40 @@ mod tests {
             nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
         assert!(authentication_advance_control_is_safe(tesla.clone()));
 
+        let mut initial = tesla.clone();
+        initial.actionability = nook_companion_core::PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(initial.clone()));
+        let planning_facts = nook_companion_core::AuthenticationPageObservationFacts {
+            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                username_field_count: 1.into(),
+                ..Default::default()
+            },
+            detailed_advance_control:
+                nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
+                    initial,
+                ),
+            ..Default::default()
+        };
+        assert!(matches!(
+            nook_companion_core::AuthenticationPageObservationFactsBatch {
+                observations: vec![planning_facts.clone()],
+            }
+            .classify(),
+            nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == nook_companion_core::AuthenticationWorkflowKind::Login
+                    && snapshot.action
+                        == nook_companion_core::AuthenticationWorkflowAction::ContinueWithNook
+        ));
+        let wasm_workflow = crate::classify_companion_authentication_workflow_facts(
+            nook_companion_core::AuthenticationPageObservationFactsBatch {
+                observations: vec![planning_facts],
+            },
+        );
+        assert_eq!(
+            crate::companion_authentication_workflow_match_kind(wasm_workflow),
+            crate::CompanionAuthenticationWorkflowMatchKind::Matched
+        );
+
         for evidence in [
             nook_companion_core::AuthenticationUsernameEvidence::Absent,
             nook_companion_core::AuthenticationUsernameEvidence::Generic,

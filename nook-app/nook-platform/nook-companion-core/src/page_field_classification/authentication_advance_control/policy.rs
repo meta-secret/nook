@@ -15,11 +15,45 @@ use crate::page_field_classification::form_identity::{
     OneTimeCodeContext,
 };
 use crate::page_field_classification::{
-    AuthenticationUsernameEvidence, contains_any_word, expand_identity_text,
-    looks_like_login_advance_control_label, looks_like_supported_localized_login_control_label,
+    AuthenticationUsernameEvidence, canonicalize_control_destination, contains_any_word,
+    expand_identity_text, looks_like_login_advance_control_label,
+    looks_like_supported_localized_login_control_label,
 };
 
 impl AuthenticationAdvanceControlObservation {
+    /// Whether an inert control supplies narrow page-planning evidence only.
+    #[must_use]
+    pub(crate) fn is_inert_webauthn_email_planning_advance(&self) -> bool {
+        if !matches!(self.actionability, PageControlActionability::Inert)
+            || !matches!(self.ownership, PageControlOwnership::OwnedForm)
+            || !matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            || !matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::WebAuthnEmail
+            )
+            || !matches!(self.submission_method, PageControlSubmissionMethod::Get)
+            || !matches!(
+                self.submission_destination_source,
+                PageControlSubmissionDestinationSource::Omitted
+            )
+        {
+            return false;
+        }
+        let Some(destination) =
+            canonicalize_control_destination(&self.source_origin, &self.destination_identity)
+        else {
+            return false;
+        };
+        if !AuthenticationRouteIdentity::new(&destination.route_identity)
+            .indicates_oauth_authorization()
+        {
+            return false;
+        }
+        let mut actionable = self.clone();
+        actionable.actionability = PageControlActionability::Actionable;
+        crate::authentication_advance_control_is_safe(&actionable)
+    }
+
     pub(super) fn is_identifier_only_get_advance(&self) -> bool {
         matches!(self.actionability, PageControlActionability::Actionable)
             && matches!(

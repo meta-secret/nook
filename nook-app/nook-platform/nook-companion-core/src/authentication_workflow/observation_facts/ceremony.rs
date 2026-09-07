@@ -35,10 +35,11 @@ impl AuthenticationDetailedAdvanceControlObservation {
     ) -> AuthenticationAdvanceControlEvidence {
         let advances = matches!(self, Self::Observed(observations) if observations.iter().any(
             |observation| fields.is_compatible_with_detailed_control(observation)
-                && matches!(
-                    observation.classify(),
-                    AuthenticationAdvanceControlDecision::AdvancesAuthentication
-                )
+                && (matches!(
+                        observation.classify(),
+                        AuthenticationAdvanceControlDecision::AdvancesAuthentication
+                    )
+                    || observation.is_inert_webauthn_email_planning_advance())
         ));
         if advances {
             AuthenticationAdvanceControlEvidence::Present
@@ -290,6 +291,55 @@ fn password_implicit_submission_uses_get(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{
+        PageControlActionability, PageControlOwnership, PageControlSemantics,
+        PageControlSubmissionDestinationSource, authentication_advance_control_is_safe,
+    };
+
+    struct TeslaInertPlanningScenario;
+
+    impl TeslaInertPlanningScenario {
+        fn observation() -> AuthenticationAdvanceControlObservation {
+            AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Inert,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::WebAuthnEmail,
+                password_field_count: 0.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://auth.tesla.com".to_owned(),
+                form_identity: String::new(),
+                destination_identity: "https://auth.tesla.com/oauth2/v1/authorize".to_owned(),
+                label: "Next".to_owned(),
+                machine_identity: String::new(),
+                submission_method: PageControlSubmissionMethod::Get,
+                submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+            }
+        }
+
+        fn fields() -> AuthenticationFieldObservationFacts {
+            AuthenticationFieldObservationFacts {
+                username_field_count: 1.into(),
+                ..Default::default()
+            }
+        }
+
+        fn evidence(
+            observation: AuthenticationAdvanceControlObservation,
+        ) -> AuthenticationAdvanceControlEvidence {
+            AuthenticationDetailedAdvanceControlObservation::observed(observation)
+                .evidence(Self::fields())
+        }
+
+        fn assert_rejected(observation: AuthenticationAdvanceControlObservation) {
+            assert!(matches!(
+                Self::evidence(observation),
+                AuthenticationAdvanceControlEvidence::Absent
+            ));
+        }
+    }
 
     impl AuthenticationCeremonyObservationFacts {
         fn x_identifier_get() -> Self {
@@ -324,6 +374,97 @@ mod tests {
                 control_label: String::new(),
                 control_machine_identity: String::new(),
             }
+        }
+    }
+
+    #[test]
+    fn tesla_inert_next_is_planning_evidence_without_actuation_authority() {
+        let inert = TeslaInertPlanningScenario::observation();
+        assert!(!authentication_advance_control_is_safe(&inert));
+        assert!(matches!(
+            TeslaInertPlanningScenario::evidence(inert.clone()),
+            AuthenticationAdvanceControlEvidence::Present
+        ));
+
+        let mut refreshed = inert;
+        refreshed.actionability = PageControlActionability::Actionable;
+        assert!(authentication_advance_control_is_safe(&refreshed));
+        assert!(matches!(
+            TeslaInertPlanningScenario::evidence(refreshed),
+            AuthenticationAdvanceControlEvidence::Present
+        ));
+    }
+
+    #[test]
+    fn inert_planning_requires_the_exact_webauthn_email_oauth_shape() {
+        for evidence in [
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::Strong,
+            AuthenticationUsernameEvidence::Explicit,
+        ] {
+            let mut rejected = TeslaInertPlanningScenario::observation();
+            rejected.authentication_username = evidence;
+            TeslaInertPlanningScenario::assert_rejected(rejected);
+        }
+
+        for destination in [
+            "https://attacker.example/oauth2/v1/authorize",
+            "https://auth.tesla.com/login",
+            "https://auth.tesla.com/signup",
+            "https://auth.tesla.com/recover",
+            "https://auth.tesla.com/oauth2/v1/authorize?provider=google",
+            "https://auth.tesla.com/account/delete",
+        ] {
+            let mut rejected = TeslaInertPlanningScenario::observation();
+            rejected.destination_identity = destination.to_owned();
+            TeslaInertPlanningScenario::assert_rejected(rejected);
+        }
+
+        for label in [
+            "Trouble Signing In",
+            "Create Account",
+            "Continue with Google",
+            "Use passkey",
+            "Delete account",
+        ] {
+            let mut rejected = TeslaInertPlanningScenario::observation();
+            rejected.label = label.to_owned();
+            TeslaInertPlanningScenario::assert_rejected(rejected);
+        }
+
+        let mutations: &[fn(&mut AuthenticationAdvanceControlObservation)] = &[
+            |control| control.semantic_submit_control_count = 2.into(),
+            |control| control.ownership = PageControlOwnership::Unowned,
+            |control| control.ownership = PageControlOwnership::LocallyScoped,
+            |control| {
+                control.submission_destination_source =
+                    PageControlSubmissionDestinationSource::Authored;
+            },
+            |control| control.form_identity = "sign-in-form".to_owned(),
+            |control| control.semantics = PageControlSemantics::Activation,
+            |control| control.submission_method = PageControlSubmissionMethod::Post,
+            |control| control.password_field_count = 1.into(),
+        ];
+        for mutation in mutations {
+            let mut rejected = TeslaInertPlanningScenario::observation();
+            mutation(&mut rejected);
+            TeslaInertPlanningScenario::assert_rejected(rejected);
+        }
+
+        for count in [0, 2] {
+            let fields = AuthenticationFieldObservationFacts {
+                username_field_count: count.into(),
+                ..Default::default()
+            };
+            assert!(matches!(
+                AuthenticationDetailedAdvanceControlObservation::observed(
+                    TeslaInertPlanningScenario::observation()
+                )
+                .evidence(fields),
+                AuthenticationAdvanceControlEvidence::Absent
+            ));
         }
     }
 
