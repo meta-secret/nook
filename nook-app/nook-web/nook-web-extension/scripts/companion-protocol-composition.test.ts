@@ -168,7 +168,7 @@ function pairingAttempt(requestId: string, substituteProvider: boolean) {
     request: structuredClone(request),
     observedAt: 130,
     vaultStoreId: extension.vaultStoreId,
-    vaultName: 'Composition Vault',
+    vaultName: extension.vaultName,
     approvedAt: '2026-09-07T00:00:00Z',
   } satisfies CompanionPairingWebsiteAuthorization
   const approval = websiteProtocol.authorize(
@@ -233,7 +233,7 @@ beforeAll(async () => {
     kind: 'unlocked',
     vault_type: 'simple',
     vault_store_id: extension.vaultStoreId,
-    vault_name: 'Composition Vault',
+    vault_name: extension.vaultName,
     app_key: unlockedAppKey,
   } satisfies CompanionExtensionPresence
 })
