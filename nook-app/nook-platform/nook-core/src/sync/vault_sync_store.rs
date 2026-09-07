@@ -218,6 +218,7 @@ impl PreparedVaultSync<'_> {
     }
 
     /// Commit the prepared action to its original local and remote stores.
+    #[must_use]
     pub fn commit(self) -> VaultSyncAction {
         let Self {
             local,
@@ -387,7 +388,9 @@ mod tests {
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        drop(VaultSyncPair::new(&mut local, &mut remote).prepare()?);
+        {
+            let _prepared = VaultSyncPair::new(&mut local, &mut remote).prepare()?;
+        }
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
         Ok(())
