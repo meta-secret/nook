@@ -31,6 +31,66 @@ impl GitHubEventStore<'_> {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-' || byte == b'_')
     }
+
+    fn github_repo_response(
+        status: StatusCode,
+        text: &str,
+        repo: &str,
+    ) -> Result<Option<GitHubRepoResponse>, NookError> {
+        if status == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !status.is_success() {
+            return Err(NookError::GitHub(format!(
+                "Failed to read GitHub repository {repo}: {status}"
+            )));
+        }
+
+        serde_json::from_str(text)
+            .map(Some)
+            .map_err(|e| NookError::Serialization(e.to_string()))
+    }
+
+    fn github_tree_response(
+        status: StatusCode,
+        text: &str,
+    ) -> Result<Option<GitTreeResponse>, NookError> {
+        if status == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        if !status.is_success() {
+            return Err(NookError::GitHub(format!(
+                "Failed to list GitHub tree for {EVENT_LOG_ROOT}: {status}"
+            )));
+        }
+
+        let tree: GitTreeResponse =
+            serde_json::from_str(text).map_err(|e| NookError::Serialization(e.to_string()))?;
+        if tree.truncated {
+            return Err(NookError::GitHub(
+                "GitHub event tree listing was truncated; sync would be incomplete.".to_owned(),
+            ));
+        }
+
+        Ok(Some(tree))
+    }
+
+    fn event_ids_from_tree(entries: &[GitTreeEntry]) -> Vec<String> {
+        entries
+            .iter()
+            .filter(|entry| entry.entry_type == "blob")
+            .filter_map(|entry| Self::event_id_from_tree_path(&entry.path))
+            .collect()
+    }
+
+    fn event_content(bytes: &[u8]) -> Result<&str, NookError> {
+        str::from_utf8(bytes)
+            .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))
+    }
+
+    fn is_retryable_event_write_error(message: &str) -> bool {
+        message.contains("422") || message.contains("409")
+    }
 }
 
 #[derive(Deserialize)]
@@ -49,66 +109,6 @@ struct GitTreeEntry {
     path: String,
     #[serde(rename = "type")]
     entry_type: String,
-}
-
-fn github_repo_response(
-    status: StatusCode,
-    text: &str,
-    repo: &str,
-) -> Result<Option<GitHubRepoResponse>, NookError> {
-    if status == StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-    if !status.is_success() {
-        return Err(NookError::GitHub(format!(
-            "Failed to read GitHub repository {repo}: {status}"
-        )));
-    }
-
-    serde_json::from_str(text)
-        .map(Some)
-        .map_err(|e| NookError::Serialization(e.to_string()))
-}
-
-fn github_tree_response(
-    status: StatusCode,
-    text: &str,
-) -> Result<Option<GitTreeResponse>, NookError> {
-    if status == StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-    if !status.is_success() {
-        return Err(NookError::GitHub(format!(
-            "Failed to list GitHub tree for {EVENT_LOG_ROOT}: {status}"
-        )));
-    }
-
-    let tree: GitTreeResponse =
-        serde_json::from_str(text).map_err(|e| NookError::Serialization(e.to_string()))?;
-    if tree.truncated {
-        return Err(NookError::GitHub(
-            "GitHub event tree listing was truncated; sync would be incomplete.".to_owned(),
-        ));
-    }
-
-    Ok(Some(tree))
-}
-
-fn event_ids_from_tree(entries: &[GitTreeEntry]) -> Vec<String> {
-    entries
-        .iter()
-        .filter(|entry| entry.entry_type == "blob")
-        .filter_map(|entry| GitHubEventStore::event_id_from_tree_path(&entry.path))
-        .collect()
-}
-
-fn event_content(bytes: &[u8]) -> Result<&str, NookError> {
-    str::from_utf8(bytes)
-        .map_err(|e| NookError::Serialization(format!("Event YAML must be UTF-8: {e}")))
-}
-
-fn is_retryable_event_write_error(message: &str) -> bool {
-    message.contains("422") || message.contains("409")
 }
 
 impl GitHubEventStore<'_> {
@@ -148,7 +148,7 @@ impl GitHubEventStore<'_> {
             .text()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let Some(repo_info) = github_repo_response(repo_status, &repo_text, repo)? else {
+        let Some(repo_info) = Self::github_repo_response(repo_status, &repo_text, repo)? else {
             return Ok(Vec::new());
         };
         let branch = urlencoding::encode(&repo_info.default_branch);
@@ -168,11 +168,11 @@ impl GitHubEventStore<'_> {
             .text()
             .await
             .map_err(|e| NookError::Serialization(e.to_string()))?;
-        let Some(tree) = github_tree_response(tree_status, &tree_text)? else {
+        let Some(tree) = Self::github_tree_response(tree_status, &tree_text)? else {
             return Ok(Vec::new());
         };
 
-        event_ids.extend(event_ids_from_tree(&tree.tree));
+        event_ids.extend(Self::event_ids_from_tree(&tree.tree));
         Ok(event_ids)
     }
 
@@ -231,13 +231,13 @@ impl GitHubEventStore<'_> {
         }
 
         let path = event_id.storage_path();
-        let content = event_content(bytes)?;
+        let content = Self::event_content(bytes)?;
 
         for attempt in 0..3 {
             match write_github_text_file(pat, repo, &path, content, None).await {
                 Ok(_) => return Ok(()),
                 Err(NookError::GitHub(message)) if attempt < 2 => {
-                    if is_retryable_event_write_error(&message) {
+                    if Self::is_retryable_event_write_error(&message) {
                         if let Ok(Some(existing)) = fetch_github_vault(pat, repo, &path, None).await
                         {
                             let existing_bytes = existing.content.as_bytes();
@@ -336,22 +336,24 @@ mod tests {
     #[test]
     fn github_repo_response_projects_missing_errors_and_json() {
         assert!(
-            github_repo_response(StatusCode::NOT_FOUND, "", "owner/repo")
+            GitHubEventStore::github_repo_response(StatusCode::NOT_FOUND, "", "owner/repo")
                 .unwrap()
                 .is_none()
         );
 
-        let unavailable = github_repo_response(StatusCode::FORBIDDEN, "", "owner/repo");
+        let unavailable =
+            GitHubEventStore::github_repo_response(StatusCode::FORBIDDEN, "", "owner/repo");
         assert!(matches!(
             unavailable,
             Err(NookError::GitHub(message))
                 if message.contains("owner/repo") && message.contains("403")
         ));
 
-        let malformed = github_repo_response(StatusCode::OK, "not-json", "owner/repo");
+        let malformed =
+            GitHubEventStore::github_repo_response(StatusCode::OK, "not-json", "owner/repo");
         assert!(matches!(malformed, Err(NookError::Serialization(_))));
 
-        let repo = github_repo_response(
+        let repo = GitHubEventStore::github_repo_response(
             StatusCode::OK,
             r#"{"default_branch":"release"}"#,
             "owner/repo",
@@ -364,27 +366,30 @@ mod tests {
     #[test]
     fn github_tree_response_projects_missing_errors_truncation_and_entries() {
         assert!(
-            github_tree_response(StatusCode::NOT_FOUND, "")
+            GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "")
                 .unwrap()
                 .is_none()
         );
 
-        let unavailable = github_tree_response(StatusCode::BAD_GATEWAY, "");
+        let unavailable = GitHubEventStore::github_tree_response(StatusCode::BAD_GATEWAY, "");
         assert!(matches!(
             unavailable,
             Err(NookError::GitHub(message)) if message.contains(EVENT_LOG_ROOT) && message.contains("502")
         ));
 
-        let malformed = github_tree_response(StatusCode::OK, "not-json");
+        let malformed = GitHubEventStore::github_tree_response(StatusCode::OK, "not-json");
         assert!(matches!(malformed, Err(NookError::Serialization(_))));
 
-        let truncated = github_tree_response(StatusCode::OK, r#"{"truncated":true,"tree":[]}"#);
+        let truncated = GitHubEventStore::github_tree_response(
+            StatusCode::OK,
+            r#"{"truncated":true,"tree":[]}"#,
+        );
         assert!(matches!(
             truncated,
             Err(NookError::GitHub(message)) if message.contains("truncated")
         ));
 
-        let tree = github_tree_response(
+        let tree = GitHubEventStore::github_tree_response(
             StatusCode::OK,
             r#"{"truncated":false,"tree":[{"path":"event.yaml","type":"blob"}]}"#,
         )
@@ -405,19 +410,28 @@ mod tests {
             ]"#
         ))?;
         assert_eq!(
-            event_ids_from_tree(&entries),
+            GitHubEventStore::event_ids_from_tree(&entries),
             vec![format!("sha256u:{digest}")]
         );
-        assert!(is_retryable_event_write_error("status 422"));
-        assert!(is_retryable_event_write_error("status 409"));
-        assert!(!is_retryable_event_write_error("status 500"));
+        assert!(GitHubEventStore::is_retryable_event_write_error(
+            "status 422"
+        ));
+        assert!(GitHubEventStore::is_retryable_event_write_error(
+            "status 409"
+        ));
+        assert!(!GitHubEventStore::is_retryable_event_write_error(
+            "status 500"
+        ));
         Ok(())
     }
 
     #[test]
     fn event_content_accepts_utf8_and_rejects_binary_payloads() {
-        assert_eq!(event_content(b"event: yaml").unwrap(), "event: yaml");
-        let invalid = event_content(&[0xff, 0xfe]);
+        assert_eq!(
+            GitHubEventStore::event_content(b"event: yaml").unwrap(),
+            "event: yaml"
+        );
+        let invalid = GitHubEventStore::event_content(&[0xff, 0xfe]);
         assert!(matches!(
             invalid,
             Err(NookError::Serialization(message)) if message.contains("Event YAML must be UTF-8")
