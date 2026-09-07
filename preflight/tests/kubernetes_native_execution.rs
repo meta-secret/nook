@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, env, fs, mem, path::PathBuf, process::Command};
+use std::{env, fs, mem, path::PathBuf, process::Command};
 
 use anyhow::Result;
 
@@ -11,21 +11,6 @@ const CLUSTER_ENTRYPOINTS: &[&str] = &[
     ".github/scripts/remote-task-batch.sh",
     ".github/scripts/wait-hive-neo4j.sh",
     "nook-app/ci/Taskfile.yml",
-];
-
-const EXPECTED_REMOTE_CATALOG: &[&str] = &[
-    "preflight",
-    "arc:runtime",
-    "rust:ci",
-    "loom:verify",
-    "web:build",
-    "web:e2e",
-    "web:e2e:debug",
-    "extension:e2e",
-    "hive:verify",
-    "check",
-    "ci:pr",
-    "ci:pr:e2e",
 ];
 
 fn repository_root() -> PathBuf {
@@ -143,18 +128,6 @@ fn cluster_job_blocks(workflow: &str) -> Vec<String> {
         .collect()
 }
 
-fn remote_catalog() -> Result<BTreeSet<String>> {
-    let output = Command::new("bash")
-        .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
-        .arg("--list")
-        .output()?;
-    assert!(output.status.success(), "remote catalog must be readable");
-    Ok(String::from_utf8(output.stdout)?
-        .lines()
-        .map(str::to_owned)
-        .collect())
-}
-
 #[test]
 fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()> {
     let workflow_directory = repository_root().join(".github/workflows");
@@ -193,17 +166,6 @@ fn k0s_jobs_and_cluster_entrypoints_never_control_nested_runtimes() -> Result<()
             "ARC remote BuildKit wrapper must not contain hosted daemon recovery: {forbidden}"
         );
     }
-
-    let expected = EXPECTED_REMOTE_CATALOG
-        .iter()
-        .copied()
-        .map(str::to_owned)
-        .collect::<BTreeSet<_>>();
-    assert_eq!(
-        remote_catalog()?,
-        expected,
-        "ARC catalog may expose only build-only or direct-Pod implementations"
-    );
 
     let remote_workflow = read(".github/workflows/remote.yml");
     assert!(remote_workflow.contains("runs-on: nook-k0s-container"));

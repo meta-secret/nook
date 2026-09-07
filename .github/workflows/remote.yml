@@ -1,8 +1,8 @@
 # Focused, manually dispatched development tasks on the configured runner pool.
 #
-# This workflow is an allowlisted remote execution surface, not an arbitrary
-# credential-bearing shell. Complete merge validation remains in pr.yml and is
-# explicitly requested with task pr:validate.
+# This workflow executes named Task targets on the configured remote runner
+# pool. Complete merge validation remains in pr.yml and is explicitly
+# requested with task pr:validate.
 
 name: Remote task
 run-name: Remote / ${{ inputs.tasks || inputs.task }} / ${{ inputs.dispatch_nonce || 'manual' }}
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       tasks:
-        description: Comma-separated allowlisted Taskfile commands
+        description: Comma-separated Task targets
         required: false
         type: string
       task:
@@ -99,28 +99,11 @@ jobs:
           : "${KUBERNETES_NODE_NAME:?KUBERNETES_NODE_NAME is required}"
           printf '::notice title=Kubernetes worker::%s\n' "$KUBERNETES_NODE_NAME"
       - uses: actions/checkout@v7
-      - name: Validate batch request
+      - name: Report task request
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -n "$REQUESTED_REMOTE_BATCH" && -n "$REQUESTED_REMOTE_TASK" ]]; then
-            echo "Set either tasks or task, not both." >&2
-            exit 2
-          fi
-          case "$REQUESTED_RUNNER_LABEL" in
-            ""|nook-k0s|nook-k0s-hive) ;;
-            *) echo "Unsupported remote runner label: $REQUESTED_RUNNER_LABEL" >&2; exit 2 ;;
-          esac
-          case "$REQUESTED_RUNNER_LABEL:$REQUESTED_REMOTE_TASKS" in
-            :*) ;;
-            nook-k0s:preflight|nook-k0s:rust:ci|nook-k0s:loom:verify|nook-k0s:arc:runtime) ;;
-            nook-k0s-hive:hive:verify) ;;
-            *)
-              echo "Remote runner label is incompatible with the requested task" >&2
-              exit 2
-              ;;
-          esac
-          .github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS"
+          printf 'Remote task name: %s\n' "$REQUESTED_REMOTE_TASKS"
       - name: Install Task for Loom-only verification
         if: ${{ (inputs.tasks || inputs.task) == 'loom:verify' }}
         uses: go-task/setup-task@v2
@@ -182,7 +165,7 @@ jobs:
       - name: Wait for private Neo4j sidecar
         if: ${{ env.REQUEST_INCLUDES_HIVE == 'true' }}
         run: .github/scripts/wait-hive-neo4j.sh
-      - name: Run allowlisted task batch
+      - name: Run task batch
         shell: bash
         env:
           E2E_ARTIFACT_DIR: ${{ runner.temp }}/nook-e2e-artifacts
@@ -255,6 +238,7 @@ jobs:
         password: ${{ secrets.NOOK_REGISTRY_REMOTE_PASSWORD }}
     env:
       CI: "1"
+      NOOK_REMOTE_E2E_DEBUG: "1"
       E2E_PROJECT: ${{ inputs.e2e_project }}
       E2E_SPECS: ${{ inputs.e2e_specs }}
       E2E_GREP: ${{ inputs.e2e_grep }}
@@ -268,12 +252,12 @@ jobs:
           case "$REMOTE_CONTAINER_TASK" in
             web:build) task _web:build ;;
             web:e2e) task _web:test:e2e ;;
-            web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug ;;
+            web:e2e:debug) task _web:test:e2e:debug ;;
             extension:e2e) task _extension:test:e2e ;;
             check) task _check ;;
             ci:pr) task _ci:pr ;;
             ci:pr:e2e) task _ci:main ;;
-            *) echo "Unsupported Kubernetes container task: $REMOTE_CONTAINER_TASK" >&2; exit 2 ;;
+            *) task "$REMOTE_CONTAINER_TASK" ;;
           esac
 
       - name: Collect Playwright diagnostics

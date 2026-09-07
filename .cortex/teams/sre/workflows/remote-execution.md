@@ -46,12 +46,6 @@ that the branch contains the current `origin/main`.
 
 ## Focused remote tasks
 
-List the allowlisted catalog:
-
-```bash
-task remote:list
-```
-
 Dispatch one Kubernetes-native browser task:
 
 ```bash
@@ -69,9 +63,11 @@ task remote TASK_NAME=web:e2e:debug \
   E2E_GREP='exact test title'
 ```
 
-Focused E2E debugging is remote-only. The internal runner rejects direct local
-execution, validates each spec against the selected Playwright project
-catalog, and retains failure traces under the remote E2E artifact.
+Focused E2E debugging is remote-only.
+
+The remote job passes the requested Task name and Playwright selectors into
+the browser image. Malformed task or selector input fails in Task/Playwright.
+Failure traces are retained under the remote E2E artifact.
 
 Dispatch one ARC-native Rust task:
 
@@ -135,7 +131,7 @@ compiler objects. These systems solve different cold-start costs.
 
 Security rules:
 
-- Accept only literal catalog names.
+- Pass Task names as literal arguments to the `task` executable.
 - Never evaluate user input as shell.
 - Disable runner Kubernetes service-account tokens.
 - Prohibit DinD, Docker daemons, Podman, Sysbox, host runtime sockets, runner
@@ -148,7 +144,7 @@ Security rules:
 - Mount SeaweedFS credentials only as fixed BuildKit secrets.
 - Never place credential bytes in build arguments, layers, or cache checksums.
 
-The allowlisted ARC tasks avoid a general container-runtime requirement:
+The named ARC tasks avoid a general container-runtime requirement:
 
 - `rust:ci` executes formatting, Clippy, tests, and coverage in BuildKit stages.
 - `loom:verify` executes the full Loom format, lint, typecheck, unit-test,
@@ -156,7 +152,7 @@ The allowlisted ARC tasks avoid a general container-runtime requirement:
   - A Loom-only dispatch installs the repository-pinned Task version.
   - Every Loom dispatch installs the pinned Bun version and stable Rust
     toolchain used by repository policy.
-  - It proves Task, Bun, and Cargo before starting the allowlisted task.
+  - It proves Task, Bun, and Cargo before starting the named task.
   - It does not initialize Docker or cache credentials.
 - `arc:runtime` exports and verifies a BuildKit result without `docker run`.
 - `hive:verify` executes exported tests through its pinned native runtime

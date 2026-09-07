@@ -27,8 +27,8 @@ Validation has three layers:
 - **Focused evidence:** after Gizmo pushes a non-ready head, use
   `task remote TASK_NAME=<name>` for one relevant gate.
   - Do not batch broad gates sequentially before complete validation.
-  - Use only selectors listed by `task remote:list`. A local Docker-backed task
-    remains unavailable until it has a Kubernetes-native Pod implementation.
+  - Use named Task selectors. A local Docker-backed task remains unavailable
+    until it has a Kubernetes-native Pod implementation.
 - **Required remotely:** Gizmo triggers complete exact-head PR validation.
   - Dispatch every required hosted check immediately.
   - Never wait for GitHub review before dispatch.

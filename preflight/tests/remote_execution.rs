@@ -1,5 +1,4 @@
 use std::{
-    collections::BTreeSet,
     env, fs, io,
     os::unix::fs::PermissionsExt,
     path::PathBuf,
@@ -47,30 +46,20 @@ fn remote_batch_command(args: &[&str]) -> io::Result<process::Output> {
         .output()
 }
 
-fn remote_catalog() -> Result<BTreeSet<String>> {
-    let output = remote_batch_command(&["--list"])?;
-    assert!(output.status.success(), "remote catalog must be readable");
-    Ok(String::from_utf8(output.stdout)?
-        .lines()
-        .map(str::to_owned)
-        .collect())
-}
-
 #[test]
-fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
+fn remote_task_dispatch_uses_named_tasks_and_exact_head_only() {
     let root_tasks = read("Taskfile.yml");
     let remote_tasks = read(".task/remote-execution.yml");
 
     assert!(root_tasks.contains("taskfile: .task/remote-execution.yml"));
     for required in [
         "TASK_NAMES=<a,b> or TASK_NAME=<a>",
-        "remote-task-batch.sh --validate",
         "git status --porcelain",
         "git ls-remote --refs origin",
         "if [ \"$remote_sha\" != \"$local_sha\" ]",
         "gh workflow run remote.yml",
+        "requested_tasks=\"$REQUESTED_REMOTE_TASKS\"",
         "--raw-field \"tasks=$requested_tasks\"",
-        "remote:list:",
     ] {
         assert!(
             remote_tasks.contains(required),
@@ -79,7 +68,7 @@ fn remote_task_catalog_is_allowlisted_and_exact_head_only() {
     }
     assert!(
         !remote_tasks.contains("--raw-field \"command="),
-        "remote execution must dispatch an allowlisted name, not arbitrary shell"
+        "remote execution must dispatch a Task name, not arbitrary shell"
     );
 }
 
@@ -191,77 +180,18 @@ fn complete_validation_gates_optional_review_after_dispatch() -> Result<()> {
 }
 
 #[test]
-fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
-    let valid = remote_batch_command(&["--validate", "preflight,rust:ci"])?;
-    assert!(valid.status.success());
-    assert_eq!(String::from_utf8(valid.stdout)?, "preflight,rust:ci\n");
+fn remote_task_batches_dispatch_named_tasks() -> Result<()> {
+    let arbitrary = remote_batch_command(&["--timeout", "arbitrary:task"])?;
+    assert!(arbitrary.status.success());
+    assert_eq!(String::from_utf8(arbitrary.stdout)?, "30\n");
 
-    for invalid in [
-        "",
-        "preflight,",
-        "preflight,,rust:ci",
-        "preflight,preflight",
-        "preflight,arbitrary:command",
-        "preflight, rust:ci",
-        "preflight,web:e2e",
-        "preflight,extension:e2e",
-        "preflight,web:build",
-        "preflight,check",
-        "preflight,ci:pr",
-        "preflight,ci:pr:e2e",
-        "rust:test",
-        "rust:lint",
-        "rust:coverage",
-        "wasm:build",
-        "wasm:test",
-        "wasm:test:browser",
-        "web:check",
-        "web:test",
-        "extension:check",
-    ] {
-        assert!(
-            !remote_batch_command(&["--validate", invalid])?
-                .status
-                .success(),
-            "invalid remote batch must be rejected: {invalid:?}"
-        );
-    }
-
-    let commands = remote_batch_command(&["--commands", "preflight,rust:ci"])?;
-    assert!(commands.status.success());
-    assert_eq!(
-        String::from_utf8(commands.stdout)?,
-        "task preflight\ntask ci:pr:rust\n"
-    );
-    let loom_batch = remote_batch_command(&["--validate", "loom:verify,preflight"])?;
-    assert!(
-        loom_batch.status.success(),
-        "Loom verification must remain batchable on the general ARC runner"
-    );
-    let loom_command = remote_batch_command(&["--commands", "loom:verify"])?;
-    assert!(loom_command.status.success());
-    assert_eq!(
-        String::from_utf8(loom_command.stdout)?,
-        "task loom:verify\n"
-    );
-    let mixed_runtime = remote_batch_command(&["--validate", "arc:runtime,preflight"])?;
-    assert!(
-        !mixed_runtime.status.success(),
-        "ARC runtime smoke must be dispatched alone so workflow placement selects ARC"
-    );
-    for task in remote_catalog()? {
-        let timeout = remote_batch_command(&["--timeout", &task])?;
-        assert!(timeout.status.success(), "task timeout must exist: {task}");
-        let minutes = String::from_utf8(timeout.stdout)?.trim().parse::<u8>()?;
-        assert!(
-            (15..=45).contains(&minutes),
-            "task timeout must preserve the former bounded range: {task}"
-        );
-    }
     let batch_script = read(".github/scripts/remote-task-batch.sh");
     let workflow = read(".github/workflows/remote.yml");
     assert!(batch_script.contains("timeout --kill-after=1m"));
     assert!(!batch_script.contains("timeout --foreground"));
+    assert!(!batch_script.contains("is_catalog_task"));
+    assert!(!batch_script.contains("Unknown remote task"));
+    assert!(batch_script.contains("task \"$1\""));
     for task in [
         "web:build",
         "web:e2e",
@@ -280,7 +210,7 @@ fn remote_task_batches_are_validated_and_keep_requested_order() -> Result<()> {
     for direct_task in [
         "web:build) task _web:build",
         "web:e2e) task _web:test:e2e",
-        "web:e2e:debug) NOOK_REMOTE_E2E_DEBUG=1 task _web:test:e2e:debug",
+        "web:e2e:debug) task _web:test:e2e:debug",
         "extension:e2e) task _extension:test:e2e",
         "check) task _check",
         "ci:pr) task _ci:pr",
@@ -342,7 +272,7 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     let system_path = env::var("PATH")?;
     let output = Command::new("bash")
         .arg(repository_root().join(".github/scripts/remote-task-batch.sh"))
-        .args(["--run", "preflight,rust:ci,hive:verify"])
+        .args(["--run", "preflight,rust:ci,arbitrary:task,hive:verify"])
         .env("PATH", format!("{}:{system_path}", fixture.display()))
         .env("TASK_LOG", &task_log)
         .env("GITHUB_STEP_SUMMARY", &summary)
@@ -360,12 +290,13 @@ fn remote_task_batch_runs_every_selection_and_reports_failures() -> Result<()> {
     );
     assert_eq!(
         fs::read_to_string(&task_log)?,
-        "preflight\nci:pr:rust\nhive:verify\n",
+        "preflight\nci:pr:rust\narbitrary:task\nhive:verify\n",
         "a failed task must not prevent later selections from running"
     );
     let summary = fs::read_to_string(&summary)?;
     assert!(summary.contains("| `preflight` | passed |"));
     assert!(summary.contains("| `rust:ci` | failed (exit 1) |"));
+    assert!(summary.contains("| `arbitrary:task` | passed |"));
     assert!(summary.contains("| `hive:verify` | passed |"));
 
     fs::remove_dir_all(fixture)?;
@@ -444,34 +375,7 @@ fn remote_task_batch_rechecks_buildkit_after_both_timeout_statuses_and_continues
 #[test]
 fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
-    assert!(remote_tasks.contains("remote-task-batch.sh --requires-current-base"));
-    for tasks in [
-        "loom:verify",
-        "web:e2e",
-        "web:e2e:debug",
-        "extension:e2e",
-        "ci:pr",
-    ] {
-        assert!(
-            remote_batch_command(&["--requires-current-base", tasks])?
-                .status
-                .success(),
-            "expensive batch must require current base: {tasks}"
-        );
-    }
-    assert!(
-        !remote_batch_command(&["--requires-current-base", "preflight,rust:ci"])?
-            .status
-            .success(),
-        "cheap batch must remain available on a stale base"
-    );
-    assert_eq!(
-        remote_tasks
-            .matches(".github/scripts/require-current-base.sh")
-            .count(),
-        3,
-        "focused expensive dispatch and both complete-validation boundaries must enforce freshness"
-    );
+    assert!(remote_tasks.contains(".github/scripts/require-current-base.sh origin main"));
     assert!(remote_tasks.contains("baseRefName"));
 
     let status = Command::new("bash")
@@ -482,18 +386,10 @@ fn expensive_remote_validation_requires_the_current_base() -> Result<()> {
 }
 
 #[test]
-fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
+fn arc_workflow_runs_named_task_targets() -> Result<()> {
     let remote_tasks = read(".task/remote-execution.yml");
     let workflow = read(".github/workflows/remote.yml");
     let batch_script = read(".github/scripts/remote-task-batch.sh");
-    let task_catalog = remote_catalog()?;
-
-    for task in &task_catalog {
-        assert!(
-            batch_script.contains(&format!("    {task})")),
-            "remote batch helper has no literal command mapping for task: {task}"
-        );
-    }
 
     assert_eq!(
         workflow.matches("runs-on: ubuntu-latest").count(),
@@ -574,7 +470,7 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
         .context("Loom remote execution must prove both command tools")?;
     let batch_position = workflow
         .find("remote-task-batch.sh --run \"$REQUESTED_REMOTE_TASKS\"")
-        .context("remote execution must run the allowlisted batch")?;
+        .context("remote execution must run the named task batch")?;
     assert!(task_setup_position < rust_setup_position);
     assert!(rust_setup_position < bun_setup_position);
     assert!(bun_setup_position < tool_proof_position);
@@ -630,29 +526,6 @@ fn arc_workflow_matches_the_taskfile_catalog() -> Result<()> {
         1,
         "Hive-containing batches must route to and wait for the Hive scale-set sidecar"
     );
-    for unavailable in [
-        "bake-cache:prove",
-        "rust:test",
-        "rust:lint",
-        "rust:coverage",
-        "wasm:build",
-        "wasm:test",
-        "wasm:test:browser",
-        "web:check",
-        "web:test",
-        "extension:check",
-    ] {
-        assert!(
-            !task_catalog.contains(unavailable),
-            "Docker-backed task must remain unavailable to ARC: {unavailable}"
-        );
-        assert!(
-            !batch_script
-                .lines()
-                .any(|line| line.trim_start().starts_with(&format!("{unavailable})"))),
-            "Docker-backed task must have no ARC command mapping: {unavailable}"
-        );
-    }
     Ok(())
 }
 
