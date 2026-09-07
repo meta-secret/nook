@@ -56,10 +56,10 @@ pub(crate) const DEVICE_ID_KEY: &str = "device_id";
 /// Legacy dual-read key for [`APP_KEY_WRAPPED_KEY`].
 pub(crate) const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
 pub(crate) use sentinel_storage::{
-    SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, SentinelGenesisShareCatalogEntry,
-    clear_sentinel_genesis_finalization_pending, list_sentinel_genesis_share_deliveries,
-    load_sentinel_genesis_finalization_pending, load_sentinel_genesis_share_delivery,
-    save_sentinel_genesis_finalization_pending, save_sentinel_genesis_share_delivery,
+    SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, clear_sentinel_genesis_finalization_pending,
+    list_sentinel_genesis_share_deliveries, load_sentinel_genesis_finalization_pending,
+    load_sentinel_genesis_share_delivery, save_sentinel_genesis_finalization_pending,
+    save_sentinel_genesis_share_delivery,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
