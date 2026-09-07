@@ -28,19 +28,35 @@ const FAKE_CREDENTIALS: FakeLoginCredentials = {
 }
 
 type NetflixFixtureOverrides = {
-  readonly action?: string
-  readonly method?: string
-  readonly primaryLabel?: string
-  readonly includePrimary?: boolean
+  readonly actionKind: NetflixFormActionKind
+  readonly action: string
+  readonly method: string
+  readonly primaryLabel: string
+  readonly includePrimary: boolean
+}
+
+enum NetflixFormActionKind {
+  Omitted = 'omitted',
+  Authored = 'authored',
+}
+
+const NETFLIX_FIXTURE_DEFAULTS: NetflixFixtureOverrides = {
+  actionKind: NetflixFormActionKind.Omitted,
+  action: '',
+  method: 'post',
+  primaryLabel: 'Continue',
+  includePrimary: true,
 }
 
 function netflixHtml({
+  actionKind,
   action,
-  method = 'post',
-  primaryLabel = 'Continue',
-  includePrimary = true,
-}: NetflixFixtureOverrides = {}): string {
-  const actionAttribute = action === undefined ? '' : ` action="${action}"`
+  method,
+  primaryLabel,
+  includePrimary,
+}: NetflixFixtureOverrides = NETFLIX_FIXTURE_DEFAULTS): string {
+  const actionAttribute =
+    actionKind === NetflixFormActionKind.Omitted ? '' : ` action="${action}"`
   const primary = includePrimary
     ? `<button type="submit" data-testid="netflix-continue">${primaryLabel}</button>`
     : ''
@@ -72,12 +88,15 @@ function expectFailClosed(html: string): void {
     filled: false,
     submissionResult: FormSubmissionResult.NotObserved,
   })
-  expect(
-    document.querySelector<HTMLInputElement>('[name="userLoginId"]')?.value,
-  ).toBe('')
-  expect(
-    document.querySelector<HTMLInputElement>('[name="password"]')?.value,
-  ).toBe('')
+  const username = document.querySelector<HTMLInputElement>(
+    '[name="userLoginId"]',
+  )
+  const password = document.querySelector<HTMLInputElement>('[name="password"]')
+  if (!username || !password) {
+    throw new Error('expected rejected Netflix credentials')
+  }
+  expect(username.value).toBe('')
+  expect(password.value).toBe('')
 }
 
 afterEach(() => {
@@ -134,16 +153,24 @@ describe('Netflix DOM-backed authentication simulation', () => {
       value: FAKE_CREDENTIALS.password,
     })
     expect(help.type).toBe('button')
-    expect(document.querySelector('h1')?.textContent).toBe(
-      'Enter your info to sign in',
-    )
-    expect(document.querySelector('h2')?.textContent).toBe(
+    const heading = document.querySelector('h1')
+    const newAccountHeading = document.querySelector('h2')
+    if (!heading || !newAccountHeading) {
+      throw new Error('expected Netflix headings')
+    }
+    expect(heading.textContent).toBe('Enter your info to sign in')
+    expect(newAccountHeading.textContent).toBe(
       'Or get started with a new account.',
     )
-    expect(
-      document.querySelector('[data-testid="netflix-recaptcha-disclosure"]'),
-    ).not.toBeNull()
-    expect(document.querySelector('footer select')).not.toBeNull()
+    const disclosure = document.querySelector(
+      '[data-testid="netflix-recaptcha-disclosure"]',
+    )
+    const language = document.querySelector('footer select')
+    if (!disclosure || !language) {
+      throw new Error('expected Netflix disclosure and language controls')
+    }
+    expect(disclosure.textContent).toContain('protected by reCAPTCHA')
+    expect(language.tagName).toBe('SELECT')
 
     const [observation] = summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected Netflix observation')
@@ -164,7 +191,13 @@ describe('Netflix DOM-backed authentication simulation', () => {
   })
 
   test('rejects a cross-origin form destination', () => {
-    expectFailClosed(netflixHtml({ action: 'https://attacker.example/login' }))
+    expectFailClosed(
+      netflixHtml({
+        ...NETFLIX_FIXTURE_DEFAULTS,
+        actionKind: NetflixFormActionKind.Authored,
+        action: 'https://attacker.example/login',
+      }),
+    )
   })
 
   test.each([
@@ -173,11 +206,17 @@ describe('Netflix DOM-backed authentication simulation', () => {
     '/login?provider=google',
     '/login?action=delete',
   ])('rejects the unsafe same-origin action %s', (action) =>
-    expectFailClosed(netflixHtml({ action })),
+    expectFailClosed(
+      netflixHtml({
+        ...NETFLIX_FIXTURE_DEFAULTS,
+        actionKind: NetflixFormActionKind.Authored,
+        action,
+      }),
+    ),
   )
 
   test.each(['get', 'dialog'])('rejects the %s form method', (method) => {
-    expectFailClosed(netflixHtml({ method }))
+    expectFailClosed(netflixHtml({ ...NETFLIX_FIXTURE_DEFAULTS, method }))
   })
 
   test.each([
@@ -190,14 +229,17 @@ describe('Netflix DOM-backed authentication simulation', () => {
     'Create account',
     'Delete account',
   ])('rejects the unsafe primary control %s', (primaryLabel) => {
-    expectFailClosed(netflixHtml({ primaryLabel }))
+    expectFailClosed(netflixHtml({ ...NETFLIX_FIXTURE_DEFAULTS, primaryLabel }))
   })
 
   test('does not treat the auxiliary Get Help button as submission', () => {
-    expectFailClosed(netflixHtml({ includePrimary: false }))
+    expectFailClosed(
+      netflixHtml({ ...NETFLIX_FIXTURE_DEFAULTS, includePrimary: false }),
+    )
     const help = document.querySelector<HTMLButtonElement>(
       '[data-testid="netflix-help"]',
     )
-    expect(help?.type).toBe('button')
+    if (!help) throw new Error('expected rejected Netflix help control')
+    expect(help.type).toBe('button')
   })
 })
