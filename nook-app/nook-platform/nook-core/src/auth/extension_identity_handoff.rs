@@ -537,20 +537,20 @@ mod tests {
                 Self::Version => payload.version = 2,
                 Self::Nonce => payload.nonce = "different".to_owned(),
                 Self::ReportedDevice => {
-                    payload.device_id = DeviceIdentity::generate()?.device_id().clone()
+                    payload.device_id = DeviceIdentity::generate()?.device_id().clone();
                 }
                 Self::ReportedEncryptionKey => {
-                    payload.device_public_key = DeviceIdentity::generate()?.public_key()
+                    payload.device_public_key = DeviceIdentity::generate()?.public_key();
                 }
                 Self::ReportedSigningKey => {
-                    payload.device_signing_public_key = SigningIdentity::generate()?.0.public_key()
+                    payload.device_signing_public_key = SigningIdentity::generate()?.0.public_key();
                 }
                 Self::PrivateIdentity => {
-                    payload.identity_private_key = DeviceIdentity::generate()?.secret_string()
+                    payload.identity_private_key = DeviceIdentity::generate()?.secret_string();
                 }
                 Self::SigningSeed => {
                     payload.signing_seed =
-                        SensitiveSigningSeed(SigningIdentity::generate()?.1.as_str().to_owned())
+                        SensitiveSigningSeed(SigningIdentity::generate()?.1.as_str().to_owned());
                 }
             }
             Ok(())
