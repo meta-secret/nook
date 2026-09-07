@@ -15,6 +15,12 @@
 //!
 //! See `.cortex/teams/dev-core/product-specs/password-envelope.md` for the full design.
 
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use crate::VaultKeys;
 use crate::errors::{
     AgeCryptoError, PasswordError, PasswordResult, RejectedPasswordEnvelopeVersion,
@@ -45,24 +51,29 @@ pub const PASSWORD_MIN_LENGTH: PasswordCharacterCount = PasswordCharacterCount::
 pub const PASSWORD_RECOMMENDED_MIN_LENGTH: PasswordCharacterCount =
     PasswordCharacterCount::RECOMMENDED_MINIMUM;
 
-#[must_use]
-pub fn vault_password_min_length() -> PasswordCharacterCount {
-    PASSWORD_MIN_LENGTH
-}
+/// Password policy for password-backed vault unlock entries.
+pub struct PasswordPolicy;
 
-#[must_use]
-pub fn is_vault_password_long_enough(password: &str) -> bool {
-    password.len() >= PASSWORD_MIN_LENGTH.into()
-}
+impl PasswordPolicy {
+    #[must_use]
+    pub fn min_length() -> PasswordCharacterCount {
+        PASSWORD_MIN_LENGTH
+    }
 
-#[must_use]
-pub fn vault_password_recommended_min_length() -> PasswordCharacterCount {
-    PASSWORD_RECOMMENDED_MIN_LENGTH
-}
+    #[must_use]
+    pub fn is_long_enough(password: &str) -> bool {
+        password.len() >= PASSWORD_MIN_LENGTH.into()
+    }
 
-#[must_use]
-pub fn is_vault_password_recommended_length(password: &str) -> bool {
-    password.trim().len() >= PASSWORD_RECOMMENDED_MIN_LENGTH.into()
+    #[must_use]
+    pub fn recommended_min_length() -> PasswordCharacterCount {
+        PASSWORD_RECOMMENDED_MIN_LENGTH
+    }
+
+    #[must_use]
+    pub fn is_recommended_length(password: &str) -> bool {
+        password.trim().len() >= PASSWORD_RECOMMENDED_MIN_LENGTH.into()
+    }
 }
 
 /// A labelled password unlock slot. Each entry wraps the same vault keys with
@@ -225,6 +236,132 @@ impl PasswordEnvelope {
             .resolve()
             .is_ok()
     }
+
+    fn encode_keys(keys: &VaultKeys) -> PasswordResult<Zeroizing<String>> {
+        let encoded = serde_json::to_string(&EnvelopePlaintext {
+            secrets_key: keys.secrets_key.as_str().to_owned(),
+            members_key: keys.members_key.as_str().to_owned(),
+        })
+        .map_err(PasswordError::EnvelopePlaintextSerialize)?;
+        Ok(Zeroizing::new(encoded))
+    }
+
+    fn encrypt_recipient(
+        recipient: &x25519::Recipient,
+        plaintext: &[u8],
+    ) -> PasswordResult<AgeArmoredCiphertext> {
+        use age::armor::{ArmoredWriter, Format};
+
+        let encryptor =
+            age::Encryptor::with_recipients(iter::once(recipient as &dyn age::Recipient)).map_err(
+                |error| PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string())),
+            )?;
+        let mut armored = Vec::new();
+        let armor_writer =
+            ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor).map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeArmorWrap(error.to_string()))
+            })?;
+        let mut writer = encryptor.wrap_output(armor_writer).map_err(|error| {
+            PasswordError::Age(AgeCryptoError::EnvelopeEncrypt(error.to_string()))
+        })?;
+        writer.write_all(plaintext).map_err(|error| {
+            PasswordError::Age(AgeCryptoError::EnvelopeWrite(error.to_string()))
+        })?;
+        writer
+            .finish()
+            .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeFinish(error.to_string())))?
+            .finish()
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeArmorFinish(error.to_string()))
+            })?;
+        String::from_utf8(armored)
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeInvalidUtf8(error.to_string()))
+            })
+            .map(AgeArmoredCiphertext::from_trusted_armored)
+    }
+
+    fn decrypt_identity(
+        identity: &x25519::Identity,
+        armored: &[u8],
+    ) -> PasswordResult<Zeroizing<Vec<u8>>> {
+        use age::armor::ArmoredReader;
+
+        let decryptor =
+            age::Decryptor::new_buffered(ArmoredReader::new(armored)).map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
+            })?;
+        let mut reader = decryptor
+            .decrypt(iter::once(identity as &dyn age::Identity))
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(error.to_string()))
+            })?;
+        let mut plaintext = Zeroizing::new(Vec::new());
+        reader
+            .read_to_end(&mut plaintext)
+            .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeRead(error.to_string())))?;
+        Ok(plaintext)
+    }
+
+    fn encrypt_scrypt(
+        recipient: &scrypt::Recipient,
+        plaintext: &[u8],
+    ) -> PasswordResult<AgeArmoredCiphertext> {
+        use age::armor::{ArmoredWriter, Format};
+
+        let encryptor =
+            age::Encryptor::with_recipients(iter::once(recipient as &dyn age::Recipient)).map_err(
+                |error| PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string())),
+            )?;
+
+        let mut armored = Vec::new();
+        let armor_writer =
+            ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor).map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeArmorWrap(error.to_string()))
+            })?;
+        let mut writer = encryptor.wrap_output(armor_writer).map_err(|error| {
+            PasswordError::Age(AgeCryptoError::EnvelopeEncrypt(error.to_string()))
+        })?;
+        writer.write_all(plaintext).map_err(|error| {
+            PasswordError::Age(AgeCryptoError::EnvelopeWrite(error.to_string()))
+        })?;
+        writer
+            .finish()
+            .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeFinish(error.to_string())))?
+            .finish()
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeArmorFinish(error.to_string()))
+            })?;
+
+        String::from_utf8(armored)
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeInvalidUtf8(error.to_string()))
+            })
+            .map(AgeArmoredCiphertext::from_trusted_armored)
+    }
+
+    fn decrypt_scrypt(
+        identity: &scrypt::Identity,
+        armored: &[u8],
+    ) -> PasswordResult<Zeroizing<Vec<u8>>> {
+        use age::armor::ArmoredReader;
+
+        let decryptor =
+            age::Decryptor::new_buffered(ArmoredReader::new(armored)).map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
+            })?;
+        let mut reader = decryptor
+            .decrypt(iter::once(identity as &dyn age::Identity))
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(error.to_string()))
+            })?;
+
+        let mut plaintext = Zeroizing::new(Vec::new());
+        reader
+            .read_to_end(&mut plaintext)
+            .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeRead(error.to_string())))?;
+        Ok(plaintext)
+    }
 }
 
 impl PasswordUnlockEntry {
@@ -330,22 +467,22 @@ impl<'a> PasswordEnvelopeAttachment<'a> {
         if !(1..64).contains(&raw_work_factor) {
             return Err(PasswordError::InvalidWorkFactor);
         }
-        if !is_vault_password_long_enough(self.password) {
+        if !PasswordPolicy::is_long_enough(self.password) {
             return Err(PasswordError::TooShort {
                 min: PASSWORD_MIN_LENGTH,
             });
         }
 
-        let plaintext = encode_keys(self.keys)?;
+        let plaintext = PasswordEnvelope::encode_keys(self.keys)?;
         let wrapping_identity = x25519::Identity::generate();
         let recipient = wrapping_identity.to_public();
-        let wrapped_keys = age_encrypt_recipient(&recipient, plaintext.as_bytes())?;
+        let wrapped_keys = PasswordEnvelope::encrypt_recipient(&recipient, plaintext.as_bytes())?;
         let wrapping_identity = wrapping_identity.to_string();
 
         let secret = secrecy::SecretString::from(self.password.to_owned());
         let mut password_recipient = scrypt::Recipient::new(secret);
         password_recipient.set_work_factor(raw_work_factor);
-        let ciphertext = age_encrypt_scrypt(
+        let ciphertext = PasswordEnvelope::encrypt_scrypt(
             &password_recipient,
             wrapping_identity.expose_secret().as_bytes(),
         )?;
@@ -390,7 +527,7 @@ impl<'a> PasswordEnvelopeResolution<'a> {
         let secret = secrecy::SecretString::from(self.password.to_owned());
         let identity = scrypt::Identity::new(secret);
         let mut password_plaintext =
-            age_decrypt_scrypt(&identity, self.envelope.ciphertext.as_bytes())?;
+            PasswordEnvelope::decrypt_scrypt(&identity, self.envelope.ciphertext.as_bytes())?;
         let mut plaintext_bytes = if self.envelope.version == PasswordEnvelopeVersion::LEGACY {
             Zeroizing::new(mem::take(&mut *password_plaintext))
         } else {
@@ -404,7 +541,10 @@ impl<'a> PasswordEnvelopeResolution<'a> {
                     .map_err(|error| {
                         PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
                     })?;
-            age_decrypt_identity(&wrapping_identity, self.envelope.wrapped_keys.as_bytes())?
+            PasswordEnvelope::decrypt_identity(
+                &wrapping_identity,
+                self.envelope.wrapped_keys.as_bytes(),
+            )?
         };
         let plaintext_str = Zeroizing::new(
             String::from_utf8(mem::take(&mut *plaintext_bytes))
@@ -466,8 +606,8 @@ impl<'a> PasswordEnvelopeRewrap<'a> {
             .map_err(|error| {
                 PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string()))
             })?;
-        let plaintext = encode_keys(self.keys)?;
-        let wrapped_keys = age_encrypt_recipient(&recipient, plaintext.as_bytes())?;
+        let plaintext = PasswordEnvelope::encode_keys(self.keys)?;
+        let wrapped_keys = PasswordEnvelope::encrypt_recipient(&recipient, plaintext.as_bytes())?;
         let mut rewrapped = self.envelope.clone();
         wrapped_keys
             .as_str()
@@ -483,116 +623,6 @@ struct EnvelopePlaintext {
 }
 
 const ENVELOPE_KDF: &str = "scrypt";
-
-fn encode_keys(keys: &VaultKeys) -> PasswordResult<Zeroizing<String>> {
-    let encoded = serde_json::to_string(&EnvelopePlaintext {
-        secrets_key: keys.secrets_key.as_str().to_owned(),
-        members_key: keys.members_key.as_str().to_owned(),
-    })
-    .map_err(PasswordError::EnvelopePlaintextSerialize)?;
-    Ok(Zeroizing::new(encoded))
-}
-
-fn age_encrypt_recipient(
-    recipient: &x25519::Recipient,
-    plaintext: &[u8],
-) -> PasswordResult<AgeArmoredCiphertext> {
-    use age::armor::{ArmoredWriter, Format};
-
-    let encryptor = age::Encryptor::with_recipients(iter::once(recipient as &dyn age::Recipient))
-        .map_err(|error| {
-        PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string()))
-    })?;
-    let mut armored = Vec::new();
-    let armor_writer =
-        ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor).map_err(|error| {
-            PasswordError::Age(AgeCryptoError::EnvelopeArmorWrap(error.to_string()))
-        })?;
-    let mut writer = encryptor
-        .wrap_output(armor_writer)
-        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeEncrypt(error.to_string())))?;
-    writer
-        .write_all(plaintext)
-        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeWrite(error.to_string())))?;
-    writer
-        .finish()
-        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeFinish(error.to_string())))?
-        .finish()
-        .map_err(|error| {
-            PasswordError::Age(AgeCryptoError::EnvelopeArmorFinish(error.to_string()))
-        })?;
-    String::from_utf8(armored)
-        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeInvalidUtf8(error.to_string())))
-        .map(AgeArmoredCiphertext::from_trusted_armored)
-}
-
-fn age_decrypt_identity(
-    identity: &x25519::Identity,
-    armored: &[u8],
-) -> PasswordResult<Zeroizing<Vec<u8>>> {
-    use age::armor::ArmoredReader;
-
-    let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored)).map_err(|error| {
-        PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
-    })?;
-    let mut reader = decryptor
-        .decrypt(iter::once(identity as &dyn age::Identity))
-        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(error.to_string())))?;
-    let mut plaintext = Zeroizing::new(Vec::new());
-    reader
-        .read_to_end(&mut plaintext)
-        .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeRead(error.to_string())))?;
-    Ok(plaintext)
-}
-
-fn age_encrypt_scrypt(
-    recipient: &scrypt::Recipient,
-    plaintext: &[u8],
-) -> PasswordResult<AgeArmoredCiphertext> {
-    use age::armor::{ArmoredWriter, Format};
-
-    let encryptor =
-        age::Encryptor::with_recipients(iter::once(recipient as &dyn age::Recipient))
-            .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(e.to_string())))?;
-
-    let mut armored = Vec::new();
-    let armor_writer = ArmoredWriter::wrap_output(&mut armored, Format::AsciiArmor)
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeArmorWrap(e.to_string())))?;
-    let mut writer = encryptor
-        .wrap_output(armor_writer)
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeEncrypt(e.to_string())))?;
-    writer
-        .write_all(plaintext)
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeWrite(e.to_string())))?;
-    writer
-        .finish()
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeFinish(e.to_string())))?
-        .finish()
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeArmorFinish(e.to_string())))?;
-
-    String::from_utf8(armored)
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeInvalidUtf8(e.to_string())))
-        .map(AgeArmoredCiphertext::from_trusted_armored)
-}
-
-fn age_decrypt_scrypt(
-    identity: &scrypt::Identity,
-    armored: &[u8],
-) -> PasswordResult<Zeroizing<Vec<u8>>> {
-    use age::armor::ArmoredReader;
-
-    let decryptor = age::Decryptor::new_buffered(ArmoredReader::new(armored))
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(e.to_string())))?;
-    let mut reader = decryptor
-        .decrypt(iter::once(identity as &dyn age::Identity))
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeDecrypt(e.to_string())))?;
-
-    let mut plaintext = Zeroizing::new(Vec::new());
-    reader
-        .read_to_end(&mut plaintext)
-        .map_err(|e| PasswordError::Age(AgeCryptoError::EnvelopeRead(e.to_string())))?;
-    Ok(plaintext)
-}
 
 #[cfg(test)]
 mod tests {
@@ -673,17 +703,17 @@ mod tests {
 
     #[test]
     fn exposes_password_length_floor() {
-        assert_eq!(usize::from(vault_password_min_length()), 5);
-        assert!(!is_vault_password_long_enough("1234"));
-        assert!(is_vault_password_long_enough("12345"));
+        assert_eq!(usize::from(PasswordPolicy::min_length()), 5);
+        assert!(!PasswordPolicy::is_long_enough("1234"));
+        assert!(PasswordPolicy::is_long_enough("12345"));
     }
 
     #[test]
     fn exposes_recommended_password_length_floor() {
-        assert_eq!(usize::from(vault_password_recommended_min_length()), 8);
-        assert!(!is_vault_password_recommended_length("1234567"));
-        assert!(is_vault_password_recommended_length("12345678"));
-        assert!(!is_vault_password_recommended_length(" 1234567 "));
+        assert_eq!(usize::from(PasswordPolicy::recommended_min_length()), 8);
+        assert!(!PasswordPolicy::is_recommended_length("1234567"));
+        assert!(PasswordPolicy::is_recommended_length("12345678"));
+        assert!(!PasswordPolicy::is_recommended_length(" 1234567 "));
     }
 
     #[test]
