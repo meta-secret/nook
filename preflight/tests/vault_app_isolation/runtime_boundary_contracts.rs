@@ -55,7 +55,14 @@ fn vault_apps_keep_rust_owned_runtime_boundaries() {
         "nook-app/nook-web/nook-web-shared/src/vault-app/lib/runtime/wasm-bootstrap.ts",
     );
     assert!(wasm_bridge.contains("configure_vault_application(application)"));
-    let wasm_vault_api = read(&root, "nook-app/nook-platform/nook-wasm/src/vault_api.rs");
+    let wasm_vault_api = format!(
+        "{}\n{}",
+        read(&root, "nook-app/nook-platform/nook-wasm/src/vault_api.rs"),
+        read(
+            &root,
+            "nook-app/nook-platform/nook-wasm/src/vault_api_local.rs",
+        ),
+    );
     for rust_owned_api in [
         "application: nook_core::VaultApplication",
         "-> nook_core::VaultApplication",
