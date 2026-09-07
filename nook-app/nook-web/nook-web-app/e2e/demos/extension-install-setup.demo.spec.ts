@@ -10,6 +10,7 @@ import {
   type ExtensionPairedVaultIdentityStatusMessage,
   type OpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { installMockPasskeyRuntime } from '../passkey-mock'
 
 type ExtensionInstallDemoMessage =
   ExtensionPairedVaultIdentityDiscoveryMessage | OpenCompanionLauncherMessage
@@ -32,6 +33,14 @@ type ExtensionInstallDemoChromeRuntime = {
 
 type ExtensionInstallDemoBrowserGlobal = typeof globalThis & {
   chrome?: { runtime?: ExtensionInstallDemoChromeRuntime }
+}
+
+type ExtensionInstallDemoVault = {
+  requireManager(): {
+    device_id: string
+    device_public_key: string
+    device_signing_public_key_js(): Promise<string>
+  }
 }
 
 const extensionInstallDemoMessageTypes: ExtensionInstallDemoMessageTypes = {
@@ -221,6 +230,70 @@ test('offer browser extension install on vault home and in Devices', async ({
     extensionInstallDemoMessageTypes.openCompanionLauncher,
     extensionInstallDemoMessageTypes.pairedVaultIdentityDiscovery,
   ])
+  await demoBeat(page)
+})
+
+test('accept delayed extension pairing acknowledgement without duplicate delivery', async ({
+  browser,
+  page,
+}) => {
+  await connectLocalVault(page)
+
+  const extensionContext = await browser.newContext()
+  await extensionContext.addInitScript(installMockPasskeyRuntime)
+  const extensionPage = await extensionContext.newPage()
+  await connectLocalVault(extensionPage)
+  const extensionDevice = await extensionPage.evaluate(async () => {
+    const manager = (
+      window as Window & { __nookVault: ExtensionInstallDemoVault }
+    ).__nookVault.requireManager()
+    return {
+      deviceId: manager.device_id,
+      devicePublicKey: manager.device_public_key,
+      deviceSigningPublicKey: await manager.device_signing_public_key_js(),
+    }
+  })
+  await extensionContext.close()
+
+  await page.goto(
+    `/extension-connect?device_id=${extensionDevice.deviceId}&device_public_key=${encodeURIComponent(extensionDevice.devicePublicKey)}&device_signing_public_key=${extensionDevice.deviceSigningPublicKey}&extension_id=demo-extension-id&device_label=Nook%20Extension%20-%20UI%20demo&nonce=demo-nonce&scopes=vault-access,password-filling`,
+  )
+  const consent = page.getByTestId('extension-connect-consent')
+  await expect(consent).toBeVisible({ timeout: UI_TIMEOUT_MS })
+
+  await page.evaluate((acknowledgementDelayMs) => {
+    let deliveryCount = 0
+    const browserGlobal = globalThis as ExtensionInstallDemoBrowserGlobal
+    browserGlobal.chrome = {
+      runtime: {
+        sendMessage: (_extensionId, _message, callback) => {
+          deliveryCount += 1
+          document.documentElement.setAttribute(
+            'data-demo-pairing-delivery-count',
+            String(deliveryCount),
+          )
+          window.setTimeout(
+            () => callback({ ok: true }),
+            acknowledgementDelayMs,
+          )
+        },
+      },
+    }
+  }, 6_000)
+
+  await page.getByTestId('approve-extension-device-btn').click()
+  const html = page.locator('html')
+  await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
+
+  await page.waitForTimeout(5_200)
+  await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
+  await expect(consent.getByRole('alert')).toHaveCount(0)
+
+  await expect(page.getByTestId('extension-connect-approved')).toBeVisible({
+    timeout: UI_TIMEOUT_MS,
+  })
+  await expect(html).toHaveAttribute('data-demo-pairing-delivery-count', '1')
+  await expect(consent.getByRole('alert')).toHaveCount(0)
   await demoBeat(page)
 })
 

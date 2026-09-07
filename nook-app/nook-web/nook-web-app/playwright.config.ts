@@ -150,6 +150,10 @@ export default defineConfig({
     url: `http://127.0.0.1:${webPort}`,
     reuseExistingServer: !isCi && !isUiDemo,
     timeout: isCi ? 120_000 : 30_000,
+    gracefulShutdown: {
+      signal: 'SIGTERM',
+      timeout: 5_000,
+    },
     env: usePreviewServer
       ? {
           VITE_E2E_EXPOSE_VAULT: 'true',

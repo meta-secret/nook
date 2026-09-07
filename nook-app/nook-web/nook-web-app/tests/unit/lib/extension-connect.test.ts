@@ -236,8 +236,7 @@ describe('extension pairing approved message', () => {
     expect(sendMessage).toHaveBeenCalledOnce()
   })
 
-  test('retries a callback that supplies no response argument', async () => {
-    vi.useFakeTimers()
+  test('reports a callback that supplies no response argument once', async () => {
     const sendMessage = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
         args[2]()
@@ -245,16 +244,15 @@ describe('extension pairing approved message', () => {
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
 
-    const delivery = deliverExtensionPairingApproval(approvalDeliveryArgs())
-    await vi.runAllTimersAsync()
-    await expect(delivery).resolves.toEqual({
+    await expect(
+      deliverExtensionPairingApproval(approvalDeliveryArgs()),
+    ).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
     })
-    expect(sendMessage).toHaveBeenCalledTimes(3)
+    expect(sendMessage).toHaveBeenCalledOnce()
   })
 
-  test('retries runtime errors and callback timeouts', async () => {
-    vi.useFakeTimers()
+  test('reports a runtime error once', async () => {
     const runtimeErrorSend = vi.fn(
       (...args: [string, unknown, (response?: unknown) => void]) => {
         args[2]({ ok: true })
@@ -266,24 +264,30 @@ describe('extension pairing approved message', () => {
         lastError: { message: 'gone' },
       },
     })
-    const runtimeErrorDelivery = deliverExtensionPairingApproval(
-      approvalDeliveryArgs(),
-    )
-    await vi.runAllTimersAsync()
-    await expect(runtimeErrorDelivery).resolves.toEqual({
+    await expect(
+      deliverExtensionPairingApproval(approvalDeliveryArgs()),
+    ).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
     })
+    expect(runtimeErrorSend).toHaveBeenCalledOnce()
+  })
 
-    const timeoutSend = vi.fn()
-    vi.stubGlobal('chrome', { runtime: { sendMessage: timeoutSend } })
-    const timeoutDelivery = deliverExtensionPairingApproval(
-      approvalDeliveryArgs(),
+  test('waits for one slow pairing import acknowledgement', async () => {
+    vi.useFakeTimers()
+    const sendMessage = vi.fn(
+      (...args: [string, unknown, (response?: unknown) => void]) => {
+        window.setTimeout(() => args[2]({ ok: true }), 6_000)
+      },
     )
-    await vi.runAllTimersAsync()
-    await expect(timeoutDelivery).resolves.toEqual({
-      kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
+    vi.stubGlobal('chrome', { runtime: { sendMessage } })
+
+    const delivery = deliverExtensionPairingApproval(approvalDeliveryArgs())
+    await vi.advanceTimersByTimeAsync(6_000)
+
+    await expect(delivery).resolves.toEqual({
+      kind: ExtensionPairingDeliveryKind.Delivered,
     })
-    expect(timeoutSend).toHaveBeenCalledTimes(3)
+    expect(sendMessage).toHaveBeenCalledOnce()
   })
 
   test('classifies plaintext provider migration rejection', async () => {

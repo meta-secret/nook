@@ -242,6 +242,8 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let values = read("infra/k0s/manifests/arc/runner-scale-set-values.yaml");
     let hive_values = read("infra/k0s/scripts/arc-hive-values.rb");
     let buildkit = read("infra/k0s/manifests/arc/buildkit.yaml");
+    let container_hook = read("infra/k0s/manifests/arc/container-hook.yaml");
+    let container_job_nodes = read("infra/k0s/config/arc-container-job-nodes");
     let tasks = read("infra/tasks/arc.yml");
     let pull_request_workflow = read(".github/workflows/pr.yml");
 
@@ -307,6 +309,12 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         );
     }
     assert!(!buildkit.contains("--oci-worker-gc-keepstorage"));
+    assert!(container_hook.contains("nook.nokey.sh/arc-build: \"true\""));
+    assert!(container_hook.contains("nook.nokey.sh/arc-container-job: \"true\""));
+    assert_eq!(
+        container_job_nodes, "nook-rise-s-1\nnook-rise-s-2\novh-us\n",
+        "container jobs must remain limited to the explicit eligible-node inventory"
+    );
     assert!(
         pull_request_workflow
             .contains("github.event.pull_request.head.repo.full_name == github.repository")
@@ -347,6 +355,10 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
         "autoscalingrunnerset/nook-k0s",
         "autoscalingrunnerset/nook-k0s-hive",
         "arc:build-hosts:activate:",
+        "arc:container-hosts:reconcile:",
+        "arc-container-job-nodes",
+        "nook.nokey.sh/arc-container-job=true",
+        "ARC container-job labels do not match the declared eligibility inventory",
         "for tier in primary secondary overflow",
         "primary) expected_tier_count=2",
         "secondary|overflow) expected_tier_count=1",
@@ -364,13 +376,21 @@ fn arc_prioritizes_and_spreads_runners_across_qualified_nodes() {
     let storage = tasks
         .find("- task: arc:buildkit:storage:prepare")
         .expect("ARC deployment must prepare retained storage");
+    let container_eligibility = tasks
+        .find("- task: arc:container-hosts:reconcile")
+        .expect("ARC deployment must reconcile container-job eligibility");
     let rollout = tasks
         .find("rollout status statefulset/nook-buildkit")
         .expect("ARC deployment must wait for BuildKit");
     let activate = tasks
         .rfind("- task: arc:build-hosts:activate")
         .expect("ARC deployment must activate converged nodes");
-    assert!(prepare < storage && storage < rollout && rollout < activate);
+    assert!(
+        prepare < container_eligibility
+            && container_eligibility < storage
+            && storage < rollout
+            && rollout < activate
+    );
     let primary = tasks
         .find("for tier in primary secondary overflow")
         .expect("ARC activation must expose primary capacity first");
