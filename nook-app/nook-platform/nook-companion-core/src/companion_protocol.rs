@@ -65,12 +65,6 @@ impl CompanionEpochMilliseconds {
     }
 }
 
-impl From<u32> for CompanionEpochMilliseconds {
-    fn from(value: u32) -> Self {
-        Self(f64::from(value))
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -380,15 +374,21 @@ impl CompanionIdentityHandoffResponse {
 #[serde(tag = "kind", rename_all = "kebab-case")]
 #[tsify(into_wasm_abi)]
 pub enum CompanionIdentityStatusAdmission {
-    Accepted { status: CompanionIdentityStatus },
-    Rejected { failure: CompanionProtocolFailure },
+    Accepted {
+        status: Box<CompanionIdentityStatus>,
+    },
+    Rejected {
+        failure: CompanionProtocolFailure,
+    },
 }
 
 impl CompanionIdentityStatusAdmission {
     #[must_use]
     pub fn admit(status: CompanionIdentityStatus) -> Self {
         match status.validate() {
-            Ok(()) => Self::Accepted { status },
+            Ok(()) => Self::Accepted {
+                status: Box::new(status),
+            },
             Err(error) => Self::Rejected {
                 failure: error.into(),
             },
@@ -401,7 +401,7 @@ impl CompanionIdentityStatusAdmission {
 #[tsify(into_wasm_abi)]
 pub enum CompanionHandoffResponseAdmission {
     Accepted {
-        response: CompanionIdentityHandoffResponse,
+        response: Box<CompanionIdentityHandoffResponse>,
     },
     Rejected {
         failure: CompanionProtocolFailure,
@@ -412,7 +412,9 @@ impl CompanionHandoffResponseAdmission {
     #[must_use]
     pub fn admit(response: CompanionIdentityHandoffResponse) -> Self {
         match response.validate() {
-            Ok(()) => Self::Accepted { response },
+            Ok(()) => Self::Accepted {
+                response: Box::new(response),
+            },
             Err(error) => Self::Rejected {
                 failure: error.into(),
             },
@@ -441,7 +443,6 @@ pub enum CompanionExtensionPresence {
 impl CompanionExtensionPresence {
     fn validate(&self) -> Result<(), CompanionProtocolError> {
         match self {
-            Self::Unavailable => Ok(()),
             Self::Locked {
                 vault_store_id,
                 vault_name,
@@ -455,7 +456,7 @@ impl CompanionExtensionPresence {
                 Err(CompanionProtocolError::InvalidValue)
             }
             Self::Unlocked { app_key, .. } => app_key.validate(),
-            Self::Locked { .. } => Ok(()),
+            Self::Unavailable | Self::Locked { .. } => Ok(()),
         }
     }
 }
@@ -653,9 +654,9 @@ mod tests {
                     request: CompanionIdentityDiscoveryRequest {
                         request_id: "request-1".to_owned(),
                         vault_store_id: "store-1".to_owned(),
-                        expires_at: 200_u32.into(),
+                        expires_at: CompanionEpochMilliseconds(200.0),
                     },
-                    observed_at: 100_u32.into(),
+                    observed_at: CompanionEpochMilliseconds(100.0),
                 },
                 status: self.status.clone(),
                 context: CompanionIdentityHandoffContext::PairedVault {
@@ -702,9 +703,9 @@ mod tests {
                     request: CompanionIdentityDiscoveryRequest {
                         request_id: "request-1".to_owned(),
                         vault_store_id: "store-1".to_owned(),
-                        expires_at: 100_u32.into(),
+                        expires_at: CompanionEpochMilliseconds(100.0),
                     },
-                    observed_at: 100_u32.into(),
+                    observed_at: CompanionEpochMilliseconds(100.0),
                 }),
             Err(CompanionProtocolError::DiscoveryExpired)
         ));
@@ -739,7 +740,7 @@ mod tests {
     fn website_rejects_a_response_observed_after_discovery_expiry() -> anyhow::Result<()> {
         let scenario = Scenario::new()?;
         let mut begin = scenario.begin();
-        begin.discovery.observed_at = 200_u32.into();
+        begin.discovery.observed_at = CompanionEpochMilliseconds(200.0);
         assert!(matches!(
             begin.validate(),
             Err(CompanionProtocolError::DiscoveryExpired)
