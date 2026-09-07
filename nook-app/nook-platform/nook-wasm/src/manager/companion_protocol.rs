@@ -30,7 +30,7 @@ enum CompanionOperationError {
     InstallationAppKeyMismatch,
 }
 
-fn companion_js_error(error: CompanionOperationError) -> JsError {
+fn companion_js_error(error: &CompanionOperationError) -> JsError {
     JsError::new(&error.to_string())
 }
 
@@ -83,7 +83,7 @@ impl NookCompanionExtensionEndpoint {
         let authorized = self.protocol.authorize_handoff(operation.request)?;
         // A valid nonce is consumed even if sealing fails: callers must perform
         // fresh discovery rather than replay an authorization after ambiguity.
-        Ok(authorized.seal(&mut CompanionManagerSealer(operation.manager))?)
+        authorized.seal(&mut CompanionManagerSealer(operation.manager))
     }
 }
 
@@ -97,7 +97,7 @@ impl NookCompanionExtensionEndpoint {
     #[wasm_bindgen(constructor)]
     #[allow(clippy::needless_pass_by_value)]
     pub fn new(presence: CompanionExtensionPresence) -> Result<Self, JsError> {
-        Self::from_presence(presence).map_err(companion_js_error)
+        Self::from_presence(presence).map_err(|error| companion_js_error(&error))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -109,9 +109,9 @@ impl NookCompanionExtensionEndpoint {
         manager
             .ensure_signing_identity()
             .await
-            .map_err(|error| companion_js_error(CompanionOperationError::Manager(error)))?;
+            .map_err(|error| companion_js_error(&CompanionOperationError::Manager(error)))?;
         self.authorize_and_seal_loaded(CompanionExtensionSealOperation { manager, request })
-            .map_err(companion_js_error)
+            .map_err(|error| companion_js_error(&error))
     }
 }
 
@@ -208,7 +208,7 @@ impl NookVaultManager {
         begin: CompanionWebsiteHandoffBegin,
     ) -> Result<CompanionIdentityHandoffRequest, JsError> {
         self.begin_companion_identity_handoff_inner(begin)
-            .map_err(companion_js_error)
+            .map_err(|error| companion_js_error(&error))
     }
 
     #[allow(clippy::needless_pass_by_value)]
@@ -218,7 +218,7 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         let mut pending = self
             .consume_companion_website_handoff(&response)
-            .map_err(companion_js_error)?;
+            .map_err(|error| companion_js_error(&error))?;
         let context = NookExtensionIdentityHandoffContext::from_companion(pending.context.clone())?;
         self.device.extension_handoff_private_key = pending.take_recipient_secret();
         let expected = &pending.request.expected_app_key;
