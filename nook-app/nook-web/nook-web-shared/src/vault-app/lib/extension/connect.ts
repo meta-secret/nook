@@ -1,6 +1,7 @@
 type ExtensionMessageRequest = {
   readonly extensionId: string;
   readonly message: unknown;
+  readonly responseWait: ExtensionMessageResponseWait;
 };
 
 type ExtensionPairingApprovalDelivery = {
@@ -87,6 +88,30 @@ export type InstalledExtensionRuntime =
 const extensionRuntimeIdAttribute = "data-nook-extension-runtime-id";
 const EXTENSION_MESSAGE_TIMEOUT_MS = 5_000;
 const PAIRED_IDENTITY_UNAVAILABLE_RETRY_MS = 150;
+
+enum ExtensionMessageResponseWaitKind {
+  BrowserChannel = "browser-channel",
+  Bounded = "bounded",
+}
+
+type ExtensionMessageResponseWait =
+  | { readonly kind: ExtensionMessageResponseWaitKind.BrowserChannel }
+  | {
+      readonly kind: ExtensionMessageResponseWaitKind.Bounded;
+      readonly timeoutMs: number;
+    };
+
+enum ExtensionMessageResponseTimerKind {
+  NotScheduled = "not-scheduled",
+  Scheduled = "scheduled",
+}
+
+type ExtensionMessageResponseTimer =
+  | { readonly kind: ExtensionMessageResponseTimerKind.NotScheduled }
+  | {
+      readonly kind: ExtensionMessageResponseTimerKind.Scheduled;
+      readonly handle: ReturnType<typeof window.setTimeout>;
+    };
 
 export function isExtensionConnectPath(pathname: string): boolean {
   const normalized = stripBasePath(pathname).replace(/\/$/, "") || "/";
@@ -194,6 +219,7 @@ export function readInstalledExtensionRuntimeId(): InstalledExtensionRuntime {
 function sendExtensionMessage({
   extensionId,
   message,
+  responseWait,
 }: ExtensionMessageRequest): Promise<ExtensionMessageDelivery> {
   return new Promise((resolve) => {
     const runtime = (
@@ -220,10 +246,16 @@ function sendExtensionMessage({
       return;
     }
     let settled = false;
+    let responseTimer: ExtensionMessageResponseTimer = {
+      kind: ExtensionMessageResponseTimerKind.NotScheduled,
+    };
     const finishUnavailable = () => {
       if (settled) return;
       settled = true;
-      window.clearTimeout(timer);
+      if (responseTimer.kind === ExtensionMessageResponseTimerKind.Scheduled) {
+        window.clearTimeout(responseTimer.handle);
+      }
+      responseTimer = { kind: ExtensionMessageResponseTimerKind.NotScheduled };
       const resolveArgs2: Parameters<typeof resolve>[0] = {
         kind: ExtensionMessageDeliveryKind.Unavailable,
       };
@@ -232,17 +264,22 @@ function sendExtensionMessage({
     const finishReceived = (response: unknown) => {
       if (settled) return;
       settled = true;
-      window.clearTimeout(timer);
+      if (responseTimer.kind === ExtensionMessageResponseTimerKind.Scheduled) {
+        window.clearTimeout(responseTimer.handle);
+      }
+      responseTimer = { kind: ExtensionMessageResponseTimerKind.NotScheduled };
       const resolveArgs3: Parameters<typeof resolve>[0] = {
         kind: ExtensionMessageDeliveryKind.Received,
         response,
       };
       resolve(resolveArgs3);
     };
-    const timer = window.setTimeout(
-      finishUnavailable,
-      EXTENSION_MESSAGE_TIMEOUT_MS,
-    );
+    if (responseWait.kind === ExtensionMessageResponseWaitKind.Bounded) {
+      responseTimer = {
+        kind: ExtensionMessageResponseTimerKind.Scheduled,
+        handle: window.setTimeout(finishUnavailable, responseWait.timeoutMs),
+      };
+    }
     function receiveExtensionResponse(response?: unknown): void {
       if (runtime?.lastError?.message) {
         finishUnavailable();
@@ -287,27 +324,15 @@ export async function deliverExtensionPairingApproval({
   request,
   message,
 }: ExtensionPairingApprovalDelivery): Promise<ExtensionPairingDelivery> {
-  let lastDelivery: ExtensionPairingDelivery = {
-    kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
+  const sendArgs: Parameters<typeof sendExtensionMessage>[0] = {
+    extensionId: request.extensionRuntimeId,
+    message,
+    responseWait: { kind: ExtensionMessageResponseWaitKind.BrowserChannel },
   };
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    const sendArgs: Parameters<typeof sendExtensionMessage>[0] = {
-      extensionId: request.extensionRuntimeId,
-      message,
-    };
-    const delivery = await sendExtensionMessage(sendArgs);
-    lastDelivery =
-      delivery.kind === ExtensionMessageDeliveryKind.Received
-        ? pairingDeliveryFromResponse(delivery.response)
-        : { kind: ExtensionPairingDeliveryKind.MessagingUnavailable };
-    if (lastDelivery.kind === ExtensionPairingDeliveryKind.Delivered) {
-      return lastDelivery;
-    }
-    if (attempt < 2) {
-      await new Promise<void>((resolve) => window.setTimeout(resolve, 150));
-    }
-  }
-  return lastDelivery;
+  const delivery = await sendExtensionMessage(sendArgs);
+  return delivery.kind === ExtensionMessageDeliveryKind.Received
+    ? pairingDeliveryFromResponse(delivery.response)
+    : { kind: ExtensionPairingDeliveryKind.MessagingUnavailable };
 }
 
 export async function openInstalledExtension(): Promise<boolean> {
@@ -323,6 +348,10 @@ export async function openInstalledExtension(): Promise<boolean> {
   const sendExtensionMessageArgs: Parameters<typeof sendExtensionMessage>[0] = {
     extensionId: installedExtension.extensionRuntimeId,
     message,
+    responseWait: {
+      kind: ExtensionMessageResponseWaitKind.Bounded,
+      timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
+    },
   };
   const delivery = await sendExtensionMessage(sendExtensionMessageArgs);
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
@@ -360,7 +389,14 @@ async function discoverPairedExtensionIdentityOnce(
   };
 
   const sendExtensionMessageArgs2: Parameters<typeof sendExtensionMessage>[0] =
-    { extensionId: installedExtension.extensionRuntimeId, message };
+    {
+      extensionId: installedExtension.extensionRuntimeId,
+      message,
+      responseWait: {
+        kind: ExtensionMessageResponseWaitKind.Bounded,
+        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
+      },
+    };
   const delivery = await sendExtensionMessage(sendExtensionMessageArgs2);
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return delivery;
   const statusMessage = delivery.response;
@@ -466,7 +502,14 @@ export async function requestPairedExtensionUnlock(
     payload: { requestId: unlockRequestId, vaultStoreId },
   };
   const sendExtensionMessageArgs3: Parameters<typeof sendExtensionMessage>[0] =
-    { extensionId: installedExtension.extensionRuntimeId, message };
+    {
+      extensionId: installedExtension.extensionRuntimeId,
+      message,
+      responseWait: {
+        kind: ExtensionMessageResponseWaitKind.Bounded,
+        timeoutMs: EXTENSION_MESSAGE_TIMEOUT_MS,
+      },
+    };
   const delivery = await sendExtensionMessage(sendExtensionMessageArgs3);
   if (delivery.kind !== ExtensionMessageDeliveryKind.Received) return false;
   const response = delivery.response;
