@@ -1,103 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly MAX_REMOTE_TASKS=8
-
-catalog() {
-  cat <<'EOF'
-preflight
-arc:runtime
-rust:ci
-loom:verify
-web:build
-web:e2e
-web:e2e:debug
-extension:e2e
-hive:verify
-check
-ci:pr
-ci:pr:e2e
-EOF
-}
-
-is_catalog_task() {
-  catalog | grep -Fxq "$1"
-}
-
-normalize_tasks() {
-  local raw_tasks="$1"
-  local task
-  local seen=","
-  local normalized=""
-  local count=0
-  local -a requested_tasks
-
-  if [[ -z "$raw_tasks" || "$raw_tasks" == ,* || "$raw_tasks" == *, || "$raw_tasks" == *,,* ]]; then
-    echo "Remote task selection must be a non-empty comma-separated list." >&2
-    return 2
-  fi
-  if [[ "$raw_tasks" =~ [[:space:]] ]]; then
-    echo "Remote task selection must not contain whitespace." >&2
-    return 2
-  fi
-
-  IFS=',' read -r -a requested_tasks <<< "$raw_tasks"
-  for task in "${requested_tasks[@]}"; do
-    if ! is_catalog_task "$task"; then
-      echo "Unknown remote task: $task" >&2
-      echo "Run 'task remote:list' to see the allowlisted catalog." >&2
-      return 2
-    fi
-    if [[ "$seen" == *",$task,"* ]]; then
-      echo "Duplicate remote task: $task" >&2
-      return 2
-    fi
-    seen+="$task,"
-    normalized+="${normalized:+,}$task"
-    count=$((count + 1))
-  done
-
-  if (( count > MAX_REMOTE_TASKS )); then
-    echo "A remote batch may contain at most $MAX_REMOTE_TASKS tasks." >&2
-    return 2
-  fi
-  if (( count > 1 )) && [[ "$seen" == *",arc:runtime,"* ]]; then
-    echo "arc:runtime must be dispatched as a single ARC task." >&2
-    return 2
-  fi
-  if (( count > 1 )) \
-    && { [[ "$seen" == *",web:build,"* ]] \
-      || [[ "$seen" == *",web:e2e,"* ]] \
-      || [[ "$seen" == *",web:e2e:debug,"* ]] \
-      || [[ "$seen" == *",extension:e2e,"* ]] \
-      || [[ "$seen" == *",check,"* ]] \
-      || [[ "$seen" == *",ci:pr,"* ]] \
-      || [[ "$seen" == *",ci:pr:e2e,"* ]]; }; then
-    echo "Runtime-backed tasks must be dispatched alone on the Kubernetes container runner." >&2
-    return 2
-  fi
-
-  printf '%s\n' "$normalized"
-}
-
-task_command() {
-  case "$1" in
-    preflight) echo "task preflight" ;;
-    arc:runtime) echo "bash .github/scripts/arc-runtime-smoke.sh" ;;
-    rust:ci) echo "task ci:pr:rust" ;;
-    loom:verify) echo "task loom:verify" ;;
-    web:build) echo "task web:build" ;;
-    web:e2e) echo "task web:test:e2e" ;;
-    web:e2e:debug) echo "task _web:test:e2e:debug" ;;
-    extension:e2e) echo "task extension:test:e2e" ;;
-    hive:verify) echo "task hive:verify" ;;
-    check) echo "task check" ;;
-    ci:pr) echo "task ci:pr" ;;
-    ci:pr:e2e) echo "task ci:pr:e2e" ;;
-    *) return 2 ;;
-  esac
-}
-
 task_timeout_minutes() {
   case "$1" in
     arc:runtime) echo 15 ;;
@@ -108,7 +11,7 @@ task_timeout_minutes() {
     web:e2e|web:e2e:debug|extension:e2e) echo 30 ;;
     check|ci:pr) echo 35 ;;
     ci:pr:e2e) echo 45 ;;
-    *) return 2 ;;
+    *) echo 30 ;;
   esac
 }
 
@@ -159,44 +62,19 @@ run_task() {
     check) run_with_timeout "$timeout_minutes" task check ;;
     ci:pr) run_with_timeout "$timeout_minutes" task ci:pr ;;
     ci:pr:e2e) run_with_timeout "$timeout_minutes" env E2E_ARTIFACT_DIR="$artifact_root/ci-pr-e2e" task ci:pr:e2e ;;
-    *) return 2 ;;
+    *) run_with_timeout "$timeout_minutes" task "$1" ;;
   esac
 }
 
-requires_current_base() {
-  local normalized_tasks="$1"
-  local task
-  local -a tasks
-
-  IFS=',' read -r -a tasks <<< "$normalized_tasks"
-  for task in "${tasks[@]}"; do
-    case "$task" in
-      loom:verify|web:e2e|web:e2e:debug|extension:e2e|check|ci:pr|ci:pr:e2e) return 0 ;;
-    esac
-  done
-  return 1
-}
-
-print_commands() {
-  local normalized_tasks="$1"
-  local task
-  local -a tasks
-
-  IFS=',' read -r -a tasks <<< "$normalized_tasks"
-  for task in "${tasks[@]}"; do
-    task_command "$task"
-  done
-}
-
 run_batch() {
-  local normalized_tasks="$1"
+  local raw_tasks="$1"
   local task
   local status
   local failures=0
   local timeout_cleanup_status
   local -a tasks
 
-  IFS=',' read -r -a tasks <<< "$normalized_tasks"
+  IFS=',' read -r -a tasks <<< "$raw_tasks"
   if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
     printf '## Remote task batch\n\n| Task | Result |\n|---|---|\n' >> "$GITHUB_STEP_SUMMARY"
   fi
@@ -243,38 +121,17 @@ run_batch() {
 }
 
 usage() {
-  echo "Usage: $0 --list | --validate <tasks> | --commands <tasks> | --timeout <task> | --requires-current-base <tasks> | --run <tasks>" >&2
+  echo "Usage: $0 --timeout <task> | --run <task[,task...]>" >&2
 }
 
 case "${1:-}" in
-  --list)
-    [[ $# -eq 1 ]] || { usage; exit 2; }
-    catalog
-    ;;
-  --validate)
-    [[ $# -eq 2 ]] || { usage; exit 2; }
-    normalize_tasks "$2"
-    ;;
-  --commands)
-    [[ $# -eq 2 ]] || { usage; exit 2; }
-    normalized_tasks="$(normalize_tasks "$2")"
-    print_commands "$normalized_tasks"
-    ;;
   --timeout)
     [[ $# -eq 2 ]] || { usage; exit 2; }
-    normalized_tasks="$(normalize_tasks "$2")"
-    [[ "$normalized_tasks" != *,* ]] || { echo "--timeout accepts one task." >&2; exit 2; }
-    task_timeout_minutes "$normalized_tasks"
-    ;;
-  --requires-current-base)
-    [[ $# -eq 2 ]] || { usage; exit 2; }
-    normalized_tasks="$(normalize_tasks "$2")"
-    requires_current_base "$normalized_tasks"
+    task_timeout_minutes "$2"
     ;;
   --run)
     [[ $# -eq 2 ]] || { usage; exit 2; }
-    normalized_tasks="$(normalize_tasks "$2")"
-    run_batch "$normalized_tasks"
+    run_batch "$2"
     ;;
   *)
     usage

@@ -205,7 +205,7 @@ Workbench record, not another coordinator or worker. See the
 
 ## Remote task execution
 
-The allowlisted remote selectors map prohibited local work to hosted execution:
+The remote task selectors map local validation work to hosted execution:
 
 - `preflight` runs repository preflight.
 - `rust:ci` runs Rust product validation.
@@ -220,18 +220,18 @@ Run hosted validation from a clean, committed non-main branch:
 
 1. Push the branch and confirm that the remote branch is at the same commit as
    local `HEAD`.
-2. Run `task remote:list` to see the allowlisted hosted tasks.
-3. Dispatch one task with `task remote TASK_NAME=<task>`, for example
+2. Dispatch one task with `task remote TASK_NAME=<task>`, for example
    `task remote TASK_NAME=loom:verify`.
-4. Dispatch compatible tasks together with
+3. Dispatch compatible tasks together with
    `task remote TASK_NAMES=<task-a>,<task-b>` when one hosted job is preferred.
-5. Follow the run URL printed by the command, or inspect the exact-head run
+4. Follow the run URL printed by the command, or inspect the exact-head run
    with the printed `gh run list` command.
 
-`task remote` rejects a dirty checkout, `main`, an unpushed branch, a local
-`HEAD` that differs from the remote branch, and tasks outside the allowlist.
-Runtime-backed selectors and `arc:runtime` must be dispatched alone; compatible
-batches may contain at most eight selectors.
+`task remote` rejects a dirty checkout, `main`, an unpushed branch, or a local
+`HEAD` that differs from the remote branch. The remote runner invokes the
+requested Task name; an unknown or otherwise broken Task fails on the remote
+runner. Runtime-backed selectors and `arc:runtime` should be dispatched alone
+so their Task implementations receive the correct runner image.
 When a task requires a current base:
 
 - It verifies that the branch contains the current `origin/main` before

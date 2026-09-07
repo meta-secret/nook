@@ -8,6 +8,7 @@ import {
 import type { ConfigurationReference } from './skill-provider-config-types.ts';
 import { resolveDispatchCommand } from './skill-provider-shell-dispatch.ts';
 import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
+import { isQuotedDynamicTaskName } from './skill-provider-task-boundary.ts';
 
 export type CommandConfigurationRequest = {
   readonly commands: readonly string[];
@@ -264,8 +265,16 @@ function selectedTaskfileReference(
       };
       continue;
     }
-    if (word.dynamic && !taskNameSeen)
+    if (word.dynamic && !taskNameSeen) {
+      if (
+        index === request.words.length - 1 &&
+        isQuotedDynamicTaskName({ word })
+      ) {
+        taskNameSeen = true;
+        continue;
+      }
       throw new Error('Dynamic Task option construction is forbidden.');
+    }
     if (!word.value.startsWith('-')) taskNameSeen = true;
   }
   if (selection === false) return false;

@@ -847,7 +847,7 @@ remoteWorkflow.requireBefore({
 });
 remoteWorkflow.requireBefore({
   first: "name: Activate Vale 3.19.0",
-  second: "name: Run allowlisted task batch",
+  second: "name: Run task batch",
 });
 remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",

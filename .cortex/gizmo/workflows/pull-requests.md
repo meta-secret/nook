@@ -460,7 +460,7 @@ of requesting another Cloud review immediately.
 
 ### 5. Hosted iteration and explicit validation
 
-**GitHub Actions is the normal build/test path.** `remote.yml` runs allowlisted
+**GitHub Actions is the normal build/test path.** `remote.yml` runs named
 focused tasks on the configured ARC scale set, with `ubuntu-latest` as its
 fallback. It always targets an exact pushed branch head. `pr.yml` remains the
 GitHub Actions merge-validation pipeline and runs only when an agent explicitly
