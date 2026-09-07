@@ -87,6 +87,126 @@ fn github_get_headers(pat: &str) -> [(&'static str, String); 4] {
     ]
 }
 
+fn github_username_response(status: StatusCode, text: &str) -> Result<String, NookError> {
+    if status == StatusCode::UNAUTHORIZED {
+        log_github_api_failure("user", "", "", status);
+        return Err(NookError::GitHub(
+            "GitHub rejected your token (401). Check that it is valid, not expired, and has repo access.".to_owned(),
+        ));
+    }
+
+    if !status.is_success() {
+        log_github_api_failure("user", "", "", status);
+        return Err(NookError::GitHub(format!(
+            "Failed to fetch GitHub user details: status {status}"
+        )));
+    }
+
+    let parsed: GitHubUserResponse = serde_json::from_str(text)
+        .map_err(|e| NookError::Serialization(format!("Failed to parse user JSON: {}", e)))?;
+
+    Ok(parsed.login)
+}
+
+fn github_repo_check_result(repo: &str, status: StatusCode) -> Result<bool, NookError> {
+    if status.is_success() {
+        return Ok(true);
+    }
+
+    if status != StatusCode::NOT_FOUND {
+        log_github_api_failure("repo_check", repo, "", status);
+        return Err(NookError::GitHub(format!(
+            "Failed to check GitHub repository {repo}: status {status}"
+        )));
+    }
+
+    Ok(false)
+}
+
+fn github_directory_listing(
+    status: StatusCode,
+    text: &str,
+    repo: &str,
+    path: &str,
+) -> Result<Option<bool>, NookError> {
+    if status == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+
+    if !status.is_success() {
+        log_github_api_failure("contents_list", repo, path, status);
+        return Err(NookError::GitHub(format!(
+            "GitHub API responded with status {status}"
+        )));
+    }
+
+    let entries: Vec<GitHubDirEntry> = serde_json::from_str(text).map_err(|e| {
+        NookError::Serialization(format!("Failed to parse GitHub directory listing: {e}"))
+    })?;
+
+    Ok(Some(entries.iter().any(|item| {
+        item.name == path && item.entry_type == "file"
+    })))
+}
+
+fn github_file_response(
+    status: StatusCode,
+    text: &str,
+    repo: &str,
+    path: &str,
+) -> Result<Option<GitHubVaultFile>, NookError> {
+    if status == StatusCode::NOT_FOUND {
+        return Ok(None);
+    }
+
+    if !status.is_success() {
+        log_github_api_failure("file_fetch", repo, path, status);
+        return Err(NookError::GitHub(format!(
+            "GitHub API responded with status {status}"
+        )));
+    }
+
+    let parsed: GitHubFileResponse = serde_json::from_str(text)
+        .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
+
+    let cleaned_content = parsed
+        .content
+        .replace('\n', "")
+        .replace('\r', "")
+        .replace(' ', "");
+    let decoded_bytes = base64_decode(&cleaned_content)?;
+    let vault_content = String::from_utf8(decoded_bytes)
+        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
+
+    Ok(Some(GitHubVaultFile {
+        content: vault_content,
+    }))
+}
+
+fn github_put_response(
+    status: StatusCode,
+    text: &str,
+    repo: &str,
+    path: &str,
+) -> Result<String, NookError> {
+    if !status.is_success() {
+        log_github_api_failure("file_write", repo, path, status);
+        let message = if status == StatusCode::NOT_FOUND {
+            format!(
+                "Cannot write to {repo}/{path} (404). Ensure your PAT has repo scope and you can access {repo}."
+            )
+        } else {
+            format!("GitHub API responded with status {status}")
+        };
+        return Err(NookError::GitHub(message));
+    }
+
+    let parsed: GitHubPutResponse = serde_json::from_str(text)
+        .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
+
+    Ok(parsed.content.sha)
+}
+
 pub(crate) async fn fetch_github_username(pat: &str) -> Result<String, NookError> {
     let pat = pat.trim();
     if pat.is_empty() {
@@ -106,26 +226,9 @@ pub(crate) async fn fetch_github_username(pat: &str) -> Result<String, NookError
         .send()
         .await?;
 
-    if response.status() == StatusCode::UNAUTHORIZED {
-        log_github_api_failure("user", "", "", response.status());
-        return Err(NookError::GitHub(
-            "GitHub rejected your token (401). Check that it is valid, not expired, and has repo access.".to_owned(),
-        ));
-    }
-
-    if !response.status().is_success() {
-        let status = response.status();
-        log_github_api_failure("user", "", "", status);
-        return Err(NookError::GitHub(format!(
-            "Failed to fetch GitHub user details: status {status}"
-        )));
-    }
-
+    let status = response.status();
     let text = response.text().await?;
-    let parsed: GitHubUserResponse = serde_json::from_str(&text)
-        .map_err(|e| NookError::Serialization(format!("Failed to parse user JSON: {}", e)))?;
-
-    Ok(parsed.login)
+    github_username_response(status, &text)
 }
 
 pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(), NookError> {
@@ -141,16 +244,8 @@ pub(crate) async fn ensure_github_repo_exists(pat: &str, repo: &str) -> Result<(
         .send()
         .await?;
 
-    if check.status().is_success() {
+    if github_repo_check_result(repo, check.status())? {
         return Ok(());
-    }
-
-    if check.status() != StatusCode::NOT_FOUND {
-        let status = check.status();
-        log_github_api_failure("repo_check", repo, "", status);
-        return Err(NookError::GitHub(format!(
-            "Failed to check GitHub repository {repo}: status {status}"
-        )));
     }
 
     let repo_name = repo
@@ -202,35 +297,9 @@ async fn fetch_github_file_at_path(
     }
     let file_response = request.send().await?;
 
-    if file_response.status() == StatusCode::NOT_FOUND {
-        return Ok(None);
-    }
-
-    if !file_response.status().is_success() {
-        let status = file_response.status();
-        log_github_api_failure("file_fetch", repo, path, status);
-        return Err(NookError::GitHub(format!(
-            "GitHub API responded with status {status}"
-        )));
-    }
-
+    let status = file_response.status();
     let text = file_response.text().await?;
-
-    let parsed: GitHubFileResponse = serde_json::from_str(&text)
-        .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
-
-    let cleaned_content = parsed
-        .content
-        .replace('\n', "")
-        .replace('\r', "")
-        .replace(' ', "");
-    let decoded_bytes = base64_decode(&cleaned_content)?;
-    let vault_content = String::from_utf8(decoded_bytes)
-        .map_err(|e| NookError::Serialization(format!("Vault file is not valid UTF-8: {e}")))?;
-
-    Ok(Some(GitHubVaultFile {
-        content: vault_content,
-    }))
+    github_file_response(status, &text, repo, path)
 }
 
 pub(crate) async fn fetch_github_vault(
@@ -264,30 +333,16 @@ pub(crate) async fn fetch_github_vault(
     let list_url = github_cache_bust_url(&format!("https://api.github.com/repos/{repo}/contents/"));
     let list_response = apply_headers(client.get(&list_url)).send().await?;
 
-    if list_response.status() == StatusCode::NOT_FOUND {
+    let list_status = list_response.status();
+    let list_text = list_response.text().await?;
+    let Some(has_file) = github_directory_listing(list_status, &list_text, repo, path)? else {
         if let Some(flag) = root_empty {
             *flag = true;
         }
         return Ok(None);
-    }
+    };
 
-    if !list_response.status().is_success() {
-        let status = list_response.status();
-        log_github_api_failure("contents_list", repo, path, status);
-        return Err(NookError::GitHub(format!(
-            "GitHub API responded with status {status}"
-        )));
-    }
-
-    let list_text = list_response.text().await?;
-    let entries: Vec<GitHubDirEntry> = serde_json::from_str(&list_text).map_err(|e| {
-        NookError::Serialization(format!("Failed to parse GitHub directory listing: {e}"))
-    })?;
-
-    if !entries
-        .iter()
-        .any(|item| item.name == path && item.entry_type == "file")
-    {
+    if !has_file {
         return Ok(None);
     }
 
@@ -327,25 +382,9 @@ pub(crate) async fn write_github_text_file(
         .send()
         .await?;
 
-    if !response.status().is_success() {
-        let status = response.status();
-        log_github_api_failure("file_write", repo, path, status);
-        let message = if status == StatusCode::NOT_FOUND {
-            format!(
-                "Cannot write to {repo}/{path} (404). Ensure your PAT has repo scope and you can access {repo}."
-            )
-        } else {
-            format!("GitHub API responded with status {status}")
-        };
-        return Err(NookError::GitHub(message));
-    }
-
+    let status = response.status();
     let text = response.text().await?;
-
-    let parsed: GitHubPutResponse = serde_json::from_str(&text)
-        .map_err(|e| NookError::Serialization(format!("Failed to parse JSON: {}", e)))?;
-
-    Ok(parsed.content.sha)
+    github_put_response(status, &text, repo, path)
 }
 
 fn base64_decode(input: &str) -> Result<Vec<u8>, NookError> {
@@ -434,6 +473,172 @@ mod tests {
         let with_sha: SerializedPutBody = serde_json::from_value(with_sha)?;
         assert_eq!(with_sha.sha.as_deref(), Some("sha-1"));
         Ok(())
+    }
+
+    #[test]
+    fn github_username_response_covers_auth_statuses_and_payloads() {
+        let unauthorized = github_username_response(StatusCode::UNAUTHORIZED, "")
+            .expect_err("401 must be reported as a GitHub error");
+        assert!(matches!(
+            unauthorized,
+            NookError::GitHub(message) if message.contains("rejected your token")
+        ));
+
+        let unavailable = github_username_response(StatusCode::BAD_GATEWAY, "")
+            .expect_err("non-success status must be reported");
+        assert!(matches!(
+            unavailable,
+            NookError::GitHub(message) if message.contains("status 502")
+        ));
+
+        assert_eq!(
+            github_username_response(StatusCode::OK, r#"{"login":"nook"}"#).unwrap(),
+            "nook"
+        );
+        let malformed = github_username_response(StatusCode::OK, "not-json")
+            .expect_err("malformed user JSON must fail closed");
+        assert!(matches!(
+            malformed,
+            NookError::Serialization(message) if message.contains("Failed to parse user JSON")
+        ));
+    }
+
+    #[test]
+    fn github_repo_check_result_distinguishes_existing_missing_and_failure() {
+        assert!(github_repo_check_result("owner/repo", StatusCode::OK).unwrap());
+        assert!(!github_repo_check_result("owner/repo", StatusCode::NOT_FOUND).unwrap());
+        let error = github_repo_check_result("owner/repo", StatusCode::FORBIDDEN)
+            .expect_err("forbidden repository checks must fail closed");
+        assert!(matches!(
+            error,
+            NookError::GitHub(message) if message.contains("owner/repo") && message.contains("403")
+        ));
+    }
+
+    #[test]
+    fn github_directory_listing_covers_missing_errors_and_file_matching() {
+        assert!(
+            github_directory_listing(StatusCode::NOT_FOUND, "", "owner/repo", "vault.yaml")
+                .unwrap()
+                .is_none()
+        );
+
+        let unavailable = github_directory_listing(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "",
+            "owner/repo",
+            "vault.yaml",
+        )
+        .expect_err("directory status failures must fail closed");
+        assert!(matches!(
+            unavailable,
+            NookError::GitHub(message) if message.contains("status 500")
+        ));
+
+        let malformed =
+            github_directory_listing(StatusCode::OK, "not-json", "owner/repo", "vault.yaml")
+                .expect_err("malformed directory JSON must fail closed");
+        assert!(matches!(
+            malformed,
+            NookError::Serialization(message) if message.contains("directory listing")
+        ));
+
+        let listing = r#"[
+            {"name":"vault.yaml","type":"file"},
+            {"name":"events","type":"dir"}
+        ]"#;
+        assert_eq!(
+            github_directory_listing(StatusCode::OK, listing, "owner/repo", "vault.yaml").unwrap(),
+            Some(true)
+        );
+        assert_eq!(
+            github_directory_listing(StatusCode::OK, listing, "owner/repo", "missing.yaml")
+                .unwrap(),
+            Some(false)
+        );
+    }
+
+    #[test]
+    fn github_file_response_covers_missing_protocol_decode_and_utf8_errors() {
+        assert!(
+            github_file_response(StatusCode::NOT_FOUND, "", "owner/repo", "vault.yaml")
+                .unwrap()
+                .is_none()
+        );
+
+        let unavailable = github_file_response(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "",
+            "owner/repo",
+            "vault.yaml",
+        );
+        assert!(matches!(
+            unavailable,
+            Err(NookError::GitHub(message)) if message.contains("status 503")
+        ));
+
+        let malformed =
+            github_file_response(StatusCode::OK, "not-json", "owner/repo", "vault.yaml");
+        assert!(matches!(
+            malformed,
+            Err(NookError::Serialization(message)) if message.contains("Failed to parse JSON")
+        ));
+
+        let invalid_utf8 = github_file_response(
+            StatusCode::OK,
+            r#"{"content":"/w=="}"#,
+            "owner/repo",
+            "vault.yaml",
+        );
+        assert!(matches!(
+            invalid_utf8,
+            Err(NookError::Serialization(message)) if message.contains("not valid UTF-8")
+        ));
+
+        let file = github_file_response(
+            StatusCode::OK,
+            r#"{"content":" b m 9 v a w = =\n"}"#,
+            "owner/repo",
+            "vault.yaml",
+        )
+        .unwrap()
+        .expect("valid file payload must decode");
+        assert_eq!(file.content, "nook");
+    }
+
+    #[test]
+    fn github_put_response_covers_status_and_sha_projection() {
+        let missing = github_put_response(StatusCode::NOT_FOUND, "", "owner/repo", "vault.yaml")
+            .expect_err("missing write target must fail closed");
+        assert!(matches!(
+            missing,
+            NookError::GitHub(message) if message.contains("Cannot write to owner/repo/vault.yaml")
+        ));
+
+        let unavailable = github_put_response(StatusCode::CONFLICT, "", "owner/repo", "vault.yaml")
+            .expect_err("write conflicts must be reported");
+        assert!(matches!(
+            unavailable,
+            NookError::GitHub(message) if message.contains("status 409")
+        ));
+
+        let malformed = github_put_response(StatusCode::OK, "not-json", "owner/repo", "vault.yaml")
+            .expect_err("malformed write JSON must fail closed");
+        assert!(matches!(
+            malformed,
+            NookError::Serialization(message) if message.contains("Failed to parse JSON")
+        ));
+
+        assert_eq!(
+            github_put_response(
+                StatusCode::CREATED,
+                r#"{"content":{"sha":"sha-2"}}"#,
+                "owner/repo",
+                "vault.yaml"
+            )
+            .unwrap(),
+            "sha-2"
+        );
     }
 
     #[wasm_bindgen_test]
