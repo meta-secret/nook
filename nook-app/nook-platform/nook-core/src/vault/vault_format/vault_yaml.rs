@@ -126,7 +126,7 @@ impl StoredVaultYaml {
                     ciphertext: record.value.as_str().to_owned(),
                 }),
                 VaultMetaRecord::Auth(..) => {
-                    vault.auth.push(AuthYamlRecord::from_stored_record(record)?)
+                    vault.auth.push(AuthYamlRecord::from_stored_record(record)?);
                 }
                 VaultMetaRecord::SentinelShare(..) => vault.sentinel_shares.push(record.clone()),
                 VaultMetaRecord::Secret(..) => vault.secrets.push(record.clone()),
