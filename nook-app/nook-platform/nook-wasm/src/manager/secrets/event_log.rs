@@ -195,7 +195,7 @@ mod wasm_tests {
         let store_id =
             nook_core::generate_store_id().map_err(|error| JsError::new(&error.to_string()))?;
         let key_epoch = nook_core::EventId::from_sha256_hex(
-            nook_core::sha256_hex(b"nook-wasm-event-log-wrapper-test").as_str(),
+            nook_auth2::Sha256Hex::from_bytes(b"nook-wasm-event-log-wrapper-test").as_str(),
         )
         .map_err(|error| JsError::new(&error.to_string()))?;
         let actor_id = signing_identity

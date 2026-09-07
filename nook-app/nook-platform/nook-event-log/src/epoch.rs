@@ -179,7 +179,7 @@ mod tests {
     fn operation_starts_epoch_maps_security_ops() -> anyhow::Result<()> {
         assert_eq!(
             operation_starts_epoch(&VaultOperation::VaultImported {
-                source_content_hash: crate::Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }),

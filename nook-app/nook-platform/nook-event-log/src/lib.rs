@@ -31,11 +31,7 @@ mod signing;
 mod store;
 
 pub use builder::{AppendEventInput, ObservedHeads};
-pub use canonical::{
-    Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
-    format_ed25519_signature, parse_ed25519_signature, sha256_hex, sign_body,
-    verify_body_signature,
-};
+pub use canonical::{Ed25519Signature, EventId};
 pub use epoch::{
     EpochRecord, EpochRotationReason, EpochTransition, KeyEpoch,
     concurrent_epoch_rotations_conflict, operation_starts_epoch,
@@ -62,6 +58,13 @@ pub use store::{
 };
 
 // Re-export typed wire values that appear in the event-log public API.
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: re-exports the validated digest type owned by nook-auth2"
+    )
+)]
 pub use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
     IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, PasswordEnvelope,

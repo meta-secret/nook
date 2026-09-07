@@ -12,6 +12,7 @@ crate-type = ["cdylib", "rlib"]
 [dependencies]
 nook-companion-core = { path = "../nook-companion-core" }
 nook-core = { path = "../nook-core" }
+nook-auth2 = { path = "../nook-auth2" }
 coset = "0.4.2"
 passkey-types = "0.5.0"
 serde_json = "1.0.150"

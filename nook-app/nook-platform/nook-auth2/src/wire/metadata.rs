@@ -3,6 +3,7 @@
 use super::HEX_32_BYTE_LEN;
 use crate::errors::{ValidationError, ValidationResult};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use sha2::{Digest, Sha256};
 use std::fmt;
 
 /// Bare SHA-256 hex digest (64 chars).
@@ -31,6 +32,18 @@ impl Sha256Hex {
     #[must_use]
     pub fn from_trusted(value: String) -> Self {
         Self(value)
+    }
+
+    #[must_use]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: hashes arbitrary payload bytes into a validated digest"
+        )
+    )]
+    pub fn from_bytes(bytes: &[u8]) -> Self {
+        Self(hex::encode(Sha256::digest(bytes)))
     }
 }
 
