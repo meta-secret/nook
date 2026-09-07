@@ -590,6 +590,66 @@ mod metadata_tests {
     }
 
     #[wasm_bindgen_test]
+    async fn locked_password_mutations_fail_closed_without_session_changes() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+
+        assert!(
+            manager
+                .add_vault_password_for_e2e("Recovery".to_owned(), "password".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .update_vault_password_entry_for_e2e(
+                    "pwdentry001".to_owned(),
+                    "password".to_owned(),
+                )
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .remove_vault_password_entry("pwdentry001".to_owned())
+                .await
+                .is_err()
+        );
+        assert!(manager.remove_vault_password().await.is_err());
+        assert!(manager.vault.password_entries.is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn local_password_add_and_remove_updates_the_event_log() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
+        let identity = DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.bootstrap_event_log_genesis().await?;
+
+        manager
+            .add_vault_password_for_e2e("Recovery".to_owned(), "password".to_owned())
+            .await?;
+        let entry = manager
+            .vault
+            .password_entries
+            .first()
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("password entry was not added"))?;
+        assert!(manager.verify_vault_password(&entry.id, "password"));
+
+        manager
+            .remove_vault_password_entry(entry.id)
+            .await
+            .map_err(|error| anyhow::anyhow!("password entry removal failed: {error:?}"))?;
+        assert!(manager.vault.password_entries.is_empty());
+        manager.remove_vault_password().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
     async fn password_provider_switch_preserves_active_vault_metadata() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
         let entry = nook_core::PasswordEntryIssuance::with_work_factor(
