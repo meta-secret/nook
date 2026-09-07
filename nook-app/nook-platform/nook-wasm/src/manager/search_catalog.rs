@@ -175,6 +175,7 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manager::VaultCryptoState;
     use nook_core::VaultCrypto;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -260,6 +261,36 @@ mod tests {
             vec![(5, ciphertext)]
         );
         indexed_db::save_secret_search_catalog_buckets(store_id.as_str(), &[(5, None)]).await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn manager_catalog_guards_rebuild_invalid_cache_and_purge_legacy_data()
+    -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        assert!(manager.prepare_secret_search_catalog().await.is_err());
+
+        let keys = nook_core::generate_vault_keys()?;
+        let store_id = nook_core::generate_store_id()?;
+        manager.vault.store_id = store_id.to_string();
+        manager.vault.secrets_key = keys.secrets_key.to_string();
+        manager.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
+        indexed_db::save_secret_search_catalog_buckets(
+            store_id.as_str(),
+            &[(0, Some("not-encrypted".to_owned()))],
+        )
+        .await?;
+
+        manager.prepare_secret_search_catalog().await?;
+        assert!(manager.vault.search_catalog.is_ready());
+        assert_eq!(manager.vault.search_catalog_pending_bucket_mask, 0);
+        manager.purge_legacy_plaintext_search_catalog().await?;
+
+        indexed_db::save_secret_search_catalog_buckets(store_id.as_str(), &[(0, None)]).await?;
         Ok(())
     }
 }
