@@ -134,8 +134,11 @@ This staged canary proves that one active PR can reach its assigned Steward.
 1. Confirm the scoped credential file and exact pull-request number exist.
 2. Start the documented direct Bun subscription in the foreground PTY.
 3. Keep the child active until matching NDJSON reaches the parent Gizmo.
-
-Stop, reconciliation, and terminal evidence follow in the next commit.
+4. Correlate its `deliveryId` across GitHub, Argo, and the NATS envelope.
+5. Have PR Steward send the bounded matching notification to Gizmo.
+6. Have Gizmo perform a bounded direct GitHub reconciliation.
+7. After terminal state, send Ctrl-C to the same PTY.
+   - Require the NATS drain and process exit to complete with status zero.
 
 ## Validation
 
