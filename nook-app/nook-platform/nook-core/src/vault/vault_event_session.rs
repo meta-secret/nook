@@ -11,7 +11,7 @@ use crate::{
     AppendEventInput, CanonicalEventBodyBytes, Database, EventId, EventStorageBytes,
     LocalEventStore, ObservedHeads, SecretEpochReencryption, SigningIdentity, StoredSecretRecord,
     VaultCrypto, VaultMetaState, VaultOperation, VaultProjection, build_members_records,
-    build_signed_event, project_vault, resolve_member_roster,
+    project_vault, resolve_member_roster,
 };
 
 /// In-memory event-log session state shared by WASM adapters and integration tests.
@@ -79,7 +79,7 @@ impl VaultEventSession {
         let key_epoch = EventId::parse(&self.key_epoch)?;
         let created_at = IsoTimestamp::parse(created_at)?;
         let parents = ObservedHeads::parse(&self.heads)?.as_parents();
-        let (event, bytes) = build_signed_event(AppendEventInput {
+        let (event, bytes) = AppendEventInput::build(AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &self.signing,

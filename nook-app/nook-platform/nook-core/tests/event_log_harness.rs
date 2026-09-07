@@ -9,12 +9,11 @@ use nook_core::{
 };
 
 use nook_core::{
-    AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EventId, JoinRequest,
-    LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue, SigningIdentity,
-    VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection, VaultResult,
-    VaultUnlock, encrypted_secret_from_armored, generate_store_id, generate_vault_keys,
-    genesis_auth_record, genesis_members_records, hydrate_keys_from_projection_yaml,
-    serialize_stored_yaml_with_unlock,
+    AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventId,
+    JoinRequest, LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue,
+    SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection,
+    VaultResult, VaultUnlock, generate_store_id, generate_vault_keys, genesis_auth_record,
+    genesis_members_records, hydrate_keys_from_projection_yaml, serialize_stored_yaml_with_unlock,
 };
 use std::collections::{BTreeSet, HashMap};
 
@@ -86,7 +85,7 @@ impl EventLogDevice {
     pub fn append_secret(&mut self, secret_id: &str, plaintext: &str) -> VaultResult<EventId> {
         let ciphertext = self.crypto.encrypt_value(plaintext)?;
         self.append_signed(vec![VaultOperation::SecretCreated {
-            secret: encrypted_secret_from_armored(
+            secret: EncryptedSecretPayload::from_armored(
                 &SecretId::from_vault_record(secret_id),
                 SecretType::ApiKey,
                 ciphertext.as_str(),
@@ -116,7 +115,7 @@ impl EventLogDevice {
         let version = value.fingerprint(&secrets_key)?;
         let ciphertext = self.crypto.encrypt_value(value.to_yaml()?.as_str())?;
         self.append_signed(vec![VaultOperation::SecretCreated {
-            secret: encrypted_secret_from_armored(
+            secret: EncryptedSecretPayload::from_armored(
                 &SecretId::from_vault_record(secret_id),
                 SecretType::Login,
                 ciphertext.as_str(),

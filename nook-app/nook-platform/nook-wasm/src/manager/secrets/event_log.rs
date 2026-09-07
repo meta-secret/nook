@@ -203,7 +203,7 @@ mod wasm_tests {
             .map_err(|error| JsError::new(&error.to_string()))?;
         let created_at = nook_core::IsoTimestamp::parse("2026-01-01T00:00:00Z")
             .map_err(|error| JsError::new(&error.to_string()))?;
-        let (event, bytes) = nook_core::build_signed_event(nook_core::AppendEventInput {
+        let (event, bytes) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
             store_id: &store_id,
             actor_id: &actor_id,
             signing_identity: &signing_identity,

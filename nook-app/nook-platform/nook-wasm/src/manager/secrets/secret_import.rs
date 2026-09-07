@@ -126,7 +126,7 @@ impl<'a> CoalescedSecretImport<'a> {
                 let new_id = nook_core::generate_secret_id()?;
                 ImportItemOutcome::Operation(VaultOperation::SecretReplaced {
                     old_id: record.key.clone(),
-                    new_secret: nook_core::encrypted_secret_from_armored(
+                    new_secret: nook_core::EncryptedSecretPayload::from_armored(
                         &new_id,
                         secret_type,
                         ciphertext.as_str(),
@@ -152,7 +152,7 @@ impl<'a> CoalescedSecretImport<'a> {
         let id = nook_core::generate_secret_id()?;
         Ok(ImportItemOutcome::Operation(
             VaultOperation::SecretCreated {
-                secret: nook_core::encrypted_secret_from_armored(
+                secret: nook_core::EncryptedSecretPayload::from_armored(
                     &id,
                     secret_type,
                     ciphertext.as_str(),
