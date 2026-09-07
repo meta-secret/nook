@@ -629,9 +629,9 @@ mod tests {
     fn scopes_current_and_companion_identity_vault_rows() -> anyhow::Result<()> {
         let current_key = AppKey::generate()?;
         let companion_key = AppKey::generate()?;
-        let current_store = nook_core::generate_store_id()?;
-        let companion_store = nook_core::generate_store_id()?;
-        let unrelated_store = nook_core::generate_store_id()?;
+        let current_store = nook_core::StoreId::generate()?;
+        let companion_store = nook_core::StoreId::generate()?;
+        let unrelated_store = nook_core::StoreId::generate()?;
         let mut current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
         let mut companion = IdentityRecord::create_with_app_key("Work", &companion_key, None)?;
         current.generate_vault_dek(current_store.clone())?;
@@ -655,8 +655,8 @@ mod tests {
     fn scopes_verified_access_to_each_local_identity_profile() -> anyhow::Result<()> {
         let personal_key = AppKey::generate()?;
         let work_key = AppKey::generate()?;
-        let personal_store = nook_core::generate_store_id()?;
-        let work_store = nook_core::generate_store_id()?;
+        let personal_store = nook_core::StoreId::generate()?;
+        let work_store = nook_core::StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
         let mut work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
         personal.generate_vault_dek(personal_store.clone())?;
@@ -782,7 +782,7 @@ mod browser_tests {
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let companion_id = DeviceId::parse(companion_key.app_id().as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let store_id = nook_core::generate_store_id()
+        let store_id = nook_core::StoreId::generate()
             .map_err(|error| NookError::Database(error.to_string()))?;
         let mut identity = IdentityRecord::create_with_app_key("Companion", &companion_key, None)
             .map_err(|error| NookError::Database(error.to_string()))?;

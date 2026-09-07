@@ -547,9 +547,9 @@ mod tests {
 
     #[test]
     fn validate_before_insert_rejects_blank_label() -> anyhow::Result<()> {
-        use crate::{validate_secret_data, validate_secret_id};
+        use crate::{SecretId, validate_secret_data};
 
-        assert!(validate_secret_id("   ").is_err());
+        assert!(SecretId::parse("   ").is_err());
         assert!(validate_secret_data("").is_err());
         Ok(())
     }

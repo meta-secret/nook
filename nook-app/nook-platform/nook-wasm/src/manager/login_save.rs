@@ -120,7 +120,7 @@ impl NookVaultManager {
 
         if decision == NookWebsiteLoginSaveDecision::Update {
             let old_id = replace_secret_id.unwrap_or_default().to_owned();
-            let new_id = nook_core::generate_secret_id()?.to_string();
+            let new_id = nook_core::SecretId::generate()?.to_string();
             let records = self
                 .replace_secret(old_id, new_id, secret_type, data)
                 .await
@@ -129,7 +129,7 @@ impl NookVaultManager {
                 })?;
             drop(records);
         } else {
-            let id = nook_core::generate_secret_id()?.to_string();
+            let id = nook_core::SecretId::generate()?.to_string();
             let records = self.add_secret(id, secret_type, data).await.map_err(|_| {
                 NookError::Database("Failed to create the website login.".to_owned())
             })?;

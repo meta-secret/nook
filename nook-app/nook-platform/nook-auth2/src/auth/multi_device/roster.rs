@@ -98,7 +98,7 @@ pub fn resolve_member_roster(
             members_key,
         )?;
         if !member_record_key_matches(record.key.as_str(), &entry.pk_id) {
-            let pk_id = crate::normalize_auth_key_id(entry.pk_id.as_str())
+            let pk_id = crate::AuthKeyId::parse(entry.pk_id.as_str())
                 .map_or_else(|_| entry.pk_id.to_string(), |id| id.to_string());
             let expected_key = AuthKeyId::parse(&pk_id)
                 .unwrap_or(entry.pk_id.clone())
@@ -151,7 +151,7 @@ pub fn rename_vault_member(
     auth_id: &AuthKeyId,
     label: &str,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    if !crate::is_auth_key_id(auth_id.as_str()) {
+    if !crate::AuthKeyId::is_valid(auth_id.as_str()) {
         return Err(MultiDeviceError::InvalidMemberId);
     }
     let trimmed = label.trim();
@@ -184,7 +184,7 @@ pub fn revoke_vault_member(
     members_key: &SymmetricKey,
     auth_id: &AuthKeyId,
 ) -> MultiDeviceResult<Vec<StoredSecretRecord>> {
-    if !crate::is_auth_key_id(auth_id.as_str()) {
+    if !crate::AuthKeyId::is_valid(auth_id.as_str()) {
         return Err(MultiDeviceError::InvalidMemberId);
     }
     let roster = resolve_member_roster(records, members_key)?;

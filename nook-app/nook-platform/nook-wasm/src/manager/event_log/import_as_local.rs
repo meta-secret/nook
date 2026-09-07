@@ -66,7 +66,7 @@ mod browser_tests {
             .delete_local_browser_data()
             .await
             .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-        let store_id = nook_core::generate_store_id()?.to_string();
+        let store_id = nook_core::StoreId::generate()?.to_string();
         indexed_db::save_vault_blob(&store_id, "prior vault").await?;
 
         assert_eq!(
@@ -89,7 +89,7 @@ mod browser_tests {
             .delete_local_browser_data()
             .await
             .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
-        let store_id = nook_core::generate_store_id()?.to_string();
+        let store_id = nook_core::StoreId::generate()?.to_string();
         let error = NookVaultManager::ensure_prior_local_vault_still_registered(&store_id, true)
             .await
             .expect_err("a missing prior blob must be reported");

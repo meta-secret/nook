@@ -365,7 +365,7 @@ mod tests {
     #[test]
     fn capture_unlock_adopts_metadata_and_version() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &[],
             &VaultUnlock::Keys,

@@ -87,9 +87,9 @@ impl NookVaultManager {
                 .commit();
             }
         }
-        let validated_new = nook_core::validate_secret_id(&input.new_id)?;
+        let validated_new = nook_core::SecretId::parse(&input.new_id)?;
         self.vault.mark_search_catalog_dirty();
-        let validated_old = nook_core::validate_secret_id(&input.old_id)?;
+        let validated_old = nook_core::SecretId::parse(&input.old_id)?;
         let ciphertext = self
             .vault
             .meta
@@ -226,7 +226,7 @@ impl NookVaultManager {
 
     /// Prefixed secret item id (`secret_{token}`).
     pub fn generate_secret_id(&self) -> Result<String, JsError> {
-        Ok(nook_core::generate_secret_id()?.to_string())
+        Ok(nook_core::SecretId::generate()?.to_string())
     }
 
     /// Compact random token (11 chars, base64url) without a type prefix.
@@ -279,7 +279,7 @@ impl NookVaultManager {
             )
             .into());
         }
-        let id = nook_core::validate_secret_id(&id)?;
+        let id = nook_core::SecretId::parse(&id)?;
         nook_core::validate_secret_data(&data)?;
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = SecretValue::from_yaml_str(secret_type, &data)?;
@@ -403,7 +403,7 @@ impl NookVaultManager {
     pub async fn delete_secret(&mut self, id: String) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("DELETE_SECRET_START".to_owned());
         self.ensure_vault_crypto_from_cache().await?;
-        let id = nook_core::validate_secret_id(&id)?;
+        let id = nook_core::SecretId::parse(&id)?;
         self.vault.meta.secrets.remove(&id);
         self.vault.mark_search_catalog_dirty();
         self.append_vault_operations(vec![VaultOperation::SecretDeleted {
@@ -428,8 +428,8 @@ impl NookVaultManager {
         old_secret_id: String,
         chosen_secret_id: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        let old_id = nook_core::validate_secret_id(&old_secret_id)?;
-        let chosen_id = nook_core::validate_secret_id(&chosen_secret_id)?;
+        let old_id = nook_core::SecretId::parse(&old_secret_id)?;
+        let chosen_id = nook_core::SecretId::parse(&chosen_secret_id)?;
         let projection = self.load_projection_conflicts().await?;
         let conflict = projection
             .replacement_conflicts
@@ -476,7 +476,7 @@ mod wasm_tests {
     fn concurrent_same_identity_logins_both_survive_after_event_union() -> anyhow::Result<()> {
         use nook_core::{
             EncryptedSecretPayload, LoginSecret, SecretId, SecretType, SecretValue,
-            SigningIdentity, VaultCrypto, VaultEventSession, VaultOperation, generate_store_id,
+            SigningIdentity, StoreId, VaultCrypto, VaultEventSession, VaultOperation,
         };
         use std::collections::BTreeSet;
 
@@ -515,7 +515,7 @@ mod wasm_tests {
         }
 
         let keys = VaultKeys::generate()?;
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
 
@@ -677,7 +677,7 @@ mod projection_tests {
         let identity = DeviceIdentity::generate()?;
         manager.device.identity_private_key = identity.secret_string().into_inner();
         manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.bootstrap_event_log_genesis().await?;
         manager.drain_status_log();
 

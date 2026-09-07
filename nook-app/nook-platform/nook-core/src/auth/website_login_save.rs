@@ -92,7 +92,7 @@ mod tests {
     use crate::SecretId;
 
     fn secret_id(label: &str) -> anyhow::Result<SecretId> {
-        Ok(crate::validate_secret_id(&format!(
+        Ok(crate::SecretId::parse(&format!(
             "secret_SMypl8K0w9{label}"
         ))?)
     }

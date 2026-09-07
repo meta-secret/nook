@@ -42,7 +42,7 @@ fn core_application_capability_constructs_real_wasm_manager() {
 
 #[test]
 fn auth2_store_id_is_the_same_core_domain_type() -> Result<()> {
-    let generated = nook_auth2::generate_store_id()?;
+    let generated = nook_auth2::StoreId::generate()?;
     let through_core: nook_core::StoreId = generated.clone();
     assert_eq!(through_core, generated);
     Ok(())

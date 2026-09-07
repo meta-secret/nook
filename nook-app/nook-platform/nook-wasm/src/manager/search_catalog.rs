@@ -241,7 +241,7 @@ mod tests {
     async fn persistence_deletes_captured_buckets_and_retains_unrelated_pending_bits()
     -> anyhow::Result<()> {
         let fixture = CatalogFixture::new()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let ciphertext = fixture.crypto.encrypt_value("{}")?.as_str().to_owned();
         indexed_db::save_secret_search_catalog_buckets(
             store_id.as_str(),
@@ -275,7 +275,7 @@ mod tests {
         assert!(manager.prepare_secret_search_catalog().await.is_err());
 
         let keys = nook_core::VaultKeys::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         manager.vault.store_id = store_id.to_string();
         manager.vault.secrets_key = keys.secrets_key.to_string();
         manager.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);

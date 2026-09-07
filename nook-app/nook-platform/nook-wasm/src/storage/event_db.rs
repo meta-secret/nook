@@ -590,7 +590,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn transactional_loader_rejects_event_row_with_wrong_id() -> Result<(), NookError> {
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let indexed_id = "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo";
         let (signing, _) = SigningIdentity::generate()?;
         let actor_id = signing.actor_id()?;

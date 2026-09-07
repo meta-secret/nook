@@ -28,7 +28,7 @@ impl IdentityId {
         let Some(suffix) = trimmed.strip_prefix(IDENTITY_ID_PREFIX) else {
             return Err(ValidationError::StoreIdInvalid);
         };
-        if !crate::is_compact_token(suffix) {
+        if !crate::CompactToken::is_valid(suffix) {
             return Err(ValidationError::StoreIdInvalid);
         }
         Ok(Self(trimmed.to_owned()))
@@ -804,7 +804,7 @@ mod tests {
             signing_public_key: DeviceSigningPublicKey::Unavailable,
             label: None,
         })?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let _ = identity.generate_vault_dek(store_id.clone())?;
         identity.remove_member(second.app_id())?;
         let vault_dek = identity

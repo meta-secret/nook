@@ -193,7 +193,7 @@ mod wasm_tests {
         let (signing_identity, _) = nook_core::SigningIdentity::generate()
             .map_err(|error| JsError::new(&error.to_string()))?;
         let store_id =
-            nook_core::generate_store_id().map_err(|error| JsError::new(&error.to_string()))?;
+            nook_core::StoreId::generate().map_err(|error| JsError::new(&error.to_string()))?;
         let key_epoch = nook_core::EventId::from_sha256_hex(
             nook_auth2::Sha256Hex::from_bytes(b"nook-wasm-event-log-wrapper-test").as_str(),
         )

@@ -6,7 +6,7 @@ wasm_bindgen_test_configure!(run_in_browser);
 
 #[wasm_bindgen_test]
 fn device_protection_contexts_and_manager_state_project_in_wasm() -> Result<(), JsError> {
-    let store_id = nook_core::generate_store_id()?;
+    let store_id = nook_core::StoreId::generate()?;
     let creation = NookExtensionIdentityHandoffContext::vault_creation();
     assert!(matches!(
         pending_extension_enrollment(&creation, None)?,
@@ -59,7 +59,7 @@ fn device_protection_contexts_and_manager_state_project_in_wasm() -> Result<(), 
 fn pending_handoff_state_can_be_confirmed_and_rolled_back() -> Result<(), JsError> {
     let extension = AppKey::generate()?;
     let authorizer = AppKey::generate()?;
-    let store_id = nook_core::generate_store_id()?;
+    let store_id = nook_core::StoreId::generate()?;
     let (signing, signing_seed) = SigningIdentity::generate()?;
     let mut manager = NookVaultManager::new();
     manager.device.id = extension.device_id().as_str().to_owned();

@@ -106,7 +106,7 @@ impl StagedSimpleGenesisInput<'_> {
                 .set_member_signing_public_key(&identity_id, app_id, signing_public_key)
                 .map_err(super::map_domain_error)?;
         }
-        let store_id = nook_core::generate_store_id().map_err(super::map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(super::map_domain_error)?;
         let _ = staged_directory
             .open_or_generate_vault_dek_for_identity(&identity_id, input.app_key, store_id.clone())
             .map_err(super::map_domain_error)?;
@@ -373,7 +373,7 @@ mod tests {
         directory
             .create_identity("Concurrent duplicate", &app_key, None)
             .map_err(identity_record::map_domain_error)?;
-        let store_id = nook_core::generate_store_id().map_err(identity_record::map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
         let pending = PendingSimpleGenesis {
             store_id,
             identity_id: pending_identity_id.clone(),
@@ -498,7 +498,7 @@ mod tests {
         legacy
             .select(&duplicate_id)
             .map_err(identity_record::map_domain_error)?;
-        let store_id = nook_core::generate_store_id().map_err(identity_record::map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
         let mut candidate = legacy.clone();
         let _ = candidate
             .open_or_generate_vault_dek_for_identity(
@@ -572,7 +572,7 @@ mod tests {
         legacy
             .select(&pending_identity_id)
             .map_err(identity_record::map_domain_error)?;
-        let store_id = nook_core::generate_store_id().map_err(identity_record::map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
         let mut candidate = legacy.clone();
         candidate
             .enroll_selected_app_key_for_vault_creation(&candidate_key, "Pending")

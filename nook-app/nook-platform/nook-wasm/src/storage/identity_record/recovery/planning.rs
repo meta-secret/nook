@@ -322,7 +322,7 @@ mod tests {
     #[wasm_bindgen_test]
     async fn destructive_recovery_bypasses_a_corrupt_identity_directory() -> Result<(), NookError> {
         identity_record::clear_identity_directory_for_test().await?;
-        let store_id = nook_core::generate_store_id().map_err(identity_record::map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
         let stale_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
         let earlier_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
         indexed_db::idb_put_string(
@@ -381,7 +381,7 @@ mod tests {
     async fn destructive_recovery_bypasses_corrupt_indexes_and_deletes_markers()
     -> Result<(), NookError> {
         identity_record::clear_identity_directory_for_test().await?;
-        let store_id = nook_core::generate_store_id().map_err(identity_record::map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
         let marker = format!("pending_identity_reconciliation_v2:{store_id}");
         indexed_db::idb_put_string(IDENTITY_DIRECTORY_KEY, "{corrupt").await?;
         indexed_db::idb_put_string("vault_registry", "{corrupt").await?;
@@ -445,7 +445,7 @@ mod tests {
         )
         .await?;
         let unrelated_store_id =
-            nook_core::generate_store_id().map_err(identity_record::map_domain_error)?;
+            nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?;
         let unrelated_marker = format!("pending_identity_reconciliation_v2:{unrelated_store_id}");
         indexed_db::idb_put_string(&unrelated_marker, "remaining-identity-plan").await?;
         indexed_db::idb_put_string(

@@ -132,7 +132,7 @@ impl VaultAccessDiagnosticRequest<'_> {
         let auth_id = identity.auth_id();
         let auth_rows: Vec<&StoredSecretRecord> = records
             .iter()
-            .filter(|record| crate::is_auth_key_id(record.key.as_str()))
+            .filter(|record| crate::AuthKeyId::is_valid(record.key.as_str()))
             .collect();
         let Some(auth_record) = auth_rows
             .iter()
@@ -203,7 +203,7 @@ impl VaultAccessDiagnosticRequest<'_> {
 
         let mut auth_key_ids: Vec<AuthKeyId> = records
             .iter()
-            .filter(|record| crate::is_auth_key_id(record.key.as_str()))
+            .filter(|record| crate::AuthKeyId::is_valid(record.key.as_str()))
             .filter_map(|record| AuthKeyId::parse(record.key.as_str()).ok())
             .collect();
         auth_key_ids.sort();

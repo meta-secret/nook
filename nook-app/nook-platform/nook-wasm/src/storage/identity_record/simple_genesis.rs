@@ -286,7 +286,7 @@ impl OrdinarySimpleGenesisRequest<'_> {
         }
         let identity = identity_record::ensure_local_identity_for_app_key(app_key, label).await?;
         let proposed = PendingSimpleGenesis {
-            store_id: nook_core::generate_store_id()
+            store_id: nook_core::StoreId::generate()
                 .map_err(|error| NookError::Database(error.to_string()))?,
             identity_id: identity.identity_id,
             created_at: IsoTimestamp::parse(&conversion::wasm_iso_timestamp())
@@ -420,7 +420,7 @@ mod tests {
             .await?
             .ok_or_else(|| NookError::Database("Pending genesis marker is missing.".to_owned()))?;
         let different_store = PendingSimpleGenesis {
-            store_id: nook_core::generate_store_id().map_err(identity_record::map_domain_error)?,
+            store_id: nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?,
             ..pending.clone()
         };
         let different_identity = PendingSimpleGenesis {
@@ -472,7 +472,7 @@ mod tests {
         let identity =
             identity_record::ensure_local_identity_for_app_key(&app_key, "Personal").await?;
         let raw = serde_json::to_string(&LegacyGenesisMarker {
-            store_id: nook_core::generate_store_id().map_err(identity_record::map_domain_error)?,
+            store_id: nook_core::StoreId::generate().map_err(identity_record::map_domain_error)?,
             identity_id: identity.identity_id,
             created_at: "2026-08-13T00:00:00.000Z",
             event_yaml: "signed-event\n",

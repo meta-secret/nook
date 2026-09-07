@@ -743,7 +743,7 @@ mod tests {
             AppKey::generate().map_err(|error| NookError::Database(error.to_string()))?;
         let companion_id = DeviceId::parse(companion_key.app_id().as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let companion_store = nook_core::generate_store_id()
+        let companion_store = nook_core::StoreId::generate()
             .map_err(|error| NookError::Database(error.to_string()))?;
         VerifiedVaultAccessUpdate {
             device_id: &companion_id,
@@ -824,9 +824,9 @@ mod tests {
             .await?;
         let app_device_id = DeviceId::parse(app_key.app_id().as_str())
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let first_store = nook_core::generate_store_id()
+        let first_store = nook_core::StoreId::generate()
             .map_err(|error| NookError::Database(error.to_string()))?;
-        let second_store = nook_core::generate_store_id()
+        let second_store = nook_core::StoreId::generate()
             .map_err(|error| NookError::Database(error.to_string()))?;
         let mut legacy = DeviceAccessProfile::default();
         legacy.record_verified_vault_access(

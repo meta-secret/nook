@@ -111,7 +111,7 @@ pub fn build_passkey_recovery_request_options(
 
 #[wasm_bindgen]
 pub fn generate_secret_id() -> Result<String, wasm_bindgen::JsError> {
-    Ok(nook_core::generate_secret_id()?.to_string())
+    Ok(nook_core::SecretId::generate()?.to_string())
 }
 
 /// Cryptographically secure password generation — free function so the UI can

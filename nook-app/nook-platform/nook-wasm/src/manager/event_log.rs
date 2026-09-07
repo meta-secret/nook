@@ -269,7 +269,7 @@ impl NookVaultManager {
         operations: Vec<VaultOperation>,
     ) -> Result<EventId, NookError> {
         if self.vault.store_id.is_empty() {
-            self.vault.store_id = nook_core::generate_store_id()?.to_string();
+            self.vault.store_id = nook_core::StoreId::generate()?.to_string();
         }
         self.activate_event_log_mode().await?;
         let parents = self.load_event_heads().await?;

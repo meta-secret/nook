@@ -293,15 +293,15 @@ mod tests {
     use super::*;
     use crate::{
         AppKey, DeviceIdentity, DeviceKeyProtectionSetup, IdentityDirectory, IdentityRecord,
-        IdentitySelection, PasskeyDeviceProtectionMode, WrappedDeviceIdentity, generate_store_id,
+        IdentitySelection, PasskeyDeviceProtectionMode, StoreId, WrappedDeviceIdentity,
     };
 
     #[test]
     fn selected_vault_links_only_the_identity_that_owns_its_dek() -> anyhow::Result<()> {
         let personal_key = AppKey::generate()?;
         let work_key = AppKey::generate()?;
-        let personal_store = generate_store_id()?;
-        let work_store = generate_store_id()?;
+        let personal_store = StoreId::generate()?;
+        let work_store = StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
         let mut work = IdentityRecord::create_with_app_key("Work", &work_key, None)?;
         personal.generate_vault_dek(personal_store.clone())?;
@@ -326,8 +326,8 @@ mod tests {
     #[test]
     fn selected_vault_links_are_empty_when_no_identity_owns_the_dek() -> anyhow::Result<()> {
         let personal_key = AppKey::generate()?;
-        let personal_store = generate_store_id()?;
-        let unknown_store = generate_store_id()?;
+        let personal_store = StoreId::generate()?;
+        let unknown_store = StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
         personal.generate_vault_dek(personal_store)?;
         let directory = IdentityDirectory::from_records(vec![personal], IdentitySelection::Empty)?;
@@ -346,7 +346,7 @@ mod tests {
     #[test]
     fn selected_vault_grants_a_member_with_both_dek_envelopes() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         identity.generate_vault_dek(store_id.clone())?;
 
@@ -366,7 +366,7 @@ mod tests {
     fn selected_vault_does_not_grant_a_member_after_its_envelopes_are_revoked() -> anyhow::Result<()>
     {
         let app_key = AppKey::generate()?;
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         identity.generate_vault_dek(store_id.clone())?;
         let vault = identity

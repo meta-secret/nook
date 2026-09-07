@@ -708,7 +708,7 @@ mod tests {
         legacy
             .create_identity("Personal", &app_key, None)
             .map_err(map_domain_error)?;
-        let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(map_domain_error)?;
         let expected = legacy
             .open_or_generate_vault_dek(&app_key, store_id.clone())
             .map_err(map_domain_error)?;
@@ -760,7 +760,7 @@ mod tests {
                 .map_err(|error| NookError::IndexedDb(error.to_string()))?,
         )
         .await?;
-        let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(map_domain_error)?;
         let pending_raw = serde_json::json!({
             "storeId": store_id,
             "identityId": pending_identity_id,
@@ -793,7 +793,7 @@ mod tests {
         legacy
             .create_identity("Selected", &app_key, None)
             .map_err(map_domain_error)?;
-        let store_id = nook_core::generate_store_id().map_err(map_domain_error)?;
+        let store_id = nook_core::StoreId::generate().map_err(map_domain_error)?;
         let mut candidate = legacy.clone();
         candidate
             .open_or_generate_vault_dek_for_identity(

@@ -1,18 +1,13 @@
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{SecretRecord, is_auth_key_id, is_device_id};
-
-/// Compact random id (`generate_id` — 11 chars, base64url).
-#[must_use]
-#[allow(dead_code)]
-pub fn is_compact_id(key: &str) -> bool {
-    crate::is_compact_token(key)
-}
+use crate::{AppId, AuthKeyId, SecretId, SecretRecord, StoreId};
 
 #[must_use]
 pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord> {
     let user_records: Vec<SecretRecord> = records
         .iter()
-        .filter(|record| !is_device_id(record.id.as_str()) && !is_auth_key_id(record.id.as_str()))
+        .filter(|record| {
+            !AppId::is_valid(record.id.as_str()) && !AuthKeyId::is_valid(record.id.as_str())
+        })
         .cloned()
         .collect();
     let needle = query.trim().to_lowercase();
@@ -35,9 +30,7 @@ pub fn validate_secret_data(data: &str) -> ValidationResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        ApiKeySecret, SecretRecord, SecretType, SecretValue, validate_secret_id, validate_store_id,
-    };
+    use crate::{ApiKeySecret, SecretRecord, SecretType, SecretValue};
 
     use super::{filter_secrets, validate_secret_data};
 
@@ -52,12 +45,12 @@ mod tests {
     fn sample_records() -> anyhow::Result<Vec<SecretRecord>> {
         Ok(vec![
             SecretRecord {
-                id: validate_secret_id("secret_SMypl8K0w9Y")?,
+                id: SecretId::parse("secret_SMypl8K0w9Y")?,
                 secret_type: SecretType::ApiKey,
                 data: value("a"),
             },
             SecretRecord {
-                id: validate_secret_id("secret_SMypl8K0w9Z")?,
+                id: SecretId::parse("secret_SMypl8K0w9Z")?,
                 secret_type: SecretType::ApiKey,
                 data: value("b"),
             },
@@ -66,26 +59,23 @@ mod tests {
 
     #[test]
     fn validates_secret_fields() -> anyhow::Result<()> {
-        assert!(validate_secret_id("  ").is_err());
+        assert!(SecretId::parse("  ").is_err());
         assert_eq!(
-            validate_secret_id(" secret_SMypl8K0w9Y ")?.as_str(),
+            SecretId::parse(" secret_SMypl8K0w9Y ")?.as_str(),
             "secret_SMypl8K0w9Y"
         );
         assert!(validate_secret_data("").is_err());
         assert!(validate_secret_data("x").is_ok());
-        assert!(validate_secret_id("abc123def4567890").is_err());
-        assert!(validate_secret_id(&"a".repeat(64)).is_err());
+        assert!(SecretId::parse("abc123def4567890").is_err());
+        assert!(SecretId::parse(&"a".repeat(64)).is_err());
         assert_eq!(
-            validate_store_id("store_SMypl8K0w9Y")?.as_str(),
+            StoreId::parse("store_SMypl8K0w9Y")?.as_str(),
             "store_SMypl8K0w9Y"
         );
+        assert_eq!(StoreId::parse("SMypl8K0w9Y")?.as_str(), "store_SMypl8K0w9Y");
+        assert!(StoreId::parse("short").is_err());
         assert_eq!(
-            validate_store_id("SMypl8K0w9Y")?.as_str(),
-            "store_SMypl8K0w9Y"
-        );
-        assert!(validate_store_id("short").is_err());
-        assert_eq!(
-            validate_secret_id("secret_SMypl8K0w9Y")?.as_str(),
+            SecretId::parse("secret_SMypl8K0w9Y")?.as_str(),
             "secret_SMypl8K0w9Y"
         );
         Ok(())
@@ -127,7 +117,7 @@ mod tests {
     #[test]
     fn does_not_search_values() -> anyhow::Result<()> {
         let records = vec![SecretRecord {
-            id: validate_secret_id("secret_SMypl8K0w9X")?,
+            id: SecretId::parse("secret_SMypl8K0w9X")?,
             secret_type: SecretType::ApiKey,
             data: value("find-me"),
         }];

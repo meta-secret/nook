@@ -102,7 +102,7 @@ mod browser_tests {
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
         assert!(manager.identity_directory_snapshot_request().is_ok());
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         assert!(
             manager
                 .selected_vault_identity_context_request(store_id.as_str())

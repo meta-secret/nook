@@ -58,7 +58,7 @@ mod tests {
             selected.app_id().clone(),
             wrapped,
         );
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let mut selected_profile = DeviceAccessProfile::default();
         selected_profile.record_verified_vault_access(
             &DeviceId::parse(selected.app_id().as_str())?,

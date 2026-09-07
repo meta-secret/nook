@@ -561,7 +561,7 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let identity = manager.device_identity()?;
         manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.bootstrap_event_log_genesis().await?;
 
         assert!(manager.init_device().is_ok());
@@ -629,7 +629,7 @@ mod browser_tests {
             .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let owner_identity = manager.device_identity()?;
         manager.initialize_genesis_vault(&owner_identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.bootstrap_event_log_genesis().await?;
 
         let owner_auth_id = js(manager.list_vault_members())?
@@ -664,7 +664,7 @@ mod browser_tests {
         let enrollee_identity = nook_core::DeviceIdentity::generate()?;
         enrollee.device.id = enrollee_identity.device_id().to_string();
         enrollee.device.identity_private_key = enrollee_identity.secret_string().into_inner();
-        enrollee.vault.store_id = nook_core::generate_store_id()?.to_string();
+        enrollee.vault.store_id = nook_core::StoreId::generate()?.to_string();
         enrollee.bootstrap_event_log_genesis().await?;
         let keys = nook_core::VaultKeys::generate()?;
         let enrolled = js(enrollee

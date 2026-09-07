@@ -150,7 +150,7 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await?;
         let authorizer = AppKey::generate()?;
         let extension = AppKey::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let owner_key = authorizer.clone();
         let owner_store = store_id.clone();
         identity_record::update_identity_directory(move |directory| {
@@ -203,8 +203,8 @@ mod tests {
     )]
     async fn paired_identity_handoff_rejects_a_different_connected_vault() -> Result<(), JsError> {
         let extension = AppKey::generate()?;
-        let staged_store_id = nook_core::generate_store_id()?;
-        let connected_store_id = nook_core::generate_store_id()?;
+        let staged_store_id = nook_core::StoreId::generate()?;
+        let connected_store_id = nook_core::StoreId::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.id = extension.device_id().as_str().to_owned();
@@ -240,7 +240,7 @@ mod tests {
     )]
     async fn paired_session_unlock_clears_pending_without_enrolling() -> Result<(), JsError> {
         let extension = AppKey::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();
         manager.device.id = extension.device_id().as_str().to_owned();

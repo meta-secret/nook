@@ -653,7 +653,7 @@ mod tests {
         let app_key = AppKey::generate()?;
         let mut record =
             IdentityRecord::create_with_app_key("Personal", &app_key, Some("MacBook".to_owned()))?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         record.generate_vault_dek(store_id.clone())?;
         let local_protections = [LocalAppProtection {
             app_id: app_key.app_id().clone(),
@@ -724,7 +724,7 @@ mod tests {
     #[test]
     fn selected_vault_context_resolves_current_browser() -> anyhow::Result<()> {
         let personal_key = AppKey::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &personal_key, None)?;
         personal.generate_vault_dek(store_id.clone())?;
         let linked = [&personal];
@@ -807,7 +807,7 @@ mod tests {
     #[test]
     fn selected_vault_context_rejects_current_member_without_vault_grant() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let mut identity = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         identity.generate_vault_dek(store_id.clone())?;
         let vault = identity
@@ -892,7 +892,7 @@ mod tests {
     fn current_and_other_protected_identities_keep_distinct_eligibility() -> anyhow::Result<()> {
         let current_key = AppKey::generate()?;
         let other_key = AppKey::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
@@ -921,7 +921,7 @@ mod tests {
     fn linked_identity_without_a_protected_keyring_entry_is_unavailable() -> anyhow::Result<()> {
         let current_key = AppKey::generate()?;
         let linked_key = AppKey::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let current = IdentityRecord::create_with_app_key("Personal", &current_key, None)?;
         let current_id = current.identity_id.clone();
         let current_entry = keyring_entry(&current, &current_key)?;
@@ -943,7 +943,7 @@ mod tests {
     fn revoked_or_missing_dek_envelopes_make_a_protected_identity_unavailable() -> anyhow::Result<()>
     {
         let app_key = AppKey::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let mut base = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
         base.generate_vault_dek(store_id.clone())?;
         let entry = keyring_entry(&base, &app_key)?;

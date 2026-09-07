@@ -319,7 +319,7 @@ mod tests {
         let app_key = AppKey::generate()?;
         let (event_signing, _) = SigningIdentity::generate()?;
         let (_, mismatched_seed) = SigningIdentity::generate()?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let event = VaultEvent::sign(
             nook_core::VaultEventBody {
                 schema_version: VaultEventSchemaVersion::CURRENT,
@@ -409,7 +409,7 @@ mod tests {
         let fixture = PinningFixture::new().await?;
         let original = fixture.marker().await?;
         let different_store = PendingSimpleGenesis {
-            store_id: nook_core::generate_store_id()?,
+            store_id: nook_core::StoreId::generate()?,
             ..fixture.pending.clone()
         };
         let different_identity = PendingSimpleGenesis {

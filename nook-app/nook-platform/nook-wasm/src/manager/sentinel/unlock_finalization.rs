@@ -387,7 +387,7 @@ mod tests {
         for mismatch in 0..4 {
             let mut manager = fixture.manager()?;
             match mismatch {
-                0 => manager.vault.store_id = nook_core::generate_store_id()?.to_string(),
+                0 => manager.vault.store_id = nook_core::StoreId::generate()?.to_string(),
                 1 => manager.vault.architecture = VaultArchitecture::default(),
                 2 => {
                     manager.vault.architecture = VaultArchitecture::sentinel_personal(

@@ -302,7 +302,7 @@ mod tests {
         let shared = AppKey::generate()?;
         let other = AppKey::generate()?;
         let mut personal = IdentityRecord::create_with_app_key("Personal", &shared, None)?;
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let expected = personal.generate_vault_dek(store_id.clone())?;
         let mut work = IdentityRecord::create_with_app_key("Work", &shared, None)?;
         work.add_member(IdentityMember {

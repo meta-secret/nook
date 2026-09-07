@@ -190,7 +190,7 @@ mod tests {
         assert!(manager.pending_vault_creation_handoff().is_some());
         assert!(manager.pending_existing_vault_import().is_none());
 
-        let paired_store = nook_core::generate_store_id()?;
+        let paired_store = nook_core::StoreId::generate()?;
         manager.device.pending_extension_handoff = Some(staged_handoff(
             PendingExtensionIdentityEnrollment::PairedVault {
                 authorizer: AppKey::generate()?,
@@ -200,7 +200,7 @@ mod tests {
         assert!(manager.defers_identity_reconciliation_until_handoff());
         assert!(manager.pending_vault_creation_handoff().is_none());
 
-        let unlock_store = nook_core::generate_store_id()?;
+        let unlock_store = nook_core::StoreId::generate()?;
         manager.device.pending_extension_handoff = Some(staged_handoff(
             PendingExtensionIdentityEnrollment::PairedVaultSessionUnlock {
                 store_id: unlock_store,
@@ -208,7 +208,7 @@ mod tests {
         )?);
         assert!(manager.defers_identity_reconciliation_until_handoff());
 
-        let import_store = nook_core::generate_store_id()?;
+        let import_store = nook_core::StoreId::generate()?;
         manager.device.pending_extension_handoff = Some(staged_handoff(
             PendingExtensionIdentityEnrollment::ExistingVaultImport {
                 store_id: import_store.clone(),

@@ -315,7 +315,7 @@ mod browser_tests {
         let mut companion_profile = DeviceAccessProfile::default();
         companion_profile.record_verified_vault_access(
             &DeviceId::parse(companion.app_id().as_str())?,
-            &nook_core::generate_store_id()?,
+            &nook_core::StoreId::generate()?,
             IsoTimestamp::from_trusted("2026-08-25T01:00:00.000Z".to_owned()),
         );
         let companion_raw = serde_json::to_string(&companion_profile)?;
@@ -420,7 +420,7 @@ mod browser_tests {
         fixture.write(&original).await?;
         let app = AppKey::generate()?;
         let device_id = DeviceId::parse(app.app_id().as_str())?;
-        let store_id = nook_core::generate_store_id()?;
+        let store_id = nook_core::StoreId::generate()?;
         let called = Cell::new(false);
         let result = fixture
             .destination()

@@ -160,7 +160,7 @@ mod tests {
         manager.device.pending_extension_handoff = Some(PendingExtensionIdentityHandoff {
             enrollment: PendingExtensionIdentityEnrollment::PairedVault {
                 authorizer,
-                store_id: nook_core::generate_store_id()?,
+                store_id: nook_core::StoreId::generate()?,
             },
             authorizer_signing: None,
             signing_public_key: signing.public_key(),

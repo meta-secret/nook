@@ -94,7 +94,7 @@ impl NookVaultManager {
         record.zeroize_plaintext();
         let (yaml, expected_codes) = result?;
         let yaml = Zeroizing::new(yaml);
-        let new_id = nook_core::generate_secret_id()
+        let new_id = nook_core::SecretId::generate()
             .map_err(NookError::from)?
             .to_string();
         self.replace_secret_with_projection_verification(SecretReplacementInput {
@@ -140,14 +140,14 @@ mod wasm_tests {
             .map_err(|error| anyhow::anyhow!("protect extension identity: {error:?}"))?;
         let identity = manager.device_identity()?;
         manager.initialize_genesis_vault(&identity)?;
-        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
         manager.bootstrap_event_log_genesis().await?;
 
         let authenticator = AuthenticatorSecret::from_otpauth_uri(
             "otpauth://totp/Nook:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Nook",
         )?;
         let authenticator_yaml = SecretValue::Authenticator(authenticator).to_yaml()?;
-        let original_id = nook_core::generate_secret_id()?.to_string();
+        let original_id = nook_core::SecretId::generate()?.to_string();
         manager
             .persist_authenticator_yaml(original_id.clone(), authenticator_yaml.into_inner())
             .await
@@ -239,7 +239,7 @@ impl NookVaultManager {
                 .as_str()
                 .to_owned(),
         );
-        let id = nook_core::generate_secret_id()
+        let id = nook_core::SecretId::generate()
             .map_err(NookError::from)?
             .to_string();
         self.persist_authenticator_yaml(id, yaml.as_str().to_owned())

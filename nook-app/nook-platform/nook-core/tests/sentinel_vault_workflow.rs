@@ -6,8 +6,8 @@ use std::slice;
 
 use nook_core::{
     DeviceIdentity, DeviceMode, MultiDeviceError, SentinelKeyReconstruction, SentinelPolicy,
-    SentinelShareOpening, VaultArchitecture, VaultContent, VaultKeys, VaultRecordSet, VaultType,
-    VaultUnlock, create_sentinel_share_records, generate_store_id,
+    SentinelShareOpening, StoreId, VaultArchitecture, VaultContent, VaultKeys, VaultRecordSet,
+    VaultType, VaultUnlock, create_sentinel_share_records,
 };
 
 #[test]
@@ -34,7 +34,7 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
     assert!(!architecture.can_create_secret_with_records(&shares[..1]));
     assert!(architecture.can_create_secret_with_records(&shares));
 
-    let store_id = generate_store_id()?;
+    let store_id = StoreId::generate()?;
     let yaml = VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
         &shares,
         &VaultUnlock::Keys,

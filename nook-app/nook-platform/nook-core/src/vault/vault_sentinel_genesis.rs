@@ -145,7 +145,7 @@ impl SentinelGenesisOutput {
     pub fn from_ready(
         ready: ReadySentinelGenesis<'_>,
     ) -> Result<SentinelGenesisOutput, crate::MultiDeviceError> {
-        let store_id = crate::generate_store_id()?;
+        let store_id = crate::StoreId::generate()?;
         let issued = ready.issue(&store_id)?;
         let policy = issued
             .deliveries

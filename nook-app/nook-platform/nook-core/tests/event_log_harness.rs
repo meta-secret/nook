@@ -11,8 +11,8 @@ use nook_core::{
 use nook_core::{
     AuthKeyId, Database, DeviceIdentity, DeviceSigningPublicKey, EncryptedSecretPayload, EventId,
     JoinRequest, LocalEventStore, LoginSecret, MemberLabel, SecretId, SecretType, SecretValue,
-    SigningIdentity, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation, VaultProjection,
-    VaultProjectionCache, VaultRecordSet, VaultResult, VaultUnlock, generate_store_id,
+    SigningIdentity, StoreId, VaultCrypto, VaultEventSession, VaultKeys, VaultOperation,
+    VaultProjection, VaultProjectionCache, VaultRecordSet, VaultResult, VaultUnlock,
     genesis_members_records,
 };
 use std::collections::{BTreeSet, HashMap};
@@ -33,7 +33,7 @@ impl EventLogDevice {
     pub fn genesis(label: &str) -> VaultResult<Self> {
         let keys = VaultKeys::generate()?;
         let identity = DeviceIdentity::generate()?;
-        let store_id = generate_store_id()?;
+        let store_id = StoreId::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let session =
             VaultEventSession::new(store_id.to_string(), signing, signing_seed.into_inner());
