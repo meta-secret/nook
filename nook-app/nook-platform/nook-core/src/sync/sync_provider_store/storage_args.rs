@@ -415,8 +415,8 @@ mod tests {
         ValidationError,
     };
     use crate::{
-        EnrollmentProvider, LocalFolderConfigData, ProviderSyncCheckpoint,
-        SharedEnrollmentProvider, VaultArchitecture, enrollment_provider_for_architecture,
+        EnrollmentProvider, LocalFolderConfigData, ProviderEnrollmentRequest,
+        ProviderSyncCheckpoint, SharedEnrollmentProvider, VaultArchitecture,
     };
 
     impl StorageProviderData {
@@ -434,9 +434,6 @@ mod tests {
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
         }
-    }
-
-    impl StorageProviderData {
         fn local_folder_provider(id: &str, handle_id: &str) -> StorageProviderData {
             StorageProviderData {
                 id: id.to_owned(),
@@ -456,9 +453,6 @@ mod tests {
                 created_at: "2026-06-24T00:00:00.000Z".to_owned(),
             }
         }
-    }
-
-    impl StorageProviderData {
         fn oauth_provider(
             id: &str,
             preset: OauthFilePreset,
@@ -743,7 +737,13 @@ mod tests {
         oauth.icloud_share_target = StoredICloudShareTarget::SharedTarget(target.clone());
 
         assert_eq!(
-            enrollment_provider_for_architecture(&icloud, &VaultArchitecture::default(), None)?,
+            ProviderEnrollmentRequest {
+                provider: &icloud,
+                architecture: &VaultArchitecture::default(),
+                shared_joiner_identity: None,
+                shared_storage_target_id: None
+            }
+            .build()?,
             EnrollmentProvider::shared(SharedEnrollmentProvider::icloud(target.clone()))
         );
         let args = (icloud).connection_args()?;

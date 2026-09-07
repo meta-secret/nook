@@ -37,10 +37,7 @@ pub use catalog::{
     ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,
     normalize_auth_snapshot, provider_storage_detail, provider_target_key,
 };
-pub use enrollment::{
-    enrollment_provider_for_architecture, enrollment_provider_for_architecture_with_storage_target,
-    enrollment_provider_onboarding_type, provider_onboarding_type, shared_grant_provider_id,
-};
+pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
 pub use legacy_storage::auth_snapshot_legacy_storage_value;
 pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
 pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
