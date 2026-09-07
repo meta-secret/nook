@@ -1,8 +1,7 @@
 use crate::errors::{AgeCryptoError, MultiDeviceError, MultiDeviceResult};
 use crate::{
     AgeArmoredCiphertext, AppId, AuthKeyId, CompactToken, DeviceId, DeviceIdentitySecret,
-    DevicePublicKey, DeviceSigningPublicKey, SecretId, SecretType, StoredRecordPayload,
-    StoredSecretRecord, SymmetricKey,
+    DevicePublicKey, SecretId, SecretType, StoredRecordPayload, StoredSecretRecord, SymmetricKey,
 };
 use age::secrecy::ExposeSecret;
 use age::x25519::{Identity, Recipient};
@@ -16,6 +15,7 @@ use std::{
 };
 
 mod access;
+mod join;
 mod roster;
 #[path = "multi_device_secret_sharing.rs"]
 mod secret_sharing;
@@ -28,6 +28,7 @@ pub use access::{
     ConnectAccessStatus, SelfRosterSync, assess_connect_access, device_is_enrolled,
     ensure_self_in_roster, pending_join_for_device,
 };
+pub use join::{DeviceEnrollment, JoinRequestApproval, JoinRequestDenial, JoinRequestIssuance};
 pub use roster::{
     build_members_records, encrypt_member_entry, genesis_members_records, member_from_identity,
     member_from_join, rename_vault_member, replace_member_records, resolve_member_roster,
@@ -187,19 +188,6 @@ pub fn user_stored_records(
     Ok(user_records)
 }
 
-#[must_use]
-pub fn deny_join_request(
-    records: &[StoredSecretRecord],
-    join_device_id: &DeviceId,
-) -> Vec<StoredSecretRecord> {
-    let join_key = join_record_key(join_device_id);
-    records
-        .iter()
-        .filter(|record| record.key.as_str() != join_key)
-        .cloned()
-        .collect()
-}
-
 pub fn auth_record(
     pk_id: &AuthKeyId,
     secrets_key: &SymmetricKey,
@@ -245,88 +233,6 @@ pub fn genesis_dec_record(
 ) -> MultiDeviceResult<StoredSecretRecord> {
     let key = SymmetricKey::parse(dec).map_err(MultiDeviceError::Validation)?;
     genesis_auth_record(identity, &key, &key)
-}
-
-pub fn create_join_request_record(
-    identity: &DeviceIdentity,
-    requested_at: &str,
-) -> MultiDeviceResult<StoredSecretRecord> {
-    create_join_request_record_with_signing_key(
-        identity,
-        requested_at,
-        &DeviceSigningPublicKey::from_trusted(String::new()),
-    )
-}
-
-pub fn create_join_request_record_with_signing_key(
-    identity: &DeviceIdentity,
-    requested_at: &str,
-    signing_public_key: &DeviceSigningPublicKey,
-) -> MultiDeviceResult<StoredSecretRecord> {
-    let request = JoinRequest {
-        device_id: identity.device_id().to_owned(),
-        public_key: identity.public_key(),
-        signing_public_key: signing_public_key.clone(),
-        requested_at: requested_at.to_owned(),
-    };
-    Ok(StoredSecretRecord {
-        key: SecretId::from_vault_record(&join_record_key(identity.device_id())),
-        secret_type: None,
-        value: StoredRecordPayload::from_trusted(
-            serde_json::to_string(&request).map_err(MultiDeviceError::JoinRequestSerialize)?,
-        ),
-    })
-}
-
-pub fn approve_join_request(
-    secrets_key: &SymmetricKey,
-    members_key: &SymmetricKey,
-    join: &JoinRequest,
-    approver: &DeviceIdentity,
-    records: &[StoredSecretRecord],
-) -> MultiDeviceResult<(StoredSecretRecord, String, Vec<StoredSecretRecord>)> {
-    let pk_id = dec_auth_id_from_public_key(&join.public_key)?;
-    let auth_record = auth_record(&pk_id, secrets_key, members_key, &join.public_key)?;
-    let new_member = member_from_join(join)?;
-    let roster = match resolve_member_roster(records, members_key) {
-        Ok(existing) => roster_add_member(existing, new_member),
-        Err(_) => vec![
-            member_from_identity(approver, &join.requested_at),
-            new_member,
-        ],
-    };
-    let member_records = build_members_records(&roster, members_key)?;
-    Ok((
-        auth_record,
-        join_record_key(&join.device_id),
-        member_records,
-    ))
-}
-
-pub fn enroll_device_with_keys(
-    secrets_key: &SymmetricKey,
-    members_key: &SymmetricKey,
-    identity: &DeviceIdentity,
-    enrolled_at: &str,
-) -> MultiDeviceResult<(StoredSecretRecord, Vec<StoredSecretRecord>)> {
-    let auth = genesis_auth_record(identity, secrets_key, members_key)?;
-    let members = genesis_members_records(identity, members_key, enrolled_at)?;
-    Ok((auth, members))
-}
-
-/// Back-compat: OOB enroll when both keys are the same (tests only).
-pub fn enroll_device_with_dec(
-    dec: &str,
-    identity: &DeviceIdentity,
-    enrolled_at: &str,
-) -> MultiDeviceResult<(StoredSecretRecord, StoredSecretRecord)> {
-    let key = SymmetricKey::parse(dec).map_err(MultiDeviceError::Validation)?;
-    let (auth, members) = enroll_device_with_keys(&key, &key, identity, enrolled_at)?;
-    let members = members
-        .into_iter()
-        .next()
-        .ok_or(MultiDeviceError::MemberRosterBuildFailed)?;
-    Ok((auth, members))
 }
 
 fn resolve_auth_envelopes(
@@ -430,6 +336,7 @@ mod tests {
     use std::io;
 
     use super::*;
+    use crate::DeviceSigningPublicKey;
 
     const ENROLLED_AT: &str = "2026-06-21T00:00:00Z";
     fn genesis_vault(
@@ -465,13 +372,14 @@ mod tests {
     ) -> anyhow::Result<()> {
         let join = pending_join_for_device(records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
-        let (auth_record, join_key, member_records) = approve_join_request(
+        let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
             &join,
             approver,
             records,
-        )?;
+        )
+        .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
         replace_member_records(records, member_records)?;
@@ -493,7 +401,7 @@ mod tests {
         let (genesis, mut records) = genesis_vault(&keys)?;
 
         let joiner = DeviceIdentity::generate()?;
-        records.push(create_join_request_record(&joiner, ENROLLED_AT)?);
+        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
 
         approve_pending_join(&keys, &genesis, &mut records, &joiner)?;
 
@@ -517,11 +425,12 @@ mod tests {
         )?
         .pop()
         .ok_or_else(|| io::Error::other("sentinel share record must exist"))?;
-        let join_record = create_join_request_record_with_signing_key(
+        let join_record = JoinRequestIssuance::with_signing_key(
             &joiner,
             ENROLLED_AT,
             &DeviceSigningPublicKey::from_trusted("a".repeat(64)),
-        )?;
+        )
+        .issue()?;
         let user_secret = user_secret_record("secret_login001", "encrypted-user-secret");
         records.push(join_record.clone());
         records.push(sentinel_record.clone());
@@ -592,14 +501,11 @@ mod tests {
         records.push(user_secret_record("secret_api001", "encrypted-user-secret"));
 
         let stale_joiner = DeviceIdentity::generate()?;
-        records.push(create_join_request_record(
-            &stale_joiner,
-            "2026-06-20T00:00:00Z",
-        )?);
+        records.push(JoinRequestIssuance::new(&stale_joiner, "2026-06-20T00:00:00Z").issue()?);
         let mut state = VaultMetaState::from_stored_records(&records)?;
 
         let fresh_joiner = DeviceIdentity::generate()?;
-        let fresh_records = vec![create_join_request_record(&fresh_joiner, ENROLLED_AT)?];
+        let fresh_records = vec![JoinRequestIssuance::new(&fresh_joiner, ENROLLED_AT).issue()?];
         merge_remote_join_records(&mut state, &fresh_records)?;
 
         assert_eq!(state.secrets.len(), 1);
@@ -631,19 +537,20 @@ mod tests {
         .next()
         .ok_or_else(|| io::Error::other("member record must exist"))?;
         let records = vec![
-            create_join_request_record(&joiner, ENROLLED_AT)?,
+            JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?,
             corrupt_member_record,
         ];
         let join = pending_join_for_device(&records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join must exist"))?;
 
-        let (auth_record, join_key, member_records) = approve_join_request(
+        let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
             &join,
             &genesis,
             &records,
-        )?;
+        )
+        .approve()?;
         let mut approved_records = vec![auth_record];
         approved_records.extend(member_records);
 
