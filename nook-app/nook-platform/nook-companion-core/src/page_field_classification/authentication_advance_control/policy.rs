@@ -96,6 +96,15 @@ impl AuthenticationAdvanceControlObservation {
 }
 
 impl CheckedAuthenticationControl<'_> {
+    fn has_webauthn_email_oauth_identifier_advance(&self) -> bool {
+        matches!(
+            self.observation.authentication_username,
+            AuthenticationUsernameEvidence::WebAuthnEmail
+        ) && self.observation.is_identifier_only_get_advance()
+            && AuthenticationRouteIdentity::new(&self.destination.route_identity)
+                .indicates_oauth_authorization()
+    }
+
     pub(super) fn has_positive_login_identity(&self) -> bool {
         let authentication_scope_owns_control = matches!(
             self.observation.ownership,
@@ -123,10 +132,7 @@ impl CheckedAuthenticationControl<'_> {
         let credential_update_destination = self.credential_update_destination();
         let observation = self.observation;
         let expanded_label = expand_identity_text(&observation.label);
-        let webauthn_identifier_advance = matches!(
-            observation.authentication_username,
-            AuthenticationUsernameEvidence::WebAuthnEmail
-        ) && observation.is_identifier_only_get_advance();
+        let webauthn_identifier_advance = self.has_webauthn_email_oauth_identifier_advance();
         let primary_oauth_login_label = AuthenticationControlIdentity::new(&observation.label)
             .is_explicit_advance()
             || (webauthn_identifier_advance && expanded_label == "next");
@@ -198,6 +204,7 @@ impl CheckedAuthenticationControl<'_> {
                 AuthenticationUsernameEvidence::Strong | AuthenticationUsernameEvidence::Explicit
             ) || standards_email_semantic_submit)
                 && username_only_authentication_context)
+            || self.has_webauthn_email_oauth_identifier_advance()
             || (authentication_scope_owns_control
                 && AuthenticationRouteIdentity::new(&observation.form_identity)
                     .indicates_authentication())

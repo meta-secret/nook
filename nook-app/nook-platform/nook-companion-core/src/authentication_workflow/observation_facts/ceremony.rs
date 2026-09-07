@@ -381,6 +381,8 @@ mod tests {
     fn tesla_inert_next_is_planning_evidence_without_actuation_authority() {
         let inert = TeslaInertPlanningScenario::observation();
         assert!(!authentication_advance_control_is_safe(&inert));
+        assert!(inert.is_inert_webauthn_email_planning_advance());
+        assert!(TeslaInertPlanningScenario::fields().is_compatible_with_detailed_control(&inert));
         assert!(matches!(
             TeslaInertPlanningScenario::evidence(inert.clone()),
             AuthenticationAdvanceControlEvidence::Present
