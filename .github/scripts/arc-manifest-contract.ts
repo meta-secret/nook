@@ -2,63 +2,12 @@ import { resolve } from "node:path";
 import { readdir } from "node:fs/promises";
 
 import { assertHiveRenderContract } from "./arc-hive-render-contract";
+import { TextContract } from "./text-contract";
 
 const root = resolve(import.meta.dir, "../..");
 
 async function read(relative: string): Promise<string> {
   return Bun.file(resolve(root, relative)).text();
-}
-
-interface ContractSource {
-  label: string;
-  source: string;
-}
-
-class TextContract {
-  constructor(private readonly input: ContractSource) {}
-
-  require(fragment: string): void {
-    if (!this.input.source.includes(fragment)) {
-      throw new Error(
-        `${this.input.label} is missing required contract: ${fragment}`,
-      );
-    }
-  }
-
-  requireAll(fragments: string[]): void {
-    for (const fragment of fragments) this.require(fragment);
-  }
-
-  forbid(fragment: string): void {
-    if (this.input.source.includes(fragment)) {
-      throw new Error(
-        `${this.input.label} contains prohibited contract: ${fragment}`,
-      );
-    }
-  }
-
-  forbidAll(fragments: string[]): void {
-    for (const fragment of fragments) this.forbid(fragment);
-  }
-
-  count(input: { fragment: string; expected: number }): void {
-    const actual = this.input.source.split(input.fragment).length - 1;
-    if (actual !== input.expected) {
-      throw new Error(
-        `${this.input.label} expected ${input.expected} copies of ${input.fragment}, found ${actual}`,
-      );
-    }
-  }
-
-  requireBefore(input: { first: string; second: string }): void {
-    const firstIndex = this.input.source.indexOf(input.first);
-    const secondIndex = this.input.source.indexOf(input.second);
-    if (firstIndex < 0 || secondIndex < 0 || firstIndex > secondIndex) {
-      throw new Error(
-        `${this.input.label} must place ${input.first} before ${input.second}`,
-      );
-    }
-  }
 }
 
 interface ResourceEnvelope {
