@@ -245,6 +245,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
       destinationIdentity: 'https://www.airbnb.com/login',
       formIdentity: '',
       label: AirbnbFixtureControl.Continue,
+      machineIdentity: '',
       ownership: 'owned-form',
       semanticSubmitControlCount: 1,
       submissionDestinationSource: 'omitted',

@@ -77,7 +77,7 @@ describe('website one-time-code fields', () => {
         <input autocomplete="username" />
         <input type="password" autocomplete="current-password" />
         <button type="submit">Delete account</button>
-        <button type="submit">Sign in</button>
+        <button type="submit" id="login-submit" name="intent" value="session" class="primary action">Sign in</button>
       </form>
     `
 
@@ -95,9 +95,11 @@ describe('website one-time-code fields', () => {
       expect.arrayContaining([
         expect.objectContaining({
           label: expect.stringContaining('Delete account'),
+          machineIdentity: '',
         }),
         expect.objectContaining({
           label: expect.stringContaining('Sign in'),
+          machineIdentity: 'login-submit intent=session primary action',
         }),
       ]),
     )
