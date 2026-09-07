@@ -1,0 +1,183 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: eventbus-default-js
+  namespace: argo-events
+  labels:
+    app.kubernetes.io/name: nook-jetstream
+    app.kubernetes.io/part-of: webhook-ingress
+spec:
+  serviceName: eventbus-default-js-svc
+  podManagementPolicy: Parallel
+  replicas: 3
+  selector:
+    matchLabels:
+      controller: eventbus-controller
+      eventbus-name: default
+      owner-name: default
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: nook-jetstream
+        app.kubernetes.io/part-of: webhook-ingress
+        controller: eventbus-controller
+        eventbus-name: default
+        owner-name: default
+    spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 60
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1000
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: main
+          image: docker.io/library/nats:2.10.29@sha256:5498ba57b9471840be3d15b033a4eec554d1c02fa6c2cc0ca2d888637f6c6e2f
+          imagePullPolicy: IfNotPresent
+          command: ["nats-server", "--config", "/etc/nats-config/nats-js.conf"]
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: CLUSTER_ADVERTISE
+              value: $(POD_NAME).eventbus-default-js-svc.$(POD_NAMESPACE).svc
+            - name: JS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: jetstream-server
+                  key: encryption
+          ports:
+            - name: nats-client
+              containerPort: 4222
+            - name: nats-cluster
+              containerPort: 6222
+            - name: monitor
+              containerPort: 8222
+            - name: websocket
+              containerPort: 9222
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            failureThreshold: 30
+            initialDelaySeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: monitor
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: monitor
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+          lifecycle:
+            preStop:
+              exec:
+                command: ["nats-server", "-sl=ldm=/var/run/nats/nats.pid"]
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/nats-config
+              readOnly: true
+            - name: pid
+              mountPath: /var/run/nats
+            - name: eventbus-default-js-vol
+              mountPath: /data/jetstream
+        - name: metrics
+          image: docker.io/natsio/prometheus-nats-exporter:0.14.0@sha256:839c59f6a23473a657f6560c2a14dca9b9ce722a017933a41d071a3c9dd3a7d7
+          imagePullPolicy: IfNotPresent
+          args:
+            - -connz
+            - -routez
+            - -subz
+            - -varz
+            - -prefix=nats
+            - -use_internal_server_id
+            - -jsz=all
+            - http://localhost:8222
+          ports:
+            - name: metrics
+              containerPort: 7777
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1001
+            runAsGroup: 1001
+      volumes:
+        - name: config-volume
+          projected:
+            defaultMode: 0440
+            sources:
+              - configMap:
+                  name: nook-jetstream-config
+                  items:
+                    - key: nats-js
+                      path: nats-js.conf
+              - secret:
+                  name: jetstream-server
+                  items:
+                    - key: auth
+                      path: auth.conf
+                    - key: private-key
+                      path: server-private-key.pem
+                    - key: cert
+                      path: server-cert.pem
+                    - key: ca-cert
+                      path: ca-cert.pem
+                    - key: cluster-private-key
+                      path: cluster-private-key.pem
+                    - key: cluster-cert
+                      path: cluster-cert.pem
+                    - key: cluster-ca-cert
+                      path: cluster-ca-cert.pem
+        - name: pid
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: eventbus-default-js-vol
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        storageClassName: argo-events-jetstream-local-retain
+        resources:
+          requests:
+            storage: 1Gi

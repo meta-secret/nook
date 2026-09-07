@@ -11,6 +11,7 @@ Load only the category that owns the assigned operational functionality.
 - [Engineering harness](architecture/engineering-harness.md)
 - [ARC and Kata runner platform](design-docs/arc-kata-runner-platform.md)
 - [Hive isolated agent platform](design-docs/hive-isolated-agent-platform.md)
+- [Repository-managed JetStream](design-docs/repository-managed-jetstream.md)
 
 ## Infrastructure and validation skills
 

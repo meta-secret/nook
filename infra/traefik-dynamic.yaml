@@ -21,6 +21,13 @@ http:
       service: github-webhooks
       tls:
         certResolver: letsencrypt
+    jetstream-events:
+      entryPoints:
+        - websecure
+      rule: Host(`events.dev.nokey.sh`)
+      service: jetstream-events
+      tls:
+        certResolver: letsencrypt
 
   services:
     registry:
@@ -37,3 +44,8 @@ http:
         passHostHeader: true
         servers:
           - url: http://10.96.90.20:12000
+    jetstream-events:
+      loadBalancer:
+        passHostHeader: true
+        servers:
+          - url: http://10.96.90.30:9222
