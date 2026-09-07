@@ -201,10 +201,15 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use nook_companion_core::{
-        CompanionIdentityDiscoveryObservation, CompanionIdentityDiscoveryRequest,
-        CompanionIdentityHandoffContext, CompanionIdentityStatus, CompanionInstallationAppKey,
-        CompanionUnlockedAppKey, ExtensionConnectScope, ExtensionPairingVaultType,
+        CompanionEpochMilliseconds, CompanionIdentityDiscoveryObservation,
+        CompanionIdentityDiscoveryRequest, CompanionIdentityHandoffContext,
+        CompanionIdentityStatus, CompanionInstallationAppKey, CompanionUnlockedAppKey,
+        ExtensionConnectScope, ExtensionPairingVaultType,
     };
+
+    fn epoch_milliseconds(serialized: &str) -> Result<CompanionEpochMilliseconds, JsError> {
+        serde_json::from_str(serialized).map_err(|error| JsError::new(&error.to_string()))
+    }
 
     struct DirectHandoffScenario {
         website: NookVaultManager,
@@ -253,25 +258,25 @@ mod tests {
             })
         }
 
-        fn handoff_begin(&self) -> CompanionWebsiteHandoffBegin {
-            CompanionWebsiteHandoffBegin {
+        fn handoff_begin(&self) -> Result<CompanionWebsiteHandoffBegin, JsError> {
+            Ok(CompanionWebsiteHandoffBegin {
                 discovery: CompanionIdentityDiscoveryObservation {
                     request: CompanionIdentityDiscoveryRequest {
                         request_id: "request-1".to_owned(),
                         vault_store_id: "store-1".to_owned(),
-                        expires_at: 200_u32.into(),
+                        expires_at: epoch_milliseconds("200")?,
                     },
-                    observed_at: 100_u32.into(),
+                    observed_at: epoch_milliseconds("100")?,
                 },
                 status: self.status.clone(),
                 context: CompanionIdentityHandoffContext::PairedVault {
                     vault_store_id: "store-1".to_owned(),
                 },
-            }
+            })
         }
 
         fn begin(&mut self) -> Result<CompanionIdentityHandoffRequest, JsError> {
-            let begin = self.handoff_begin();
+            let begin = self.handoff_begin()?;
             self.website.begin_companion_identity_handoff(begin)
         }
     }
@@ -335,12 +340,12 @@ mod tests {
     #[test]
     fn rejected_discovery_never_allocates_website_handoff_state() -> Result<(), JsError> {
         let mut scenario = DirectHandoffScenario::new()?;
-        let mut request_id = scenario.handoff_begin();
+        let mut request_id = scenario.handoff_begin()?;
         request_id.discovery.request.request_id = "request-other".to_owned();
-        let mut vault_store = scenario.handoff_begin();
+        let mut vault_store = scenario.handoff_begin()?;
         vault_store.discovery.request.vault_store_id = "store-other".to_owned();
-        let mut expired = scenario.handoff_begin();
-        expired.discovery.observed_at = 200_u32.into();
+        let mut expired = scenario.handoff_begin()?;
+        expired.discovery.observed_at = epoch_milliseconds("200")?;
 
         for begin in [request_id, vault_store, expired] {
             assert!(
