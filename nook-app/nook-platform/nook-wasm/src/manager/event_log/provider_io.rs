@@ -7,8 +7,8 @@
 use crate::storage::event_db::save_event_bytes;
 use crate::storage::identity_record;
 use nook_core::{
-    IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StorageMode, StoreId, SymmetricKey,
-    VaultEvent, VaultEventSchemaVersion, VaultType,
+    IsoTimestamp, MemberLabel, SigningIdentity, StorageMode, StoreId, SymmetricKey, VaultEvent,
+    VaultEventSchemaVersion, VaultType,
 };
 use std::collections::BTreeSet;
 
@@ -279,7 +279,7 @@ impl NookVaultManager {
         let key_epoch = self.ensure_key_epoch().await?;
         let identity = self.device_identity()?;
         let mut operations = vec![VaultOperation::VaultImported {
-            source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             secrets: vec![],
             password_entries: self.vault.password_entries.clone(),
         }];
@@ -373,7 +373,7 @@ impl NookVaultManager {
         let actor_id = signing.actor_id()?;
         let key_epoch = self.ensure_key_epoch().await?;
         let mut operations = vec![VaultOperation::VaultImported {
-            source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             secrets: vec![],
             password_entries: vec![],
         }];

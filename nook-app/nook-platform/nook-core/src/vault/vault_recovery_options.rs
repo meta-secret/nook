@@ -159,8 +159,8 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, GenesisImportPayload, IsoTimestamp,
-        MemberLabel, PasswordEntryId, PasswordEntryIssuance, Sha256Hex, SigningIdentity, StoreId,
-        VaultEvent, VaultEventBody, VaultEventSchemaVersion, build_genesis_import_event,
+        MemberLabel, PasswordEntryId, PasswordEntryIssuance, SigningIdentity, StoreId, VaultEvent,
+        VaultEventBody, VaultEventSchemaVersion, build_genesis_import_event,
     };
 
     const STORE_ID: &str = "store_recovery01x";
@@ -183,7 +183,9 @@ mod tests {
             actor_signing_public_key: signing.public_key(),
             parents: vec![parent],
             created_at: timestamp(created_at)?,
-            key_epoch: EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
+            key_epoch: EventId::from_sha256_hex(
+                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+            )?,
             operations,
         };
         let event = VaultEvent::sign(body, signing.signing_key())?;
@@ -210,9 +212,11 @@ mod tests {
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE_ID)?,
             &signing.actor_id()?,
-            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
+            &EventId::from_sha256_hex(
+                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+            )?,
             GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },
@@ -303,9 +307,11 @@ mod tests {
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE_ID)?,
             &signing.actor_id()?,
-            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
+            &EventId::from_sha256_hex(
+                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+            )?,
             GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![],
             },
@@ -351,9 +357,11 @@ mod tests {
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE_ID)?,
             &signing.actor_id()?,
-            &EventId::from_sha256_hex(Sha256Hex::from_trusted("1".repeat(64)).as_str())?,
+            &EventId::from_sha256_hex(
+                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+            )?,
             GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },

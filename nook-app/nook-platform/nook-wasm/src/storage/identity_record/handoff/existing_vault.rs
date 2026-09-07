@@ -159,7 +159,7 @@ mod tests {
     use futures_util::future;
     use nook_core::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, IdentityDirectory, IsoTimestamp,
-        LocalEventStore, MemberLabel, Sha256Hex, SigningIdentity, VaultOperation,
+        LocalEventStore, MemberLabel, SigningIdentity, VaultOperation,
     };
     use rexie::TransactionMode;
 
@@ -302,7 +302,9 @@ mod tests {
                     created_at: &created_at,
                     operations: vec![
                         VaultOperation::VaultImported {
-                            source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                            source_content_hash: nook_auth2::Sha256Hex::from_trusted(
+                                "0".repeat(64),
+                            ),
                             secrets: Vec::new(),
                             password_entries: Vec::new(),
                         },

@@ -358,8 +358,8 @@ impl DriveEventStore<'_> {
 mod tests {
     use super::*;
     use nook_core::{
-        Ed25519Signature, EventId, GenesisImportPayload, IsoTimestamp, Sha256Hex, SigningIdentity,
-        StoreId, VaultEvent, build_genesis_import_event, serialize_event_storage_yaml,
+        Ed25519Signature, EventId, GenesisImportPayload, IsoTimestamp, SigningIdentity, StoreId,
+        VaultEvent, build_genesis_import_event, serialize_event_storage_yaml,
     };
 
     struct EventFixture(EventId, VaultEvent, Vec<u8>);
@@ -372,7 +372,7 @@ mod tests {
                 &identity.actor_id()?,
                 &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
                 GenesisImportPayload {
-                    source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: vec![],
                     password_entries: vec![],
                 },

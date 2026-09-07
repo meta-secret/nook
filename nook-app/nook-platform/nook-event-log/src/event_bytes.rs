@@ -1,7 +1,41 @@
 //! Typed byte representations owned by the signed event protocol.
 
+use crate::{EventError, EventResult};
+use serde_json::{Map, Value};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CanonicalEventBodyBytes(Vec<u8>);
+
+impl CanonicalEventBodyBytes {
+    pub fn from_json(value: &Value) -> EventResult<Self> {
+        let canonical = Self::canonical_value(value);
+        serde_json::to_vec(&canonical)
+            .map(Into::into)
+            .map_err(EventError::from)
+    }
+
+    pub(crate) fn canonical_value(value: &Value) -> Value {
+        Self::canonicalize_json(value)
+    }
+
+    fn canonicalize_json(value: &Value) -> Value {
+        match value {
+            Value::Object(map) => {
+                let mut sorted = Map::new();
+                let mut entries = map.iter().collect::<Vec<_>>();
+                entries.sort_by_key(|(key, _)| *key);
+                for (key, item) in entries {
+                    sorted.insert(key.clone(), Self::canonicalize_json(item));
+                }
+                Value::Object(sorted)
+            }
+            Value::Array(items) => {
+                Value::Array(items.iter().map(Self::canonicalize_json).collect())
+            }
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => value.clone(),
+        }
+    }
+}
 
 impl From<Vec<u8>> for CanonicalEventBodyBytes {
     #[cfg_attr(

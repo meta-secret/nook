@@ -424,7 +424,7 @@ mod tests {
     mod browser {
         use super::*;
         use crate::storage::event_db;
-        use nook_core::{EventId, IsoTimestamp, Sha256Hex, VaultOperation};
+        use nook_core::{EventId, IsoTimestamp, VaultOperation};
         use wasm_bindgen_test::wasm_bindgen_test;
 
         #[wasm_bindgen_test]
@@ -474,13 +474,14 @@ mod tests {
                 let mut manager = fixture.manager()?;
                 // A signed genesis root needs VaultImported before its Sentinel operations.
                 let mut operations = vec![VaultOperation::VaultImported {
-                    source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 }];
                 operations.extend(nook_core::sentinel_genesis_operations(&fixture.output));
                 let epoch = EventId::from_sha256_hex(
-                    nook_core::sha256_hex(fixture.output.store_id.as_str().as_bytes()).as_str(),
+                    nook_auth2::Sha256Hex::from_bytes(fixture.output.store_id.as_str().as_bytes())
+                        .as_str(),
                 )?;
                 let (event, bytes) =
                     nook_core::AppendEventInput::build(nook_core::AppendEventInput {

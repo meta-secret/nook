@@ -245,7 +245,7 @@ impl NookVaultManager {
             return Ok(self.event_log.key_epoch.clone());
         }
         let epoch = EventId::from_sha256_hex(
-            nook_core::sha256_hex(self.vault.store_id.as_bytes()).as_str(),
+            nook_auth2::Sha256Hex::from_bytes(self.vault.store_id.as_bytes()).as_str(),
         )?
         .into_inner();
         self.event_log.key_epoch = epoch;

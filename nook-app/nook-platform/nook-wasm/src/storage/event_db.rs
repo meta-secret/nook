@@ -460,7 +460,7 @@ pub(crate) async fn remove_outbox_entry(
 
 #[cfg(test)]
 mod tests {
-    use nook_core::{EventId, IsoTimestamp, Sha256Hex, SigningIdentity, VaultOperation};
+    use nook_core::{EventId, IsoTimestamp, SigningIdentity, VaultOperation};
     use rexie::TransactionMode;
 
     use super::*;
@@ -603,7 +603,7 @@ mod tests {
             key_epoch: &key_epoch,
             created_at: &IsoTimestamp::from_trusted("2026-08-15T00:00:00Z".to_owned()),
             operations: vec![VaultOperation::VaultImported {
-                source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             }],
