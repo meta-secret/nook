@@ -705,6 +705,78 @@ mod import_tests {
         assert!(note.note.contains("## Proton Pass"));
         Ok(())
     }
+
+    #[test]
+    fn import_sources_keep_status_actions_and_labels_aligned() {
+        let cases = [
+            (
+                SecretImportSource::ApplePasswords,
+                "IMPORT_APPLE_PASSWORDS_START",
+                "import-apple-passwords",
+                "Safari / Apple Passwords",
+            ),
+            (
+                SecretImportSource::Bitwarden,
+                "IMPORT_BITWARDEN_START",
+                "import-bitwarden",
+                "Bitwarden",
+            ),
+            (
+                SecretImportSource::ChromePasswords,
+                "IMPORT_CHROME_PASSWORDS_START",
+                "import-chrome-passwords",
+                "Chrome passwords",
+            ),
+            (
+                SecretImportSource::Dashlane,
+                "IMPORT_DASHLANE_START",
+                "import-dashlane",
+                "Dashlane",
+            ),
+            (
+                SecretImportSource::GoogleAuthenticator,
+                "IMPORT_GOOGLE_AUTHENTICATOR_START",
+                "import-google-authenticator",
+                "Google Authenticator",
+            ),
+            (
+                SecretImportSource::KeePassXc,
+                "IMPORT_KEEPASSXC_START",
+                "import-keepassxc",
+                "KeePassXC",
+            ),
+            (
+                SecretImportSource::Keeper,
+                "IMPORT_KEEPER_START",
+                "import-keeper",
+                "Keeper",
+            ),
+            (
+                SecretImportSource::LastPass,
+                "IMPORT_LASTPASS_START",
+                "import-lastpass",
+                "LastPass",
+            ),
+            (
+                SecretImportSource::OnePassword,
+                "IMPORT_ONEPASSWORD_START",
+                "import-onepassword",
+                "1Password",
+            ),
+            (
+                SecretImportSource::ProtonPass,
+                "IMPORT_PROTON_PASS_START",
+                "import-proton-pass",
+                "Proton Pass",
+            ),
+        ];
+
+        for (source, status, action, label) in cases {
+            assert_eq!(source.status(), status);
+            assert_eq!(source.action(), action);
+            assert_eq!(source.label(), label);
+        }
+    }
 }
 
 #[cfg(test)]
@@ -738,6 +810,107 @@ mod prepared_page_tests {
             .await?;
 
         assert!(manager.vault.crypto.is_unlocked());
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod secret_import_browser_tests {
+    use super::*;
+    use nook_core::DeviceIdentity;
+    use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
+    }
+
+    async fn ready_manager() -> anyhow::Result<NookVaultManager> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        let identity = DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.initialize_genesis_vault(&identity)?;
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.bootstrap_event_log_genesis().await?;
+        manager.drain_status_log();
+        Ok(manager)
+    }
+
+    fn assert_status(manager: &NookVaultManager, source: &str) {
+        assert_eq!(
+            manager.drain_status_log(),
+            vec![format!("{source}_START"), "READY".to_owned()]
+        );
+    }
+
+    #[wasm_bindgen_test]
+    async fn import_wrappers_commit_duplicate_and_empty_plans() -> anyhow::Result<()> {
+        let mut manager = ready_manager().await?;
+
+        let bitwarden = r#"{"items":[{"type":1,"name":"Bitwarden","notes":"recovery","login":{"username":"alice","password":"bitwarden-secret","uris":[{"uri":"https://bitwarden.example"}]}}]}"#;
+        let result = js(manager
+            .import_bitwarden_json(bitwarden.to_owned(), String::new())
+            .await)?;
+        assert_eq!(result.imported(), 1);
+        assert_eq!(result.skipped_unsupported(), 0);
+        assert_eq!(result.skipped_duplicates(), 0);
+        assert_status(&manager, "IMPORT_BITWARDEN");
+
+        let chrome = "name,url,username,password,note\nChrome,https://chrome.example,alice,chrome-secret,notes\n";
+        let result = js(manager.import_chrome_passwords_csv(chrome.to_owned()).await)?;
+        assert_eq!(result.imported(), 1);
+        assert_status(&manager, "IMPORT_CHROME_PASSWORDS");
+        let result = js(manager.import_chrome_passwords_csv(chrome.to_owned()).await)?;
+        assert_eq!(result.imported(), 0);
+        assert_eq!(result.skipped_duplicates(), 1);
+        assert_status(&manager, "IMPORT_CHROME_PASSWORDS");
+
+        let lastpass = "url,username,password,extra,name,grouping,fav\nhttps://lastpass.example,alice,lastpass-secret,Recovery,LastPass,Personal,1\n";
+        let result = js(manager.import_lastpass_csv(lastpass.to_owned()).await)?;
+        assert_eq!(result.imported(), 1);
+        assert_status(&manager, "IMPORT_LASTPASS");
+
+        let keepassxc = "Group,Title,Username,Password,URL,Notes\n,Keepass,alice,keepass-secret,https://keepass.example,offline\n";
+        let result = js(manager.import_keepassxc_csv(keepassxc.to_owned()).await)?;
+        assert_eq!(result.imported(), 1);
+        assert_status(&manager, "IMPORT_KEEPASSXC");
+
+        let keeper = "Title,Login,Password,Website Address,Notes\nKeeper,alice,keeper-secret,https://keeper.example,offline\n";
+        let result = js(manager.import_keeper_csv(keeper.to_owned()).await)?;
+        assert_eq!(result.imported(), 1);
+        assert_status(&manager, "IMPORT_KEEPER");
+
+        let apple = "Title,URL,Username,Password\nApple,https://apple.example,alice,apple-secret\n";
+        let result = js(manager
+            .import_apple_passwords_export(apple.as_bytes().to_vec())
+            .await)?;
+        assert_eq!(result.imported(), 1);
+        assert_status(&manager, "IMPORT_APPLE_PASSWORDS");
+
+        let dashlane = "username,title,password,note,url,category,otpSecret\nalice,Dashlane,dashlane-secret,offline,https://dashlane.example,Personal,\n";
+        let result = js(manager
+            .import_dashlane_export(dashlane.as_bytes().to_vec())
+            .await)?;
+        assert_eq!(result.imported(), 1);
+        assert_status(&manager, "IMPORT_DASHLANE");
+
+        let result = js(manager
+            .import_proton_pass(br#"{"vaults":{}}"#.to_vec())
+            .await)?;
+        assert_eq!(result.imported(), 0);
+        assert_status(&manager, "IMPORT_PROTON_PASS");
+
+        assert!(
+            manager
+                .import_google_authenticator_migration(vec!["not-a-migration-uri".to_owned()])
+                .await
+                .is_err()
+        );
+        assert!(manager.import_onepassword_pux(Vec::new()).await.is_err());
+
+        js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
 }
