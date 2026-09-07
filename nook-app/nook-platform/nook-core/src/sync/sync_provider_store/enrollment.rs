@@ -118,7 +118,7 @@ pub fn enrollment_provider_for_architecture_with_storage_target(
 ) -> ValidationResult<EnrollmentProvider> {
     match provider_onboarding_type(provider, architecture)? {
         OnboardingType::PersonalCredentialTransfer => {
-            personal_enrollment_providerprovider.map(EnrollmentProvider::personal)
+            personal_enrollment_provider(provider).map(EnrollmentProvider::personal)
         }
         OnboardingType::SharedProviderGrant => {
             shared_enrollment_provider(provider, shared_joiner_identity, shared_storage_target_id)
