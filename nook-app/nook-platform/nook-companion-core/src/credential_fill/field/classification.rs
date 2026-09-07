@@ -235,6 +235,14 @@ mod tests {
                 })),
             ),
             (
+                Fixture::page_input(crate::PageInputType::Password, &["password"], "password"),
+                Classification::from(Observation::from(Credential {
+                    field_index: Index::ZERO,
+                    role: CredentialRole::Password(Password::Generic),
+                    editability: Editability::Writable,
+                })),
+            ),
+            (
                 Fixture::page_input(
                     crate::PageInputType::Text,
                     &["username"],

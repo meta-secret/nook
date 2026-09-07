@@ -552,6 +552,24 @@ mod tests {
         netflix.form_identity.clear();
         netflix.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
         assert!(authentication_advance_control_is_safe(netflix.clone()));
+        let generic_password_facts = nook_companion_core::AuthenticationPageObservationFacts {
+            fields: nook_companion_core::AuthenticationFieldObservationFacts {
+                username_field_count: 1.into(),
+                current_password_field_count: 0.into(),
+                generic_password_field_count: 1.into(),
+                actionable_password_field_count: 1.into(),
+                ..Default::default()
+            },
+            detailed_advance_control:
+                nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
+                    netflix.clone(),
+                ),
+            ..Default::default()
+        };
+        assert_eq!(
+            authentication_page_observation_facts_priority(generic_password_facts),
+            3
+        );
 
         for method in [
             nook_companion_core::PageControlSubmissionMethod::Get,
