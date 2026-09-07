@@ -159,9 +159,8 @@ mod tests {
     use super::*;
     use crate::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, GenesisImportPayload, IsoTimestamp,
-        MemberLabel, PasswordEntryId, Sha256Hex, SigningIdentity, StoreId, VaultEvent,
-        VaultEventBody, VaultEventSchemaVersion, build_genesis_import_event,
-        create_password_entry_with_work_factor,
+        MemberLabel, PasswordEntryId, PasswordEntryIssuance, Sha256Hex, SigningIdentity, StoreId,
+        VaultEvent, VaultEventBody, VaultEventSchemaVersion, build_genesis_import_event,
     };
 
     const STORE_ID: &str = "store_recovery01x";
@@ -198,14 +197,16 @@ mod tests {
         let signing = SigningIdentity::generate()?.0;
         let first = DeviceIdentity::generate()?;
         let second = DeviceIdentity::generate()?;
-        let password = create_password_entry_with_work_factor(
-            &crate::generate_vault_keys()?,
+        let keys = crate::generate_vault_keys()?;
+        let password = PasswordEntryIssuance::with_work_factor(
+            &keys,
             "pwdentry001",
             "Emergency kit",
             "2026-07-22T00:00:00Z",
             "correct horse battery staple",
             10.into(),
-        )?;
+        )
+        .issue()?;
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE_ID)?,
             &signing.actor_id()?,
@@ -337,14 +338,16 @@ mod tests {
     #[test]
     fn removed_password_is_not_reported() -> anyhow::Result<()> {
         let signing = SigningIdentity::generate()?.0;
-        let password = create_password_entry_with_work_factor(
-            &crate::generate_vault_keys()?,
+        let keys = crate::generate_vault_keys()?;
+        let password = PasswordEntryIssuance::with_work_factor(
+            &keys,
             "pwdentry001",
             "Old recovery",
             "2026-07-22T00:00:00Z",
             "correct horse battery staple",
             10.into(),
-        )?;
+        )
+        .issue()?;
         let genesis = build_genesis_import_event(
             &StoreId::parse(STORE_ID)?,
             &signing.actor_id()?,

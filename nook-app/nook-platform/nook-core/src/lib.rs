@@ -280,14 +280,11 @@ pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
 };
 pub use password_envelope::{
-    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEnvelope, PasswordEnvelopeVersion,
-    PasswordUnlockEntry, VaultUnlock, attach_password_envelope,
-    attach_password_envelope_with_work_factor, create_password_entry,
-    create_password_entry_with_work_factor, is_vault_password_long_enough,
-    is_vault_password_recommended_length, password_envelope_supports_key_rewrap,
-    resolve_keys_from_entry, resolve_keys_from_password, rewrap_password_envelope,
-    vault_password_min_length, vault_password_recommended_min_length, verify_password,
-    verify_password_entry,
+    PASSWORD_MIN_LENGTH, PASSWORD_SCRYPT_LOG_N, PasswordEntryIssuance, PasswordEntryResolution,
+    PasswordEnvelope, PasswordEnvelopeAttachment, PasswordEnvelopeResolution,
+    PasswordEnvelopeRewrap, PasswordEnvelopeVersion, PasswordUnlockEntry, VaultUnlock,
+    is_vault_password_long_enough, is_vault_password_recommended_length, vault_password_min_length,
+    vault_password_recommended_min_length,
 };
 pub use secrets::{filter_secrets, validate_secret_data};
 pub use session::{

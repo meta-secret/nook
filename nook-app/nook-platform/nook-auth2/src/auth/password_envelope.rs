@@ -211,60 +211,269 @@ impl VaultUnlock {
     }
 }
 
-/// Build a new labelled password entry from resolved vault keys.
-pub fn create_password_entry(
-    keys: &VaultKeys,
-    id: &str,
-    label: &str,
-    created_at: &str,
-    password: &str,
-) -> PasswordResult<PasswordUnlockEntry> {
-    create_password_entry_with_work_factor(
-        keys,
-        id,
-        label,
-        created_at,
-        password,
-        PASSWORD_SCRYPT_LOG_N,
-    )
-}
-
-/// Build a labelled password entry with an explicit scrypt work factor.
-///
-/// This is primarily for browser test builds, where the age crate cannot
-/// calibrate scrypt in wasm and high work factors block Chromium's main thread.
-pub fn create_password_entry_with_work_factor(
-    keys: &VaultKeys,
-    id: &str,
-    label: &str,
-    created_at: &str,
-    password: &str,
-    work_factor: PasswordWorkFactor,
-) -> PasswordResult<PasswordUnlockEntry> {
-    let trimmed_label = label.trim();
-    if trimmed_label.is_empty() {
-        return Err(PasswordError::LabelEmpty);
+impl PasswordEnvelope {
+    /// Whether this envelope can be rewrapped without the password plaintext.
+    #[must_use]
+    pub fn supports_key_rewrap(&self) -> bool {
+        self.version == PasswordEnvelopeVersion::CURRENT
     }
-    Ok(PasswordUnlockEntry {
-        id: id.to_owned(),
-        label: trimmed_label.to_owned(),
-        created_at: created_at.to_owned(),
-        envelope: attach_password_envelope_with_work_factor(keys, password, work_factor)?,
-    })
+
+    /// Verify a password without exposing the unwrapped keys.
+    #[must_use]
+    pub fn verify_password(&self, password: &str) -> bool {
+        PasswordEnvelopeResolution::new(self, password)
+            .resolve()
+            .is_ok()
+    }
 }
 
-/// Resolve keys using a specific password entry.
-pub fn resolve_keys_from_entry(
-    entry: &PasswordUnlockEntry,
-    password: &str,
-) -> PasswordResult<VaultKeys> {
-    resolve_keys_from_password(&entry.envelope, password)
+impl PasswordUnlockEntry {
+    /// Verify a password without exposing the unwrapped keys.
+    #[must_use]
+    pub fn verify_password(&self, password: &str) -> bool {
+        PasswordEntryResolution::new(self, password)
+            .resolve()
+            .is_ok()
+    }
 }
 
-/// Verify a password against a specific entry.
-#[must_use]
-pub fn verify_password_entry(entry: &PasswordUnlockEntry, password: &str) -> bool {
-    resolve_keys_from_entry(entry, password).is_ok()
+/// Borrowed vault keys and password metadata awaiting consuming entry issuance.
+pub struct PasswordEntryIssuance<'a> {
+    keys: &'a VaultKeys,
+    id: &'a str,
+    label: &'a str,
+    created_at: &'a str,
+    password: &'a str,
+    work_factor: PasswordWorkFactor,
+}
+
+impl<'a> PasswordEntryIssuance<'a> {
+    #[must_use]
+    pub fn new(
+        keys: &'a VaultKeys,
+        id: &'a str,
+        label: &'a str,
+        created_at: &'a str,
+        password: &'a str,
+    ) -> Self {
+        Self::with_work_factor(keys, id, label, created_at, password, PASSWORD_SCRYPT_LOG_N)
+    }
+
+    #[must_use]
+    pub fn with_work_factor(
+        keys: &'a VaultKeys,
+        id: &'a str,
+        label: &'a str,
+        created_at: &'a str,
+        password: &'a str,
+        work_factor: PasswordWorkFactor,
+    ) -> Self {
+        Self {
+            keys,
+            id,
+            label,
+            created_at,
+            password,
+            work_factor,
+        }
+    }
+
+    /// Consume the issuance state into one labelled password entry.
+    pub fn issue(self) -> PasswordResult<PasswordUnlockEntry> {
+        let trimmed_label = self.label.trim();
+        if trimmed_label.is_empty() {
+            return Err(PasswordError::LabelEmpty);
+        }
+        Ok(PasswordUnlockEntry {
+            id: self.id.to_owned(),
+            label: trimmed_label.to_owned(),
+            created_at: self.created_at.to_owned(),
+            envelope: PasswordEnvelopeAttachment::with_work_factor(
+                self.keys,
+                self.password,
+                self.work_factor,
+            )
+            .attach()?,
+        })
+    }
+}
+
+/// Borrowed vault keys and password awaiting consuming envelope attachment.
+pub struct PasswordEnvelopeAttachment<'a> {
+    keys: &'a VaultKeys,
+    password: &'a str,
+    work_factor: PasswordWorkFactor,
+}
+
+impl<'a> PasswordEnvelopeAttachment<'a> {
+    #[must_use]
+    pub fn new(keys: &'a VaultKeys, password: &'a str) -> Self {
+        Self::with_work_factor(keys, password, PASSWORD_SCRYPT_LOG_N)
+    }
+
+    #[must_use]
+    pub fn with_work_factor(
+        keys: &'a VaultKeys,
+        password: &'a str,
+        work_factor: PasswordWorkFactor,
+    ) -> Self {
+        Self {
+            keys,
+            password,
+            work_factor,
+        }
+    }
+
+    /// Consume the attachment state into one password envelope.
+    pub fn attach(self) -> PasswordResult<PasswordEnvelope> {
+        let raw_work_factor = u8::from(self.work_factor);
+        if !(1..64).contains(&raw_work_factor) {
+            return Err(PasswordError::InvalidWorkFactor);
+        }
+        if !is_vault_password_long_enough(self.password) {
+            return Err(PasswordError::TooShort {
+                min: PASSWORD_MIN_LENGTH,
+            });
+        }
+
+        let plaintext = encode_keys(self.keys)?;
+        let wrapping_identity = x25519::Identity::generate();
+        let recipient = wrapping_identity.to_public();
+        let wrapped_keys = age_encrypt_recipient(&recipient, plaintext.as_bytes())?;
+        let wrapping_identity = wrapping_identity.to_string();
+
+        let secret = secrecy::SecretString::from(self.password.to_owned());
+        let mut password_recipient = scrypt::Recipient::new(secret);
+        password_recipient.set_work_factor(raw_work_factor);
+        let ciphertext = age_encrypt_scrypt(
+            &password_recipient,
+            wrapping_identity.expose_secret().as_bytes(),
+        )?;
+
+        Ok(PasswordEnvelope {
+            version: PasswordEnvelopeVersion::CURRENT,
+            kdf: ENVELOPE_KDF.to_owned(),
+            work_factor: self.work_factor,
+            recipient: recipient.to_string(),
+            wrapped_keys: wrapped_keys.as_str().to_owned(),
+            ciphertext: ciphertext.as_str().to_owned(),
+        })
+    }
+}
+
+/// Borrowed password envelope and password awaiting consuming key resolution.
+pub struct PasswordEnvelopeResolution<'a> {
+    envelope: &'a PasswordEnvelope,
+    password: &'a str,
+}
+
+impl<'a> PasswordEnvelopeResolution<'a> {
+    #[must_use]
+    pub fn new(envelope: &'a PasswordEnvelope, password: &'a str) -> Self {
+        Self { envelope, password }
+    }
+
+    /// Consume the resolution state into the wrapped vault keys.
+    pub fn resolve(self) -> PasswordResult<VaultKeys> {
+        if self.envelope.kdf != ENVELOPE_KDF {
+            tracing::warn!(
+                scope = "password-envelope",
+                kdf = self.envelope.kdf.as_str(),
+                supported = ENVELOPE_KDF,
+                "unsupported password envelope kdf"
+            );
+            return Err(PasswordError::UnsupportedEnvelopeKdf {
+                kdf: self.envelope.kdf.clone(),
+            });
+        }
+
+        let secret = secrecy::SecretString::from(self.password.to_owned());
+        let identity = scrypt::Identity::new(secret);
+        let mut password_plaintext =
+            age_decrypt_scrypt(&identity, self.envelope.ciphertext.as_bytes())?;
+        let mut plaintext_bytes = if self.envelope.version == PasswordEnvelopeVersion::LEGACY {
+            Zeroizing::new(mem::take(&mut *password_plaintext))
+        } else {
+            let wrapping_identity_text = Zeroizing::new(
+                String::from_utf8(mem::take(&mut *password_plaintext))
+                    .map_err(PasswordError::EnvelopePlaintextUtf8)?,
+            );
+            let wrapping_identity =
+                wrapping_identity_text
+                    .parse::<x25519::Identity>()
+                    .map_err(|error| {
+                        PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
+                    })?;
+            age_decrypt_identity(&wrapping_identity, self.envelope.wrapped_keys.as_bytes())?
+        };
+        let plaintext_str = Zeroizing::new(
+            String::from_utf8(mem::take(&mut *plaintext_bytes))
+                .map_err(PasswordError::EnvelopePlaintextUtf8)?,
+        );
+        let parsed = Zeroizing::new(
+            serde_json::from_str::<EnvelopePlaintext>(plaintext_str.as_str())
+                .map_err(PasswordError::EnvelopePlaintextJson)?,
+        );
+
+        Ok(VaultKeys {
+            secrets_key: SymmetricKey::parse(&parsed.secrets_key)?,
+            members_key: SymmetricKey::parse(&parsed.members_key)?,
+        })
+    }
+}
+
+/// Borrowed password entry and password awaiting consuming key resolution.
+pub struct PasswordEntryResolution<'a> {
+    entry: &'a PasswordUnlockEntry,
+    password: &'a str,
+}
+
+impl<'a> PasswordEntryResolution<'a> {
+    #[must_use]
+    pub fn new(entry: &'a PasswordUnlockEntry, password: &'a str) -> Self {
+        Self { entry, password }
+    }
+
+    /// Consume the resolution state into the wrapped vault keys.
+    pub fn resolve(self) -> PasswordResult<VaultKeys> {
+        PasswordEnvelopeResolution::new(&self.entry.envelope, self.password).resolve()
+    }
+}
+
+/// Borrowed current envelope and replacement keys awaiting consuming rewrap.
+pub struct PasswordEnvelopeRewrap<'a> {
+    envelope: &'a PasswordEnvelope,
+    keys: &'a VaultKeys,
+}
+
+impl<'a> PasswordEnvelopeRewrap<'a> {
+    #[must_use]
+    pub fn new(envelope: &'a PasswordEnvelope, keys: &'a VaultKeys) -> Self {
+        Self { envelope, keys }
+    }
+
+    /// Consume the rewrap state into a fresh envelope with the same password.
+    pub fn rewrap(self) -> PasswordResult<PasswordEnvelope> {
+        if self.envelope.version != PasswordEnvelopeVersion::CURRENT {
+            return Err(PasswordError::UnsupportedEnvelopeVersion {
+                version: RejectedPasswordEnvelopeVersion::from_raw(self.envelope.version.into()),
+            });
+        }
+        let recipient = self
+            .envelope
+            .recipient
+            .parse::<x25519::Recipient>()
+            .map_err(|error| {
+                PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string()))
+            })?;
+        let plaintext = encode_keys(self.keys)?;
+        let wrapped_keys = age_encrypt_recipient(&recipient, plaintext.as_bytes())?;
+        let mut rewrapped = self.envelope.clone();
+        wrapped_keys
+            .as_str()
+            .clone_into(&mut rewrapped.wrapped_keys);
+        Ok(rewrapped)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Zeroize)]
@@ -275,61 +484,6 @@ struct EnvelopePlaintext {
 
 const ENVELOPE_KDF: &str = "scrypt";
 
-/// Whether an envelope can follow a security-epoch key rotation without the
-/// password plaintext.
-#[must_use]
-pub fn password_envelope_supports_key_rewrap(envelope: &PasswordEnvelope) -> bool {
-    envelope.version == PasswordEnvelopeVersion::CURRENT
-}
-
-/// Wrap `secrets_key` + `members_key` with a password-derived scrypt key.
-pub fn attach_password_envelope(
-    keys: &VaultKeys,
-    password: &str,
-) -> PasswordResult<PasswordEnvelope> {
-    attach_password_envelope_with_work_factor(keys, password, PASSWORD_SCRYPT_LOG_N)
-}
-
-/// Wrap `secrets_key` + `members_key` with an explicit scrypt work factor.
-pub fn attach_password_envelope_with_work_factor(
-    keys: &VaultKeys,
-    password: &str,
-    work_factor: PasswordWorkFactor,
-) -> PasswordResult<PasswordEnvelope> {
-    let raw_work_factor = u8::from(work_factor);
-    if !(1..64).contains(&raw_work_factor) {
-        return Err(PasswordError::InvalidWorkFactor);
-    }
-    if !is_vault_password_long_enough(password) {
-        return Err(PasswordError::TooShort {
-            min: PASSWORD_MIN_LENGTH,
-        });
-    }
-
-    let plaintext = encode_keys(keys)?;
-    let wrapping_identity = x25519::Identity::generate();
-    let recipient = wrapping_identity.to_public();
-    let wrapped_keys = age_encrypt_recipient(&recipient, plaintext.as_bytes())?;
-    let wrapping_identity = wrapping_identity.to_string();
-
-    let secret = secrecy::SecretString::from(password.to_owned());
-    let mut password_recipient = scrypt::Recipient::new(secret);
-    password_recipient.set_work_factor(raw_work_factor);
-    let ciphertext = age_encrypt_scrypt(
-        &password_recipient,
-        wrapping_identity.expose_secret().as_bytes(),
-    )?;
-
-    Ok(PasswordEnvelope {
-        version: PasswordEnvelopeVersion::CURRENT,
-        kdf: ENVELOPE_KDF.to_owned(),
-        work_factor,
-        recipient: recipient.to_string(),
-        wrapped_keys: wrapped_keys.as_str().to_owned(),
-        ciphertext: ciphertext.as_str().to_owned(),
-    })
-}
-
 fn encode_keys(keys: &VaultKeys) -> PasswordResult<Zeroizing<String>> {
     let encoded = serde_json::to_string(&EnvelopePlaintext {
         secrets_key: keys.secrets_key.as_str().to_owned(),
@@ -337,81 +491,6 @@ fn encode_keys(keys: &VaultKeys) -> PasswordResult<Zeroizing<String>> {
     })
     .map_err(PasswordError::EnvelopePlaintextSerialize)?;
     Ok(Zeroizing::new(encoded))
-}
-
-/// Re-wrap a version-2 password credential to fresh vault keys without the password.
-pub fn rewrap_password_envelope(
-    envelope: &PasswordEnvelope,
-    keys: &VaultKeys,
-) -> PasswordResult<PasswordEnvelope> {
-    if envelope.version != PasswordEnvelopeVersion::CURRENT {
-        return Err(PasswordError::UnsupportedEnvelopeVersion {
-            version: RejectedPasswordEnvelopeVersion::from_raw(envelope.version.into()),
-        });
-    }
-    let recipient = envelope
-        .recipient
-        .parse::<x25519::Recipient>()
-        .map_err(|error| {
-            PasswordError::Age(AgeCryptoError::EnvelopeEncryptSetup(error.to_string()))
-        })?;
-    let plaintext = encode_keys(keys)?;
-    let wrapped_keys = age_encrypt_recipient(&recipient, plaintext.as_bytes())?;
-    let mut rewrapped = envelope.clone();
-    wrapped_keys
-        .as_str()
-        .clone_into(&mut rewrapped.wrapped_keys);
-    Ok(rewrapped)
-}
-
-/// Unwrap a password envelope to recover `secrets_key` + `members_key`.
-pub fn resolve_keys_from_password(
-    envelope: &PasswordEnvelope,
-    password: &str,
-) -> PasswordResult<VaultKeys> {
-    if envelope.kdf != ENVELOPE_KDF {
-        tracing::warn!(
-            scope = "password-envelope",
-            kdf = envelope.kdf.as_str(),
-            supported = ENVELOPE_KDF,
-            "unsupported password envelope kdf"
-        );
-        return Err(PasswordError::UnsupportedEnvelopeKdf {
-            kdf: envelope.kdf.clone(),
-        });
-    }
-
-    let secret = secrecy::SecretString::from(password.to_owned());
-    let identity = scrypt::Identity::new(secret);
-    let mut password_plaintext = age_decrypt_scrypt(&identity, envelope.ciphertext.as_bytes())?;
-    let mut plaintext_bytes = if envelope.version == PasswordEnvelopeVersion::LEGACY {
-        Zeroizing::new(mem::take(&mut *password_plaintext))
-    } else {
-        let wrapping_identity_text = Zeroizing::new(
-            String::from_utf8(mem::take(&mut *password_plaintext))
-                .map_err(PasswordError::EnvelopePlaintextUtf8)?,
-        );
-        let wrapping_identity =
-            wrapping_identity_text
-                .parse::<x25519::Identity>()
-                .map_err(|error| {
-                    PasswordError::Age(AgeCryptoError::EnvelopeDecryptSetup(error.to_string()))
-                })?;
-        age_decrypt_identity(&wrapping_identity, envelope.wrapped_keys.as_bytes())?
-    };
-    let plaintext_str = Zeroizing::new(
-        String::from_utf8(mem::take(&mut *plaintext_bytes))
-            .map_err(PasswordError::EnvelopePlaintextUtf8)?,
-    );
-    let parsed = Zeroizing::new(
-        serde_json::from_str::<EnvelopePlaintext>(plaintext_str.as_str())
-            .map_err(PasswordError::EnvelopePlaintextJson)?,
-    );
-
-    Ok(VaultKeys {
-        secrets_key: SymmetricKey::parse(&parsed.secrets_key)?,
-        members_key: SymmetricKey::parse(&parsed.members_key)?,
-    })
 }
 
 fn age_encrypt_recipient(
@@ -464,12 +543,6 @@ fn age_decrypt_identity(
         .read_to_end(&mut plaintext)
         .map_err(|error| PasswordError::Age(AgeCryptoError::EnvelopeRead(error.to_string())))?;
     Ok(plaintext)
-}
-
-/// Verify a password decrypts the envelope without exposing the unwrapped keys.
-#[must_use]
-pub fn verify_password(envelope: &PasswordEnvelope, password: &str) -> bool {
-    resolve_keys_from_password(envelope, password).is_ok()
 }
 
 fn age_encrypt_scrypt(
@@ -535,7 +608,8 @@ mod tests {
     #[test]
     fn roundtrip_attach_and_resolve() -> anyhow::Result<()> {
         let keys = sample_keys()?;
-        let envelope = attach_password_envelope(&keys, "correct horse battery staple")?;
+        let envelope =
+            PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         assert_eq!(envelope.version, PasswordEnvelopeVersion::CURRENT);
         assert_eq!(envelope.kdf, "scrypt");
         assert!(
@@ -545,25 +619,29 @@ mod tests {
                 .contains("BEGIN AGE ENCRYPTED FILE")
         );
 
-        let resolved = resolve_keys_from_password(&envelope, "correct horse battery staple")?;
+        let resolved =
+            PasswordEnvelopeResolution::new(&envelope, "correct horse battery staple").resolve()?;
         assert_eq!(resolved, keys);
         Ok(())
     }
 
     #[test]
     fn rewrap_preserves_password_and_updates_keys() -> anyhow::Result<()> {
-        let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
+        let keys = sample_keys()?;
+        let envelope =
+            PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let new_keys = VaultKeys {
             secrets_key: SymmetricKey::parse(&"cafebabecafebabecafebabecafebabe".repeat(2))?,
             members_key: SymmetricKey::parse(&"01234567012345670123456701234567".repeat(2))?,
         };
-        let rewrapped = rewrap_password_envelope(&envelope, &new_keys)?;
+        let rewrapped = PasswordEnvelopeRewrap::new(&envelope, &new_keys).rewrap()?;
 
         assert_eq!(rewrapped.ciphertext, envelope.ciphertext);
         assert_eq!(rewrapped.recipient, envelope.recipient);
         assert_ne!(rewrapped.wrapped_keys, envelope.wrapped_keys);
         assert_eq!(
-            resolve_keys_from_password(&rewrapped, "correct horse battery staple")?,
+            PasswordEnvelopeResolution::new(&rewrapped, "correct horse battery staple")
+                .resolve()?,
             new_keys
         );
         Ok(())
@@ -571,17 +649,22 @@ mod tests {
 
     #[test]
     fn wrong_password_fails() -> anyhow::Result<()> {
-        let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
-        let err = resolve_keys_from_password(&envelope, "wrong password something else");
+        let keys = sample_keys()?;
+        let envelope =
+            PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
+        let err =
+            PasswordEnvelopeResolution::new(&envelope, "wrong password something else").resolve();
         assert!(err.is_err());
-        assert!(!verify_password(&envelope, "wrong password something else"));
-        assert!(verify_password(&envelope, "correct horse battery staple"));
+        assert!(!envelope.verify_password("wrong password something else"));
+        assert!(envelope.verify_password("correct horse battery staple"));
         Ok(())
     }
 
     #[test]
     fn short_password_rejected() -> anyhow::Result<()> {
-        let err = attach_password_envelope(&sample_keys()?, "abc")
+        let keys = sample_keys()?;
+        let err = PasswordEnvelopeAttachment::new(&keys, "abc")
+            .attach()
             .err()
             .ok_or_else(|| anyhow::anyhow!("password envelope test should reject invalid input"))?;
         assert!(err.to_string().contains("at least"));
@@ -623,29 +706,36 @@ mod tests {
 
     #[test]
     fn legacy_envelope_requires_explicit_upgrade_before_key_rewrap() -> anyhow::Result<()> {
-        let current = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
+        let keys = sample_keys()?;
+        let current =
+            PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let mut legacy = current.clone();
         legacy.version = PasswordEnvelopeVersion::LEGACY;
 
-        assert!(password_envelope_supports_key_rewrap(&current));
-        assert!(!password_envelope_supports_key_rewrap(&legacy));
+        assert!(current.supports_key_rewrap());
+        assert!(!legacy.supports_key_rewrap());
         Ok(())
     }
 
     #[test]
     fn unsupported_kdf_rejected() -> anyhow::Result<()> {
+        let keys = sample_keys()?;
         let mut envelope =
-            attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
+            PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         envelope.kdf = "argon2".to_owned();
-        assert!(resolve_keys_from_password(&envelope, "correct horse battery staple").is_err());
+        assert!(
+            PasswordEnvelopeResolution::new(&envelope, "correct horse battery staple")
+                .resolve()
+                .is_err()
+        );
         Ok(())
     }
 
     #[test]
     fn ciphertext_is_nondeterministic() -> anyhow::Result<()> {
         let keys = sample_keys()?;
-        let a = attach_password_envelope(&keys, "correct horse battery staple")?;
-        let b = attach_password_envelope(&keys, "correct horse battery staple")?;
+        let a = PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
+        let b = PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         assert_ne!(a.ciphertext, b.ciphertext);
         Ok(())
     }
@@ -668,7 +758,9 @@ mod tests {
 
     #[test]
     fn vault_unlock_password_variant_roundtrips() -> anyhow::Result<()> {
-        let envelope = attach_password_envelope(&sample_keys()?, "correct horse battery staple")?;
+        let keys = sample_keys()?;
+        let envelope =
+            PasswordEnvelopeAttachment::new(&keys, "correct horse battery staple").attach()?;
         let value = VaultUnlock::Passwords {
             entries: vec![PasswordUnlockEntry {
                 id: "entry-1".to_owned(),
