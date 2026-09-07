@@ -682,4 +682,71 @@ mod tests {
         assert!(registry.load(handle_id).await?.is_none());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    fn browser_boundary_helpers_preserve_error_and_option_shapes() -> anyhow::Result<()> {
+        let string_error = JsString::from("permission denied");
+        assert_eq!(
+            FolderFailure::new(&string_error.unchecked_into())
+                .into_error("query failed")
+                .to_string(),
+            "query failed: permission denied"
+        );
+        let object = Object::new();
+        Reflect::set(
+            &object,
+            &JsString::from("message"),
+            &JsString::from("bad handle"),
+        )
+        .map_err(|error| FolderFailure::new(&error.unchecked_into()).into_error("fixture"))?;
+        assert_eq!(
+            FolderFailure::new(&object).into_error("open").to_string(),
+            "open: bad handle"
+        );
+
+        for (lookup, expected) in [(ChildLookup::Existing, false), (ChildLookup::Create, true)] {
+            let options = lookup.options()?;
+            assert_eq!(
+                Reflect::get(&options, &JsString::from("create"))?
+                    .as_bool()
+                    .unwrap_or_default(),
+                expected
+            );
+        }
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            unowned_function,
+            reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+        )
+    )]
+    fn folder_method_rejects_missing_and_non_callable_properties() -> anyhow::Result<()> {
+        let object = Object::new();
+        assert!(matches!(
+            FolderObject::new(&object).method("missing"),
+            Ok(None)
+        ));
+        Reflect::set(
+            &object,
+            &JsString::from("not_callable"),
+            &JsString::from("value"),
+        )
+        .map_err(|error| FolderFailure::new(&error.unchecked_into()).into_error("fixture"))?;
+        assert!(matches!(
+            FolderObject::new(&object).method("not_callable"),
+            Err(NookError::Database(message)) if message == "not_callable is not a function."
+        ));
+        Ok(())
+    }
 }

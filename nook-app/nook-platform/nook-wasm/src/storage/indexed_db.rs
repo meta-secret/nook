@@ -702,6 +702,48 @@ pub(crate) async fn read_string_preferring(
     Ok(None)
 }
 
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    #[test]
+    fn storage_keys_keep_each_namespace_and_bucket_shape() {
+        assert_eq!(vault_blob_key("store-a"), "vault:store-a");
+        assert_eq!(vault_cache_key("remote"), "vault_cache:remote");
+        assert_eq!(secret_search_key("store-a"), "secret_search:store-a");
+        assert_eq!(
+            secret_search_bucket_key("store-a", 3),
+            "secret_search_v2:store-a:03"
+        );
+        assert_eq!(
+            sentinel_genesis_share_key("store-a", "device-b"),
+            "sentinel_genesis_share:store-a:device-b"
+        );
+    }
+
+    #[test]
+    fn registry_upsert_creates_defaults_updates_labels_and_touches_unlocks() {
+        let mut registry = VaultRegistry::default();
+        upsert_registry_entry(&mut registry, "store_registry01", None, false);
+        assert_eq!(registry.vaults.len(), 1);
+        assert!(!registry.vaults[0].label.is_empty());
+        assert!(registry.vaults[0].last_unlocked_at.is_none());
+
+        upsert_registry_entry(&mut registry, "store_registry01", Some(" Work "), true);
+        assert_eq!(registry.vaults[0].label, " Work ");
+        assert!(registry.vaults[0].last_unlocked_at.is_some());
+        upsert_registry_entry(&mut registry, "store_registry02", Some("Personal"), false);
+        assert_eq!(registry.vaults.len(), 2);
+    }
+
+    #[test]
+    fn yaml_projection_fails_closed_and_defaults_unusable_labels() {
+        assert!(store_id_from_yaml("not yaml").is_err());
+        assert!(label_from_yaml("not yaml").is_none());
+        assert!(!default_registry_label("store_registry01").is_empty());
+    }
+}
+
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod sentinel_genesis_storage_tests {
     use rexie::Rexie;
@@ -785,6 +827,164 @@ mod sentinel_genesis_storage_tests {
                 delivery_json: payload.to_owned(),
             }]
         );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn vault_blob_registry_and_pending_slot_keep_local_projection_order()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        let store_id = "store_indexeddb01";
+        save_vault_blob(store_id, "encrypted-vault").await?;
+        assert_eq!(
+            load_vault_blob(store_id).await?.as_deref(),
+            Some("encrypted-vault")
+        );
+        assert_eq!(get_active_vault_id().await?.as_deref(), Some(store_id));
+        assert_eq!(list_vault_registry_entries().await?.len(), 1);
+
+        prepare_new_local_vault_slot().await?;
+        assert!(load_from_indexed_db().await?.is_none());
+        save_vault_blob(store_id, "updated-vault").await?;
+        assert_eq!(
+            load_from_indexed_db().await?.as_deref(),
+            Some("updated-vault")
+        );
+        clear_active_vault_id().await?;
+        assert!(load_from_indexed_db().await?.is_none());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn secret_search_buckets_round_trip_and_reject_out_of_range_writes()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        let store_id = "store_search01";
+        save_secret_search_catalog_buckets(
+            store_id,
+            &[(0, Some("first".to_owned())), (2, Some("third".to_owned()))],
+        )
+        .await?;
+        assert_eq!(
+            load_secret_search_catalog_buckets(store_id).await?,
+            vec![(0, "first".to_owned()), (2, "third".to_owned())]
+        );
+        save_secret_search_catalog_buckets(store_id, &[(0, None)]).await?;
+        assert_eq!(
+            load_secret_search_catalog_buckets(store_id).await?,
+            vec![(2, "third".to_owned())]
+        );
+        let error = save_secret_search_catalog_buckets(
+            store_id,
+            &[(
+                nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT,
+                Some("bad".to_owned()),
+            )],
+        )
+        .await
+        .expect_err("out-of-range search bucket must fail closed");
+        assert!(matches!(error, NookError::IndexedDb(message) if message.contains("out of range")));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn sentinel_storage_rejects_empty_inputs_without_writes()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        assert!(
+            save_sentinel_genesis_share_delivery("", "device", "payload")
+                .await
+                .is_err()
+        );
+        assert!(
+            load_sentinel_genesis_share_delivery("", "device")
+                .await?
+                .is_none()
+        );
+        assert!(list_sentinel_genesis_share_deliveries("").await?.is_empty());
+        assert!(
+            save_sentinel_genesis_finalization_pending(" ")
+                .await
+                .is_err()
+        );
+        assert!(
+            load_sentinel_genesis_finalization_pending()
+                .await?
+                .is_none()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn sentinel_catalog_replaces_same_identity_and_filters_devices()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        save_sentinel_genesis_share_delivery("store_b", "device-1", "old").await?;
+        save_sentinel_genesis_share_delivery("store_a", "device-2", "other").await?;
+        save_sentinel_genesis_share_delivery("store_b", "device-1", "new").await?;
+        assert_eq!(
+            list_sentinel_genesis_share_deliveries("device-1").await?,
+            vec![SentinelGenesisShareCatalogEntry {
+                store_id: "store_b".to_owned(),
+                device_id: "device-1".to_owned(),
+                delivery_json: "new".to_owned(),
+            }]
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn finalization_pending_round_trip_can_be_cleared() -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        save_sentinel_genesis_finalization_pending("{\"store\":\"pending\"}").await?;
+        assert_eq!(
+            load_sentinel_genesis_finalization_pending()
+                .await?
+                .as_deref(),
+            Some("{\"store\":\"pending\"}")
+        );
+        clear_sentinel_genesis_finalization_pending().await?;
+        assert!(
+            load_sentinel_genesis_finalization_pending()
+                .await?
+                .is_none()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn preferred_storage_value_wins_over_legacy_fallback() -> Result<(), wasm_bindgen::JsError>
+    {
+        let _ = Rexie::delete("nook_db").await;
+        idb_put_string("preferred", "new-value").await?;
+        idb_put_string("legacy", "old-value").await?;
+        let database = open_nook_database().await?;
+        let transaction = database
+            .transaction(&["vault"], TransactionMode::ReadOnly)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        let store = transaction
+            .store("vault")
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        assert_eq!(
+            read_string_preferring(&store, "preferred", "legacy", "fixture").await?,
+            Some("new-value".to_owned())
+        );
+        transaction
+            .done()
+            .await
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn local_vault_validation_rejects_empty_or_unknown_updates()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        assert!(save_to_indexed_db(" ").await.is_err());
+        assert!(save_to_indexed_db("not yaml").await.is_err());
+        assert!(set_local_vault_label("missing", " ").await.is_err());
+        assert!(set_local_vault_label("missing", "Known").await.is_err());
+        assert!(switch_active_vault("missing").await.is_err());
         Ok(())
     }
 }
