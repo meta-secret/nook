@@ -1,4 +1,9 @@
 //! Ciphertext-backed session access for projected or stored user records.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
 use crate::AgeArmoredCiphertext;
 
@@ -37,149 +42,168 @@ pub struct SecretPage {
     pub limit: crate::SecretPageLimit,
 }
 
-fn decrypt_secret_record(
-    id: &SecretId,
-    secret_type: SecretType,
-    payload: &StoredRecordPayload,
-    crypto: &VaultCrypto,
-) -> VaultResult<SecretRecord> {
-    let ciphertext = AgeArmoredCiphertext::parse(payload.as_str())?;
-    let mut plaintext = crypto.decrypt_value(&ciphertext)?;
-    let data = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
-    plaintext.zeroize_plaintext();
-    Ok(SecretRecord {
-        id: id.clone(),
-        secret_type,
-        data,
-    })
+/// Borrowed ciphertext-backed session state awaiting a read action.
+pub struct VaultSecretSession<'a, S: BuildHasher> {
+    secrets: &'a HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
+    crypto: &'a VaultCrypto,
 }
 
-pub fn decrypt_encrypted_secret<S: BuildHasher>(
-    secrets: &HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
-    crypto: &VaultCrypto,
-    id: &SecretId,
-) -> VaultResult<SecretRecord> {
-    let (secret_type, payload) = secrets
-        .get(id)
-        .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
-    decrypt_secret_record(id, *secret_type, payload, crypto)
-}
+impl<'a, S: BuildHasher> VaultSecretSession<'a, S> {
+    #[must_use]
+    pub fn new(
+        secrets: &'a HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
+        crypto: &'a VaultCrypto,
+    ) -> Self {
+        Self { secrets, crypto }
+    }
 
-/// Decrypt only the requested page from a ciphertext-backed vault session.
-///
-/// Empty queries select the page by sorted id without decrypting records outside
-/// the page. Non-empty production search uses [`super::SecretSearchCatalog`];
-/// this fallback still zeroizes each decrypted candidate immediately.
-pub fn query_encrypted_secrets<S: BuildHasher>(
-    secrets: &HashMap<SecretId, (SecretType, StoredRecordPayload), S>,
-    crypto: &VaultCrypto,
-    query: &str,
-    secret_type_filter: SecretTypeFilter,
-    offset: crate::SecretPageOffset,
-    limit: crate::SecretPageLimit,
-) -> VaultResult<SecretPage> {
-    let offset = usize::from(offset);
-    let limit = usize::from(limit);
-    let limit = limit.clamp(1, MAX_SECRET_PAGE_SIZE);
-    let needle = query.trim();
-    let mut ids = secrets.keys().cloned().collect::<Vec<_>>();
-    ids.sort();
+    pub fn decrypt(&self, id: &SecretId) -> VaultResult<SecretRecord> {
+        let (secret_type, payload) = self
+            .secrets
+            .get(id)
+            .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
+        Self::decrypt_record(id, *secret_type, payload, self.crypto)
+    }
 
-    if needle.is_empty() {
-        let total = ids
-            .iter()
-            .filter(|id| {
-                secrets
-                    .get(id)
-                    .is_some_and(|(secret_type, _)| secret_type_filter.matches(*secret_type))
-            })
-            .count();
-        let records = ids
-            .into_iter()
-            .filter(|id| {
-                secrets
-                    .get(id)
-                    .is_some_and(|(secret_type, _)| secret_type_filter.matches(*secret_type))
-            })
-            .skip(offset)
-            .take(limit)
-            .map(|id| {
-                let (secret_type, payload) = secrets
-                    .get(&id)
-                    .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
-                let mut record = decrypt_secret_record(&id, *secret_type, payload, crypto)?;
-                let item = record.list_item();
+    /// Decrypt only the requested page from a ciphertext-backed vault session.
+    ///
+    /// Empty queries select the page by sorted id without decrypting records outside
+    /// the page. Non-empty production search uses [`super::SecretSearchCatalog`];
+    /// this fallback still zeroizes each decrypted candidate immediately.
+    pub fn query(
+        &self,
+        query: &str,
+        secret_type_filter: SecretTypeFilter,
+        offset: crate::SecretPageOffset,
+        limit: crate::SecretPageLimit,
+    ) -> VaultResult<SecretPage> {
+        let offset = usize::from(offset);
+        let limit = usize::from(limit);
+        let limit = limit.clamp(1, MAX_SECRET_PAGE_SIZE);
+        let needle = query.trim();
+        let mut ids = self.secrets.keys().cloned().collect::<Vec<_>>();
+        ids.sort();
+
+        if needle.is_empty() {
+            let total = ids
+                .iter()
+                .filter(|id| {
+                    self.secrets
+                        .get(id)
+                        .is_some_and(|(secret_type, _)| secret_type_filter.matches(*secret_type))
+                })
+                .count();
+            let records = ids
+                .into_iter()
+                .filter(|id| {
+                    self.secrets
+                        .get(id)
+                        .is_some_and(|(secret_type, _)| secret_type_filter.matches(*secret_type))
+                })
+                .skip(offset)
+                .take(limit)
+                .map(|id| {
+                    let (secret_type, payload) = self
+                        .secrets
+                        .get(&id)
+                        .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
+                    let mut record = Self::decrypt_record(&id, *secret_type, payload, self.crypto)?;
+                    let item = record.list_item();
+                    record.zeroize_plaintext();
+                    Ok(item)
+                })
+                .collect::<VaultResult<Vec<_>>>()?;
+            return Ok(SecretPage {
+                records,
+                total: total.into(),
+                offset: offset.into(),
+                limit: limit.into(),
+            });
+        }
+
+        let mut total = 0;
+        let mut records = Vec::with_capacity(limit);
+        for id in ids {
+            let (secret_type, payload) = self
+                .secrets
+                .get(&id)
+                .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
+            if !secret_type_filter.matches(*secret_type) {
+                continue;
+            }
+            let mut record = Self::decrypt_record(&id, *secret_type, payload, self.crypto)?;
+            if record.matches_search(needle) {
+                if total >= offset && records.len() < limit {
+                    records.push(record.list_item());
+                    record.zeroize_plaintext();
+                } else {
+                    record.zeroize_plaintext();
+                }
+                total += 1;
+            } else {
                 record.zeroize_plaintext();
-                Ok(item)
-            })
-            .collect::<VaultResult<Vec<_>>>()?;
-        return Ok(SecretPage {
+            }
+        }
+
+        Ok(SecretPage {
             records,
             total: total.into(),
             offset: offset.into(),
             limit: limit.into(),
-        });
+        })
     }
 
-    let mut total = 0;
-    let mut records = Vec::with_capacity(limit);
-    for id in ids {
-        let (secret_type, payload) = secrets
-            .get(&id)
-            .ok_or_else(|| SessionError::SecretNotFound { id: id.clone() })?;
-        if !secret_type_filter.matches(*secret_type) {
-            continue;
-        }
-        let mut record = decrypt_secret_record(&id, *secret_type, payload, crypto)?;
-        if record.matches_search(needle) {
-            if total >= offset && records.len() < limit {
-                records.push(record.list_item());
-                record.zeroize_plaintext();
-            } else {
-                record.zeroize_plaintext();
+    fn decrypt_record(
+        id: &SecretId,
+        secret_type: SecretType,
+        payload: &StoredRecordPayload,
+        crypto: &VaultCrypto,
+    ) -> VaultResult<SecretRecord> {
+        let ciphertext = AgeArmoredCiphertext::parse(payload.as_str())?;
+        let mut plaintext = crypto.decrypt_value(&ciphertext)?;
+        let data = SecretValue::from_yaml_str(secret_type, plaintext.as_str())?;
+        plaintext.zeroize_plaintext();
+        Ok(SecretRecord {
+            id: id.clone(),
+            secret_type,
+            data,
+        })
+    }
+}
+
+/// Owned projected user records awaiting replacement or armored hydration.
+pub struct VaultUserRecordBatch {
+    records: Vec<StoredSecretRecord>,
+}
+
+impl VaultUserRecordBatch {
+    #[must_use]
+    pub fn new(records: Vec<StoredSecretRecord>) -> Self {
+        Self { records }
+    }
+
+    /// Replace only encrypted user records, retaining all metadata buckets.
+    pub fn replace(self, state: &mut VaultMetaState) {
+        state.secrets.clear();
+        for record in self.records {
+            if let Some(secret_type) = record.secret_type {
+                state
+                    .secrets
+                    .insert(record.key, (secret_type, record.value));
             }
-            total += 1;
-        } else {
-            record.zeroize_plaintext();
         }
     }
 
-    Ok(SecretPage {
-        records,
-        total: total.into(),
-        offset: offset.into(),
-        limit: limit.into(),
-    })
-}
-
-/// Replace the encrypted user-record bucket without hydrating plaintext.
-pub fn apply_user_records_to_encrypted_session(
-    user_records: Vec<StoredSecretRecord>,
-    state: &mut VaultMetaState,
-) {
-    state.secrets.clear();
-    for record in user_records {
-        if let Some(secret_type) = record.secret_type {
-            state
-                .secrets
-                .insert(record.key, (secret_type, record.value));
-        }
+    /// Decrypt the batch into a database before replacing the encrypted bucket.
+    pub fn hydrate(
+        self,
+        crypto: &VaultCrypto,
+        state: &mut VaultMetaState,
+    ) -> VaultResult<Database> {
+        let db = Database::from_stored_records_with_crypto(&self.records, crypto)?;
+        self.replace(state);
+        Ok(db)
     }
-}
-
-/// Merge live user secrets into the typed session meta state and return the
-/// decrypted in-memory database.
-///
-/// Vault meta rows (auth, members, join) in `state` are preserved; the `secrets`
-/// bucket is fully replaced from `user_records`.
-pub fn apply_user_records_to_armored_session(
-    user_records: Vec<StoredSecretRecord>,
-    crypto: &VaultCrypto,
-    state: &mut VaultMetaState,
-) -> VaultResult<Database> {
-    let db = Database::from_stored_records_with_crypto(&user_records, crypto)?;
-    apply_user_records_to_encrypted_session(user_records, state);
-    Ok(db)
 }
 
 #[cfg(test)]
@@ -226,7 +250,7 @@ mod tests {
             value: StoredRecordPayload::from_age_armored(ciphertext),
         }];
 
-        let db = apply_user_records_to_armored_session(user_records, &crypto, &mut state)?;
+        let db = VaultUserRecordBatch::new(user_records).hydrate(&crypto, &mut state)?;
 
         assert!(db.list().iter().any(|record| record.id == new_id));
         assert!(!state.secrets.contains_key(&old_id));
@@ -236,47 +260,51 @@ mod tests {
         Ok(())
     }
 
-    fn encrypted_record(
-        crypto: &VaultCrypto,
-        id: &str,
-        username: &str,
-        password: &str,
-    ) -> VaultResult<(SecretId, (crate::SecretType, StoredRecordPayload))> {
-        let id = SecretId::from_vault_record(id);
-        let value = SecretValue::Login(LoginSecret {
-            website_url: format!("https://{username}.example.com"),
-            username: username.to_owned(),
-            password: password.to_owned(),
-            notes: String::new(),
-        });
-        let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
-        Ok((
-            id,
-            (
-                SecretType::Login,
-                StoredRecordPayload::from_age_armored(ciphertext),
-            ),
-        ))
-    }
+    struct VaultSessionTestData;
 
-    fn encrypted_note(
-        crypto: &VaultCrypto,
-        id: &str,
-        title: &str,
-    ) -> VaultResult<(SecretId, (crate::SecretType, StoredRecordPayload))> {
-        let id = SecretId::from_vault_record(id);
-        let value = SecretValue::SecureNote(crate::SecureNoteSecret {
-            title: title.to_owned(),
-            note: "private note body".to_owned(),
-        });
-        let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
-        Ok((
-            id,
-            (
-                SecretType::SecureNote,
-                StoredRecordPayload::from_age_armored(ciphertext),
-            ),
-        ))
+    impl VaultSessionTestData {
+        fn encrypted_record(
+            crypto: &VaultCrypto,
+            id: &str,
+            username: &str,
+            password: &str,
+        ) -> VaultResult<(SecretId, (crate::SecretType, StoredRecordPayload))> {
+            let id = SecretId::from_vault_record(id);
+            let value = SecretValue::Login(LoginSecret {
+                website_url: format!("https://{username}.example.com"),
+                username: username.to_owned(),
+                password: password.to_owned(),
+                notes: String::new(),
+            });
+            let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+            Ok((
+                id,
+                (
+                    SecretType::Login,
+                    StoredRecordPayload::from_age_armored(ciphertext),
+                ),
+            ))
+        }
+
+        fn encrypted_note(
+            crypto: &VaultCrypto,
+            id: &str,
+            title: &str,
+        ) -> VaultResult<(SecretId, (crate::SecretType, StoredRecordPayload))> {
+            let id = SecretId::from_vault_record(id);
+            let value = SecretValue::SecureNote(crate::SecureNoteSecret {
+                title: title.to_owned(),
+                note: "private note body".to_owned(),
+            });
+            let ciphertext = crypto.encrypt_value(value.to_yaml()?.as_str())?;
+            Ok((
+                id,
+                (
+                    SecretType::SecureNote,
+                    StoredRecordPayload::from_age_armored(ciphertext),
+                ),
+            ))
+        }
     }
 
     #[test]
@@ -285,14 +313,12 @@ mod tests {
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut secrets = HashMap::new();
         secrets.extend([
-            encrypted_record(&crypto, "secret_c", "carol", "pw-c")?,
-            encrypted_record(&crypto, "secret_a", "alice", "pw-a")?,
-            encrypted_record(&crypto, "secret_b", "bob", "pw-b")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_c", "carol", "pw-c")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_a", "alice", "pw-a")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_b", "bob", "pw-b")?,
         ]);
 
-        let page = query_encrypted_secrets(
-            &secrets,
-            &crypto,
+        let page = VaultSecretSession::new(&secrets, &crypto).query(
             "",
             SecretTypeFilter::All,
             1.into(),
@@ -312,14 +338,12 @@ mod tests {
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut secrets = HashMap::new();
         secrets.extend([
-            encrypted_record(&crypto, "secret_a", "team-alice", "hidden-a")?,
-            encrypted_record(&crypto, "secret_b", "other", "team-password")?,
-            encrypted_record(&crypto, "secret_c", "team-carol", "hidden-c")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_a", "team-alice", "hidden-a")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_b", "other", "team-password")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_c", "team-carol", "hidden-c")?,
         ]);
 
-        let page = query_encrypted_secrets(
-            &secrets,
-            &crypto,
+        let page = VaultSecretSession::new(&secrets, &crypto).query(
             "team",
             SecretTypeFilter::All,
             1.into(),
@@ -338,14 +362,12 @@ mod tests {
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut secrets = HashMap::new();
         secrets.extend([
-            encrypted_record(&crypto, "secret_a", "alice", "hidden-a")?,
-            encrypted_note(&crypto, "secret_b", "Recovery")?,
-            encrypted_note(&crypto, "secret_c", "Operations")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_a", "alice", "hidden-a")?,
+            VaultSessionTestData::encrypted_note(&crypto, "secret_b", "Recovery")?,
+            VaultSessionTestData::encrypted_note(&crypto, "secret_c", "Operations")?,
         ]);
 
-        let page = query_encrypted_secrets(
-            &secrets,
-            &crypto,
+        let page = VaultSecretSession::new(&secrets, &crypto).query(
             "",
             SecretTypeFilter::Only(SecretType::SecureNote),
             1.into(),
@@ -364,14 +386,12 @@ mod tests {
         let keys = generate_vault_keys()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let secrets = HashMap::from([
-            encrypted_record(&crypto, "secret_a", "recovery-user", "hidden")?,
-            encrypted_note(&crypto, "secret_b", "Recovery plan")?,
-            encrypted_note(&crypto, "secret_c", "Operations")?,
+            VaultSessionTestData::encrypted_record(&crypto, "secret_a", "recovery-user", "hidden")?,
+            VaultSessionTestData::encrypted_note(&crypto, "secret_b", "Recovery plan")?,
+            VaultSessionTestData::encrypted_note(&crypto, "secret_c", "Operations")?,
         ]);
 
-        let page = query_encrypted_secrets(
-            &secrets,
-            &crypto,
+        let page = VaultSecretSession::new(&secrets, &crypto).query(
             "recovery",
             SecretTypeFilter::Only(SecretType::SecureNote),
             0.into(),
@@ -387,16 +407,14 @@ mod tests {
     fn page_results_never_contain_secret_plaintext() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
-        let secrets = HashMap::from([encrypted_record(
+        let secrets = HashMap::from([VaultSessionTestData::encrypted_record(
             &crypto,
             "secret_a",
             "alice",
             "credential-must-not-cross-page-boundary",
         )?]);
 
-        let page = query_encrypted_secrets(
-            &secrets,
-            &crypto,
+        let page = VaultSecretSession::new(&secrets, &crypto).query(
             "",
             SecretTypeFilter::All,
             0.into(),
@@ -413,7 +431,12 @@ mod tests {
     fn explicit_decrypt_returns_only_requested_record() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
-        let requested = encrypted_record(&crypto, "secret_a", "alice", "requested-password")?;
+        let requested = VaultSessionTestData::encrypted_record(
+            &crypto,
+            "secret_a",
+            "alice",
+            "requested-password",
+        )?;
         let invalid_id = SecretId::from_vault_record("secret_invalid");
         let secrets = HashMap::from([
             requested,
@@ -427,7 +450,7 @@ mod tests {
         ]);
 
         let id = SecretId::from_vault_record("secret_a");
-        let mut record = decrypt_encrypted_secret(&secrets, &crypto, &id)?;
+        let mut record = VaultSecretSession::new(&secrets, &crypto).decrypt(&id)?;
 
         assert_eq!(record.primary_credential(), "requested-password");
         record.zeroize_plaintext();
@@ -441,7 +464,8 @@ mod tests {
         let secrets = HashMap::new();
         let id = SecretId::from_vault_record("secret_missing");
 
-        let error = decrypt_encrypted_secret(&secrets, &crypto, &id)
+        let error = VaultSecretSession::new(&secrets, &crypto)
+            .decrypt(&id)
             .err()
             .ok_or_else(|| anyhow::anyhow!("vault session test should reject invalid input"))?;
 
@@ -456,16 +480,14 @@ mod tests {
     fn search_never_matches_secret_values() -> VaultResult<()> {
         let keys = generate_vault_keys()?;
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
-        let secrets = HashMap::from([encrypted_record(
+        let secrets = HashMap::from([VaultSessionTestData::encrypted_record(
             &crypto,
             "secret_a",
             "alice",
             "find-me-only-in-password",
         )?]);
 
-        let page = query_encrypted_secrets(
-            &secrets,
-            &crypto,
+        let page = VaultSecretSession::new(&secrets, &crypto).query(
             "find-me-only-in-password",
             SecretTypeFilter::All,
             0.into(),

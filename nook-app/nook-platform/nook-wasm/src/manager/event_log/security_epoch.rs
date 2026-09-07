@@ -23,7 +23,7 @@ struct PreparedEpochRotation {
     previous_checkpoint: nook_core::IdentityVaultEventId,
     new_keys: nook_core::VaultKeys,
     secrets: Vec<nook_core::EncryptedSecretPayload>,
-    members_checkpoint_hash: nook_core::Sha256Hex,
+    members_checkpoint_hash: nook_auth2::Sha256Hex,
     rotated_meta_records: Vec<nook_core::StoredSecretRecord>,
 }
 
@@ -571,7 +571,7 @@ mod tests {
             previous_checkpoint: epoch,
             new_keys: nook_core::generate_vault_keys()?,
             secrets: Vec::new(),
-            members_checkpoint_hash: nook_core::Sha256Hex::from_trusted("00".repeat(32)),
+            members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("00".repeat(32)),
             rotated_meta_records: Vec::new(),
         };
         assert!(prepared.rotation_frontier_matches(&[]));

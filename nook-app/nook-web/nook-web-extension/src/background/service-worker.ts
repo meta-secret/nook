@@ -86,6 +86,7 @@ import {
 } from './service-worker/login-operations'
 import {
   createIdentityHandoff,
+  createPairedIdentityHandoff,
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
   isAuthorizedWebsiteSender,
@@ -174,6 +175,7 @@ const externalCompanionRoutingDependencies: Parameters<
   typeof routeExternalCompanionMessage
 >[0]['dependencies'] = {
   createIdentityHandoff,
+  createPairedIdentityHandoff,
   discoverPairedVaultIdentity,
   hasPairingApprovedType,
   importPairingAfterCompanionReady,

@@ -6,9 +6,9 @@ use std::slice;
 
 use nook_core::{
     DeviceIdentity, DeviceMode, MultiDeviceError, SentinelKeyReconstruction, SentinelPolicy,
-    SentinelShareOpening, VaultArchitecture, VaultType, VaultUnlock, create_sentinel_share_records,
-    generate_store_id, generate_vault_keys, load_sentinel_vault, load_sentinel_vault_from_opened,
-    load_stored_vault, serialize_stored_yaml_with_unlock_name_architecture,
+    SentinelShareOpening, VaultArchitecture, VaultContent, VaultType, VaultUnlock,
+    create_sentinel_share_records, generate_store_id, generate_vault_keys,
+    serialize_stored_yaml_with_unlock_name_architecture,
 };
 
 #[test]
@@ -47,14 +47,19 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
     )?;
 
     assert!(matches!(
-        load_stored_vault(yaml.as_str(), &first),
+        VaultContent::new(yaml.as_str()).load(&first),
         Err(VaultError::MultiDevice(
             MultiDeviceError::SentinelCeremonyRequired
         ))
     ));
-    assert!(load_sentinel_vault(yaml.as_str(), slice::from_ref(&first)).is_err());
+    assert!(
+        VaultContent::new(yaml.as_str())
+            .load_sentinel(slice::from_ref(&first))
+            .is_err()
+    );
 
-    let loaded = load_sentinel_vault(yaml.as_str(), &[first.clone(), second.clone()])?;
+    let loaded =
+        VaultContent::new(yaml.as_str()).load_sentinel(&[first.clone(), second.clone()])?;
     assert_eq!(loaded.secrets_key, keys.secrets_key);
     assert_eq!(loaded.members_key, keys.members_key);
     assert_eq!(loaded.meta.sentinel_shares.len(), 3);
@@ -67,7 +72,7 @@ fn sentinel_threshold_shares_block_single_device_and_unlock_with_quorum() -> any
     let from_opened = SentinelKeyReconstruction::from_opened(&shares, &opened).reconstruct()?;
     assert_eq!(from_opened, keys);
 
-    let loaded_opened = load_sentinel_vault_from_opened(yaml.as_str(), &opened)?;
+    let loaded_opened = VaultContent::new(yaml.as_str()).load_sentinel_from_opened(&opened)?;
     assert_eq!(loaded_opened.secrets_key, keys.secrets_key);
     assert_eq!(loaded_opened.members_key, keys.members_key);
     Ok(())

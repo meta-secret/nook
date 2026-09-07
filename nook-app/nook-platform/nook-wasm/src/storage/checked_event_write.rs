@@ -68,7 +68,7 @@ mod tests {
     };
     use nook_core::{
         DriveEventParent, Ed25519Signature, GenesisImportPayload, ICloudEventTarget, IsoTimestamp,
-        Sha256Hex, SigningIdentity, StoreId, ValidationError, build_genesis_import_event,
+        SigningIdentity, StoreId, ValidationError, build_genesis_import_event,
         serialize_event_storage_yaml,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
@@ -87,7 +87,7 @@ mod tests {
                 &identity.actor_id()?,
                 &EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?,
                 GenesisImportPayload {
-                    source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                     secrets: vec![],
                     password_entries: vec![],
                 },

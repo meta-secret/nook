@@ -18,7 +18,7 @@ impl NookVaultManager {
                 continue;
             }
             let mut record =
-                nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, id)?;
+                nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
             if record.matches_search(query)
                 && let SecretValue::Authenticator(authenticator) = &record.data
             {
@@ -40,7 +40,7 @@ impl NookVaultManager {
         let id = SecretId::parse(secret_id)?;
         let crypto = self.vault.crypto.get()?;
         let mut record =
-            nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)?;
+            nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
         let result = match &record.data {
             SecretValue::Authenticator(authenticator) => authenticator
                 .current_code(u64::from(unix_seconds).into())

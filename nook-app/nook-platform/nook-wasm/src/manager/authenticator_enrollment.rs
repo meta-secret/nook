@@ -66,7 +66,8 @@ impl NookVaultManager {
         );
         let id = SecretId::parse(secret_id).map_err(NookError::from)?;
         let crypto = self.vault.crypto.get()?;
-        let mut record = nook_core::decrypt_encrypted_secret(&self.vault.meta.secrets, crypto, &id)
+        let mut record = nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto)
+            .decrypt(&id)
             .map_err(NookError::from)?;
         let result = match &mut record.data {
             SecretValue::Authenticator(authenticator) => {
@@ -201,11 +202,8 @@ mod wasm_tests {
                 .contains_key(&SecretId::parse(&original_id)?)
         );
         let crypto = manager.vault.crypto.get()?;
-        let mut projected = nook_core::decrypt_encrypted_secret(
-            &manager.vault.meta.secrets,
-            crypto,
-            &replacement_id,
-        )?;
+        let mut projected = nook_core::VaultSecretSession::new(&manager.vault.meta.secrets, crypto)
+            .decrypt(&replacement_id)?;
         let persisted_codes = match &projected.data {
             SecretValue::Authenticator(authenticator) => authenticator.backup_codes.clone(),
             _ => anyhow::bail!("replacement projection is not an authenticator"),

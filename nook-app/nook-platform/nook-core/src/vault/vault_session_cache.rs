@@ -1,4 +1,9 @@
 //! Restore vault encryption keys from the projection-cache YAML.
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
 
 use crate::SessionError;
 
@@ -8,26 +13,32 @@ use crate::{
     resolve_secrets_key,
 };
 
-/// Resolve `secrets_key` and `members_key` from a stored vault YAML projection cache.
-///
-/// Sentinel vaults fail closed: auth envelopes must never unlock a sentinel session.
-/// Browser unlock uses the opened-share ceremony instead.
-pub fn hydrate_keys_from_projection_yaml(
-    yaml: &str,
-    identity: &DeviceIdentity,
-) -> VaultResult<(String, String)> {
-    if yaml.trim().is_empty() {
-        return Err(SessionError::EmptyProjectionCache.into());
+/// Borrowed projection-cache YAML awaiting a key hydration action.
+pub struct VaultProjectionCache<'a> {
+    yaml: &'a str,
+}
+
+impl<'a> VaultProjectionCache<'a> {
+    #[must_use]
+    pub fn new(yaml: &'a str) -> Self {
+        Self { yaml }
     }
-    let architecture = crate::read_vault_architecture(yaml)?;
-    if architecture.vault_type == VaultType::Sentinel {
-        return Err(MultiDeviceError::SentinelCeremonyRequired.into());
+
+    /// Resolve both vault keys without accepting a sentinel projection cache.
+    pub fn unlock(self, identity: &DeviceIdentity) -> VaultResult<(String, String)> {
+        if self.yaml.trim().is_empty() {
+            return Err(SessionError::EmptyProjectionCache.into());
+        }
+        let architecture = crate::read_vault_architecture(self.yaml)?;
+        if architecture.vault_type == VaultType::Sentinel {
+            return Err(MultiDeviceError::SentinelCeremonyRequired.into());
+        }
+        let format = detect_stored_format(self.yaml)?;
+        let records = deserialize_stored(self.yaml, format)?;
+        let secrets_key = resolve_secrets_key(&records, identity)?;
+        let members_key = resolve_members_key(&records, identity)?;
+        Ok((secrets_key.into_inner(), members_key.into_inner()))
     }
-    let format = detect_stored_format(yaml)?;
-    let records = deserialize_stored(yaml, format)?;
-    let secrets_key = resolve_secrets_key(&records, identity)?;
-    let members_key = resolve_members_key(&records, identity)?;
-    Ok((secrets_key.into_inner(), members_key.into_inner()))
 }
 
 #[cfg(test)]
@@ -44,7 +55,7 @@ mod tests {
     fn hydrate_keys_from_genesis_projection_yaml() -> VaultResult<()> {
         let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
         let (secrets_key, members_key) =
-            hydrate_keys_from_projection_yaml(yaml.as_str(), &identity)?;
+            VaultProjectionCache::new(yaml.as_str()).unlock(&identity)?;
         assert_eq!(secrets_key, keys.secrets_key.as_str());
         assert_eq!(members_key, keys.members_key.as_str());
         Ok(())
@@ -53,8 +64,8 @@ mod tests {
     #[test]
     fn hydrate_fails_on_empty_cache() -> VaultResult<()> {
         let identity = DeviceIdentity::generate()?;
-        assert!(hydrate_keys_from_projection_yaml("", &identity).is_err());
-        assert!(hydrate_keys_from_projection_yaml("   ", &identity).is_err());
+        assert!(VaultProjectionCache::new("").unlock(&identity).is_err());
+        assert!(VaultProjectionCache::new("   ").unlock(&identity).is_err());
         Ok(())
     }
 
@@ -91,7 +102,8 @@ mod tests {
             &architecture,
         )?;
 
-        let err = hydrate_keys_from_projection_yaml(yaml.as_str(), &first)
+        let err = VaultProjectionCache::new(yaml.as_str())
+            .unlock(&first)
             .err()
             .ok_or_else(|| {
                 anyhow::anyhow!("vault session cache test should reject invalid input")

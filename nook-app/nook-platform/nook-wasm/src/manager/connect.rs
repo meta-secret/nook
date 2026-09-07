@@ -16,7 +16,7 @@ use super::verified_access::VerifiedVaultAccessFlow;
 use super::{NookVaultManager, VaultNameState};
 use crate::NookError;
 use crate::NookSecretRecord;
-use crate::conversion::{LoadedVault, access_status_for_vault_content, content_requires_genesis};
+use crate::conversion::LoadedVault;
 use crate::storage::event_db::load_local_event_store;
 use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisCompletion};
 use crate::storage::indexed_db::load_vault_local_cache;
@@ -496,7 +496,7 @@ impl NookVaultManager {
                 &identity,
             )?)
         } else {
-            access_status_for_vault_content(&content, &identity)?
+            nook_core::VaultContent::new(&content).access_status(&identity)?
         };
         let _ = self
             .status
@@ -590,7 +590,7 @@ impl NookVaultManager {
         let use_genesis = if event_log_only_remote {
             false
         } else {
-            content_requires_genesis(&content, force_genesis)?
+            nook_core::VaultContent::new(&content).requires_genesis(force_genesis)?
         };
 
         let completed_genesis = if use_genesis {

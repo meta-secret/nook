@@ -232,6 +232,22 @@ impl VaultMetaState {
         Ok(())
     }
 
+    /// Replace the encrypted member roster rows in this typed metadata state.
+    pub fn replace_member_records(
+        &mut self,
+        member_records: &[StoredSecretRecord],
+    ) -> MultiDeviceResult<()> {
+        let mut members = self.members.clone();
+        members.clear();
+        for record in member_records {
+            if let VaultMetaRecord::Member(auth_id, payload) = VaultMetaRecord::classify(record)? {
+                members.insert(auth_id, payload);
+            }
+        }
+        self.members = members;
+        Ok(())
+    }
+
     /// Remove whichever bucket a raw on-disk key refers to (join rows are
     /// removed by device id; everything else by its own key encoding).
     pub fn remove_key(&mut self, key: &str) {

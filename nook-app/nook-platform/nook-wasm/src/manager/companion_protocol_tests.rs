@@ -1,9 +1,10 @@
 use super::*;
 use nook_companion_core::{
     CompanionEpochMilliseconds, CompanionIdentityDiscoveryObservation,
-    CompanionIdentityDiscoveryRequest, CompanionIdentityHandoffContext, CompanionIdentityStatus,
-    CompanionInstallationAppKey, CompanionUnlockedAppKey, ExtensionConnectScope,
-    ExtensionPairingVaultType,
+    CompanionIdentityDiscoveryRequest, CompanionIdentityHandoffAuthorization,
+    CompanionIdentityHandoffContext, CompanionIdentityStatusAdmission,
+    CompanionIdentityStatusAdmissionRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
+    ExtensionConnectScope, ExtensionPairingVaultType,
 };
 
 fn epoch_milliseconds(
@@ -16,7 +17,7 @@ struct DirectHandoffScenario {
     website: NookVaultManager,
     extension: NookVaultManager,
     endpoint: NookCompanionExtensionEndpoint,
-    status: CompanionIdentityStatus,
+    presence: CompanionExtensionPresence,
 }
 
 impl DirectHandoffScenario {
@@ -40,36 +41,45 @@ impl DirectHandoffScenario {
         extension.device.id = identity.device_id().as_str().to_owned();
         extension.device.identity_private_key = identity.secret_string().into_inner();
         extension.event_log.signing_seed = signing_seed.into_inner();
+        let presence = CompanionExtensionPresence::Unlocked {
+            vault_type: ExtensionPairingVaultType::Simple,
+            vault_store_id: "store-1".to_owned(),
+            vault_name: "Personal".to_owned(),
+            app_key,
+        };
         Ok(Self {
             website: NookVaultManager::new(),
             extension,
-            endpoint: NookCompanionExtensionEndpoint::from_presence(
-                CompanionExtensionPresence::Unlocked {
-                    vault_type: ExtensionPairingVaultType::Simple,
-                    vault_store_id: "store-1".to_owned(),
-                    vault_name: "Personal".to_owned(),
-                    app_key: app_key.clone(),
-                },
-            )?,
-            status: CompanionIdentityStatus::Unlocked {
-                request_id: "request-1".to_owned(),
-                vault_store_id: "store-1".to_owned(),
-                app_key,
-            },
+            endpoint: NookCompanionExtensionEndpoint::from_presence(presence.clone())?,
+            presence,
         })
     }
 
-    fn handoff_begin(&self) -> Result<CompanionWebsiteHandoffBegin, CompanionOperationError> {
-        Ok(CompanionWebsiteHandoffBegin {
-            discovery: CompanionIdentityDiscoveryObservation {
-                request: CompanionIdentityDiscoveryRequest {
-                    request_id: "request-1".to_owned(),
-                    vault_store_id: "store-1".to_owned(),
-                    expires_at: epoch_milliseconds("200")?,
-                },
-                observed_at: epoch_milliseconds("100")?,
+    fn discovery(&self) -> Result<CompanionIdentityDiscoveryObservation, CompanionOperationError> {
+        Ok(CompanionIdentityDiscoveryObservation {
+            request: CompanionIdentityDiscoveryRequest {
+                request_id: "request-1".to_owned(),
+                vault_store_id: "store-1".to_owned(),
+                expires_at: epoch_milliseconds("200")?,
             },
-            status: self.status.clone(),
+            observed_at: epoch_milliseconds("100")?,
+        })
+    }
+
+    fn handoff_begin(&mut self) -> Result<CompanionWebsiteHandoffBegin, CompanionOperationError> {
+        let discovery = self.discovery()?;
+        let status = self.endpoint.discover_inner(discovery.clone())?;
+        let admission =
+            CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
+                discovery,
+                status,
+                observed_at: epoch_milliseconds("100")?,
+            });
+        let CompanionIdentityStatusAdmission::Accepted { transaction } = admission else {
+            return Err(CompanionOperationError::HandoffNotPending);
+        };
+        Ok(CompanionWebsiteHandoffBegin {
+            transaction: *transaction,
             context: CompanionIdentityHandoffContext::PairedVault {
                 vault_store_id: "store-1".to_owned(),
             },
@@ -85,10 +95,15 @@ impl DirectHandoffScenario {
         &mut self,
         request: CompanionIdentityHandoffRequest,
     ) -> Result<CompanionIdentityHandoffResponse, CompanionOperationError> {
+        let presence = self.presence.clone();
         self.endpoint
             .authorize_and_seal_loaded(CompanionExtensionSealOperation {
                 manager: &mut self.extension,
-                request,
+                authorization: CompanionIdentityHandoffAuthorization {
+                    request,
+                    observed_at: epoch_milliseconds("100")?,
+                    presence,
+                },
             })
     }
 }
@@ -102,7 +117,11 @@ impl DirectHandoffScenario {
 fn real_managers_complete_handoff_reject_replay_and_clear_pending_state()
 -> Result<(), CompanionOperationError> {
     let mut scenario = DirectHandoffScenario::new()?;
-    let request = scenario.begin()?;
+    let begin = scenario.handoff_begin()?;
+    let repeat_begin = begin.clone();
+    let request = scenario
+        .website
+        .begin_companion_identity_handoff_inner(begin)?;
     assert!(
         !scenario
             .website
@@ -132,8 +151,10 @@ fn real_managers_complete_handoff_reject_replay_and_clear_pending_state()
     );
     assert!(!pending.recipient_secret.is_empty());
 
-    let mut forged = scenario.begin()?;
-    forged.request_id = "request-forged".to_owned();
+    let mut forged = scenario
+        .website
+        .begin_companion_identity_handoff_inner(repeat_begin)?;
+    forged.transaction.discovery.request.request_id = "request-forged".to_owned();
     let forged_response = CompanionIdentityHandoffResponse {
         request: forged,
         encrypted_envelope: "not-used".to_owned(),
@@ -165,16 +186,17 @@ fn real_managers_complete_handoff_reject_replay_and_clear_pending_state()
 fn rejected_discovery_and_context_clear_existing_pending_secret()
 -> Result<(), CompanionOperationError> {
     let mut scenario = DirectHandoffScenario::new()?;
-    let mut request = scenario.handoff_begin()?;
-    request.discovery.request.request_id = "request-other".to_owned();
-    let mut store = scenario.handoff_begin()?;
-    store.discovery.request.vault_store_id = "store-other".to_owned();
-    let mut context = scenario.handoff_begin()?;
+    let valid = scenario.handoff_begin()?;
+    let mut request = valid.clone();
+    request.transaction.discovery.request.request_id = "request-other".to_owned();
+    let mut store = valid.clone();
+    store.transaction.discovery.request.vault_store_id = "store-other".to_owned();
+    let mut context = valid.clone();
     context.context = CompanionIdentityHandoffContext::PairedVault {
         vault_store_id: "store-other".to_owned(),
     };
-    let mut expired = scenario.handoff_begin()?;
-    expired.discovery.observed_at = epoch_milliseconds("200")?;
+    let mut expired = valid.clone();
+    expired.transaction.admitted_at = epoch_milliseconds("200")?;
 
     for (begin, expected) in [
         (request, CompanionProtocolError::RequestMismatch),
@@ -182,7 +204,9 @@ fn rejected_discovery_and_context_clear_existing_pending_secret()
         (context, CompanionProtocolError::ContextMismatch),
         (expired, CompanionProtocolError::DiscoveryExpired),
     ] {
-        scenario.begin()?;
+        scenario
+            .website
+            .begin_companion_identity_handoff_inner(valid.clone())?;
         assert!(
             !scenario
                 .website
@@ -236,6 +260,61 @@ fn sealing_failure_consumes_nonce_and_requires_fresh_discovery()
 #[allow(
     unknown_lints,
     non_local_effect_before_unhandled_error,
+    reason = "the test intentionally observes transaction cleanup after stale authorization and concurrent discovery"
+)]
+fn production_endpoint_consumes_stale_and_concurrent_transactions()
+-> Result<(), CompanionOperationError> {
+    let mut stale = DirectHandoffScenario::new()?;
+    let stale_request = stale.begin()?;
+    let stale_presence = stale.presence.clone();
+    assert!(matches!(
+        stale
+            .endpoint
+            .authorize_and_seal_loaded(CompanionExtensionSealOperation {
+                manager: &mut stale.extension,
+                authorization: CompanionIdentityHandoffAuthorization {
+                    request: stale_request.clone(),
+                    observed_at: epoch_milliseconds("200")?,
+                    presence: stale_presence,
+                },
+            }),
+        Err(CompanionOperationError::Protocol(
+            CompanionProtocolError::DiscoveryExpired
+        ))
+    ));
+    assert!(matches!(
+        stale.authorize_and_seal(stale_request),
+        Err(CompanionOperationError::Protocol(
+            CompanionProtocolError::NonceUnavailable
+        ))
+    ));
+
+    let mut concurrent = DirectHandoffScenario::new()?;
+    let begin = concurrent.handoff_begin()?;
+    let request = concurrent
+        .website
+        .begin_companion_identity_handoff_inner(begin)?;
+    let mut second = concurrent.discovery()?;
+    second.request.request_id = "request-2".to_owned();
+    assert!(matches!(
+        concurrent.endpoint.discover_inner(second),
+        Err(CompanionOperationError::Protocol(
+            CompanionProtocolError::RequestMismatch
+        ))
+    ));
+    assert!(matches!(
+        concurrent.authorize_and_seal(request),
+        Err(CompanionOperationError::Protocol(
+            CompanionProtocolError::NonceUnavailable
+        ))
+    ));
+    Ok(())
+}
+
+#[test]
+#[allow(
+    unknown_lints,
+    non_local_effect_before_unhandled_error,
     reason = "the test intentionally installs a different real app key before observing fail-closed sealing rejection"
 )]
 fn real_manager_rejects_an_installation_app_key_mismatch() -> Result<(), CompanionOperationError> {
@@ -245,8 +324,14 @@ fn real_manager_rejects_an_installation_app_key_mismatch() -> Result<(), Compani
     scenario.extension.device.id = other.device_id().as_str().to_owned();
     scenario.extension.device.identity_private_key = other.secret_string().into_inner();
     assert!(matches!(
-        scenario.authorize_and_seal(request),
+        scenario.authorize_and_seal(request.clone()),
         Err(CompanionOperationError::InstallationAppKeyMismatch)
+    ));
+    assert!(matches!(
+        scenario.authorize_and_seal(request),
+        Err(CompanionOperationError::Protocol(
+            CompanionProtocolError::NonceUnavailable
+        ))
     ));
     Ok(())
 }

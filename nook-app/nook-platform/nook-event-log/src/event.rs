@@ -2,10 +2,7 @@
 
 use std::{fmt, str};
 
-use crate::canonical::{
-    Ed25519Signature, EventId, canonical_json_bytes, canonicalize_json, event_id_from_body_bytes,
-    sign_body, verify_body_signature,
-};
+use crate::canonical::{Ed25519Signature, EventId};
 use crate::signing::SigningIdentity;
 use crate::{CanonicalEventBodyBytes, EventError, EventResult, EventStorageBytes};
 use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelShareVersion};
@@ -297,15 +294,15 @@ impl VaultEventBody {
             sorted_parents.sort();
             map.insert("parents".to_owned(), json!(sorted_parents));
         }
-        Ok(canonicalize_json(&value))
+        Ok(CanonicalEventBodyBytes::canonical_value(&value))
     }
 
     pub fn to_canonical_bytes(&self) -> EventResult<CanonicalEventBodyBytes> {
-        canonical_json_bytes(&self.to_canonical_value()?)
+        CanonicalEventBodyBytes::from_json(&self.to_canonical_value()?)
     }
 
     pub fn event_id(&self) -> EventResult<EventId> {
-        Ok(event_id_from_body_bytes(&self.to_canonical_bytes()?))
+        Ok(EventId::from_body_bytes(&self.to_canonical_bytes()?))
     }
 }
 
@@ -325,13 +322,13 @@ impl VaultEvent {
 
     pub fn sign(body: VaultEventBody, signing_key: &SigningKey) -> EventResult<Self> {
         let body_bytes = body.to_canonical_bytes()?;
-        let signature = sign_body(&body_bytes, signing_key);
+        let signature = Ed25519Signature::sign(&body_bytes, signing_key);
         Ok(Self { body, signature })
     }
 
     pub fn verify_signature(&self, verifying_key: &VerifyingKey) -> EventResult<()> {
         let body_bytes = self.body.to_canonical_bytes()?;
-        verify_body_signature(&body_bytes, self.signature.as_str(), verifying_key)
+        self.signature.verify(&body_bytes, verifying_key)
     }
 
     pub fn validate_actor_signature(&self) -> EventResult<()> {

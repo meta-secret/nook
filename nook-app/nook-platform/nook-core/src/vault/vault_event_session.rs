@@ -40,10 +40,9 @@ pub struct VaultSecurityEpochRotationInput<'a> {
 impl VaultEventSession {
     #[must_use]
     pub fn new(store_id: String, signing: SigningIdentity, signing_seed: String) -> Self {
-        let key_epoch = nook_event_log::event_id_from_body_bytes(&CanonicalEventBodyBytes::from(
-            store_id.as_bytes().to_vec(),
-        ))
-        .into_inner();
+        let key_epoch =
+            EventId::from_body_bytes(&CanonicalEventBodyBytes::from(store_id.as_bytes().to_vec()))
+                .into_inner();
         Self {
             store: LocalEventStore::new(),
             store_id,
@@ -135,7 +134,7 @@ impl VaultEventSession {
         let projection = VaultProjection::from_graph(&graph, &self.store_id)?;
         let live = projection.live_secrets(&graph);
         let user_records: Vec<StoredSecretRecord> = live.into_values().collect();
-        crate::apply_user_records_to_armored_session(user_records, crypto, state)
+        crate::VaultUserRecordBatch::new(user_records).hydrate(crypto, state)
     }
 
     pub fn members_checkpoint_hash(
@@ -146,7 +145,7 @@ impl VaultEventSession {
         let member_records = build_members_records(&roster, members_key)?;
         let json = serde_json::to_string(&member_records)
             .map_err(VaultEpochError::MemberRecordsSerialize)?;
-        Ok(sha256_hex(json.as_bytes()))
+        Ok(Sha256Hex::from_bytes(json.as_bytes()))
     }
 
     pub fn flush_outbox_to_remote(
@@ -200,16 +199,4 @@ impl VaultEventSession {
             new_keys.members_key.as_str().to_owned(),
         ))
     }
-}
-
-#[must_use]
-#[cfg_attr(
-    dylint_lib = "nook_domain_api",
-    expect(
-        raw_numeric_public_api,
-        reason = "serialization boundary: hashes encoded vault metadata bytes"
-    )
-)]
-pub fn sha256_hex(bytes: &[u8]) -> Sha256Hex {
-    nook_event_log::sha256_hex(bytes)
 }

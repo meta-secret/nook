@@ -332,7 +332,7 @@ mod tests {
                 parents: Vec::new(),
                 created_at: IsoTimestamp::parse("2026-08-14T00:00:00Z")?,
                 key_epoch: EventId::from_sha256_hex(
-                    nook_core::sha256_hex(store_id.as_str().as_bytes()).as_str(),
+                    nook_auth2::Sha256Hex::from_bytes(store_id.as_str().as_bytes()).as_str(),
                 )?,
                 operations: Vec::new(),
             },

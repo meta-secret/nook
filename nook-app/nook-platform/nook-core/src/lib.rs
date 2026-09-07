@@ -269,11 +269,9 @@ pub use nook_event_log::{
     ProjectionEpoch, RemoteEventBatch, RemoteEventLogClassification, RemoteEventWrites,
     SecretFingerprint, SecretReplacementConflict, SecurityConflict, SentinelShareIssuedPayload,
     SigningIdentity, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultOperation,
-    VaultProjection, build_genesis_import_event, canonical_json_bytes, canonicalize_json,
-    concurrent_epoch_rotations_conflict, event_id_from_body_bytes, format_ed25519_signature,
-    operation_starts_epoch, parse_ed25519_signature, parse_event_storage_bytes,
-    parse_remote_event_storage_bytes, serialize_event_storage_yaml, sign_body,
-    verify_body_signature,
+    VaultProjection, build_genesis_import_event, concurrent_epoch_rotations_conflict,
+    operation_starts_epoch, parse_event_storage_bytes, parse_remote_event_storage_bytes,
+    serialize_event_storage_yaml,
 };
 pub use password::{
     MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH, PasswordGenerationOptions, generate_password,
@@ -354,17 +352,14 @@ pub use vault_client_policy::{
     VaultSyncTimerTickDecision,
 };
 pub use vault_connect::{
-    LoadedVault, UnlockedVault, VaultAccessStatus, VaultContentMetadata,
-    access_status_for_vault_content, apply_member_records, capture_vault_unlock_from_content,
-    content_requires_genesis, load_sentinel_vault, load_sentinel_vault_from_opened,
-    load_stored_vault, unlock_stored_vault,
+    LoadedVault, UnlockedVault, VaultAccessStatus, VaultContent, VaultContentMetadata,
 };
 pub use vault_crypto::VaultCrypto;
 pub use vault_epoch_crypto::{
     MembersCheckpointHash, SecretEpochReencryption, VaultKeyRotation, VaultMetaRecordRewrap,
     VaultMetaRewrap,
 };
-pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput, sha256_hex};
+pub use vault_event_session::{VaultEventSession, VaultSecurityEpochRotationInput};
 pub use vault_format::{
     VaultFormat, VaultName, VaultNameRef, VaultStoreIdentity, VaultStoreIdentityRef,
     VaultVersionWrite, current_vault_schema_version, default_vault_name_for_store_id,
@@ -398,10 +393,9 @@ pub use vault_sentinel_genesis::{
 pub use vault_sentinel_unlock::SentinelUnlockSigning;
 pub use vault_session::{
     DEFAULT_SECRET_PAGE_SIZE, MAX_SECRET_PAGE_SIZE, SecretPage, SecretTypeFilter,
-    apply_user_records_to_armored_session, apply_user_records_to_encrypted_session,
-    decrypt_encrypted_secret, query_encrypted_secrets,
+    VaultSecretSession, VaultUserRecordBatch,
 };
-pub use vault_session_cache::hydrate_keys_from_projection_yaml;
+pub use vault_session_cache::VaultProjectionCache;
 pub use vault_sync::{
     CommonContentHash, VaultRevision, VaultRevisionStore, VaultSyncAction, compare_vault_sync,
     compare_vault_sync_with_common, read_vault_revision, vault_content_hash,
@@ -411,6 +405,13 @@ pub use vault_sync_store::{
     MemoryVaultStore, PreparedVaultSync, RevisionGuardedWrite, StoreRevision, StoreRevisionRef,
     VaultSyncFanOut, VaultSyncPair,
 };
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: re-exports the validated digest type owned by nook-auth2"
+    )
+)]
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,

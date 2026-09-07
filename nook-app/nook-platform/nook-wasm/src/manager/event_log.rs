@@ -34,7 +34,7 @@ use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles};
 use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
-    VaultOperation, apply_user_records_to_encrypted_session,
+    VaultOperation, VaultUserRecordBatch,
 };
 
 fn iso_timestamp() -> String {
@@ -245,7 +245,7 @@ impl NookVaultManager {
             return Ok(self.event_log.key_epoch.clone());
         }
         let epoch = EventId::from_sha256_hex(
-            nook_core::sha256_hex(self.vault.store_id.as_bytes()).as_str(),
+            nook_auth2::Sha256Hex::from_bytes(self.vault.store_id.as_bytes()).as_str(),
         )?
         .into_inner();
         self.event_log.key_epoch = epoch;
@@ -366,7 +366,7 @@ impl NookVaultManager {
         let user_records: Vec<nook_core::StoredSecretRecord> = live.into_values().collect();
         self.vault.password_entries = projection.password_entries;
         self.vault.unlock = VaultUnlock::Keys;
-        apply_user_records_to_encrypted_session(user_records, &mut self.vault.meta);
+        VaultUserRecordBatch::new(user_records).replace(&mut self.vault.meta);
         self.vault.mark_search_catalog_dirty();
         nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;

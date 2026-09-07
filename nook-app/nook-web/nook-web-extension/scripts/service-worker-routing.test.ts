@@ -109,6 +109,7 @@ const lifecycleDependencies: ExtensionLifecycleRoutingDependencies = {
 
 const externalDependencies: ExternalCompanionRoutingDependencies = {
   createIdentityHandoff: unusedAsyncDependency,
+  createPairedIdentityHandoff: unusedAsyncDependency,
   discoverPairedVaultIdentity: unusedAsyncDependency,
   hasPairingApprovedType: mock(() => false),
   importPairingAfterCompanionReady: unusedAsyncDependency,

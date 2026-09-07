@@ -7,6 +7,13 @@ use std::{fmt, mem};
 use crate::errors;
 use serde::{Deserialize, Deserializer, de::Error as _};
 
+#[cfg_attr(
+    dylint_lib = "nook_domain_api",
+    expect(
+        raw_numeric_public_api,
+        reason = "serialization boundary: re-exports the validated digest type owned by nook-auth2"
+    )
+)]
 pub use nook_auth2::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,

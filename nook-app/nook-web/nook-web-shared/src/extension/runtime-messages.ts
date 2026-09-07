@@ -114,12 +114,11 @@ export enum ExtensionPairedVaultIdentityDiscoveryMessageType {
 
 export type ExtensionPairedVaultIdentityDiscoveryMessage = {
   type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery;
-  payload: {
-    requestId: string;
-    vaultStoreId: string;
-    expiresAt: number;
-  };
+  payload: unknown;
 };
+
+export type CompanionIdentityDiscoveryTransportResponse =
+  { ok: true; status: unknown } | { ok: false };
 
 export enum ExtensionPairedVaultUnlockRequestMessageType {
   NookExtensionPairedVaultUnlockRequest = "nook:extension-paired-vault-unlock-request",
@@ -133,56 +132,17 @@ export type ExtensionPairedVaultUnlockRequestMessage = {
   };
 };
 
-type ExtensionPairedVaultIdentityStatusBase = {
-  requestId: string;
-  vaultStoreId: string;
-};
-
-export enum ExtensionPairedVaultIdentityStatusMessageType {
-  NookExtensionPairedVaultIdentityStatus = "nook:extension-paired-vault-identity-status",
-}
-
-export type ExtensionPairedVaultIdentityStatusMessage =
-  | {
-      type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus;
-      payload: ExtensionPairedVaultIdentityStatusBase & {
-        status:
-          | ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
-          | ExtensionPairedVaultIdentityStatusMessageStatus.Locked;
-      };
-    }
-  | {
-      type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus;
-      payload: ExtensionPairedVaultIdentityStatusBase & {
-        status: ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault;
-        connectedVaultStoreId: string;
-        connectedVaultName: string;
-      };
-    }
-  | {
-      type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus;
-      payload: ExtensionPairedVaultIdentityStatusBase & {
-        status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked;
-        extensionRuntimeId: string;
-        deviceId: string;
-        devicePublicKey: string;
-        deviceSigningPublicKey: string;
-        deviceLabel: string;
-        nonce: string;
-        scopes: ExtensionConnectScope[];
-      };
-    };
-
 export enum ExtensionPairedVaultIdentityHandoffRequestMessageType {
   NookExtensionPairedVaultIdentityHandoffRequest = "nook:extension-paired-vault-identity-handoff-request",
 }
 
 export type ExtensionPairedVaultIdentityHandoffRequestMessage = {
   type: ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest;
-  payload: ExtensionIdentityHandoffRequestMessage["payload"] & {
-    vaultStoreId: string;
-  };
+  payload: unknown;
 };
+
+export type CompanionIdentityHandoffTransportResponse =
+  { ok: true; response: unknown } | { ok: false; reason: string };
 
 export type RuntimeMessage =
   | OpenSimpleVaultMessage
@@ -191,7 +151,6 @@ export type RuntimeMessage =
   | ExtensionIdentityHandoffRequestMessage
   | ExtensionPairedVaultIdentityDiscoveryMessage
   | ExtensionPairedVaultUnlockRequestMessage
-  | ExtensionPairedVaultIdentityStatusMessage
   | ExtensionPairedVaultIdentityHandoffRequestMessage
   | ExtensionPairingApprovedMessage
   | ExtensionLocalEventLogUpdatedMessage;
@@ -281,13 +240,10 @@ export function isExtensionIdentityHandoffRequestMessage(
   );
 }
 
-
 type IsPairedVaultRequestMessageArgs = {
   message: unknown;
-  type:
-    | ExtensionPairedVaultIdentityDiscoveryMessage["type"]
-    | ExtensionPairedVaultUnlockRequestMessage["type"];
-}
+  type: ExtensionPairedVaultUnlockRequestMessage["type"];
+};
 function isPairedVaultRequestMessage({
   message,
   type,
@@ -312,20 +268,11 @@ function isPairedVaultRequestMessage({
 export function isExtensionPairedVaultIdentityDiscoveryMessage(
   message: unknown,
 ): message is ExtensionPairedVaultIdentityDiscoveryMessage {
-  const nookNamedArgs0_0: Parameters<typeof isPairedVaultRequestMessage>[0] = {
-    message,
-    type: ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery,
-  };
   return (
-    isPairedVaultRequestMessage(nookNamedArgs0_0) &&
-    typeof (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
-      .expiresAt === "number" &&
-    Number.isFinite(
-      (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
-        .expiresAt,
-    ) &&
-    (message as ExtensionPairedVaultIdentityDiscoveryMessage).payload
-      .expiresAt > Date.now()
+    isRuntimeMessage(message) &&
+    message.type ===
+      ExtensionPairedVaultIdentityDiscoveryMessageType.NookExtensionPairedVaultIdentityDiscovery &&
+    "payload" in message
   );
 }
 
@@ -339,65 +286,6 @@ export function isExtensionPairedVaultUnlockRequestMessage(
   return isPairedVaultRequestMessage(nookTypedArgs0_0);
 }
 
-export function isExtensionPairedVaultIdentityStatusMessage(
-  message: unknown,
-): message is ExtensionPairedVaultIdentityStatusMessage {
-  if (
-    !isRuntimeMessage(message) ||
-    message.type !==
-      ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus ||
-    typeof (message as { payload?: unknown }).payload !== "object" ||
-    !(message as { payload?: unknown }).payload
-  ) {
-    return false;
-  }
-  const payload = (message as { payload: Record<string, unknown> }).payload;
-  if (
-    typeof payload.requestId !== "string" ||
-    payload.requestId.length === 0 ||
-    typeof payload.vaultStoreId !== "string" ||
-    payload.vaultStoreId.length === 0
-  ) {
-    return false;
-  }
-  if (
-    payload.status ===
-      ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable ||
-    payload.status === ExtensionPairedVaultIdentityStatusMessageStatus.Locked
-  ) {
-    return true;
-  }
-  if (
-    payload.status ===
-    ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-  ) {
-    return (
-      typeof payload.connectedVaultStoreId === "string" &&
-      payload.connectedVaultStoreId.length > 0 &&
-      typeof payload.connectedVaultName === "string" &&
-      payload.connectedVaultName.length > 0
-    );
-  }
-  return (
-    payload.status ===
-      ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked &&
-    typeof payload.extensionRuntimeId === "string" &&
-    payload.extensionRuntimeId.length > 0 &&
-    typeof payload.deviceId === "string" &&
-    payload.deviceId.length > 0 &&
-    typeof payload.devicePublicKey === "string" &&
-    payload.devicePublicKey.length > 0 &&
-    typeof payload.deviceSigningPublicKey === "string" &&
-    payload.deviceSigningPublicKey.length > 0 &&
-    typeof payload.deviceLabel === "string" &&
-    payload.deviceLabel.length > 0 &&
-    typeof payload.nonce === "string" &&
-    payload.nonce.length > 0 &&
-    Array.isArray(payload.scopes) &&
-    payload.scopes.every((scope) => typeof scope === "string")
-  );
-}
-
 export function isExtensionPairedVaultIdentityHandoffRequestMessage(
   message: unknown,
 ): message is ExtensionPairedVaultIdentityHandoffRequestMessage {
@@ -405,26 +293,11 @@ export function isExtensionPairedVaultIdentityHandoffRequestMessage(
     !isRuntimeMessage(message) ||
     message.type !==
       ExtensionPairedVaultIdentityHandoffRequestMessageType.NookExtensionPairedVaultIdentityHandoffRequest ||
-    typeof (message as { payload?: unknown }).payload !== "object" ||
-    !(message as { payload?: unknown }).payload
+    !("payload" in message)
   ) {
     return false;
   }
-  const payload = (message as { payload: Record<string, unknown> }).payload;
-  return (
-    typeof payload.vaultStoreId === "string" &&
-    payload.vaultStoreId.length > 0 &&
-    typeof payload.recipientPublicKey === "string" &&
-    payload.recipientPublicKey.length > 0 &&
-    typeof payload.nonce === "string" &&
-    payload.nonce.length > 0 &&
-    typeof payload.expectedDeviceId === "string" &&
-    payload.expectedDeviceId.length > 0 &&
-    typeof payload.expectedDevicePublicKey === "string" &&
-    payload.expectedDevicePublicKey.length > 0 &&
-    typeof payload.expectedDeviceSigningPublicKey === "string" &&
-    payload.expectedDeviceSigningPublicKey.length > 0
-  );
+  return true;
 }
 
 export function isExtensionPairingApprovedGrant(

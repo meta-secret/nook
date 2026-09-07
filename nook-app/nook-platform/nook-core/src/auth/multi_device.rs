@@ -471,8 +471,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        EventGraph, EventId, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
-        VaultEvent, VaultEventBody, VaultEventSchemaVersion,
+        EventGraph, EventId, IsoTimestamp, MemberLabel, SigningIdentity, StoreId, VaultEvent,
+        VaultEventBody, VaultEventSchemaVersion,
     };
 
     fn signed_event(
@@ -491,7 +491,7 @@ mod tests {
                 parents,
                 created_at: IsoTimestamp::parse(timestamp)?,
                 key_epoch: EventId::from_sha256_hex(
-                    crate::sha256_hex(store_id.as_str().as_bytes()).as_str(),
+                    nook_auth2::Sha256Hex::from_bytes(store_id.as_str().as_bytes()).as_str(),
                 )?,
                 operations,
             },
@@ -511,7 +511,7 @@ mod tests {
             vec![],
             vec![
                 VaultOperation::VaultImported {
-                    source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: vec![],
                     password_entries: vec![],
                 },
@@ -576,7 +576,7 @@ mod tests {
                 key_epoch: trigger_id,
                 operations: vec![VaultOperation::EpochCheckpoint {
                     secrets: Vec::new(),
-                    members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     rotated_meta_records: EpochMetadataState::Replace(vec![replacement_record]),
                     password_entries: EpochPasswordState::Replace(Vec::new()),
                 }],
@@ -719,7 +719,7 @@ mod tests {
             vec![],
             vec![
                 VaultOperation::VaultImported {
-                    source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                     secrets: vec![],
                     password_entries: vec![],
                 },
@@ -838,7 +838,7 @@ mod tests {
             &mut meta,
             &VaultOperation::EpochCheckpoint {
                 secrets: Vec::new(),
-                members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
                 rotated_meta_records: EpochMetadataState::Replace(Vec::new()),
                 password_entries: EpochPasswordState::LegacyRetain,
             },
@@ -865,7 +865,7 @@ mod tests {
         };
         let operation = VaultOperation::EpochCheckpoint {
             secrets: Vec::new(),
-            members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
             rotated_meta_records: EpochMetadataState::Replace(vec![invalid]),
             password_entries: EpochPasswordState::LegacyRetain,
         };

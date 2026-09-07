@@ -5,10 +5,7 @@
 //! Event-log vaults union remote events. Projection YAML is never a sync source.
 
 use super::NookVaultManager;
-use crate::conversion::{
-    access_status_for_vault_content, sync_result_access_status, sync_result_session,
-    sync_result_unchanged,
-};
+use crate::conversion::{sync_result_access_status, sync_result_session, sync_result_unchanged};
 use crate::storage::event_db::is_event_log_mode;
 use crate::{NookError, NookVaultSyncResult};
 use nook_core::{StorageMode, VaultAccessStatus};
@@ -86,7 +83,7 @@ impl NookVaultManager {
             self.capture_vault_unlock(&content)?;
             self.vault.last_synced_content = content.clone();
             let identity = self.ensure_device_identity()?;
-            let status = access_status_for_vault_content(&content, &identity)?;
+            let status = nook_core::VaultContent::new(&content).access_status(&identity)?;
             return sync_result_access_status(status);
         }
 

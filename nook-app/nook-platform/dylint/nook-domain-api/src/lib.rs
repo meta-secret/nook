@@ -78,8 +78,9 @@ declare_lint! {
     /// ### What it does
     ///
     /// Enforces narrow, reason-bearing suppression of `raw_numeric_public_api`.
-    /// Suppression is accepted only as an item-level `expect` on a callable or
-    /// field and only for serialization, database, or FFI boundaries.
+    /// Suppression is accepted only as an item-level `expect` on a callable,
+    /// field, or narrow public re-export and only for serialization, database,
+    /// or FFI boundaries.
     ///
     /// ### Why is this bad?
     ///
@@ -134,8 +135,12 @@ impl<'tcx> LateLintPass<'tcx> for DomainApi {
     }
 
     fn check_item(&mut self, cx: &LateContext<'tcx>, item: &'tcx Item<'tcx>) {
-        if !matches!(item.kind, ItemKind::Fn { .. } | ItemKind::Mod(..)) {
-            check_suppressions(cx, item.hir_id(), SuppressionScope::Broad);
+        match item.kind {
+            ItemKind::Fn { .. } | ItemKind::Mod(..) => {}
+            ItemKind::Use(..) => {
+                check_suppressions(cx, item.hir_id(), SuppressionScope::BoundaryItem);
+            }
+            _ => check_suppressions(cx, item.hir_id(), SuppressionScope::Broad),
         }
         if item.span.from_expansion() {
             return;

@@ -564,9 +564,9 @@
   async function resumePairedExtensionVault(
     storeId: string,
   ): Promise<
-    | ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
-    | ExtensionPairedVaultIdentityStatusMessageStatus.Locked
-    | ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+    | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+    | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+    | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
   > {
     const discoveringStagedImport =
       vault.loginRequiresExistingVault &&

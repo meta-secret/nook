@@ -429,9 +429,8 @@ mod tests {
     use crate::{
         ApiKeySecret, EncryptedSecretPayload, GenesisImportPayload, IsoTimestamp, KeyEpoch,
         PasswordEntryId, PasswordEnvelope, PasswordEnvelopeVersion, PasswordUnlockEntry,
-        SecretType, SecretValue, Sha256Hex, SigningIdentity, StoreId, StoredRecordPayload,
-        VaultProjection, VaultResult, build_genesis_import_event, generate_vault_keys,
-        genesis_auth_record,
+        SecretType, SecretValue, SigningIdentity, StoreId, StoredRecordPayload, VaultProjection,
+        VaultResult, build_genesis_import_event, generate_vault_keys, genesis_auth_record,
     };
     use ed25519_dalek::SigningKey;
     use std::ptr;
@@ -722,7 +721,7 @@ mod tests {
             &actor_id,
             &epoch,
             GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![EncryptedSecretPayload {
                     id: SecretId::from_vault_record("secret_eventdiag"),
                     secret_type: SecretType::ApiKey,
@@ -776,7 +775,7 @@ mod tests {
 
         assert_eq!(
             EncryptedOperationDiagnostic(&VaultOperation::VaultImported {
-                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: vec![secret],
                 password_entries: vec![PasswordDiagnosticFixture { id: "entry-1" }.entry()],
             })
@@ -826,7 +825,7 @@ mod tests {
             &actor_id,
             &epoch,
             GenesisImportPayload {
-                source_content_hash: Sha256Hex::from_trusted("deadbeef".repeat(8)),
+                source_content_hash: nook_auth2::Sha256Hex::from_trusted("deadbeef".repeat(8)),
                 secrets: Vec::new(),
                 password_entries: Vec::new(),
             },

@@ -11,12 +11,30 @@ import {
   shouldOfferExtensionSetup,
 } from '$lib/extension/install'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
+import type {
+  CompanionIdentityDiscoveryTransportResponse,
+  ExtensionPairedVaultIdentityDiscoveryMessage,
+} from '$web-shared/extension/runtime-messages'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
+import type {
+  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityStatus,
+} from '$app-wasm'
 
 const activeVault = {
   kind: ActiveVaultKind.Open,
   storeId: 'store-1',
 } as const
+
+type SimulatedPairedIdentityStatus =
+  | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+  | typeof ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+  | typeof ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+
+type PairedIdentityDiscoverySimulationMessage =
+  ExtensionPairedVaultIdentityDiscoveryMessage & {
+    payload: CompanionIdentityDiscoveryObservation
+  }
 
 afterEach(() => {
   document.documentElement.removeAttribute('data-nook-extension-runtime-id')
@@ -24,8 +42,8 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-function stubExtensionIdentityStatus(
-  status: ExtensionPairedVaultIdentityStatusMessageStatus,
+function installExtensionIdentityTransportSimulation(
+  status: SimulatedPairedIdentityStatus,
 ): void {
   document.documentElement.setAttribute(
     'data-nook-extension-runtime-id',
@@ -35,24 +53,32 @@ function stubExtensionIdentityStatus(
     runtime: {
       sendMessage: (
         _extensionId: string,
-        message: { payload: { requestId: string; vaultStoreId: string } },
-        callback: (response: unknown) => void,
+        message: PairedIdentityDiscoverySimulationMessage,
+        callback: (
+          response: CompanionIdentityDiscoveryTransportResponse,
+        ) => void,
       ) => {
-        callback({
-          type: 'nook:extension-paired-vault-identity-status',
-          payload: {
-            requestId: message.payload.requestId,
-            vaultStoreId: message.payload.vaultStoreId,
-            status,
-            ...(status ===
-            ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
-              ? {
-                  connectedVaultStoreId: 'store-previous',
-                  connectedVaultName: 'Previous vault',
-                }
-              : {}),
-          },
-        })
+        const request = message.payload.request
+        const responseStatus: CompanionIdentityStatus =
+          status ===
+          ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
+            ? {
+                status,
+                request_id: request.requestId,
+                vault_store_id: request.vaultStoreId,
+                connected_vault_store_id: 'store-previous',
+                connected_vault_name: 'Previous vault',
+              }
+            : {
+                status,
+                request_id: request.requestId,
+                vault_store_id: request.vaultStoreId,
+              }
+        const response: CompanionIdentityDiscoveryTransportResponse = {
+          ok: true,
+          status: responseStatus,
+        }
+        callback(response)
       },
     },
   })
@@ -196,7 +222,7 @@ describe('extension setup status', () => {
   })
 
   test('reports installed_unpaired when the extension is present but not paired', async () => {
-    stubExtensionIdentityStatus(
+    installExtensionIdentityTransportSimulation(
       ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
     )
 
@@ -206,7 +232,7 @@ describe('extension setup status', () => {
   })
 
   test('reports paired when the extension holds a locked grant', async () => {
-    stubExtensionIdentityStatus(
+    installExtensionIdentityTransportSimulation(
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked,
     )
 
@@ -216,7 +242,7 @@ describe('extension setup status', () => {
   })
 
   test('reports the vault identity when the extension is paired elsewhere', async () => {
-    stubExtensionIdentityStatus(
+    installExtensionIdentityTransportSimulation(
       ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
     )
 

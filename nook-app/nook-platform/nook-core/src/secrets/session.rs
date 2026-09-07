@@ -203,7 +203,7 @@ impl<'a> EncryptedSecretSession<'a> {
         .commit();
 
         let mut projected =
-            crate::decrypt_encrypted_secret(&projected_state.secrets, crypto, &new_id)?;
+            crate::VaultSecretSession::new(&projected_state.secrets, crypto).decrypt(&new_id)?;
         let verification = match &projected.data {
             SecretValue::Authenticator(authenticator) => BackupCodePersistenceVerification {
                 persisted: &authenticator.backup_codes,
@@ -288,7 +288,8 @@ mod tests {
                 })?;
         assert!(payload.as_str().contains("BEGIN AGE ENCRYPTED FILE"));
         assert!(!payload.as_str().contains("new-password"));
-        let projected = crate::decrypt_encrypted_secret(&state.secrets, &crypto, &replacement_id)?;
+        let projected =
+            crate::VaultSecretSession::new(&state.secrets, &crypto).decrypt(&replacement_id)?;
         let expected = SecretValue::from_yaml_str(
             SecretType::Login,
             "websiteUrl: https://new.example\nusername: new\npassword: new-password\nnotes: ''",
@@ -361,7 +362,7 @@ mod tests {
         }
         .prepare_verified(&verified)?
         .commit();
-        let projected = crate::decrypt_encrypted_secret(&state.secrets, &crypto, &new_id)?;
+        let projected = crate::VaultSecretSession::new(&state.secrets, &crypto).decrypt(&new_id)?;
         let SecretValue::Authenticator(projected_authenticator) = projected.data else {
             anyhow::bail!("expected projected authenticator")
         };
