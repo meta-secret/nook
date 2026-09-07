@@ -1,11 +1,10 @@
 use nook_companion_core::{
-    CompanionExtensionPairingEndpoint, CompanionPairingAcknowledgementAdmission,
-    CompanionPairingAcknowledgementAdmissionRequest, CompanionPairingApprovalAttempt,
-    CompanionPairingFinalizationEvidence, CompanionPairingFinalizationOutcome,
-    CompanionPairingProviderManifestDigest, CompanionPairingRequest,
-    CompanionPairingRequestObservation, CompanionPairingWebsiteAuthorization,
-    CompanionPairingWebsiteAuthorizationOutcome, CompanionWebsitePairingEndpoint,
-    ConsumedCompanionPairingAuthority,
+    CompanionExtensionPairingEndpoint, CompanionPairingAdmissionEvidence,
+    CompanionPairingApprovalAttempt, CompanionPairingProviderManifestDigest,
+    CompanionPairingRequest, CompanionPairingRequestObservation,
+    CompanionPairingWebsiteAuthorization, CompanionPairingWebsiteAuthorizationOutcome,
+    CompanionWebsitePairingEndpoint, ConsumedCompanionPairingAuthority,
+    PrevalidatedCompanionPairingActivation,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -49,25 +48,28 @@ pub struct NookCompanionPairingApprovalAuthority {
 #[wasm_bindgen]
 impl NookCompanionPairingApprovalAuthority {
     #[allow(clippy::needless_pass_by_value)]
-    pub fn finalize(
+    pub fn prevalidate(
         self,
         attempt: CompanionPairingApprovalAttempt,
-        evidence: CompanionPairingFinalizationEvidence,
-    ) -> CompanionPairingFinalizationOutcome {
-        match self.inner.authorize_approval(attempt) {
-            Ok(authorized) => match authorized.finalize(evidence) {
-                Ok(finalization) => CompanionPairingFinalizationOutcome::Accepted {
-                    finalization: Box::new(finalization),
-                },
-                Err(acknowledgement) => {
-                    CompanionPairingFinalizationOutcome::Rejected { acknowledgement }
-                }
-            },
-            Err(acknowledgement) => {
-                CompanionPairingFinalizationOutcome::Rejected { acknowledgement }
-            }
-        }
+        evidence: CompanionPairingAdmissionEvidence,
+    ) -> Result<NookPrevalidatedCompanionPairingActivation, JsError> {
+        let authorized = self
+            .inner
+            .authorize_approval(attempt)
+            .map_err(|failure| JsError::new(&format!("{failure:?}")))?;
+        Ok(NookPrevalidatedCompanionPairingActivation {
+            inner: authorized
+                .prevalidate(evidence)
+                .map_err(|failure| JsError::new(&format!("{failure:?}")))?,
+        })
     }
+}
+
+/// Opaque proof consumed only by the future activation transaction.
+#[wasm_bindgen]
+pub struct NookPrevalidatedCompanionPairingActivation {
+    #[allow(dead_code)]
+    inner: PrevalidatedCompanionPairingActivation,
 }
 
 #[wasm_bindgen]
@@ -109,21 +111,13 @@ impl NookCompanionPairingWebsiteProtocol {
     }
 }
 
-#[wasm_bindgen]
-#[allow(clippy::needless_pass_by_value)]
-pub fn admit_companion_pairing_acknowledgement(
-    request: CompanionPairingAcknowledgementAdmissionRequest,
-) -> CompanionPairingAcknowledgementAdmission {
-    CompanionPairingAcknowledgementAdmission::admit(request)
-}
-
 #[cfg(all(test, target_arch = "wasm32"))]
 mod tests {
     use super::*;
     use nook_companion_core::{
-        CompanionPairingAcknowledgement, CompanionPairingApproval, CompanionPairingCorrelation,
-        CompanionPairingEpochMilliseconds, CompanionPairingFailure, CompanionPairingInstallation,
-        ExtensionConnectScope, ExtensionPairingVaultType,
+        CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
+        ExtensionConnectScope, ExtensionEventCount, ExtensionPairingVaultType,
+        ExtensionSyncProviderCount, ImportedExtensionEventLog,
     };
 
     fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, wasm_bindgen::JsValue> {
@@ -172,61 +166,28 @@ mod tests {
     }
 
     #[wasm_bindgen_test::wasm_bindgen_test]
-    fn generated_acknowledgement_admission_preserves_semantic_outcomes()
+    fn generated_authority_is_one_use_and_returns_opaque_admission()
     -> Result<(), wasm_bindgen::JsValue> {
-        let approval = approval()?;
-        let correlation = CompanionPairingCorrelation {
-            request_id: "request-1".to_owned(),
-            nonce: "nonce-1".to_owned(),
-        };
-        let accepted = admit_companion_pairing_acknowledgement(
-            CompanionPairingAcknowledgementAdmissionRequest {
-                approval: approval.clone(),
-                acknowledgement: CompanionPairingAcknowledgement::Accepted {
-                    correlation: correlation.clone(),
+        let mut protocol = NookCompanionPairingExtensionProtocol::new(request()?)?;
+        let authority = protocol.take_authority()?;
+        assert!(protocol.take_authority().is_err());
+        let admission = authority.prevalidate(
+            CompanionPairingApprovalAttempt {
+                approval: approval()?,
+                observed_at: epoch("150")?,
+            },
+            CompanionPairingAdmissionEvidence {
+                imported: ImportedExtensionEventLog {
                     vault_store_id: "store-1".to_owned(),
+                    event_count: ExtensionEventCount::from(1),
+                    heads: vec!["head-1".to_owned()],
+                    access_granted: true,
                 },
+                sync_provider_count: ExtensionSyncProviderCount::from(0),
+                observed_at: "2026-09-07T00:00:01Z".to_owned(),
             },
-        );
-        assert!(matches!(
-            accepted,
-            CompanionPairingAcknowledgementAdmission::PairingAccepted { .. }
-        ));
-
-        let rejected = admit_companion_pairing_acknowledgement(
-            CompanionPairingAcknowledgementAdmissionRequest {
-                approval: approval.clone(),
-                acknowledgement: CompanionPairingAcknowledgement::Rejected {
-                    correlation,
-                    failure: CompanionPairingFailure::EffectFailed,
-                },
-            },
-        );
-        assert_eq!(
-            rejected,
-            CompanionPairingAcknowledgementAdmission::PairingRejected {
-                failure: CompanionPairingFailure::EffectFailed,
-            }
-        );
-
-        let mismatched = admit_companion_pairing_acknowledgement(
-            CompanionPairingAcknowledgementAdmissionRequest {
-                approval,
-                acknowledgement: CompanionPairingAcknowledgement::Accepted {
-                    correlation: CompanionPairingCorrelation {
-                        request_id: "request-other".to_owned(),
-                        nonce: "nonce-1".to_owned(),
-                    },
-                    vault_store_id: "store-1".to_owned(),
-                },
-            },
-        );
-        assert_eq!(
-            mismatched,
-            CompanionPairingAcknowledgementAdmission::InvalidAcknowledgement {
-                failure: CompanionPairingFailure::RequestMismatch,
-            }
-        );
+        )?;
+        drop(admission);
         Ok(())
     }
 }

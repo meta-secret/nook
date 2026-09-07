@@ -35,8 +35,6 @@ pub enum CompanionPairingError {
     ProviderRecipientMismatch,
     #[error("companion pairing event log does not grant the installation access")]
     EventLogAccessDenied,
-    #[error("companion pairing effect did not complete")]
-    EffectFailed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -53,7 +51,6 @@ pub enum CompanionPairingFailure {
     ProviderManifestMismatch,
     ProviderRecipientMismatch,
     EventLogAccessDenied,
-    EffectFailed,
 }
 
 impl From<CompanionPairingError> for CompanionPairingFailure {
@@ -69,7 +66,6 @@ impl From<CompanionPairingError> for CompanionPairingFailure {
             CompanionPairingError::ProviderManifestMismatch => Self::ProviderManifestMismatch,
             CompanionPairingError::ProviderRecipientMismatch => Self::ProviderRecipientMismatch,
             CompanionPairingError::EventLogAccessDenied => Self::EventLogAccessDenied,
-            CompanionPairingError::EffectFailed => Self::EffectFailed,
         }
     }
 }
@@ -243,23 +239,6 @@ impl CompanionPairingRequest {
         Ok(())
     }
 
-    fn correlation(&self) -> CompanionPairingCorrelation {
-        CompanionPairingCorrelation {
-            request_id: self.request_id.clone(),
-            nonce: self.nonce.clone(),
-        }
-    }
-
-    fn rejected_acknowledgement(
-        &self,
-        failure: CompanionPairingFailure,
-    ) -> CompanionPairingAcknowledgement {
-        CompanionPairingAcknowledgement::Rejected {
-            correlation: self.correlation(),
-            failure,
-        }
-    }
-
     fn binding_error(&self, actual: &Self) -> Option<CompanionPairingError> {
         if self.request_id != actual.request_id
             || self.nonce != actual.nonce
@@ -377,88 +356,6 @@ pub struct CompanionPairingApprovalAttempt {
     pub observed_at: CompanionPairingEpochMilliseconds,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct CompanionPairingCorrelation {
-    pub request_id: String,
-    pub nonce: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", deny_unknown_fields, rename_all = "kebab-case")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub enum CompanionPairingAcknowledgement {
-    Accepted {
-        correlation: CompanionPairingCorrelation,
-        vault_store_id: String,
-    },
-    Rejected {
-        correlation: CompanionPairingCorrelation,
-        failure: CompanionPairingFailure,
-    },
-}
-
-impl CompanionPairingAcknowledgement {
-    fn validate_for(
-        &self,
-        approval: &CompanionPairingApproval,
-    ) -> Result<(), CompanionPairingError> {
-        let correlation = match self {
-            Self::Accepted {
-                correlation,
-                vault_store_id,
-            } => {
-                if vault_store_id != &approval.vault_store_id {
-                    return Err(CompanionPairingError::VaultMismatch);
-                }
-                correlation
-            }
-            Self::Rejected { correlation, .. } => correlation,
-        };
-        if correlation != &approval.request.correlation() {
-            return Err(CompanionPairingError::RequestMismatch);
-        }
-        Ok(())
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct CompanionPairingAcknowledgementAdmissionRequest {
-    pub approval: CompanionPairingApproval,
-    pub acknowledgement: CompanionPairingAcknowledgement,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
-pub enum CompanionPairingAcknowledgementAdmission {
-    PairingAccepted { vault_store_id: String },
-    PairingRejected { failure: CompanionPairingFailure },
-    InvalidAcknowledgement { failure: CompanionPairingFailure },
-}
-
-impl CompanionPairingAcknowledgementAdmission {
-    #[must_use]
-    pub fn admit(request: CompanionPairingAcknowledgementAdmissionRequest) -> Self {
-        if let Err(error) = request.acknowledgement.validate_for(&request.approval) {
-            return Self::InvalidAcknowledgement {
-                failure: error.into(),
-            };
-        }
-        match request.acknowledgement {
-            CompanionPairingAcknowledgement::Accepted { vault_store_id, .. } => {
-                Self::PairingAccepted { vault_store_id }
-            }
-            CompanionPairingAcknowledgement::Rejected { failure, .. } => {
-                Self::PairingRejected { failure }
-            }
-        }
-    }
-}
-
 #[derive(Debug)]
 enum PairingAuthorityState {
     Pending(Box<CompanionPairingRequest>),
@@ -565,14 +462,10 @@ impl CompanionExtensionPairingEndpoint {
     pub fn authorize_approval(
         &mut self,
         attempt: CompanionPairingApprovalAttempt,
-    ) -> Result<AuthorizedCompanionPairingApproval, CompanionPairingAcknowledgement> {
-        let incoming = &attempt.approval.request;
-        let authority = match self.take_authority() {
-            Ok(authority) => authority,
-            Err(error) => {
-                return Err(incoming.rejected_acknowledgement(error.into()));
-            }
-        };
+    ) -> Result<AuthorizedCompanionPairingApproval, CompanionPairingFailure> {
+        let authority = self
+            .take_authority()
+            .map_err(CompanionPairingFailure::from)?;
         authority.authorize_approval(attempt)
     }
 
@@ -590,13 +483,13 @@ impl ConsumedCompanionPairingAuthority {
     pub fn authorize_approval(
         self,
         attempt: CompanionPairingApprovalAttempt,
-    ) -> Result<AuthorizedCompanionPairingApproval, CompanionPairingAcknowledgement> {
+    ) -> Result<AuthorizedCompanionPairingApproval, CompanionPairingFailure> {
         let expected = self.0;
         if let Err(error) = attempt.approval.validate_at(attempt.observed_at) {
-            return Err(expected.rejected_acknowledgement(error.into()));
+            return Err(error.into());
         }
         if let Some(error) = expected.binding_error(&attempt.approval.request) {
-            return Err(expected.rejected_acknowledgement(error.into()));
+            return Err(error.into());
         }
         Ok(AuthorizedCompanionPairingApproval(attempt.approval))
     }
@@ -605,45 +498,10 @@ impl ConsumedCompanionPairingAuthority {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct CompanionPairingFinalizationEvidence {
+pub struct CompanionPairingAdmissionEvidence {
     pub imported: ImportedExtensionEventLog,
     pub sync_provider_count: ExtensionSyncProviderCount,
     pub observed_at: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct CompanionPairingFinalization {
-    pub pairing_state: ExtensionPairingState,
-    pub acknowledgement: CompanionPairingAcknowledgement,
-}
-
-impl CompanionPairingFinalization {
-    #[must_use]
-    pub fn effect_failed(self) -> CompanionPairingAcknowledgement {
-        match self.acknowledgement {
-            CompanionPairingAcknowledgement::Accepted { correlation, .. }
-            | CompanionPairingAcknowledgement::Rejected { correlation, .. } => {
-                CompanionPairingAcknowledgement::Rejected {
-                    correlation,
-                    failure: CompanionPairingFailure::EffectFailed,
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
-#[serde(tag = "kind", rename_all = "kebab-case")]
-#[tsify(into_wasm_abi)]
-pub enum CompanionPairingFinalizationOutcome {
-    Accepted {
-        finalization: Box<CompanionPairingFinalization>,
-    },
-    Rejected {
-        acknowledgement: CompanionPairingAcknowledgement,
-    },
 }
 
 #[derive(Debug)]
@@ -654,20 +512,15 @@ impl AuthorizedCompanionPairingApproval {
         &self.0
     }
 
-    #[must_use]
-    pub fn reject(self, failure: CompanionPairingFailure) -> CompanionPairingAcknowledgement {
-        self.0.request.rejected_acknowledgement(failure)
-    }
-
-    pub fn finalize(
+    pub fn prevalidate(
         self,
-        evidence: CompanionPairingFinalizationEvidence,
-    ) -> Result<CompanionPairingFinalization, CompanionPairingAcknowledgement> {
+        evidence: CompanionPairingAdmissionEvidence,
+    ) -> Result<PrevalidatedCompanionPairingActivation, CompanionPairingFailure> {
         if evidence.imported.vault_store_id != self.0.vault_store_id {
-            return Err(self.reject(CompanionPairingFailure::VaultMismatch));
+            return Err(CompanionPairingFailure::VaultMismatch);
         }
         if !evidence.imported.access_granted {
-            return Err(self.reject(CompanionPairingFailure::EventLogAccessDenied));
+            return Err(CompanionPairingFailure::EventLogAccessDenied);
         }
         if !self
             .0
@@ -676,7 +529,7 @@ impl AuthorizedCompanionPairingApproval {
             .contains(&ExtensionConnectScope::SyncProviderCredentials)
             && evidence.sync_provider_count.raw() != 0
         {
-            return Err(self.reject(CompanionPairingFailure::ScopeMismatch));
+            return Err(CompanionPairingFailure::ScopeMismatch);
         }
         let grant = ExtensionPairingGrantApproval {
             vault_type: self.0.request.vault_type,
@@ -696,16 +549,18 @@ impl AuthorizedCompanionPairingApproval {
             observed_at: evidence.observed_at,
         }) {
             Ok(state) => state,
-            Err(_) => return Err(self.reject(CompanionPairingFailure::InvalidValue)),
+            Err(_) => return Err(CompanionPairingFailure::InvalidValue),
         };
-        Ok(CompanionPairingFinalization {
-            pairing_state: state,
-            acknowledgement: CompanionPairingAcknowledgement::Accepted {
-                correlation: self.0.request.correlation(),
-                vault_store_id: self.0.vault_store_id,
-            },
+        Ok(PrevalidatedCompanionPairingActivation {
+            _pairing_state: state,
         })
     }
+}
+
+/// Opaque, side-effect-free proof for the separately owned activation transaction.
+#[derive(Debug)]
+pub struct PrevalidatedCompanionPairingActivation {
+    _pairing_state: ExtensionPairingState,
 }
 
 #[cfg(test)]
@@ -779,12 +634,12 @@ mod tests {
             .approve(provider_manifest_digest()?);
         let authorized = extension
             .authorize_approval(CompanionPairingApprovalAttempt {
-                approval: approval.clone(),
+                approval,
                 observed_at: epoch("175")?,
             })
-            .map_err(|acknowledgement| anyhow::anyhow!("{acknowledgement:?}"))?;
-        let finalization = authorized
-            .finalize(CompanionPairingFinalizationEvidence {
+            .map_err(|failure| anyhow::anyhow!("{failure:?}"))?;
+        let _admitted = authorized
+            .prevalidate(CompanionPairingAdmissionEvidence {
                 imported: ImportedExtensionEventLog {
                     vault_store_id: "store-1".to_owned(),
                     event_count: ExtensionEventCount::from(3),
@@ -794,19 +649,7 @@ mod tests {
                 sync_provider_count: ExtensionSyncProviderCount::from(1),
                 observed_at: "2026-09-07T00:00:01Z".to_owned(),
             })
-            .map_err(|acknowledgement| anyhow::anyhow!("{acknowledgement:?}"))?;
-        assert!(matches!(
-            CompanionPairingAcknowledgementAdmission::admit(
-                CompanionPairingAcknowledgementAdmissionRequest {
-                    approval,
-                    acknowledgement: finalization.acknowledgement,
-                }
-            ),
-            CompanionPairingAcknowledgementAdmission::PairingAccepted {
-                vault_store_id
-            } if vault_store_id == "store-1"
-        ));
-        assert_eq!(finalization.pairing_state.ordered_grants().len(), 1);
+            .map_err(|failure| anyhow::anyhow!("{failure:?}"))?;
         Ok(())
     }
 
@@ -871,22 +714,13 @@ mod tests {
             let Err(rejected) = authority.authorize_approval(attempt) else {
                 anyhow::bail!("terminal attempt was accepted");
             };
-            assert!(matches!(
-                rejected,
-                CompanionPairingAcknowledgement::Rejected {
-                    failure: observed,
-                    ..
-                } if observed == failure
-            ));
+            assert_eq!(rejected, failure);
             assert!(matches!(
                 endpoint.authorize_approval(CompanionPairingApprovalAttempt {
                     approval: approval()?,
                     observed_at: epoch("175")?,
                 }),
-                Err(CompanionPairingAcknowledgement::Rejected {
-                    failure: CompanionPairingFailure::AuthorityUnavailable,
-                    ..
-                })
+                Err(CompanionPairingFailure::AuthorityUnavailable)
             ));
         }
         Ok(())
@@ -904,71 +738,36 @@ mod tests {
     }
 
     #[test]
-    fn rejected_finalization_cannot_publish_pairing_state() -> anyhow::Result<()> {
-        let mut endpoint = CompanionExtensionPairingEndpoint::issue(request()?)?;
-        let authorized = endpoint
-            .authorize_approval(CompanionPairingApprovalAttempt {
-                approval: approval()?,
-                observed_at: epoch("175")?,
-            })
-            .map_err(|acknowledgement| anyhow::anyhow!("{acknowledgement:?}"))?;
-        let Err(rejected) = authorized.finalize(CompanionPairingFinalizationEvidence {
-            imported: ImportedExtensionEventLog {
-                vault_store_id: "store-other".to_owned(),
-                event_count: ExtensionEventCount::from(1),
-                heads: Vec::new(),
-                access_granted: true,
-            },
-            sync_provider_count: ExtensionSyncProviderCount::from(0),
-            observed_at: "2026-09-07T00:00:01Z".to_owned(),
-        }) else {
-            anyhow::bail!("mismatched vault was accepted");
-        };
-        assert!(matches!(
-            rejected,
-            CompanionPairingAcknowledgement::Rejected {
-                failure: CompanionPairingFailure::VaultMismatch,
-                ..
-            }
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn acknowledgement_admission_preserves_rejection_and_rejects_mismatch() -> anyhow::Result<()> {
-        let approval = approval()?;
-        let correlation = approval.request.correlation();
-        assert_eq!(
-            CompanionPairingAcknowledgementAdmission::admit(
-                CompanionPairingAcknowledgementAdmissionRequest {
-                    approval: approval.clone(),
-                    acknowledgement: CompanionPairingAcknowledgement::Rejected {
-                        correlation,
-                        failure: CompanionPairingFailure::EffectFailed,
-                    },
-                },
+    fn prevalidation_rejects_mismatched_or_denied_event_evidence() -> anyhow::Result<()> {
+        for (store_id, access_granted, expected) in [
+            ("store-other", true, CompanionPairingFailure::VaultMismatch),
+            (
+                "store-1",
+                false,
+                CompanionPairingFailure::EventLogAccessDenied,
             ),
-            CompanionPairingAcknowledgementAdmission::PairingRejected {
-                failure: CompanionPairingFailure::EffectFailed,
-            }
-        );
-        assert_eq!(
-            CompanionPairingAcknowledgementAdmission::admit(
-                CompanionPairingAcknowledgementAdmissionRequest {
-                    approval,
-                    acknowledgement: CompanionPairingAcknowledgement::Accepted {
-                        correlation: CompanionPairingCorrelation {
-                            request_id: "request-other".to_owned(),
-                            nonce: "nonce-1".to_owned(),
-                        },
-                        vault_store_id: "store-1".to_owned(),
-                    },
+        ] {
+            let mut endpoint = CompanionExtensionPairingEndpoint::issue(request()?)?;
+            let authorized = endpoint
+                .authorize_approval(CompanionPairingApprovalAttempt {
+                    approval: approval()?,
+                    observed_at: epoch("175")?,
+                })
+                .map_err(|failure| anyhow::anyhow!("{failure:?}"))?;
+            let Err(rejected) = authorized.prevalidate(CompanionPairingAdmissionEvidence {
+                imported: ImportedExtensionEventLog {
+                    vault_store_id: store_id.to_owned(),
+                    event_count: ExtensionEventCount::from(1),
+                    heads: vec!["head-1".to_owned()],
+                    access_granted,
                 },
-            ),
-            CompanionPairingAcknowledgementAdmission::InvalidAcknowledgement {
-                failure: CompanionPairingFailure::RequestMismatch,
-            }
-        );
+                sync_provider_count: ExtensionSyncProviderCount::from(0),
+                observed_at: "2026-09-07T00:00:01Z".to_owned(),
+            }) else {
+                anyhow::bail!("invalid event evidence was admitted");
+            };
+            assert_eq!(rejected, expected);
+        }
         Ok(())
     }
 }
