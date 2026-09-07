@@ -5,10 +5,9 @@
 )]
 
 use super::{
-    DEVICE_ACCESS_PROFILE_VERSION, DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS,
-    DeviceAccessIdentityState, DeviceAccessProfile, DeviceAccessProfileDecodeResult,
-    DeviceAccessProfileVersionEnvelope, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
-    PasskeyAccessProfile,
+    DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS, DeviceAccessIdentityState, DeviceAccessProfile,
+    DeviceAccessProfileDecodeResult, DeviceAccessProfileVersionEnvelope,
+    DeviceAccessProtectionKind, DeviceAccessProviderLabelError, PasskeyAccessProfile,
 };
 use crate::{AppId, IdentityDirectory, IdentityRecord, StoreId, WrappedDeviceIdentity};
 use sha2::{Digest, Sha256};
@@ -146,7 +145,7 @@ impl DeviceAccessIdentityState {
 }
 
 impl PasskeyAccessProfile {
-    /// Stable, non-secret correlation id for a Nook-managed WebAuthn credential.
+    /// Stable, non-secret correlation id for a Nook-managed `WebAuthn` credential.
     #[must_use]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -159,7 +158,7 @@ impl PasskeyAccessProfile {
         Self::short_identifier("passkey", credential_id)
     }
 
-    /// Stable, non-secret correlation id for the RP-scoped WebAuthn user handle.
+    /// Stable, non-secret correlation id for the RP-scoped `WebAuthn` user handle.
     #[must_use]
     #[cfg_attr(
         dylint_lib = "nook_domain_api",
@@ -172,7 +171,6 @@ impl PasskeyAccessProfile {
         Self::short_identifier("user", user_handle)
     }
 
-    #[must_use]
     pub fn normalize_provider_label(value: &str) -> Result<String, DeviceAccessProviderLabelError> {
         let value = value.trim();
         if value.chars().count() > DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS {
@@ -184,7 +182,6 @@ impl PasskeyAccessProfile {
         Ok(value.to_owned())
     }
 
-    #[must_use]
     pub fn normalize_name(value: &str) -> Result<String, DeviceAccessProviderLabelError> {
         Self::normalize_provider_label(value)
     }
