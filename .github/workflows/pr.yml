@@ -429,8 +429,8 @@ jobs:
           git fetch "https://github.com/${{ github.repository }}.git" "$BASE_SHA" --depth=1
           bash .github/scripts/ui-demo-contract.sh "$BASE_SHA"
 
-      # Authentication observation and actuation changes require the focused
-      # real-extension regression that exercises the polluted Namecheap shell.
+      # Authentication observation and scenario changes require the focused
+      # real-extension regression that exercises the provider fixtures.
       - name: Detect authentication-sensitive browser changes
         id: auth-sensitive-e2e-contract
         env:
@@ -443,6 +443,7 @@ jobs:
               nook-app/nook-web/nook-web-shared/src/extension/password-form* |\
               nook-app/nook-web/nook-web-extension/src/content/autofill.ts |\
               nook-app/nook-web/nook-web-extension/src/content/autofill/* |\
+              nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts |\
               nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte |\
               nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts)
                 required=true

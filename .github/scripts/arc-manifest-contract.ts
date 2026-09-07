@@ -677,6 +677,7 @@ prWorkflow.requireAll([
   "nook-app/nook-web/nook-web-shared/src/extension/password-form*",
   "nook-app/nook-web/nook-web-extension/src/content/autofill.ts",
   "nook-app/nook-web/nook-web-extension/src/content/autofill/*",
+  "nook-app/nook-web/nook-web-extension/e2e/mock-auth-provider-scenarios.ts",
   "nook-app/nook-web/nook-web-extension/e2e/mock-auth/src/pages/DetectionHiddenHeaderLogin.svelte",
   "nook-app/nook-web/nook-web-extension/e2e/mock-auth-pilot-coverage.spec.ts",
   "auth-sensitive-extension-e2e:",
