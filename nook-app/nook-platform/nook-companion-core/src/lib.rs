@@ -121,15 +121,14 @@ pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
 };
 pub use companion_protocol::{
-    AuthorizedCompanionIdentityHandoff, CompanionDeviceIdentity, CompanionEpochMilliseconds,
-    CompanionEventLogRecord, CompanionEventLogUpdate, CompanionExtensionPresence,
-    CompanionExtensionProtocol, CompanionIdentityDiscoveryObservation,
-    CompanionIdentityDiscoveryRequest, CompanionIdentityHandoffContext,
-    CompanionIdentityHandoffFinishRequest, CompanionIdentityHandoffRequest,
-    CompanionIdentityHandoffResponse, CompanionIdentityStatus, CompanionIdentityUnlockRequest,
-    CompanionImportResult, CompanionPairingApproval, CompanionProtocolError,
-    CompanionStorageProvider, CompanionStorageProviderType, CompanionUnlockedIdentity,
-    CompanionWebsiteDiscovery, CompanionWebsiteHandoffPreparation, CompanionWebsiteProtocol,
+    AuthorizedCompanionIdentityHandoff, CompanionEpochMilliseconds, CompanionExtensionPresence,
+    CompanionExtensionProtocol, CompanionHandoffResponseAdmission,
+    CompanionIdentityDiscoveryObservation, CompanionIdentityDiscoveryRequest,
+    CompanionIdentityHandoffContext, CompanionIdentityHandoffRequest,
+    CompanionIdentityHandoffResponse, CompanionIdentityHandoffSealer, CompanionIdentityStatus,
+    CompanionIdentityStatusAdmission, CompanionIdentityUnlockRequest, CompanionInstallationAppKey,
+    CompanionProtocolError, CompanionProtocolFailure, CompanionUnlockedAppKey,
+    CompanionWebsiteHandoffBegin,
 };
 pub use domain_numbers::{
     AuthenticationFieldCount, AuthenticationOutcomeElapsedMilliseconds,

@@ -238,11 +238,8 @@ impl NookExtensionIdentityHandoffContext {
     pub(in crate::manager) fn from_companion(
         context: CompanionIdentityHandoffContext,
     ) -> Result<Self, JsError> {
-        context
-            .validate()
-            .map_err(|error| JsError::new(&error.to_string()))?;
         match context {
-            CompanionIdentityHandoffContext::VaultCreation => Ok(Self::vault_creation()),
+            CompanionIdentityHandoffContext::VaultCreation { .. } => Ok(Self::vault_creation()),
             CompanionIdentityHandoffContext::PairedVault { vault_store_id } => {
                 Self::paired_vault(&vault_store_id)
             }

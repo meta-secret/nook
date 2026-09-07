@@ -1,106 +1,196 @@
-//! Typed companion-protocol bridge over the real vault manager.
-
 use super::{NookExtensionIdentityHandoffContext, NookVaultManager};
-#[cfg(test)]
-use nook_companion_core::AuthorizedCompanionIdentityHandoff;
 use nook_companion_core::{
-    CompanionIdentityHandoffFinishRequest, CompanionIdentityHandoffRequest,
-    CompanionIdentityHandoffResponse, CompanionIdentityStatus,
+    CompanionExtensionPresence, CompanionExtensionProtocol, CompanionIdentityHandoffContext,
+    CompanionIdentityHandoffRequest, CompanionIdentityHandoffResponse,
+    CompanionIdentityHandoffSealer, CompanionProtocolError, CompanionWebsiteHandoffBegin,
 };
-use nook_core::{DeviceId, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity};
+use nook_core::{
+    DeviceId, DeviceIdentity, DevicePublicKey, DeviceSigningPublicKey, SigningIdentity,
+    VaultApplication,
+};
+use serde::{Deserialize, Serialize};
+use std::mem;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+use zeroize::{Zeroize, Zeroizing};
 
-impl NookVaultManager {
-    fn seal_loaded_companion_identity(
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+struct PendingCompanionWebsiteHandoff {
+    request: CompanionIdentityHandoffRequest,
+    context: CompanionIdentityHandoffContext,
+    recipient_secret: String,
+}
+
+impl PendingCompanionWebsiteHandoff {
+    fn encode(&self) -> Result<String, JsError> {
+        serde_json::to_string(self).map_err(|error| JsError::new(&error.to_string()))
+    }
+
+    fn decode(serialized: &str) -> Result<Self, JsError> {
+        serde_json::from_str(serialized).map_err(|error| JsError::new(&error.to_string()))
+    }
+
+    fn take_recipient_secret(&mut self) -> String {
+        mem::take(&mut self.recipient_secret)
+    }
+}
+
+impl Drop for PendingCompanionWebsiteHandoff {
+    fn drop(&mut self) {
+        self.recipient_secret.zeroize();
+    }
+}
+
+#[wasm_bindgen]
+pub struct NookCompanionExtensionEndpoint {
+    protocol: CompanionExtensionProtocol,
+}
+
+impl NookCompanionExtensionEndpoint {
+    fn authorize_and_seal_loaded(
         &mut self,
+        operation: CompanionExtensionSealOperation<'_>,
+    ) -> Result<CompanionIdentityHandoffResponse, JsError> {
+        let authorized = self
+            .protocol
+            .authorize_handoff(operation.request)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        authorized.seal(operation.manager)
+    }
+}
+
+struct CompanionExtensionSealOperation<'a> {
+    manager: &'a mut NookVaultManager,
+    request: CompanionIdentityHandoffRequest,
+}
+
+#[wasm_bindgen]
+impl NookCompanionExtensionEndpoint {
+    #[wasm_bindgen(constructor)]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn new(presence: CompanionExtensionPresence) -> Result<Self, JsError> {
+        Ok(Self {
+            protocol: CompanionExtensionProtocol::new(presence)
+                .map_err(|error| JsError::new(&error.to_string()))?,
+        })
+    }
+
+    #[allow(clippy::needless_pass_by_value)]
+    pub async fn authorize_and_seal(
+        &mut self,
+        manager: &mut NookVaultManager,
         request: CompanionIdentityHandoffRequest,
     ) -> Result<CompanionIdentityHandoffResponse, JsError> {
+        manager.ensure_signing_identity().await?;
+        self.authorize_and_seal_loaded(CompanionExtensionSealOperation { manager, request })
+    }
+}
+
+impl CompanionIdentityHandoffSealer for NookVaultManager {
+    type Error = JsError;
+
+    fn seal_companion_handoff(
+        &mut self,
+        request: &CompanionIdentityHandoffRequest,
+    ) -> Result<String, Self::Error> {
         request
             .validate()
             .map_err(|error| JsError::new(&error.to_string()))?;
-        let identity = self.ensure_device_identity()?;
-        let signing = SigningIdentity::from_seed_hex_stored(&self.event_log.signing_seed)?;
-        let expected = &request.expected_identity;
-        if identity.device_id() != &DeviceId::parse(&expected.device_id)?
-            || identity.public_key() != DevicePublicKey::parse(&expected.device_public_key)?
-            || signing.public_key()
-                != DeviceSigningPublicKey::parse(&expected.device_signing_public_key)?
+        if self.application != VaultApplication::Extension
+            || self.vault.store_id != request.vault_store_id
         {
             return Err(JsError::new(
-                "Companion handoff request does not match the unlocked device.",
+                "Companion handoff request does not match the active extension vault.",
+            ));
+        }
+        let identity = self.ensure_device_identity()?;
+        let signing = SigningIdentity::from_seed_hex_stored(&self.event_log.signing_seed)?;
+        let expected = &request.expected_app_key;
+        if identity.device_id() != &DeviceId::parse(&expected.app_id)?
+            || identity.public_key() != DevicePublicKey::parse(&expected.encryption_public_key)?
+            || signing.public_key() != DeviceSigningPublicKey::parse(&expected.signing_public_key)?
+        {
+            return Err(JsError::new(
+                "Companion handoff request does not match the unlocked installation app key.",
             ));
         }
         let recipient = DevicePublicKey::parse(&request.recipient_public_key)?;
-        let envelope = nook_core::ExtensionIdentityHandoffSeal {
+        Ok(nook_core::ExtensionIdentityHandoffSeal {
             identity: &identity,
             signing_seed: &self.event_log.signing_seed,
             recipient_public_key: &recipient,
             nonce: &request.nonce,
         }
-        .seal()?;
-        Ok(CompanionIdentityHandoffResponse {
-            request,
-            encrypted_envelope: envelope.into_inner(),
-        })
+        .seal()?
+        .into_inner())
     }
+}
 
-    #[cfg(test)]
-    fn seal_authorized_companion_identity_handoff(
+impl NookVaultManager {
+    fn consume_companion_website_handoff(
         &mut self,
-        authorized: AuthorizedCompanionIdentityHandoff,
-    ) -> Result<CompanionIdentityHandoffResponse, JsError> {
-        self.seal_loaded_companion_identity(authorized.into_request())
+        response: &CompanionIdentityHandoffResponse,
+    ) -> Result<PendingCompanionWebsiteHandoff, JsError> {
+        let serialized = Zeroizing::new(mem::take(&mut self.device.extension_handoff_private_key));
+        if serialized.is_empty() {
+            return Err(JsError::new("Companion app-key handoff is not pending."));
+        }
+        let pending = PendingCompanionWebsiteHandoff::decode(&serialized)?;
+        response
+            .validate()
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        if pending.request != response.request {
+            return Err(JsError::new(
+                &CompanionProtocolError::RequestMismatch.to_string(),
+            ));
+        }
+        pending
+            .context
+            .validate_for_store(&pending.request.vault_store_id)
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        Ok(pending)
     }
 }
 
 #[wasm_bindgen]
 impl NookVaultManager {
-    /// Start a typed website handoff while the recipient secret stays in Rust memory.
     #[allow(clippy::needless_pass_by_value)]
     pub fn begin_companion_identity_handoff(
         &mut self,
-        status: CompanionIdentityStatus,
+        begin: CompanionWebsiteHandoffBegin,
     ) -> Result<CompanionIdentityHandoffRequest, JsError> {
-        status
+        self.device.extension_handoff_private_key.zeroize();
+        self.device.extension_handoff_private_key.clear();
+        begin
             .validate()
             .map_err(|error| JsError::new(&error.to_string()))?;
-        status
-            .unlocked_identity()
-            .map_err(|error| JsError::new(&error.to_string()))?;
-        let recipient = self.begin_extension_identity_handoff()?;
-        status
-            .request_handoff(recipient)
-            .map_err(|error| JsError::new(&error.to_string()))
+        let recipient = DeviceIdentity::generate()?;
+        let context = begin.context.clone();
+        let request = begin.prepare(recipient.public_key().into_inner())?;
+        let pending = PendingCompanionWebsiteHandoff {
+            request: request.clone(),
+            context,
+            recipient_secret: recipient.secret_string().into_inner(),
+        };
+        self.device.extension_handoff_private_key = pending.encode()?;
+        Ok(request)
     }
 
-    /// Seal only after the typed request is bound to the live unlocked identity.
-    #[allow(clippy::needless_pass_by_value)]
-    pub async fn seal_companion_identity_handoff(
-        &mut self,
-        request: CompanionIdentityHandoffRequest,
-    ) -> Result<CompanionIdentityHandoffResponse, JsError> {
-        self.ensure_signing_identity().await?;
-        self.seal_loaded_companion_identity(request)
-    }
-
-    /// Open a typed response and retain the existing staged/commit/rollback policy.
     #[allow(clippy::needless_pass_by_value)]
     pub async fn finish_companion_identity_handoff(
         &mut self,
-        finish: CompanionIdentityHandoffFinishRequest,
+        response: CompanionIdentityHandoffResponse,
     ) -> Result<(), JsError> {
-        finish
-            .validate()
-            .map_err(|error| JsError::new(&error.to_string()))?;
-        let CompanionIdentityHandoffFinishRequest { response, context } = finish;
-        let request = response.request;
-        let context = NookExtensionIdentityHandoffContext::from_companion(context)?;
+        let mut pending = self.consume_companion_website_handoff(&response)?;
+        let context = NookExtensionIdentityHandoffContext::from_companion(pending.context.clone())?;
+        self.device.extension_handoff_private_key = pending.take_recipient_secret();
+        let expected = &pending.request.expected_app_key;
         self.finish_extension_identity_handoff(
             &response.encrypted_envelope,
-            &request.nonce,
-            &request.expected_identity.device_id,
-            &request.expected_identity.device_public_key,
-            &request.expected_identity.device_signing_public_key,
+            &pending.request.nonce,
+            &expected.app_id,
+            &expected.encryption_public_key,
+            &expected.signing_public_key,
             &context,
         )
         .await
@@ -111,122 +201,121 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use nook_companion_core::{
-        CompanionDeviceIdentity, CompanionExtensionPresence, CompanionExtensionProtocol,
-        CompanionProtocolError, CompanionUnlockedIdentity, ExtensionConnectScope,
-        ExtensionPairingVaultType,
+        CompanionIdentityHandoffContext, CompanionIdentityStatus, CompanionInstallationAppKey,
+        CompanionUnlockedAppKey, ExtensionConnectScope, ExtensionPairingVaultType,
     };
-    use nook_core::{
-        AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceIdentitySecret, DevicePublicKey,
-        DeviceSigningPublicKey, ExtensionIdentityHandoffOpen, SigningIdentity,
-    };
-    use zeroize::Zeroizing;
 
     struct DirectHandoffScenario {
         website: NookVaultManager,
         extension: NookVaultManager,
-        protocol: CompanionExtensionProtocol,
-        unlocked: CompanionUnlockedIdentity,
+        endpoint: NookCompanionExtensionEndpoint,
+        status: CompanionIdentityStatus,
     }
 
     impl DirectHandoffScenario {
         fn new() -> Result<Self, JsError> {
             let identity = DeviceIdentity::generate()?;
             let (signing, signing_seed) = SigningIdentity::generate()?;
-            let descriptor = CompanionDeviceIdentity {
-                device_id: identity.device_id().as_str().to_owned(),
-                device_public_key: identity.public_key().as_str().to_owned(),
-                device_signing_public_key: signing.public_key().as_str().to_owned(),
-                device_label: "Nook Extension".to_owned(),
-            };
-            let unlocked = CompanionUnlockedIdentity {
+            let app_key = CompanionUnlockedAppKey {
                 extension_runtime_id: "runtime-1".to_owned(),
-                identity: descriptor,
+                app_key: CompanionInstallationAppKey {
+                    app_id: identity.device_id().as_str().to_owned(),
+                    encryption_public_key: identity.public_key().as_str().to_owned(),
+                    signing_public_key: signing.public_key().as_str().to_owned(),
+                    installation_label: "Nook Extension".to_owned(),
+                },
                 nonce: "nonce-1".to_owned(),
                 scopes: vec![ExtensionConnectScope::VaultAccess],
             };
             let mut extension = NookVaultManager::new();
+            extension.application = VaultApplication::Extension;
+            extension.vault.store_id = "store-1".to_owned();
             extension.device.id = identity.device_id().as_str().to_owned();
             extension.device.identity_private_key = identity.secret_string().into_inner();
             extension.event_log.signing_seed = signing_seed.into_inner();
             Ok(Self {
                 website: NookVaultManager::new(),
                 extension,
-                protocol: CompanionExtensionProtocol::new(CompanionExtensionPresence::Unlocked {
-                    vault_type: ExtensionPairingVaultType::Simple,
+                endpoint: NookCompanionExtensionEndpoint::new(
+                    CompanionExtensionPresence::Unlocked {
+                        vault_type: ExtensionPairingVaultType::Simple,
+                        vault_store_id: "store-1".to_owned(),
+                        vault_name: "Personal".to_owned(),
+                        app_key: app_key.clone(),
+                    },
+                )?,
+                status: CompanionIdentityStatus::Unlocked {
+                    request_id: "request-1".to_owned(),
                     vault_store_id: "store-1".to_owned(),
-                    vault_name: "Personal".to_owned(),
-                    identity: unlocked.clone(),
-                })
-                .map_err(|error| JsError::new(&error.to_string()))?,
-                unlocked,
+                    app_key,
+                },
             })
         }
 
-        fn status(&self) -> CompanionIdentityStatus {
-            CompanionIdentityStatus::Unlocked {
-                request_id: "request-1".to_owned(),
-                vault_store_id: "store-1".to_owned(),
-                unlocked: self.unlocked.clone(),
-            }
+        fn begin(&mut self) -> Result<CompanionIdentityHandoffRequest, JsError> {
+            self.website
+                .begin_companion_identity_handoff(CompanionWebsiteHandoffBegin {
+                    status: self.status.clone(),
+                    context: CompanionIdentityHandoffContext::PairedVault {
+                        vault_store_id: "store-1".to_owned(),
+                    },
+                })
         }
     }
 
     #[test]
-    fn direct_real_managers_seal_only_a_protocol_authorized_handoff() -> Result<(), JsError> {
+    fn production_endpoint_directly_authorizes_and_seals_real_managers() -> Result<(), JsError> {
         let mut scenario = DirectHandoffScenario::new()?;
-        let status = scenario.status();
-        let request = scenario.website.begin_companion_identity_handoff(status)?;
-        let authorized = scenario
-            .protocol
-            .authorize_handoff(request)
-            .map_err(|error| JsError::new(&error.to_string()))?;
-        let response = scenario
-            .extension
-            .seal_authorized_companion_identity_handoff(authorized)?;
-        assert!(!response.encrypted_envelope.is_empty());
-        let recipient = DeviceIdentity::from_secret_str(&DeviceIdentitySecret::parse(
-            &scenario.website.device.extension_handoff_private_key,
-        )?)?;
-        let envelope = AgeArmoredCiphertext::parse(&response.encrypted_envelope)?;
-        let expected = &response.request.expected_identity;
-        let expected_device_id = DeviceId::parse(&expected.device_id)?;
-        let expected_public_key = DevicePublicKey::parse(&expected.device_public_key)?;
-        let expected_signing_key =
-            DeviceSigningPublicKey::parse(&expected.device_signing_public_key)?;
-        let material = ExtensionIdentityHandoffOpen {
-            recipient_identity: &recipient,
-            envelope: &envelope,
-            expected_nonce: &response.request.nonce,
-            expected_device_id: &expected_device_id,
-            expected_device_public_key: &expected_public_key,
-            expected_device_signing_public_key: &expected_signing_key,
-        }
-        .open()?;
-        let (adopted, signing_seed) = material.into_parts();
-        let signing_seed = Zeroizing::new(signing_seed);
-        assert_eq!(adopted.device_id(), &expected_device_id);
-        assert_eq!(
-            SigningIdentity::from_seed_hex_stored(&signing_seed)?.public_key(),
-            expected_signing_key
-        );
-        assert!(matches!(
+        let request = scenario.begin()?;
+        let replay = request.clone();
+        let response =
             scenario
-                .protocol
-                .authorize_handoff(response.request.clone()),
-            Err(CompanionProtocolError::NonceUnavailable)
-        ));
-        Ok(())
-    }
+                .endpoint
+                .authorize_and_seal_loaded(CompanionExtensionSealOperation {
+                    manager: &mut scenario.extension,
+                    request,
+                })?;
+        assert!(!response.encrypted_envelope.is_empty());
+        assert!(
+            scenario
+                .endpoint
+                .authorize_and_seal_loaded(CompanionExtensionSealOperation {
+                    manager: &mut scenario.extension,
+                    request: replay,
+                })
+                .is_err()
+        );
 
-    #[test]
-    fn unavailable_identity_does_not_allocate_a_handoff_secret() {
-        let mut website = NookVaultManager::new();
-        let status = CompanionIdentityStatus::Locked {
-            request_id: "request-1".to_owned(),
-            vault_store_id: "store-1".to_owned(),
+        let pending = scenario
+            .website
+            .consume_companion_website_handoff(&response)?;
+        assert!(
+            scenario
+                .website
+                .device
+                .extension_handoff_private_key
+                .is_empty()
+        );
+        assert!(!pending.recipient_secret.is_empty());
+        let mut forged = scenario.begin()?;
+        forged.request_id = "forged-request".to_owned();
+        let forged_response = CompanionIdentityHandoffResponse {
+            request: forged,
+            encrypted_envelope: "not-used".to_owned(),
         };
-
-        assert!(website.begin_companion_identity_handoff(status).is_err());
-        assert!(website.device.extension_handoff_private_key.is_empty());
+        assert!(
+            scenario
+                .website
+                .consume_companion_website_handoff(&forged_response)
+                .is_err()
+        );
+        assert!(
+            scenario
+                .website
+                .device
+                .extension_handoff_private_key
+                .is_empty()
+        );
+        Ok(())
     }
 }
