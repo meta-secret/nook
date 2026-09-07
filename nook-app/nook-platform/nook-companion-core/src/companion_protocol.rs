@@ -279,17 +279,27 @@ impl CompanionIdentityHandoffContext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct CompanionWebsiteHandoffBegin {
+    pub discovery: CompanionIdentityDiscoveryObservation,
     pub status: CompanionIdentityStatus,
     pub context: CompanionIdentityHandoffContext,
 }
 
 impl CompanionWebsiteHandoffBegin {
     pub fn validate(&self) -> Result<(), CompanionProtocolError> {
+        self.discovery
+            .request
+            .validate(self.discovery.observed_at)?;
         self.status.validate()?;
+        let correlation = self.status.correlation();
+        if correlation.request_id != self.discovery.request.request_id.as_str()
+            || correlation.vault_store_id != self.discovery.request.vault_store_id.as_str()
+        {
+            return Err(CompanionProtocolError::RequestMismatch);
+        }
         let CompanionIdentityStatus::Unlocked { vault_store_id, .. } = &self.status else {
             return Err(CompanionProtocolError::AppKeyUnavailable);
         };
@@ -637,14 +647,25 @@ mod tests {
             })
         }
 
-        fn request(&self) -> anyhow::Result<CompanionIdentityHandoffRequest> {
-            Ok(CompanionWebsiteHandoffBegin {
+        fn begin(&self) -> CompanionWebsiteHandoffBegin {
+            CompanionWebsiteHandoffBegin {
+                discovery: CompanionIdentityDiscoveryObservation {
+                    request: CompanionIdentityDiscoveryRequest {
+                        request_id: "request-1".to_owned(),
+                        vault_store_id: "store-1".to_owned(),
+                        expires_at: 200_u32.into(),
+                    },
+                    observed_at: 100_u32.into(),
+                },
                 status: self.status.clone(),
                 context: CompanionIdentityHandoffContext::PairedVault {
                     vault_store_id: "store-1".to_owned(),
                 },
             }
-            .prepare("age1recipient".to_owned())?)
+        }
+
+        fn request(&self) -> anyhow::Result<CompanionIdentityHandoffRequest> {
+            Ok(self.begin().prepare("age1recipient".to_owned())?)
         }
     }
 
@@ -664,10 +685,11 @@ mod tests {
     fn context_and_discovery_correlation_fail_closed() -> anyhow::Result<()> {
         let scenario = Scenario::new()?;
         let mismatched = CompanionWebsiteHandoffBegin {
-            status: scenario.status,
+            status: scenario.status.clone(),
             context: CompanionIdentityHandoffContext::PairedVault {
                 vault_store_id: "store-other".to_owned(),
             },
+            ..scenario.begin()
         };
         assert!(matches!(
             mismatched.prepare("age1recipient".to_owned()),
@@ -684,6 +706,42 @@ mod tests {
                     },
                     observed_at: 100_u32.into(),
                 }),
+            Err(CompanionProtocolError::DiscoveryExpired)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn website_rejects_mismatched_discovery_request_id() -> anyhow::Result<()> {
+        let scenario = Scenario::new()?;
+        let mut begin = scenario.begin();
+        begin.discovery.request.request_id = "request-other".to_owned();
+        assert!(matches!(
+            begin.validate(),
+            Err(CompanionProtocolError::RequestMismatch)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn website_rejects_mismatched_discovery_vault_store() -> anyhow::Result<()> {
+        let scenario = Scenario::new()?;
+        let mut begin = scenario.begin();
+        begin.discovery.request.vault_store_id = "store-other".to_owned();
+        assert!(matches!(
+            begin.validate(),
+            Err(CompanionProtocolError::RequestMismatch)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn website_rejects_a_response_observed_after_discovery_expiry() -> anyhow::Result<()> {
+        let scenario = Scenario::new()?;
+        let mut begin = scenario.begin();
+        begin.discovery.observed_at = 200_u32.into();
+        assert!(matches!(
+            begin.validate(),
             Err(CompanionProtocolError::DiscoveryExpired)
         ));
         Ok(())
