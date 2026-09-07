@@ -13,7 +13,7 @@ See [issues](../../../gizmo/workflows/issues.md),
 ## Workflow map
 
 - **[`remote.yml`](../../../../.github/workflows/remote.yml)**
-  - Trigger: Manual allowlisted task dispatch
+  - Trigger: Manual named-task dispatch
   - Purpose: Focused command batch; no merge authorization
   - GitHub PAT: No
 - **[`pr.yml`](../../../../.github/workflows/pr.yml)**
@@ -1060,7 +1060,7 @@ authenticator-domain to 90 percent.
 - Explicit local build tasks may upload source-free Rust/WASM dependency stages
   to unique candidate tags. The shared formatter never reads or writes those
   caches.
-- The Main-defined allowlisted Remote workflow completely downloads each
+- The Main-defined Remote workflow completely downloads each
   candidate.
 - It uploads and downloads a hosted-normalized tag before atomically assigning
   the stable content-fingerprint tag in the same OCI repository.
