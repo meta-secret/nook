@@ -43,10 +43,27 @@ tasks:
         set -euo pipefail
         repo_root="$(git rev-parse --show-toplevel)"
         platform="$repo_root/infra/k0s/manifests/argo-events/platform.yaml"
+        storage="$repo_root/infra/k0s/manifests/argo-events/storage.yaml"
         ingress="$repo_root/infra/k0s/manifests/webhook-ingress/github.yaml"
         traefik="$repo_root/infra/traefik-dynamic.yaml"
         grep -F 'version: 2.10.29' "$platform" >/dev/null
         grep -F 'replicas: 3' "$platform" >/dev/null
+        grep -F 'maxAge: 24h' "$platform" >/dev/null
+        grep -F 'storageClassName: argo-events-jetstream-local-retain' "$platform" >/dev/null
+        grep -F 'accessMode: ReadWriteOnce' "$platform" >/dev/null
+        grep -F 'volumeSize: 1Gi' "$platform" >/dev/null
+        grep -F 'provisioner: kubernetes.io/no-provisioner' "$storage" >/dev/null
+        grep -F 'volumeBindingMode: WaitForFirstConsumer' "$storage" >/dev/null
+        grep -F 'reclaimPolicy: Retain' "$storage" >/dev/null
+        test "$(grep -c '^kind: PersistentVolume$' "$storage")" -eq 3
+        test "$(grep -c '^  persistentVolumeReclaimPolicy: Retain$' "$storage")" -eq 3
+        for ordinal in 0 1 2; do
+          grep -F "name: argo-events-jetstream-default-$ordinal" "$storage" >/dev/null
+          grep -F "name: eventbus-default-js-vol-eventbus-default-js-$ordinal" "$storage" >/dev/null
+        done
+        for node in bynull-servo nook-rise-s-1 ovh-us; do
+          grep -F "values: [\"$node\"]" "$storage" >/dev/null
+        done
         grep -F 'kind: EventSource' "$ingress" >/dev/null
         grep -F 'replicas: 2' "$ingress" >/dev/null
         grep -F 'endpoint: /webhooks/github' "$ingress" >/dev/null
@@ -58,7 +75,7 @@ tasks:
         grep -F -- '- ping' "$ingress" >/dev/null
         test "$(grep -c '^kind: EventSource$' "$ingress")" -eq 1
         ! grep -Eq '^kind: (Sensor|Workflow)$|websocket|hostPort:|type: (NodePort|LoadBalancer)' \
-          "$platform" "$ingress"
+          "$platform" "$storage" "$ingress"
         grep -F 'Host(`{{.NOOK_WEBHOOK_INGRESS_HOST}}`) && Path(`/webhooks/github`) && Method(`POST`)' \
           "$traefik" >/dev/null
         grep -F 'url: http://{{.NOOK_WEBHOOK_INGRESS_CLUSTER_IP}}:12000' \
@@ -100,14 +117,101 @@ tasks:
           crd/eventbus.argoproj.io \
           crd/eventsources.argoproj.io \
           crd/sensors.argoproj.io --timeout=2m
+        prepare_storage_node() {
+          ordinal="$1"
+          node="$2"
+          pod="argo-events-jetstream-storage-prep-$ordinal"
+          kubectl delete pod "$pod" --namespace argo-events \
+            --ignore-not-found --wait >/dev/null
+          cat <<YAML | kubectl apply -f - >/dev/null
+        apiVersion: v1
+        kind: Pod
+        metadata:
+          name: $pod
+          namespace: argo-events
+        spec:
+          automountServiceAccountToken: false
+          nodeName: $node
+          restartPolicy: Never
+          securityContext:
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: prepare
+              image: registry.dev.nokey.sh/library/busybox:1.37.0@sha256:9532d8c39891ca2ecde4d30d7710e01fb739c87a8b9299685c63704296b16028
+              command: ["sh", "-ec", "mkdir -p /host/jetstream-default && chmod 0700 /host/jetstream-default"]
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+                readOnlyRootFilesystem: true
+                runAsNonRoot: false
+                runAsUser: 0
+              resources:
+                requests:
+                  cpu: 5m
+                  memory: 8Mi
+                limits:
+                  cpu: 50m
+                  memory: 32Mi
+              volumeMounts:
+                - name: storage-root
+                  mountPath: /host
+          volumes:
+            - name: storage-root
+              hostPath:
+                path: /var/lib/nook/argo-events
+                type: DirectoryOrCreate
+        YAML
+          kubectl wait pod "$pod" --namespace argo-events \
+            --for=jsonpath='{.status.phase}'=Succeeded --timeout=2m
+          kubectl delete pod "$pod" --namespace argo-events --wait >/dev/null
+        }
+        prepare_storage_node 0 bynull-servo
+        prepare_storage_node 1 nook-rise-s-1
+        prepare_storage_node 2 ovh-us
+        kubectl apply \
+          -f "$remote_dir/infra/k0s/manifests/argo-events/storage.yaml"
+        legacy_empty_dir=false
+        if kubectl get statefulset/eventbus-default-js \
+          --namespace argo-events >/dev/null 2>&1 &&
+          test "$(kubectl get statefulset/eventbus-default-js \
+            --namespace argo-events \
+            -o jsonpath='{.spec.template.spec.volumes[?(@.name=="js-data")].emptyDir}')" = '{}'; then
+          legacy_empty_dir=true
+        fi
         kubectl apply \
           -f "$remote_dir/infra/k0s/manifests/argo-events/platform.yaml"
+        if test "$legacy_empty_dir" = true; then
+          kubectl delete statefulset/eventbus-default-js \
+            --namespace argo-events --cascade=foreground --wait
+        fi
+        for ordinal in 0 1 2; do
+          claim="persistentvolumeclaim/eventbus-default-js-vol-eventbus-default-js-$ordinal"
+          for attempt in $(seq 1 60); do
+            if kubectl get "$claim" --namespace argo-events >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          kubectl get "$claim" --namespace argo-events >/dev/null
+          kubectl wait --for=jsonpath='{.status.phase}'=Bound \
+            "$claim" \
+            --namespace argo-events --timeout=10m
+        done
         kubectl wait --for=condition=Deployed eventbus/default \
           --namespace argo-events --timeout=10m
         kubectl wait --for=condition=Configured eventbus/default \
           --namespace argo-events --timeout=10m
         kubectl rollout status statefulset/eventbus-default-js \
           --namespace argo-events --timeout=10m
+        if kubectl get deployment --namespace argo-events \
+          --selector eventsource-name=github-webhook -o name | grep -q .; then
+          kubectl rollout restart deployment --namespace argo-events \
+            --selector eventsource-name=github-webhook
+          kubectl rollout status deployment --namespace argo-events \
+            --selector eventsource-name=github-webhook --timeout=10m
+        fi
         REMOTE
 
   webhook-ingress:secret:publish:

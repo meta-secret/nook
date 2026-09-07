@@ -16,7 +16,7 @@ spec:
     replicas: 3
     streamConfig: |
       maxMsgs: 1000
-      maxAge: 1h
+      maxAge: 24h
       maxBytes: 64MB
       replicas: 3
       duplicates: 300s
@@ -25,6 +25,10 @@ spec:
     settings: |
       max_memory_store: 128MB
       max_file_store: 256MB
+    persistence:
+      storageClassName: argo-events-jetstream-local-retain
+      accessMode: ReadWriteOnce
+      volumeSize: 1Gi
     containerTemplate:
       resources:
         requests:

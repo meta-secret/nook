@@ -1,0 +1,88 @@
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: argo-events-jetstream-local-retain
+provisioner: kubernetes.io/no-provisioner
+volumeBindingMode: WaitForFirstConsumer
+reclaimPolicy: Retain
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: argo-events-jetstream-default-0
+  labels:
+    app.kubernetes.io/name: argo-events-jetstream
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: argo-events-jetstream-local-retain
+  claimRef:
+    namespace: argo-events
+    name: eventbus-default-js-vol-eventbus-default-js-0
+  local:
+    path: /var/lib/nook/argo-events/jetstream-default
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["bynull-servo"]
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: argo-events-jetstream-default-1
+  labels:
+    app.kubernetes.io/name: argo-events-jetstream
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: argo-events-jetstream-local-retain
+  claimRef:
+    namespace: argo-events
+    name: eventbus-default-js-vol-eventbus-default-js-1
+  local:
+    path: /var/lib/nook/argo-events/jetstream-default
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["nook-rise-s-1"]
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: argo-events-jetstream-default-2
+  labels:
+    app.kubernetes.io/name: argo-events-jetstream
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: argo-events-jetstream-local-retain
+  claimRef:
+    namespace: argo-events
+    name: eventbus-default-js-vol-eventbus-default-js-2
+  local:
+    path: /var/lib/nook/argo-events/jetstream-default
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values: ["ovh-us"]
