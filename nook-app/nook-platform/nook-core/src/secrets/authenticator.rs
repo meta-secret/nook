@@ -12,7 +12,7 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 mod backup_codes;
 mod setup_key;
