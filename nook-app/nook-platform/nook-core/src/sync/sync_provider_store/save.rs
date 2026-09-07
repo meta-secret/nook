@@ -7,6 +7,7 @@
 use super::oauth::ConfigurationText;
 use crate::ProviderRows;
 use crate::StoredICloudShareTarget;
+use crate::{DuplicateProviderSelection, LocalProviderRowRequest};
 
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -19,10 +20,7 @@ use crate::{
     StoredOAuthRemoteFileName, StoredOAuthTokenExpiry, sync_provider_default_label,
 };
 
-use super::{
-    AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData, ensure_local_provider_row,
-    find_duplicate_sync_provider,
-};
+use super::{AuthProvidersSnapshotData, OAuthFileConfigData, StorageProviderData};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(tag = "state", content = "providerType", rename_all = "camelCase")]
@@ -280,7 +278,13 @@ impl OAuthUpdateTarget<'_> {
             .for_vault(active_store_id)
             .sync()
             .ok()?;
-        find_duplicate_sync_provider(&sync_providers, &candidate, None).map(|provider| provider.id)
+        DuplicateProviderSelection {
+            providers: &sync_providers,
+            candidate: &candidate,
+            exclude_id: None,
+        }
+        .find()
+        .map(|provider| provider.id)
     }
 }
 
@@ -318,7 +322,12 @@ impl ProviderSaveRequest {
                     return ProviderSaveOutcome::LocalFolderRequired;
                 }
             };
-            let duplicate = find_duplicate_sync_provider(&active_providers, &provider, None);
+            let duplicate = DuplicateProviderSelection {
+                providers: &active_providers,
+                candidate: &provider,
+                exclude_id: None,
+            }
+            .find();
             if duplicate.is_some() && request.explicit_add {
                 return ProviderSaveOutcome::Duplicate;
             }
@@ -347,12 +356,11 @@ impl ProviderSaveRequest {
                 providers,
                 active_vault_store_id: request.snapshot.active_vault_store_id.clone(),
             };
-            let (seeded, _) = ensure_local_provider_row(
-                &snapshot,
-                Some(store_id),
-                &request.new_provider_id,
-                &request.created_at,
-            );
+            let (seeded, _) = snapshot.ensure_local_row(LocalProviderRowRequest {
+                active_store_id: Some(store_id),
+                new_id: &request.new_provider_id,
+                created_at: &request.created_at,
+            });
             providers = seeded.providers;
         }
 

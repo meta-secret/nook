@@ -32,10 +32,7 @@ pub use active_credentials::{
     ActiveProviderCredentialDraft, ActiveProviderCredentialsProjection,
     ActiveProviderCredentialsRequest, ActiveProviderLoginSetup,
 };
-pub use catalog::{
-    ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,
-    normalize_auth_snapshot, provider_storage_detail, provider_target_key,
-};
+pub use catalog::{DuplicateProviderSelection, LocalProviderRowRequest};
 pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
 pub use legacy_storage::auth_snapshot_legacy_storage_value;
 pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
@@ -252,7 +249,7 @@ pub struct AuthProvidersSnapshot {
 
 pub type AuthProvidersSnapshotData = AuthProvidersSnapshot;
 
-/// Result of [`normalize_auth_snapshot`].
+/// Result of [`NormalizedAuthSnapshot::from_wire`].
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NormalizedAuthSnapshot {
