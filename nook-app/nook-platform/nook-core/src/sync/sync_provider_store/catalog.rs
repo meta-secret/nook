@@ -8,11 +8,10 @@ use crate::ProviderSyncCheckpoint;
 use serde_json::{Map, Value};
 
 use crate::{
-    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask, GithubSyncTarget,
-    ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, ProviderVaultScope,
-    StorageProviderType, StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
-    StoredOAuthFileConfiguration, SyncProviderTarget, mask_github_pat, sync_provider_default_label,
-    sync_provider_target_key,
+    DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPat, GithubPatMask,
+    GithubSyncTarget, ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget,
+    ProviderVaultScope, StorageProviderType, StoredGithubPat, StoredGithubRepository,
+    StoredLocalFolderConfiguration, StoredOAuthFileConfiguration, SyncProviderTarget,
 };
 
 use super::{
@@ -86,7 +85,7 @@ impl StorageProviderData {
                 let repo = CatalogProviderText(provider.github_repo.as_deref())
                     .non_empty()
                     .unwrap_or_else(|| DEFAULT_GITHUB_REPO_NAME.to_owned());
-                let pat = match mask_github_pat(provider.github_pat.as_deref().unwrap_or_default())
+                let pat = match GithubPat::mask(provider.github_pat.as_deref().unwrap_or_default())
                 {
                     GithubPatMask::Hint(hint) => hint,
                     GithubPatMask::NoToken => labels.no_token_saved.clone(),
@@ -184,7 +183,7 @@ impl StorageProviderData {
     #[must_use]
     pub fn target_key(&self) -> Option<String> {
         let provider = self;
-        sync_provider_target_key(&provider.catalog_target())
+        provider.catalog_target().stable_key()
     }
 }
 
@@ -407,7 +406,7 @@ impl AuthProvidersSnapshotData {
         let local = StorageProviderData {
             id: new_id.to_owned(),
             provider_type: StorageProviderType::Local,
-            label: sync_provider_default_label(StorageProviderType::Local, None, None),
+            label: StorageProviderType::Local.default_label(None, None),
             github_pat: StoredGithubPat::Missing,
             github_repo: StoredGithubRepository::DefaultRepository,
             oauth_file: StoredOAuthFileConfiguration::NotApplicable,

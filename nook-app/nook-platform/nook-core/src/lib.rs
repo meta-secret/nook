@@ -307,12 +307,6 @@ pub use validation::{
     GoogleDriveMode, ICloudEventTarget, ICloudMode, ICloudShareRole, ICloudSharedTarget,
     LocalFolderSyncTarget, OauthAccessToken, OauthFilePreset, OauthFileSyncTarget,
     STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
-    existing_vault_provider_readiness, format_drive_storage_ref, format_drive_storage_ref_raw,
-    format_sync_provider_cache_ref, has_provider_credentials, mask_github_pat,
-    normalize_google_drive_folder_ref, parse_drive_storage_ref, staged_provider_default_label,
-    storage_mode_for_provider, sync_provider_default_label, sync_provider_target_key,
-    validate_connect, validate_drive_backup_name, validate_github_pat, validate_github_repo_name,
-    validate_oauth_access_token, validate_storage_mode,
 };
 pub use vault::vault_recovery_options::{
     VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword, VaultRecoverySummary,

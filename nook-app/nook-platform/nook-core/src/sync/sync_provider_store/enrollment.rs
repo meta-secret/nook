@@ -13,10 +13,9 @@ use crate::{
 use super::StorageProviderData;
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{
-    EnrollmentProvider, GoogleDriveMode, ICloudMode, OauthFilePreset, OnboardingType,
-    PersonalEnrollmentProvider, ReplicationType, SharedEnrollmentProvider,
-    SharedStorageTargetSelection, StorageProviderType, VaultArchitecture, validate_github_pat,
-    validate_github_repo_name, validate_oauth_access_token,
+    EnrollmentProvider, GithubPat, GithubRepoName, GoogleDriveMode, ICloudMode, OauthAccessToken,
+    OauthFilePreset, OnboardingType, PersonalEnrollmentProvider, ReplicationType,
+    SharedEnrollmentProvider, SharedStorageTargetSelection, StorageProviderType, VaultArchitecture,
 };
 
 /// Borrowed configuration for one enrollment payload construction.
@@ -194,10 +193,10 @@ impl CheckedProviderEnrollment<'_> {
                 Ok(PersonalEnrollmentProvider::local())
             }
             StorageProviderType::Github => Ok(PersonalEnrollmentProvider::github(
-                validate_github_pat(provider.github_pat.as_deref().unwrap_or_default())?
+                GithubPat::parse(provider.github_pat.as_deref().unwrap_or_default())?
                     .as_str()
                     .to_owned(),
-                validate_github_repo_name(provider.github_repo.as_deref().unwrap_or_default())?
+                GithubRepoName::parse(provider.github_repo.as_deref().unwrap_or_default())?
                     .as_str()
                     .to_owned(),
             )),
@@ -209,7 +208,7 @@ impl CheckedProviderEnrollment<'_> {
                 let preset = oauth.preset;
                 Ok(PersonalEnrollmentProvider::oauth_file(
                     preset.as_str().to_owned(),
-                    validate_oauth_access_token(oauth.access_token.as_deref().unwrap_or_default())?
+                    OauthAccessToken::parse(oauth.access_token.as_deref().unwrap_or_default())?
                         .as_str()
                         .to_owned(),
                     match oauth.refresh_token.as_deref() {

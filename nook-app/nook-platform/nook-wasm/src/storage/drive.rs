@@ -37,7 +37,7 @@ fn drive_error(status: reqwest::StatusCode, body: &str) -> NookError {
 }
 
 pub(crate) async fn verify_drive_access(access_token: &str) -> Result<(), NookError> {
-    let token = nook_core::validate_oauth_access_token(access_token)?;
+    let token = nook_core::OauthAccessToken::parse(access_token)?;
     let client = Client::new();
     let mut request = client
         .get("https://www.googleapis.com/drive/v3/about")

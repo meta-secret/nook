@@ -244,29 +244,19 @@ pub fn is_vault_password_recommended_length(password: &str) -> bool {
 #[wasm_bindgen]
 #[must_use]
 pub fn has_github_credentials(pat: &str) -> bool {
-    nook_core::has_provider_credentials(StorageProviderType::Github, Some(pat), None, None)
+    StorageProviderType::Github.has_credentials(Some(pat), None, None)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn has_oauth_credentials(access_token: &str) -> bool {
-    nook_core::has_provider_credentials(
-        StorageProviderType::OauthFile,
-        None,
-        Some(access_token),
-        None,
-    )
+    StorageProviderType::OauthFile.has_credentials(None, Some(access_token), None)
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn has_local_folder_credentials(handle_id: &str) -> bool {
-    nook_core::has_provider_credentials(
-        StorageProviderType::LocalFolder,
-        None,
-        None,
-        Some(handle_id),
-    )
+    StorageProviderType::LocalFolder.has_credentials(None, None, Some(handle_id))
 }
 
 #[wasm_bindgen]

@@ -1,3 +1,9 @@
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use std::fmt;
 
 use super::{
@@ -15,7 +21,24 @@ pub struct DriveBackupName(String);
 
 impl DriveBackupName {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        validate_drive_backup_name(raw)
+        let file_name = if raw.trim().is_empty() {
+            DEFAULT_DRIVE_BACKUP_NAME.to_owned()
+        } else {
+            raw.trim().to_owned()
+        };
+        if file_name.len() > 100 {
+            return Err(ValidationError::DriveFileNameLength);
+        }
+        if file_name == "." || file_name == ".." {
+            return Err(ValidationError::DriveFileNameInvalid);
+        }
+        if !file_name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        {
+            return Err(ValidationError::DriveFileNameChars);
+        }
+        Ok(Self(file_name))
     }
 
     #[must_use]
@@ -34,6 +57,33 @@ impl DriveBackupName {
 pub struct GoogleDriveFolderId(String);
 
 impl GoogleDriveFolderId {
+    pub fn parse(raw: &str) -> ValidationResult<Self> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(ValidationError::SharedStorageTargetRequired);
+        }
+        let without_suffix = trimmed
+            .split(['?', '#'])
+            .next()
+            .unwrap_or_default()
+            .trim_end_matches('/');
+        let candidate = if let Some((_, tail)) = without_suffix.rsplit_once("/folders/") {
+            tail.rsplit('/').next().unwrap_or_default()
+        } else {
+            without_suffix
+        }
+        .trim();
+        if candidate.is_empty()
+            || candidate.len() > 256
+            || !candidate.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
+            })
+        {
+            return Err(ValidationError::SharedStorageTargetInvalid);
+        }
+        Ok(Self(candidate.to_owned()))
+    }
+
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -63,7 +113,11 @@ pub struct OauthAccessToken(String);
 
 impl OauthAccessToken {
     pub fn parse(raw: &str) -> ValidationResult<Self> {
-        validate_oauth_access_token(raw)
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Err(ValidationError::OauthAccessTokenEmpty);
+        }
+        Ok(Self(trimmed.to_owned()))
     }
 
     #[must_use]
@@ -89,78 +143,20 @@ impl AsRef<str> for OauthAccessToken {
     }
 }
 
-/// Boundary helper: confirms a raw string is a known storage mode. Prefer
-/// `StorageMode::parse` when you also want the parsed value.
-pub fn validate_storage_mode(mode: &str) -> ValidationResult<()> {
-    StorageMode::parse(mode).map(|_| ())
-}
-
-/// Validates a Google Drive app-data vault file name. Empty uses
-/// [`DEFAULT_DRIVE_BACKUP_NAME`].
-pub fn validate_drive_backup_name(name: &str) -> ValidationResult<DriveBackupName> {
-    let file_name = if name.trim().is_empty() {
-        DEFAULT_DRIVE_BACKUP_NAME.to_owned()
-    } else {
-        name.trim().to_owned()
-    };
-    if file_name.len() > 100 {
-        return Err(ValidationError::DriveFileNameLength);
-    }
-    if file_name == "." || file_name == ".." {
-        return Err(ValidationError::DriveFileNameInvalid);
-    }
-    if !file_name
-        .chars()
-        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-    {
-        return Err(ValidationError::DriveFileNameChars);
-    }
-    Ok(DriveBackupName(file_name))
-}
-
-/// Normalize either an opaque Drive folder id or a standard Drive folder URL.
-/// Query parameters (including resource keys) are intentionally excluded from
-/// the persisted provider identity; the folder id is the stable event parent.
-pub fn normalize_google_drive_folder_ref(raw: &str) -> ValidationResult<GoogleDriveFolderId> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Err(ValidationError::SharedStorageTargetRequired);
-    }
-    let without_suffix = trimmed
-        .split(['?', '#'])
-        .next()
-        .unwrap_or_default()
-        .trim_end_matches('/');
-    let candidate = if let Some((_, tail)) = without_suffix.rsplit_once("/folders/") {
-        tail.rsplit('/').next().unwrap_or_default()
-    } else {
-        without_suffix
-    }
-    .trim();
-    if candidate.is_empty()
-        || candidate.len() > 256
-        || !candidate
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'))
-    {
-        return Err(ValidationError::SharedStorageTargetInvalid);
-    }
-    Ok(GoogleDriveFolderId(candidate.to_owned()))
-}
-
 /// Parses the Drive storage reference from the web layer: `fileId\\tfileName`
 /// or `fileName` alone when no cached file id exists yet.
 ///
 /// Shared Google Drive provider folder ids are encoded as `shared:<folderId>` in the
 /// `fileId` slot so connect args stay a 3-tuple.
-pub fn parse_drive_storage_ref(value: &str) -> ValidationResult<(String, DriveBackupName)> {
-    if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
-        Ok((
-            file_id.trim().to_owned(),
-            validate_drive_backup_name(file_name)?,
-        ))
-    } else {
-        Ok((String::new(), validate_drive_backup_name(value)?))
+impl DriveBackupName {
+    /// Parse the Drive storage reference from the web layer: `fileId\tfileName`
+    /// or `fileName` alone when no cached file id exists yet.
+    pub fn parse_storage_ref(value: &str) -> ValidationResult<(String, Self)> {
+        if let Some((file_id, file_name)) = value.split_once(DRIVE_STORAGE_REF_SEP) {
+            Ok((file_id.trim().to_owned(), Self::parse(file_name)?))
+        } else {
+            Ok((String::new(), Self::parse(value)?))
+        }
     }
 }
 
@@ -178,7 +174,7 @@ pub enum DriveEventParent {
 }
 
 impl DriveEventParent {
-    /// Parse the storage-id slot from [`parse_drive_storage_ref`].
+    /// Parse the storage-id slot from [`DriveBackupName::parse_storage_ref`].
     #[must_use]
     pub fn from_storage_id(storage_id: &str) -> Self {
         let trimmed = storage_id.trim();
@@ -211,189 +207,182 @@ impl DriveEventParent {
     }
 }
 
-#[must_use]
-pub fn format_drive_storage_ref(file_id: &str, file_name: &DriveBackupName) -> String {
-    format_drive_storage_ref_raw(file_id, file_name.as_str())
-}
+impl DriveBackupName {
+    #[must_use]
+    pub fn format_storage_ref(file_id: &str, file_name: &Self) -> String {
+        Self::format_storage_ref_raw(file_id, file_name.as_str())
+    }
 
-#[must_use]
-pub fn format_drive_storage_ref_raw(file_id: &str, file_name: &str) -> String {
-    let id = file_id.trim();
-    let name = file_name.trim();
-    let name = if name.is_empty() {
-        DEFAULT_DRIVE_BACKUP_NAME
-    } else {
-        name
-    };
-    if id.is_empty() {
-        name.to_owned()
-    } else {
-        format!("{id}{DRIVE_STORAGE_REF_SEP}{name}")
+    #[must_use]
+    pub fn format_storage_ref_raw(file_id: &str, file_name: &str) -> String {
+        let id = file_id.trim();
+        let name = file_name.trim();
+        let name = if name.is_empty() {
+            DEFAULT_DRIVE_BACKUP_NAME
+        } else {
+            name
+        };
+        if id.is_empty() {
+            name.to_owned()
+        } else {
+            format!("{id}{DRIVE_STORAGE_REF_SEP}{name}")
+        }
     }
 }
 
-#[must_use]
-pub fn storage_mode_for_provider(
-    provider_type: StorageProviderType,
-    oauth_preset: Option<OauthFilePreset>,
-) -> StorageMode {
-    match provider_type {
-        StorageProviderType::Local | StorageProviderType::LocalFolder => StorageMode::Local,
-        StorageProviderType::Github => StorageMode::Github,
-        StorageProviderType::OauthFile => {
-            match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
+impl StorageProviderType {
+    #[must_use]
+    pub fn storage_mode(self, oauth_preset: Option<OauthFilePreset>) -> StorageMode {
+        match self {
+            Self::Local | Self::LocalFolder => StorageMode::Local,
+            Self::Github => StorageMode::Github,
+            Self::OauthFile => match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
                 OauthFilePreset::GoogleDrive => StorageMode::GoogleDrive,
                 OauthFilePreset::ICloud => StorageMode::ICloud,
+            },
+        }
+    }
+
+    #[must_use]
+    pub fn default_label(
+        self,
+        detail: Option<&str>,
+        oauth_preset: Option<OauthFilePreset>,
+    ) -> String {
+        match self {
+            Self::Local => "This device".to_owned(),
+            Self::LocalFolder => {
+                let directory = detail.map(str::trim).filter(|value| !value.is_empty());
+                directory.map_or_else(
+                    || "Local backup".to_owned(),
+                    |directory| format!("Local backup · {directory}"),
+                )
+            }
+            Self::Github => {
+                let repo = detail
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
+                if repo == DEFAULT_GITHUB_REPO_NAME {
+                    "GitHub".to_owned()
+                } else {
+                    format!("GitHub · {repo}")
+                }
+            }
+            Self::OauthFile => {
+                let file = detail
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
+                let prefix = match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
+                    OauthFilePreset::GoogleDrive => "Google Drive",
+                    OauthFilePreset::ICloud => "iCloud",
+                };
+                if file == DEFAULT_DRIVE_BACKUP_NAME {
+                    prefix.to_owned()
+                } else {
+                    format!("{prefix} · {file}")
+                }
             }
         }
     }
-}
 
-#[must_use]
-pub fn sync_provider_default_label(
-    provider_type: StorageProviderType,
-    detail: Option<&str>,
-    oauth_preset: Option<OauthFilePreset>,
-) -> String {
-    match provider_type {
-        StorageProviderType::Local => "This device".to_owned(),
-        StorageProviderType::LocalFolder => {
-            let directory = detail.map(str::trim).filter(|value| !value.is_empty());
-            directory.map_or_else(
-                || "Local backup".to_owned(),
-                |directory| format!("Local backup · {directory}"),
-            )
-        }
-        StorageProviderType::Github => {
-            let repo = detail
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
-            if repo == DEFAULT_GITHUB_REPO_NAME {
-                "GitHub".to_owned()
-            } else {
-                format!("GitHub · {repo}")
+    #[must_use]
+    pub fn staged_default_label(
+        self,
+        github_repo: Option<&str>,
+        oauth_file_name: Option<&str>,
+        oauth_file_preset: Option<OauthFilePreset>,
+        oauth_setup_preset: Option<OauthFilePreset>,
+    ) -> String {
+        match self {
+            Self::Github => {
+                let detail = github_repo
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
+                Self::Github.default_label(Some(detail), None)
             }
-        }
-        StorageProviderType::OauthFile => {
-            let file = detail
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
-            let prefix = match oauth_preset.unwrap_or(OauthFilePreset::GoogleDrive) {
-                OauthFilePreset::GoogleDrive => "Google Drive",
-                OauthFilePreset::ICloud => "iCloud",
-            };
-            if file == DEFAULT_DRIVE_BACKUP_NAME {
-                prefix.to_owned()
-            } else {
-                format!("{prefix} · {file}")
+            Self::OauthFile => {
+                let detail = github_repo
+                    .map(str::trim)
+                    .filter(|value| !value.is_empty())
+                    .or_else(|| {
+                        oauth_file_name
+                            .map(str::trim)
+                            .filter(|value| !value.is_empty())
+                    })
+                    .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
+                let preset = oauth_file_preset
+                    .or(oauth_setup_preset)
+                    .unwrap_or(OauthFilePreset::GoogleDrive);
+                Self::OauthFile.default_label(Some(detail), Some(preset))
             }
+            other => other.default_label(None, None),
         }
     }
-}
 
-#[must_use]
-pub fn staged_provider_default_label(
-    provider_type: StorageProviderType,
-    github_repo: Option<&str>,
-    oauth_file_name: Option<&str>,
-    oauth_file_preset: Option<OauthFilePreset>,
-    oauth_setup_preset: Option<OauthFilePreset>,
-) -> String {
-    match provider_type {
-        StorageProviderType::Github => {
-            let detail = github_repo
+    #[must_use]
+    pub fn has_credentials(
+        self,
+        github_pat: Option<&str>,
+        oauth_access_token: Option<&str>,
+        local_folder_handle_id: Option<&str>,
+    ) -> bool {
+        match self {
+            Self::Github => github_pat
                 .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .unwrap_or(DEFAULT_GITHUB_REPO_NAME);
-            sync_provider_default_label(StorageProviderType::Github, Some(detail), None)
-        }
-        StorageProviderType::OauthFile => {
-            let detail = github_repo
+                .is_some_and(|value| !value.is_empty()),
+            Self::OauthFile => oauth_access_token
                 .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .or_else(|| {
-                    oauth_file_name
-                        .map(str::trim)
-                        .filter(|value| !value.is_empty())
-                })
-                .unwrap_or(DEFAULT_DRIVE_BACKUP_NAME);
-            let preset = oauth_file_preset
-                .or(oauth_setup_preset)
-                .unwrap_or(OauthFilePreset::GoogleDrive);
-            sync_provider_default_label(StorageProviderType::OauthFile, Some(detail), Some(preset))
+                .is_some_and(|value| !value.is_empty()),
+            Self::LocalFolder => local_folder_handle_id
+                .map(str::trim)
+                .is_some_and(|value| !value.is_empty()),
+            Self::Local => true,
         }
-        other => sync_provider_default_label(other, None, None),
     }
 }
 
-#[must_use]
-pub fn has_provider_credentials(
-    provider_type: StorageProviderType,
-    github_pat: Option<&str>,
-    oauth_access_token: Option<&str>,
-    local_folder_handle_id: Option<&str>,
-) -> bool {
-    match provider_type {
-        StorageProviderType::Github => github_pat
-            .map(str::trim)
-            .is_some_and(|value| !value.is_empty()),
-        StorageProviderType::OauthFile => oauth_access_token
-            .map(str::trim)
-            .is_some_and(|value| !value.is_empty()),
-        StorageProviderType::LocalFolder => local_folder_handle_id
-            .map(str::trim)
-            .is_some_and(|value| !value.is_empty()),
-        StorageProviderType::Local => true,
-    }
-}
-
-#[must_use]
-pub fn sync_provider_target_key(target: &SyncProviderTarget) -> Option<String> {
+impl SyncProviderTarget {
     fn non_empty(value: Option<&String>) -> Option<&str> {
         value
             .map(|value| value.trim())
             .filter(|value| !value.is_empty())
     }
 
-    match target {
-        SyncProviderTarget::Empty => None,
-        SyncProviderTarget::Local => Some("local".to_owned()),
-        SyncProviderTarget::LocalFolder(folder) => {
-            let key = non_empty(folder.handle_id.as_ref())
-                .or_else(|| non_empty(folder.directory_name.as_ref()))
-                .unwrap_or("unselected");
-            Some(format!("local-folder:{key}"))
-        }
-        SyncProviderTarget::Github(github) => {
-            let repo = github.repo.trim().to_lowercase();
-            let pat = github.pat.trim();
-            Some(format!("github:{repo}:{pat}"))
-        }
-        SyncProviderTarget::OauthFile(oauth) => {
-            let file_key = non_empty(oauth.folder_id.as_ref())
-                .map(|folder_id| format!("shared:{folder_id}"))
-                .or_else(|| non_empty(oauth.file_id.as_ref()).map(str::to_owned))
-                .or_else(|| non_empty(oauth.file_name.as_ref()).map(str::to_owned))
-                .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
-            let account_key = non_empty(oauth.account_email.as_ref())
-                .or_else(|| non_empty(oauth.access_token.as_ref()))
-                .unwrap_or_default();
-            Some(format!(
-                "oauth-file:{}:{file_key}:{account_key}",
-                oauth.preset.as_str()
-            ))
+    #[must_use]
+    pub fn stable_key(&self) -> Option<String> {
+        match self {
+            Self::Empty => None,
+            Self::Local => Some("local".to_owned()),
+            Self::LocalFolder(folder) => {
+                let key = Self::non_empty(folder.handle_id.as_ref())
+                    .or_else(|| Self::non_empty(folder.directory_name.as_ref()))
+                    .unwrap_or("unselected");
+                Some(format!("local-folder:{key}"))
+            }
+            Self::Github(github) => {
+                let repo = github.repo.trim().to_lowercase();
+                let pat = github.pat.trim();
+                Some(format!("github:{repo}:{pat}"))
+            }
+            Self::OauthFile(oauth) => {
+                let file_key = Self::non_empty(oauth.folder_id.as_ref())
+                    .map(|folder_id| format!("shared:{folder_id}"))
+                    .or_else(|| Self::non_empty(oauth.file_id.as_ref()).map(str::to_owned))
+                    .or_else(|| Self::non_empty(oauth.file_name.as_ref()).map(str::to_owned))
+                    .unwrap_or_else(|| DEFAULT_DRIVE_BACKUP_NAME.to_owned());
+                let account_key = Self::non_empty(oauth.account_email.as_ref())
+                    .or_else(|| Self::non_empty(oauth.access_token.as_ref()))
+                    .unwrap_or_default();
+                Some(format!(
+                    "oauth-file:{}:{file_key}:{account_key}",
+                    oauth.preset.as_str()
+                ))
+            }
         }
     }
-}
-
-pub fn validate_oauth_access_token(token: &str) -> ValidationResult<OauthAccessToken> {
-    let trimmed = token.trim();
-    if trimmed.is_empty() {
-        return Err(ValidationError::OauthAccessTokenEmpty);
-    }
-    Ok(OauthAccessToken(trimmed.to_owned()))
 }
 
 #[cfg(test)]
@@ -405,26 +394,23 @@ mod tests {
     #[test]
     fn storage_mode_for_provider_maps_oauth_presets() -> anyhow::Result<()> {
         assert_eq!(
-            storage_mode_for_provider(StorageProviderType::Local, None),
+            StorageProviderType::Local.storage_mode(None),
             StorageMode::Local
         );
         assert_eq!(
-            storage_mode_for_provider(StorageProviderType::LocalFolder, None),
+            StorageProviderType::LocalFolder.storage_mode(None),
             StorageMode::Local
         );
         assert_eq!(
-            storage_mode_for_provider(StorageProviderType::Github, None),
+            StorageProviderType::Github.storage_mode(None),
             StorageMode::Github
         );
         assert_eq!(
-            storage_mode_for_provider(StorageProviderType::OauthFile, None),
+            StorageProviderType::OauthFile.storage_mode(None),
             StorageMode::GoogleDrive
         );
         assert_eq!(
-            storage_mode_for_provider(
-                StorageProviderType::OauthFile,
-                Some(OauthFilePreset::ICloud)
-            ),
+            StorageProviderType::OauthFile.storage_mode(Some(OauthFilePreset::ICloud)),
             StorageMode::ICloud
         );
         Ok(())
@@ -433,31 +419,24 @@ mod tests {
     #[test]
     fn provider_default_labels_match_sync_provider_ui() -> anyhow::Result<()> {
         assert_eq!(
-            sync_provider_default_label(StorageProviderType::Local, None, None),
+            StorageProviderType::Local.default_label(None, None),
             "This device"
         );
         assert_eq!(
-            sync_provider_default_label(
-                StorageProviderType::LocalFolder,
-                Some("Nook Backup"),
-                None,
-            ),
+            StorageProviderType::LocalFolder.default_label(Some("Nook Backup"), None),
             "Local backup · Nook Backup"
         );
         assert_eq!(
-            sync_provider_default_label(StorageProviderType::Github, Some("team-vault"), None),
+            StorageProviderType::Github.default_label(Some("team-vault"), None),
             "GitHub · team-vault"
         );
         assert_eq!(
-            sync_provider_default_label(StorageProviderType::OauthFile, None, None),
+            StorageProviderType::OauthFile.default_label(None, None),
             "Google Drive"
         );
         assert_eq!(
-            sync_provider_default_label(
-                StorageProviderType::OauthFile,
-                Some("work.yaml"),
-                Some(OauthFilePreset::ICloud),
-            ),
+            StorageProviderType::OauthFile
+                .default_label(Some("work.yaml"), Some(OauthFilePreset::ICloud),),
             "iCloud · work.yaml"
         );
         Ok(())
@@ -466,8 +445,7 @@ mod tests {
     #[test]
     fn staged_provider_labels_match_login_setup_draft_fields() -> anyhow::Result<()> {
         assert_eq!(
-            staged_provider_default_label(
-                StorageProviderType::Github,
+            StorageProviderType::Github.staged_default_label(
                 Some("  team-vault  "),
                 None,
                 None,
@@ -476,18 +454,11 @@ mod tests {
             "GitHub · team-vault"
         );
         assert_eq!(
-            staged_provider_default_label(
-                StorageProviderType::Github,
-                Some("  "),
-                None,
-                None,
-                None
-            ),
+            StorageProviderType::Github.staged_default_label(Some("  "), None, None, None),
             "GitHub"
         );
         assert_eq!(
-            staged_provider_default_label(
-                StorageProviderType::OauthFile,
+            StorageProviderType::OauthFile.staged_default_label(
                 Some("drive-vault"),
                 Some("ignored-file"),
                 None,
@@ -496,8 +467,7 @@ mod tests {
             "iCloud · drive-vault"
         );
         assert_eq!(
-            staged_provider_default_label(
-                StorageProviderType::OauthFile,
+            StorageProviderType::OauthFile.staged_default_label(
                 Some("  "),
                 Some(" personal-events "),
                 Some(OauthFilePreset::GoogleDrive),
@@ -506,8 +476,7 @@ mod tests {
             "Google Drive · personal-events"
         );
         assert_eq!(
-            staged_provider_default_label(
-                StorageProviderType::LocalFolder,
+            StorageProviderType::LocalFolder.staged_default_label(
                 Some("ignored"),
                 Some("ignored"),
                 None,
@@ -520,48 +489,13 @@ mod tests {
 
     #[test]
     fn provider_credentials_match_provider_requirements() -> anyhow::Result<()> {
-        assert!(has_provider_credentials(
-            StorageProviderType::Local,
-            None,
-            None,
-            None,
-        ));
-        assert!(has_provider_credentials(
-            StorageProviderType::Github,
-            Some(" ghp_test "),
-            None,
-            None,
-        ));
-        assert!(!has_provider_credentials(
-            StorageProviderType::Github,
-            Some(" "),
-            None,
-            None,
-        ));
-        assert!(has_provider_credentials(
-            StorageProviderType::OauthFile,
-            None,
-            Some(" token "),
-            None,
-        ));
-        assert!(!has_provider_credentials(
-            StorageProviderType::OauthFile,
-            None,
-            None,
-            None,
-        ));
-        assert!(has_provider_credentials(
-            StorageProviderType::LocalFolder,
-            None,
-            None,
-            Some(" folder-1 "),
-        ));
-        assert!(!has_provider_credentials(
-            StorageProviderType::LocalFolder,
-            None,
-            None,
-            Some(" "),
-        ));
+        assert!(StorageProviderType::Local.has_credentials(None, None, None,));
+        assert!(StorageProviderType::Github.has_credentials(Some(" ghp_test "), None, None,));
+        assert!(!StorageProviderType::Github.has_credentials(Some(" "), None, None,));
+        assert!(StorageProviderType::OauthFile.has_credentials(None, Some(" token "), None,));
+        assert!(!StorageProviderType::OauthFile.has_credentials(None, None, None,));
+        assert!(StorageProviderType::LocalFolder.has_credentials(None, None, Some(" folder-1 "),));
+        assert!(!StorageProviderType::LocalFolder.has_credentials(None, None, Some(" "),));
         Ok(())
     }
 
@@ -575,10 +509,7 @@ mod tests {
             repo: "my-repo".to_owned(),
             pat: "github_pat_11AAAA".to_owned(),
         });
-        assert_eq!(
-            sync_provider_target_key(&github_a),
-            sync_provider_target_key(&github_b)
-        );
+        assert_eq!(github_a.stable_key(), github_b.stable_key());
 
         let drive_by_id = SyncProviderTarget::OauthFile(OauthFileSyncTarget {
             preset: OauthFilePreset::GoogleDrive,
@@ -596,21 +527,18 @@ mod tests {
             account_email: Some("me@example.com".to_owned()),
             access_token: Some("ya29.test".to_owned()),
         });
-        assert_ne!(
-            sync_provider_target_key(&drive_by_id),
-            sync_provider_target_key(&drive_by_name)
-        );
+        assert_ne!(drive_by_id.stable_key(), drive_by_name.stable_key());
 
         let folder = SyncProviderTarget::LocalFolder(LocalFolderSyncTarget {
             directory_name: Some("Nook Backup".to_owned()),
             handle_id: Some("folder-1".to_owned()),
         });
         assert_eq!(
-            sync_provider_target_key(&folder),
+            folder.stable_key(),
             Some("local-folder:folder-1".to_owned())
         );
 
-        assert_eq!(sync_provider_target_key(&SyncProviderTarget::Empty), None);
+        assert_eq!(SyncProviderTarget::Empty.stable_key(), None);
         Ok(())
     }
 }
