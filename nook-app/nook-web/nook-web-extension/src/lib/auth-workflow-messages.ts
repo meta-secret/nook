@@ -97,6 +97,7 @@ function isAdvanceControl(
       'generic',
       'standards-based-email',
       'web-authn-email',
+      'mixed-phone-or-email',
       'strong',
       'explicit',
     ].includes(control.authenticationUsername) &&
