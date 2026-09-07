@@ -544,6 +544,71 @@ mod tests {
 
     #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
     #[cfg_attr(not(target_arch = "wasm32"), test)]
+    fn authentication_advance_control_wasm_export_preserves_netflix_post_login_policy() {
+        let mut netflix = login_advance_observation("https://www.netflix.com/login", "Continue");
+        netflix.authentication_username =
+            nook_companion_core::AuthenticationUsernameEvidence::Strong;
+        netflix.source_origin = "https://www.netflix.com".to_owned();
+        netflix.form_identity.clear();
+        netflix.submission_method = nook_companion_core::PageControlSubmissionMethod::Post;
+        assert!(authentication_advance_control_is_safe(netflix.clone()));
+
+        for method in [
+            nook_companion_core::PageControlSubmissionMethod::Get,
+            nook_companion_core::PageControlSubmissionMethod::Dialog,
+        ] {
+            let mut rejected = netflix.clone();
+            rejected.submission_method = method;
+            assert!(!authentication_advance_control_is_safe(rejected));
+        }
+
+        for label in [
+            "Get Help",
+            "Forgot password",
+            "Sign in with Google",
+            "Use passkey",
+            "Continue with SAML",
+            "Sign in with SSO",
+            "Create account",
+            "Delete account",
+        ] {
+            let mut rejected = netflix.clone();
+            rejected.label = label.to_owned();
+            assert!(!authentication_advance_control_is_safe(rejected), "{label}");
+        }
+
+        for destination in [
+            "/login",
+            "https://attacker.example/login",
+            "https://www.netflix.com/help",
+            "https://www.netflix.com/login?provider=google",
+            "https://www.netflix.com/login?action=delete",
+        ] {
+            let mut rejected = netflix.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(rejected),
+                "{destination}"
+            );
+        }
+
+        let mut unowned = netflix.clone();
+        unowned.ownership = nook_companion_core::PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(unowned));
+
+        let mut inert_help = netflix.clone();
+        inert_help.actionability = nook_companion_core::PageControlActionability::Inert;
+        inert_help.semantics = nook_companion_core::PageControlSemantics::Activation;
+        inert_help.label = "Get Help".to_owned();
+        assert!(!authentication_advance_control_is_safe(inert_help));
+
+        netflix.semantic_submit_control_count = 2.into();
+        netflix.label = "Primary action".to_owned();
+        assert!(!authentication_advance_control_is_safe(netflix));
+    }
+
+    #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+    #[cfg_attr(not(target_arch = "wasm32"), test)]
     fn authentication_facts_wasm_export_accepts_exact_login_mode_get() {
         let facts = nook_companion_core::AuthenticationPageObservationFacts {
             fields: nook_companion_core::AuthenticationFieldObservationFacts {
