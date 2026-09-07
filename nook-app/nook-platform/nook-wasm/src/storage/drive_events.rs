@@ -571,7 +571,7 @@ mod tests {
         );
         assert_eq!(
             DriveEventStore::list_event_ids_from_response(&serde_json::json!({})),
-            vec![]
+            Vec::<String>::new()
         );
         Ok(())
     }
