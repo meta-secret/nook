@@ -675,8 +675,7 @@ mod projection_tests {
         manager.delete_local_browser_data().await?;
 
         let identity = nook_core::DeviceIdentity::generate()?;
-        manager.device.id = identity.device_id().as_str().to_owned();
-        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.set_test_device_identity(&identity);
         manager
             .connect_fresh("local".to_owned(), String::new(), String::new())
             .await?;

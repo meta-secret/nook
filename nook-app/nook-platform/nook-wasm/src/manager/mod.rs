@@ -528,6 +528,12 @@ impl NookVaultManager {
         )?)
     }
 
+    #[cfg(test)]
+    pub(crate) fn set_test_device_identity(&mut self, identity: &nook_core::DeviceIdentity) {
+        self.device.id = identity.device_id().as_str().to_owned();
+        self.device.identity_private_key = identity.secret_string().into_inner();
+    }
+
     /// Pull the active unlock mode from a freshly-accepted vault YAML and
     /// stash it in session state.
     ///
