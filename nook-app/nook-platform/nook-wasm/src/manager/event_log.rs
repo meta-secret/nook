@@ -34,8 +34,7 @@ use crate::storage::indexed_db::{load_from_indexed_db, save_to_indexed_db};
 use crate::storage::local_folder::{LocalFolderEventWrite, LocalFolderHandles};
 use nook_core::{
     AppendEventInput, EventId, RemoteEventLogClassification, SigningIdentity, VaultEvent,
-    VaultOperation, apply_user_records_to_encrypted_session, build_signed_event,
-    members_checkpoint_hash_from_roster, project_vault, rewrapped_vault_meta_records_for_epoch,
+    VaultOperation, apply_user_records_to_encrypted_session, build_signed_event, project_vault,
 };
 
 fn iso_timestamp() -> String {

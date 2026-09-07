@@ -5,15 +5,15 @@
 )]
 use super::{
     BuiltVaultEvent, NookError, NookVaultManager, VaultOperation, load_local_event_store,
-    members_checkpoint_hash_from_roster, rewrapped_vault_meta_records_for_epoch, save_key_epoch,
+    save_key_epoch,
 };
 use crate::storage::event_db::{EpochPairAppend, EventAppend, VaultEventPersistence};
 use crate::storage::identity_record::{
     IdentityReconciliationStore, PendingIdentityRotation, ReconciliationIntent,
 };
 use nook_core::{
-    EpochMetadataState, EpochPasswordState, EventId, IdentityVaultEventId, ProjectionEpoch,
-    StoreId, SymmetricKey,
+    EpochMetadataState, EpochPasswordState, EventId, IdentityVaultEventId, MembersCheckpointHash,
+    ProjectionEpoch, StoreId, SymmetricKey, VaultKeyRotation, VaultMetaRecordRewrap,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
@@ -150,14 +150,12 @@ impl NookVaultManager {
         let records_snapshot = self.stored_records_snapshot();
         let user_records = nook_core::user_stored_records(&records_snapshot)?;
         let (new_keys, secrets) =
-            nook_core::rotate_vault_keys_with_secrets(&user_records, &old_secrets_key)?;
-        let members_checkpoint_hash = members_checkpoint_hash_from_roster(
-            &records_snapshot,
-            &old_members_key,
-            &new_keys.members_key,
-        )?;
+            VaultKeyRotation::new(&user_records, &old_secrets_key).rotate()?;
+        let members_checkpoint_hash =
+            MembersCheckpointHash::new(&records_snapshot, &old_members_key, &new_keys.members_key)
+                .compute()?;
         let rotated_meta_records =
-            rewrapped_vault_meta_records_for_epoch(&records_snapshot, &old_members_key, &new_keys)?;
+            VaultMetaRecordRewrap::new(&records_snapshot, &old_members_key, &new_keys).rewrap()?;
         Ok(PreparedEpochRotation {
             previous_key_epoch,
             previous_checkpoint,
