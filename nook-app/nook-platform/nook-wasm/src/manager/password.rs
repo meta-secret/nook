@@ -84,7 +84,7 @@ impl NookVaultManager {
             .iter()
             .find(|entry| entry.id == entry_id)
         {
-            Some(entry) => nook_core::verify_password_entry(entry, password),
+            Some(entry) => entry.verify_password(password),
             None => false,
         }
     }
@@ -133,14 +133,15 @@ impl NookVaultManager {
             secrets_key: SymmetricKey::parse(&self.vault.secrets_key)?,
             members_key: SymmetricKey::parse(&self.vault.members_key)?,
         };
-        let entry = nook_core::create_password_entry_with_work_factor(
+        let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
             &label,
             &wasm_iso_timestamp(),
             &password,
             work_factor.into(),
-        )?;
+        )
+        .issue()?;
 
         self.vault.password_entries.push(entry.clone());
         self.vault.unlock = VaultUnlock::Keys;
@@ -211,16 +212,17 @@ impl NookVaultManager {
             .find(|entry| entry.id == entry_id)
             .ok_or_else(|| NookError::Database("Password entry not found.".to_owned()))?
             .clone();
-        if !nook_core::password_envelope_supports_key_rewrap(&target_entry.envelope) {
+        if !target_entry.envelope.supports_key_rewrap() {
             let keys = nook_core::VaultKeys {
                 secrets_key: SymmetricKey::parse(&self.vault.secrets_key)?,
                 members_key: SymmetricKey::parse(&self.vault.members_key)?,
             };
-            let envelope = nook_core::attach_password_envelope_with_work_factor(
+            let envelope = nook_core::PasswordEnvelopeAttachment::with_work_factor(
                 &keys,
                 &password,
                 work_factor.into(),
-            )?;
+            )
+            .attach()?;
             self.persist_vault_change(vec![VaultOperation::PasswordEnvelopeUpgraded {
                 entry_id: PasswordEntryId::parse(&entry_id)?,
                 envelope,
@@ -228,10 +230,12 @@ impl NookVaultManager {
             .await?;
             return Ok(());
         }
-        if self.vault.password_entries.iter().any(|entry| {
-            entry.id != entry_id
-                && !nook_core::password_envelope_supports_key_rewrap(&entry.envelope)
-        }) {
+        if self
+            .vault
+            .password_entries
+            .iter()
+            .any(|entry| entry.id != entry_id && !entry.envelope.supports_key_rewrap())
+        {
             return Err(NookError::Database(
                 "Upgrade every legacy password entry before rotating the security epoch."
                     .to_owned(),
@@ -366,7 +370,7 @@ impl NookVaultManager {
                 NookError::Decryption("No backup password found on this vault.".to_owned())
             })?
             .clone();
-        let keys = nook_core::resolve_keys_from_entry(&entry, &password)?;
+        let keys = nook_core::PasswordEntryResolution::new(&entry, &password).resolve()?;
         let meta = VaultMetaState::from_stored_records(&records)?;
 
         self.apply_vault_keys(keys.secrets_key.as_str(), keys.members_key.as_str())?;
@@ -527,14 +531,15 @@ mod metadata_tests {
     fn password_listing_and_verification_reject_unknown_or_wrong_credentials() -> anyhow::Result<()>
     {
         let keys = nook_core::generate_vault_keys()?;
-        let entry = nook_core::create_password_entry_with_work_factor(
+        let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             "pwdentry001",
             "Recovery",
             "2026-09-06T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
-        )?;
+        )
+        .issue()?;
         let mut manager = NookVaultManager::new();
         manager.vault.password_entries = vec![entry.clone()];
 
@@ -587,14 +592,15 @@ mod metadata_tests {
     #[wasm_bindgen_test]
     async fn password_provider_switch_preserves_active_vault_metadata() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
-        let entry = nook_core::create_password_entry_with_work_factor(
+        let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
             "Recovery",
             "2026-07-29T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
-        )?;
+        )
+        .issue()?;
         let mut manager = NookVaultManager::new();
         manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
         manager.vault.unlock = VaultUnlock::Passwords {
@@ -644,14 +650,15 @@ mod metadata_tests {
     async fn invalid_password_envelope_does_not_mutate_session_or_fall_back_to_events()
     -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
-        let entry = nook_core::create_password_entry_with_work_factor(
+        let entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
             "Recovery",
             "2026-09-05T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
-        )?;
+        )
+        .issue()?;
         let remote_store_id = nook_core::generate_store_id()?;
         let content = nook_core::serialize_stored_yaml_with_unlock_and_name(
             &[],
@@ -712,14 +719,15 @@ mod wasm_tests {
             ("Primary", "legacy primary password"),
             ("Recovery", "legacy recovery password"),
         ] {
-            let mut entry = nook_core::create_password_entry_with_work_factor(
+            let mut entry = nook_core::PasswordEntryIssuance::with_work_factor(
                 &keys,
                 nook_core::generate_id()?.as_str(),
                 label,
                 "2026-08-15T00:00:00Z",
                 password,
                 E2E_PASSWORD_SCRYPT_LOG_N.into(),
-            )?;
+            )
+            .issue()?;
             entry.envelope.version = nook_core::PasswordEnvelopeVersion::LEGACY;
             entries.push(entry);
         }
@@ -738,12 +746,16 @@ mod wasm_tests {
             )
             .await
             .map_err(|error| anyhow::anyhow!("first legacy upgrade failed: {error:?}"))?;
-        assert!(nook_core::password_envelope_supports_key_rewrap(
-            &manager.vault.password_entries[0].envelope
-        ));
-        assert!(!nook_core::password_envelope_supports_key_rewrap(
-            &manager.vault.password_entries[1].envelope
-        ));
+        assert!(
+            manager.vault.password_entries[0]
+                .envelope
+                .supports_key_rewrap()
+        );
+        assert!(
+            !manager.vault.password_entries[1]
+                .envelope
+                .supports_key_rewrap()
+        );
 
         manager
             .update_vault_password_entry_for_e2e(
@@ -757,7 +769,7 @@ mod wasm_tests {
                 .vault
                 .password_entries
                 .iter()
-                .all(|entry| { nook_core::password_envelope_supports_key_rewrap(&entry.envelope) })
+                .all(|entry| entry.envelope.supports_key_rewrap())
         );
         let graph = load_local_event_store(&manager.vault.store_id)
             .await?
@@ -839,14 +851,15 @@ mod wasm_tests {
         );
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let records = database.to_stored_records_with_crypto(&crypto)?;
-        let password_entry = nook_core::create_password_entry_with_work_factor(
+        let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
             "Recovery",
             "2026-07-13T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
-        )?;
+        )
+        .issue()?;
         let store_id = nook_core::generate_store_id()?.to_string();
         let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
             &records,
@@ -879,14 +892,15 @@ mod wasm_tests {
     async fn password_unlock_succeeds_after_app_key_is_deleted() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
-        let password_entry = nook_core::create_password_entry_with_work_factor(
+        let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
             "Recovery",
             "2026-08-16T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
-        )?;
+        )
+        .issue()?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();
         owner.device.identity_private_key = identity.secret_string().into_inner();
@@ -923,14 +937,15 @@ mod wasm_tests {
     async fn password_entries_list_after_app_key_is_deleted() -> anyhow::Result<()> {
         let keys = nook_core::generate_vault_keys()?;
         let identity = DeviceIdentity::generate()?;
-        let password_entry = nook_core::create_password_entry_with_work_factor(
+        let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
             &keys,
             nook_core::generate_id()?.as_str(),
             "Recovery",
             "2026-08-16T00:00:00Z",
             "correct horse battery staple",
             E2E_PASSWORD_SCRYPT_LOG_N.into(),
-        )?;
+        )
+        .issue()?;
         let mut owner = NookVaultManager::new();
         owner.vault.store_id = nook_core::generate_store_id()?.to_string();
         owner.device.identity_private_key = identity.secret_string().into_inner();
