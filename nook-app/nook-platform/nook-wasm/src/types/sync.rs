@@ -3,6 +3,7 @@ use super::{
     NookOAuthRemoteFile, NookOAuthTokenExpiry, NookSecretRecord, NookVaultManager, NookVaultMember,
     wasm_bindgen,
 };
+use nook_core::OnboardingType;
 use nook_core::{
     EnrollmentProvider, EnrollmentProviderDataRef, PersonalEnrollmentProvider,
     PersonalEnrollmentProviderData, SharedEnrollmentProvider, SharedEnrollmentProviderData,
@@ -101,7 +102,7 @@ impl NookEnrollmentProvider {
     #[wasm_bindgen(getter, js_name = onboardingType)]
     #[must_use]
     pub fn onboarding_type(&self) -> nook_core::OnboardingType {
-        nook_core::enrollment_provider_onboarding_type(&self.0)
+        OnboardingType::from_enrollment(&self.0)
     }
 
     #[wasm_bindgen(getter, js_name = githubPat)]
