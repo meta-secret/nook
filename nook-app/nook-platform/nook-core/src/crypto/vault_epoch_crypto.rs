@@ -117,8 +117,8 @@ mod tests {
 
     use super::*;
     use crate::{
-        ApiKeySecret, DeviceIdentity, SecretId, SecretValue, VaultOperation, VaultResult,
-        approve_join_request, create_join_request_record, generate_vault_keys, genesis_auth_record,
+        ApiKeySecret, DeviceIdentity, JoinRequestApproval, JoinRequestIssuance, SecretId,
+        SecretValue, VaultOperation, VaultResult, generate_vault_keys, genesis_auth_record,
         genesis_members_records, pending_join_for_device, replace_member_records,
         resolve_members_key, resolve_secrets_key,
     };
@@ -223,16 +223,17 @@ mod tests {
             &old_keys.members_key,
             "2026-06-28T00:00:00Z",
         )?);
-        records.push(create_join_request_record(&joiner, "2026-06-28T00:01:00Z")?);
+        records.push(JoinRequestIssuance::new(&joiner, "2026-06-28T00:01:00Z").issue()?);
         let join = pending_join_for_device(&records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("join request must exist"))?;
-        let (joiner_auth, join_key, member_records) = approve_join_request(
+        let (joiner_auth, join_key, member_records) = JoinRequestApproval::new(
             &old_keys.secrets_key,
             &old_keys.members_key,
             &join,
             &owner,
             &records,
-        )?;
+        )
+        .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(joiner_auth);
         replace_member_records(&mut records, member_records)?;

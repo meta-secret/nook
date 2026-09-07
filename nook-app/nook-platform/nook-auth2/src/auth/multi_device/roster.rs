@@ -230,7 +230,7 @@ mod tests {
 
     use super::*;
     use crate::auth::multi_device::{
-        MEMBER_RECORD_PREFIX, VaultKeys, approve_join_request, create_join_request_record,
+        JoinRequestApproval, JoinRequestIssuance, MEMBER_RECORD_PREFIX, VaultKeys,
         create_sentinel_share_records, generate_vault_keys, genesis_auth_record,
         pending_join_for_device, resolve_members_key, resolve_secrets_key,
     };
@@ -271,13 +271,14 @@ mod tests {
     ) -> anyhow::Result<()> {
         let join = pending_join_for_device(records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
-        let (auth_record, join_key, member_records) = approve_join_request(
+        let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
             &join,
             approver,
             records,
-        )?;
+        )
+        .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
         replace_member_records(records, member_records)?;
@@ -289,7 +290,7 @@ mod tests {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
-        records.push(create_join_request_record(&joiner, ENROLLED_AT)?);
+        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
         approve_pending_join(&keys, &genesis, &mut records, &joiner)?;
 
         let renamed = rename_vault_member(
@@ -330,7 +331,7 @@ mod tests {
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
         let user_secret = user_secret_record("secret_note001", "encrypted-user-secret");
-        records.push(create_join_request_record(&joiner, ENROLLED_AT)?);
+        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
         records.push(user_secret.clone());
         approve_pending_join(&keys, &genesis, &mut records, &joiner)?;
         records.extend(create_sentinel_share_records(
