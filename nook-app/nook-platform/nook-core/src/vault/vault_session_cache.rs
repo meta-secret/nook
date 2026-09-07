@@ -41,6 +41,7 @@ impl<'a> VaultProjectionCache<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::VaultKeys;
     use crate::{
         MultiDeviceError, VaultError, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
     };

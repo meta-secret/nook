@@ -10,7 +10,7 @@ use crate::SecretValue;
 
 use crate::EncryptedSecretPayload;
 use crate::errors::{VaultEpochError, VaultEpochResult, VaultResult};
-use crate::multi_device::{AuthRecordIssuance, VaultKeys, VaultRecordView};
+use crate::multi_device::{AuthRecordIssuance, VaultKeys};
 #[cfg(test)]
 use crate::secret_types::StoredRecordPayload;
 use crate::secret_types::StoredSecretRecord;

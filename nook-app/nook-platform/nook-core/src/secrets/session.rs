@@ -235,6 +235,7 @@ impl<'a> EncryptedSecretSession<'a> {
 
 #[cfg(test)]
 mod tests {
+    use crate::VaultKeys;
     use crate::{AuthenticatorSecret, ValidationError, VaultError};
     use std::ptr;
     use zeroize::Zeroizing;
