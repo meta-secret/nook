@@ -10,9 +10,7 @@ use super::{
     DeviceAccessProfileVersionEnvelope, DeviceAccessProtectionKind, DeviceAccessProviderLabelError,
     PasskeyAccessProfile,
 };
-use crate::{
-    AppId, IdentityDirectory, IdentityRecord, StoreId, WrappedDeviceIdentity,
-};
+use crate::{AppId, IdentityDirectory, IdentityRecord, StoreId, WrappedDeviceIdentity};
 use sha2::{Digest, Sha256};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -175,9 +173,7 @@ impl PasskeyAccessProfile {
     }
 
     #[must_use]
-    pub fn normalize_provider_label(
-        value: &str,
-    ) -> Result<String, DeviceAccessProviderLabelError> {
+    pub fn normalize_provider_label(value: &str) -> Result<String, DeviceAccessProviderLabelError> {
         let value = value.trim();
         if value.chars().count() > DEVICE_ACCESS_PROVIDER_LABEL_MAX_CHARS {
             return Err(DeviceAccessProviderLabelError::TooLong);
