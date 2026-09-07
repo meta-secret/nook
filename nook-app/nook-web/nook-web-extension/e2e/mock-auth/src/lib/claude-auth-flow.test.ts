@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+
 import { describe, expect, test } from 'bun:test'
 
 import siteShells from '../../fixtures/site-shells.json'
@@ -10,6 +12,7 @@ import {
   ClaudeAuthFormMethod,
   ClaudeAuthInteractionState,
   ClaudeAuthMockScenario,
+  ClaudeAuthPresentationState,
   ClaudeAuthTransitionKind,
   type ClaudeAuthSubmission,
 } from './claude-auth-flow'
@@ -30,6 +33,16 @@ describe('Claude authentication mock', () => {
     expect(ClaudeAuthMockScenario.transition(emailSubmission)).toBe(
       ClaudeAuthTransitionKind.Completed,
     )
+  })
+
+  test('owns runtime presentation states outside the Svelte type-only script', () => {
+    const pageSource = readFileSync(
+      new URL('../pages/DetectionClaude.svelte', import.meta.url),
+      'utf8',
+    )
+    expect(pageSource).not.toMatch(/^\s*enum\s+ClaudeAuthPresentationState\b/mu)
+    expect(ClaudeAuthPresentationState.Ready).toBe('ready')
+    expect(ClaudeAuthPresentationState.Rejected).toBe('rejected')
   })
 
   test.each([

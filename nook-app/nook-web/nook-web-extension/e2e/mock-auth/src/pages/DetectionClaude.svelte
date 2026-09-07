@@ -3,16 +3,12 @@
     ClaudeAuthControl,
     ClaudeAuthInteractionState,
     ClaudeAuthMockScenario,
+    ClaudeAuthPresentationState,
     ClaudeAuthTransitionKind,
   } from '../lib/claude-auth-flow'
   import { navigate } from '../lib/navigation'
 
   const EVIDENCE_KEY = 'claude-submission-evidence'
-
-  enum ClaudeAuthPresentationState {
-    Ready = 'ready',
-    Rejected = 'rejected',
-  }
 
   let email = $state('')
   let googleInteraction = $state(ClaudeAuthInteractionState.Untouched)

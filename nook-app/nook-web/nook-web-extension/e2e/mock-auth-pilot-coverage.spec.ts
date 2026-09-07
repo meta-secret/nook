@@ -272,17 +272,30 @@ test.describe('PIN Pilot mock-auth coverage', () => {
         identifierForm.locator(
           'button[name="intent"][form="openai-social-form"]',
         ),
-      ).toHaveCount(3)
+      ).toHaveCount(0)
+      const socialProviderControls = page.locator(
+        'button[name="intent"][form="openai-social-form"]',
+      )
+      await expect(socialProviderControls).toHaveCount(3)
+      await expect(socialProviderControls).toHaveText([
+        'Continue with Google',
+        'Continue with Apple',
+        'Continue with Microsoft',
+      ])
       expect(
-        await identifierForm
-          .locator('button[name="intent"][form="openai-social-form"]')
-          .evaluateAll((buttons) =>
-            buttons.every(
-              (button) =>
-                (button as HTMLButtonElement).form?.id === 'openai-social-form',
-            ),
+        await socialProviderControls.evaluateAll((buttons) =>
+          buttons.every(
+            (button) =>
+              (button as HTMLButtonElement).form?.id === 'openai-social-form',
           ),
+        ),
       ).toBe(true)
+      await expect(identifierForm.locator('button[type="submit"]')).toHaveCount(
+        1,
+      )
+      await expect(
+        identifierForm.getByRole('button', { name: 'Continue', exact: true }),
+      ).toHaveAttribute('value', 'openai-continue')
       await expect(page.locator('input[type="password"]')).toHaveCount(0)
 
       await expect(widget.getByText('Ready to sign in')).toBeVisible()

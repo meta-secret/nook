@@ -38,6 +38,11 @@ export enum ClaudeAuthTransitionKind {
   Rejected = 'rejected',
 }
 
+export enum ClaudeAuthPresentationState {
+  Ready = 'ready',
+  Rejected = 'rejected',
+}
+
 export type ClaudeAuthSubmission = {
   readonly email: string
   readonly submittedControl: ClaudeAuthControl
