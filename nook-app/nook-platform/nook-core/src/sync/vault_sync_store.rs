@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 
 use crate::errors::VaultSyncError;
-use crate::vault_sync::{CommonContentHash, VaultRevision, VaultSyncAction, VaultSyncComparison};
+use crate::vault_sync::{CommonContentHash, VaultSyncAction, VaultSyncComparison};
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
@@ -280,7 +280,7 @@ impl<'a> VaultSyncFanOut<'a> {
 mod tests {
     use super::*;
     use crate::test_support::sample_vault_yaml as sample_yaml;
-    use crate::vault_sync;
+    use crate::vault_sync::VaultRevision;
 
     #[test]
     fn reconcile_push_local_copies_blob_and_bumps_revision() -> anyhow::Result<()> {
