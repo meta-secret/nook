@@ -1,5 +1,5 @@
 use crate::errors::{ValidationError, ValidationResult};
-use crate::{AppId, AuthKeyId, SecretId, SecretRecord, StoreId};
+use crate::{AppId, AuthKeyId, SecretRecord};
 
 #[must_use]
 pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord> {
@@ -30,7 +30,7 @@ pub fn validate_secret_data(data: &str) -> ValidationResult<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::{ApiKeySecret, SecretRecord, SecretType, SecretValue};
+    use crate::{ApiKeySecret, SecretId, SecretRecord, SecretType, SecretValue, StoreId};
 
     use super::{filter_secrets, validate_secret_data};
 
