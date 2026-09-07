@@ -143,7 +143,7 @@ pub(crate) async fn load_auth_providers(
     } else {
         scoped
     };
-    let normalized = nook_core::normalize_auth_snapshot(&raw);
+    let normalized = NormalizedAuthSnapshot::from_wire(&raw);
     let mut snapshot = normalized.snapshot;
     snapshot.open_credentials(identity)?;
     Ok(NormalizedAuthSnapshot {
@@ -282,7 +282,7 @@ mod wasm_idb_tests {
         .save()
         .await?;
         let raw = read_raw_snapshot_at(&state_key_for_app_id(identity.app_id())).await?;
-        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
         let stored_pat = stored.providers[0]
             .github_pat
             .as_deref()
@@ -442,7 +442,7 @@ mod wasm_idb_tests {
         write_snapshot(&legacy).await?;
 
         migrate_legacy_auth_providers_for_identity(&first).await?;
-        let mut rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        let mut rollback = NormalizedAuthSnapshot::from_wire(&read_raw_snapshot().await?).snapshot;
         rollback.open_credentials(&first)?;
         assert_eq!(
             rollback.providers[0].github_pat.as_deref(),
@@ -500,7 +500,7 @@ mod wasm_idb_tests {
                 .as_deref(),
             Some("github_pat_newer")
         );
-        let mut rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        let mut rollback = NormalizedAuthSnapshot::from_wire(&read_raw_snapshot().await?).snapshot;
         rollback.open_credentials(&identity)?;
         assert_eq!(
             rollback.providers[0].github_pat.as_deref(),
@@ -583,7 +583,7 @@ mod wasm_idb_tests {
 
         migrate_legacy_auth_providers_for_selected_identity().await?;
 
-        let mut rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        let mut rollback = NormalizedAuthSnapshot::from_wire(&read_raw_snapshot().await?).snapshot;
         rollback.open_credentials(&first)?;
         assert_eq!(
             rollback.providers[0].github_pat.as_deref(),
@@ -666,7 +666,7 @@ mod wasm_idb_tests {
         .await?;
 
         let raw = read_raw_snapshot_at(&state_key_for_app_id(identity.app_id())).await?;
-        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
         let mut provider_ids = stored
             .providers
             .iter()
@@ -678,7 +678,7 @@ mod wasm_idb_tests {
             stored.credential_storage_admission(),
             ProviderCredentialStorageAdmission::MarkerCompatible
         );
-        let rollback = nook_core::normalize_auth_snapshot(&read_raw_snapshot().await?).snapshot;
+        let rollback = NormalizedAuthSnapshot::from_wire(&read_raw_snapshot().await?).snapshot;
         let mut rollback_provider_ids = rollback
             .providers
             .iter()
@@ -742,7 +742,7 @@ mod wasm_idb_tests {
         .save()
         .await?;
         let raw = read_raw_snapshot_at(&state_key_for_app_id(identity.app_id())).await?;
-        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
         let oauth = stored.providers[0]
             .oauth_file
             .as_ref()
