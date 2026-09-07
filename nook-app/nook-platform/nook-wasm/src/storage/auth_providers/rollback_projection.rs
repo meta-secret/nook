@@ -1,6 +1,7 @@
 //! Ownership and migration policy for the singleton provider rollback projection.
 
 use crate::storage::identity_record;
+use nook_core::NormalizedAuthSnapshot;
 use nook_core::ProviderCredentialStorageAdmission;
 use rexie::TransactionMode;
 
@@ -38,8 +39,8 @@ pub(super) fn projections_match(scoped: &serde_json::Value, legacy: &serde_json:
     if scoped.is_null() || legacy.is_null() {
         return false;
     }
-    nook_core::normalize_auth_snapshot(scoped).snapshot
-        == nook_core::normalize_auth_snapshot(legacy).snapshot
+    NormalizedAuthSnapshot::from_wire(scoped).snapshot
+        == NormalizedAuthSnapshot::from_wire(legacy).snapshot
 }
 
 fn require_compatible_legacy_snapshot(
@@ -66,7 +67,7 @@ pub(super) fn legacy_snapshot_belongs_to_identity(
     if legacy.is_null() {
         return false;
     }
-    let mut snapshot = nook_core::normalize_auth_snapshot(legacy).snapshot;
+    let mut snapshot = NormalizedAuthSnapshot::from_wire(legacy).snapshot;
     let sealed = snapshot.clone();
     snapshot.open_credentials(identity).is_ok() && snapshot != sealed
 }
@@ -87,7 +88,7 @@ pub(super) async fn migrate_legacy_auth_providers_for_identity(
     let legacy = read_raw_snapshot_from_store(&store, STATE_KEY).await?;
     require_compatible_legacy_snapshot(&scoped, &legacy)?;
     if scoped.is_null() && !legacy.is_null() {
-        let mut snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
+        let mut snapshot = NormalizedAuthSnapshot::from_wire(&legacy).snapshot;
         snapshot.open_credentials(identity)?;
         snapshot.seal_credentials(identity)?;
         ProviderSnapshotStore {
@@ -132,7 +133,7 @@ pub(crate) async fn migrate_legacy_auth_providers_for_selected_identity() -> Res
     let legacy = read_raw_snapshot_from_store(&store, STATE_KEY).await?;
     require_compatible_legacy_snapshot(&scoped, &legacy)?;
     if scoped.is_null() {
-        let snapshot = nook_core::normalize_auth_snapshot(&legacy).snapshot;
+        let snapshot = NormalizedAuthSnapshot::from_wire(&legacy).snapshot;
         if !legacy.is_null()
             && snapshot.credential_storage_admission()
                 != ProviderCredentialStorageAdmission::MarkerCompatible

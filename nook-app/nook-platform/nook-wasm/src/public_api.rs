@@ -290,7 +290,7 @@ pub fn provider_storage_detail(
         icloud_not_signed_in,
         local_folder_needs_reconnect,
     };
-    Ok(nook_core::provider_storage_detail(&provider, &labels)?)
+    Ok(provider.storage_detail(&labels)?)
 }
 
 #[wasm_bindgen]
@@ -310,7 +310,7 @@ pub fn localize_provider_label(
         google_drive,
         icloud,
     };
-    nook_core::localize_provider_label(label, &labels)
+    labels.localize(label)
 }
 
 #[wasm_bindgen]

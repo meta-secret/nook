@@ -10,6 +10,7 @@
 use super::rollback_projection;
 use super::{self as auth_providers, SCHEMA_KEY, STATE_KEY, STORAGE_SCHEMA_VERSION, STORE};
 use crate::NookError;
+use nook_core::NormalizedAuthSnapshot;
 use nook_core::{
     AppId, AuthProvidersSnapshotData, DeviceIdentity, ProviderCredentialStorageAdmission,
 };
@@ -110,7 +111,7 @@ impl PresealedProviderSnapshotPublication<'_> {
         } else {
             legacy.clone()
         };
-        let existing = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let existing = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
         if existing.credential_storage_admission()
             != ProviderCredentialStorageAdmission::MarkerCompatible
         {
@@ -427,7 +428,7 @@ mod tests {
         let admitted = prepared.snapshot.clone();
         prepared.persist().await?;
         let raw = fixture.scoped().await?;
-        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
         assert_eq!(stored, admitted);
         let loaded = auth_providers::load_auth_providers(&fixture.identity).await?;
         assert_eq!(loaded.snapshot, fixture.snapshot);
@@ -448,7 +449,7 @@ mod tests {
         fixture.import().save().await?;
         let before = fixture.scoped().await?;
         assert_eq!(
-            nook_core::normalize_auth_snapshot(&before).snapshot,
+            NormalizedAuthSnapshot::from_wire(&before).snapshot,
             fixture.snapshot
         );
         assert!(
@@ -632,7 +633,7 @@ mod tests {
             identity.app_id(),
         ))
         .await?;
-        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
         let mut provider_ids = stored
             .providers
             .iter()
@@ -695,7 +696,7 @@ mod tests {
         ))
         .await?;
         assert_eq!(
-            nook_core::normalize_auth_snapshot(&raw).snapshot.providers[0]
+            NormalizedAuthSnapshot::from_wire(&raw).snapshot.providers[0]
                 .github_pat
                 .as_deref(),
             Some("github_pat_plaintext")
@@ -752,7 +753,7 @@ mod tests {
             identity.app_id(),
         ))
         .await?;
-        let stored = nook_core::normalize_auth_snapshot(&raw).snapshot;
+        let stored = NormalizedAuthSnapshot::from_wire(&raw).snapshot;
         assert_eq!(stored.providers.len(), 1);
         assert_eq!(stored.providers[0].id, "gh-retained");
         assert_eq!(
