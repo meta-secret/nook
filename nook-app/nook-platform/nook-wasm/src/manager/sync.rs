@@ -133,4 +133,58 @@ mod browser_tests {
         manager.delete_local_browser_data().await?;
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn local_sync_with_matching_empty_content_reports_unchanged() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+        crate::storage::event_db::clear_event_log_mode().await?;
+
+        let result = manager
+            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .await?;
+        assert!(!result.changed());
+        assert!(result.access_status().is_err());
+
+        manager.delete_local_browser_data().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn local_sync_with_matching_content_returns_session_projection() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+        crate::storage::event_db::clear_event_log_mode().await?;
+        manager.vault.last_synced_content.clear();
+        manager.vault.members_key = "ab".repeat(32);
+
+        let result = manager
+            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .await?;
+        assert!(!result.changed());
+        assert!(result.access_status().is_err());
+        assert!(result.vault_members().is_empty());
+
+        manager.delete_local_browser_data().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn event_log_sync_restores_local_storage_after_projection() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+        crate::storage::event_db::set_event_log_mode().await?;
+        manager.event_log.enabled = true;
+
+        let result = manager
+            .sync_vault_from_storage("local".to_owned(), String::new(), String::new())
+            .await?;
+        assert!(!result.changed());
+        assert!(result.access_status().is_err());
+        assert_eq!(manager.storage.mode, StorageMode::Local);
+
+        crate::storage::event_db::clear_event_log_mode().await?;
+        manager.delete_local_browser_data().await?;
+        Ok(())
+    }
 }

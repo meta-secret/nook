@@ -72,7 +72,7 @@ mod tests {
     use std::io;
 
     use super::super::{
-        VaultKeys, approve_join_request, create_join_request_record, generate_vault_keys,
+        JoinRequestApproval, JoinRequestIssuance, VaultKeys, generate_vault_keys,
         genesis_auth_record, genesis_members_records, member_stored_key, replace_member_records,
         resolve_secrets_key,
     };
@@ -105,13 +105,14 @@ mod tests {
     ) -> anyhow::Result<()> {
         let join = pending_join_for_device(records, joiner.device_id())?
             .ok_or_else(|| io::Error::other("pending join fixture must exist"))?;
-        let (auth_record, join_key, member_records) = approve_join_request(
+        let (auth_record, join_key, member_records) = JoinRequestApproval::new(
             &keys.secrets_key,
             &keys.members_key,
             &join,
             approver,
             records,
-        )?;
+        )
+        .approve()?;
         records.retain(|record| record.key.as_str() != join_key);
         records.push(auth_record);
         replace_member_records(records, member_records)?;
@@ -140,7 +141,7 @@ mod tests {
         let pending = DeviceIdentity::generate()?;
         let stranger = DeviceIdentity::generate()?;
 
-        records.push(create_join_request_record(&pending, ENROLLED_AT)?);
+        records.push(JoinRequestIssuance::new(&pending, ENROLLED_AT).issue()?);
 
         assert_eq!(
             assess_connect_access(&records, &genesis)?,
@@ -162,7 +163,7 @@ mod tests {
         let keys = generate_vault_keys()?;
         let (genesis, mut records) = genesis_vault(&keys)?;
         let joiner = DeviceIdentity::generate()?;
-        records.push(create_join_request_record(&joiner, ENROLLED_AT)?);
+        records.push(JoinRequestIssuance::new(&joiner, ENROLLED_AT).issue()?);
         approve_pending_join(&keys, &genesis, &mut records, &joiner)?;
 
         let mut missing_joiner_roster = records

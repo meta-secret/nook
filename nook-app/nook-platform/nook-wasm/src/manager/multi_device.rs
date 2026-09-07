@@ -134,12 +134,13 @@ impl NookVaultManager {
             }
         }
         let mut records = retained;
-        let (auth, members) = nook_core::enroll_device_with_keys(
+        let (auth, members) = nook_core::DeviceEnrollment::with_keys(
             &parsed_secrets,
             &parsed_members,
             &identity,
             &wasm_iso_timestamp(),
-        )?;
+        )
+        .enroll()?;
         records.push(auth);
         records.extend(members);
 
@@ -172,11 +173,9 @@ impl NookVaultManager {
         let signing = self.ensure_signing_identity().await?;
         let signing_pk =
             DeviceSigningPublicKey::from_trusted(hex::encode(signing.verifying_key().as_bytes()));
-        let record = nook_core::create_join_request_record_with_signing_key(
-            &identity,
-            &requested_at,
-            &signing_pk,
-        )?;
+        let record =
+            nook_core::JoinRequestIssuance::with_signing_key(&identity, &requested_at, &signing_pk)
+                .issue()?;
         self.vault.meta.apply_record(&record)?;
         self.persist_vault_change(vec![VaultOperation::JoinRequested {
             device_id: identity.device_id().clone(),
@@ -208,13 +207,14 @@ impl NookVaultManager {
         let mut operations = Vec::new();
         match self.vault.architecture.vault_type {
             VaultType::Simple => {
-                let (auth_record, join_key, member_records) = nook_core::approve_join_request(
+                let (auth_record, join_key, member_records) = nook_core::JoinRequestApproval::new(
                     &secrets_key,
                     &members_key,
                     &join,
                     &identity,
                     &records,
-                )?;
+                )
+                .approve()?;
                 self.vault.meta.remove_key(&join_key);
                 self.vault.meta.apply_record(&auth_record)?;
                 apply_member_records(&mut self.vault.meta, &member_records)?;
@@ -589,7 +589,8 @@ mod browser_tests {
         assert!(js(manager.list_pending_joins())?.is_empty());
 
         let joiner = nook_core::DeviceIdentity::generate()?;
-        let join_record = nook_core::create_join_request_record(&joiner, "2026-09-07T00:01:00Z")?;
+        let join_record =
+            nook_core::JoinRequestIssuance::new(&joiner, "2026-09-07T00:01:00Z").issue()?;
         manager.vault.meta.apply_record(&join_record)?;
         assert_eq!(js(manager.list_pending_joins())?.len(), 1);
 
@@ -693,13 +694,14 @@ impl NookVaultManager {
         };
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let members_key = SymmetricKey::parse(&self.vault.members_key)?;
-        let (auth_record, _join_key, member_records) = nook_core::approve_join_request(
+        let (auth_record, _join_key, member_records) = nook_core::JoinRequestApproval::new(
             &secrets_key,
             &members_key,
             &join,
             &identity,
             &records,
-        )?;
+        )
+        .approve()?;
         self.vault.meta.apply_record(&auth_record)?;
         apply_member_records(&mut self.vault.meta, &member_records)?;
         let envelopes: nook_core::AuthEnvelopes = serde_json::from_str(auth_record.value.as_str())
@@ -737,7 +739,7 @@ impl NookVaultManager {
         }) {
             return Err(NookError::Database("Join request not found.".to_owned()).into());
         }
-        let updated = nook_core::deny_join_request(&records, &join_device);
+        let updated = nook_core::JoinRequestDenial::new(&records, &join_device).apply();
         self.vault.meta = VaultMetaState::from_stored_records(&updated)?;
         self.persist_vault_change(vec![VaultOperation::JoinDenied {
             device_id: join_device,
@@ -848,12 +850,13 @@ impl NookVaultManager {
         let identity = self.device_identity()?;
         let parsed_secrets = SymmetricKey::parse(&secrets_key)?;
         let parsed_members = SymmetricKey::parse(&members_key)?;
-        let (auth, members) = nook_core::enroll_device_with_keys(
+        let (auth, members) = nook_core::DeviceEnrollment::with_keys(
             &parsed_secrets,
             &parsed_members,
             &identity,
             &wasm_iso_timestamp(),
-        )?;
+        )
+        .enroll()?;
         self.apply_vault_keys(&secrets_key, &members_key)?;
         self.vault.meta.apply_record(&auth)?;
         for member in &members {
