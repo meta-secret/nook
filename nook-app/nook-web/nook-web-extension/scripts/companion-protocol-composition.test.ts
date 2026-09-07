@@ -33,7 +33,7 @@ import {
   NookCompanionExtensionEndpoint,
   NookCompanionPairingExtensionEndpoint,
   NookVaultManager,
-  NookPrevalidatedCompanionPairingActivation,
+  NookPrevalidatedCompanionPairingApproval,
   seal_auth_providers_for_device_public_key,
   VaultApplication,
   type AuthProvidersSnapshot,
@@ -189,16 +189,6 @@ function pairingAttempt(requestId: string, substituteProvider: boolean) {
     extension,
     { approval: approval.approval, observedAt: 150 },
     providers,
-    {
-      imported: {
-        vaultStoreId: extension.vaultStoreId,
-        eventCount: 1,
-        heads: ['head-1'],
-        accessGranted: true,
-      },
-      syncProviderCount: 1,
-      observedAt: '2026-09-07T00:00:01Z',
-    },
   )
 }
 
@@ -267,7 +257,7 @@ describe('generated companion protocol composition', () => {
       } else {
         const admission = pairingAttempt(requestId, false)
         expect(admission).toBeInstanceOf(
-          NookPrevalidatedCompanionPairingActivation,
+          NookPrevalidatedCompanionPairingApproval,
         )
         admission.free()
       }

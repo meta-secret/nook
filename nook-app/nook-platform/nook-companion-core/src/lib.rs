@@ -122,14 +122,14 @@ pub use backup_code_candidates::{
     contains_backup_code_candidate, extract_backup_code_candidates, page_has_backup_code_hint,
 };
 pub use companion_pairing::{
-    AuthorizedCompanionPairingApproval, AuthorizedCompanionWebsitePairing,
-    CompanionExtensionPairingEndpoint, CompanionPairingAdmissionEvidence, CompanionPairingApproval,
+    AdmittedCompanionPairingApproval, AuthorizedCompanionPairingApproval,
+    AuthorizedCompanionWebsitePairing, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
     CompanionPairingApprovalAttempt, CompanionPairingEpochMilliseconds, CompanionPairingError,
     CompanionPairingFailure, CompanionPairingInstallation, CompanionPairingIssue,
     CompanionPairingProviderManifestDigest, CompanionPairingRequest,
     CompanionPairingRequestObservation, CompanionPairingWebsiteAuthorization,
     CompanionPairingWebsiteAuthorizationOutcome, CompanionWebsitePairingEndpoint,
-    ConsumedCompanionPairingAuthority, PrevalidatedCompanionPairingActivation,
+    ConsumedCompanionPairingAuthority,
 };
 pub use companion_protocol::{
     AuthorizedCompanionIdentityHandoff, CompanionAdmittedIdentityDiscovery,

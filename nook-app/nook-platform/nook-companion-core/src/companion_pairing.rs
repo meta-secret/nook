@@ -4,11 +4,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::{
-    CreateExtensionPairingStateInput, ExtensionConnectScope, ExtensionPairingGrantApproval,
-    ExtensionPairingState, ExtensionPairingVaultType, ExtensionSyncProviderCount,
-    ImportedExtensionEventLog,
-};
+use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
 use serde::{Deserialize, Serialize};
 use std::mem;
 use tsify::Tsify;
@@ -33,8 +29,6 @@ pub enum CompanionPairingError {
     ProviderManifestMismatch,
     #[error("companion pairing provider credentials do not match the installation recipient")]
     ProviderRecipientMismatch,
-    #[error("companion pairing event log does not grant the installation access")]
-    EventLogAccessDenied,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -50,7 +44,6 @@ pub enum CompanionPairingFailure {
     ScopeMismatch,
     ProviderManifestMismatch,
     ProviderRecipientMismatch,
-    EventLogAccessDenied,
 }
 
 impl From<CompanionPairingError> for CompanionPairingFailure {
@@ -65,7 +58,6 @@ impl From<CompanionPairingError> for CompanionPairingFailure {
             CompanionPairingError::ScopeMismatch => Self::ScopeMismatch,
             CompanionPairingError::ProviderManifestMismatch => Self::ProviderManifestMismatch,
             CompanionPairingError::ProviderRecipientMismatch => Self::ProviderRecipientMismatch,
-            CompanionPairingError::EventLogAccessDenied => Self::EventLogAccessDenied,
         }
     }
 }
@@ -495,15 +487,6 @@ impl ConsumedCompanionPairingAuthority {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct CompanionPairingAdmissionEvidence {
-    pub imported: ImportedExtensionEventLog,
-    pub sync_provider_count: ExtensionSyncProviderCount,
-    pub observed_at: String,
-}
-
 #[derive(Debug)]
 pub struct AuthorizedCompanionPairingApproval(CompanionPairingApproval);
 
@@ -512,62 +495,21 @@ impl AuthorizedCompanionPairingApproval {
         &self.0
     }
 
-    pub fn prevalidate(
-        self,
-        evidence: CompanionPairingAdmissionEvidence,
-    ) -> Result<PrevalidatedCompanionPairingActivation, CompanionPairingFailure> {
-        if evidence.imported.vault_store_id != self.0.vault_store_id {
-            return Err(CompanionPairingFailure::VaultMismatch);
-        }
-        if !evidence.imported.access_granted {
-            return Err(CompanionPairingFailure::EventLogAccessDenied);
-        }
-        if !self
-            .0
-            .request
-            .scopes
-            .contains(&ExtensionConnectScope::SyncProviderCredentials)
-            && evidence.sync_provider_count.raw() != 0
-        {
-            return Err(CompanionPairingFailure::ScopeMismatch);
-        }
-        let grant = ExtensionPairingGrantApproval {
-            vault_type: self.0.request.vault_type,
-            device_id: self.0.request.installation.app_id.clone(),
-            device_public_key: self.0.request.installation.encryption_public_key.clone(),
-            device_signing_public_key: self.0.request.installation.signing_public_key.clone(),
-            device_label: self.0.request.installation.installation_label.clone(),
-            vault_store_id: self.0.vault_store_id.clone(),
-            vault_name: self.0.vault_name.clone(),
-            approved_at: self.0.approved_at.clone(),
-            scopes: self.0.request.scopes.clone(),
-            sync_provider_count: evidence.sync_provider_count,
-        };
-        let state = match ExtensionPairingState::create(CreateExtensionPairingStateInput {
-            grant,
-            imported: evidence.imported,
-            observed_at: evidence.observed_at,
-        }) {
-            Ok(state) => state,
-            Err(_) => return Err(CompanionPairingFailure::InvalidValue),
-        };
-        Ok(PrevalidatedCompanionPairingActivation {
-            _pairing_state: state,
-        })
+    #[must_use]
+    pub fn admit(self) -> AdmittedCompanionPairingApproval {
+        AdmittedCompanionPairingApproval { _approval: self.0 }
     }
 }
 
-/// Opaque, side-effect-free proof for the separately owned activation transaction.
+/// Opaque proof that one exact pairing approval consumed its request authority.
 #[derive(Debug)]
-pub struct PrevalidatedCompanionPairingActivation {
-    _pairing_state: ExtensionPairingState,
+pub struct AdmittedCompanionPairingApproval {
+    _approval: CompanionPairingApproval,
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ExtensionEventCount;
-
     fn epoch(value: &str) -> anyhow::Result<CompanionPairingEpochMilliseconds> {
         Ok(serde_json::from_str(value)?)
     }
@@ -638,18 +580,7 @@ mod tests {
                 observed_at: epoch("175")?,
             })
             .map_err(|failure| anyhow::anyhow!("{failure:?}"))?;
-        let _admitted = authorized
-            .prevalidate(CompanionPairingAdmissionEvidence {
-                imported: ImportedExtensionEventLog {
-                    vault_store_id: "store-1".to_owned(),
-                    event_count: ExtensionEventCount::from(3),
-                    heads: vec!["head-1".to_owned()],
-                    access_granted: true,
-                },
-                sync_provider_count: ExtensionSyncProviderCount::from(1),
-                observed_at: "2026-09-07T00:00:01Z".to_owned(),
-            })
-            .map_err(|failure| anyhow::anyhow!("{failure:?}"))?;
+        let _admitted = authorized.admit();
         Ok(())
     }
 
@@ -738,36 +669,23 @@ mod tests {
     }
 
     #[test]
-    fn prevalidation_rejects_mismatched_or_denied_event_evidence() -> anyhow::Result<()> {
-        for (store_id, access_granted, expected) in [
-            ("store-other", true, CompanionPairingFailure::VaultMismatch),
-            (
-                "store-1",
-                false,
-                CompanionPairingFailure::EventLogAccessDenied,
-            ),
-        ] {
-            let mut endpoint = CompanionExtensionPairingEndpoint::issue(request()?)?;
-            let authorized = endpoint
-                .authorize_approval(CompanionPairingApprovalAttempt {
-                    approval: approval()?,
-                    observed_at: epoch("175")?,
-                })
-                .map_err(|failure| anyhow::anyhow!("{failure:?}"))?;
-            let Err(rejected) = authorized.prevalidate(CompanionPairingAdmissionEvidence {
-                imported: ImportedExtensionEventLog {
-                    vault_store_id: store_id.to_owned(),
-                    event_count: ExtensionEventCount::from(1),
-                    heads: vec!["head-1".to_owned()],
-                    access_granted,
-                },
-                sync_provider_count: ExtensionSyncProviderCount::from(0),
-                observed_at: "2026-09-07T00:00:01Z".to_owned(),
-            }) else {
-                anyhow::bail!("invalid event evidence was admitted");
-            };
-            assert_eq!(rejected, expected);
-        }
+    fn website_authority_is_consumed_by_rejected_authorization() -> anyhow::Result<()> {
+        let request = request()?;
+        let mut endpoint =
+            CompanionWebsitePairingEndpoint::admit(CompanionPairingRequestObservation {
+                request,
+                observed_at: epoch("125")?,
+            })?;
+        let mut mismatched = authorization()?;
+        mismatched.request.installation.extension_runtime_id = "runtime-other".to_owned();
+        assert_eq!(
+            endpoint.authorize(mismatched).map(|_| ()),
+            Err(CompanionPairingError::InstallationMismatch)
+        );
+        assert!(matches!(
+            endpoint.authorize(authorization()?),
+            Err(CompanionPairingError::AuthorityUnavailable)
+        ));
         Ok(())
     }
 }

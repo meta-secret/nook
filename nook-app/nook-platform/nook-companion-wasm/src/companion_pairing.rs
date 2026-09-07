@@ -1,10 +1,9 @@
 use nook_companion_core::{
-    CompanionExtensionPairingEndpoint, CompanionPairingAdmissionEvidence,
+    AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint,
     CompanionPairingApprovalAttempt, CompanionPairingProviderManifestDigest,
     CompanionPairingRequest, CompanionPairingRequestObservation,
     CompanionPairingWebsiteAuthorization, CompanionPairingWebsiteAuthorizationOutcome,
     CompanionWebsitePairingEndpoint, ConsumedCompanionPairingAuthority,
-    PrevalidatedCompanionPairingActivation,
 };
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
@@ -48,28 +47,25 @@ pub struct NookCompanionPairingApprovalAuthority {
 #[wasm_bindgen]
 impl NookCompanionPairingApprovalAuthority {
     #[allow(clippy::needless_pass_by_value)]
-    pub fn prevalidate(
+    pub fn admit(
         self,
         attempt: CompanionPairingApprovalAttempt,
-        evidence: CompanionPairingAdmissionEvidence,
-    ) -> Result<NookPrevalidatedCompanionPairingActivation, JsError> {
+    ) -> Result<NookAdmittedCompanionPairingApproval, JsError> {
         let authorized = self
             .inner
             .authorize_approval(attempt)
             .map_err(|failure| JsError::new(&format!("{failure:?}")))?;
-        Ok(NookPrevalidatedCompanionPairingActivation {
-            inner: authorized
-                .prevalidate(evidence)
-                .map_err(|failure| JsError::new(&format!("{failure:?}")))?,
+        Ok(NookAdmittedCompanionPairingApproval {
+            inner: authorized.admit(),
         })
     }
 }
 
-/// Opaque proof consumed only by the future activation transaction.
+/// Opaque proof that one exact approval consumed its request authority.
 #[wasm_bindgen]
-pub struct NookPrevalidatedCompanionPairingActivation {
+pub struct NookAdmittedCompanionPairingApproval {
     #[allow(dead_code)]
-    inner: PrevalidatedCompanionPairingActivation,
+    inner: AdmittedCompanionPairingApproval,
 }
 
 #[wasm_bindgen]
@@ -116,8 +112,7 @@ mod tests {
     use super::*;
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
-        ExtensionConnectScope, ExtensionEventCount, ExtensionPairingVaultType,
-        ExtensionSyncProviderCount, ImportedExtensionEventLog,
+        ExtensionConnectScope, ExtensionPairingVaultType,
     };
 
     fn epoch(value: &str) -> Result<CompanionPairingEpochMilliseconds, wasm_bindgen::JsValue> {
@@ -171,22 +166,10 @@ mod tests {
         let mut protocol = NookCompanionPairingExtensionProtocol::new(request()?)?;
         let authority = protocol.take_authority()?;
         assert!(protocol.take_authority().is_err());
-        let admission = authority.prevalidate(
-            CompanionPairingApprovalAttempt {
-                approval: approval()?,
-                observed_at: epoch("150")?,
-            },
-            CompanionPairingAdmissionEvidence {
-                imported: ImportedExtensionEventLog {
-                    vault_store_id: "store-1".to_owned(),
-                    event_count: ExtensionEventCount::from(1),
-                    heads: vec!["head-1".to_owned()],
-                    access_granted: true,
-                },
-                sync_provider_count: ExtensionSyncProviderCount::from(0),
-                observed_at: "2026-09-07T00:00:01Z".to_owned(),
-            },
-        )?;
+        let admission = authority.admit(CompanionPairingApprovalAttempt {
+            approval: approval()?,
+            observed_at: epoch("150")?,
+        })?;
         drop(admission);
         Ok(())
     }

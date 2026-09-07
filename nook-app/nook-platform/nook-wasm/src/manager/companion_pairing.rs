@@ -1,9 +1,8 @@
 use super::{NookVaultManager, VaultNameState};
 use nook_companion_core::{
-    CompanionExtensionPairingEndpoint, CompanionPairingAdmissionEvidence,
+    AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint,
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
     ConsumedCompanionPairingAuthority, ExtensionConnectScope,
-    PrevalidatedCompanionPairingActivation,
 };
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -54,8 +53,7 @@ impl NookCompanionPairingApprovalAuthority {
         manager: &NookVaultManager,
         attempt: CompanionPairingApprovalAttempt,
         providers: AuthProvidersSnapshotData,
-        evidence: CompanionPairingAdmissionEvidence,
-    ) -> Result<NookPrevalidatedCompanionPairingActivation, JsError> {
+    ) -> Result<NookPrevalidatedCompanionPairingApproval, JsError> {
         let authorized = self
             .inner
             .authorize_approval(attempt)
@@ -110,13 +108,10 @@ impl NookCompanionPairingApprovalAuthority {
         providers
             .authenticate_credentials_for(&identity)
             .map_err(|_| failure_js_error(CompanionPairingFailure::ProviderRecipientMismatch))?;
-        if usize::try_from(evidence.sync_provider_count.raw()).ok()
-            != Some(providers.providers.len())
-        {
-            return Err(failure_js_error(CompanionPairingFailure::ScopeMismatch));
-        }
-        let admission = authorized.prevalidate(evidence).map_err(failure_js_error)?;
-        Ok(NookPrevalidatedCompanionPairingActivation { inner: admission })
+        Ok(NookPrevalidatedCompanionPairingApproval {
+            approval: authorized.admit(),
+            providers,
+        })
     }
 }
 
@@ -124,11 +119,13 @@ fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
     JsError::new(&format!("{failure:?}"))
 }
 
-/// Opaque proof consumed only by the future activation transaction.
+/// Opaque proof of a manager-bound approval and its sealed provider snapshot.
 #[wasm_bindgen]
-pub struct NookPrevalidatedCompanionPairingActivation {
+pub struct NookPrevalidatedCompanionPairingApproval {
     #[allow(dead_code)]
-    inner: PrevalidatedCompanionPairingActivation,
+    approval: AdmittedCompanionPairingApproval,
+    #[allow(dead_code)]
+    providers: AuthProvidersSnapshotData,
 }
 
 #[cfg(test)]

@@ -53,7 +53,7 @@ mod verified_access;
 
 pub use companion_pairing::{
     NookCompanionPairingApprovalAuthority, NookCompanionPairingExtensionEndpoint,
-    NookPrevalidatedCompanionPairingActivation,
+    NookPrevalidatedCompanionPairingApproval,
 };
 pub use companion_protocol::{
     NookCompanionExtensionEndpoint, admit_companion_handoff_response,
