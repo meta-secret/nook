@@ -13,7 +13,7 @@
 use std::collections::HashMap;
 
 use crate::errors::VaultSyncError;
-use crate::vault_sync::{CommonContentHash, VaultSyncAction, compare_vault_sync_with_common};
+use crate::vault_sync::{CommonContentHash, VaultRevision, VaultSyncAction, VaultSyncComparison};
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
@@ -191,11 +191,12 @@ impl<'a> VaultSyncPair<'a> {
 
     /// Prepare an action while retaining exclusive access to the compared stores.
     pub fn prepare(self) -> VaultSyncResult<PreparedVaultSync<'a>> {
-        let action = compare_vault_sync_with_common(
+        let action = VaultSyncComparison::with_common(
             self.local.blob(),
             self.remote.blob(),
             self.last_common_content_hash,
-        )?;
+        )
+        .decide()?;
         Ok(PreparedVaultSync {
             local: self.local,
             remote: self.remote,
@@ -335,7 +336,7 @@ mod tests {
         let base_blob = sample_yaml(2, store_id, "base")?;
         let local_blob = sample_yaml(4, store_id, "local")?;
         let remote_blob = sample_yaml(3, store_id, "remote")?;
-        let base_hash = vault_sync::vault_content_hash(&base_blob);
+        let base_hash = VaultRevision::content_hash(&base_blob);
         let mut local = MemoryVaultStore::with_blob(local_blob.clone());
         let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
