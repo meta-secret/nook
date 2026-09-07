@@ -5,8 +5,9 @@
 )]
 
 use super::{
-    AuthenticationAdvanceControlObservation, CheckedAuthenticationControl, PageControlOwnership,
-    PageControlSemantics,
+    AuthenticationAdvanceControlObservation, CheckedAuthenticationControl,
+    PageControlActionability, PageControlOwnership, PageControlSemantics,
+    PageControlSubmissionDestinationSource,
 };
 use crate::page_field_classification::control_identity::AuthenticationControlIdentity;
 use crate::page_field_classification::form_identity::{
@@ -19,6 +20,33 @@ use crate::page_field_classification::{
 };
 
 impl AuthenticationAdvanceControlObservation {
+    pub(super) fn is_identifier_only_get_advance(&self) -> bool {
+        matches!(self.actionability, PageControlActionability::Actionable)
+            && matches!(
+                self.ownership,
+                PageControlOwnership::OwnedForm | PageControlOwnership::LocallyScoped
+            )
+            && matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            && match self.submission_destination_source {
+                PageControlSubmissionDestinationSource::Authored => matches!(
+                    self.authentication_username,
+                    AuthenticationUsernameEvidence::Strong
+                        | AuthenticationUsernameEvidence::Explicit
+                ),
+                PageControlSubmissionDestinationSource::Omitted => {
+                    self.form_identity.is_empty()
+                        && matches!(
+                            self.authentication_username,
+                            AuthenticationUsernameEvidence::Explicit
+                        )
+                }
+            }
+            && self.password_field_count.raw() == 0
+            && self.new_password_field_count.raw() == 0
+            && self.one_time_code_field_count.raw() == 0
+            && self.semantic_submit_control_count.raw() == 1
+    }
+
     pub(super) fn has_ambiguous_identifier_only_submit(&self) -> bool {
         matches!(self.semantics, PageControlSemantics::SemanticSubmit)
             && !matches!(
@@ -171,6 +199,88 @@ impl CheckedAuthenticationControl<'_> {
 mod tests {
     use super::super::*;
     use crate::authentication_advance_control_is_safe;
+
+    struct BookingDefaultGetScenario;
+
+    impl BookingDefaultGetScenario {
+        fn observation() -> AuthenticationAdvanceControlObservation {
+            AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Actionable,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::Explicit,
+                password_field_count: 0.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://account.booking.com".to_owned(),
+                form_identity: String::new(),
+                destination_identity: "https://account.booking.com/sign-in".to_owned(),
+                label: "Continue with email".to_owned(),
+                machine_identity: String::new(),
+                submission_method: PageControlSubmissionMethod::Get,
+                submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+            }
+        }
+
+        fn assert_hostile_variants_fail_closed() {
+            for destination in [
+                "https://attacker.example/sign-in",
+                "https://account.booking.com/sign-up",
+                "https://account.booking.com/sign-in?provider=google",
+                "https://account.booking.com/account/delete",
+            ] {
+                let mut rejected = Self::observation();
+                rejected.destination_identity = destination.to_owned();
+                assert!(
+                    !authentication_advance_control_is_safe(&rejected),
+                    "{destination}"
+                );
+            }
+
+            for label in ["Continue with Google", "Create account", "Delete account"] {
+                let mut rejected = Self::observation();
+                rejected.label = label.to_owned();
+                assert!(
+                    !authentication_advance_control_is_safe(&rejected),
+                    "{label}"
+                );
+            }
+
+            let mut recovery_submit = Self::observation();
+            recovery_submit.destination_identity = "https://account.booking.com/recover".to_owned();
+            recovery_submit.label = "Recover your account".to_owned();
+            assert!(!authentication_advance_control_is_safe(&recovery_submit));
+
+            let mut ambiguous = Self::observation();
+            ambiguous.semantic_submit_control_count = 2.into();
+            assert!(!authentication_advance_control_is_safe(&ambiguous));
+
+            let mut unowned = Self::observation();
+            unowned.ownership = PageControlOwnership::Unowned;
+            assert!(!authentication_advance_control_is_safe(&unowned));
+
+            let mut inert = Self::observation();
+            inert.actionability = PageControlActionability::Inert;
+            assert!(!authentication_advance_control_is_safe(&inert));
+
+            let mut activation = Self::observation();
+            activation.semantics = PageControlSemantics::Activation;
+            assert!(!authentication_advance_control_is_safe(&activation));
+
+            let mut implicit_email = Self::observation();
+            implicit_email.authentication_username = AuthenticationUsernameEvidence::Strong;
+            assert!(!authentication_advance_control_is_safe(&implicit_email));
+        }
+    }
+
+    #[test]
+    fn booking_owned_identifier_default_get_is_narrowly_admitted() {
+        assert!(authentication_advance_control_is_safe(
+            &BookingDefaultGetScenario::observation()
+        ));
+        BookingDefaultGetScenario::assert_hostile_variants_fail_closed();
+    }
 
     #[test]
     fn claude_owned_email_post_uses_existing_identifier_advance_policy() -> anyhow::Result<()> {

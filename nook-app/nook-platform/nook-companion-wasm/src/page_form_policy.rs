@@ -413,7 +413,8 @@ mod tests {
         ));
         identifier_get.submission_destination_source =
             nook_companion_core::PageControlSubmissionDestinationSource::Omitted;
-        assert!(!authentication_advance_control_is_safe(identifier_get));
+        identifier_get.form_identity.clear();
+        assert!(authentication_advance_control_is_safe(identifier_get));
 
         let mut microsoft = login_advance_observation("https://login.live.com/", "Next");
         microsoft.authentication_username =
