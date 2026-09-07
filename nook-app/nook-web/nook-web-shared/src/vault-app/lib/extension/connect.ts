@@ -110,7 +110,7 @@ type ExtensionMessageResponseTimer =
   | { readonly kind: ExtensionMessageResponseTimerKind.NotScheduled }
   | {
       readonly kind: ExtensionMessageResponseTimerKind.Scheduled;
-      readonly handle: ReturnType<typeof window.setTimeout>;
+      readonly handle: number;
     };
 
 export function isExtensionConnectPath(pathname: string): boolean {
