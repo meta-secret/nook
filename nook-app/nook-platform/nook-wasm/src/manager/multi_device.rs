@@ -547,6 +547,113 @@ mod browser_tests {
         assert!(manager.maybe_issue_sentinel_shares(&overflow).is_err());
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn simple_keys_join_lifecycle_updates_pending_requests_and_roster() -> anyhow::Result<()>
+    {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+        manager
+            .finish_pin_device_protection("multi-device owner pin".to_owned())
+            .await?;
+        let identity = manager.device_identity()?;
+        manager.initialize_genesis_vault(&identity)?;
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.bootstrap_event_log_genesis().await?;
+
+        assert!(manager.init_device().is_ok());
+        assert!(manager.device_signing_public_key_js().await?.len() > 10);
+        assert!(manager.list_pending_joins()?.is_empty());
+        assert_eq!(manager.list_vault_members()?.len(), 1);
+
+        manager
+            .create_join_request("2026-09-07T00:00:00Z".to_owned())
+            .await?;
+        let pending = manager.list_pending_joins()?;
+        assert_eq!(pending.len(), 1);
+        let owner_join_device = pending[0].device_id();
+        manager.deny_join_request(owner_join_device).await?;
+        assert!(manager.list_pending_joins()?.is_empty());
+
+        let joiner = nook_core::DeviceIdentity::generate()?;
+        let join_record = nook_core::create_join_request_record(&joiner, "2026-09-07T00:01:00Z")?;
+        manager.vault.meta.apply_record(&join_record)?;
+        assert_eq!(manager.list_pending_joins()?.len(), 1);
+
+        manager
+            .approve_join_request(joiner.device_id().to_string())
+            .await?;
+        assert!(manager.list_pending_joins()?.is_empty());
+        let members = manager.list_vault_members()?;
+        assert_eq!(members.len(), 2);
+        let joiner_member = members
+            .iter()
+            .find(|member| member.device_id() == joiner.device_id().to_string())
+            .ok_or_else(|| anyhow::anyhow!("approved joiner is missing from roster"))?;
+        manager
+            .rename_vault_member(joiner_member.auth_id(), "Work laptop".to_owned())
+            .await?;
+        let renamed = manager
+            .list_vault_members()?
+            .into_iter()
+            .find(|member| member.device_id() == joiner.device_id().to_string())
+            .ok_or_else(|| anyhow::anyhow!("renamed joiner is missing from roster"))?;
+        assert_eq!(renamed.label(), "Work laptop");
+
+        manager.delete_local_browser_data().await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn local_join_and_enrollment_require_a_vault_and_valid_keys() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.id = identity.device_id().to_string();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+
+        assert!(
+            manager
+                .request_vault_access(
+                    "local".to_owned(),
+                    String::new(),
+                    String::new(),
+                    "2026-09-07T00:00:00Z".to_owned(),
+                )
+                .await
+                .is_err()
+        );
+        assert!(
+            manager
+                .enroll_and_connect(
+                    "local".to_owned(),
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                    String::new(),
+                )
+                .await
+                .is_err()
+        );
+
+        manager.vault.architecture = nook_core::VaultArchitecture::sentinel_personal(
+            nook_core::DeviceMode::Standard,
+            nook_core::SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 0.into(),
+            },
+        );
+        assert!(
+            manager
+                .enroll_with_keys(String::new(), String::new())
+                .await
+                .is_err()
+        );
+        assert!(manager.enroll_with_dec(String::new()).await.is_err());
+        manager.delete_local_browser_data().await?;
+        Ok(())
+    }
 }
 
 impl NookVaultManager {
