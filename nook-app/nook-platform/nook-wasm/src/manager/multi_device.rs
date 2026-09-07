@@ -430,7 +430,7 @@ mod browser_tests {
     wasm_bindgen_test_configure!(run_in_browser);
 
     fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
-        result.map_err(|error| anyhow::anyhow!(error.to_string()))
+        result.map_err(|error| anyhow::anyhow!("{error:?}"))
     }
 
     #[wasm_bindgen_test]
@@ -560,7 +560,7 @@ mod browser_tests {
         manager
             .finish_pin_device_protection("multi-device owner pin".to_owned())
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let identity = manager.device_identity()?;
         manager.initialize_genesis_vault(&identity)?;
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
@@ -574,14 +574,14 @@ mod browser_tests {
         manager
             .create_join_request("2026-09-07T00:00:00Z".to_owned())
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let pending = js(manager.list_pending_joins())?;
         assert_eq!(pending.len(), 1);
         let owner_join_device = pending[0].device_id();
         manager
             .deny_join_request(owner_join_device)
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert!(js(manager.list_pending_joins())?.is_empty());
 
         let joiner = nook_core::DeviceIdentity::generate()?;
@@ -592,7 +592,7 @@ mod browser_tests {
         manager
             .approve_join_request(joiner.device_id().to_string())
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         assert!(js(manager.list_pending_joins())?.is_empty());
         let members = js(manager.list_vault_members())?;
         assert_eq!(members.len(), 2);
@@ -603,7 +603,7 @@ mod browser_tests {
         manager
             .rename_vault_member(joiner_member.auth_id(), "Work laptop".to_owned())
             .await
-            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            .map_err(|error| anyhow::anyhow!("{error:?}"))?;
         let renamed = js(manager.list_vault_members())?
             .into_iter()
             .find(|member| member.device_id() == joiner.device_id().to_string())
