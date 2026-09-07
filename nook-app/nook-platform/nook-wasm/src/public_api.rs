@@ -290,7 +290,7 @@ pub fn provider_storage_detail(
         icloud_not_signed_in,
         local_folder_needs_reconnect,
     };
-    Ok(provider.storage_detail(&labels)?)
+    Ok(provider.storage_detail(&labels))
 }
 
 #[wasm_bindgen]

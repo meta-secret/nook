@@ -7,7 +7,6 @@
 use crate::ProviderSyncCheckpoint;
 use serde_json::{Map, Value};
 
-use crate::errors::ValidationResult;
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GithubPatMask, GithubSyncTarget,
     ICloudMode, LocalFolderSyncTarget, OauthFilePreset, OauthFileSyncTarget, ProviderVaultScope,
@@ -26,6 +25,7 @@ pub struct DuplicateProviderSelection<'a> {
     pub candidate: &'a StorageProviderData,
     pub exclude_id: Option<&'a str>,
 }
+#[derive(Clone, Copy)]
 pub struct LocalProviderRowRequest<'a> {
     pub active_store_id: Option<&'a str>,
     pub new_id: &'a str,
@@ -41,18 +41,18 @@ struct SemanticProviderField<'a> {
 }
 
 impl StorageProviderData {
-    pub fn storage_detail(&self, labels: &ProviderStorageDetailLabels) -> ValidationResult<String> {
+    pub fn storage_detail(&self, labels: &ProviderStorageDetailLabels) -> String {
         let provider = self;
         let provider_type = provider.provider_type;
         match provider_type {
-            StorageProviderType::Local => Ok(labels.this_device_desc.clone()),
-            StorageProviderType::LocalFolder => Ok(provider
+            StorageProviderType::Local => labels.this_device_desc.clone(),
+            StorageProviderType::LocalFolder => provider
                 .local_folder
                 .as_ref()
                 .and_then(|folder| {
                     CatalogProviderText(folder.directory_name.as_deref()).non_empty()
                 })
-                .unwrap_or_else(|| labels.local_folder_needs_reconnect.clone())),
+                .unwrap_or_else(|| labels.local_folder_needs_reconnect.clone()),
             StorageProviderType::OauthFile => {
                 let oauth = provider.oauth_file.as_ref();
                 let preset = oauth.map_or(OauthFilePreset::GoogleDrive, |oauth| oauth.preset);
@@ -80,7 +80,7 @@ impl StorageProviderData {
                     }
                     None => labels.google_not_signed_in.clone(),
                 };
-                Ok(format!("{file} · {account}"))
+                format!("{file} · {account}")
             }
             StorageProviderType::Github => {
                 let repo = CatalogProviderText(provider.github_repo.as_deref())
@@ -91,7 +91,7 @@ impl StorageProviderData {
                     GithubPatMask::Hint(hint) => hint,
                     GithubPatMask::NoToken => labels.no_token_saved.clone(),
                 };
-                Ok(format!("{repo} · {pat}"))
+                format!("{repo} · {pat}")
             }
         }
     }
@@ -822,7 +822,7 @@ mod tests {
             sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
             created_at: "2026-06-24T00:00:00.000Z".to_owned(),
         };
-        assert_eq!(local.storage_detail(&labels)?, "This device desc");
+        assert_eq!(local.storage_detail(&labels), "This device desc");
         assert_eq!(
             (GithubCatalogFixture {
                 id: "gh",
@@ -830,7 +830,7 @@ mod tests {
                 pat: " github_pat_11AAAAbbbbCCCC "
             }
             .build())
-            .storage_detail(&labels)?,
+            .storage_detail(&labels),
             "team-vault · github_pat_11A…"
         );
         assert_eq!(
@@ -839,7 +839,7 @@ mod tests {
                 handle_id: "handle-1"
             }
             .build())
-            .storage_detail(&labels)?,
+            .storage_detail(&labels),
             "Nook Backup"
         );
         assert_eq!(
@@ -851,7 +851,7 @@ mod tests {
                 }
                 .build()
             })
-            .storage_detail(&labels)?,
+            .storage_detail(&labels),
             "Choose folder"
         );
         assert_eq!(
@@ -862,7 +862,7 @@ mod tests {
                 file_name: " "
             }
             .build())
-            .storage_detail(&labels)?,
+            .storage_detail(&labels),
             format!("{DEFAULT_DRIVE_BACKUP_NAME} · Signed in with iCloud")
         );
         Ok(())
