@@ -161,7 +161,7 @@ impl MnemonicWords {
         for bit in 0..byte_count * 8 {
             let source = padding + bit;
             if words[source / 10] & (1 << (9 - source % 10)) != 0 {
-                bytes[bit / 8] |= 1 << (7 - source % 10);
+                bytes[bit / 8] |= 1 << (7 - bit % 8);
             }
         }
         Ok(bytes)
