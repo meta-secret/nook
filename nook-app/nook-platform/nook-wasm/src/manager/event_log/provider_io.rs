@@ -493,6 +493,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn local_provider_io_dispatches_without_remote_access() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Local;
@@ -513,6 +517,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn local_genesis_is_idempotently_reused_by_sentinel_guard() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager

@@ -848,6 +848,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
     async fn local_outbox_queue_is_noop_without_a_provider_and_persists_with_one()
     -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
