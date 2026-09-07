@@ -308,10 +308,7 @@ impl NookVaultManager {
 mod metadata_tests {
     use super::*;
     use crate::manager::VaultNameState;
-    use crate::storage::event_db::load_local_event_store;
-    use nook_core::{
-        DeviceIdentity, StorageMode, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
-    };
+    use nook_core::{DeviceIdentity, VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -551,11 +548,12 @@ mod metadata_tests {
 mod wasm_tests {
     use super::*;
     use crate::manager::VaultNameState;
+    use crate::storage::event_db::load_local_event_store;
     use crate::storage::indexed_db;
     use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
     use nook_core::{
-        Database, DeviceIdentity, SecretId, SecretValue, VaultCrypto, VaultName, VaultNameRef,
-        VaultStoreIdentityRef, VaultVersionWrite,
+        Database, DeviceIdentity, SecretId, SecretValue, StorageMode, VaultCrypto, VaultName,
+        VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite,
     };
     use std::slice;
     use wasm_bindgen_test::*;
