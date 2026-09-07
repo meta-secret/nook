@@ -233,6 +233,13 @@ describe('Claude DOM-backed authentication simulation', () => {
     if (!detailedAdvanceControl || detailedAdvanceControl.kind !== 'observed') {
       throw new Error('expected typed Claude advance-control facts')
     }
+    expect(detailedAdvanceControl.observations).toEqual([
+      expect.objectContaining({
+        label: 'Continue with email',
+        submissionDestinationSource: 'omitted',
+        submissionMethod: 'post',
+      }),
+    ])
     expect(
       detailedAdvanceControl.observations.some(
         authentication_advance_control_is_safe,

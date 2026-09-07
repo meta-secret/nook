@@ -208,6 +208,7 @@ describe('authentication workflow snapshot messages', () => {
                         formIdentity: 'login',
                         destinationIdentity: 'https://login.example.com/login',
                         label: 'Use passkey',
+                        submissionDestinationSource: 'omitted',
                       },
                     },
                   ],

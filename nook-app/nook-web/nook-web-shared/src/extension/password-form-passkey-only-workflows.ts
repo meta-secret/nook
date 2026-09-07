@@ -17,6 +17,7 @@ import {
 } from "./password-form-fields";
 import {
   associatedAuthenticationForm,
+  AuthenticationSubmissionDestination,
   authenticationAdvanceControlSelector,
   authenticationFactStringsAreTransportable,
   controlDestinationIdentity,
@@ -371,6 +372,8 @@ function unownedScopeLooksProgressing(
       label: controlLabel(control),
       machineIdentity: controlMachineIdentity(control),
       submissionMethod: controlSubmissionMethod(control),
+      submissionDestinationSource:
+        AuthenticationSubmissionDestination.source(control),
     };
     return (
       authenticationFactStringsAreTransportable([

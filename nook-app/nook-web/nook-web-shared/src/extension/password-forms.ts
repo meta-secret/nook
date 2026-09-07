@@ -41,7 +41,7 @@ import type {
   PasswordFormScope,
 } from "./password-form-fields";
 import {
-  associatedAuthenticationForm,
+  associatedAuthenticationForm, AuthenticationSubmissionDestination,
   authenticationAdvanceControlSelector,
   authenticationFactStringsAreTransportable,
   authenticationPolicyTextFits,
@@ -301,7 +301,7 @@ function pageControlObservation({
     destinationIdentity: controlDestinationIdentity(destinationRequest),
     label: controlLabel(control),
     machineIdentity: controlMachineIdentity(control),
-    submissionMethod: controlSubmissionMethod(control),
+    submissionMethod: controlSubmissionMethod(control), submissionDestinationSource: AuthenticationSubmissionDestination.source(control),
   };
 }
 function transportableControlObservation(

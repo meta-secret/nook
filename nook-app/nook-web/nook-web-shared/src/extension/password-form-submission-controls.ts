@@ -2,7 +2,10 @@ import {
   authentication_advance_control_is_safe,
   can_activate_authentication_route_control,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
-import type { AuthenticationAdvanceControlObservation } from "./nook-companion-wasm/nook_companion_wasm.js";
+import type {
+  AuthenticationAdvanceControlObservation,
+  PageControlSubmissionDestinationSource,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
   FormSubmissionResult,
   observeAuthenticationSubmission,
@@ -394,6 +397,18 @@ function controlHasNativeSubmitSemantics(control: HTMLElement): boolean {
   );
 }
 
+export class AuthenticationSubmissionDestination {
+  static source(control: HTMLElement): PageControlSubmissionDestinationSource {
+    if (!controlHasNativeSubmitSemantics(control)) return "omitted";
+    if (control.hasAttribute("formaction")) return "authored";
+    const owner = associatedAuthenticationForm(control);
+    return owner.kind === PasswordFormScopeKind.Owned &&
+      owner.owner.hasAttribute("action")
+      ? "authored"
+      : "omitted";
+  }
+}
+
 export function controlSubmissionMethod(
   control: HTMLElement,
 ): PageControlSubmissionMethod {
@@ -764,6 +779,8 @@ function canActivateAuthenticationRouteControl(
       label: controlLabel,
       machineIdentity,
       submissionMethod: controlSubmissionMethod(control),
+      submissionDestinationSource:
+        AuthenticationSubmissionDestination.source(control),
     };
     return authentication_advance_control_is_safe(observation);
   }
@@ -894,6 +911,8 @@ export function formHasRustClassifiableAdvanceControl(
       label: controlLabel(control),
       machineIdentity: controlMachineIdentity(control),
       submissionMethod: controlSubmissionMethod(control),
+      submissionDestinationSource:
+        AuthenticationSubmissionDestination.source(control),
     };
     return (
       authenticationFactStringsAreTransportable([
