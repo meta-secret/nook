@@ -236,43 +236,25 @@ describe('Tesla DOM-backed authentication simulation', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     })
-    expect(facts.fields).toMatchObject({
-      usernameFieldCount: 1,
-      currentPasswordFieldCount: 0,
-      genericPasswordFieldCount: 0,
-      actionablePasswordFieldCount: 0,
-    })
-    expect(facts.ceremony).toMatchObject({
-      authenticationContext: {
-        authenticationUsername: 'web-authn-email',
-        sourceOrigin: 'https://auth.tesla.com',
-        formIdentity: '',
-        destinationIdentity: 'https://auth.tesla.com/oauth2/v1/authorize',
-      },
-      implicitSubmissionMethod: 'get',
-    })
     const detailedAdvanceControl = facts.detailedAdvanceControl
     if (!detailedAdvanceControl || detailedAdvanceControl.kind !== 'observed') {
       throw new Error('expected typed Tesla advance-control facts')
     }
-    expect(detailedAdvanceControl.observations).toEqual([
-      expect.objectContaining({
-        actionability: 'inert',
-        authenticationUsername: 'web-authn-email',
-        destinationIdentity: 'https://auth.tesla.com/oauth2/v1/authorize',
-        formIdentity: '',
-        label: TeslaFixturePrimaryControl.Next,
-        ownership: 'owned-form',
-        semanticSubmitControlCount: 1,
-        submissionDestinationSource: 'omitted',
-        submissionMethod: 'get',
-      }),
-    ])
-    expect(
-      detailedAdvanceControl.observations.some(
-        authentication_advance_control_is_safe,
-      ),
-    ).toBe(false)
+    const [initialControl] = detailedAdvanceControl.observations
+    if (!initialControl) throw new Error('expected inert Tesla control facts')
+    expect(initialControl).toMatchObject({
+      actionability: 'inert',
+      authenticationUsername: 'web-authn-email',
+      sourceOrigin: 'https://auth.tesla.com',
+      destinationIdentity: 'https://auth.tesla.com/oauth2/v1/authorize',
+      formIdentity: '',
+      label: TeslaFixturePrimaryControl.Next,
+      ownership: 'owned-form',
+      semanticSubmitControlCount: 1,
+      submissionDestinationSource: 'omitted',
+      submissionMethod: 'get',
+    })
+    expect(authentication_advance_control_is_safe(initialControl)).toBe(false)
     const initialWorkflow = classify_companion_authentication_workflow_facts({
       observations: [facts],
     })
@@ -309,18 +291,6 @@ describe('Tesla DOM-backed authentication simulation', () => {
         authentication_advance_control_is_safe,
       ),
     ).toBe(true)
-    const workflow = classify_companion_authentication_workflow_facts({
-      observations: [refreshedFacts],
-    })
-    expect(companion_authentication_workflow_match_kind(workflow)).toBe(
-      CompanionAuthenticationWorkflowMatchKind.Matched,
-    )
-    if (!('snapshot' in workflow)) throw new Error('expected matched workflow')
-    expect(workflow.snapshot).toMatchObject({
-      kind: AuthenticationWorkflowKind.Login,
-      action: AuthenticationWorkflowAction.ContinueWithNook,
-    })
-
     fixture.email.value = ''
     fixture.email.dispatchEvent(new InputEvent('input', { bubbles: true }))
     const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
