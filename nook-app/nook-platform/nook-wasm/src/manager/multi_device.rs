@@ -429,6 +429,10 @@ mod browser_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    fn js<T>(result: Result<T, JsError>) -> anyhow::Result<T> {
+        result.map_err(|error| anyhow::anyhow!(error.to_string()))
+    }
+
     #[wasm_bindgen_test]
     fn empty_multi_device_queries_are_safe() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
@@ -552,39 +556,45 @@ mod browser_tests {
     async fn simple_keys_join_lifecycle_updates_pending_requests_and_roster() -> anyhow::Result<()>
     {
         let mut manager = NookVaultManager::new();
-        manager.delete_local_browser_data().await?;
+        js(manager.delete_local_browser_data().await)?;
         manager
             .finish_pin_device_protection("multi-device owner pin".to_owned())
-            .await?;
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         let identity = manager.device_identity()?;
         manager.initialize_genesis_vault(&identity)?;
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
         manager.bootstrap_event_log_genesis().await?;
 
         assert!(manager.init_device().is_ok());
-        assert!(manager.device_signing_public_key_js().await?.len() > 10);
-        assert!(manager.list_pending_joins()?.is_empty());
-        assert_eq!(manager.list_vault_members()?.len(), 1);
+        assert!(js(manager.device_signing_public_key_js().await)?.len() > 10);
+        assert!(js(manager.list_pending_joins())?.is_empty());
+        assert_eq!(js(manager.list_vault_members())?.len(), 1);
 
         manager
             .create_join_request("2026-09-07T00:00:00Z".to_owned())
-            .await?;
-        let pending = manager.list_pending_joins()?;
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let pending = js(manager.list_pending_joins())?;
         assert_eq!(pending.len(), 1);
         let owner_join_device = pending[0].device_id();
-        manager.deny_join_request(owner_join_device).await?;
-        assert!(manager.list_pending_joins()?.is_empty());
+        manager
+            .deny_join_request(owner_join_device)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        assert!(js(manager.list_pending_joins())?.is_empty());
 
         let joiner = nook_core::DeviceIdentity::generate()?;
         let join_record = nook_core::create_join_request_record(&joiner, "2026-09-07T00:01:00Z")?;
         manager.vault.meta.apply_record(&join_record)?;
-        assert_eq!(manager.list_pending_joins()?.len(), 1);
+        assert_eq!(js(manager.list_pending_joins())?.len(), 1);
 
         manager
             .approve_join_request(joiner.device_id().to_string())
-            .await?;
-        assert!(manager.list_pending_joins()?.is_empty());
-        let members = manager.list_vault_members()?;
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        assert!(js(manager.list_pending_joins())?.is_empty());
+        let members = js(manager.list_vault_members())?;
         assert_eq!(members.len(), 2);
         let joiner_member = members
             .iter()
@@ -592,22 +602,22 @@ mod browser_tests {
             .ok_or_else(|| anyhow::anyhow!("approved joiner is missing from roster"))?;
         manager
             .rename_vault_member(joiner_member.auth_id(), "Work laptop".to_owned())
-            .await?;
-        let renamed = manager
-            .list_vault_members()?
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let renamed = js(manager.list_vault_members())?
             .into_iter()
             .find(|member| member.device_id() == joiner.device_id().to_string())
             .ok_or_else(|| anyhow::anyhow!("renamed joiner is missing from roster"))?;
         assert_eq!(renamed.label(), "Work laptop");
 
-        manager.delete_local_browser_data().await?;
+        js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
 
     #[wasm_bindgen_test]
     async fn local_join_and_enrollment_require_a_vault_and_valid_keys() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.delete_local_browser_data().await?;
+        js(manager.delete_local_browser_data().await)?;
         let identity = nook_core::DeviceIdentity::generate()?;
         manager.device.id = identity.device_id().to_string();
         manager.device.identity_private_key = identity.secret_string().into_inner();
@@ -651,7 +661,7 @@ mod browser_tests {
                 .is_err()
         );
         assert!(manager.enroll_with_dec(String::new()).await.is_err());
-        manager.delete_local_browser_data().await?;
+        js(manager.delete_local_browser_data().await)?;
         Ok(())
     }
 }
