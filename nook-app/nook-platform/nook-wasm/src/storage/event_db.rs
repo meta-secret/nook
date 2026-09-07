@@ -650,7 +650,7 @@ mod tests {
 
     #[wasm_bindgen_test]
     async fn event_log_and_outbox_projections_round_trip() -> Result<(), NookError> {
-        clear_event_log_mode().await?;
+        store_delete(STORE_VAULT, EVENT_LOG_MODE_KEY).await?;
         assert!(!is_event_log_mode().await?);
         set_event_log_mode().await?;
         assert!(is_event_log_mode().await?);
@@ -687,7 +687,7 @@ mod tests {
         store_delete(STORE_OUTBOX, &outbox_key("drive", "event-1")).await?;
         store_delete(STORE_OUTBOX, "outbox_index:drive").await?;
         store_delete(STORE_VAULT, SIGNING_SEED_KEY).await?;
-        clear_event_log_mode().await?;
+        store_delete(STORE_VAULT, EVENT_LOG_MODE_KEY).await?;
         Ok(())
     }
 
