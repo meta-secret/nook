@@ -1,6 +1,18 @@
 import 'fake-indexeddb/auto'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { IDBFactory } from 'fake-indexeddb'
+import {
+  IDBCursor,
+  IDBCursorWithValue,
+  IDBDatabase,
+  IDBFactory,
+  IDBIndex,
+  IDBKeyRange,
+  IDBObjectStore,
+  IDBOpenDBRequest,
+  IDBRequest,
+  IDBTransaction,
+  IDBVersionChangeEvent,
+} from 'fake-indexeddb'
 import { companionWasmReady } from '../../nook-web-shared/src/extension/companion-ready'
 import {
   NookCompanionExtensionProtocol,
@@ -24,9 +36,34 @@ import {
 let extension: NookVaultManager
 let presence: CompanionExtensionPresence
 let unlockedAppKey: CompanionUnlockedAppKey
-const previousIndexedDB = globalThis.indexedDB
-const previousIDBFactory = globalThis.IDBFactory
-const compositionIndexedDB = new IDBFactory()
+const previousIndexedDBRuntime = {
+  IDBCursor: globalThis.IDBCursor,
+  IDBCursorWithValue: globalThis.IDBCursorWithValue,
+  IDBDatabase: globalThis.IDBDatabase,
+  IDBFactory: globalThis.IDBFactory,
+  IDBIndex: globalThis.IDBIndex,
+  IDBKeyRange: globalThis.IDBKeyRange,
+  IDBObjectStore: globalThis.IDBObjectStore,
+  IDBOpenDBRequest: globalThis.IDBOpenDBRequest,
+  IDBRequest: globalThis.IDBRequest,
+  IDBTransaction: globalThis.IDBTransaction,
+  IDBVersionChangeEvent: globalThis.IDBVersionChangeEvent,
+  indexedDB: globalThis.indexedDB,
+}
+const compositionIndexedDBRuntime = {
+  IDBCursor,
+  IDBCursorWithValue,
+  IDBDatabase,
+  IDBFactory,
+  IDBIndex,
+  IDBKeyRange,
+  IDBObjectStore,
+  IDBOpenDBRequest,
+  IDBRequest,
+  IDBTransaction,
+  IDBVersionChangeEvent,
+  indexedDB: new IDBFactory(),
+}
 
 function discovery(requestId: string): CompanionIdentityDiscoveryObservation {
   return {
@@ -60,10 +97,7 @@ function beginHandoff(requestId: string) {
 }
 
 beforeAll(async () => {
-  Object.assign(globalThis, {
-    IDBFactory,
-    indexedDB: compositionIndexedDB,
-  })
+  Object.assign(globalThis, compositionIndexedDBRuntime)
   const nookWasmBytes = await Bun.file(
     new URL(
       '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm_bg.wasm',
@@ -111,10 +145,7 @@ beforeAll(async () => {
 })
 
 afterAll(() => {
-  Object.assign(globalThis, {
-    IDBFactory: previousIDBFactory,
-    indexedDB: previousIndexedDB,
-  })
+  Object.assign(globalThis, previousIndexedDBRuntime)
 })
 
 describe('generated companion protocol composition', () => {
