@@ -45,14 +45,19 @@ fn unlocked_status() -> CompanionIdentityStatus {
     }
 }
 
-fn website_begin() -> CompanionWebsiteHandoffBegin {
-    CompanionWebsiteHandoffBegin {
-        discovery: observation(),
-        status: unlocked_status(),
+fn website_begin() -> anyhow::Result<CompanionWebsiteHandoffBegin> {
+    Ok(CompanionWebsiteHandoffBegin {
+        transaction: CompanionAdmittedIdentityDiscovery::admit(
+            CompanionIdentityStatusAdmissionRequest {
+                discovery: observation(),
+                status: unlocked_status(),
+                observed_at: before_expiry(),
+            },
+        )?,
         context: CompanionIdentityHandoffContext::PairedVault {
             vault_store_id: "store-1".to_owned(),
         },
-    }
+    })
 }
 
 fn unlocked_presence() -> CompanionExtensionPresence {
@@ -65,7 +70,7 @@ fn unlocked_presence() -> CompanionExtensionPresence {
 }
 
 fn handoff_request() -> anyhow::Result<CompanionIdentityHandoffRequest> {
-    Ok(website_begin().prepare("age1recipient".to_owned())?)
+    Ok(website_begin()?.prepare("age1recipient".to_owned())?)
 }
 
 #[test]
@@ -136,22 +141,105 @@ fn discovery_rejects_malformed_and_expired_observations() -> anyhow::Result<()> 
 }
 
 #[test]
-fn website_requires_exact_request_store_and_context_correlation() {
-    let mut request_id = website_begin();
-    request_id.discovery.request.request_id = "request-other".to_owned();
+fn admission_correlates_every_status_and_rechecks_expiry() -> anyhow::Result<()> {
+    let presences = [
+        CompanionExtensionPresence::Unavailable,
+        CompanionExtensionPresence::Locked {
+            vault_type: ExtensionPairingVaultType::Simple,
+            vault_store_id: "store-1".to_owned(),
+            vault_name: "Personal".to_owned(),
+        },
+        CompanionExtensionPresence::Locked {
+            vault_type: ExtensionPairingVaultType::Simple,
+            vault_store_id: "store-other".to_owned(),
+            vault_name: "Other".to_owned(),
+        },
+        unlocked_presence(),
+    ];
+    for presence in presences {
+        let status = CompanionExtensionProtocol::new(presence)?.discover(observation())?;
+        let accepted =
+            CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
+                discovery: observation(),
+                status: status.clone(),
+                observed_at: before_expiry(),
+            });
+        assert!(matches!(
+            accepted,
+            CompanionIdentityStatusAdmission::Accepted { .. }
+        ));
+
+        let mut mismatched_request = status.clone();
+        match &mut mismatched_request {
+            CompanionIdentityStatus::Unavailable { request_id, .. }
+            | CompanionIdentityStatus::Locked { request_id, .. }
+            | CompanionIdentityStatus::DifferentVault { request_id, .. }
+            | CompanionIdentityStatus::Unlocked { request_id, .. } => {
+                *request_id = "request-other".to_owned();
+            }
+        }
+        assert_eq!(
+            CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
+                discovery: observation(),
+                status: mismatched_request,
+                observed_at: before_expiry(),
+            }),
+            CompanionIdentityStatusAdmission::Rejected {
+                failure: CompanionProtocolFailure::RequestMismatch,
+            }
+        );
+
+        let mut mismatched_store = status;
+        match &mut mismatched_store {
+            CompanionIdentityStatus::Unavailable { vault_store_id, .. }
+            | CompanionIdentityStatus::Locked { vault_store_id, .. }
+            | CompanionIdentityStatus::DifferentVault { vault_store_id, .. }
+            | CompanionIdentityStatus::Unlocked { vault_store_id, .. } => {
+                *vault_store_id = "store-other".to_owned();
+            }
+        }
+        assert_eq!(
+            CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
+                discovery: observation(),
+                status: mismatched_store,
+                observed_at: before_expiry(),
+            }),
+            CompanionIdentityStatusAdmission::Rejected {
+                failure: CompanionProtocolFailure::RequestMismatch,
+            }
+        );
+    }
+
+    assert_eq!(
+        CompanionIdentityStatusAdmission::admit(CompanionIdentityStatusAdmissionRequest {
+            discovery: observation(),
+            status: unlocked_status(),
+            observed_at: expiry(),
+        }),
+        CompanionIdentityStatusAdmission::Rejected {
+            failure: CompanionProtocolFailure::DiscoveryExpired,
+        }
+    );
+    Ok(())
+}
+
+#[test]
+fn website_requires_exact_request_store_and_context_correlation() -> anyhow::Result<()> {
+    let mut request_id = website_begin()?;
+    request_id.transaction.discovery.request.request_id = "request-other".to_owned();
     assert!(matches!(
         request_id.validate(),
         Err(CompanionProtocolError::RequestMismatch)
     ));
 
-    let mut store = website_begin();
-    store.discovery.request.vault_store_id = "store-other".to_owned();
+    let mut store = website_begin()?;
+    store.transaction.discovery.request.vault_store_id = "store-other".to_owned();
     assert!(matches!(
         store.validate(),
         Err(CompanionProtocolError::RequestMismatch)
     ));
 
-    let mut context = website_begin();
+    let mut context = website_begin()?;
     context.context = CompanionIdentityHandoffContext::ExistingVaultImport {
         vault_store_id: "store-other".to_owned(),
     };
@@ -159,11 +247,11 @@ fn website_requires_exact_request_store_and_context_correlation() {
         context.validate(),
         Err(CompanionProtocolError::ContextMismatch)
     ));
+    Ok(())
 }
 
 #[test]
-fn authorization_rejects_missing_capability_revocation_and_app_key_mismatch() -> anyhow::Result<()>
-{
+fn authorization_requires_capability_and_an_issued_discovery() -> anyhow::Result<()> {
     let without_access = CompanionExtensionPresence::Unlocked {
         vault_type: ExtensionPairingVaultType::Simple,
         vault_store_id: "store-1".to_owned(),
@@ -171,27 +259,141 @@ fn authorization_rejects_missing_capability_revocation_and_app_key_mismatch() ->
         app_key: app_key(vec![ExtensionConnectScope::PasswordFilling]),
     };
     assert!(matches!(
-        CompanionExtensionProtocol::new(without_access),
+        CompanionExtensionHandoffEndpoint::new(without_access),
         Err(CompanionProtocolError::InvalidValue)
     ));
 
-    let request = handoff_request()?;
-    let mut revoked = CompanionExtensionProtocol::new(CompanionExtensionPresence::Unavailable)?;
+    let mut revoked =
+        CompanionExtensionHandoffEndpoint::new(CompanionExtensionPresence::Unavailable)?;
+    let status = revoked.discover(observation())?;
+    let transaction =
+        CompanionAdmittedIdentityDiscovery::admit(CompanionIdentityStatusAdmissionRequest {
+            discovery: observation(),
+            status,
+            observed_at: before_expiry(),
+        })?;
     assert!(matches!(
-        revoked.authorize_handoff(request.clone()),
+        (CompanionWebsiteHandoffBegin {
+            transaction,
+            context: CompanionIdentityHandoffContext::PairedVault {
+                vault_store_id: "store-1".to_owned(),
+            },
+        })
+        .prepare("age1recipient".to_owned()),
         Err(CompanionProtocolError::AppKeyUnavailable)
     ));
 
-    let mut protocol = CompanionExtensionProtocol::new(unlocked_presence())?;
-    let mut mismatched = request.clone();
-    mismatched.expected_app_key.app_id = "app-other".to_owned();
+    let mut endpoint = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    endpoint.discover(observation())?;
+    let authorization = CompanionIdentityHandoffAuthorization {
+        request: handoff_request()?,
+        observed_at: before_expiry(),
+        presence: unlocked_presence(),
+    };
+    endpoint.authorize_handoff(authorization.clone())?;
     assert!(matches!(
-        protocol.authorize_handoff(mismatched),
+        endpoint.authorize_handoff(authorization),
+        Err(CompanionProtocolError::NonceUnavailable)
+    ));
+    Ok(())
+}
+
+#[test]
+fn mismatched_stale_and_concurrent_transactions_consume_endpoint_state() -> anyhow::Result<()> {
+    let mut mismatched = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    mismatched.discover(observation())?;
+    let exact = CompanionIdentityHandoffAuthorization {
+        request: handoff_request()?,
+        observed_at: before_expiry(),
+        presence: unlocked_presence(),
+    };
+    let mut wrong = exact.clone();
+    let CompanionIdentityStatus::Unlocked { app_key, .. } = &mut wrong.request.transaction.status
+    else {
+        return Err(anyhow::anyhow!("expected unlocked fixture"));
+    };
+    app_key.app_key.app_id = "app-other".to_owned();
+    assert!(matches!(
+        mismatched.authorize_handoff(wrong),
+        Err(CompanionProtocolError::RequestMismatch)
+    ));
+    assert!(matches!(
+        mismatched.authorize_handoff(exact),
+        Err(CompanionProtocolError::NonceUnavailable)
+    ));
+
+    let mut revoked = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    revoked.discover(observation())?;
+    let exact = CompanionIdentityHandoffAuthorization {
+        request: handoff_request()?,
+        observed_at: before_expiry(),
+        presence: unlocked_presence(),
+    };
+    let mut unavailable = exact.clone();
+    unavailable.presence = CompanionExtensionPresence::Unavailable;
+    assert!(matches!(
+        revoked.authorize_handoff(unavailable),
+        Err(CompanionProtocolError::AppKeyUnavailable)
+    ));
+    assert!(matches!(
+        revoked.authorize_handoff(exact),
+        Err(CompanionProtocolError::NonceUnavailable)
+    ));
+
+    let mut changed_presence = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    changed_presence.discover(observation())?;
+    let mut changed = CompanionIdentityHandoffAuthorization {
+        request: handoff_request()?,
+        observed_at: before_expiry(),
+        presence: unlocked_presence(),
+    };
+    let CompanionExtensionPresence::Unlocked { app_key, .. } = &mut changed.presence else {
+        return Err(anyhow::anyhow!("expected unlocked presence fixture"));
+    };
+    app_key.app_key.app_id = "app-other".to_owned();
+    assert!(matches!(
+        changed_presence.authorize_handoff(changed),
         Err(CompanionProtocolError::HandoffBindingMismatch)
     ));
-    protocol.authorize_handoff(request.clone())?;
     assert!(matches!(
-        protocol.authorize_handoff(request),
+        changed_presence.authorize_handoff(CompanionIdentityHandoffAuthorization {
+            request: handoff_request()?,
+            observed_at: before_expiry(),
+            presence: unlocked_presence(),
+        }),
+        Err(CompanionProtocolError::NonceUnavailable)
+    ));
+
+    let mut stale = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    stale.discover(observation())?;
+    let stale_authorization = CompanionIdentityHandoffAuthorization {
+        request: handoff_request()?,
+        observed_at: expiry(),
+        presence: unlocked_presence(),
+    };
+    assert!(matches!(
+        stale.authorize_handoff(stale_authorization.clone()),
+        Err(CompanionProtocolError::DiscoveryExpired)
+    ));
+    assert!(matches!(
+        stale.authorize_handoff(stale_authorization),
+        Err(CompanionProtocolError::NonceUnavailable)
+    ));
+
+    let mut concurrent = CompanionExtensionHandoffEndpoint::new(unlocked_presence())?;
+    concurrent.discover(observation())?;
+    let mut another = observation();
+    another.request.request_id = "request-2".to_owned();
+    assert!(matches!(
+        concurrent.discover(another),
+        Err(CompanionProtocolError::RequestMismatch)
+    ));
+    assert!(matches!(
+        concurrent.authorize_handoff(CompanionIdentityHandoffAuthorization {
+            request: handoff_request()?,
+            observed_at: before_expiry(),
+            presence: unlocked_presence(),
+        }),
         Err(CompanionProtocolError::NonceUnavailable)
     ));
     Ok(())
