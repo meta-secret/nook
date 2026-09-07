@@ -116,6 +116,261 @@ impl NookVaultManager {
     }
 }
 
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use crate::storage::event_db::load_local_event_store;
+    use crate::storage::indexed_db::{import_vault_blob, switch_active_vault};
+    use nook_core::{
+        Database, DeviceIdentity, DeviceMode, SecretId, SecretValue, SentinelPolicy,
+        VaultArchitecture, VaultCrypto, VaultNameRef, VaultStoreIdentityRef, VaultType,
+        VaultVersionWrite,
+    };
+    use std::slice;
+    use wasm_bindgen_test::*;
+
+    const E2E_PASSWORD_SCRYPT_LOG_N: u8 = 10;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn password_unlock_rejects_sentinel_vaults_before_decryption() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
+        let mut records = nook_core::create_sentinel_share_records(&keys, &participants, 2.into())?;
+        let mut database = Database::new();
+        let secret_id =
+            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
+        database.insert(
+            secret_id,
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
+                title: "sentinel password".to_owned(),
+                note: "must be rejected".to_owned(),
+            }),
+        );
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        records.extend(database.to_stored_records_with_crypto(&crypto)?);
+        let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
+            &keys,
+            nook_core::generate_id()?.as_str(),
+            "Recovery",
+            "2026-09-07T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
+        )
+        .issue()?;
+        let store_id = nook_core::generate_store_id()?.to_string();
+        let architecture = VaultArchitecture::sentinel_personal(
+            DeviceMode::Standard,
+            SentinelPolicy {
+                threshold: 2.into(),
+                required_participants: 2.into(),
+                ready_participants: 2.into(),
+            },
+        );
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            &records,
+            &VaultUnlock::Keys,
+            slice::from_ref(&password_entry),
+            VaultStoreIdentityRef::Assigned(&store_id),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
+            &architecture,
+        )?;
+        import_vault_blob(yaml.as_str(), Some("Sentinel password")).await?;
+        switch_active_vault(&store_id).await?;
+
+        let mut manager = NookVaultManager::new();
+        let result = manager
+            .connect_with_password(
+                "local".to_owned(),
+                String::new(),
+                String::new(),
+                password_entry.id,
+                "correct horse battery staple".to_owned(),
+                50,
+            )
+            .await;
+        assert!(
+            result.is_err(),
+            "sentinel password unlock must be forbidden"
+        );
+        assert_eq!(manager.vault.architecture.vault_type, VaultType::Sentinel);
+        assert!(manager.vault.secrets_key.is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn password_unlock_requires_a_backup_entry() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let mut database = Database::new();
+        let secret_id =
+            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
+        database.insert(
+            secret_id,
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
+                title: "password entry missing".to_owned(),
+                note: "no envelope".to_owned(),
+            }),
+        );
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let records = database.to_stored_records_with_crypto(&crypto)?;
+        let store_id = nook_core::generate_store_id()?.to_string();
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            VaultStoreIdentityRef::Assigned(&store_id),
+            VaultNameRef::Named("No backup"),
+            VaultVersionWrite::Initial,
+        )?;
+        import_vault_blob(yaml.as_str(), Some("No backup")).await?;
+        switch_active_vault(&store_id).await?;
+
+        let mut manager = NookVaultManager::new();
+        let result = manager
+            .connect_with_password(
+                "local".to_owned(),
+                String::new(),
+                String::new(),
+                String::new(),
+                "correct horse battery staple".to_owned(),
+                50,
+            )
+            .await;
+        assert!(result.is_err(), "unlock without a backup entry must fail");
+        assert!(manager.vault.secrets_key.is_empty());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn password_unlock_uses_the_first_entry_for_an_unknown_id() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let identity = DeviceIdentity::generate()?;
+        let password_entry = nook_core::PasswordEntryIssuance::with_work_factor(
+            &keys,
+            nook_core::generate_id()?.as_str(),
+            "Recovery",
+            "2026-09-07T00:00:00Z",
+            "correct horse battery staple",
+            E2E_PASSWORD_SCRYPT_LOG_N.into(),
+        )
+        .issue()?;
+        let mut owner = NookVaultManager::new();
+        owner.vault.store_id = nook_core::generate_store_id()?.to_string();
+        owner.device.identity_private_key = identity.secret_string().into_inner();
+        owner.apply_genesis_vault_keys(&identity, &keys)?;
+        owner.vault.password_entries = vec![password_entry.clone()];
+        owner.bootstrap_event_log_genesis().await?;
+        let yaml = owner.serialize_current_projection_yaml()?;
+        let store_id = owner.vault.store_id.clone();
+        import_vault_blob(yaml.as_str(), Some("Password fallback")).await?;
+        switch_active_vault(&store_id).await?;
+
+        let mut recovered = NookVaultManager::new();
+        let page = recovered
+            .connect_with_password(
+                "local".to_owned(),
+                String::new(),
+                String::new(),
+                "unknown-entry-id".to_owned(),
+                "correct horse battery staple".to_owned(),
+                50,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("password fallback failed: {error:?}"))?;
+        assert_eq!(recovered.vault.store_id, store_id);
+        assert_eq!(page.total(), 0);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn password_record_loading_filters_join_requests() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let mut database = Database::new();
+        let secret_id =
+            SecretId::from_vault_record(format!("secret_{}", nook_core::generate_id()?).as_str());
+        database.insert(
+            secret_id,
+            SecretValue::SecureNote(nook_core::SecureNoteSecret {
+                title: "retained secret".to_owned(),
+                note: "join rows are not password records".to_owned(),
+            }),
+        );
+        let crypto = VaultCrypto::new(&keys.secrets_key)?;
+        let mut records = database.to_stored_records_with_crypto(&crypto)?;
+        let joiner = DeviceIdentity::generate()?;
+        records.push(nook_core::JoinRequestIssuance::new(&joiner, "2026-09-07T00:00:00Z").issue()?);
+        let store_id = nook_core::generate_store_id()?.to_string();
+        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
+            &records,
+            &VaultUnlock::Keys,
+            &[],
+            VaultStoreIdentityRef::Assigned(&store_id),
+            VaultNameRef::Unnamed,
+            VaultVersionWrite::Initial,
+        )?;
+
+        let mut manager = NookVaultManager::new();
+        let (event_log_remote, retained) = manager
+            .load_password_unlock_records(yaml.as_str(), false)
+            .await?;
+        assert!(!event_log_remote);
+        assert_eq!(retained.len(), 1);
+        assert!(!nook_core::is_join_stored_record(&retained[0])?);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn password_membership_persistence_adds_an_authorized_member() -> anyhow::Result<()> {
+        let keys = nook_core::generate_vault_keys()?;
+        let owner_identity = DeviceIdentity::generate()?;
+        let joiner_identity = DeviceIdentity::generate()?;
+        let mut manager = NookVaultManager::new();
+        manager.vault.store_id = nook_core::generate_store_id()?.to_string();
+        manager.device.identity_private_key = owner_identity.secret_string().into_inner();
+        manager.apply_genesis_vault_keys(&owner_identity, &keys)?;
+        manager.bootstrap_event_log_genesis().await?;
+        let records = manager.vault.meta.to_stored_records();
+
+        manager
+            .persist_password_unlock_membership(&records, &joiner_identity, &keys)
+            .await
+            .map_err(|error| anyhow::anyhow!("membership persistence failed: {error:?}"))?;
+        let graph = load_local_event_store(&manager.vault.store_id)
+            .await?
+            .load_graph(&manager.vault.store_id)?;
+        let approvals = graph
+            .events()
+            .flat_map(|(_, event)| event.body.operations.iter())
+            .filter(|operation| {
+                matches!(
+                    operation,
+                    nook_core::VaultOperation::JoinApproved { device_id, .. }
+                        if device_id == joiner_identity.device_id()
+                )
+            })
+            .count();
+        assert_eq!(approvals, 1);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn password_membership_persistence_requires_an_event_log() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        let identity = DeviceIdentity::generate()?;
+        let keys = nook_core::generate_vault_keys()?;
+        let result = manager
+            .persist_password_unlock_membership(&[], &identity, &keys)
+            .await;
+        assert!(
+            result.is_err(),
+            "membership persistence without an event log must fail"
+        );
+        Ok(())
+    }
+}
+
 impl NookVaultManager {
     pub(super) async fn load_password_unlock_records(
         &mut self,

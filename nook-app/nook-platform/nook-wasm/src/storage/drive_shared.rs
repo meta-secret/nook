@@ -190,3 +190,76 @@ pub(crate) async fn verify_shared_vault_folder(
             .unwrap_or_else(|| "Nook shared vault".to_owned()),
     ))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn drive_errors_preserve_status_and_optional_body() {
+        assert!(matches!(
+            drive_error(reqwest::StatusCode::BAD_REQUEST, "bad query"),
+            NookError::Drive(message)
+                if message == "Google Drive API responded with status 400 Bad Request — bad query"
+        ));
+        assert!(matches!(
+            drive_error(reqwest::StatusCode::SERVICE_UNAVAILABLE, ""),
+            NookError::Drive(message)
+                if message == "Google Drive API responded with status 503 Service Unavailable"
+        ));
+    }
+
+    #[test]
+    fn shared_drive_response_shapes_accept_optional_fields() -> anyhow::Result<()> {
+        let created: DriveFileCreateResponse =
+            serde_json::from_str(r#"{"id":"folder-1","name":"Shared"}"#)?;
+        assert_eq!(created.id.as_deref(), Some("folder-1"));
+        assert_eq!(created.name.as_deref(), Some("Shared"));
+
+        let metadata: DriveFolderMetadataResponse = serde_json::from_str(
+            r#"{"id":"folder-1","name":"Shared","mimeType":"application/vnd.google-apps.folder","capabilities":{"canAddChildren":true}}"#,
+        )?;
+        assert_eq!(metadata.id.as_deref(), Some("folder-1"));
+        assert_eq!(metadata.name.as_deref(), Some("Shared"));
+        assert_eq!(
+            metadata.mime_type.as_deref(),
+            Some("application/vnd.google-apps.folder")
+        );
+        assert_eq!(
+            metadata
+                .capabilities
+                .and_then(|capabilities| capabilities.can_add_children),
+            Some(true)
+        );
+
+        let missing: DriveFolderMetadataResponse = serde_json::from_str("{}")?;
+        assert!(missing.id.is_none());
+        assert!(missing.capabilities.is_none());
+        Ok(())
+    }
+}
+
+#[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
+mod browser_tests {
+    use super::*;
+    use wasm_bindgen_test::*;
+
+    wasm_bindgen_test_configure!(run_in_browser);
+
+    #[wasm_bindgen_test]
+    async fn shared_drive_input_guards_fail_before_network_access() -> anyhow::Result<()> {
+        assert!(create_shared_vault_folder("", "Shared").await.is_err());
+        assert!(
+            share_folder_with_email("ya29.test", "", "joiner@example.test")
+                .await
+                .is_err()
+        );
+        assert!(
+            share_folder_with_email("ya29.test", "folder-1", "")
+                .await
+                .is_err()
+        );
+        assert!(verify_shared_vault_folder("ya29.test", "").await.is_err());
+        Ok(())
+    }
+}
