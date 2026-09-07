@@ -1,8 +1,5 @@
 import { posix } from 'node:path';
-import {
-  consumeEnvPrefix,
-  isQuotedDynamicTaskName,
-} from './skill-provider-command-boundary.ts';
+import { consumeEnvPrefix } from './skill-provider-command-boundary.ts';
 import {
   ShellSeparator,
   type ShellToken,
@@ -11,6 +8,7 @@ import {
 import type { ConfigurationReference } from './skill-provider-config-types.ts';
 import { resolveDispatchCommand } from './skill-provider-shell-dispatch.ts';
 import { tokenizeShell } from './skill-provider-shell-tokenizer.ts';
+import { isQuotedDynamicTaskName } from './skill-provider-task-boundary.ts';
 
 export type CommandConfigurationRequest = {
   readonly commands: readonly string[];

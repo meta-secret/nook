@@ -8,6 +8,7 @@ import {
   hasUnquotedExpansion,
   tokenizeShell,
 } from './skill-provider-shell-tokenizer.ts';
+import { isQuotedDynamicTaskName } from './skill-provider-task-boundary.ts';
 import {
   aliasInvocationSource,
   applyAliasMutation,
@@ -69,15 +70,6 @@ export type {
   ShellLaunchArgument,
   ShellScriptLaunch,
 } from './skill-provider-command-types.ts';
-
-export function isQuotedDynamicTaskName(word: ShellWord): boolean {
-  return (
-    word.dynamic &&
-    /^"[\s\S]*"$/u.test(word.source) &&
-    !word.source.includes('$(') &&
-    !word.source.includes('`')
-  );
-}
 
 const MAX_SHELL_COMMANDS = 4_096;
 const MAX_SHELL_DEPTH = 8;
@@ -892,12 +884,7 @@ function runtimeExecutable(
   if (index === request.words.length) return false;
   const executable = request.words[index] as ShellWord;
   if (!executableIsStatic(executable)) {
-    // Task targets are quoted data arguments; the Task executable remains literal.
-    if (
-      (request.runtime === 'task' || request.runtime === 'go-task') &&
-      isQuotedDynamicTaskName(executable)
-    )
-      return false;
+    if (isQuotedDynamicTaskName(executable, request.runtime)) return false;
     throw new Error(
       `Dynamic ${request.runtime} executable construction is forbidden: ${executable.source}`,
     );
