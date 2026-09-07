@@ -591,7 +591,7 @@ mod tests {
 
     #[expect(
         unowned_function,
-        reason = "test fixture constructs a signed event for provider export coverage"
+        reason = "framework boundary: test fixture constructs a signed event for provider export coverage"
     )]
     fn event_fixture() -> anyhow::Result<(EventId, EventStorageBytes, VaultEvent)> {
         let signing = SigningIdentity::generate()?.0;
