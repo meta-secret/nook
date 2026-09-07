@@ -7,8 +7,8 @@ function ownershipUnit(number, gizmoId, capability = 'Plan validation') {
   return `${number}. Capability: ${capability}; Gizmo ID: ${gizmoId}; Functional owner: AI; Expertise provider: None; Expertise allowed code paths: None; Expertise allowed test paths: None; Expertise forbidden paths: None; Expertise consumer interfaces: None; Expertise acceptance evidence: None; Capability acceptance evidence: Contract tests pass`
 }
 
-function slice(number, gizmoId, predecessor = 'None', scope = 'Validator') {
-  return `${number}. Gizmo ID: ${gizmoId}; Gizmo name: Validator; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored changed lines: 200; Acceptance evidence: Contract tests pass`
+function slice(number, gizmoId, predecessor = 'None', scope = 'Validator', estimate = 200, evidence = 'Contract tests pass') {
+  return `${number}. Gizmo ID: ${gizmoId}; Gizmo name: Validator ${number}; Predecessor Gizmo ID: ${predecessor}; ${scope}; Estimated authored changed lines: ${estimate}; Acceptance evidence: ${evidence}`
 }
 
 function plan({
@@ -17,6 +17,8 @@ function plan({
   slices = [slice(1, 'gizmo-1')],
   shape = 'One PR',
   mode = 'One PR',
+  totalEstimate = 200,
+  currentEstimate = 200,
 } = {}) {
   return `# Task plan
 
@@ -36,14 +38,14 @@ Deliver one mapped PR.
 
 - Mission controller: Gizmo Prime
 - Current Gizmo ID: ${currentGizmoId}
-- Estimated authored changed lines: 200
+- Estimated authored changed lines: ${totalEstimate}
 - Owning modules, packages, or layers: Workbench records
 - Ownership units:
 ${ownershipUnits.join('\n')}
 - Public or cross-module interfaces: Plan contract
 - Delivery shape: ${shape}
 - PR sequence mode: ${mode}
-- Current PR estimated authored changed lines: 200
+- Current PR estimated authored changed lines: ${currentEstimate}
 - Current PR slice and acceptance evidence: Validator; Acceptance evidence: Contract tests pass
 - PR slices, estimates, and acceptance evidence:
 ${slices.join('\n')}
@@ -85,11 +87,23 @@ test('accepts a canonical Gizmo ID that starts with a digit', () => {
   assert.equal(validate(candidate, '2fa-slice'), '')
 })
 
-test('rejects multiple PR rows', () => {
-  assert.match(
-    validate(plan({ slices: [slice(1, 'gizmo-1'), slice(2, 'gizmo-2')] })),
-    /one-PR plan requires one numbered slice/,
-  )
+test('accepts a strictly sequential multi-PR feature plan', () => {
+  const candidate = plan({
+    currentGizmoId: 'gizmo-1',
+    ownershipUnits: [
+      ownershipUnit(1, 'gizmo-1'),
+      ownershipUnit(2, 'gizmo-2', 'Publisher adoption'),
+    ],
+    slices: [
+      slice(1, 'gizmo-1', 'None', 'Validator', 1200),
+      slice(2, 'gizmo-2', 'gizmo-1', 'Publisher', 1200, 'Publisher tests pass'),
+    ],
+    shape: 'Multiple PRs',
+    mode: 'Sequential PRs',
+    totalEstimate: 2400,
+    currentEstimate: 1200,
+  })
+  assert.equal(validate(candidate, 'gizmo-1'), '')
 })
 
 test('rejects a predecessor on the sole PR row', () => {
@@ -107,6 +121,78 @@ for (const [shape, mode] of [
     assert.notEqual(validate(plan({ shape, mode })), '')
   })
 }
+
+test('rejects a sequential slice whose predecessor is not the prior slice', () => {
+  const candidate = plan({
+    ownershipUnits: [
+      ownershipUnit(1, 'gizmo-1'),
+      ownershipUnit(2, 'gizmo-2', 'Publisher adoption'),
+    ],
+    slices: [
+      slice(1, 'gizmo-1', 'None', 'Validator', 1200),
+      slice(2, 'gizmo-2', 'None', 'Publisher', 1200, 'Publisher tests pass'),
+    ],
+    shape: 'Multiple PRs',
+    mode: 'Sequential PRs',
+    totalEstimate: 2400,
+    currentEstimate: 1200,
+  })
+  assert.match(validate(candidate), /immediately preceding Gizmo ID/)
+})
+
+test('rejects sequential delivery when the complete feature fits one PR', () => {
+  const candidate = plan({
+    ownershipUnits: [
+      ownershipUnit(1, 'gizmo-1'),
+      ownershipUnit(2, 'gizmo-2', 'Publisher adoption'),
+    ],
+    slices: [
+      slice(1, 'gizmo-1', 'None', 'Validator', 1000),
+      slice(2, 'gizmo-2', 'gizmo-1', 'Publisher', 1000, 'Publisher tests pass'),
+    ],
+    shape: 'Multiple PRs',
+    mode: 'Sequential PRs',
+    totalEstimate: 2000,
+    currentEstimate: 1000,
+  })
+  assert.match(validate(candidate), /necessary feature estimate above 2,000/)
+})
+
+test('rejects sequential slices with duplicate observable functionality', () => {
+  const candidate = plan({
+    ownershipUnits: [
+      ownershipUnit(1, 'gizmo-1'),
+      ownershipUnit(2, 'gizmo-2', 'Publisher adoption'),
+    ],
+    slices: [
+      slice(1, 'gizmo-1', 'None', 'Validator', 1200),
+      slice(2, 'gizmo-2', 'gizmo-1', 'Validator', 1200),
+    ],
+    shape: 'Multiple PRs',
+    mode: 'Sequential PRs',
+    totalEstimate: 2400,
+    currentEstimate: 1200,
+  })
+  assert.match(validate(candidate), /distinct observable functionality/)
+})
+
+test('rejects sequential slices with duplicate acceptance evidence', () => {
+  const candidate = plan({
+    ownershipUnits: [
+      ownershipUnit(1, 'gizmo-1'),
+      ownershipUnit(2, 'gizmo-2', 'Publisher adoption'),
+    ],
+    slices: [
+      slice(1, 'gizmo-1', 'None', 'Validator', 1200),
+      slice(2, 'gizmo-2', 'gizmo-1', 'Publisher', 1200),
+    ],
+    shape: 'Multiple PRs',
+    mode: 'Sequential PRs',
+    totalEstimate: 2400,
+    currentEstimate: 1200,
+  })
+  assert.match(validate(candidate), /distinct acceptance evidence/)
+})
 
 test('rejects an ownership unit mapped to an undeclared Gizmo', () => {
   assert.match(
