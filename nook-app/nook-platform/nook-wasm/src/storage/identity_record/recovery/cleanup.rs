@@ -175,4 +175,80 @@ mod tests {
         assert!(!LocalIdentityRecovery::has_pending().await?);
         identity_record::clear_identity_directory_for_test().await
     }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn pending_marker_round_trips_and_treats_null_as_absent() -> Result<(), NookError> {
+        identity_record::clear_identity_directory_for_test().await?;
+        let app_key = AppKey::generate().map_err(identity_record::map_domain_error)?;
+        let recovery = LocalIdentityRecovery {
+            retired_app_id: Some(app_key.app_id().clone()),
+            has_remaining_local_identities: false,
+        };
+        let database = open_nook_database().await?;
+        let transaction = database
+            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let store = transaction
+            .store("vault")
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let key = serde_wasm_bindgen::to_value(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let null = serde_wasm_bindgen::to_value(&Option::<String>::None)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        store
+            .put(&null, Some(&key))
+            .await
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        assert_eq!(LocalIdentityRecovery::load_pending(&store).await?, None);
+        recovery.write_pending(&store).await?;
+        assert_eq!(
+            LocalIdentityRecovery::load_pending(&store).await?,
+            Some(recovery)
+        );
+        transaction
+            .done()
+            .await
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        identity_record::clear_identity_directory_for_test().await
+    }
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test browser test entrypoint"
+    )]
+    async fn pending_marker_rejects_malformed_json() -> Result<(), NookError> {
+        identity_record::clear_identity_directory_for_test().await?;
+        let database = open_nook_database().await?;
+        let transaction = database
+            .transaction(&["vault"], TransactionMode::ReadWrite)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let store = transaction
+            .store("vault")
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let key = serde_wasm_bindgen::to_value(PENDING_LOCAL_IDENTITY_RECOVERY_CLEANUP_KEY)
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let malformed = serde_wasm_bindgen::to_value("{not-json")
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        store
+            .put(&malformed, Some(&key))
+            .await
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        let error = LocalIdentityRecovery::load_pending(&store)
+            .await
+            .expect_err("malformed cleanup marker must be rejected");
+        assert!(
+            matches!(error, NookError::IndexedDb(ref message) if message.contains("Recovery cleanup decode error")),
+            "unexpected error: {error}"
+        );
+        transaction
+            .done()
+            .await
+            .map_err(|error| NookError::IndexedDb(error.to_string()))?;
+        identity_record::clear_identity_directory_for_test().await
+    }
 }
