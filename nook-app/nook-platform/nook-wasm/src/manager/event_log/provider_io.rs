@@ -515,10 +515,14 @@ mod tests {
     #[wasm_bindgen_test]
     async fn local_genesis_is_idempotently_reused_by_sentinel_guard() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
-        manager.delete_local_browser_data().await?;
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
         manager
             .finish_pin_device_protection("provider-io-test-pin".to_owned())
-            .await?;
+            .await
+            .map_err(|error| anyhow::anyhow!("protect device: {error:?}"))?;
         let identity = manager.device_identity()?;
         manager.initialize_genesis_vault(&identity)?;
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
@@ -528,7 +532,10 @@ mod tests {
         manager.ensure_sentinel_genesis_event(&[], &[]).await?;
         assert_eq!(manager.event_log.heads.len(), 1);
 
-        manager.delete_local_browser_data().await?;
+        manager
+            .delete_local_browser_data()
+            .await
+            .map_err(|error| anyhow::anyhow!("clear browser data: {error:?}"))?;
         Ok(())
     }
 }
