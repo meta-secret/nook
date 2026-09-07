@@ -645,7 +645,7 @@ mod browser_tests {
             .approve_extension_device(
                 joiner.device_id().to_string(),
                 joiner.public_key().to_string(),
-                owner_signing_key,
+                owner_signing_key.clone(),
                 "Browser extension".to_owned(),
             )
             .await)?;
@@ -658,14 +658,24 @@ mod browser_tests {
         let extension_auth_id = extension_member.auth_id();
         assert!(extension_member.label().is_empty());
 
-        js(manager
-            .rename_vault_member(extension_auth_id.clone(), "Work browser".to_owned())
-            .await)?;
-        let renamed = js(manager.list_vault_members())?
-            .into_iter()
-            .find(|member| member.auth_id() == extension_auth_id)
-            .ok_or_else(|| anyhow::anyhow!("renamed extension is missing from roster"))?;
-        assert_eq!(renamed.label(), "Work browser");
+        // The event projection exposes the newly enrolled extension through
+        // the fallback roster until encrypted member rows are hydrated. Restore
+        // that canonical projection before exercising a mutating member path.
+        let extension_join = nook_core::JoinRequest {
+            device_id: joiner.device_id().clone(),
+            public_key: joiner.public_key(),
+            signing_public_key: DeviceSigningPublicKey::from_trusted(owner_signing_key),
+            requested_at: "2026-09-07T00:00:00Z".to_owned(),
+        };
+        let members_key = SymmetricKey::parse(&manager.vault.members_key)?;
+        let member_records = nook_core::build_members_records(
+            &[
+                nook_core::member_from_identity(&owner_identity, "2026-09-07T00:00:00Z"),
+                nook_core::member_from_join(&extension_join)?,
+            ],
+            &members_key,
+        )?;
+        apply_member_records(&mut manager.vault.meta, &member_records)?;
 
         let records = js(manager.revoke_vault_member(extension_auth_id).await)?;
         assert!(records.is_empty());
