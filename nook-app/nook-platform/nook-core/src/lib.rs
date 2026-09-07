@@ -313,9 +313,9 @@ pub use sync_provider_store::{
     StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
     StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry, VaultStorageConnection, active_provider_credentials_projection,
-    auth_snapshot_legacy_storage_value, ensure_local_provider_row, find_duplicate_sync_provider,
-    localize_provider_label, normalize_auth_snapshot, provider_storage_detail, provider_target_key,
+    StoredOAuthTokenExpiry, VaultStorageConnection, auth_snapshot_legacy_storage_value,
+    ensure_local_provider_row, find_duplicate_sync_provider, localize_provider_label,
+    normalize_auth_snapshot, provider_storage_detail, provider_target_key,
     update_provider_sync_metadata,
 };
 pub use validation::{
