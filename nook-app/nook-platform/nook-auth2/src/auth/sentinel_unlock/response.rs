@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{
     DeviceIdentity, DeviceSigningPublicKey, MultiDeviceError, MultiDeviceResult,
-    StoredSecretRecord, encrypt_for_recipient, open_sentinel_share_for_identity,
+    SentinelShareOpening, StoredSecretRecord, encrypt_for_recipient,
 };
 
 /// A request with a valid signature bound to the supplied expected signing key.
@@ -98,7 +98,7 @@ impl CheckedSentinelUnlockRequest {
         signing_key: &SigningKey,
     ) -> MultiDeviceResult<SentinelUnlockResponse> {
         let request = self.request;
-        let opened_share = open_sentinel_share_for_identity(records, identity)?;
+        let opened_share = SentinelShareOpening::new(records, identity).open()?;
         if opened_share.threshold != request.policy.threshold
             || opened_share.required_participants != request.policy.required_participants
             || opened_share.device_id != identity.device_id().as_str()

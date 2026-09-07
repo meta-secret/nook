@@ -15,8 +15,8 @@ mod response;
 pub use response::CheckedSentinelUnlockRequest;
 
 use super::multi_device::{
-    DeviceIdentity, OpenedSentinelShare, VaultKeys, device_id_from_public_key, generate_id,
-    reconstruct_sentinel_vault_keys_from_opened,
+    DeviceIdentity, OpenedSentinelShare, SentinelKeyReconstruction, VaultKeys,
+    device_id_from_public_key, generate_id,
 };
 use crate::{
     AgeArmoredCiphertext, CompactToken, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
@@ -412,7 +412,7 @@ impl SentinelUnlockQuorum<'_> {
             }
             opened.push(contribution.opened_share);
         }
-        reconstruct_sentinel_vault_keys_from_opened(&records, &opened)
+        SentinelKeyReconstruction::from_opened(&records, &opened).reconstruct()
     }
 }
 
@@ -449,9 +449,7 @@ impl SentinelUnlockRequest {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{
-        create_sentinel_root_share_records_for_recipients, open_sentinel_share_for_identity,
-    };
+    use crate::{SentinelShareOpening, create_sentinel_root_share_records_for_recipients};
 
     struct Fixture {
         keys: VaultKeys,
@@ -481,7 +479,7 @@ mod tests {
         let first = fixture.response(&request, 0)?;
         let second = fixture.response(&request, 1)?;
         let local_plaintext =
-            open_sentinel_share_for_identity(&fixture.records, &fixture.participants[0])?;
+            SentinelShareOpening::new(&fixture.records, &fixture.participants[0]).open()?;
         assert!(!serde_json::to_string(&first)?.contains(&local_plaintext.share));
         session = Fixture::collect(session, first)?;
         assert_eq!(

@@ -159,7 +159,7 @@ fn validate_user_secret_types(records: &[StoredSecretRecord]) -> VaultResult<()>
 /// identities can open their encrypted shares locally.
 ///
 /// Browser unlock must not collect peer identities. Use
-/// [`crate::open_sentinel_share_for_identity`] on each device and
+/// [`crate::SentinelShareOpening`] on each device and
 /// [`load_sentinel_vault_from_opened`] on the reconstructing device.
 pub fn load_sentinel_vault(
     content: &str,
@@ -173,7 +173,8 @@ pub fn load_sentinel_vault(
     let stored_records = deserialize_stored(content, format)?;
     validate_user_secret_types(&stored_records)?;
     architecture.validate_records(&stored_records)?;
-    let keys = crate::reconstruct_sentinel_vault_keys(&stored_records, identities)?;
+    let keys = crate::SentinelKeyReconstruction::from_identities(&stored_records, identities)
+        .reconstruct()?;
     hydrate_loaded_vault(UnlockedVault {
         meta: VaultMetaState::from_stored_records(&stored_records)?,
         secrets_key: keys.secrets_key,
@@ -194,7 +195,8 @@ pub fn load_sentinel_vault_from_opened(
     let stored_records = deserialize_stored(content, format)?;
     validate_user_secret_types(&stored_records)?;
     architecture.validate_records(&stored_records)?;
-    let keys = crate::reconstruct_sentinel_vault_keys_from_opened(&stored_records, opened)?;
+    let keys =
+        crate::SentinelKeyReconstruction::from_opened(&stored_records, opened).reconstruct()?;
     hydrate_loaded_vault(UnlockedVault {
         meta: VaultMetaState::from_stored_records(&stored_records)?,
         secrets_key: keys.secrets_key,

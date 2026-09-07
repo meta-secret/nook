@@ -1,21 +1,19 @@
-use std::collections::BTreeSet;
-
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use hkdf::Hkdf;
 use serde::{Deserialize, Deserializer, Serialize, de};
-use sha2::Sha256;
 use zeroize::Zeroize;
 
-use super::secret_sharing::{
-    IndexedShare, reconstruct_secret_bytes, split_secret_bytes, validate_sentinel_threshold,
-};
+use super::secret_sharing::{split_secret_bytes, validate_sentinel_threshold};
 use super::{DeviceIdentity, VaultKeys, VaultMetaRecord, encrypt_for_recipient};
 use crate::auth::slip39;
 use crate::errors::{MultiDeviceError, MultiDeviceResult};
 use crate::{
     AgeArmoredCiphertext, DeviceId, DevicePublicKey, SentinelParticipantCount, SentinelRecordCount,
-    SentinelShareIndex, SentinelThreshold, StoredSecretRecord, SymmetricKey,
+    SentinelShareIndex, SentinelThreshold, StoredSecretRecord,
 };
+
+mod quorum;
+use quorum::SentinelVaultKeyDerivation;
+pub use quorum::{SentinelKeyReconstruction, SentinelShareOpening};
 
 pub const SENTINEL_SHARE_RECORD_PREFIX: &str = "sentinel_share:";
 
@@ -94,28 +92,6 @@ impl<'de> Deserialize<'de> for SentinelShareVersion {
 struct SentinelVaultKeysPlaintext {
     secrets_key: String,
     members_key: String,
-}
-
-const SENTINEL_SECRETS_KEY_INFO: &[u8] = b"nook/sentinel-genesis/v1/secrets-key";
-const SENTINEL_MEMBERS_KEY_INFO: &[u8] = b"nook/sentinel-genesis/v1/members-key";
-
-fn derive_sentinel_vault_keys(root: &[u8; 32]) -> MultiDeviceResult<VaultKeys> {
-    let hkdf = Hkdf::<Sha256>::new(None, root);
-    let mut secrets = [0_u8; 32];
-    let mut members = [0_u8; 32];
-    hkdf.expand(SENTINEL_SECRETS_KEY_INFO, &mut secrets)
-        .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
-    hkdf.expand(SENTINEL_MEMBERS_KEY_INFO, &mut members)
-        .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
-    let result = Ok(VaultKeys {
-        secrets_key: SymmetricKey::parse(&hex::encode(secrets))
-            .map_err(MultiDeviceError::Validation)?,
-        members_key: SymmetricKey::parse(&hex::encode(members))
-            .map_err(MultiDeviceError::Validation)?,
-    });
-    secrets.zeroize();
-    members.zeroize();
-    result
 }
 
 pub fn parse_sentinel_share_envelope(value: &str) -> MultiDeviceResult<SentinelShareEnvelope> {
@@ -200,7 +176,7 @@ pub fn create_sentinel_root_share_records_for_recipients(
     validate_sentinel_threshold(threshold.into(), required_participants.into())?;
     let mut root = [0_u8; 32];
     getrandom::fill(&mut root).map_err(|error| MultiDeviceError::GenerateKey(error.to_string()))?;
-    let keys = derive_sentinel_vault_keys(&root)?;
+    let keys = SentinelVaultKeyDerivation::new(&root).derive()?;
     let shares = slip39::SentinelSecretSplitRequest::new(
         &root,
         threshold.into(),
@@ -248,167 +224,6 @@ pub fn count_sentinel_share_records(
         }
     }
     Ok(count.into())
-}
-
-/// Open this device's encrypted Sentinel share for an in-Rust unlock response.
-pub fn open_sentinel_share_for_identity(
-    records: &[StoredSecretRecord],
-    identity: &DeviceIdentity,
-) -> MultiDeviceResult<OpenedSentinelShare> {
-    let record = records
-        .iter()
-        .find(|entry| entry.key.as_str() == sentinel_share_record_key(identity.device_id()))
-        .ok_or_else(|| MultiDeviceError::SentinelShareNotFound {
-            device_id: identity.device_id().to_string(),
-        })?;
-    let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
-    let plaintext_json = identity.open_utf8(&envelope.ciphertext)?;
-    let plaintext: SentinelSharePlaintext =
-        serde_json::from_str(&plaintext_json).map_err(MultiDeviceError::SentinelSharePayload)?;
-    if plaintext.version != envelope.version
-        || plaintext.threshold != envelope.threshold
-        || plaintext.required_participants != envelope.required_participants
-        || plaintext.share_index != envelope.share_index
-    {
-        return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-    }
-    // Reject malformed legacy share encoding early. Current SLIP-0039 shares
-    // are fully checksum/digest-validated when quorum reconstruction runs.
-    if plaintext.version == SentinelShareVersion::CURRENT {
-        if plaintext.share.split_whitespace().count() != 33 {
-            return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-        }
-    } else {
-        URL_SAFE_NO_PAD
-            .decode(plaintext.share.as_bytes())
-            .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
-    }
-    Ok(OpenedSentinelShare {
-        version: plaintext.version,
-        threshold: plaintext.threshold,
-        required_participants: plaintext.required_participants,
-        share_index: plaintext.share_index,
-        share: plaintext.share,
-        device_id: identity.device_id().to_string(),
-    })
-}
-
-/// Reconstruct vault keys from opened-share ceremony contributions.
-///
-/// `records` are used to verify each contribution matches a stored sentinel share
-/// envelope; peer device identities are never required.
-pub fn reconstruct_sentinel_vault_keys_from_opened(
-    records: &[StoredSecretRecord],
-    opened: &[OpenedSentinelShare],
-) -> MultiDeviceResult<VaultKeys> {
-    let mut shares = Vec::new();
-    let mut expected_threshold = None;
-    let mut expected_required = None;
-    let mut expected_version = None;
-    let mut seen_indexes = BTreeSet::new();
-    let mut slip39_mnemonics = Vec::new();
-    for contribution in opened {
-        let device_id =
-            DeviceId::parse(&contribution.device_id).map_err(MultiDeviceError::Validation)?;
-        let record = records
-            .iter()
-            .find(|entry| entry.key.as_str() == sentinel_share_record_key(&device_id))
-            .ok_or_else(|| MultiDeviceError::SentinelShareNotFound {
-                device_id: contribution.device_id.clone(),
-            })?;
-        let envelope = parse_sentinel_share_envelope(record.value.as_str())?;
-        if contribution.version != envelope.version
-            || contribution.threshold != envelope.threshold
-            || contribution.required_participants != envelope.required_participants
-            || contribution.share_index != envelope.share_index
-        {
-            return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-        }
-        if let Some(threshold) = expected_threshold {
-            if threshold != contribution.threshold {
-                return Err(MultiDeviceError::InvalidSentinelThreshold);
-            }
-        } else {
-            expected_threshold = Some(contribution.threshold);
-        }
-        if let Some(required) = expected_required {
-            if required != contribution.required_participants {
-                return Err(MultiDeviceError::InvalidSentinelThreshold);
-            }
-        } else {
-            expected_required = Some(contribution.required_participants);
-        }
-        if let Some(version) = expected_version {
-            if version != contribution.version {
-                return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-            }
-        } else {
-            expected_version = Some(contribution.version);
-        }
-        if !seen_indexes.insert(contribution.share_index) {
-            return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-        }
-        if contribution.version == SentinelShareVersion::CURRENT {
-            if contribution.share.split_whitespace().count() != 33 {
-                return Err(MultiDeviceError::InvalidSentinelShareEncoding);
-            }
-            slip39_mnemonics.push(contribution.share.clone());
-        } else {
-            let bytes = URL_SAFE_NO_PAD
-                .decode(contribution.share.as_bytes())
-                .map_err(|_| MultiDeviceError::InvalidSentinelShareEncoding)?;
-            shares.push(IndexedShare {
-                index: contribution.share_index.into(),
-                bytes,
-            });
-        }
-    }
-    let threshold = expected_threshold.ok_or(MultiDeviceError::NotEnoughSentinelShares {
-        threshold: 1.into(),
-        available: 0.into(),
-    })?;
-    if opened.len() < usize::from(u8::from(threshold)) {
-        return Err(MultiDeviceError::NotEnoughSentinelShares {
-            threshold,
-            available: opened.len().into(),
-        });
-    }
-    if expected_version == Some(SentinelShareVersion::CURRENT) {
-        let mut root = slip39::SentinelSecretRecoveryRequest::sentinel(
-            &slip39_mnemonics[..usize::from(u8::from(threshold))],
-        )
-        .recover()?;
-        let keys = derive_sentinel_vault_keys(&root);
-        root.zeroize();
-        return keys;
-    }
-    let reconstructed = reconstruct_secret_bytes(
-        &shares[..usize::from(u8::from(threshold))],
-        threshold.into(),
-    )?;
-    let payload: SentinelVaultKeysPlaintext =
-        serde_json::from_slice(&reconstructed).map_err(MultiDeviceError::SentinelSharePayload)?;
-    Ok(VaultKeys {
-        secrets_key: SymmetricKey::parse(&payload.secrets_key)
-            .map_err(MultiDeviceError::Validation)?,
-        members_key: SymmetricKey::parse(&payload.members_key)
-            .map_err(MultiDeviceError::Validation)?,
-    })
-}
-
-/// Native/test helper: open each identity's share locally, then reconstruct.
-///
-/// Browser unlock must use the typed Sentinel unlock request/response protocol;
-/// this helper is for native tests and compatibility code only.
-pub fn reconstruct_sentinel_vault_keys(
-    records: &[StoredSecretRecord],
-    identities: &[DeviceIdentity],
-) -> MultiDeviceResult<VaultKeys> {
-    let opened = identities
-        .iter()
-        .map(|identity| open_sentinel_share_for_identity(records, identity))
-        .collect::<MultiDeviceResult<Vec<_>>>()?;
-    reconstruct_sentinel_vault_keys_from_opened(records, &opened)
 }
 
 #[cfg(test)]
@@ -462,13 +277,19 @@ mod tests {
             assert!(!is_auth_stored_record(record)?);
         }
         assert!(resolve_secrets_key(&records, &first).is_err());
-        assert!(reconstruct_sentinel_vault_keys(&records, slice::from_ref(&first)).is_err());
+        assert!(
+            SentinelKeyReconstruction::from_identities(&records, slice::from_ref(&first))
+                .reconstruct()
+                .is_err()
+        );
 
         let reconstructed =
-            reconstruct_sentinel_vault_keys(&records, &[first.clone(), second.clone()])?;
+            SentinelKeyReconstruction::from_identities(&records, &[first.clone(), second.clone()])
+                .reconstruct()?;
         assert_eq!(reconstructed, keys);
 
-        let alternate = reconstruct_sentinel_vault_keys(&records, &[second, third])?;
+        let alternate =
+            SentinelKeyReconstruction::from_identities(&records, &[second, third]).reconstruct()?;
         assert_eq!(alternate, keys);
         Ok(())
     }
@@ -477,18 +298,20 @@ mod tests {
     fn opened_sentinel_shares_reconstruct_without_peer_identities() -> anyhow::Result<()> {
         let (keys, [first, second, third], records) = sentinel_share_fixture()?;
 
-        let opened_first = open_sentinel_share_for_identity(&records, &first)?;
-        let opened_second = open_sentinel_share_for_identity(&records, &second)?;
+        let opened_first = SentinelShareOpening::new(&records, &first).open()?;
+        let opened_second = SentinelShareOpening::new(&records, &second).open()?;
         assert_eq!(opened_first.device_id, first.device_id().as_str());
         assert_eq!(u8::from(opened_second.threshold), 2);
 
         assert!(
-            reconstruct_sentinel_vault_keys_from_opened(&records, slice::from_ref(&opened_first))
+            SentinelKeyReconstruction::from_opened(&records, slice::from_ref(&opened_first))
+                .reconstruct()
                 .is_err()
         );
 
         let reconstructed =
-            reconstruct_sentinel_vault_keys_from_opened(&records, &[opened_first, opened_second])?;
+            SentinelKeyReconstruction::from_opened(&records, &[opened_first, opened_second])
+                .reconstruct()?;
         assert_eq!(reconstructed, keys);
 
         // Share-row enrollment counts as Ready without an auth envelope.
@@ -498,6 +321,38 @@ mod tests {
             ConnectAccessStatus::Ready
         );
         assert!(resolve_secrets_key(&records, &first).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn quorum_admission_validates_all_opened_contributions_before_reconstructing()
+    -> anyhow::Result<()> {
+        let (keys, [first, second, third], records) = sentinel_share_fixture()?;
+        let opened_first = SentinelShareOpening::new(&records, &first).open()?;
+        let opened_second = SentinelShareOpening::new(&records, &second).open()?;
+        let mut malformed_third = SentinelShareOpening::new(&records, &third).open()?;
+        malformed_third.share.push('!');
+
+        let rejected = SentinelKeyReconstruction::from_opened(
+            &records,
+            &[opened_first.clone(), opened_second.clone(), malformed_third],
+        )
+        .reconstruct();
+        assert!(matches!(
+            rejected,
+            Err(MultiDeviceError::InvalidSentinelShareEncoding)
+        ));
+
+        let reconstructed = SentinelKeyReconstruction::from_opened(
+            &records,
+            &[
+                opened_first,
+                opened_second,
+                SentinelShareOpening::new(&records, &third).open()?,
+            ],
+        )
+        .reconstruct()?;
+        assert_eq!(reconstructed, keys);
         Ok(())
     }
 }
