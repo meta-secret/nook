@@ -1,8 +1,6 @@
 use super::{application, wasm_bindgen};
 use crate::storage::indexed_db;
-use nook_core::{
-    AppId, DevicePublicKey, IsoTimestamp, VaultApplication, VaultConnectIntent, VaultType,
-};
+use nook_core::{IsoTimestamp, VaultApplication, VaultConnectIntent, VaultType};
 use wasm_bindgen::JsError;
 
 fn validate_configured_application_for_content(content: &str) -> Result<(), crate::NookError> {
