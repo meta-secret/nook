@@ -266,7 +266,10 @@ function selectedTaskfileReference(
       continue;
     }
     if (word.dynamic && !taskNameSeen) {
-      if (isQuotedDynamicTaskName({ word })) {
+      if (
+        index === request.words.length - 1 &&
+        isQuotedDynamicTaskName({ word })
+      ) {
         taskNameSeen = true;
         continue;
       }
