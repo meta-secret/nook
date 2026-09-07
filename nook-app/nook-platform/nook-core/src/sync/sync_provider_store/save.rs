@@ -287,11 +287,18 @@ impl OAuthUpdateTarget<'_> {
 impl ProviderSaveRequest {
     fn active_provider_rows(&self) -> (Vec<StorageProviderData>, Option<StorageProviderData>) {
         let active_store_id = self.snapshot.active_vault_store_id.as_deref();
-        let rows = ProviderRows {
+        let active = ProviderRows {
             providers: &self.snapshot.providers,
-        };
-        let active = rows.for_vault(active_store_id).active();
-        let local = rows.for_vault(active_store_id).local().ok().flatten();
+        }
+        .for_vault(active_store_id)
+        .active();
+        let local = ProviderRows {
+            providers: &self.snapshot.providers,
+        }
+        .for_vault(active_store_id)
+        .local()
+        .ok()
+        .flatten();
         (active, local)
     }
 
