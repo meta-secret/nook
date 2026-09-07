@@ -26,6 +26,7 @@ vault behavior.
 Open the narrow design authority for the affected Rust or WASM contract.
 
 - [Authentication providers and sync](design-docs/auth-providers.md)
+- [Companion protocol simulation](design-docs/companion-protocol-simulation.md)
 - [Sentinel genesis](design-docs/sentinel-genesis.md)
 - [Rust action ownership and typestate](design-docs/rust-action-ownership.md)
 - [Typed newtypes](design-docs/typed-newtypes.md)
