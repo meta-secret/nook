@@ -235,14 +235,6 @@ mod tests {
                 })),
             ),
             (
-                Fixture::page_input(crate::PageInputType::Password, &["password"], "password"),
-                Classification::from(Observation::from(Credential {
-                    field_index: Index::ZERO,
-                    role: CredentialRole::Password(Password::Generic),
-                    editability: Editability::Writable,
-                })),
-            ),
-            (
                 Fixture::page_input(
                     crate::PageInputType::Text,
                     &["username"],
@@ -266,6 +258,20 @@ mod tests {
                 CredentialFillFieldClassificationOutcome::Observed
             );
         }
+    }
+
+    #[test]
+    fn nonstandard_password_autocomplete_remains_generic() {
+        let field = Fixture::page_input(crate::PageInputType::Password, &["password"], "password");
+        assert_eq!(
+            Classification::from_page_input(Index::ZERO, &field),
+            Observation::from(Credential {
+                field_index: Index::ZERO,
+                role: CredentialRole::Password(Password::Generic),
+                editability: Editability::Writable,
+            })
+            .into()
+        );
     }
 
     #[test]
