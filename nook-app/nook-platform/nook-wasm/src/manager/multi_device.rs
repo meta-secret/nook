@@ -243,7 +243,7 @@ impl NookVaultManager {
                     ],
                 };
                 let member_records = nook_core::build_members_records(&roster, &members_key)?;
-                self.vault.meta.remove_key(&join.device_id.as_str());
+                self.vault.meta.remove_key(join.device_id.as_str());
                 self.vault.meta.replace_member_records(&member_records)?;
                 operations.push(VaultOperation::SentinelParticipantEnrolled {
                     device_id: join.device_id.clone(),
