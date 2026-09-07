@@ -31,8 +31,10 @@ type StaticAssetResolution =
   | { kind: StaticAssetResolutionKind.Rejected }
   | { kind: StaticAssetResolutionKind.Resolved; path: string }
 
-export function shouldUseSpaFallback(urlPath: string): boolean {
-  return path.extname(urlPath) === ''
+export class MockAuthStaticHostPolicy {
+  static shouldUseSpaFallback(urlPath: string): boolean {
+    return path.extname(urlPath) === ''
+  }
 }
 
 async function resolveAsset(urlPath: string): Promise<StaticAssetResolution> {
@@ -49,7 +51,7 @@ async function resolveAsset(urlPath: string): Promise<StaticAssetResolution> {
   } catch {
     // fall through to SPA index
   }
-  if (!shouldUseSpaFallback(urlPath)) {
+  if (!MockAuthStaticHostPolicy.shouldUseSpaFallback(urlPath)) {
     return { kind: StaticAssetResolutionKind.NotFound }
   }
   // Client-side routes: serve the SPA shell.
