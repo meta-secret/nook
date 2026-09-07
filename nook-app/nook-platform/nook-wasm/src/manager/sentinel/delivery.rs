@@ -1,5 +1,9 @@
 //! Sentinel share delivery and member onboarding boundary.
 
+use nook_core::{
+    SentinelOnboardingIssuance, SentinelOnboardingPackage, SentinelOnboardingRecipient,
+};
+
 use super::super::NookVaultManager;
 use super::StoredSentinelGenesisDelivery;
 use crate::storage::auth_providers::ProviderSnapshotPublication;
@@ -28,9 +32,13 @@ impl NookVaultManager {
             .map_err(|error| NookError::Serialization(error.to_string()))?;
         let delivery: nook_core::SentinelGenesisShareDelivery = serde_json::from_str(delivery_json)
             .map_err(|error| NookError::Serialization(error.to_string()))?;
-        let package =
-            nook_core::create_sentinel_onboarding_package(request, delivery, &provider_snapshot)?;
-        Ok(nook_core::encode_sentinel_onboarding_package(&package)?)
+        let package = SentinelOnboardingIssuance {
+            request,
+            delivery,
+            provider_snapshot: &provider_snapshot,
+        }
+        .create()?;
+        Ok(package.encode()?)
     }
 
     /// Accept a member-addressed package, persist this device's encrypted
@@ -40,9 +48,13 @@ impl NookVaultManager {
         &mut self,
         package_json: String,
     ) -> Result<String, JsError> {
-        let package = nook_core::decode_sentinel_onboarding_package(&package_json)?;
+        let package = SentinelOnboardingPackage::decode(&package_json)?;
         let identity = self.ensure_device_identity()?;
-        let accepted = nook_core::accept_sentinel_onboarding_package(&package, &identity)?;
+        let accepted = SentinelOnboardingRecipient {
+            package: &package,
+            identity: &identity,
+        }
+        .accept()?;
         let stored_json = serde_json::to_string(&StoredSentinelGenesisDelivery {
             request: package.request.clone(),
             delivery: package.delivery.clone(),

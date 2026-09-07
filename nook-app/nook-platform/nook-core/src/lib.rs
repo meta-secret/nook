@@ -196,9 +196,8 @@ pub use secret_view::{
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
-    AcceptedSentinelOnboarding, SentinelOnboardingPackage, SentinelOnboardingVersion,
-    accept_sentinel_onboarding_package, create_sentinel_onboarding_package,
-    decode_sentinel_onboarding_package, encode_sentinel_onboarding_package,
+    AcceptedSentinelOnboarding, SentinelOnboardingIssuance, SentinelOnboardingPackage,
+    SentinelOnboardingRecipient, SentinelOnboardingVersion,
 };
 pub use vault_sync_conflict::{
     ContentSyncConflict, CurrentVaultReplaceability, ProviderVaultDecision,
