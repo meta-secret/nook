@@ -8,6 +8,7 @@ import {
   hasUnquotedExpansion,
   tokenizeShell,
 } from './skill-provider-shell-tokenizer.ts';
+import { isQuotedDynamicTaskName } from './skill-provider-task-boundary.ts';
 import {
   aliasInvocationSource,
   applyAliasMutation,
@@ -883,6 +884,8 @@ function runtimeExecutable(
   if (index === request.words.length) return false;
   const executable = request.words[index] as ShellWord;
   if (!executableIsStatic(executable)) {
+    if (isQuotedDynamicTaskName({ word: executable, runtime: request.runtime }))
+      return false;
     throw new Error(
       `Dynamic ${request.runtime} executable construction is forbidden: ${executable.source}`,
     );

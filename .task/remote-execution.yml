@@ -2,7 +2,7 @@ version: '3'
 
 tasks:
   remote:
-    desc: Run allowlisted tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>).
+    desc: Run named tasks in one configured remote job (TASK_NAMES=<a,b> or TASK_NAME=<a>).
     env:
       REQUESTED_REMOTE_TASKS: '{{.TASK_NAMES | default .TASK_NAME}}'
       REQUESTED_E2E_PROJECT: '{{.E2E_PROJECT}}'
@@ -17,7 +17,7 @@ tasks:
       - |
         set -euo pipefail
 
-        requested_tasks="$(.github/scripts/remote-task-batch.sh --validate "$REQUESTED_REMOTE_TASKS")"
+        requested_tasks="$REQUESTED_REMOTE_TASKS"
 
         branch="$(git branch --show-current)"
         if [ -z "$branch" ] || [ "$branch" = "main" ]; then
@@ -43,23 +43,13 @@ tasks:
           exit 2
         fi
 
-        if .github/scripts/remote-task-batch.sh --requires-current-base "$requested_tasks"; then
-          .github/scripts/require-current-base.sh origin main
-        fi
+        .github/scripts/require-current-base.sh origin main
 
         workflow_args=(
           --ref "$branch"
           --raw-field "tasks=$requested_tasks"
         )
         if [ "$requested_tasks" = "web:e2e:debug" ]; then
-          test -n "$REQUESTED_E2E_PROJECT" || {
-            echo "E2E_PROJECT is required for web:e2e:debug." >&2
-            exit 2
-          }
-          test -n "$REQUESTED_E2E_SPECS" || {
-            echo "E2E_SPECS is required for web:e2e:debug." >&2
-            exit 2
-          }
           workflow_args+=(
             --raw-field "e2e_project=$REQUESTED_E2E_PROJECT"
             --raw-field "e2e_specs=$REQUESTED_E2E_SPECS"
@@ -71,12 +61,6 @@ tasks:
         echo "Dispatched '$requested_tasks' in one job for $branch at $local_sha."
         echo "Inspect it with:"
         echo "gh run list --workflow=remote.yml --branch=\"$branch\" --commit=\"$local_sha\" --event=workflow_dispatch"
-
-  remote:list:
-    desc: Print the allowlisted remote task catalog.
-    silent: true
-    cmds:
-      - .github/scripts/remote-task-batch.sh --list
 
   pr:validate:
     desc: Trigger required PR validation immediately and optionally request concurrent exact-head Codex review (PR=<number>, CODEX_REVIEW=1 only for a final coherent head, FULL_E2E=1 for a Main-fix browser gate, REVIEW_CIRCUIT_BREAKER_ACKNOWLEDGED=1 after comprehensive stabilization).
