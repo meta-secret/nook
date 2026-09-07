@@ -204,6 +204,13 @@ const containerHook = new TextContract({
   label: "ARC Kubernetes container hook",
   source: containerHookSource,
 });
+const containerJobNodesSource = await read(
+  "infra/k0s/config/arc-container-job-nodes",
+);
+const containerJobNodes = new TextContract({
+  label: "ARC container-job node inventory",
+  source: containerJobNodesSource,
+});
 const buildkitSource = await read("infra/k0s/manifests/arc/buildkit.yaml");
 const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
@@ -467,6 +474,7 @@ containerHook.requireAll([
   "automountServiceAccountToken: false",
   'name: "$job"',
   "nook.nokey.sh/arc-build: \"true\"",
+  "nook.nokey.sh/arc-container-job: \"true\"",
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
@@ -493,6 +501,13 @@ containerHook.forbidAll([
   "containerd.sock",
   "hostPath:",
 ]);
+containerJobNodes.requireAll(["nook-rise-s-1", "nook-rise-s-2", "ovh-us"]);
+containerJobNodes.forbid("bynull-servo");
+if (containerJobNodesSource !== "nook-rise-s-1\nnook-rise-s-2\novh-us\n") {
+  throw new Error(
+    "ARC container-job node inventory must contain exactly the declared eligible nodes",
+  );
+}
 
 // These scenarios compare the declared preferences; Kubernetes still combines
 // them with its other scheduler scores and live node state.
@@ -604,6 +619,7 @@ runtimeSmoke.forbidAll(["--load", "docker run", "docker info", "podman"]);
 
 tasks.requireAll([
   "arc:build-hosts:quarantine:",
+  "arc:container-hosts:reconcile:",
   "arc:buildkit:storage:prepare:",
   "install -d -o 1000 -g 1000 -m 0700",
   "infra/k0s/manifests/arc/buildkit.yaml",
@@ -612,6 +628,9 @@ tasks.requireAll([
   "for scale_set in nook-k0s nook-k0s-hive",
   "helm uninstall nook-k0s-cache",
   "arc-build-nodes",
+  "arc-container-job-nodes",
+  "nook.nokey.sh/arc-container-job=true",
+  "ARC container-job labels do not match the declared eligibility inventory",
   "expected_build_nodes",
   "usable_bytes=$((available_bytes + state_bytes + legacy_bytes))",
   'state_bytes="${state_bytes:-0}"',
@@ -645,7 +664,7 @@ tasks.requireAll([
   'secondary|overflow) expected_tier_count=1',
   'kubectl taint node "${tier_nodes[@]}"',
   "ARC build tier $tier is active",
-  "- task: arc:build-hosts:quarantine\n      - task: arc:buildkit:storage:prepare",
+  "- task: arc:build-hosts:quarantine\n      - task: arc:container-hosts:reconcile\n      - task: arc:buildkit:storage:prepare",
   "container-runner-scale-set-values.yaml",
   "container-hook.yaml",
   "for scale_set in nook-k0s nook-k0s-hive nook-k0s-container",
