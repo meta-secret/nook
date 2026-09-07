@@ -12,8 +12,8 @@
 
 use crate::VaultStoreIdentity;
 
+use crate::VaultFormatDocument;
 use crate::errors::VaultSyncError;
-use crate::read_vault_store_id;
 
 type VaultSyncResult<T> = Result<T, VaultSyncError>;
 
@@ -84,12 +84,12 @@ impl VaultRevision {
                 store: VaultRevisionStore::EmptyVault,
             });
         }
-        let store_id = match read_vault_store_id(trimmed)? {
+        let store_id = match VaultFormatDocument::new(trimmed).store_id()? {
             VaultStoreIdentity::Assigned(store_id) => store_id,
             VaultStoreIdentity::Unassigned => return Err(VaultSyncError::MissingStoreId),
         };
         Ok(Self {
-            version: crate::read_vault_version(trimmed)?,
+            version: crate::VaultFormatDocument::new(trimmed).version()?,
             content_hash: Self::content_hash(trimmed),
             store: VaultRevisionStore::Identified(store_id),
         })

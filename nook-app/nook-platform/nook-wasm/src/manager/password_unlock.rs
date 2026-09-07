@@ -405,8 +405,8 @@ impl NookVaultManager {
                     .to_owned(),
             ));
         }
-        let format = nook_core::detect_stored_format(content)?;
-        let records = nook_core::deserialize_stored(content, format)?;
+        let format = nook_core::VaultFormatDocument::new(content).detect()?;
+        let records = nook_core::VaultFormatDocument::new(content).deserialize(format)?;
         let mut retained = Vec::with_capacity(records.len());
         for record in records {
             if !nook_core::is_join_stored_record(&record)? {

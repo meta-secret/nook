@@ -362,7 +362,7 @@ mod tests {
     fn capture_unlock_adopts_metadata_and_version() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         let store_id = nook_core::generate_store_id()?;
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &[],
             &VaultUnlock::Keys,
             &[],
@@ -501,7 +501,7 @@ impl NookVaultManager {
         }
         let records = self.vault.meta.to_stored_records();
         Ok(
-            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
                 &records,
                 &self.vault.unlock,
                 &self.vault.password_entries,

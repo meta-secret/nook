@@ -52,7 +52,7 @@ impl NookVaultManager {
     }
 
     async fn hydrate_listed_password_entries(&mut self, content: &str) -> Result<(), NookError> {
-        let entries = nook_core::read_vault_password_entries(content)?;
+        let entries = nook_core::VaultFormatDocument::new(content).password_entries()?;
         if !entries.is_empty() {
             self.vault.password_entries = entries;
             return Ok(());
@@ -458,7 +458,7 @@ mod metadata_tests {
         manager.vault.password_entries = vec![entry.clone()];
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
         manager.vault.last_synced_content =
-            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
                 &manager.vault.meta.to_stored_records(),
                 &manager.vault.unlock,
                 &manager.vault.password_entries,
@@ -509,7 +509,7 @@ mod metadata_tests {
         )
         .issue()?;
         let remote_store_id = nook_core::generate_store_id()?;
-        let content = nook_core::serialize_stored_yaml_with_unlock_and_name(
+        let content = nook_core::VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &[],
             &VaultUnlock::Keys,
             slice::from_ref(&entry),
@@ -642,7 +642,7 @@ mod wasm_tests {
         manager.vault.vault_name = VaultNameState::Named("Personal".to_owned());
         manager.vault.store_id = nook_core::generate_store_id()?.to_string();
         manager.vault.last_synced_content =
-            nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+            nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
                 &manager.vault.meta.to_stored_records(),
                 &manager.vault.unlock,
                 &manager.vault.password_entries,
@@ -672,14 +672,14 @@ mod wasm_tests {
             VaultNameState::Named(name) if name == "Personal"
         ));
         assert_eq!(
-            nook_core::read_vault_name(&manager.vault.last_synced_content)?,
+            nook_core::VaultFormatDocument::new(&manager.vault.last_synced_content).name()?,
             VaultName::Named("Personal".to_owned())
         );
         let persisted_projection = indexed_db::load_from_indexed_db()
             .await?
             .ok_or_else(|| anyhow::anyhow!("persisted rolled-back projection is missing"))?;
         assert_eq!(
-            nook_core::read_vault_name(&persisted_projection)?,
+            nook_core::VaultFormatDocument::new(&persisted_projection).name()?,
             VaultName::Named("Personal".to_owned())
         );
         assert_eq!(manager.storage.mode, StorageMode::Local);
@@ -711,7 +711,7 @@ mod wasm_tests {
         )
         .issue()?;
         let store_id = nook_core::generate_store_id()?.to_string();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_and_name(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Keys,
             slice::from_ref(&password_entry),

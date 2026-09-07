@@ -630,15 +630,16 @@ async fn replacement_manager(
     fixture: &ImportFixture,
 ) -> anyhow::Result<(NookVaultManager, String)> {
     let previous_store_id = nook_core::generate_store_id()?.to_string();
-    let previous_projection = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
-        &[],
-        &VaultUnlock::Keys,
-        &[],
-        VaultStoreIdentityRef::Assigned(&previous_store_id),
-        VaultNameRef::Named("Previous vault"),
-        VaultVersionWrite::Initial,
-        &VaultArchitecture::default(),
-    )?;
+    let previous_projection =
+        nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+            &[],
+            &VaultUnlock::Keys,
+            &[],
+            VaultStoreIdentityRef::Assigned(&previous_store_id),
+            VaultNameRef::Named("Previous vault"),
+            VaultVersionWrite::Initial,
+            &VaultArchitecture::default(),
+        )?;
     import_vault_blob(previous_projection.as_str(), Some("Previous vault")).await?;
     switch_active_vault(&previous_store_id).await?;
 
@@ -679,7 +680,7 @@ async fn assert_rollback(
         .await?
         .ok_or_else(|| anyhow::anyhow!("restored active projection is missing"))?;
     assert_eq!(
-        nook_core::read_vault_store_id(&projection)?,
+        nook_core::VaultFormatDocument::new(&projection).store_id()?,
         VaultStoreIdentity::Assigned(previous_store_id.to_owned())
     );
     Ok(())
@@ -811,15 +812,16 @@ async fn locked_external_import_preserves_prior_vault_and_password_entries() -> 
         .collect::<Vec<_>>();
 
     let previous_store_id = nook_core::generate_store_id()?.to_string();
-    let previous_projection = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
-        &[],
-        &VaultUnlock::Keys,
-        &[],
-        VaultStoreIdentityRef::Assigned(&previous_store_id),
-        VaultNameRef::Named("Empty local vault"),
-        VaultVersionWrite::Initial,
-        &VaultArchitecture::default(),
-    )?;
+    let previous_projection =
+        nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+            &[],
+            &VaultUnlock::Keys,
+            &[],
+            VaultStoreIdentityRef::Assigned(&previous_store_id),
+            VaultNameRef::Named("Empty local vault"),
+            VaultVersionWrite::Initial,
+            &VaultArchitecture::default(),
+        )?;
     import_vault_blob(previous_projection.as_str(), Some("Empty local vault")).await?;
     switch_active_vault(&previous_store_id).await?;
 

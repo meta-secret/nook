@@ -413,7 +413,7 @@ impl NookVaultManager {
 
     pub(in crate::manager) async fn persist_projection_cache(&mut self) -> Result<(), NookError> {
         let records = self.vault.meta.to_stored_records();
-        let yaml = nook_core::serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &records,
             &self.vault.unlock,
             &self.vault.password_entries,

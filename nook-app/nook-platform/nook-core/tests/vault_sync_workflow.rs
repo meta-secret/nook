@@ -7,9 +7,8 @@ use nook_core::{VaultStoreIdentity, VaultStoreIdentityRef, VaultVersionWrite};
 
 use nook_core::{
     MemoryVaultStore, RevisionGuardedWrite, SecretId, StoreRevision, StoreRevisionRef,
-    StoredRecordPayload, StoredSecretRecord, VaultSyncAction, VaultSyncComparison, VaultSyncError,
-    VaultSyncFanOut, VaultSyncPair, VaultUnlock, read_vault_store_id, read_vault_version,
-    serialize_stored_yaml_with_unlock,
+    StoredRecordPayload, StoredSecretRecord, VaultFormatDocument, VaultRecordSet, VaultSyncAction,
+    VaultSyncComparison, VaultSyncError, VaultSyncFanOut, VaultSyncPair, VaultUnlock,
 };
 use std::collections::HashMap;
 
@@ -19,7 +18,7 @@ struct VaultSyncFixture;
 
 impl VaultSyncFixture {
     fn sample_yaml(version: u64, armor_line: &str) -> anyhow::Result<String> {
-        Ok(serialize_stored_yaml_with_unlock(
+        Ok(VaultRecordSet::serialize_yaml_with_unlock(
         &[StoredSecretRecord {
             key: SecretId::from_vault_record("secret_SMypl8K0w9Y"),
             secret_type: None,
@@ -58,7 +57,7 @@ fn local_save_then_fan_out_replicates_to_all_providers() -> anyhow::Result<()> {
     assert_eq!(remotes["provider-alpha"].blob(), v3);
     assert_eq!(remotes["provider-beta"].blob(), v3);
     assert_eq!(
-        u64::from(read_vault_version(remotes["provider-alpha"].blob())?),
+        u64::from(VaultFormatDocument::new(remotes["provider-alpha"].blob()).version()?),
         3
     );
     Ok(())
@@ -75,7 +74,10 @@ fn remote_ahead_adopts_into_local_on_reconcile() -> anyhow::Result<()> {
         .commit();
     assert_eq!(action, VaultSyncAction::AdoptRemote);
     assert_eq!(local.blob(), remote_blob);
-    assert_eq!(u64::from(read_vault_version(local.blob())?), 4);
+    assert_eq!(
+        u64::from(VaultFormatDocument::new(local.blob()).version()?),
+        4
+    );
     assert_eq!(
         VaultSyncComparison::new(local.blob(), remote.blob()).decide()?,
         VaultSyncAction::Unchanged
@@ -216,10 +218,16 @@ fn sequential_fan_out_stops_updating_local_when_remote_is_newer() -> anyhow::Res
     assert_eq!(actions["stale"], VaultSyncAction::PushLocal);
     assert_eq!(actions["ahead"], VaultSyncAction::AdoptRemote);
     assert_eq!(local.blob(), remotes["ahead"].blob());
-    assert_eq!(u64::from(read_vault_version(local.blob())?), 5);
-    assert_eq!(u64::from(read_vault_version(remotes["stale"].blob())?), 5);
     assert_eq!(
-        read_vault_store_id(local.blob())?,
+        u64::from(VaultFormatDocument::new(local.blob()).version()?),
+        5
+    );
+    assert_eq!(
+        u64::from(VaultFormatDocument::new(remotes["stale"].blob()).version()?),
+        5
+    );
+    assert_eq!(
+        VaultFormatDocument::new(local.blob()).store_id()?,
         VaultStoreIdentity::Assigned(store_id.to_owned())
     );
     Ok(())

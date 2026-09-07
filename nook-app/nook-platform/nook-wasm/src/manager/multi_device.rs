@@ -121,8 +121,8 @@ impl NookVaultManager {
             return Err(MultiDeviceError::SentinelCeremonyRequired.into());
         }
 
-        let format = nook_core::detect_stored_format(&content)?;
-        let records = nook_core::deserialize_stored(&content, format)?;
+        let format = nook_core::VaultFormatDocument::new(&content).detect()?;
+        let records = nook_core::VaultFormatDocument::new(&content).deserialize(format)?;
         let parsed_secrets = SymmetricKey::parse(&secrets_key)?;
         let parsed_members = SymmetricKey::parse(&members_key)?;
 
@@ -147,7 +147,7 @@ impl NookVaultManager {
         self.vault.meta = VaultMetaState::from_stored_records(&records)?;
         self.persist_vault_change(Vec::new()).await?;
 
-        let updated = nook_core::serialize_stored(&records, format)?;
+        let updated = nook_core::VaultRecordSet::serialize(&records, format)?;
         let loaded = LoadedVault::unlock(updated.as_str(), &identity)?;
         let LoadedVault {
             meta,

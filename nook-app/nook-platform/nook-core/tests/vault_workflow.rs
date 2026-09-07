@@ -8,8 +8,8 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
     PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId, SecretType,
-    SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultMetaState,
-    deserialize_stored, filter_secrets, generate_password, serialize_stored, validate_connect,
+    SecretValue, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultFormatDocument,
+    VaultMetaState, VaultRecordSet, filter_secrets, generate_password, validate_connect,
     validate_secret_data, validate_secret_id,
 };
 use std::collections::HashMap;
@@ -97,7 +97,7 @@ fn save_armored_cache(armored: &HashMap<SecretId, String>) -> anyhow::Result<Str
         .map(|key| (key.clone(), SecretType::ApiKey))
         .collect();
     let records = Database::stored_records_from_armored(armored, &secret_types);
-    Ok(serialize_stored(&records, VaultFormat::Yaml)?
+    Ok(VaultRecordSet::serialize(&records, VaultFormat::Yaml)?
         .as_str()
         .to_owned())
 }
@@ -106,7 +106,7 @@ fn load_vault(
     yaml: &str,
     crypto: &VaultCrypto,
 ) -> anyhow::Result<(Database, HashMap<SecretId, String>)> {
-    let records = deserialize_stored(yaml, VaultFormat::Yaml)?;
+    let records = VaultFormatDocument::new(yaml).deserialize(VaultFormat::Yaml)?;
     let mut armored = HashMap::with_capacity(records.len());
     for record in &records {
         armored.insert(record.key.clone(), record.value.as_str().to_owned());
@@ -127,8 +127,8 @@ fn passkey_round_trips_through_encrypted_vault_storage() -> anyhow::Result<()> {
     assert!(!stored[0].value.as_str().contains("alice@example.com"));
     assert!(!stored[0].value.as_str().contains("login.example.com"));
 
-    let yaml = serialize_stored(&stored, VaultFormat::Yaml)?;
-    let parsed = deserialize_stored(yaml.as_str(), VaultFormat::Yaml)?;
+    let yaml = VaultRecordSet::serialize(&stored, VaultFormat::Yaml)?;
+    let parsed = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
     let restored = Database::from_stored_records_with_crypto(&parsed, &crypto)?;
 
     assert_eq!(

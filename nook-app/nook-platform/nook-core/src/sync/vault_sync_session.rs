@@ -83,8 +83,8 @@ impl<'a> YamlSyncSession<'a> {
             return Ok(YamlSyncOutcome::AccessStatus(status));
         }
 
-        let format = crate::detect_stored_format(self.content)?;
-        let fresh_records = crate::deserialize_stored(self.content, format)?;
+        let format = crate::VaultFormatDocument::new(self.content).detect()?;
+        let fresh_records = crate::VaultFormatDocument::new(self.content).deserialize(format)?;
         merge_remote_join_records(self.state, &fresh_records)?;
         Ok(YamlSyncOutcome::Reloaded(Box::new(self.reload()?)))
     }
@@ -113,9 +113,8 @@ mod tests {
     use super::*;
     use crate::errors;
     use crate::{
-        PasswordEnvelope, PasswordUnlockEntry, VaultKeys, VaultResult, generate_store_id,
-        generate_vault_keys, genesis_auth_record, genesis_members_records,
-        serialize_stored_yaml_with_unlock, serialize_stored_yaml_with_unlock_and_name,
+        PasswordEnvelope, PasswordUnlockEntry, VaultKeys, VaultRecordSet, VaultResult,
+        generate_store_id, generate_vault_keys, genesis_auth_record, genesis_members_records,
     };
 
     struct YamlSyncTestData;
@@ -136,7 +135,7 @@ mod tests {
                 "2026-06-28T00:00:00Z",
             )?);
             let store_id = generate_store_id()?;
-            serialize_stored_yaml_with_unlock(
+            VaultRecordSet::serialize_yaml_with_unlock(
                 &records,
                 &VaultUnlock::Keys,
                 &[],
@@ -199,7 +198,7 @@ mod tests {
             "2026-06-28T00:00:00Z",
         )?);
         let store_id = generate_store_id()?;
-        let yaml = serialize_stored_yaml_with_unlock_and_name(
+        let yaml = VaultRecordSet::serialize_yaml_with_unlock_and_name(
             &records,
             &VaultUnlock::Passwords {
                 entries: password_entries.clone(),

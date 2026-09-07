@@ -16,7 +16,7 @@ pub fn update_provider_sync_metadata(
     manager_store_id: ManagerStoreScopeRef<'_>,
     synced_at: &str,
 ) -> Vec<StorageProviderData> {
-    let version = match crate::read_vault_version(vault_yaml) {
+    let version = match crate::VaultFormatDocument::new(vault_yaml).version() {
         Ok(version) => match i64::try_from(u64::from(version)) {
             Ok(version) if version > 0 => ProviderSyncedVaultVersion::Version(version.into()),
             Ok(_) | Err(_) => ProviderSyncedVaultVersion::Unknown,

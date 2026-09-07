@@ -4,11 +4,10 @@ use std::io;
 
 use nook_core::{
     ApiKeySecret, Database, DeviceEnrollment, DeviceIdentity, JoinRequestApproval,
-    JoinRequestIssuance, SecretId, SecretValue, VaultCrypto, VaultFormat, VaultKeys,
-    deserialize_stored, generate_vault_keys, genesis_auth_record, genesis_members_records,
+    JoinRequestIssuance, SecretId, SecretValue, VaultCrypto, VaultFormat, VaultFormatDocument,
+    VaultKeys, VaultRecordSet, generate_vault_keys, genesis_auth_record, genesis_members_records,
     list_join_requests, rename_vault_member, replace_member_records, resolve_member_roster,
-    resolve_members_key, resolve_secrets_key, revoke_vault_member, serialize_stored,
-    user_stored_records,
+    resolve_members_key, resolve_secrets_key, revoke_vault_member, user_stored_records,
 };
 
 fn sid(label: &str) -> SecretId {
@@ -92,7 +91,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     records.push(auth_three);
     replace_member_records(&mut records, member_records)?;
 
-    let yaml = serialize_stored(&records, VaultFormat::Yaml)?;
+    let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
     let yaml_str = yaml.as_str();
     assert!(yaml_str.contains("auth:"));
     assert!(yaml_str.contains("members:"));
@@ -103,7 +102,7 @@ fn three_device_join_flow_unlocks_shared_vault_and_roster() -> anyhow::Result<()
     assert!(yaml_str.contains("secrets:"));
     assert!(!yaml_str.contains("age1"));
 
-    let loaded = deserialize_stored(yaml_str, VaultFormat::Yaml)?;
+    let loaded = VaultFormatDocument::new(yaml_str).deserialize(VaultFormat::Yaml)?;
 
     for device in [&genesis, &device_two, &device_three] {
         let resolved_secrets = resolve_secrets_key(&loaded, device)?;
@@ -156,8 +155,8 @@ fn yaml_roundtrip_preserves_secrets_and_members_key_resolution() -> anyhow::Resu
     let keys = generate_vault_keys()?;
     let (genesis, records) = genesis_vault(&keys)?;
 
-    let yaml = serialize_stored(&records, VaultFormat::Yaml)?;
-    let loaded = deserialize_stored(yaml.as_str(), VaultFormat::Yaml)?;
+    let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
+    let loaded = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
 
     assert_eq!(resolve_secrets_key(&loaded, &genesis)?, keys.secrets_key);
     assert_eq!(resolve_members_key(&loaded, &genesis)?, keys.members_key);
@@ -233,9 +232,9 @@ fn rename_member_label_survives_yaml_roundtrip() -> anyhow::Result<()> {
     )?;
     replace_member_records(&mut records, member_records)?;
 
-    let yaml = serialize_stored(&records, VaultFormat::Yaml)?;
+    let yaml = VaultRecordSet::serialize(&records, VaultFormat::Yaml)?;
     assert!(!yaml.as_str().contains("Kitchen iPad"));
-    let loaded = deserialize_stored(yaml.as_str(), VaultFormat::Yaml)?;
+    let loaded = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
     let roster = resolve_member_roster(&loaded, &keys.members_key)?;
     assert_eq!(roster.len(), 1);
     assert_eq!(roster[0].label.as_deref(), Some("Kitchen iPad"));
@@ -265,8 +264,8 @@ fn revoked_device_cannot_resolve_keys_after_yaml_roundtrip() -> anyhow::Result<(
     replace_member_records(&mut records, member_records)?;
 
     let revoked = revoke_vault_member(&records, &keys.members_key, &joiner.auth_id())?;
-    let yaml = serialize_stored(&revoked, VaultFormat::Yaml)?;
-    let loaded = deserialize_stored(yaml.as_str(), VaultFormat::Yaml)?;
+    let yaml = VaultRecordSet::serialize(&revoked, VaultFormat::Yaml)?;
+    let loaded = VaultFormatDocument::new(yaml.as_str()).deserialize(VaultFormat::Yaml)?;
 
     assert!(resolve_secrets_key(&loaded, &joiner).is_err());
     assert_eq!(resolve_secrets_key(&loaded, &genesis)?, keys.secrets_key);

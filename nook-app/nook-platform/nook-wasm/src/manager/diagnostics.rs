@@ -36,7 +36,7 @@ impl NookVaultManager {
         let vault_name = match &self.vault.vault_name {
             VaultNameState::Named(name) => name.clone(),
             VaultNameState::Unnamed => {
-                nook_core::default_vault_name_for_store_id(store_id.as_str())
+                nook_core::VaultStoreIdentity::default_name_for_store_id(store_id.as_str())
             }
         };
         Ok(VaultRecoverySummary::from_options(

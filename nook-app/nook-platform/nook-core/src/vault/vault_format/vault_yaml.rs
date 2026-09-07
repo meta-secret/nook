@@ -1,4 +1,3 @@
-use super::vault_unlock_is_keys;
 use crate::errors::{VaultFormatError, VaultFormatResult};
 use crate::{
     AgeArmoredCiphertext, AuthEnvelopes, AuthKeyId, PasswordUnlockEntry, SecretId,
@@ -25,7 +24,7 @@ pub(super) struct StoredVaultYaml {
     /// Explicit projection-cache schema.
     pub(super) schema_version: u32,
     /// Monotonic revision counter — incremented on every save.
-    #[serde(default, skip_serializing_if = "vault_version_is_zero")]
+    #[serde(default, skip_serializing_if = "StoredVaultYaml::version_is_zero")]
     pub(super) vault_version: u64,
     /// Logical secret-store identity — same id on every provider replica of this vault.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -34,10 +33,13 @@ pub(super) struct StoredVaultYaml {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) name: Option<String>,
     /// Active unlock mechanism. Omitted on write when `Keys` (the default).
-    #[serde(default, skip_serializing_if = "vault_unlock_is_keys")]
+    #[serde(default, skip_serializing_if = "StoredVaultYaml::unlock_is_keys")]
     pub(super) unlock: VaultUnlock,
     /// Grouped vault architecture modes.
-    #[serde(default, skip_serializing_if = "vault_architecture_is_default")]
+    #[serde(
+        default,
+        skip_serializing_if = "StoredVaultYaml::architecture_is_default"
+    )]
     pub(super) architecture: VaultArchitecture,
     #[serde(default)]
     pub(super) secrets: Vec<StoredSecretRecord>,
@@ -57,106 +59,130 @@ pub(super) struct StoredVaultYaml {
     pub(super) password_entries: Vec<PasswordUnlockEntry>,
 }
 
-pub(super) fn stored_record_to_auth(
-    record: &StoredSecretRecord,
-) -> VaultFormatResult<AuthYamlRecord> {
-    let envelopes = crate::parse_auth_envelopes(record.value.as_str())
-        .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
-    Ok(AuthYamlRecord {
-        pk_id: crate::normalize_auth_key_id(record.key.as_str())
-            .map_or_else(|_| record.key.to_string(), |id| id.to_string()),
-        secrets_key: envelopes.secrets_key.as_str().to_owned(),
-        members_key: envelopes.members_key.as_str().to_owned(),
-    })
+impl AuthYamlRecord {
+    pub(super) fn from_stored_record(record: &StoredSecretRecord) -> VaultFormatResult<Self> {
+        let envelopes = crate::parse_auth_envelopes(record.value.as_str())
+            .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?;
+        Ok(Self {
+            pk_id: crate::normalize_auth_key_id(record.key.as_str())
+                .map_or_else(|_| record.key.to_string(), |id| id.to_string()),
+            secrets_key: envelopes.secrets_key.as_str().to_owned(),
+            members_key: envelopes.members_key.as_str().to_owned(),
+        })
+    }
+
+    pub(super) fn into_stored_record(self) -> VaultFormatResult<StoredSecretRecord> {
+        let pk_id = crate::normalize_auth_key_id(&self.pk_id)
+            .map(|id| id.to_string())
+            .unwrap_or(self.pk_id);
+        Ok(StoredSecretRecord {
+            key: SecretId::from_vault_record(&pk_id),
+            secret_type: None,
+            value: StoredRecordPayload::from_trusted(
+                serde_json::to_string(&AuthEnvelopes {
+                    secrets_key: AgeArmoredCiphertext::from_trusted_armored(self.secrets_key),
+                    members_key: AgeArmoredCiphertext::from_trusted_armored(self.members_key),
+                })
+                .map_err(VaultFormatError::JsonSerialize)?,
+            ),
+        })
+    }
 }
 
-pub(super) fn auth_to_stored_record(
-    record: AuthYamlRecord,
-) -> VaultFormatResult<StoredSecretRecord> {
-    let pk_id = crate::normalize_auth_key_id(&record.pk_id)
-        .map(|id| id.to_string())
-        .unwrap_or(record.pk_id);
-    Ok(StoredSecretRecord {
-        key: SecretId::from_vault_record(&pk_id),
-        secret_type: None,
-        value: StoredRecordPayload::from_trusted(
-            serde_json::to_string(&AuthEnvelopes {
-                secrets_key: AgeArmoredCiphertext::from_trusted_armored(record.secrets_key),
-                members_key: AgeArmoredCiphertext::from_trusted_armored(record.members_key),
-            })
-            .map_err(VaultFormatError::JsonSerialize)?,
-        ),
-    })
+impl MembersYamlRecord {
+    pub(super) fn into_stored_record(self) -> VaultFormatResult<StoredSecretRecord> {
+        let pk_id = crate::normalize_auth_key_id(&self.pk_id)
+            .map(|id| id.to_string())
+            .unwrap_or(self.pk_id);
+        Ok(StoredSecretRecord {
+            key: SecretId::from_vault_record(&crate::member_stored_key(&AuthKeyId::parse(&pk_id)?)),
+            secret_type: None,
+            value: StoredRecordPayload::from_trusted(self.ciphertext),
+        })
+    }
 }
 
-pub(super) fn members_to_stored_record(
-    record: MembersYamlRecord,
-) -> VaultFormatResult<StoredSecretRecord> {
-    let pk_id = crate::normalize_auth_key_id(&record.pk_id)
-        .map(|id| id.to_string())
-        .unwrap_or(record.pk_id);
-    Ok(StoredSecretRecord {
-        key: SecretId::from_vault_record(&crate::member_stored_key(&AuthKeyId::parse(&pk_id)?)),
-        secret_type: None,
-        value: StoredRecordPayload::from_trusted(record.ciphertext),
-    })
-}
-
-pub(super) fn partition_yaml_records(
-    records: &[StoredSecretRecord],
-) -> VaultFormatResult<StoredVaultYaml> {
-    let mut vault = StoredVaultYaml::default();
-    for record in records {
-        // Device-protection wrappers are browser-local state. Keep this final
-        // serialization boundary defensive even if a caller accidentally
-        // mixes an IndexedDB wrapper into the vault record collection.
-        if is_local_device_wrapper(record.value.as_str()) {
-            if record.secret_type.is_some() {
-                return Err(VaultFormatError::InvalidAuthRecord(
-                    "browser-local device wrapper cannot be a typed vault secret".to_owned(),
-                ));
+impl StoredVaultYaml {
+    pub(super) fn from_records(records: &[StoredSecretRecord]) -> VaultFormatResult<Self> {
+        let mut vault = Self::default();
+        for record in records {
+            // Device-protection wrappers are browser-local state. Keep this final
+            // serialization boundary defensive even if a caller accidentally
+            // mixes an IndexedDB wrapper into the vault record collection.
+            if Self::is_local_device_wrapper(record.value.as_str()) {
+                if record.secret_type.is_some() {
+                    return Err(VaultFormatError::InvalidAuthRecord(
+                        "browser-local device wrapper cannot be a typed vault secret".to_owned(),
+                    ));
+                }
+                continue;
             }
-            continue;
+            match VaultMetaRecord::classify(record)
+                .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?
+            {
+                VaultMetaRecord::Join(..) => vault.joins.push(record.clone()),
+                VaultMetaRecord::Member(auth_id, _) => vault.members.push(MembersYamlRecord {
+                    pk_id: auth_id.to_string(),
+                    ciphertext: record.value.as_str().to_owned(),
+                }),
+                VaultMetaRecord::Auth(..) => {
+                    vault.auth.push(AuthYamlRecord::from_stored_record(record)?)
+                }
+                VaultMetaRecord::SentinelShare(..) => vault.sentinel_shares.push(record.clone()),
+                VaultMetaRecord::Secret(..) => vault.secrets.push(record.clone()),
+            }
         }
-        match VaultMetaRecord::classify(record)
-            .map_err(|error| VaultFormatError::InvalidAuthRecord(error.to_string()))?
-        {
-            VaultMetaRecord::Join(..) => vault.joins.push(record.clone()),
-            VaultMetaRecord::Member(auth_id, _) => vault.members.push(MembersYamlRecord {
-                pk_id: auth_id.to_string(),
-                ciphertext: record.value.as_str().to_owned(),
-            }),
-            VaultMetaRecord::Auth(..) => vault.auth.push(stored_record_to_auth(record)?),
-            VaultMetaRecord::SentinelShare(..) => vault.sentinel_shares.push(record.clone()),
-            VaultMetaRecord::Secret(..) => vault.secrets.push(record.clone()),
+        for secret in &mut vault.secrets {
+            if let Ok(id) = crate::normalize_secret_id_for_write(secret.key.as_str()) {
+                secret.key = id;
+            }
         }
+        Ok(vault)
     }
-    for secret in &mut vault.secrets {
-        if let Ok(id) = crate::normalize_secret_id_for_write(secret.key.as_str()) {
-            secret.key = id;
-        }
+
+    pub(super) fn into_stored_records(self) -> VaultFormatResult<Vec<StoredSecretRecord>> {
+        let mut records = self.secrets;
+        records.extend(
+            self.auth
+                .into_iter()
+                .map(AuthYamlRecord::into_stored_record)
+                .collect::<VaultFormatResult<Vec<_>>>()?,
+        );
+        records.extend(self.joins);
+        records.extend(
+            self.members
+                .into_iter()
+                .map(MembersYamlRecord::into_stored_record)
+                .collect::<VaultFormatResult<Vec<_>>>()?,
+        );
+        records.extend(self.sentinel_shares);
+        Ok(records)
     }
-    Ok(vault)
-}
 
-fn is_local_device_wrapper(value: &str) -> bool {
-    let Ok(serde_json::Value::Object(fields)) = serde_json::from_str(value) else {
-        return false;
-    };
-    // Marker fields can be missing or malformed in corrupted/future local wrappers.
-    // Identify browser-local material by the remaining required structural fields.
-    let has_fields = |required: &[&str]| required.iter().all(|field| fields.contains_key(*field));
-    has_fields(&["credentialId", "userHandle", "prfInput", "kdf"])
-        || has_fields(&["kdf", "iterations", "salt", "cipher", "nonce", "ciphertext"])
-}
+    pub(super) fn unlock_is_keys(unlock: &VaultUnlock) -> bool {
+        matches!(unlock, VaultUnlock::Keys)
+    }
 
-#[allow(clippy::trivially_copy_pass_by_ref)]
-pub(super) fn vault_version_is_zero(version: &u64) -> bool {
-    *version == 0
-}
+    pub(super) fn architecture_is_default(architecture: &VaultArchitecture) -> bool {
+        architecture == &VaultArchitecture::default()
+    }
 
-pub(super) fn vault_architecture_is_default(architecture: &VaultArchitecture) -> bool {
-    architecture == &VaultArchitecture::default()
+    #[allow(clippy::trivially_copy_pass_by_ref)]
+    pub(super) fn version_is_zero(version: &u64) -> bool {
+        *version == 0
+    }
+
+    fn is_local_device_wrapper(value: &str) -> bool {
+        let Ok(serde_json::Value::Object(fields)) = serde_json::from_str(value) else {
+            return false;
+        };
+        // Marker fields can be missing or malformed in corrupted/future local wrappers.
+        // Identify browser-local material by the remaining required structural fields.
+        let has_fields =
+            |required: &[&str]| required.iter().all(|field| fields.contains_key(*field));
+        has_fields(&["credentialId", "userHandle", "prfInput", "kdf"])
+            || has_fields(&["kdf", "iterations", "salt", "cipher", "nonce", "ciphertext"])
+    }
 }
 
 #[cfg(test)]
@@ -170,13 +196,56 @@ mod tests {
     use std::slice;
 
     use super::super::{
-        VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite, deserialize_stored_yaml,
-        serialize_stored_yaml, serialize_stored_yaml_with_unlock_name_architecture,
+        VaultFormatDocument, VaultNameRef, VaultRecordSet, VaultStoreIdentityRef, VaultVersionWrite,
     };
     use super::*;
 
-    fn sid(label: &str) -> SecretId {
-        SecretId::from_vault_record(label)
+    struct VaultYamlTestData;
+
+    impl VaultYamlTestData {
+        fn sid(label: &str) -> SecretId {
+            SecretId::from_vault_record(label)
+        }
+
+        fn serialize_stored_yaml(
+            records: &[StoredSecretRecord],
+        ) -> VaultFormatResult<super::super::VaultYamlBlob> {
+            VaultRecordSet::serialize_yaml(records)
+        }
+
+        fn serialize_stored_yaml_with_unlock_name_architecture(
+            records: &[StoredSecretRecord],
+            unlock: &VaultUnlock,
+            password_entries: &[PasswordUnlockEntry],
+            store_id: VaultStoreIdentityRef<'_>,
+            name: VaultNameRef<'_>,
+            version: VaultVersionWrite,
+            architecture: &VaultArchitecture,
+        ) -> VaultFormatResult<super::super::VaultYamlBlob> {
+            VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
+                records,
+                unlock,
+                password_entries,
+                store_id,
+                name,
+                version,
+                architecture,
+            )
+        }
+
+        fn deserialize_stored_yaml(stored: &str) -> VaultFormatResult<Vec<StoredSecretRecord>> {
+            VaultFormatDocument::new(stored).deserialize_yaml()
+        }
+
+        fn auth_to_stored_record(record: AuthYamlRecord) -> VaultFormatResult<StoredSecretRecord> {
+            AuthYamlRecord::into_stored_record(record)
+        }
+
+        fn partition_yaml_records(
+            records: &[StoredSecretRecord],
+        ) -> VaultFormatResult<StoredVaultYaml> {
+            StoredVaultYaml::from_records(records)
+        }
     }
 
     #[test]
@@ -195,11 +264,11 @@ mod tests {
         let join_id = join_request.device_id.as_str();
         let records = vec![
             StoredSecretRecord {
-                key: sid("github.com"),
+                key: VaultYamlTestData::sid("github.com"),
                 secret_type: Some(SecretType::Login),
                 value: StoredRecordPayload::from_trusted("encrypted-user-secret".to_owned()),
             },
-            auth_to_stored_record(AuthYamlRecord {
+            VaultYamlTestData::auth_to_stored_record(AuthYamlRecord {
                 pk_id: auth_id,
                 secrets_key:
                     "-----BEGIN AGE ENCRYPTED FILE-----\nsecrets\n-----END AGE ENCRYPTED FILE-----"
@@ -209,13 +278,13 @@ mod tests {
                         .to_owned(),
             })?,
             StoredSecretRecord {
-                key: sid(join_id),
+                key: VaultYamlTestData::sid(join_id),
                 secret_type: None,
                 value: StoredRecordPayload::from_trusted(serde_json::to_string(&join_request)?),
             },
         ];
 
-        let stored = serialize_stored_yaml(&records)?;
+        let stored = VaultYamlTestData::serialize_stored_yaml(&records)?;
         assert!(stored.as_str().contains("secrets:"));
         assert!(stored.as_str().contains("auth:"));
         assert!(stored.as_str().contains("joins:"));
@@ -226,7 +295,10 @@ mod tests {
         assert!(!stored.as_str().contains("auth:\n- key:"));
         assert!(!stored.as_str().contains(device_id));
 
-        assert_eq!(deserialize_stored_yaml(stored.as_str())?.len(), 3);
+        assert_eq!(
+            VaultYamlTestData::deserialize_stored_yaml(stored.as_str())?.len(),
+            3
+        );
         Ok(())
     }
 
@@ -234,7 +306,7 @@ mod tests {
     fn member_records_use_pk_id_and_ciphertext_yaml_fields() -> anyhow::Result<()> {
         let auth_id = format!("key_{}", "c".repeat(64));
         let records = vec![StoredSecretRecord {
-            key: sid(&format!("member:{auth_id}")),
+            key: VaultYamlTestData::sid(&format!("member:{auth_id}")),
             secret_type: None,
             value: StoredRecordPayload::from_trusted(
                 "-----BEGIN AGE ENCRYPTED FILE-----\nline\n-----END AGE ENCRYPTED FILE-----"
@@ -242,14 +314,14 @@ mod tests {
             ),
         }];
 
-        let stored = serialize_stored_yaml(&records)?;
+        let stored = VaultYamlTestData::serialize_stored_yaml(&records)?;
         assert!(stored.as_str().contains("members:"));
         assert!(stored.as_str().contains("pk_id:"));
         assert!(stored.as_str().contains("ciphertext:"));
         assert!(stored.as_str().contains(&auth_id));
         assert!(!stored.as_str().contains("member:"));
 
-        let parsed = deserialize_stored_yaml(stored.as_str())?;
+        let parsed = VaultYamlTestData::deserialize_stored_yaml(stored.as_str())?;
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), format!("member:{auth_id}"));
         Ok(())
@@ -258,12 +330,12 @@ mod tests {
     #[test]
     fn invalid_reserved_sentinel_share_never_enters_secret_yaml() {
         let invalid = StoredSecretRecord {
-            key: sid("sentinel_share:0123456789abcdef"),
+            key: VaultYamlTestData::sid("sentinel_share:0123456789abcdef"),
             secret_type: None,
             value: StoredRecordPayload::from_trusted(r#"{"version":3}"#.to_owned()),
         };
         assert!(matches!(
-            partition_yaml_records(&[invalid]),
+            VaultYamlTestData::partition_yaml_records(&[invalid]),
             Err(VaultFormatError::InvalidAuthRecord(_))
         ));
     }
@@ -293,7 +365,7 @@ mod tests {
             "\"protection\":7",
         );
         let invalid_typed = StoredSecretRecord {
-            key: sid("typed_wrapper_shape"),
+            key: VaultYamlTestData::sid("typed_wrapper_shape"),
             secret_type: Some(SecretType::Login),
             value: StoredRecordPayload::from_trusted(
                 r#"{"version":4,"protection":"passkey-wrapped-local","credentialId":7,"userHandle":"local","prfInput":"local","kdf":"HKDF-SHA256"}"#.to_owned(),
@@ -304,14 +376,14 @@ mod tests {
         assert_ne!(missing, local_record);
         assert_ne!(numeric, local_record);
         assert!(matches!(
-            partition_yaml_records(&[invalid_typed]),
+            VaultYamlTestData::partition_yaml_records(&[invalid_typed]),
             Err(VaultFormatError::InvalidAuthRecord(_))
         ));
         let records = [local_record, unsupported, unknown, missing, numeric]
             .into_iter()
             .enumerate()
             .map(|(index, value)| StoredSecretRecord {
-                key: sid(&format!("device_identity_wrapped_{index}")),
+                key: VaultYamlTestData::sid(&format!("device_identity_wrapped_{index}")),
                 secret_type: None,
                 value: StoredRecordPayload::from_trusted(value),
             })
@@ -321,7 +393,7 @@ mod tests {
             ..VaultArchitecture::default()
         };
 
-        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = VaultYamlTestData::serialize_stored_yaml_with_unlock_name_architecture(
             &records,
             &VaultUnlock::Keys,
             &[],
@@ -357,7 +429,7 @@ mod tests {
             },
         );
 
-        let yaml = serialize_stored_yaml_with_unlock_name_architecture(
+        let yaml = VaultYamlTestData::serialize_stored_yaml_with_unlock_name_architecture(
             &shares,
             &VaultUnlock::Keys,
             &[],
@@ -370,7 +442,7 @@ mod tests {
         assert!(!yaml.as_str().contains("auth:"));
         assert!(yaml.as_str().contains("secrets: []"));
 
-        let parsed = deserialize_stored_yaml(yaml.as_str())?;
+        let parsed = VaultYamlTestData::deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed, shares);
         for record in &parsed {
             assert!(crate::is_sentinel_share_stored_record(record)?);
@@ -381,7 +453,7 @@ mod tests {
     #[test]
     fn auth_envelopes_roundtrip_through_internal_json() -> anyhow::Result<()> {
         let auth_id = format!("key_{}", "b".repeat(64));
-        let record = auth_to_stored_record(AuthYamlRecord {
+        let record = VaultYamlTestData::auth_to_stored_record(AuthYamlRecord {
             pk_id: auth_id.clone(),
             secrets_key: "-----BEGIN AGE ENCRYPTED FILE-----\ns\n-----END AGE ENCRYPTED FILE-----"
                 .to_owned(),
@@ -389,13 +461,13 @@ mod tests {
                 .to_owned(),
         })?;
 
-        let yaml = serialize_stored_yaml(slice::from_ref(&record))?;
+        let yaml = VaultYamlTestData::serialize_stored_yaml(slice::from_ref(&record))?;
         assert!(yaml.as_str().contains("secrets_key:"));
         assert!(yaml.as_str().contains("members_key:"));
         assert!(!yaml.as_str().contains("dek:"));
         assert!(!yaml.as_str().contains("mek:"));
 
-        let parsed = deserialize_stored_yaml(yaml.as_str())?;
+        let parsed = VaultYamlTestData::deserialize_stored_yaml(yaml.as_str())?;
         assert_eq!(parsed.len(), 1);
         assert_eq!(parsed[0].key.as_str(), auth_id);
 
