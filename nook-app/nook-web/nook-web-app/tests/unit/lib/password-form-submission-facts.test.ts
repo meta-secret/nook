@@ -61,7 +61,7 @@ describe('credential submission observation facts', () => {
       kind: 'observed',
       observations: [
         {
-          destinationIdentity: expect.stringContaining('/login'),
+          destinationIdentity: `${location.origin}/login`,
           submissionDestinationSource: 'authored',
         },
       ],
@@ -72,7 +72,7 @@ describe('credential submission observation facts', () => {
       kind: 'observed',
       observations: [
         {
-          destinationIdentity: expect.stringContaining('/auth/login'),
+          destinationIdentity: `${location.origin}/auth/login`,
           submissionDestinationSource: 'authored',
         },
       ],
