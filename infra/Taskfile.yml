@@ -110,3 +110,7 @@ includes:
     taskfile: tasks/kubernetes-cache.yml
     dir: ..
     flatten: true
+  webhook-ingress:
+    taskfile: tasks/webhook-ingress.yml
+    dir: ..
+    flatten: true
