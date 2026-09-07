@@ -6,6 +6,8 @@ import {
   AuthenticationWorkflowAction,
   AuthenticationWorkflowKind,
   CompanionAuthenticationWorkflowMatchKind,
+  authentication_advance_control_is_safe,
+  authentication_page_observation_facts_priority,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   authenticationPageObservationFacts,
@@ -33,11 +35,17 @@ type NetflixFixtureOverrides = {
   readonly method: string
   readonly primaryLabel: string
   readonly includePrimary: boolean
+  readonly helpControlKind: NetflixHelpControlKind
 }
 
 enum NetflixFormActionKind {
   Omitted = 'omitted',
   Authored = 'authored',
+}
+
+enum NetflixHelpControlKind {
+  Button = 'button',
+  Submit = 'submit',
 }
 
 const NETFLIX_FIXTURE_DEFAULTS: NetflixFixtureOverrides = {
@@ -46,6 +54,7 @@ const NETFLIX_FIXTURE_DEFAULTS: NetflixFixtureOverrides = {
   method: 'post',
   primaryLabel: 'Continue',
   includePrimary: true,
+  helpControlKind: NetflixHelpControlKind.Button,
 }
 
 function netflixHtml({
@@ -54,6 +63,7 @@ function netflixHtml({
   method,
   primaryLabel,
   includePrimary,
+  helpControlKind,
 }: NetflixFixtureOverrides = NETFLIX_FIXTURE_DEFAULTS): string {
   const actionAttribute =
     actionKind === NetflixFormActionKind.Omitted ? '' : ` action="${action}"`
@@ -64,7 +74,7 @@ function netflixHtml({
     <form method="${method}"${actionAttribute} data-testid="netflix-login-form">
       <label>Email or mobile number<input name="userLoginId" type="text" autocomplete="email" aria-label="Email or mobile number"></label>
       <label>Password<input name="password" type="password" autocomplete="password" aria-label="Password"></label>
-      ${primary}<button type="button" data-testid="netflix-help">Get Help</button>
+      ${primary}<button type="${helpControlKind}" data-testid="netflix-help">Get Help</button>
     </form>
     <section><h2>Or get started with a new account.</h2><a href="/signup">Sign up</a></section>
     <p data-testid="netflix-recaptcha-disclosure">This page is protected by reCAPTCHA to ensure you're not a bot.</p>
@@ -97,6 +107,21 @@ function expectFailClosed(html: string): void {
   }
   expect(username.value).toBe('')
   expect(password.value).toBe('')
+  const [observation] = summarizeAuthenticationWorkflowForms()
+  if (!observation) throw new Error('expected rejected Netflix observation')
+  const facts = authenticationPageObservationFacts({
+    observation,
+    authenticatorSetupHint: false,
+    backupCodesHint: false,
+  })
+  if (facts.detailedAdvanceControl.kind !== 'observed') {
+    throw new Error('expected a typed Netflix advance-control observation')
+  }
+  expect(
+    facts.detailedAdvanceControl.observations.some(
+      authentication_advance_control_is_safe,
+    ),
+  ).toBe(false)
 }
 
 afterEach(() => {
@@ -181,8 +206,16 @@ describe('Netflix DOM-backed authentication simulation', () => {
     })
     expect(facts.fields).toMatchObject({
       usernameFieldCount: 1,
-      currentPasswordFieldCount: 1,
+      currentPasswordFieldCount: 0,
+      genericPasswordFieldCount: 1,
+      actionablePasswordFieldCount: 1,
     })
+    expect(observation.summary).toMatchObject({
+      passwordFieldCount: 1,
+      currentPasswordFieldCount: 0,
+      genericPasswordFieldCount: 1,
+    })
+    expect(authentication_page_observation_facts_priority(facts)).toBe(3)
     expect(facts.ceremony).toMatchObject({
       sourceOrigin: 'https://www.netflix.com',
       destinationIdentity: 'https://www.netflix.com/login',
@@ -230,16 +263,36 @@ describe('Netflix DOM-backed authentication simulation', () => {
     'Delete account',
   ])('rejects the unsafe primary control %s', (primaryLabel) => {
     expectFailClosed(netflixHtml({ ...NETFLIX_FIXTURE_DEFAULTS, primaryLabel }))
+    const submitControls = document.querySelectorAll<HTMLButtonElement>(
+      'button[type="submit"]',
+    )
+    expect(submitControls).toHaveLength(1)
+    const [submitControl] = submitControls
+    if (!submitControl) throw new Error('expected hostile Netflix submit')
+    expect(submitControl.textContent).toBe(primaryLabel)
+    expect(
+      [...submitControls].some(
+        (control) =>
+          control.textContent !== null &&
+          control.textContent.trim() === 'Continue',
+      ),
+    ).toBe(false)
   })
 
-  test('does not treat the auxiliary Get Help button as submission', () => {
+  test('rejects Get Help when it becomes the only semantic submit control', () => {
     expectFailClosed(
-      netflixHtml({ ...NETFLIX_FIXTURE_DEFAULTS, includePrimary: false }),
+      netflixHtml({
+        ...NETFLIX_FIXTURE_DEFAULTS,
+        includePrimary: false,
+        helpControlKind: NetflixHelpControlKind.Submit,
+      }),
     )
     const help = document.querySelector<HTMLButtonElement>(
       '[data-testid="netflix-help"]',
     )
     if (!help) throw new Error('expected rejected Netflix help control')
-    expect(help.type).toBe('button')
+    expect(help.type).toBe('submit')
+    expect(document.querySelectorAll('button[type="submit"]')).toHaveLength(1)
+    expect(help.textContent).toBe('Get Help')
   })
 })
