@@ -24,7 +24,7 @@ use nook_core::{LocalEventStore, VaultError, VaultMetaState};
 
 use harness::{EventLogDevice, ProviderBuckets, push_device_outbox, union_device_from_providers};
 use nook_core::{
-    DeviceIdentity, JoinRequest, MultiDeviceError, VaultResult, materialize_vault_meta_from_graph,
+    DeviceIdentity, JoinRequest, MultiDeviceError, VaultMetaGraphProjection, VaultResult,
 };
 use std::marker::PhantomData;
 
@@ -49,7 +49,9 @@ impl RosterView {
 pub fn roster_view(device: &EventLogDevice) -> VaultResult<RosterView> {
     let graph = device.session.store.load_graph(device.store_id())?;
     let mut state = VaultMetaState::default();
-    materialize_vault_meta_from_graph(&graph, &mut state).map_err(VaultError::from)?;
+    VaultMetaGraphProjection::new(&graph)
+        .materialize(&mut state)
+        .map_err(VaultError::from)?;
     let mut pending_joins: Vec<String> = state
         .joins
         .keys()

@@ -13,7 +13,8 @@ use crate::storage::identity_record::{
 };
 use nook_core::{
     EpochMetadataState, EpochPasswordState, EventId, IdentityVaultEventId, MembersCheckpointHash,
-    ProjectionEpoch, StoreId, SymmetricKey, VaultKeyRotation, VaultMetaRecordRewrap,
+    ProjectionEpoch, StoreId, SymmetricKey, VaultKeyRotation, VaultMetaGraphProjection,
+    VaultMetaRecordRewrap,
 };
 use serde::{Deserialize, Serialize};
 use zeroize::{Zeroize, Zeroizing};
@@ -356,7 +357,7 @@ impl CommittedSecurityEpochExecution {
                 .commit_epoch(&key_epoch)
                 .await?;
             epoch_commit.commit_checkpoint(&checkpoint).await?;
-            nook_core::materialize_vault_meta_from_graph(&graph, &mut manager.vault.meta)?;
+            VaultMetaGraphProjection::new(&graph).materialize(&mut manager.vault.meta)?;
             manager.adopt_projected_security_epoch(&projection).await?;
             manager.apply_event_projection_to_session().await?;
             manager.persist_projection_cache().await?;

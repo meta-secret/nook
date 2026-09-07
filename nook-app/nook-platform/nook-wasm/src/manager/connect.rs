@@ -22,8 +22,8 @@ use crate::storage::identity_record::{PendingSimpleGenesis, SimpleGenesisComplet
 use crate::storage::indexed_db::load_vault_local_cache;
 use crate::storage::{event_db, identity_record, indexed_db};
 use nook_core::{
-    ConnectAccessStatus, EventId, IdentityVaultDekEpoch, IdentityVaultEventId, StorageMode,
-    StoreId, VaultAccessStatus, VaultUnlock,
+    ConnectAccessStatus, EventGraphAuthorizationProjection, EventId, IdentityVaultDekEpoch,
+    IdentityVaultEventId, StorageMode, StoreId, VaultAccessStatus, VaultUnlock,
 };
 use wasm_bindgen::JsError;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -754,7 +754,7 @@ impl NookVaultManager {
             let authorized_auth_ids = if self.event_log.enabled {
                 let store = load_local_event_store(store_id.as_str()).await?;
                 let graph = store.load_graph(store_id.as_str())?;
-                nook_core::event_graph_active_auth_ids(&graph)?
+                EventGraphAuthorizationProjection::new(&graph).active_auth_ids()?
             } else {
                 self.vault.meta.auth.keys().cloned().collect()
             };

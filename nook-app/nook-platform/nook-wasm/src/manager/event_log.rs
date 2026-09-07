@@ -3,7 +3,8 @@
 use crate::storage::identity_record;
 use crate::storage::identity_record::LocalIdentitySigner;
 use nook_core::{
-    EventError, IsoTimestamp, StoreId, VaultError, VaultNameRef, VaultProjection,
+    EventError, IsoTimestamp, StoreId, VaultError, VaultMetaGraphProjection,
+    VaultMetaOperationApplier, VaultMetaOperationRequest, VaultNameRef, VaultProjection,
     VaultStoreIdentityRef, VaultUnlock, VaultVersionWrite,
 };
 mod extension_import;
@@ -342,10 +343,11 @@ impl NookVaultManager {
             self.apply_event_projection_to_session().await?;
         } else {
             for operation in &operations {
-                nook_core::apply_vault_meta_operation(
-                    &mut self.vault.meta,
-                    operation,
-                    created_at.as_str(),
+                VaultMetaOperationApplier::new(&mut self.vault.meta).apply(
+                    VaultMetaOperationRequest {
+                        operation,
+                        requested_at: &created_at,
+                    },
                 )?;
             }
         }
@@ -368,7 +370,7 @@ impl NookVaultManager {
         self.vault.unlock = VaultUnlock::Keys;
         VaultUserRecordBatch::new(user_records).replace(&mut self.vault.meta);
         self.vault.mark_search_catalog_dirty();
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         if let Ok(identity) = self.device_identity() {
             let _ = self.maybe_sync_self_into_roster(&identity);
@@ -386,7 +388,7 @@ impl NookVaultManager {
         }
         let store = load_local_event_store(&self.vault.store_id).await?;
         let graph = store.load_graph(&self.vault.store_id)?;
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         Ok(())
     }
@@ -406,7 +408,7 @@ impl NookVaultManager {
         let graph = store.load_graph(&self.vault.store_id)?;
         let projection = VaultProjection::from_graph(&graph, &self.vault.store_id)?;
         self.vault.password_entries = projection.password_entries;
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
         self.ensure_sentinel_architecture_from_shares()?;
         Ok(())
     }

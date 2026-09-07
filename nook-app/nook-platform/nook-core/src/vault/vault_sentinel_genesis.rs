@@ -1,6 +1,9 @@
 //! Atomic core integration for provider-independent Sentinel genesis.
 
-use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation};
+use crate::{
+    IsoTimestamp, MemberLabel, MultiDeviceError, SentinelConfiguration, VaultMetaOperationApplier,
+    VaultMetaOperationRequest, VaultOperation,
+};
 
 use crate::i18n_keys;
 #[cfg(test)]
@@ -254,12 +257,12 @@ mod tests {
         let operations = sentinel_genesis_operations(&output);
         assert_eq!(operations.len(), 3);
         let mut materialized = VaultMetaState::default();
+        let requested_at = IsoTimestamp::parse("2026-07-09T00:00:00Z")?;
         for operation in &operations {
-            crate::apply_vault_meta_operation(
-                &mut materialized,
+            VaultMetaOperationApplier::new(&mut materialized).apply(VaultMetaOperationRequest {
                 operation,
-                "2026-07-09T00:00:00Z",
-            )?;
+                requested_at: &requested_at,
+            })?;
         }
         assert_eq!(materialized.sentinel_participants.len(), 2);
         assert_eq!(materialized.sentinel_shares.len(), 2);

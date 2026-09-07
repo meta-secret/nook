@@ -8,6 +8,7 @@ use super::ExistingVaultImportCommit;
 use crate::NookError;
 use crate::storage::{event_db, identity_record};
 use nook_core::{
+    EventGraphAuthorizationProjection, EventGraphDeviceAccess, EventGraphDeviceAccessRequest,
     IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate, IdentityVaultDekReconciliation,
     IdentityVaultEventId,
 };
@@ -93,17 +94,19 @@ impl<'a> ExistingVaultHandoff<'a> {
             checkpoint_event_id: &checkpoint_event_id,
         }
         .ancestors()?;
-        let envelopes = nook_core::event_graph_active_device_envelopes(
-            &graph,
-            &input.existing.device_id,
-            &input.app_key.public_key(),
-            input.signing_public_key,
-        )?
-        .ok_or_else(|| {
-            NookError::Database(
-                "Imported extension identity is not active in the signed vault roster.".to_owned(),
-            )
-        })?;
+        let expected_public_key = input.app_key.public_key();
+        let envelopes = EventGraphDeviceAccess::new(&graph)
+            .active_envelopes(&EventGraphDeviceAccessRequest {
+                expected_device_id: &input.existing.device_id,
+                expected_public_key: &expected_public_key,
+                expected_signing_public_key: input.signing_public_key,
+            })?
+            .ok_or_else(|| {
+                NookError::Database(
+                    "Imported extension identity is not active in the signed vault roster."
+                        .to_owned(),
+                )
+            })?;
         let reconciliation = IdentityVaultDekReconciliation {
             secrets_envelope: envelopes.secrets_key,
             members_envelope: envelopes.members_key,
@@ -114,7 +117,8 @@ impl<'a> ExistingVaultHandoff<'a> {
                 },
                 checkpoint_ancestors,
             },
-            authorized_auth_ids: nook_core::event_graph_active_auth_ids(&graph)?,
+            authorized_auth_ids: EventGraphAuthorizationProjection::new(&graph)
+                .active_auth_ids()?,
         };
         Ok(CheckedExistingVaultHandoff {
             input,
@@ -642,12 +646,16 @@ mod tests {
         let approved_graph = event_db::load_local_event_store(fixture.store_id.as_str())
             .await?
             .load_graph(fixture.store_id.as_str())?;
-        assert!(nook_core::event_graph_has_active_device_access(
-            &approved_graph,
-            fixture.identity.device_id(),
-            &fixture.identity.public_key(),
-            &events.signing_public_key,
-        )?);
+        let approved_public_key = fixture.identity.public_key();
+        assert!(
+            nook_core::EventGraphDeviceAccess::new(&approved_graph).has_access(
+                &nook_core::EventGraphDeviceAccessRequest {
+                    expected_device_id: fixture.identity.device_id(),
+                    expected_public_key: &approved_public_key,
+                    expected_signing_public_key: &events.signing_public_key,
+                },
+            )?
+        );
 
         let rexie = storage::open_nook_database().await?;
         let transaction = rexie
@@ -696,12 +704,16 @@ mod tests {
         let revoked_graph = event_db::load_local_event_store(fixture.store_id.as_str())
             .await?
             .load_graph(fixture.store_id.as_str())?;
-        assert!(!nook_core::event_graph_has_active_device_access(
-            &revoked_graph,
-            fixture.identity.device_id(),
-            &fixture.identity.public_key(),
-            &events.signing_public_key,
-        )?);
+        let revoked_public_key = fixture.identity.public_key();
+        assert!(
+            !nook_core::EventGraphDeviceAccess::new(&revoked_graph).has_access(
+                &nook_core::EventGraphDeviceAccessRequest {
+                    expected_device_id: fixture.identity.device_id(),
+                    expected_public_key: &revoked_public_key,
+                    expected_signing_public_key: &events.signing_public_key,
+                },
+            )?
+        );
         event_db::clear_local_event_store(fixture.store_id.as_str()).await?;
         identity_record::clear_identity_directory_for_test().await?;
         Ok(())

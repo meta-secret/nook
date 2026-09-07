@@ -7,7 +7,7 @@
 use crate::storage::event_db::{RemoteEventUnion, VaultEventPersistence};
 use nook_core::{
     CheckedRemoteEvent, EventStorageBytes, MultiDeviceError, ProjectionEpoch, RemoteEventBatch,
-    RemoteEventWrites, StorageMode, VaultCrypto, VaultType,
+    RemoteEventWrites, StorageMode, VaultCrypto, VaultMetaGraphProjection, VaultType,
 };
 use std::collections::BTreeSet;
 
@@ -422,7 +422,7 @@ impl NookVaultManager {
         *local = persisted;
         self.event_log.heads = heads.clone();
         let graph = local.load_graph(&self.vault.store_id)?;
-        nook_core::materialize_vault_meta_from_graph(&graph, &mut self.vault.meta)?;
+        VaultMetaGraphProjection::new(&graph).materialize(&mut self.vault.meta)?;
         let projection = nook_core::VaultProjection::from_graph(&graph, &self.vault.store_id)?;
         self.ensure_sentinel_architecture_from_shares()?;
         let unlocked =
