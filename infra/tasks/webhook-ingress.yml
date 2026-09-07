@@ -117,6 +117,8 @@ tasks:
           "$traefik" >/dev/null
         grep -F 'Host(`events.dev.nokey.sh`)' "$traefik" >/dev/null
         grep -F 'url: http://10.96.90.30:9222' "$traefik" >/dev/null
+        grep -F 'webhook-ingress:jetstream:pr-steward:sync:' "$repo_root/infra/tasks/webhook-ingress.yml" >/dev/null
+        grep -F '${HOME}/.nook/events/pr-steward-client.yaml' "$repo_root/infra/tasks/webhook-ingress.yml" >/dev/null
         BASH
 
   webhook-ingress:jetstream:secrets:publish:
@@ -604,6 +606,87 @@ tasks:
         printf '%s\n' \
           'PR Steward credential rotated; reload the infrastructure-owned handoff file.'
         REMOTE
+
+  webhook-ingress:jetstream:pr-steward:sync:
+    desc: Sync the scoped PR Steward credential to private local state.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        target="${NOOK_PR_STEWARD_CREDENTIAL_FILE:-${HOME}/.nook/events/pr-steward-client.yaml}"
+        case "$target" in
+          /*) ;;
+          *)
+            echo 'PR Steward credential destination must be an absolute path' >&2
+            exit 2
+            ;;
+        esac
+        target_dir="$(dirname "$target")"
+        if test -e "$target_dir" || test -L "$target_dir"; then
+          test -d "$target_dir"
+          test ! -L "$target_dir"
+        else
+          install -d -m 0700 "$target_dir"
+        fi
+        TARGET_DIR="$target_dir" ruby -e '
+          directory = File.stat(ENV.fetch("TARGET_DIR"))
+          abort("credential directory owner mismatch") unless directory.uid == Process.uid
+          abort("credential directory mode must be 0700") unless directory.mode & 0o777 == 0o700
+        '
+        if test -e "$target" || test -L "$target"; then
+          test -f "$target"
+          test ! -L "$target"
+          TARGET="$target" ruby -e '
+            file = File.stat(ENV.fetch("TARGET"))
+            abort("credential file owner mismatch") unless file.uid == Process.uid
+            abort("credential file mode must be 0600") unless file.mode & 0o777 == 0o600
+          '
+        fi
+        next="$(mktemp "$target_dir/.pr-steward-client.XXXXXX")"
+        trap 'rm -f "$next"' EXIT
+        chmod 0600 "$next"
+        ssh -o BatchMode=yes \
+          -o ServerAliveInterval=15 \
+          -o ServerAliveCountMax=4 \
+          "{{.INFRA_SSH_TARGET}}" \
+          "REMOTE_DIR='{{.INFRA_REMOTE_DIR}}' bash -s" > "$next" <<'REMOTE'
+        set -euo pipefail
+        credential="$REMOTE_DIR/secrets/jetstream/pr-steward-client.yaml"
+        test -f "$credential"
+        test ! -L "$credential"
+        test "$(stat -c '%a' "$credential")" = 600
+        ruby -ryaml -e '
+          credential = YAML.safe_load(File.binread(ARGV.fetch(0)))
+          valid = credential.is_a?(Hash) &&
+            credential.keys.sort == %w[password username] &&
+            credential.fetch("username") == "pr-steward" &&
+            credential.fetch("password").match?(/\A[0-9a-f]{64}\z/)
+          abort("invalid PR Steward credential shape") unless valid
+        ' "$credential"
+        cat "$credential"
+        REMOTE
+        test -s "$next"
+        NEXT="$next" ruby -ryaml -e '
+          path = ENV.fetch("NEXT")
+          file = File.stat(path)
+          abort("staged credential mode must be 0600") unless file.mode & 0o777 == 0o600
+          credential = YAML.safe_load(File.binread(path))
+          valid = credential.is_a?(Hash) &&
+            credential.keys.sort == %w[password username] &&
+            credential.fetch("username") == "pr-steward" &&
+            credential.fetch("password").match?(/\A[0-9a-f]{64}\z/)
+          abort("invalid staged PR Steward credential shape") unless valid
+        '
+        mv -f "$next" "$target"
+        trap - EXIT
+        TARGET="$target" ruby -e '
+          file = File.stat(ENV.fetch("TARGET"))
+          abort("credential file owner mismatch") unless file.uid == Process.uid
+          abort("credential file mode must be 0600") unless file.mode & 0o777 == 0o600
+        '
+        printf 'PR Steward credential synchronized to %s\n' "$target"
+        BASH
 
   webhook-ingress:jetstream:wss:smoke:
     desc: Prove trusted WSS, scoped consumption, and authorization denials.

@@ -82,6 +82,7 @@ task infra:webhook-ingress:smoke
 task infra:webhook-ingress:hook:register
 task infra:webhook-ingress:hook:ping
 task infra:webhook-ingress:jetstream:wss:smoke
+task infra:webhook-ingress:jetstream:pr-steward:sync
 task infra:webhook-ingress:jetstream:pr-steward:rotate
 
 # Install or reconcile one reviewed OVH worker through provider API, host
@@ -119,7 +120,12 @@ listener through Traefik HTTPS 443. The client, cluster, and monitoring ports
 remain private Kubernetes ports. The PR Steward credential is stored only at
 `$INFRA_REMOTE_DIR/secrets/jetstream/pr-steward-client.yaml` on the
 infrastructure host and in the `jetstream-pr-steward-client` Kubernetes Secret.
-Use the rotation task above to replace it and restart the server cluster. See
+Run the sync task to atomically copy it to the developer machine at
+`~/.nook/events/pr-steward-client.yaml` with directory mode `0700` and file mode
+`0600`. An AI consumer can set the narrowly scoped
+`NOOK_PR_STEWARD_CREDENTIAL_FILE` override to select another absolute private
+path. Use the rotation task above to replace the remote identity, restart the
+server cluster, and then rerun the sync task. See
 the [repository-managed JetStream contract](../.cortex/teams/sre/design-docs/repository-managed-jetstream.md)
 for ownership, permissions, rotation, and removal.
 
