@@ -144,7 +144,7 @@ describe('generated companion protocol composition', () => {
 
     const malformed: unknown = { status: 'unlocked' }
     expect(() =>
-      Reflect.apply(admit_companion_identity_status, undefined, [malformed]),
+      Reflect.apply(admit_companion_identity_status, globalThis, [malformed]),
     ).toThrow()
 
     const handoff = beginHandoff('request-malformed-response')
