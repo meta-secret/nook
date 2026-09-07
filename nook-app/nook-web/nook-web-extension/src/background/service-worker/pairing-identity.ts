@@ -17,6 +17,7 @@ import {
   ExtensionSessionStatusAvailability,
   type CompanionExtensionPresence,
   type CompanionIdentityStatusAdmissionRequest,
+  type CompanionUnlockedAppKey,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { runtimeSimpleVaultUrl } from '../../lib/simple-vault-runtime'
 import { WebsiteAuthenticatorResponseStatus } from '../../lib/login-fill-messages'
@@ -504,7 +505,10 @@ export async function discoverPairedVaultIdentity(
         nonce,
         scopes: grant.scopes,
       },
-    } satisfies Extract<CompanionExtensionPresence, { kind: 'unlocked' }>
+    } satisfies Extract<
+      CompanionExtensionPresence,
+      { app_key: CompanionUnlockedAppKey }
+    >
     return await discover(presence)
   } catch {
     return await discover(unavailablePresence)
