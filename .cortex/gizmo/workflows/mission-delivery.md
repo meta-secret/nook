@@ -67,6 +67,8 @@ Report the blocker instead of reporting an intermediate state as complete.
      profile and start its subscription for exactly one active pull request.
    - Before this Gizmo advances to another pull request, stop the old child,
      wait for its NATS drain and exit, then start a fresh child for the new PR.
+   - Launch the subscriber as the documented direct Bun process in a foreground
+     PTY. Stop it by sending Ctrl-C to that same PTY and require exit status zero.
    - Never stop or switch another Gizmo's independently active child.
    - Treat each matching notification as a hint to issue a bounded PR Steward
      operation packet.

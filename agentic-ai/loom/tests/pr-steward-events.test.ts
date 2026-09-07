@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'bun:test';
 import {
   chmodSync,
   mkdtempSync,
+  readFileSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -96,6 +97,22 @@ describe('PR Steward credentials', () => {
       parsePrStewardInvocation(['--pr', '1492', '--config', 'relative']),
     ).toThrow('absolute');
   });
+});
+
+test('documents a direct foreground process without a package wrapper', () => {
+  const lifecycle = readFileSync(
+    join(
+      import.meta.dir,
+      '../../../.cortex/teams/pr-steward/workflows/pull-request-lifecycle.md',
+    ),
+    'utf8',
+  );
+  expect(lifecycle).toContain(
+    'bun agentic-ai/loom/src/pr-steward-events.ts --pr <number>',
+  );
+  expect(lifecycle).not.toContain(
+    'bun run --cwd agentic-ai/loom pr-steward-events',
+  );
 });
 
 describe('PR Steward event codec', () => {

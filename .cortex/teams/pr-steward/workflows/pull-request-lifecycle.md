@@ -81,8 +81,11 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 1. Start the live subscription from the active PR Steward task.
 
    ```bash
-   bun run --cwd agentic-ai/loom pr-steward-events -- --pr <number>
+   bun agentic-ai/loom/src/pr-steward-events.ts --pr <number>
    ```
+
+   Run this direct Bun process in the child task's foreground PTY. Do not place
+   a package-script wrapper between Gizmo and the subscriber.
 
    The default credential path is
    `~/.nook/events/pr-steward-client.yaml`. Use
@@ -94,8 +97,11 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
 3. Stop when Gizmo directs the child to finish.
-   - Send `SIGINT` or `SIGTERM` to drain the NATS connection.
-   - Wait for the command and PR Steward child to exit before Gizmo finishes.
+   - Send Ctrl-C to the same foreground PTY. The direct process receives
+     `SIGINT`, drains NATS, and exits with status zero.
+   - An operating-system termination may use `SIGTERM` against the direct
+     process.
+   - Wait for exit before Gizmo finishes. A nonzero result is a blocker.
 
 ### Subscription boundary
 
