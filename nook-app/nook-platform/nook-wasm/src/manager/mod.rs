@@ -49,7 +49,6 @@ mod session;
 mod sync;
 mod verified_access;
 
-pub use companion_protocol::NookCompanionExtensionEndpoint;
 pub use device_protection::NookExtensionIdentityHandoffContext;
 pub(crate) use device_protection::PendingExtensionIdentityEnrollment;
 pub use secrets::{
