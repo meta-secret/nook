@@ -410,6 +410,7 @@ RUN --mount=type=secret,id=sccache_s3_access_key,required=false \
 
 COPY nook-app/nook-platform/nook-companion-wasm nook-companion-wasm
 COPY nook-app/nook-platform/nook-wasm nook-wasm
+COPY nook-app/nook-platform/nook-wasm-composition-tests nook-wasm-composition-tests
 
 # Export only the small, already-computed coverage payload. This target deliberately branches
 # before the WASM/web production stages so a PR fallback never materializes the multi-GB app image.
