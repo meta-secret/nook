@@ -27,6 +27,7 @@
 //!   binding. Unlike a draft genesis session, it may survive refresh and does
 //!   not contain plaintext key material.
 mod device_identity;
+#[path = "sentinel_storage.rs"]
 mod sentinel_storage;
 
 use crate::storage::identity_record;
