@@ -958,4 +958,58 @@ mod projection_tests {
         );
         Ok(())
     }
+
+    #[cfg(target_arch = "wasm32")]
+    #[wasm_bindgen_test]
+    async fn local_vault_lifecycle_wrappers_project_browser_storage() -> Result<(), JsError> {
+        let mut manager = NookVaultManager::new();
+        manager.delete_local_browser_data().await?;
+
+        let identity = nook_core::DeviceIdentity::generate()?;
+        manager.device.id = identity.device_id().as_str().to_owned();
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager
+            .connect_fresh("local".to_owned(), String::new(), String::new())
+            .await?;
+        let store_id = manager.vault.store_id.clone();
+        let content = manager.vault.last_synced_content.clone();
+        assert!(!store_id.is_empty());
+        assert!(!content.is_empty());
+
+        assert!(has_local_vault().await?);
+        assert!(has_active_local_vault().await?);
+        let selected = get_active_vault_selection().await?;
+        assert_eq!(selected.state(), NookActiveVaultSelectionState::Selected);
+        assert_eq!(selected.store_id()?, store_id);
+
+        let entries = list_local_vaults().await?;
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].store_id(), store_id);
+        assert_eq!(
+            entries[0].unlock_state(),
+            NookLocalVaultUnlockState::Unlocked
+        );
+
+        set_local_vault_label(store_id.clone(), "  Browser vault  ".to_owned()).await?;
+        let renamed = list_local_vaults().await?;
+        assert_eq!(renamed[0].label(), "Browser vault");
+        assert_eq!(renamed[0].display_label("Fallback"), "Browser vault");
+
+        prepare_new_local_vault_slot().await?;
+        let imported = import_named_local_vault_blob(content, "Imported vault".to_owned()).await?;
+        assert_eq!(imported, store_id);
+        set_active_vault(imported.clone()).await?;
+        let selected_again = get_active_vault_selection().await?;
+        assert_eq!(selected_again.store_id()?, imported);
+
+        manager.delete_local_browser_data().await?;
+        assert!(!has_local_vault().await?);
+        assert!(!has_active_local_vault().await?);
+        assert_eq!(list_local_vaults().await?.len(), 0);
+        assert_eq!(
+            get_active_vault_selection().await?.state(),
+            NookActiveVaultSelectionState::NotSelected
+        );
+        Ok(())
+    }
 }
