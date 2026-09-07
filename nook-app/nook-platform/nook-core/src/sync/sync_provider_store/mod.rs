@@ -42,21 +42,19 @@ pub use enrollment::{
     enrollment_provider_onboarding_type, provider_onboarding_type, shared_grant_provider_id,
 };
 pub use legacy_storage::auth_snapshot_legacy_storage_value;
-pub use oauth::{
-    bind_google_drive_shared_folder, google_oauth_tokens_to_config, icloud_oauth_tokens_to_config,
-    oauth_remote_storage_ref, set_google_drive_provider_mode, set_icloud_provider_mode,
-    update_oauth_remote_ref,
-};
-pub use save::{
-    ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup, apply_provider_save_policy,
-};
+pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
+pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
 pub use scope::{
     active_vault_providers, local_provider_for_active_vault, provider_label_by_id,
     providers_visible_while_device_locked, replace_active_vault_provider_grants,
     sync_providers_for_active_vault,
 };
 pub use state::*;
-pub use storage_args::*;
+pub use storage_args::{
+    DraftStorageConnection, ProviderLabelLabels, ProviderSelectionRequest,
+    ProviderStorageDetailLabels, StagedRemoteConnection, StorageConnectArgs,
+    VaultStorageConnection,
+};
 pub use sync_metadata::update_provider_sync_metadata;
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.

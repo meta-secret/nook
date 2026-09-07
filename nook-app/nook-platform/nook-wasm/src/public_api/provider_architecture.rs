@@ -1,6 +1,10 @@
 use super::{NookProviderSelection, wasm_bindgen};
 use crate::{NookEnrollmentProvider, NookProviderReplicationCapability, NookVaultArchitecture};
-use nook_core::{ICloudShareRole, ICloudSharedTarget, ProviderOauthPreset, VaultArchitecture};
+use nook_core::ProviderSelectionRequest;
+use nook_core::{
+    GoogleOAuthTokenInput, ICloudOAuthTokenInput, ICloudShareRole, ICloudSharedTarget,
+    OAuthFileConfigData, ProviderOauthPreset, VaultArchitecture,
+};
 
 #[wasm_bindgen]
 #[allow(clippy::needless_pass_by_value)]
@@ -8,9 +12,7 @@ pub fn bind_google_drive_shared_folder(
     config: nook_core::OAuthFileConfigData,
     folder_ref: &str,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-    Ok(nook_core::bind_google_drive_shared_folder(
-        &config, folder_ref,
-    )?)
+    Ok(config.bound_google_drive_folder(folder_ref)?)
 }
 
 #[wasm_bindgen]
@@ -20,10 +22,12 @@ pub fn google_oauth_tokens_to_config(
     expires_at: &str,
     existing: nook_core::StoredOAuthFileConfiguration,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-    Ok(nook_core::google_oauth_tokens_to_config(
-        access_token,
-        expires_at,
-        existing.as_ref(),
+    Ok(OAuthFileConfigData::from_google_token(
+        &GoogleOAuthTokenInput {
+            access_token,
+            expires_at,
+            existing: existing.as_ref(),
+        },
     ))
 }
 
@@ -34,10 +38,12 @@ pub fn icloud_oauth_tokens_to_config(
     account_identity: nook_core::StoredOAuthAccountIdentity,
     existing: nook_core::StoredOAuthFileConfiguration,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-    Ok(nook_core::icloud_oauth_tokens_to_config(
-        access_token,
-        account_identity.as_deref(),
-        existing.as_ref(),
+    Ok(OAuthFileConfigData::from_icloud_token(
+        &ICloudOAuthTokenInput {
+            access_token,
+            account_name: account_identity.as_deref(),
+            existing: existing.as_ref(),
+        },
     ))
 }
 
@@ -81,7 +87,7 @@ pub fn set_google_drive_provider_mode(
     config: nook_core::OAuthFileConfigData,
     mode: nook_core::GoogleDriveMode,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-    Ok(nook_core::set_google_drive_provider_mode(&config, mode))
+    Ok(config.with_google_drive_mode(mode))
 }
 
 #[wasm_bindgen]
@@ -90,7 +96,7 @@ pub fn set_icloud_provider_mode(
     config: nook_core::OAuthFileConfigData,
     mode: nook_core::ICloudMode,
 ) -> Result<nook_core::OAuthFileConfigData, wasm_bindgen::JsError> {
-    Ok(nook_core::set_icloud_provider_mode(&config, mode))
+    Ok(config.with_icloud_mode(mode))
 }
 
 #[wasm_bindgen]
@@ -144,7 +150,7 @@ pub fn provider_replication_capability(
     provider: nook_core::StorageProviderData,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     Ok(NookProviderReplicationCapability::from_core(
-        nook_core::provider_replication_capability_for_row(&provider)?,
+        provider.replication_capability(),
     ))
 }
 
@@ -177,7 +183,7 @@ pub fn validate_provider_replication(
     replication_type: nook_core::ReplicationType,
 ) -> Result<NookProviderReplicationCapability, wasm_bindgen::JsError> {
     Ok(NookProviderReplicationCapability::from_core(
-        nook_core::validate_provider_row_replication(&provider, replication_type)?,
+        provider.validate_replication(replication_type)?,
     ))
 }
 
@@ -187,10 +193,7 @@ pub fn provider_supports_replication(
     provider: nook_core::StorageProviderData,
     replication_type: nook_core::ReplicationType,
 ) -> Result<bool, wasm_bindgen::JsError> {
-    Ok(nook_core::provider_supports_replication(
-        &provider,
-        replication_type,
-    ))
+    Ok(provider.supports_replication(replication_type))
 }
 
 #[wasm_bindgen]
@@ -199,11 +202,14 @@ pub fn first_compatible_provider_id(
     snapshot: nook_core::AuthProvidersSnapshotData,
     replication_type: nook_core::ReplicationType,
 ) -> NookProviderSelection {
-    NookProviderSelection(nook_core::first_compatible_provider_id(
-        &snapshot.providers,
-        replication_type,
-        None,
-    ))
+    NookProviderSelection(
+        ProviderSelectionRequest {
+            providers: &snapshot.providers,
+            replication_type,
+            preferred_id: None,
+        }
+        .select(),
+    )
 }
 
 #[wasm_bindgen]
@@ -213,11 +219,14 @@ pub fn first_compatible_provider_id_preferred(
     replication_type: nook_core::ReplicationType,
     preferred_id: &str,
 ) -> NookProviderSelection {
-    NookProviderSelection(nook_core::first_compatible_provider_id(
-        &snapshot.providers,
-        replication_type,
-        Some(preferred_id),
-    ))
+    NookProviderSelection(
+        ProviderSelectionRequest {
+            providers: &snapshot.providers,
+            replication_type,
+            preferred_id: Some(preferred_id),
+        }
+        .select(),
+    )
 }
 
 #[wasm_bindgen]
