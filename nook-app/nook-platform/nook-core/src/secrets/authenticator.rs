@@ -1,36 +1,26 @@
 //! RFC 6238 TOTP parsing, validation, and code generation.
 
-use std::{borrow::Cow, collections::HashMap, mem};
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::ValidationError;
 use crate::secrets::authenticator_issuer_hosts;
 use hmac::{Hmac, KeyInit, Mac};
-use percent_encoding::percent_decode_str;
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
-use zeroize::{Zeroize, Zeroizing};
+use zeroize::Zeroize;
 
 mod backup_codes;
+mod setup_key;
+mod uri;
+use uri::{FormProtocolInput, OtpauthInput, ProtocolParameters};
 
 pub use backup_codes::*;
 pub use nook_authenticator_domain::{BackupCodeAttachMode, TotpAlgorithm, TotpDigits, TotpPeriod};
-
-const DEFAULT_DIGITS: u32 = 6;
-const DEFAULT_PERIOD: u64 = 30;
-
-fn parse_totp_algorithm(value: &str) -> Result<TotpAlgorithm, ValidationError> {
-    TotpAlgorithm::parse(value).map_err(|_| ValidationError::AuthenticatorUriInvalid)
-}
-
-fn parse_totp_digits(value: u32) -> Result<TotpDigits, ValidationError> {
-    TotpDigits::try_from(value).map_err(|_| ValidationError::AuthenticatorDigitsInvalid)
-}
-
-fn parse_totp_period(value: u64) -> Result<TotpPeriod, ValidationError> {
-    TotpPeriod::try_from(value).map_err(|_| ValidationError::AuthenticatorPeriodInvalid)
-}
-const MIN_SECRET_BYTES: usize = 10;
 
 /// Non-secret metadata from a validated `otpauth://totp/...` URI.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -48,29 +38,9 @@ pub struct OtpauthPreview {
 pub struct TotpSecret(String);
 
 impl TotpSecret {
-    pub fn parse(value: &str) -> Result<Self, ValidationError> {
-        let mut normalized = Zeroizing::new(normalize_base32(value));
-        let decoded = Zeroizing::new(decode_base32(&normalized)?);
-        if decoded.len() < MIN_SECRET_BYTES {
-            return Err(ValidationError::AuthenticatorSecretInvalid);
-        }
-        Ok(Self(mem::take(&mut *normalized)))
-    }
-
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
-    }
-
-    #[cfg_attr(
-        dylint_lib = "nook_domain_api",
-        expect(
-            raw_numeric_public_api,
-            reason = "serialization boundary: decodes the Base32 TOTP secret into RFC algorithm key bytes"
-        )
-    )]
-    pub fn decoded(&self) -> Result<Zeroizing<Vec<u8>>, ValidationError> {
-        decode_base32(&self.0).map(Zeroizing::new)
     }
 }
 
@@ -202,14 +172,20 @@ impl AuthenticatorSecret {
         let mut item = if secret_or_uri.trim().starts_with("otpauth://") {
             Self::from_otpauth_uri(secret_or_uri)?
         } else {
+            let secret = TotpSecret::parse(secret_or_uri)?;
+            let protocol = ProtocolParameters::from_form(&FormProtocolInput {
+                algorithm,
+                digits,
+                period,
+            })?;
             Self {
                 issuer: issuer.to_owned(),
                 account: account.to_owned(),
                 website_url: website_url.to_owned(),
-                secret: TotpSecret::parse(secret_or_uri)?,
-                algorithm: parse_totp_algorithm(algorithm)?,
-                digits: parse_totp_digits(parse_u32_or_default(digits, DEFAULT_DIGITS)?)?,
-                period: parse_totp_period(parse_u64_or_default(period, DEFAULT_PERIOD)?)?,
+                secret,
+                algorithm: protocol.algorithm,
+                digits: protocol.digits,
+                period: protocol.period,
                 backup_codes: Vec::new(),
             }
         };
@@ -229,49 +205,7 @@ impl AuthenticatorSecret {
     }
 
     pub fn from_otpauth_uri(uri: &str) -> Result<Self, ValidationError> {
-        let rest = uri
-            .trim()
-            .strip_prefix("otpauth://totp/")
-            .ok_or(ValidationError::AuthenticatorUriInvalid)?;
-        let (label_raw, query_raw) = rest
-            .split_once('?')
-            .ok_or(ValidationError::AuthenticatorUriInvalid)?;
-        let label = decode_uri_path_component(label_raw)?;
-        let params = parse_query(query_raw)?;
-        let secret = params
-            .get("secret")
-            .ok_or(ValidationError::AuthenticatorSecretInvalid)?;
-        let (label_issuer, account) = label
-            .split_once(':')
-            .map_or(("", label.as_str()), |(issuer, account)| (issuer, account));
-        let issuer = params.get("issuer").map_or(label_issuer, String::as_str);
-        let algorithm =
-            parse_totp_algorithm(params.get("algorithm").map_or("SHA1", String::as_str))?;
-        let digits = parse_totp_digits(
-            params
-                .get("digits")
-                .map(String::as_str)
-                .map_or(Ok(DEFAULT_DIGITS), parse_u32)?,
-        )?;
-        let period = parse_totp_period(
-            params
-                .get("period")
-                .map(String::as_str)
-                .map_or(Ok(DEFAULT_PERIOD), parse_u64)?,
-        )?;
-        let mut item = Self {
-            issuer: issuer.to_owned(),
-            account: account.to_owned(),
-            website_url: String::new(),
-            secret: TotpSecret::parse(secret)?,
-            algorithm,
-            digits,
-            period,
-            backup_codes: Vec::new(),
-        };
-        item.apply_inferred_website_url_if_empty();
-        item.normalize()?;
-        Ok(item)
+        OtpauthInput(uri).into_authenticator()
     }
 
     /// Validate an `otpauth://totp/...` URI and return non-secret preview fields.
@@ -328,23 +262,6 @@ impl From<TotpUnixSeconds> for u64 {
     }
 }
 
-/// Decide whether an edited setup key represents a different authenticator.
-///
-/// Stored keys are canonical Base32. Manual keys are compared after the same
-/// normalization, while an `otpauth://` URI is treated as a replacement because
-/// it can also change the algorithm, digits, and period.
-pub fn authenticator_setup_key_changed(
-    stored_key: &str,
-    candidate_key: &str,
-) -> Result<bool, ValidationError> {
-    let stored = TotpSecret::parse(stored_key)?;
-    if candidate_key.trim().starts_with("otpauth://") {
-        AuthenticatorSecret::from_otpauth_uri(candidate_key)?;
-        return Ok(true);
-    }
-    Ok(stored != TotpSecret::parse(candidate_key)?)
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TotpRemainingSeconds(u64);
 
@@ -367,128 +284,41 @@ pub struct TotpCode {
     pub period: TotpPeriod,
 }
 
-fn normalize_base32(value: &str) -> String {
-    let mut normalized = value
-        .chars()
-        .filter(|character| !character.is_ascii_whitespace() && *character != '-')
-        .map(|character| character.to_ascii_uppercase())
-        .collect::<String>();
-    normalized.truncate(normalized.trim_end_matches('=').len());
-    normalized
-}
-
-fn decode_base32(value: &str) -> Result<Vec<u8>, ValidationError> {
-    let mut output = Vec::with_capacity(value.len() * 5 / 8);
-    let mut buffer = 0_u32;
-    let mut bits = 0_u8;
-    for character in value.trim_end_matches('=').chars() {
-        let digit = match character {
-            'A'..='Z' => u32::from(character) - u32::from('A'),
-            '2'..='7' => u32::from(character) - u32::from('2') + 26,
-            _ => return Err(ValidationError::AuthenticatorSecretInvalid),
-        };
-        buffer = (buffer << 5) | digit;
-        bits += 5;
-        if bits >= 8 {
-            bits -= 8;
-            output.push(
-                u8::try_from((buffer >> bits) & 0xff)
-                    .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?,
-            );
-            buffer &= (1_u32 << bits) - 1;
-        }
-    }
-    if output.is_empty() {
-        return Err(ValidationError::AuthenticatorSecretInvalid);
-    }
-    Ok(output)
-}
-
-fn decode_uri_path_component(value: &str) -> Result<String, ValidationError> {
-    percent_decode_str(value)
-        .decode_utf8()
-        .map(Cow::into_owned)
-        .map_err(|_| ValidationError::AuthenticatorUriInvalid)
-}
-
-fn decode_uri_query_component(value: &str) -> Result<String, ValidationError> {
-    percent_decode_str(&value.replace('+', " "))
-        .decode_utf8()
-        .map(Cow::into_owned)
-        .map_err(|_| ValidationError::AuthenticatorUriInvalid)
-}
-
-fn parse_query(query: &str) -> Result<HashMap<String, String>, ValidationError> {
-    query
-        .split('&')
-        .filter(|part| !part.is_empty())
-        .map(|part| {
-            let (key, value) = part
-                .split_once('=')
-                .ok_or(ValidationError::AuthenticatorUriInvalid)?;
-            Ok((
-                decode_uri_query_component(key)?,
-                decode_uri_query_component(value)?,
-            ))
-        })
-        .collect()
-}
-
-fn parse_u32(value: &str) -> Result<u32, ValidationError> {
-    value
-        .parse()
-        .map_err(|_| ValidationError::AuthenticatorUriInvalid)
-}
-
-fn parse_u64(value: &str) -> Result<u64, ValidationError> {
-    value
-        .parse()
-        .map_err(|_| ValidationError::AuthenticatorUriInvalid)
-}
-
-fn parse_u32_or_default(value: &str, default: u32) -> Result<u32, ValidationError> {
-    if value.trim().is_empty() {
-        Ok(default)
-    } else {
-        parse_u32(value.trim())
-    }
-}
-
-fn parse_u64_or_default(value: &str, default: u64) -> Result<u64, ValidationError> {
-    if value.trim().is_empty() {
-        Ok(default)
-    } else {
-        parse_u64(value.trim())
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use super::{AuthenticatorSecret, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
+    use zeroize::Zeroize;
 
-    fn rfc_secret(secret: &[u8]) -> anyhow::Result<TotpSecret> {
-        let encoded = match secret.len() {
-            20 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
-            32 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
-            64 => {
-                "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
-            }
-            _ => panic!("unsupported fixture"),
-        };
-        Ok(TotpSecret::parse(encoded)?)
+    struct RfcTotpFixture<'a> {
+        algorithm: TotpAlgorithm,
+        secret: &'a [u8],
     }
 
-    fn fixture(algorithm: TotpAlgorithm, secret: &[u8]) -> anyhow::Result<AuthenticatorSecret> {
-        Ok(AuthenticatorSecret {
-            issuer: "RFC".to_owned(),
-            account: "test".to_owned(),
-            website_url: String::new(),
-            secret: rfc_secret(secret)?,
-            algorithm,
-            digits: TotpDigits::try_from(8)?,
-            period: TotpPeriod::default(),
-            backup_codes: Vec::new(),
-        })
+    impl RfcTotpFixture<'_> {
+        fn secret(&self) -> anyhow::Result<TotpSecret> {
+            let encoded = match self.secret.len() {
+                20 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+                32 => "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+                64 => {
+                    "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA"
+                }
+                _ => panic!("unsupported fixture"),
+            };
+            Ok(TotpSecret::parse(encoded)?)
+        }
+
+        fn authenticator(&self) -> anyhow::Result<AuthenticatorSecret> {
+            Ok(AuthenticatorSecret {
+                issuer: "RFC".to_owned(),
+                account: "test".to_owned(),
+                website_url: String::new(),
+                secret: self.secret()?,
+                algorithm: self.algorithm,
+                digits: TotpDigits::try_from(8)?,
+                period: TotpPeriod::default(),
+                backup_codes: Vec::new(),
+            })
+        }
     }
 
     #[test]
@@ -506,21 +336,33 @@ mod tests {
         ];
         for (timestamp, expected_sha1, expected_sha256, expected_sha512) in cases {
             assert_eq!(
-                fixture(TotpAlgorithm::Sha1, sha1)?
-                    .current_code(timestamp.into())?
-                    .code,
+                RfcTotpFixture {
+                    algorithm: TotpAlgorithm::Sha1,
+                    secret: sha1
+                }
+                .authenticator()?
+                .current_code(timestamp.into())?
+                .code,
                 expected_sha1
             );
             assert_eq!(
-                fixture(TotpAlgorithm::Sha256, sha256)?
-                    .current_code(timestamp.into())?
-                    .code,
+                RfcTotpFixture {
+                    algorithm: TotpAlgorithm::Sha256,
+                    secret: sha256
+                }
+                .authenticator()?
+                .current_code(timestamp.into())?
+                .code,
                 expected_sha256
             );
             assert_eq!(
-                fixture(TotpAlgorithm::Sha512, sha512)?
-                    .current_code(timestamp.into())?
-                    .code,
+                RfcTotpFixture {
+                    algorithm: TotpAlgorithm::Sha512,
+                    secret: sha512
+                }
+                .authenticator()?
+                .current_code(timestamp.into())?
+                .code,
                 expected_sha512
             );
         }
@@ -562,16 +404,12 @@ mod tests {
 
     #[test]
     fn setup_key_change_detection_uses_canonical_base32() -> anyhow::Result<()> {
-        assert!(!authenticator_setup_key_changed(
-            "JBSWY3DPEHPK3PXP",
-            "jbsw-y3dp ehpk-3pxp====",
-        )?);
-        assert!(authenticator_setup_key_changed(
-            "JBSWY3DPEHPK3PXP",
-            "KRUGS4ZANFZSAYJA",
-        )?);
-        assert!(authenticator_setup_key_changed(
-            "JBSWY3DPEHPK3PXP",
+        assert!(
+            !TotpSecret::parse("JBSWY3DPEHPK3PXP")?
+                .replacement_differs("jbsw-y3dp ehpk-3pxp====",)?
+        );
+        assert!(TotpSecret::parse("JBSWY3DPEHPK3PXP")?.replacement_differs("KRUGS4ZANFZSAYJA",)?);
+        assert!(TotpSecret::parse("JBSWY3DPEHPK3PXP")?.replacement_differs(
             "otpauth://totp/Example:alice?secret=JBSWY3DPEHPK3PXP&issuer=Example&algorithm=SHA256",
         )?);
         Ok(())
