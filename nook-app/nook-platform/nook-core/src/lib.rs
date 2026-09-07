@@ -201,8 +201,7 @@ pub use vault_sync_conflict::{
     ContentSyncConflict, CurrentVaultReplaceability, ProviderVaultDecision,
     ProviderVaultDecisionProjection, ProviderVaultDecisionReason, ProviderVaultIdentityEligibility,
     ProviderVaultIdentityObservation, ProviderVaultIdentityProjection, StoreIdSyncConflict,
-    VaultSyncConflict, VaultSyncConflictKind, classify_current_vault_replaceability,
-    project_provider_vault_decision,
+    VaultSyncConflict, VaultSyncConflictKind,
 };
 pub use vault_sync_state::{
     LocalFolderHealth, LocalFolderMultipleVaultsIssue, ManualProviderSync, SyncConflictReview,
@@ -297,8 +296,7 @@ pub use sync_provider_store::{
     StoredLocalFolderConfiguration, StoredLocalFolderDirectory, StoredLocalFolderHandle,
     StoredOAuthAccessCredential, StoredOAuthAccountIdentity, StoredOAuthFileConfiguration,
     StoredOAuthRefreshCredential, StoredOAuthRemoteFileId, StoredOAuthRemoteFileName,
-    StoredOAuthTokenExpiry, VaultStorageConnection, auth_snapshot_legacy_storage_value,
-    update_provider_sync_metadata,
+    StoredOAuthTokenExpiry, VaultStorageConnection,
 };
 pub use validation::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, DRIVE_SHARED_FOLDER_REF_PREFIX,

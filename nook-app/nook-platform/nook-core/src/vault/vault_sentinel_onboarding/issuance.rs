@@ -2,7 +2,7 @@
 use super::{OnboardingDelivery, SentinelOnboardingPackage, SentinelOnboardingVersion};
 use crate::{
     AuthProvidersSnapshotData, MultiDeviceError, SentinelGenesisRequest,
-    SentinelGenesisShareDelivery, StorageProviderType, auth_snapshot_legacy_storage_value,
+    SentinelGenesisShareDelivery, StorageProviderType,
 };
 use zeroize::Zeroizing;
 
@@ -51,7 +51,8 @@ impl PreparedOnboardingIssuance<'_> {
         } = self.input;
         // Keep the encrypted package within the QR budget while retaining semantic
         // enums in memory. The schema-1 projection is also readable after rollback.
-        let provider_storage = auth_snapshot_legacy_storage_value(provider_snapshot)
+        let provider_storage = provider_snapshot
+            .legacy_storage_value()
             .map_err(|_| MultiDeviceError::InvalidSentinelGenesisPayload)?;
         let provider_json = Zeroizing::new(
             serde_json::to_vec(&provider_storage)

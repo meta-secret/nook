@@ -424,27 +424,24 @@ mod pending_sync_conflict_tests {
     #[test]
     fn provider_vault_projection_exposes_only_public_decision_facts() {
         let projection = NookProviderVaultDecisionProjection::from_core(
-            nook_core::project_provider_vault_decision(
-                CurrentVaultReplaceability::Replaceable,
-                vec![
-                    nook_core::ProviderVaultIdentityObservation {
-                        identity_id: "identity-personal".to_owned(),
-                        identity_label: "Personal".to_owned(),
-                        linked_to_provider_vault: false,
-                        protected_local_app_available: true,
-                        is_current_app: true,
-                        app_grant: IdentityVaultAppGrantKind::NotLinked,
-                    },
-                    nook_core::ProviderVaultIdentityObservation {
-                        identity_id: "identity-work".to_owned(),
-                        identity_label: "Work".to_owned(),
-                        linked_to_provider_vault: true,
-                        protected_local_app_available: true,
-                        is_current_app: false,
-                        app_grant: IdentityVaultAppGrantKind::Granted,
-                    },
-                ],
-            ),
+            CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
+                nook_core::ProviderVaultIdentityObservation {
+                    identity_id: "identity-personal".to_owned(),
+                    identity_label: "Personal".to_owned(),
+                    linked_to_provider_vault: false,
+                    protected_local_app_available: true,
+                    is_current_app: true,
+                    app_grant: IdentityVaultAppGrantKind::NotLinked,
+                },
+                nook_core::ProviderVaultIdentityObservation {
+                    identity_id: "identity-work".to_owned(),
+                    identity_label: "Work".to_owned(),
+                    linked_to_provider_vault: true,
+                    protected_local_app_available: true,
+                    is_current_app: false,
+                    app_grant: IdentityVaultAppGrantKind::Granted,
+                },
+            ]),
         );
 
         assert_eq!(
@@ -708,17 +705,16 @@ mod browser_tests {
         assert_eq!(from_vaults.content_local_version().unwrap(), 0);
 
         let projection = NookProviderVaultDecisionProjection::from_core(
-            nook_core::project_provider_vault_decision(
-                CurrentVaultReplaceability::Replaceable,
-                vec![nook_core::ProviderVaultIdentityObservation {
+            CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
+                nook_core::ProviderVaultIdentityObservation {
                     identity_id: "identity".into(),
                     identity_label: "Personal".into(),
                     linked_to_provider_vault: false,
                     protected_local_app_available: true,
                     is_current_app: true,
                     app_grant: IdentityVaultAppGrantKind::NotLinked,
-                }],
-            ),
+                },
+            ]),
         );
         let identities = projection.identities();
         assert_eq!(identities[0].identity_id(), "identity");

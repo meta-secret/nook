@@ -878,8 +878,7 @@ mod tests {
         store_id: &nook_core::StoreId,
         projection: &identity_record::LocalIdentityProjection,
     ) -> nook_core::ProviderVaultDecisionProjection {
-        nook_core::project_provider_vault_decision(
-            CurrentVaultReplaceability::Replaceable,
+        CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(
             provider_vault_identity_observations_from_projection(
                 session_app_id,
                 store_id,

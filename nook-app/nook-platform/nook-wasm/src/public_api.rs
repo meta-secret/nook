@@ -375,7 +375,7 @@ pub fn update_provider_sync_metadata(
     manager_store_scope: &NookManagerStoreScope,
     synced_at: &str,
 ) -> Result<nook_core::AuthProvidersSnapshotData, wasm_bindgen::JsError> {
-    snapshot.providers = nook_core::update_provider_sync_metadata(
+    snapshot.providers = nook_core::StorageProviderData::update_sync_metadata(
         &snapshot.providers,
         provider_id,
         vault_yaml,
