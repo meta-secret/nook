@@ -156,6 +156,68 @@ mod tests {
     use crate::authentication_advance_control_is_safe;
 
     #[test]
+    fn claude_owned_email_post_uses_existing_identifier_advance_policy() {
+        let claude = AuthenticationAdvanceControlObservation {
+            actionability: PageControlActionability::Actionable,
+            ownership: PageControlOwnership::OwnedForm,
+            semantics: PageControlSemantics::SemanticSubmit,
+            authentication_username: AuthenticationUsernameEvidence::StandardsBasedEmail,
+            password_field_count: 0.into(),
+            new_password_field_count: 0.into(),
+            one_time_code_field_count: 0.into(),
+            semantic_submit_control_count: 1.into(),
+            source_origin: "https://claude.ai".to_owned(),
+            form_identity: String::new(),
+            destination_identity: "https://claude.ai/login".to_owned(),
+            label: "Continue with email".to_owned(),
+            machine_identity: String::new(),
+            submission_method: PageControlSubmissionMethod::Post,
+        };
+        assert!(authentication_advance_control_is_safe(&claude));
+
+        for label in [
+            "Continue with Google",
+            "Continue with SSO",
+            "Forgot password",
+            "Delete account",
+        ] {
+            let mut rejected = claude.clone();
+            rejected.label = label.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{label}"
+            );
+        }
+
+        for destination in [
+            "https://attacker.example/login",
+            "https://claude.ai/signup",
+            "https://claude.ai/login?provider=google",
+            "https://claude.ai/account/delete",
+        ] {
+            let mut rejected = claude.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{destination}"
+            );
+        }
+
+        let mut inert = claude.clone();
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(&inert));
+
+        let mut unowned = claude.clone();
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(&unowned));
+
+        let mut ambiguous = claude;
+        ambiguous.semantic_submit_control_count = 2.into();
+        ambiguous.label = "Primary action".to_owned();
+        assert!(!authentication_advance_control_is_safe(&ambiguous));
+    }
+
+    #[test]
     fn netflix_owned_post_login_uses_existing_combined_credential_policy() {
         let netflix = AuthenticationAdvanceControlObservation {
             actionability: PageControlActionability::Actionable,
