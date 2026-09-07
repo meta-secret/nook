@@ -76,7 +76,7 @@ impl CheckedOnboardingRecipient<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::tests::OnboardingFixture;
+    use super::super::tests::OnboardingFixture;
     use super::SentinelOnboardingRecipient;
     use crate::{DeviceIdentity, MultiDeviceError, encrypt_for_recipient};
     use std::ptr;

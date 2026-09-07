@@ -91,7 +91,7 @@ mod tests {
 
     #[test]
     fn codec_preserves_outer_whitespace_and_rejects_invalid_json() -> anyhow::Result<()> {
-        use super::tests::OnboardingFixture;
+        use super::super::tests::OnboardingFixture;
         let fixture = OnboardingFixture::new()?;
         let package = fixture.package()?;
         assert_eq!(
@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn decompressed_limit_accepts_exact_boundary() -> anyhow::Result<()> {
-        use super::tests::OnboardingFixture;
+        use super::super::tests::OnboardingFixture;
         let package = OnboardingFixture::new()?.package()?;
         let mut json = serde_json::to_vec(&package)?;
         json.resize(usize::try_from(MAX_DECOMPRESSED_PACKAGE_BYTES)?, b' ');
