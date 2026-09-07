@@ -1,18 +1,23 @@
 import initNookWasm, {
   configure_vault_application,
+  NookCompanionExtensionEndpoint,
   decode_storage_providers,
   NookVaultManager,
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthProvidersSnapshot,
+  CompanionIdentityHandoffResponse,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
   ExtensionSessionMessageDispatcher,
   type SessionMessageDispatchContext,
 } from './session-message-dispatch'
-import type { ExtensionSessionRequest } from './session-request-adapter'
+import type {
+  CompanionIdentityHandoffSessionTransportRequest,
+  ExtensionSessionRequest,
+} from './session-request-adapter'
 import { ExtensionSessionLifecycleMessageType } from '../lib/extension-session-lifecycle-message-type'
 import {
   handleSessionMessage,
@@ -174,11 +179,36 @@ async function handleMessage(
   return handleSessionMessage(args)
 }
 
-type ExtensionSessionResponse = Awaited<ReturnType<typeof handleMessage>>
+async function handleCompanionIdentityHandoff(
+  message: CompanionIdentityHandoffSessionTransportRequest,
+) {
+  const generation = sessionGeneration
+  const activeManager = await getManager()
+  const endpoint: NookCompanionExtensionEndpoint = Reflect.construct(
+    NookCompanionExtensionEndpoint,
+    [message.payload.presence],
+  )
+  try {
+    const response: CompanionIdentityHandoffResponse = await Reflect.apply(
+      endpoint.authorize_and_seal,
+      endpoint,
+      [activeManager, message.payload.request],
+    )
+    renewSessionExpiry(generation)
+    return { ok: true, response }
+  } finally {
+    endpoint.free()
+  }
+}
+
+type ExtensionSessionResponse =
+  | Awaited<ReturnType<typeof handleMessage>>
+  | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
 
 const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
   {
     handleMessage,
+    handleCompanionIdentityHandoff,
     decodeProviders: async (providers) => {
       const snapshot: AuthProvidersSnapshot = {
         providers: providers as StorageProvider[],

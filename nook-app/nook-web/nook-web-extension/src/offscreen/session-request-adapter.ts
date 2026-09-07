@@ -95,6 +95,31 @@ type ExtensionSessionImportTransportRequest = {
 export type ExtensionSessionTransportRequest =
   | GeneratedExtensionSessionNonImportRequest
   | ExtensionSessionImportTransportRequest
+
+export const COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE =
+  'nook:extension-session-authorize-companion-identity-handoff'
+
+export type CompanionIdentityHandoffSessionTransportRequest = {
+  type: typeof COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE
+  payload: { presence: unknown; request: unknown }
+}
+
+export function isCompanionIdentityHandoffSessionTransportRequest(
+  value: unknown,
+): value is CompanionIdentityHandoffSessionTransportRequest {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    'type' in value &&
+    value.type === COMPANION_IDENTITY_HANDOFF_SESSION_MESSAGE_TYPE &&
+    'payload' in value &&
+    !!value.payload &&
+    typeof value.payload === 'object' &&
+    'presence' in value.payload &&
+    'request' in value.payload
+  )
+}
+
 export type ParsedExtensionSessionTransportRequest =
   EnumeratedExtensionSessionRequest<ExtensionSessionTransportRequest>
 type TypedExtensionSessionImportRequest = Extract<

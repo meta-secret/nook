@@ -6,10 +6,11 @@ import {
   isOpenCompanionLauncherMessage,
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
+  type CompanionIdentityDiscoveryTransportResponse,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
-  type ExtensionPairedVaultIdentityStatusMessage,
   type OpenCompanionLauncherMessage,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
+import type { CompanionIdentityStatus } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { installMockPasskeyRuntime } from '../passkey-mock'
 
 type ExtensionInstallDemoMessage =
@@ -21,7 +22,7 @@ type ExtensionInstallDemoMessageTypes = {
 }
 
 type ExtensionInstallDemoResponse =
-  { ok: true } | { ok: false } | ExtensionPairedVaultIdentityStatusMessage
+  { ok: true } | CompanionIdentityDiscoveryTransportResponse
 
 type ExtensionInstallDemoChromeRuntime = {
   sendMessage?: (
@@ -102,14 +103,14 @@ test('offer browser extension install on vault home and in Devices', async ({
               ? { ok: true }
               : type === messageTypes.pairedVaultIdentityDiscovery
                 ? {
-                    type: 'nook:extension-paired-vault-identity-status',
-                    payload: {
-                      requestId: message.payload.requestId,
-                      vaultStoreId: message.payload.vaultStoreId,
+                    ok: true,
+                    status: {
                       status: 'different-vault',
-                      connectedVaultStoreId: 'store_previous_9a4f',
-                      connectedVaultName: 'Previous vault',
-                    },
+                      request_id: 'extension-install-discovery',
+                      vault_store_id: 'extension-install-vault',
+                      connected_vault_store_id: 'store_previous_9a4f',
+                      connected_vault_name: 'Previous vault',
+                    } satisfies CompanionIdentityStatus,
                   }
                 : { ok: false },
           )
@@ -142,7 +143,7 @@ test('offer browser extension install on vault home and in Devices', async ({
   if (!isExtensionPairedVaultIdentityDiscoveryMessage(discoveryMessage)) {
     throw new Error('Paired-vault discovery message was malformed.')
   }
-  expect(Object.keys(discoveryMessage.payload).sort()).toEqual([
+  expect(Object.keys(Reflect.get(discoveryMessage, 'payload')).sort()).toEqual([
     'expiresAt',
     'requestId',
     'vaultStoreId',

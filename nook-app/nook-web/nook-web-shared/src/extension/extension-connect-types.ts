@@ -1,4 +1,8 @@
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from './paired-vault-identity-status'
+import type {
+  CompanionIdentityDiscoveryObservation,
+  CompanionIdentityStatus,
+} from './nook-companion-wasm/nook_companion_wasm.js'
 
 export enum ExtensionIdentityRequestSource {
   ExtensionConnect = 'extension-connect',
@@ -12,6 +16,8 @@ export type ExtensionConnectRequestFor<Scope extends string> =
   | (ExtensionIdentityRequestBase<Scope> & {
       source: ExtensionIdentityRequestSource.PairedVault
       vaultStoreId: string
+      protocolDiscovery: CompanionIdentityDiscoveryObservation
+      protocolStatus: CompanionIdentityStatus
     })
 
 type ExtensionIdentityRequestBase<Scope extends string> = {

@@ -9,7 +9,6 @@ import {
   ExtensionConnectRequestStateKind,
   ExtensionPairingDeliveryKind,
   deliverExtensionPairingApproval,
-  discoverPairedExtensionIdentity,
   extensionConnectRequestFromLocation,
   isExtensionConnectPath,
   openInstalledExtension,
@@ -23,13 +22,7 @@ import {
   OpenCompanionLauncherIntent,
   ExtensionPairingVaultType,
   ExtensionPairingApprovedMessageType,
-  isExtensionPairedVaultIdentityDiscoveryMessage,
-  isExtensionPairedVaultIdentityHandoffRequestMessage,
-  isExtensionPairedVaultIdentityStatusMessage,
-  isExtensionPairedVaultUnlockRequestMessage,
   isExtensionPairingApprovedMessage,
-  ExtensionPairedVaultIdentityStatusMessageStatus,
-  ExtensionPairedVaultIdentityStatusMessageType,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   extensionPairingGrantPolicyReady,
@@ -679,101 +672,6 @@ describe('extension-owned pairing start', () => {
       }),
     ).toBe(false)
   })
-
-  test('validates paired-vault discovery and nonce-bound handoff messages', () => {
-    expect(
-      isExtensionPairedVaultIdentityDiscoveryMessage({
-        type: 'nook:extension-paired-vault-identity-discovery',
-        payload: {
-          requestId: 'request-1',
-          vaultStoreId: 'store-1',
-          expiresAt: Date.now() + 5_000,
-        },
-      }),
-    ).toBe(true)
-    expect(
-      isExtensionPairedVaultIdentityDiscoveryMessage({
-        type: 'nook:extension-paired-vault-identity-discovery',
-        payload: {
-          requestId: 'request-1',
-          vaultStoreId: 'store-1',
-          expiresAt: Date.now() - 1,
-        },
-      }),
-    ).toBe(false)
-    expect(
-      isExtensionPairedVaultUnlockRequestMessage({
-        type: 'nook:extension-paired-vault-unlock-request',
-        payload: {
-          requestId: 'request-1',
-          vaultStoreId: 'store-1',
-        },
-      }),
-    ).toBe(true)
-    expect(
-      isExtensionPairedVaultUnlockRequestMessage({
-        type: 'nook:extension-paired-vault-unlock-request',
-        payload: {
-          requestId: 'request-1',
-          vaultStoreId: '',
-        },
-      }),
-    ).toBe(false)
-    expect(
-      isExtensionPairedVaultIdentityStatusMessage({
-        type: 'nook:extension-paired-vault-identity-status',
-        payload: {
-          requestId: 'request-1',
-          vaultStoreId: 'store-1',
-          status: 'unlocked',
-          extensionRuntimeId: 'extension-1',
-          deviceId: 'device-1',
-          devicePublicKey: 'age1device',
-          deviceSigningPublicKey: 'signing-key',
-          deviceLabel: 'Nook Extension',
-          nonce: 'nonce-1',
-          scopes: [ExtensionConnectScope.VaultAccess],
-        },
-      }),
-    ).toBe(true)
-    expect(
-      isExtensionPairedVaultIdentityStatusMessage({
-        type: 'nook:extension-paired-vault-identity-status',
-        payload: {
-          requestId: 'request-1',
-          vaultStoreId: 'store-current',
-          status: 'different-vault',
-          connectedVaultStoreId: 'store-previous',
-          connectedVaultName: 'Previous vault',
-        },
-      }),
-    ).toBe(true)
-    expect(
-      isExtensionPairedVaultIdentityStatusMessage({
-        type: 'nook:extension-paired-vault-identity-status',
-        payload: {
-          requestId: 'request-1',
-          vaultStoreId: 'store-current',
-          status: 'different-vault',
-          connectedVaultStoreId: '',
-          connectedVaultName: 'Previous vault',
-        },
-      }),
-    ).toBe(false)
-    expect(
-      isExtensionPairedVaultIdentityHandoffRequestMessage({
-        type: 'nook:extension-paired-vault-identity-handoff-request',
-        payload: {
-          vaultStoreId: 'store-1',
-          recipientPublicKey: 'age1recipient',
-          nonce: 'nonce-1',
-          expectedDeviceId: 'device-1',
-          expectedDevicePublicKey: 'age1device',
-          expectedDeviceSigningPublicKey: 'signing-key',
-        },
-      }),
-    ).toBe(true)
-  })
 })
 
 describe('paired extension unlock request', () => {
@@ -819,75 +717,5 @@ describe('paired extension unlock request', () => {
     const result = requestPairedExtensionUnlock('store-1')
     await vi.advanceTimersByTimeAsync(5_000)
     await expect(result).resolves.toBe(false)
-  })
-})
-
-describe('paired extension identity discovery', () => {
-  test('retries a transient unavailable session before opening a paired vault', async () => {
-    vi.useFakeTimers()
-    document.documentElement.setAttribute(
-      'data-nook-extension-runtime-id',
-      'extension-1',
-    )
-    let attempts = 0
-    vi.stubGlobal('chrome', {
-      runtime: {
-        sendMessage: (
-          _extensionId: string,
-          message: {
-            payload: { requestId: string; vaultStoreId: string }
-          },
-          callback: (response: unknown) => void,
-        ) => {
-          attempts += 1
-          if (attempts === 1) {
-            callback({
-              type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
-              payload: {
-                requestId: message.payload.requestId,
-                vaultStoreId: message.payload.vaultStoreId,
-                status:
-                  ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
-              },
-            })
-            return
-          }
-          callback({
-            type: ExtensionPairedVaultIdentityStatusMessageType.NookExtensionPairedVaultIdentityStatus,
-            payload: {
-              requestId: message.payload.requestId,
-              vaultStoreId: message.payload.vaultStoreId,
-              status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
-              extensionRuntimeId: 'extension-1',
-              deviceId: 'device-1',
-              devicePublicKey: 'age1device',
-              deviceSigningPublicKey: 'signing-key',
-              deviceLabel: 'Nook Extension',
-              nonce: 'nonce-1',
-              scopes: [ExtensionConnectScope.VaultAccess],
-            },
-          })
-        },
-      },
-    })
-
-    const discovery = discoverPairedExtensionIdentity('store-1')
-    await vi.advanceTimersByTimeAsync(150)
-
-    await expect(discovery).resolves.toEqual({
-      status: ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked,
-      request: {
-        source: ExtensionIdentityRequestSource.PairedVault,
-        vaultStoreId: 'store-1',
-        extensionRuntimeId: 'extension-1',
-        deviceId: 'device-1',
-        devicePublicKey: 'age1device',
-        deviceSigningPublicKey: 'signing-key',
-        deviceLabel: 'Nook Extension',
-        nonce: 'nonce-1',
-        scopes: [ExtensionConnectScope.VaultAccess],
-      },
-    })
-    expect(attempts).toBe(2)
   })
 })
