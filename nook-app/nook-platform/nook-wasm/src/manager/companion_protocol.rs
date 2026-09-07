@@ -79,6 +79,7 @@ impl NookCompanionExtensionEndpoint {
         })
     }
 
+    #[cfg(test)]
     fn authorize_and_seal_loaded(
         &mut self,
         operation: CompanionExtensionSealOperation<'_>,
@@ -108,6 +109,7 @@ impl NookCompanionExtensionEndpoint {
     }
 }
 
+#[cfg(test)]
 struct CompanionExtensionSealOperation<'a> {
     manager: &'a mut NookVaultManager,
     authorization: CompanionIdentityHandoffAuthorization,
