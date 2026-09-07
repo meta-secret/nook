@@ -27,6 +27,8 @@
 //!   binding. Unlike a draft genesis session, it may survive refresh and does
 //!   not contain plaintext key material.
 mod device_identity;
+#[path = "sentinel_storage.rs"]
+mod sentinel_storage;
 
 use crate::storage::identity_record;
 use js_sys::Date;
@@ -53,9 +55,12 @@ pub(crate) const APP_KEY_WRAPPED_KEY: &str = "app_key_wrapped";
 pub(crate) const DEVICE_ID_KEY: &str = "device_id";
 /// Legacy dual-read key for [`APP_KEY_WRAPPED_KEY`].
 pub(crate) const WRAPPED_DEVICE_IDENTITY_KEY: &str = "device_identity_wrapped";
-const SENTINEL_GENESIS_SHARE_CATALOG_KEY: &str = "sentinel_genesis_share_catalog";
-pub(crate) const SENTINEL_GENESIS_FINALIZATION_PENDING_KEY: &str =
-    "sentinel_genesis_finalization_pending";
+pub(crate) use sentinel_storage::{
+    SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, clear_sentinel_genesis_finalization_pending,
+    list_sentinel_genesis_share_deliveries, load_sentinel_genesis_finalization_pending,
+    load_sentinel_genesis_share_delivery, save_sentinel_genesis_finalization_pending,
+    save_sentinel_genesis_share_delivery,
+};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultRegistryEntry {
@@ -69,14 +74,6 @@ pub struct VaultRegistryEntry {
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct VaultRegistry {
     pub vaults: Vec<VaultRegistryEntry>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct SentinelGenesisShareCatalogEntry {
-    pub store_id: String,
-    pub device_id: String,
-    pub delivery_json: String,
 }
 
 fn vault_blob_key(store_id: &str) -> String {
@@ -93,10 +90,6 @@ fn secret_search_key(store_id: &str) -> String {
 
 fn secret_search_bucket_key(store_id: &str, bucket: u8) -> String {
     format!("secret_search_v2:{store_id}:{bucket:02}")
-}
-
-fn sentinel_genesis_share_key(store_id: &str, device_id: &str) -> String {
-    format!("sentinel_genesis_share:{store_id}:{device_id}")
 }
 
 pub(crate) async fn clear_vault_db() -> Result<(), NookError> {
@@ -702,6 +695,44 @@ pub(crate) async fn read_string_preferring(
     Ok(None)
 }
 
+#[cfg(test)]
+mod unit_tests {
+    use super::*;
+
+    #[test]
+    fn storage_keys_keep_each_namespace_and_bucket_shape() {
+        assert_eq!(vault_blob_key("store-a"), "vault:store-a");
+        assert_eq!(vault_cache_key("remote"), "vault_cache:remote");
+        assert_eq!(secret_search_key("store-a"), "secret_search:store-a");
+        assert_eq!(
+            secret_search_bucket_key("store-a", 3),
+            "secret_search_v2:store-a:03"
+        );
+    }
+
+    #[test]
+    fn registry_upsert_creates_defaults_updates_labels_and_touches_unlocks() {
+        let mut registry = VaultRegistry::default();
+        upsert_registry_entry(&mut registry, "store_registry01", None, false);
+        assert_eq!(registry.vaults.len(), 1);
+        assert!(!registry.vaults[0].label.is_empty());
+        assert!(registry.vaults[0].last_unlocked_at.is_none());
+
+        upsert_registry_entry(&mut registry, "store_registry01", Some(" Work "), false);
+        assert_eq!(registry.vaults[0].label, " Work ");
+        assert!(registry.vaults[0].last_unlocked_at.is_none());
+        upsert_registry_entry(&mut registry, "store_registry02", Some("Personal"), false);
+        assert_eq!(registry.vaults.len(), 2);
+    }
+
+    #[test]
+    fn yaml_projection_fails_closed_and_defaults_unusable_labels() {
+        assert!(store_id_from_yaml("not yaml").is_err());
+        assert!(label_from_yaml("not yaml").is_none());
+        assert!(!default_registry_label("store_registry01").is_empty());
+    }
+}
+
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod sentinel_genesis_storage_tests {
     use rexie::Rexie;
@@ -762,29 +793,95 @@ mod sentinel_genesis_storage_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn verified_sentinel_genesis_share_delivery_round_trips()
+    async fn vault_blob_registry_and_pending_slot_keep_local_projection_order()
     -> Result<(), wasm_bindgen::JsError> {
         let _ = Rexie::delete("nook_db").await;
-        let store_id = "store_testsentinel11";
-        let device_id = "0123456789abcdef";
-        let payload = r#"{"version":1,"ciphertext":"verified"}"#;
-
-        save_sentinel_genesis_share_delivery(store_id, device_id, payload).await?;
-
+        let store_id = "store_indexeddb01";
+        save_vault_blob(store_id, "encrypted-vault").await?;
         assert_eq!(
-            load_sentinel_genesis_share_delivery(store_id, device_id)
-                .await?
-                .as_deref(),
-            Some(payload)
+            load_vault_blob(store_id).await?.as_deref(),
+            Some("encrypted-vault")
         );
+        assert_eq!(get_active_vault_id().await?.as_deref(), Some(store_id));
+        assert_eq!(list_vault_registry_entries().await?.len(), 1);
+
+        prepare_new_local_vault_slot().await?;
+        assert!(load_from_indexed_db().await?.is_none());
+        save_vault_blob(store_id, "updated-vault").await?;
         assert_eq!(
-            list_sentinel_genesis_share_deliveries(device_id).await?,
-            vec![SentinelGenesisShareCatalogEntry {
-                store_id: store_id.to_owned(),
-                device_id: device_id.to_owned(),
-                delivery_json: payload.to_owned(),
-            }]
+            load_from_indexed_db().await?.as_deref(),
+            Some("updated-vault")
         );
+        clear_active_vault_id().await?;
+        assert!(load_from_indexed_db().await?.is_none());
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn secret_search_buckets_round_trip_and_reject_out_of_range_writes()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        let store_id = "store_search01";
+        save_secret_search_catalog_buckets(
+            store_id,
+            &[(0, Some("first".to_owned())), (2, Some("third".to_owned()))],
+        )
+        .await?;
+        assert_eq!(
+            load_secret_search_catalog_buckets(store_id).await?,
+            vec![(0, "first".to_owned()), (2, "third".to_owned())]
+        );
+        save_secret_search_catalog_buckets(store_id, &[(0, None)]).await?;
+        assert_eq!(
+            load_secret_search_catalog_buckets(store_id).await?,
+            vec![(2, "third".to_owned())]
+        );
+        let error = save_secret_search_catalog_buckets(
+            store_id,
+            &[(
+                nook_core::SECRET_SEARCH_CATALOG_BUCKET_COUNT,
+                Some("bad".to_owned()),
+            )],
+        )
+        .await
+        .expect_err("out-of-range search bucket must fail closed");
+        assert!(matches!(error, NookError::IndexedDb(message) if message.contains("out of range")));
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn preferred_storage_value_wins_over_legacy_fallback() -> Result<(), wasm_bindgen::JsError>
+    {
+        let _ = Rexie::delete("nook_db").await;
+        idb_put_string("preferred", "new-value").await?;
+        idb_put_string("legacy", "old-value").await?;
+        let database = open_nook_database().await?;
+        let transaction = database
+            .transaction(&["vault"], TransactionMode::ReadOnly)
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        let store = transaction
+            .store("vault")
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        assert_eq!(
+            read_string_preferring(&store, "preferred", "legacy", "fixture").await?,
+            Some("new-value".to_owned())
+        );
+        transaction
+            .done()
+            .await
+            .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn local_vault_validation_rejects_empty_or_unknown_updates()
+    -> Result<(), wasm_bindgen::JsError> {
+        let _ = Rexie::delete("nook_db").await;
+        assert!(save_to_indexed_db(" ").await.is_err());
+        assert!(save_to_indexed_db("not yaml").await.is_err());
+        assert!(set_local_vault_label("missing", " ").await.is_err());
+        assert!(set_local_vault_label("missing", "Known").await.is_err());
+        assert!(switch_active_vault("missing").await.is_err());
         Ok(())
     }
 }
@@ -803,122 +900,6 @@ pub(crate) async fn load_from_indexed_db() -> Result<Option<String>, NookError> 
 
 pub(crate) async fn load_vault_local_cache(cache_ref: &str) -> Result<Option<String>, NookError> {
     idb_get_string(&vault_cache_key(cache_ref)).await
-}
-
-/// Persist an already verified, recipient-bound Sentinel share delivery.
-///
-/// Verification is intentionally owned by `nook-core`; this storage adapter
-/// accepts only the identifiers extracted from that typed result. Unfinished
-/// genesis sessions and unverified QR payloads must never call this helper.
-pub(crate) async fn save_sentinel_genesis_share_delivery(
-    store_id: &str,
-    device_id: &str,
-    delivery_json: &str,
-) -> Result<(), NookError> {
-    if store_id.trim().is_empty() || device_id.trim().is_empty() || delivery_json.trim().is_empty()
-    {
-        return Err(NookError::Database(
-            "Refusing to persist an incomplete Sentinel genesis share delivery.".to_owned(),
-        ));
-    }
-    let rexie = open_nook_database().await?;
-    let transaction = rexie
-        .transaction(&["vault"], TransactionMode::ReadWrite)
-        .map_err(|e| NookError::IndexedDb(format!("Transaction error: {e:?}")))?;
-    let store = transaction
-        .store("vault")
-        .map_err(|e| NookError::IndexedDb(format!("Store error: {e:?}")))?;
-    let catalog_key = serde_wasm_bindgen::to_value(SENTINEL_GENESIS_SHARE_CATALOG_KEY)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    let raw_catalog = store
-        .get(catalog_key.clone())
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Get error: {e:?}")))?;
-    let mut catalog = match raw_catalog {
-        Some(value) if !value.is_null() && !value.is_undefined() => {
-            let json: String = serde_wasm_bindgen::from_value(value)
-                .map_err(|e| NookError::IndexedDb(format!("Deserialization error: {e:?}")))?;
-            serde_json::from_str::<Vec<SentinelGenesisShareCatalogEntry>>(&json).map_err(|e| {
-                NookError::IndexedDb(format!("Sentinel share catalog parse error: {e}"))
-            })?
-        }
-        _ => Vec::new(),
-    };
-    catalog.retain(|entry| entry.store_id != store_id || entry.device_id != device_id);
-    catalog.push(SentinelGenesisShareCatalogEntry {
-        store_id: store_id.to_owned(),
-        device_id: device_id.to_owned(),
-        delivery_json: delivery_json.to_owned(),
-    });
-    let delivery_key =
-        serde_wasm_bindgen::to_value(&sentinel_genesis_share_key(store_id, device_id))
-            .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    let delivery_value = serde_wasm_bindgen::to_value(delivery_json)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    store
-        .put(&delivery_value, Some(&delivery_key))
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
-    let catalog_json = serde_json::to_string(&catalog).map_err(|e| {
-        NookError::IndexedDb(format!("Sentinel share catalog serialize error: {e}"))
-    })?;
-    let catalog_value = serde_wasm_bindgen::to_value(&catalog_json)
-        .map_err(|e| NookError::IndexedDb(format!("Serialization error: {e:?}")))?;
-    store
-        .put(&catalog_value, Some(&catalog_key))
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Put error: {e:?}")))?;
-    transaction
-        .done()
-        .await
-        .map_err(|e| NookError::IndexedDb(format!("Transaction done error: {e:?}")))?;
-    Ok(())
-}
-
-pub(crate) async fn load_sentinel_genesis_share_delivery(
-    store_id: &str,
-    device_id: &str,
-) -> Result<Option<String>, NookError> {
-    if store_id.trim().is_empty() || device_id.trim().is_empty() {
-        return Ok(None);
-    }
-    idb_get_string(&sentinel_genesis_share_key(store_id, device_id)).await
-}
-
-pub(crate) async fn list_sentinel_genesis_share_deliveries(
-    device_id: &str,
-) -> Result<Vec<SentinelGenesisShareCatalogEntry>, NookError> {
-    if device_id.trim().is_empty() {
-        return Ok(Vec::new());
-    }
-    let Some(json) = idb_get_string(SENTINEL_GENESIS_SHARE_CATALOG_KEY).await? else {
-        return Ok(Vec::new());
-    };
-    let mut entries: Vec<SentinelGenesisShareCatalogEntry> = serde_json::from_str(&json)
-        .map_err(|e| NookError::IndexedDb(format!("Sentinel share catalog parse error: {e}")))?;
-    entries.retain(|entry| entry.device_id == device_id);
-    entries.sort_by(|left, right| left.store_id.cmp(&right.store_id));
-    Ok(entries)
-}
-
-pub(crate) async fn save_sentinel_genesis_finalization_pending(
-    pending_json: &str,
-) -> Result<(), NookError> {
-    if pending_json.trim().is_empty() {
-        return Err(NookError::Database(
-            "Refusing to persist an empty Sentinel finalization plan.".to_owned(),
-        ));
-    }
-    idb_put_string(SENTINEL_GENESIS_FINALIZATION_PENDING_KEY, pending_json).await
-}
-
-pub(crate) async fn load_sentinel_genesis_finalization_pending() -> Result<Option<String>, NookError>
-{
-    idb_get_string(SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await
-}
-
-pub(crate) async fn clear_sentinel_genesis_finalization_pending() -> Result<(), NookError> {
-    idb_delete_key(SENTINEL_GENESIS_FINALIZATION_PENDING_KEY).await
 }
 
 pub(crate) async fn save_to_indexed_db(content: &str) -> Result<(), NookError> {

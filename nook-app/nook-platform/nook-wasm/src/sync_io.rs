@@ -22,3 +22,16 @@ pub async fn write_local_vault_yaml(content: String) -> Result<(), JsError> {
 pub fn vault_content_hash(content: &str) -> String {
     nook_core::VaultRevision::content_hash(content)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn vault_content_hash_is_stable_and_content_sensitive() {
+        let first = vault_content_hash("vault: one");
+        assert_eq!(first, vault_content_hash("vault: one"));
+        assert_ne!(first, vault_content_hash("vault: two"));
+        assert!(!first.is_empty());
+    }
+}
