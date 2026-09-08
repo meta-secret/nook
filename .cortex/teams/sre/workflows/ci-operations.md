@@ -55,9 +55,9 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 ## Registry transport performance
 
 Main finishes repository preflight before native Rust verification begins.
-The preflight cache publisher runs independently after validation.
-Native cache export stays in the verified Rust job on its node-local shard.
-Its explicit outcome feeds an independent required status gate.
+Preflight and native cache exports stay in their verified jobs on the same
+node-local shards that solved them.
+Each explicit outcome feeds an independent required status gate.
 Publication failures do not erase successful Rust evidence or suppress WASM,
 web, and browser consumers.
 Each publisher exports only its verified complete graph.

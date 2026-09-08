@@ -12,9 +12,12 @@ type SelectorDecodeOutcome =
   | { kind: SelectorDecodeKind.Missing };
 
 enum RunnerDrainCase {
-  Live = "live",
-  Terminating = "terminating",
+  Both = "both",
+  BrowserOnly = "browser-only",
+  BrowserTerminating = "browser-terminating",
   Disappeared = "disappeared",
+  ScaleSetOnly = "scale-set-only",
+  ScaleSetTerminating = "scale-set-terminating",
 }
 
 enum WorkerServiceState {
@@ -253,10 +256,10 @@ class WorkerServiceStateContract {
   }
 }
 
-class ActiveRunnerSelectorContract {
+class ArcWorkloadDrainContract {
   static decode(source: string): SelectorDecodeOutcome {
     const selectors = Array.from(
-      source.matchAll(/active_runners=.*?\| jq \\\s*\n\s*'([^']+)'/gs),
+      source.matchAll(/active_workloads=.*?\| jq '([^']+)'/gs),
       (match) => match[1],
     );
     if (selectors.length !== 2) return { kind: SelectorDecodeKind.Missing };
@@ -264,33 +267,59 @@ class ActiveRunnerSelectorContract {
   }
 
   static assert(source: string): void {
-    const outcome = ActiveRunnerSelectorContract.decode(source);
+    const outcome = ArcWorkloadDrainContract.decode(source);
     if (outcome.kind === SelectorDecodeKind.Missing) {
-      throw new Error("k0s worker install active-runner selector is missing");
+      throw new Error("k0s worker install workload selectors are missing");
     }
     const [nonTerminating, allActive] = outcome.selectors;
+    const scaleSetPod = {
+      metadata: {
+        labels: { "actions.github.com/scale-set-name": "nook-k0s" },
+      },
+      status: { phase: "Running" },
+    };
+    const browserPod = {
+      metadata: { labels: { "nook.nokey.sh/role": "arc-job-container" } },
+      status: { phase: "Pending" },
+    };
+    const terminatingScaleSetPod = {
+      ...scaleSetPod,
+      metadata: {
+        ...scaleSetPod.metadata,
+        deletionTimestamp: "2026-09-08T05:17:03Z",
+      },
+    };
+    const terminatingBrowserPod = {
+      ...browserPod,
+      metadata: {
+        ...browserPod.metadata,
+        deletionTimestamp: "2026-09-08T05:17:03Z",
+      },
+    };
     const fixtures = new Map([
       [
-        RunnerDrainCase.Live,
-        {
-          expected: [1, 1],
-          pod: { metadata: {}, status: { phase: "Running" } },
-        },
+        RunnerDrainCase.ScaleSetOnly,
+        { expected: [1, 1], pods: [scaleSetPod] },
       ],
       [
-        RunnerDrainCase.Terminating,
-        {
-          expected: [0, 1],
-          pod: {
-            metadata: { deletionTimestamp: "2026-09-08T05:17:03Z" },
-            status: { phase: "Running" },
-          },
-        },
+        RunnerDrainCase.BrowserOnly,
+        { expected: [1, 1], pods: [browserPod] },
       ],
-      [RunnerDrainCase.Disappeared, { expected: [0, 0], pod: false }],
+      [
+        RunnerDrainCase.Both,
+        { expected: [2, 2], pods: [scaleSetPod, browserPod] },
+      ],
+      [
+        RunnerDrainCase.ScaleSetTerminating,
+        { expected: [0, 1], pods: [terminatingScaleSetPod] },
+      ],
+      [
+        RunnerDrainCase.BrowserTerminating,
+        { expected: [0, 1], pods: [terminatingBrowserPod] },
+      ],
+      [RunnerDrainCase.Disappeared, { expected: [0, 0], pods: [] }],
     ] as const);
     for (const [label, fixture] of fixtures) {
-      const items = fixture.pod === false ? [] : [fixture.pod];
       const selection = Bun.spawnSync({
         cmd: [
           "jq",
@@ -298,7 +327,7 @@ class ActiveRunnerSelectorContract {
           "-nr",
           "--argjson",
           "input",
-          JSON.stringify({ items }),
+          JSON.stringify({ items: fixture.pods }),
           `$input | [(${nonTerminating}), (${allActive})]`,
         ],
         stdout: "pipe",
@@ -360,11 +389,21 @@ export class ArcWorkerRestoreContract {
         resolve(root, "infra/k0s/scripts/k0s-worker-mesh-reconcile"),
       ).text(),
     });
+    const containerHook = new TextContract({
+      label: "ARC browser job container hook",
+      source: await Bun.file(
+        resolve(root, "infra/k0s/manifests/arc/container-hook.yaml"),
+      ).text(),
+    });
     tasks.requireAll([
       "10.202.0.1",
       "10.202.0.2",
       "INFRA_WORKER_MESH_ADDRESS",
       "nook.nokey.sh/arc-build=preparing:NoSchedule",
+    ]);
+    containerHook.requireAll([
+      "namespace: arc-runners",
+      "nook.nokey.sh/role: arc-job-container",
     ]);
     sync.requireAll([
       'controller_target="{{.INFRA_SSH_TARGET}}"',
@@ -393,12 +432,12 @@ export class ArcWorkerRestoreContract {
       "printf fresh",
       'case "$worker_service_state" in active|resumed|fresh)',
       "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
-      "actions.github.com/scale-set-name",
-      "select(.metadata.deletionTimestamp == n" +
-        'ull and (.status.phase == "Pending" or .status.phase == "Running"))',
-      'select(.status.phase == "Pending" or .status.phase == "Running")',
-      "Timed out waiting for $active_runners ARC runner(s) on $node",
-      "Timed out waiting for $active_runners terminating ARC runner(s) on $node",
+      '.metadata.labels["actions.github.com/scale-set-name"] != n' + "ull",
+      '.metadata.labels["nook.nokey.sh/role"] == "arc-job-container"',
+      ".metadata.deletionTimestamp == n" + "ull",
+      '.status.phase == "Pending" or .status.phase == "Running"',
+      "Timed out waiting for $active_workloads ARC workload(s) on $node",
+      "Timed out waiting for $active_workloads terminating ARC workload(s) on $node",
       "sudo -n systemctl restart k0sworker.service",
       "sudo -n systemctl is-active --quiet k0sworker.service",
       'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
@@ -416,7 +455,7 @@ export class ArcWorkerRestoreContract {
       'echo "$token"',
       '--token "$token"',
     ]);
-    ActiveRunnerSelectorContract.assert(installSource);
+    ArcWorkloadDrainContract.assert(installSource);
     WorkerServiceStateContract.assert(installSource);
     WorkerTokenCleanupContract.assert(installSource);
     install.requireBefore({
@@ -424,17 +463,17 @@ export class ArcWorkerRestoreContract {
       second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
     });
     install.requireBefore({
-      first: "Timed out waiting for $active_runners ARC runner(s) on $node",
+      first: "Timed out waiting for $active_workloads ARC workload(s) on $node",
       second: 'worker_service_state="$(',
     });
     install.requireBefore({
       first: "printf resumed",
       second:
-        "Timed out waiting for $active_runners terminating ARC runner(s) on $node",
+        "Timed out waiting for $active_workloads terminating ARC workload(s) on $node",
     });
     install.requireBefore({
       first:
-        "Timed out waiting for $active_runners terminating ARC runner(s) on $node",
+        "Timed out waiting for $active_workloads terminating ARC workload(s) on $node",
       second: 'token="$(ssh -n -o BatchMode=yes "$controller_target"',
     });
     install.requireBefore({

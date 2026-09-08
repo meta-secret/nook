@@ -40,18 +40,22 @@ tasks:
             nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite >/dev/null
           deadline="$(( $(date +%s) + 7200 ))"
           while :; do
-            active_runners="$(kubectl get pods --namespace arc-runners \
+            active_workloads="$(kubectl get pods --namespace arc-runners \
               --field-selector "spec.nodeName=$node" \
-              -l actions.github.com/scale-set-name -o json | jq \
-              '[.items[] | select(.metadata.deletionTimestamp == null and (.status.phase == "Pending" or .status.phase == "Running"))] | length')"
-            if test "$active_runners" = 0; then
+              -o json | jq '[.items[] | select(
+                (.metadata.labels["actions.github.com/scale-set-name"] != null or
+                 .metadata.labels["nook.nokey.sh/role"] == "arc-job-container") and
+                .metadata.deletionTimestamp == null and
+                (.status.phase == "Pending" or .status.phase == "Running")
+              )] | length')"
+            if test "$active_workloads" = 0; then
               break
             fi
             if test "$(date +%s)" -ge "$deadline"; then
-              echo "Timed out waiting for $active_runners ARC runner(s) on $node" >&2
+              echo "Timed out waiting for $active_workloads ARC workload(s) on $node" >&2
               exit 1
             fi
-            echo "Waiting for $active_runners ARC runner(s) to finish on $node" >&2
+            echo "Waiting for $active_workloads ARC workload(s) to finish on $node" >&2
             sleep 30
           done
         fi
@@ -142,18 +146,21 @@ tasks:
         kubectl wait "node/$node" --for=condition=Ready --timeout=5m
         deadline="$(( $(date +%s) + 900 ))"
         while :; do
-          active_runners="$(kubectl get pods --namespace arc-runners \
+          active_workloads="$(kubectl get pods --namespace arc-runners \
             --field-selector "spec.nodeName=$node" \
-            -l actions.github.com/scale-set-name -o json | jq \
-            '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
-          if test "$active_runners" = 0; then
+            -o json | jq '[.items[] | select(
+              (.metadata.labels["actions.github.com/scale-set-name"] != null or
+               .metadata.labels["nook.nokey.sh/role"] == "arc-job-container") and
+              (.status.phase == "Pending" or .status.phase == "Running")
+            )] | length')"
+          if test "$active_workloads" = 0; then
             break
           fi
           if test "$(date +%s)" -ge "$deadline"; then
-            echo "Timed out waiting for $active_runners terminating ARC runner(s) on $node" >&2
+            echo "Timed out waiting for $active_workloads terminating ARC workload(s) on $node" >&2
             exit 1
           fi
-          echo "Waiting for $active_runners terminating ARC runner(s) to disappear on $node" >&2
+          echo "Waiting for $active_workloads terminating ARC workload(s) to disappear on $node" >&2
           sleep 15
         done
         REMOTE

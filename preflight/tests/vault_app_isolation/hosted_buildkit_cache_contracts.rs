@@ -480,6 +480,15 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let rust_verify = rust
         .find("task ci:main:rust")
         .context("Main Rust job must verify")?;
+    let preflight_verify = preflight
+        .find("task preflight")
+        .context("Main preflight job must verify")?;
+    let preflight_publish_id = preflight
+        .find("id: publish_preflight_cache")
+        .context("Main preflight producer must expose its cache publication outcome")?;
+    let preflight_publish = preflight
+        .find("task ci:main:publish-preflight-cache")
+        .context("Main preflight producer must export its verified cache")?;
     let rust_publish_id = rust
         .find("id: publish_native_cache")
         .context("Main Rust producer must expose its cache publication outcome")?;
@@ -513,10 +522,23 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     assert!(
         preflight.contains("task preflight")
             && preflight.contains("cache-selection: preflight")
-            && !preflight.contains("publish-preflight-cache")
+            && preflight_verify < preflight_publish_id
+            && preflight_publish_id < preflight_publish
+            && preflight.contains(
+                "cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}"
+            )
+            && preflight[preflight_publish_id..preflight_publish]
+                .contains("continue-on-error: true")
+            && preflight[preflight_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && preflight_cache_publish.contains("needs: [preflight]")
-            && preflight_cache_publish.contains("task ci:main:publish-preflight-cache")
-            && preflight_cache_publish.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && preflight_cache_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.preflight.outputs.cache_publication_outcome }}"
+            )
+            && preflight_cache_publish
+                .contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
+            && !preflight_cache_publish.contains("task ci:main:publish-preflight-cache")
+            && !preflight_cache_publish.contains("nook-docker-setup")
+            && !preflight_cache_publish.contains("actions/checkout")
             && !preflight_cache_publish.contains("continue-on-error")
             && rust.contains("needs: [product-paths, preflight]")
             && rust_verify < rust_publish_id
