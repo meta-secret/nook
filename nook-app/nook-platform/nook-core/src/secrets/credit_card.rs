@@ -14,6 +14,64 @@ use zeroize::Zeroize;
 const MIN_CARD_DIGITS: usize = 12;
 const MAX_CARD_DIGITS: usize = 19;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct CreditCardExpirationRequest<'a> {
+    month: &'a str,
+    year: &'a str,
+}
+
+impl CreditCardExpirationRequest<'_> {
+    fn normalize(self) -> Result<(String, String), ValidationError> {
+        let month_raw = self.month.trim();
+        let year_raw = self.year.trim();
+        if month_raw.is_empty() && year_raw.is_empty() {
+            return Ok((String::new(), String::new()));
+        }
+        if month_raw.is_empty() || year_raw.is_empty() {
+            return Err(ValidationError::CreditCardExpirationInvalid);
+        }
+
+        let month = Self::parse_month(month_raw)?;
+        let year = Self::parse_year(year_raw)?;
+        Ok((format!("{month:02}"), format!("{year:04}")))
+    }
+
+    fn parse_month(raw: &str) -> Result<u32, ValidationError> {
+        let month: u32 = raw
+            .parse()
+            .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+        if (1..=12).contains(&month) {
+            Ok(month)
+        } else {
+            Err(ValidationError::CreditCardExpirationInvalid)
+        }
+    }
+
+    fn parse_year(raw: &str) -> Result<u32, ValidationError> {
+        let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
+        match digits.len() {
+            2 => {
+                let yy: u32 = digits
+                    .parse()
+                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+                // Payment cards use a rolling century window around the current era.
+                Ok(2000 + yy)
+            }
+            4 => {
+                let year: u32 = digits
+                    .parse()
+                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+                if (2000..=2100).contains(&year) {
+                    Ok(year)
+                } else {
+                    Err(ValidationError::CreditCardExpirationInvalid)
+                }
+            }
+            _ => Err(ValidationError::CreditCardExpirationInvalid),
+        }
+    }
+}
+
 /// Encrypted credit-card plaintext payload (`camelCase` YAML).
 #[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -59,8 +117,11 @@ impl CreditCardSecret {
         }
 
         let number = Self::normalize_card_number(number)?;
-        let (expiration_month, expiration_year) =
-            Self::normalize_expiration(expiration_month, expiration_year)?;
+        let (expiration_month, expiration_year) = CreditCardExpirationRequest {
+            month: expiration_month,
+            year: expiration_year,
+        }
+        .normalize()?;
         let cvv = Self::normalize_cvv(cvv)?;
 
         Ok(Self {
@@ -147,59 +208,6 @@ impl CreditCardSecret {
             return Err(ValidationError::CreditCardCvvInvalid);
         }
         Ok(trimmed.to_owned())
-    }
-
-    fn normalize_expiration(
-        month_raw: &str,
-        year_raw: &str,
-    ) -> Result<(String, String), ValidationError> {
-        let month_raw = month_raw.trim();
-        let year_raw = year_raw.trim();
-        if month_raw.is_empty() && year_raw.is_empty() {
-            return Ok((String::new(), String::new()));
-        }
-        if month_raw.is_empty() || year_raw.is_empty() {
-            return Err(ValidationError::CreditCardExpirationInvalid);
-        }
-
-        let month = Self::parse_month(month_raw)?;
-        let year = Self::parse_year(year_raw)?;
-        Ok((format!("{month:02}"), format!("{year:04}")))
-    }
-
-    fn parse_month(raw: &str) -> Result<u32, ValidationError> {
-        let month: u32 = raw
-            .parse()
-            .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-        if (1..=12).contains(&month) {
-            Ok(month)
-        } else {
-            Err(ValidationError::CreditCardExpirationInvalid)
-        }
-    }
-
-    fn parse_year(raw: &str) -> Result<u32, ValidationError> {
-        let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
-        match digits.len() {
-            2 => {
-                let yy: u32 = digits
-                    .parse()
-                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-                // Payment cards use a rolling century window around the current era.
-                Ok(2000 + yy)
-            }
-            4 => {
-                let year: u32 = digits
-                    .parse()
-                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-                if (2000..=2100).contains(&year) {
-                    Ok(year)
-                } else {
-                    Err(ValidationError::CreditCardExpirationInvalid)
-                }
-            }
-            _ => Err(ValidationError::CreditCardExpirationInvalid),
-        }
     }
 
     fn luhn_valid(digits: &str) -> bool {

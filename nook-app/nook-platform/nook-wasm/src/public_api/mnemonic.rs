@@ -1,6 +1,7 @@
 use super::wasm_bindgen;
 use nook_core::{
-    Bip39Mnemonic, Bip39MnemonicWordCount, Bip39WordSequenceRequest, Bip39WordSuggestionRequest,
+    Bip39EnglishWordList, Bip39Mnemonic, Bip39MnemonicWordCount, Bip39Word,
+    Bip39WordSequenceRequest, Bip39WordSuggestionRequest, Bip39Words,
 };
 
 #[wasm_bindgen]
@@ -14,12 +15,13 @@ pub enum NookBip39MnemonicLength {
 #[wasm_bindgen]
 #[must_use]
 pub fn validate_bip39_mnemonic(mnemonic: &str) -> bool {
-    Bip39Mnemonic::validate(mnemonic).is_ok()
+    Bip39Mnemonic::new(mnemonic).validate().is_ok()
 }
 
 #[wasm_bindgen]
 pub fn get_bip39_english_wordlist() -> Vec<String> {
-    Bip39Mnemonic::english_wordlist()
+    Bip39EnglishWordList::english()
+        .into_words()
         .into_iter()
         .map(str::to_owned)
         .collect()
@@ -28,7 +30,7 @@ pub fn get_bip39_english_wordlist() -> Vec<String> {
 #[wasm_bindgen]
 #[must_use]
 pub fn is_known_bip39_word(word: &str) -> bool {
-    Bip39Mnemonic::is_known_word(word)
+    Bip39Word::new(word).is_known()
 }
 
 #[wasm_bindgen]
@@ -40,10 +42,11 @@ pub fn is_known_bip39_word(word: &str) -> bool {
     )
 )]
 pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
-    Bip39Mnemonic::suggest(Bip39WordSuggestionRequest {
+    Bip39WordSuggestionRequest {
         prefix,
         limit: (limit as usize).into(),
-    })
+    }
+    .suggest()
     .into_iter()
     .map(str::to_owned)
     .collect()
@@ -59,28 +62,29 @@ pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
     )
 )]
 pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> bool {
-    Bip39Mnemonic::is_word_sequence_valid(Bip39WordSequenceRequest {
+    Bip39WordSequenceRequest {
         text,
         expected_word_count: (expected_word_count as usize).into(),
-    })
+    }
+    .is_valid()
 }
 
 #[wasm_bindgen]
 pub fn parse_bip39_words(text: &str) -> Vec<String> {
-    Bip39Mnemonic::parse_words(text)
+    Bip39Mnemonic::new(text).parse_words()
 }
 
 #[wasm_bindgen]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn join_bip39_words(words: Vec<String>) -> String {
-    Bip39Mnemonic::join_words(&words)
+    Bip39Words::new(&words).join()
 }
 
 #[wasm_bindgen]
 #[must_use]
 pub fn infer_bip39_mnemonic_length(text: &str) -> NookBip39MnemonicLength {
-    match Bip39Mnemonic::infer_length(text) {
+    match Bip39Mnemonic::new(text).infer_length() {
         Some(Bip39MnemonicWordCount::WORDS_12) => NookBip39MnemonicLength::Words12,
         Some(Bip39MnemonicWordCount::WORDS_24) => NookBip39MnemonicLength::Words24,
         Some(_) | None => NookBip39MnemonicLength::Unsupported,

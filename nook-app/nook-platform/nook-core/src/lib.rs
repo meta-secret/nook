@@ -63,8 +63,9 @@ pub use authenticator_issuer_hosts::{
     AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
 };
 pub use bip39::{
-    Bip39Mnemonic, Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount,
-    Bip39WordSequenceRequest, Bip39WordSuggestionLimit, Bip39WordSuggestionRequest,
+    Bip39EnglishWordList, Bip39Mnemonic, Bip39MnemonicWordCount, Bip39Word,
+    Bip39WordSequenceExpectedCount, Bip39WordSequenceRequest, Bip39WordSuggestionLimit,
+    Bip39WordSuggestionRequest, Bip39Words,
 };
 pub use bitwarden_import::{BitwardenExport, BitwardenImportError, BitwardenImportPlan};
 pub use chrome_passwords_import::{
@@ -184,9 +185,9 @@ pub use secret_types::{
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
     AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm, LoginHostMatchRequest,
-    LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretFormRequest, SecretGroupKey,
-    SecretListItem, SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm,
-    SeedPhraseWordCount, WebsiteHost,
+    LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretGroupKey, SecretListItem,
+    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount,
+    WebsiteHost,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
