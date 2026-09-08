@@ -418,7 +418,7 @@ mod browser_tests {
             passkey_label_with_device_id("  Laptop  ", "0123456789abcdef")
                 .strip_prefix("Laptop - device ")
                 .map(str::to_owned),
-            Some("0123456789abcdef".to_owned())
+            Some("012345...cdef".to_owned())
         );
         assert_eq!(
             passkey_label_with_device_id(" ", "invalid device id"),
