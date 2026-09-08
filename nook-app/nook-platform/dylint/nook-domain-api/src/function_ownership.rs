@@ -1,9 +1,9 @@
 use clippy_utils::{diagnostics::span_lint_and_help, is_test_function};
 use rustc_ast::attr::AttributeExt;
-use rustc_hir::{Attribute, Item, ItemKind, Node, def::DefKind};
+use rustc_hir::{Attribute, HirId, Item, ItemKind, Node, def::DefKind};
 use rustc_lint::{LateContext, LateLintPass};
 use rustc_session::{declare_lint, declare_lint_pass, lint::LintExpectationId};
-use rustc_span::sym;
+use rustc_span::{def_id::LocalDefId, sym};
 
 declare_lint! {
     /// Detects authored free functions, including private and nested definitions.
@@ -29,9 +29,11 @@ declare_lint_pass! {
     FunctionOwnership => [UNOWNED_FUNCTION, INVALID_UNOWNED_FUNCTION_SUPPRESSION]
 }
 
-struct FunctionOwnershipRequest<'cx, 'item, 'tcx> {
+#[derive(Clone, Copy)]
+struct FunctionOwnershipRequest<'cx, 'tcx> {
     cx: &'cx LateContext<'tcx>,
-    item: &'item Item<'tcx>,
+    item_hir_id: HirId,
+    item_def_id: LocalDefId,
 }
 
 impl FunctionOwnership {
@@ -39,7 +41,7 @@ impl FunctionOwnership {
         request
             .cx
             .tcx
-            .def_path_str(request.item.owner_id.def_id.to_def_id())
+            .def_path_str(request.item_def_id.to_def_id())
             .split("::")
             .any(|segment| segment == "tests" || segment.ends_with("_tests"))
     }
@@ -48,21 +50,25 @@ impl FunctionOwnership {
         request
             .cx
             .tcx
-            .hir_attrs(request.item.hir_id())
+            .hir_attrs(request.item_hir_id)
             .iter()
             .any(Self::mentions_lint)
     }
 
     fn requires_owner(cx: &LateContext<'_>, item: &Item<'_>) -> bool {
         let def_id = item.owner_id.def_id;
+        let request = FunctionOwnershipRequest {
+            cx,
+            item_hir_id: item.hir_id(),
+            item_def_id: def_id,
+        };
         if !matches!(item.kind, ItemKind::Fn { .. })
             || item.span.in_external_macro(cx.tcx.sess.source_map())
             || cx
                 .tcx
                 .entry_fn(())
                 .is_some_and(|(entry, _)| entry == def_id.to_def_id())
-            || (Self::is_test_code(FunctionOwnershipRequest { cx, item })
-                && !Self::has_unowned_function_attribute(FunctionOwnershipRequest { cx, item }))
+            || (Self::is_test_code(request) && !Self::has_unowned_function_attribute(request))
         {
             return false;
         }
