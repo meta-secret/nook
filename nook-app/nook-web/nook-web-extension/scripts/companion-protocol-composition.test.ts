@@ -32,6 +32,8 @@ import {
   configure_vault_application,
   NookCompanionExtensionEndpoint,
   NookCompanionPairingExtensionEndpoint,
+  NookExternalEventLogRecords,
+  NookPreparedCompanionPairingActivation,
   NookVaultManager,
   NookPrevalidatedCompanionPairingApproval,
   seal_auth_providers_for_device_public_key,
@@ -240,6 +242,7 @@ beforeAll(async () => {
 })
 
 afterAll(() => {
+  extension.free()
   Object.assign(globalThis, previousIndexedDBRuntime)
 })
 
@@ -261,6 +264,24 @@ describe('generated companion protocol composition', () => {
         admission.free()
       }
     }
+  })
+
+  test('prepares pairing activation through generated owned wrappers', async () => {
+    const exported = await extension.export_event_log_records_js()
+    const eventRecords = exported.to_array()
+    exported.free()
+
+    const approval = pairingAttempt('pairing-activation', false)
+    const records = NookExternalEventLogRecords.from_array(eventRecords)
+    const prepared = approval.with_event_log(records)
+    expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
+    prepared.free()
+
+    const invalidApproval = pairingAttempt('pairing-activation-empty', false)
+    const invalidRecords = NookExternalEventLogRecords.from_array([])
+    expect(() => invalidApproval.with_event_log(invalidRecords)).toThrow(
+      'pairing event authorization rejected',
+    )
   })
 
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {
