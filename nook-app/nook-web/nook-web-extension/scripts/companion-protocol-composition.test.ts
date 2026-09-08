@@ -65,32 +65,66 @@ const previousIndexedDBRuntime = {
   indexedDB: globalThis.indexedDB,
 }
 
-function storedCandidate(
-  outcome: NookCompanionPairingCandidateOutcome,
-): NookStoredCompanionPairingActivationCandidate {
-  const state = outcome.state
-  switch (state) {
-    case NookCompanionPairingCandidateOutcomeState.Stored:
-      return outcome.into_stored()
-    case NookCompanionPairingCandidateOutcomeState.Rejected:
-      throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
-    default:
-      throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+class PairingActivationScenario {
+  private static storedCandidate(
+    outcome: NookCompanionPairingCandidateOutcome,
+  ): NookStoredCompanionPairingActivationCandidate {
+    const state = outcome.state
+    switch (state) {
+      case NookCompanionPairingCandidateOutcomeState.Stored:
+        return outcome.into_stored()
+      case NookCompanionPairingCandidateOutcomeState.Rejected:
+        throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
+      default:
+        throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+    }
   }
-}
 
-function candidateFailure(
-  outcome: NookCompanionPairingCandidateOutcome,
-): NookCompanionPairingCandidateFailure {
-  const state = outcome.state
-  switch (state) {
-    case NookCompanionPairingCandidateOutcomeState.Stored:
-      outcome.into_stored().free()
-      throw new Error('candidate storage unexpectedly succeeded')
-    case NookCompanionPairingCandidateOutcomeState.Rejected:
-      return outcome.into_failure()
-    default:
-      throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+  private static candidateFailure(
+    outcome: NookCompanionPairingCandidateOutcome,
+  ): NookCompanionPairingCandidateFailure {
+    const state = outcome.state
+    switch (state) {
+      case NookCompanionPairingCandidateOutcomeState.Stored:
+        outcome.into_stored().free()
+        throw new Error('candidate storage unexpectedly succeeded')
+      case NookCompanionPairingCandidateOutcomeState.Rejected:
+        return outcome.into_failure()
+      default:
+        throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+    }
+  }
+
+  static async run(): Promise<void> {
+    const exported = await extension.export_event_log_records_js()
+    const eventRecords = exported.to_array()
+    exported.free()
+
+    const approval = pairingAttempt('pairing-activation', false)
+    const records = NookExternalEventLogRecords.from_array(eventRecords)
+    const prepared = approval.with_event_log(records)
+    expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
+    const stored = this.storedCandidate(await prepared.commit(extension))
+    expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
+    stored.free()
+    const loaded = this.storedCandidate(
+      await extension.load_companion_pairing_activation_candidate(),
+    )
+    expect(loaded).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
+    loaded.free()
+
+    const replayApproval = pairingAttempt('pairing-activation-replay', false)
+    const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
+    const replay = await replayApproval
+      .with_event_log(replayRecords)
+      .commit(extension)
+    expect(this.candidateFailure(replay)).toBe(
+      NookCompanionPairingCandidateFailure.Replay,
+    )
+
+    const invalidApproval = pairingAttempt('pairing-activation-empty', false)
+    const invalidRecords = NookExternalEventLogRecords.from_array([])
+    expect(() => invalidApproval.with_event_log(invalidRecords)).toThrow()
   }
 }
 const compositionIndexedDBRuntime = {
@@ -300,37 +334,7 @@ describe('generated companion protocol composition', () => {
   })
 
   test('stores pairing activation through generated owned wrappers', async () => {
-    const exported = await extension.export_event_log_records_js()
-    const eventRecords = exported.to_array()
-    exported.free()
-
-    const approval = pairingAttempt('pairing-activation', false)
-    const records = NookExternalEventLogRecords.from_array(eventRecords)
-    const prepared = approval.with_event_log(records)
-    expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
-    const commit = await prepared.commit(extension)
-    const stored = storedCandidate(commit)
-    expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
-    stored.free()
-    const load = await extension.load_companion_pairing_activation_candidate()
-    const loaded = storedCandidate(load)
-    expect(loaded).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
-    loaded.free()
-
-    const replayApproval = pairingAttempt('pairing-activation-replay', false)
-    const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
-    const replay = await replayApproval
-      .with_event_log(replayRecords)
-      .commit(extension)
-    expect(candidateFailure(replay)).toBe(
-      NookCompanionPairingCandidateFailure.Replay,
-    )
-
-    const invalidApproval = pairingAttempt('pairing-activation-empty', false)
-    const invalidRecords = NookExternalEventLogRecords.from_array([])
-    expect(() => invalidApproval.with_event_log(invalidRecords)).toThrow(
-      'pairing event authorization rejected',
-    )
+    await PairingActivationScenario.run()
   })
 
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {

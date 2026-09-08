@@ -16,6 +16,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
 
 mod storage;
+use storage::PairingActivationStore;
 
 /// Opaque readback of an inert candidate. It conveys no live vault authority.
 #[wasm_bindgen]
@@ -46,6 +47,16 @@ struct PairingActivationStorageAdmission<'a> {
 }
 
 impl PairingActivationStorageAdmission<'_> {
+    fn validate_expiry(
+        &self,
+        observed_at: CompanionPairingEpochMilliseconds,
+    ) -> Result<(), CompanionPairingCandidateFailure> {
+        self.candidate
+            .approval
+            .revalidate_at(observed_at)
+            .map_err(|_| CompanionPairingCandidateFailure::Expiry)
+    }
+
     fn validate_effect(
         &self,
         observed_at: CompanionPairingEpochMilliseconds,
@@ -58,6 +69,7 @@ impl PairingActivationStorageAdmission<'_> {
             observed_at,
         }
         .validate()?;
+        let mut role_keys = Vec::with_capacity(2);
         for envelope in [&self.envelopes.secrets_key, &self.envelopes.members_key] {
             let plaintext = Zeroizing::new(
                 identity
@@ -66,9 +78,12 @@ impl PairingActivationStorageAdmission<'_> {
             );
             let key = SymmetricKey::parse(&plaintext)
                 .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?;
-            let zeroized_key = Zeroizing::new(key.into_inner());
-            drop(zeroized_key);
+            role_keys.push(Zeroizing::new(key.into_inner()));
         }
+        if role_keys[0].as_str() == role_keys[1].as_str() {
+            return Err(CompanionPairingCandidateFailure::EventAuthorization);
+        }
+        drop(role_keys);
         Ok(())
     }
 }
@@ -127,7 +142,7 @@ pub enum NookCompanionPairingCandidateOutcomeState {
 }
 
 enum CompanionPairingCandidateOutcome {
-    Stored(NookStoredCompanionPairingActivationCandidate),
+    Stored(Box<NookStoredCompanionPairingActivationCandidate>),
     Rejected(NookCompanionPairingCandidateFailure),
 }
 
@@ -140,9 +155,9 @@ impl NookCompanionPairingCandidateOutcome {
         result: Result<storage::StoredPairingActivationCandidate, CompanionPairingCandidateFailure>,
     ) -> Self {
         match result {
-            Ok(inner) => Self(CompanionPairingCandidateOutcome::Stored(
+            Ok(inner) => Self(CompanionPairingCandidateOutcome::Stored(Box::new(
                 NookStoredCompanionPairingActivationCandidate { _inner: inner },
-            )),
+            ))),
             Err(failure) => Self(CompanionPairingCandidateOutcome::Rejected(failure.public())),
         }
     }
@@ -168,7 +183,7 @@ impl NookCompanionPairingCandidateOutcome {
         let CompanionPairingCandidateOutcome::Stored(candidate) = self.0 else {
             unreachable!();
         };
-        candidate
+        *candidate
     }
 
     #[must_use]
@@ -334,7 +349,7 @@ impl NookPreparedCompanionPairingActivation {
             Err(failure) => return NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
         };
         NookCompanionPairingCandidateOutcome::from_result(
-            storage::PairingActivationStore::commit(storage::PairingActivationCommit {
+            PairingActivationStore::commit(storage::PairingActivationCommit {
                 admission,
                 clock: &clock,
             })
@@ -353,7 +368,7 @@ impl NookVaultManager {
                 CompanionPairingCandidateFailure::ManagerBinding,
             ));
         };
-        let candidate = match storage::PairingActivationStore::load(&store_id).await {
+        let candidate = match PairingActivationStore::load(&store_id).await {
             Ok(candidate) => candidate,
             Err(failure) => return NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
         };
@@ -599,6 +614,16 @@ mod tests {
                 manager,
                 clock: &DeterministicClock::new(vec![ActivationFixture::epoch("160")?]),
             }),
+            Err(CompanionPairingCandidateFailure::EventAuthorization)
+        ));
+        let mut fixture = CandidateFixture::new()?;
+        let identity = fixture.manager.device_identity()?;
+        let secrets_key =
+            Zeroizing::new(identity.open_utf8(&fixture.prepared.envelopes.secrets_key)?);
+        fixture.prepared.envelopes.members_key =
+            identity.public_key().seal_bytes(secrets_key.as_bytes())?;
+        assert!(matches!(
+            fixture.prepare_at(ActivationFixture::epoch("160")?),
             Err(CompanionPairingCandidateFailure::EventAuthorization)
         ));
         Ok(())

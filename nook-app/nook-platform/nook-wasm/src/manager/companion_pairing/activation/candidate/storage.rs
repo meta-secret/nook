@@ -151,14 +151,7 @@ impl PairingActivationStore {
                 value: &encoded.providers,
             })
             .await?;
-        let freshness = clock.observe().and_then(|observed| {
-            admission
-                .candidate
-                .approval
-                .revalidate_at(observed.epoch)
-                .map_err(|_| CompanionPairingCandidateFailure::Expiry)
-        });
-        if let Err(failure) = freshness {
+        if let Err(failure) = admission.validate_expiry(clock.observe()?.epoch) {
             return Err(writable.abort(failure).await);
         }
         writable = writable
@@ -167,6 +160,9 @@ impl PairingActivationStore {
                 value: &gate_json,
             })
             .await?;
+        if let Err(failure) = admission.validate_expiry(clock.observe()?.epoch) {
+            return Err(writable.abort(failure).await);
+        }
         writable.done().await?;
         Ok(StoredPairingActivationCandidate {
             _candidate: admission.candidate,
@@ -333,12 +329,9 @@ mod tests {
             let mut transaction = Self {
                 vault: self.vault.clone(),
             };
+            admission.validate_expiry(clock.observe()?.epoch)?;
             transaction.commit(encoded)?;
-            admission
-                .candidate
-                .approval
-                .revalidate_at(clock.observe()?.epoch)
-                .map_err(|_| CompanionPairingCandidateFailure::Expiry)?;
+            admission.validate_expiry(clock.observe()?.epoch)?;
             *self = transaction;
             Ok(())
         }
@@ -504,25 +497,33 @@ mod tests {
 
     #[test]
     fn late_expiry_and_manager_mutation_discard_memory_transaction() -> anyhow::Result<()> {
-        let fixture =
-            CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
-        let clock = DeterministicClock::new(vec![
-            ActivationFixture::epoch("160")?,
-            ActivationFixture::epoch("200")?,
-        ]);
         let mut store = MemoryActivationStore::default();
-        assert!(matches!(
-            store.commit_with_clock(PairingActivationCommit {
-                admission: PairingActivationStorageAdmission {
-                    candidate: fixture.candidate,
-                    envelopes: fixture.envelopes,
-                    manager: &fixture.manager,
-                },
-                clock: &clock,
-            }),
-            Err(CompanionPairingCandidateFailure::Expiry)
-        ));
-        assert!(store.vault.is_empty());
+        for observations in [
+            vec![
+                ActivationFixture::epoch("160")?,
+                ActivationFixture::epoch("200")?,
+            ],
+            vec![
+                ActivationFixture::epoch("160")?,
+                ActivationFixture::epoch("160")?,
+                ActivationFixture::epoch("200")?,
+            ],
+        ] {
+            let fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            assert!(matches!(
+                store.commit_with_clock(PairingActivationCommit {
+                    admission: PairingActivationStorageAdmission {
+                        candidate: fixture.candidate,
+                        envelopes: fixture.envelopes,
+                        manager: &fixture.manager,
+                    },
+                    clock: &DeterministicClock::new(observations),
+                }),
+                Err(CompanionPairingCandidateFailure::Expiry)
+            ));
+            assert!(store.vault.is_empty());
+        }
         let mut fixture =
             CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
         fixture.manager.application = nook_core::VaultApplication::Simple;
@@ -678,7 +679,11 @@ mod browser_tests {
         async fn late_expiry_aborts_payloads_and_gate() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
             let fixture = Self::expiring_candidate()?;
-            let clock = DeterministicClock::new(vec![Self::epoch("160")?, Self::epoch("200")?]);
+            let clock = DeterministicClock::new(vec![
+                Self::epoch("160")?,
+                Self::epoch("160")?,
+                Self::epoch("200")?,
+            ]);
             assert!(matches!(
                 PairingActivationStore::commit(PairingActivationCommit {
                     admission: PairingActivationStorageAdmission {
