@@ -1,6 +1,6 @@
 use super::{NookVaultManager, VaultNameState};
 use nook_companion_core::{
-    AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint,
+    AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
     ConsumedCompanionPairingAuthority, ExtensionConnectScope,
 };
@@ -114,8 +114,9 @@ impl NookCompanionPairingApprovalAuthority {
             .authenticate_credentials_for(&identity)
             .map_err(|_| CompanionPairingFailure::ProviderRecipientMismatch)?;
         Ok(NookPrevalidatedCompanionPairingApproval {
-            approval: authorized.admit(),
-            providers,
+            binding: approval.clone(),
+            _approval: authorized.admit(),
+            _providers: providers,
         })
     }
 }
@@ -127,10 +128,9 @@ fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
 /// Opaque proof of a manager-bound approval and its sealed provider snapshot.
 #[wasm_bindgen]
 pub struct NookPrevalidatedCompanionPairingApproval {
-    #[allow(dead_code)]
-    approval: AdmittedCompanionPairingApproval,
-    #[allow(dead_code)]
-    providers: AuthProvidersSnapshotData,
+    pub(in crate::manager) binding: CompanionPairingApproval,
+    _approval: AdmittedCompanionPairingApproval,
+    _providers: AuthProvidersSnapshotData,
 }
 
 #[cfg(test)]

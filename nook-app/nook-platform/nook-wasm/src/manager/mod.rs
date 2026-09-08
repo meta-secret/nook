@@ -29,6 +29,7 @@ use std::mem;
 mod authenticator_enrollment;
 mod authenticator_fill;
 mod companion_pairing;
+mod companion_pairing_activation;
 mod companion_protocol;
 mod connect;
 mod device_protection;
@@ -55,6 +56,7 @@ pub use companion_pairing::{
     NookCompanionPairingApprovalAuthority, NookCompanionPairingExtensionEndpoint,
     NookPrevalidatedCompanionPairingApproval,
 };
+pub use companion_pairing_activation::NookPreparedCompanionPairingActivation;
 pub use companion_protocol::{
     NookCompanionExtensionEndpoint, admit_companion_handoff_response,
     admit_companion_identity_status,

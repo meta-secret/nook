@@ -28,7 +28,7 @@ impl NookEventLogRecords {
 }
 
 #[wasm_bindgen]
-pub struct NookExternalEventLogRecords(Vec<ExternalEventLogRecord>);
+pub struct NookExternalEventLogRecords(pub(in crate::manager) Vec<ExternalEventLogRecord>);
 
 #[wasm_bindgen]
 impl NookExternalEventLogRecords {
