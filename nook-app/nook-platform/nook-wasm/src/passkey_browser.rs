@@ -352,16 +352,16 @@ mod tests {
 mod browser_tests {
     use super::*;
     use js_sys::{ArrayBuffer, Reflect, Uint8Array};
-    use wasm_bindgen::{JsValue, closure::Closure};
+    use wasm_bindgen::closure::Closure;
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
 
     fn js_error_message(error: JsError) -> String {
-        JsValue::from(error)
-            .dyn_into::<js_sys::Error>()
+        Reflect::get(&error.into(), &JsString::from("message"))
             .expect("JsError must remain a JavaScript Error")
-            .message()
+            .as_string()
+            .expect("JsError message must remain a string")
     }
 
     #[wasm_bindgen_test]
@@ -515,10 +515,11 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn promise_credential_conversion_reports_rejection_and_cancellation() {
-        let plain_object: JsValue = Object::new().into();
-        let cancelled = credential_from_promise("get", Promise::resolve(&plain_object))
-            .await
-            .expect_err("plain objects are not credentials");
+        let plain_object = Object::new();
+        let cancelled =
+            credential_from_promise("get", Promise::resolve(&plain_object.unchecked_into()))
+                .await
+                .expect_err("plain objects are not credentials");
         assert_eq!(
             js_error_message(cancelled),
             "Passkey get ceremony was cancelled."
