@@ -597,7 +597,8 @@ mod wasm_tests {
                 website_url: "",
                 issuer: "Namecheap",
             }
-            .resolve(),
+            .resolve()
+            .expect("bundled issuer catalog"),
             "namecheap.com"
         );
     }

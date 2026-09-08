@@ -6,7 +6,9 @@
 
 use super::{SecretListItem, SecretListItemData, SecretType, Url};
 use crate::secrets::{
-    authenticator_issuer_hosts::{AuthenticatorIssuerHosts, AuthenticatorWebsiteHostRequest},
+    authenticator_issuer_hosts::{
+        AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
+    },
     login_site_hosts::{LoginFamilyMatchRequest, LoginSiteHosts, LoginSiteHostsError},
 };
 use crate::vault_session::SecretPage;
@@ -16,10 +18,10 @@ pub struct WebsiteHost(String);
 
 impl WebsiteHost {
     #[must_use]
-    pub fn normalize(raw: &str) -> Self {
+    pub fn normalize(raw: &str) -> Option<Self> {
         let value = raw.trim();
         if value.is_empty() {
-            return Self(String::new());
+            return None;
         }
 
         let host = Url::parse(value)
@@ -35,7 +37,7 @@ impl WebsiteHost {
             .unwrap_or_default()
             .trim_start_matches("www.")
             .to_owned();
-        Self(host)
+        (!host.is_empty()).then_some(Self(host))
     }
 
     #[must_use]
@@ -110,11 +112,12 @@ pub struct LoginHostMatchRequest<'a> {
 
 impl LoginHostMatchRequest<'_> {
     pub fn matches(&self) -> Result<bool, LoginSiteHostsError> {
-        let secret_host = WebsiteHost::normalize(self.website_url);
-        let origin_host = WebsiteHost::normalize(self.origin);
-        if secret_host.is_empty() || origin_host.is_empty() {
+        let Some(secret_host) = WebsiteHost::normalize(self.website_url) else {
             return Ok(false);
-        }
+        };
+        let Some(origin_host) = WebsiteHost::normalize(self.origin) else {
+            return Ok(false);
+        };
         if secret_host
             .as_str()
             .eq_ignore_ascii_case(origin_host.as_str())
@@ -138,22 +141,21 @@ pub struct AuthenticatorGroupKeyRequest<'a> {
 }
 
 impl AuthenticatorGroupKeyRequest<'_> {
-    #[must_use]
-    pub fn website_host(&self) -> Option<String> {
+    pub fn website_host(&self) -> Result<Option<String>, AuthenticatorIssuerHostsError> {
         let request = AuthenticatorWebsiteHostRequest {
             website_url: self.website_url,
             issuer: self.issuer,
         };
-        request.explicit_or_domain_host().or_else(|| {
-            AuthenticatorIssuerHosts::bundled()
-                .and_then(|catalog| catalog.resolve_website_host(request))
-        })
+        if let Some(host) = request.explicit_or_domain_host() {
+            return Ok(Some(host));
+        }
+        Ok(AuthenticatorIssuerHosts::require_bundled()?.resolve_website_host(request))
     }
 
-    #[must_use]
-    pub fn resolve(&self) -> String {
-        self.website_host()
-            .unwrap_or_else(|| self.issuer.trim().to_owned())
+    pub fn resolve(&self) -> Result<String, AuthenticatorIssuerHostsError> {
+        Ok(self
+            .website_host()?
+            .unwrap_or_else(|| self.issuer.trim().to_owned()))
     }
 }
 
@@ -255,9 +257,9 @@ impl SecretListItem {
     pub fn website_host(&self) -> String {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
-            | SecretListItemData::ApiKey { website_url, .. } => {
-                WebsiteHost::normalize(website_url).into_string()
-            }
+            | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url)
+                .map(WebsiteHost::into_string)
+                .unwrap_or_default(),
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
@@ -267,6 +269,8 @@ impl SecretListItem {
                 issuer,
             }
             .website_host()
+            .ok()
+            .flatten()
             .unwrap_or_default(),
             _ => String::new(),
         }
@@ -290,14 +294,9 @@ impl SecretListItem {
     pub fn group_key(&self) -> String {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
-            | SecretListItemData::ApiKey { website_url, .. } => {
-                let host = WebsiteHost::normalize(website_url).into_string();
-                if host.is_empty() {
-                    "No Website".to_owned()
-                } else {
-                    host
-                }
-            }
+            | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url)
+                .map(WebsiteHost::into_string)
+                .unwrap_or_else(|| "No Website".to_owned()),
             SecretListItemData::SeedPhrase { name, .. } => {
                 let name = name.trim();
                 if name.is_empty() {
@@ -318,7 +317,8 @@ impl SecretListItem {
                 website_url,
                 issuer,
             }
-            .resolve(),
+            .resolve()
+            .unwrap_or_else(|_| issuer.trim().to_owned()),
             SecretListItemData::CreditCard { title, .. } => {
                 SecretTitle::new(title, "Unnamed Card").group_key()
             }
@@ -620,13 +620,20 @@ mod tests {
     }
 
     #[test]
+    fn website_host_normalization_rejects_empty_and_malformed_values() {
+        assert!(WebsiteHost::normalize("").is_none());
+        assert!(WebsiteHost::normalize("https://").is_none());
+    }
+
+    #[test]
     fn authenticator_group_key_uses_url_issuer_host_and_popular_map() {
         assert_eq!(
             AuthenticatorGroupKeyRequest {
                 website_url: "https://www.custom.example/login",
                 issuer: "OpenAI",
             }
-            .resolve(),
+            .resolve()
+            .expect("bundled issuer catalog"),
             "custom.example"
         );
         assert_eq!(
@@ -634,7 +641,8 @@ mod tests {
                 website_url: "",
                 issuer: "https://www.namecheap.com",
             }
-            .resolve(),
+            .resolve()
+            .expect("bundled issuer catalog"),
             "namecheap.com"
         );
         assert_eq!(
@@ -642,7 +650,8 @@ mod tests {
                 website_url: "",
                 issuer: "namecheap.com",
             }
-            .resolve(),
+            .resolve()
+            .expect("bundled issuer catalog"),
             "namecheap.com"
         );
         assert_eq!(
@@ -650,7 +659,8 @@ mod tests {
                 website_url: "",
                 issuer: "OpenAI",
             }
-            .resolve(),
+            .resolve()
+            .expect("bundled issuer catalog"),
             "openai.com"
         );
         assert_eq!(
@@ -658,7 +668,8 @@ mod tests {
                 website_url: "",
                 issuer: "Namecheap",
             }
-            .resolve(),
+            .resolve()
+            .expect("bundled issuer catalog"),
             "namecheap.com"
         );
         assert_eq!(
@@ -666,7 +677,8 @@ mod tests {
                 website_url: "",
                 issuer: "Totally Unknown Service",
             }
-            .resolve(),
+            .resolve()
+            .expect("bundled issuer catalog"),
             "Totally Unknown Service"
         );
     }

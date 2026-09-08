@@ -13,6 +13,13 @@ use serde::de::{self, Deserializer, MapAccess, Visitor};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::LazyLock;
+use thiserror::Error;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
+pub enum AuthenticatorIssuerHostsError {
+    #[error("bundled authenticator issuer catalog is invalid")]
+    InvalidBundledCatalog,
+}
 
 /// Popular authenticator issuer labels mapped to website hosts.
 ///
@@ -32,8 +39,7 @@ pub struct AuthenticatorWebsiteHostRequest<'a> {
 impl AuthenticatorWebsiteHostRequest<'_> {
     #[must_use]
     pub(crate) fn explicit_or_domain_host(&self) -> Option<String> {
-        let from_url = WebsiteHost::normalize(self.website_url);
-        if !from_url.is_empty() {
+        if let Some(from_url) = WebsiteHost::normalize(self.website_url) {
             return Some(from_url.into_string());
         }
 
@@ -41,8 +47,7 @@ impl AuthenticatorWebsiteHostRequest<'_> {
         if issuer.is_empty() || !(issuer.contains("://") || issuer.contains('.')) {
             return None;
         }
-        let host = WebsiteHost::normalize(issuer);
-        (!host.is_empty()).then(|| host.into_string())
+        WebsiteHost::normalize(issuer).map(WebsiteHost::into_string)
     }
 }
 
@@ -100,6 +105,10 @@ impl AuthenticatorIssuerHosts {
             AuthenticatorIssuerHostsState::Ready(hosts) => Some(hosts),
             AuthenticatorIssuerHostsState::InvalidBundledCatalog => None,
         }
+    }
+
+    pub fn require_bundled() -> Result<&'static Self, AuthenticatorIssuerHostsError> {
+        Self::bundled().ok_or(AuthenticatorIssuerHostsError::InvalidBundledCatalog)
     }
 
     /// Normalize an authenticator issuer for table lookup (`OpenAI` → `openai`).

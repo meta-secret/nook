@@ -131,8 +131,11 @@ impl KeePassXcTotp<'_> {
                 {
                     self.website_url.clone_into(&mut authenticator.website_url);
                 }
-                authenticator.apply_inferred_website_url_if_empty();
-                (Some(SecretValue::Authenticator(authenticator)), 0)
+                if authenticator.apply_inferred_website_url_if_empty().is_ok() {
+                    (Some(SecretValue::Authenticator(authenticator)), 0)
+                } else {
+                    (None, 1)
+                }
             }
             Err(_) => (None, 1),
         }

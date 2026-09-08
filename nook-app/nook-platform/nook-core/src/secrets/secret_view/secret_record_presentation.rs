@@ -91,22 +91,12 @@ impl SecretRecord {
     #[must_use]
     pub fn group_key(&self) -> String {
         match &self.data {
-            SecretValue::Login(value) => {
-                let host = WebsiteHost::normalize(&value.website_url);
-                if host.is_empty() {
-                    "No Website".to_owned()
-                } else {
-                    host.into_string()
-                }
-            }
-            SecretValue::ApiKey(value) => {
-                let host = WebsiteHost::normalize(&value.website_url);
-                if host.is_empty() {
-                    "No Website".to_owned()
-                } else {
-                    host.into_string()
-                }
-            }
+            SecretValue::Login(value) => WebsiteHost::normalize(&value.website_url)
+                .map(WebsiteHost::into_string)
+                .unwrap_or_else(|| "No Website".to_owned()),
+            SecretValue::ApiKey(value) => WebsiteHost::normalize(&value.website_url)
+                .map(WebsiteHost::into_string)
+                .unwrap_or_else(|| "No Website".to_owned()),
             SecretValue::SeedPhrase(value) => {
                 let name = value.name.trim();
                 if name.is_empty() {
@@ -123,7 +113,8 @@ impl SecretRecord {
                 website_url: &value.website_url,
                 issuer: &value.issuer,
             }
-            .resolve(),
+            .resolve()
+            .unwrap_or_else(|_| value.issuer.trim().to_owned()),
             SecretValue::CreditCard(value) => {
                 SecretTitle::new(&value.title, "Unnamed Card").group_key()
             }

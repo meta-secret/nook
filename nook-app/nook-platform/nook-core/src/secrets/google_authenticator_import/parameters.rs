@@ -104,7 +104,9 @@ impl OtpParameters {
             period: TotpPeriod::try_from(30).map_err(|_| ())?,
             backup_codes: Vec::new(),
         };
-        authenticator.apply_inferred_website_url_if_empty();
+        authenticator
+            .apply_inferred_website_url_if_empty()
+            .map_err(|_| ())?;
         authenticator.normalize().map_err(|_| ())?;
         Ok(SecretValue::Authenticator(authenticator))
     }

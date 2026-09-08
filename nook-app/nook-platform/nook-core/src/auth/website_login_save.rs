@@ -84,7 +84,7 @@ impl WebsiteLoginSavePolicy {
         if username.is_empty() || password.is_empty() {
             return Ok(WebsiteLoginSaveDecision::Invalid);
         }
-        if WebsiteHost::normalize(origin).is_empty() {
+        if WebsiteHost::normalize(origin).is_none() {
             return Ok(WebsiteLoginSaveDecision::Invalid);
         }
 

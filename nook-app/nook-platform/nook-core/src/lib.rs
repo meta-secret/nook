@@ -59,7 +59,9 @@ pub use authenticator::{
     MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview, TotpAlgorithm, TotpCode, TotpDigits,
     TotpPeriod, TotpRemainingSeconds, TotpSecret, TotpUnixSeconds,
 };
-pub use authenticator_issuer_hosts::{AuthenticatorIssuerHosts, AuthenticatorWebsiteHostRequest};
+pub use authenticator_issuer_hosts::{
+    AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
+};
 pub use bip39::{
     Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount, Bip39WordSuggestionLimit,
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,

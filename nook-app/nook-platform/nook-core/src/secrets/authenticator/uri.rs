@@ -216,7 +216,8 @@ impl CheckedOtpauthInput {
             period: self.protocol.period,
             backup_codes: Vec::new(),
         };
-        item.apply_inferred_website_url_if_empty();
+        item.apply_inferred_website_url_if_empty()
+            .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?;
         item.normalize()?;
         Ok(item)
     }

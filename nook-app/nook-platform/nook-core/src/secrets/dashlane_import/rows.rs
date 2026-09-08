@@ -266,8 +266,11 @@ impl CredentialColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    authenticator.apply_inferred_website_url_if_empty();
-                    items.push(SecretValue::Authenticator(authenticator));
+                    if authenticator.apply_inferred_website_url_if_empty().is_ok() {
+                        items.push(SecretValue::Authenticator(authenticator));
+                    } else {
+                        skipped_unsupported += 1;
+                    }
                 }
                 Err(_) => skipped_unsupported += 1,
             }
