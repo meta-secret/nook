@@ -383,13 +383,7 @@ function coherentReviewHead(args: {
     nested({ record: args.body, path: ['pull_request', 'head', 'sha'] }),
   );
   const objectHead = optionalString(
-    nested({
-      record: args.body,
-      path:
-        args.source === PrStewardSource.PullRequestReview
-          ? ['review', 'commit_id']
-          : ['comment', 'commit_id'],
-    }),
+    property({ record: eventObject(args), key: 'commit_id' }),
   );
   return (
     pullHead !== false &&
@@ -505,36 +499,28 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
   };
 }
 
-export function defaultCredentialPath(): string {
-  return join(homedir(), '.nook/events/pr-steward-client.yaml');
-}
-
-export type PrStewardInvocation = {
-  readonly pullRequest: number;
-  readonly credentialPath: string;
-};
-
-export function parsePrStewardInvocation(
-  argv: readonly string[],
-): PrStewardInvocation {
-  if (
-    (argv.length !== 2 && argv.length !== 4) ||
-    argv[0] !== '--pr' ||
-    (argv.length === 4 && argv[2] !== '--config')
-  ) {
-    throw new Error(
-      'expected --pr <positive-number> [--config <absolute-path>]',
-    );
+export class PrStewardInvocationCodec {
+  static parse(argv: readonly string[]) {
+    if (
+      (argv.length !== 2 && argv.length !== 4) ||
+      argv[0] !== '--pr' ||
+      (argv.length === 4 && argv[2] !== '--config')
+    ) {
+      throw new Error('expected --pr N [--config /absolute/path]');
+    }
+    const prText = argv[1]!;
+    if (!/^[1-9][0-9]*$/.test(prText))
+      throw new Error('pull request must be a positive integer');
+    const pullRequest = Number(prText);
+    if (!Number.isSafeInteger(pullRequest))
+      throw new Error('pull request must be a positive integer');
+    const path =
+      argv.length === 4
+        ? argv[3]!
+        : join(homedir(), '.nook/events/pr-steward-client.yaml');
+    if (!isAbsolute(path)) throw new Error('credential path must be absolute');
+    return { pullRequest, credentialPath: path };
   }
-  const prText = argv[1]!;
-  if (!/^[1-9][0-9]*$/.test(prText))
-    throw new Error('pull request must be a positive integer');
-  const pullRequest = Number(prText);
-  if (!Number.isSafeInteger(pullRequest))
-    throw new Error('pull request must be a positive integer');
-  const path = argv.length === 4 ? argv[3]! : defaultCredentialPath();
-  if (!isAbsolute(path)) throw new Error('credential path must be absolute');
-  return { pullRequest, credentialPath: path };
 }
 
 export function assignedPrEvent(args: {
@@ -619,7 +605,7 @@ export function loadCredential(path: string): PrStewardCredential {
 }
 
 async function main(): Promise<void> {
-  const invocation = parsePrStewardInvocation(process.argv.slice(2));
+  const invocation = PrStewardInvocationCodec.parse(process.argv.slice(2));
   const credential = loadCredential(invocation.credentialPath);
   const connection = await wsconnect({
     servers: PR_STEWARD_ENDPOINT,

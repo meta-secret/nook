@@ -123,8 +123,7 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 
 ### Output contract
 
-Output contains only bounded hints, never bodies, review text, logs, raw
-payloads, or credentials. Exact reconciliation and summaries are deferred.
+Output contains only bounded hints, never bodies, review text, logs, raw payloads, or credentials. Exact reconciliation and summaries are deferred.
 
 ### Live reactive pipeline canary
 
