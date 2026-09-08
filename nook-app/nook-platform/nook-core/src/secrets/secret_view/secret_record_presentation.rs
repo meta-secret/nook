@@ -96,7 +96,7 @@ impl SecretRecord {
                 if host.is_empty() {
                     "No Website".to_owned()
                 } else {
-                    host
+                    host.into_string()
                 }
             }
             SecretValue::ApiKey(value) => {
@@ -104,7 +104,7 @@ impl SecretRecord {
                 if host.is_empty() {
                     "No Website".to_owned()
                 } else {
-                    host
+                    host.into_string()
                 }
             }
             SecretValue::SeedPhrase(value) => {
@@ -115,14 +115,18 @@ impl SecretRecord {
                     name.to_owned()
                 }
             }
-            SecretValue::SecureNote(value) => SecretTitle::group_key(&value.title, "Unnamed Note"),
+            SecretValue::SecureNote(value) => {
+                SecretTitle::new(&value.title, "Unnamed Note").group_key()
+            }
             SecretValue::Passkey(value) => value.rp_id.clone(),
             SecretValue::Authenticator(value) => AuthenticatorGroupKeyRequest {
                 website_url: &value.website_url,
                 issuer: &value.issuer,
             }
             .resolve(),
-            SecretValue::CreditCard(value) => SecretTitle::group_key(&value.title, "Unnamed Card"),
+            SecretValue::CreditCard(value) => {
+                SecretTitle::new(&value.title, "Unnamed Card").group_key()
+            }
             SecretValue::FileAttachment(value) => {
                 let title = value.title.trim();
                 if title.is_empty() {

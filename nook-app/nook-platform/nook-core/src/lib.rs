@@ -184,9 +184,9 @@ pub use secret_types::{
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
     AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm, LoginHostMatchRequest,
-    LoginSecretForm, SecretFormFields, SecretListItem, SecretListItemData, SecureNoteSecretForm,
-    SeedPhraseSecretForm, SeedPhraseWordCount, WebsiteHost, build_secret_yaml,
-    build_secret_yaml_from_form,
+    LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretGroupKey, SecretListItem,
+    SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount,
+    WebsiteHost, build_secret_yaml, build_secret_yaml_from_form,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{

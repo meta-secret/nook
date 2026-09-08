@@ -35,6 +35,7 @@ impl NookVaultManager {
                     origin,
                 })
                 .matches()
+                .map_err(|error| NookError::Database(error.to_string()))?
             {
                 accounts.push(NookLoginAccount::from_projection(&LoginAccountProjection {
                     secret_id: id,
@@ -54,19 +55,20 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
-        let credential = match &record.data {
-            SecretValue::Login(login)
-                if nook_core::LoginHostMatchRequest {
-                    website_url: &login.website_url,
-                    origin: request.origin,
-                }
-                .matches() =>
-            {
-                Ok(NookLoginFillCredential::new(
-                    login.username.clone(),
-                    login.password.clone(),
-                ))
+        let matches = match &record.data {
+            SecretValue::Login(login) => nook_core::LoginHostMatchRequest {
+                website_url: &login.website_url,
+                origin: request.origin,
             }
+            .matches()
+            .map_err(|error| NookError::Database(error.to_string()))?,
+            _ => false,
+        };
+        let credential = match &record.data {
+            SecretValue::Login(login) if matches => Ok(NookLoginFillCredential::new(
+                login.username.clone(),
+                login.password.clone(),
+            )),
             SecretValue::Login(_) => Err(NookError::Decryption(
                 "Login does not match the requesting website origin.".to_owned(),
             )),

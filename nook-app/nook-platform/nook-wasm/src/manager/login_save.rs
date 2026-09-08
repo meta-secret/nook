@@ -3,7 +3,7 @@
 use super::NookVaultManager;
 use crate::NookError;
 use crate::types::{NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan};
-use nook_core::{SecretFormFields, SecretType, SecretValue};
+use nook_core::{SecretFormFields, SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
@@ -17,7 +17,12 @@ struct LoginSaveCommitRequest<'a> {
     origin: &'a str,
     username: &'a str,
     password: &'a str,
-    replace_secret_id: Option<&'a str>,
+    target: LoginSaveTarget,
+}
+
+enum LoginSaveTarget {
+    Create,
+    Replace(SecretId),
 }
 
 impl NookVaultManager {
@@ -43,6 +48,7 @@ impl NookVaultManager {
                     origin: request.origin,
                 })
                 .matches()
+                .map_err(|error| NookError::Database(error.to_string()))?
             {
                 owned_logins.push((id.clone(), login.clone()));
             }
@@ -61,7 +67,8 @@ impl NookVaultManager {
             password: request.password,
             candidates: &candidates,
         }
-        .decide();
+        .decide()
+        .map_err(|error| NookError::Database(error.to_string()))?;
         for (_, login) in &mut owned_logins {
             login.password.zeroize();
         }
@@ -105,8 +112,14 @@ impl NookVaultManager {
                 let expected = planned_replace.map_err(|_| {
                     NookError::Database("Login update is missing the existing secret.".to_owned())
                 })?;
-                let provided = request.replace_secret_id.unwrap_or_default();
-                if provided != expected {
+                let LoginSaveTarget::Replace(provided) = &request.target else {
+                    username.zeroize();
+                    password.zeroize();
+                    return Err(NookError::Database(
+                        "Login update target does not match the planned secret.".to_owned(),
+                    ));
+                };
+                if provided.to_string() != expected {
                     username.zeroize();
                     password.zeroize();
                     return Err(NookError::Database(
@@ -115,10 +128,7 @@ impl NookVaultManager {
                 }
             }
             NookWebsiteLoginSaveDecision::Create => {
-                if request
-                    .replace_secret_id
-                    .is_some_and(|value| !value.is_empty())
-                {
+                if !matches!(&request.target, LoginSaveTarget::Create) {
                     username.zeroize();
                     password.zeroize();
                     return Err(NookError::Database(
@@ -143,10 +153,14 @@ impl NookVaultManager {
         let secret_type = SecretType::Login;
 
         if decision == NookWebsiteLoginSaveDecision::Update {
-            let old_id = request.replace_secret_id.unwrap_or_default().to_owned();
+            let LoginSaveTarget::Replace(old_id) = request.target else {
+                return Err(NookError::Database(
+                    "Login update target does not match the planned secret.".to_owned(),
+                ));
+            };
             let new_id = nook_core::SecretId::generate()?.to_string();
             let records = self
-                .replace_secret(old_id, new_id, secret_type, data)
+                .replace_secret(old_id.to_string(), new_id, secret_type, data)
                 .await
                 .map_err(|_| {
                     NookError::Database("Failed to replace the website login.".to_owned())
@@ -295,7 +309,7 @@ mod browser_tests {
                     origin: "https://example.com",
                     username: "",
                     password: "new",
-                    replace_secret_id: None,
+                    target: LoginSaveTarget::Create,
                 })
                 .await
                 .is_err()
@@ -306,7 +320,7 @@ mod browser_tests {
                     origin: "https://example.com",
                     username: "alice",
                     password: "new",
-                    replace_secret_id: Some("wrong"),
+                    target: LoginSaveTarget::Replace(SecretId::from_vault_record("wrong")),
                 })
                 .await
                 .is_err()
@@ -322,7 +336,7 @@ mod browser_tests {
                     origin: "https://example.com",
                     username: "alice",
                     password: "new",
-                    replace_secret_id: Some("unexpected"),
+                    target: LoginSaveTarget::Replace(SecretId::from_vault_record("unexpected")),
                 })
                 .await
                 .is_err()
@@ -360,12 +374,19 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         self.ensure_login_save_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        let replace = (!replace_secret_id.is_empty()).then_some(replace_secret_id);
+        let target =
+            if replace_secret_id.is_empty() {
+                LoginSaveTarget::Create
+            } else {
+                LoginSaveTarget::Replace(SecretId::parse(replace_secret_id).map_err(|_| {
+                    JsError::new("Login replacement target is not a valid secret id.")
+                })?)
+            };
         self.commit_matching_login_save(LoginSaveCommitRequest {
             origin,
             username,
             password,
-            replace_secret_id: replace,
+            target,
         })
         .await
         .map_err(Into::into)

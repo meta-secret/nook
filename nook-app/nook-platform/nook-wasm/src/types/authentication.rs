@@ -284,7 +284,7 @@ impl NookLoginAccount {
             secret_id: projection.secret_id.to_string(),
             username: projection.login.username.clone(),
             website_url: projection.login.website_url.clone(),
-            website_host: WebsiteHost::normalize(&projection.login.website_url),
+            website_host: WebsiteHost::normalize(&projection.login.website_url).into_string(),
         }
     }
 

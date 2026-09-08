@@ -23,6 +23,19 @@ pub(crate) struct LoginSiteHosts {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginSiteHostsError {
+    InvalidBundledCatalog,
+}
+
+impl std::fmt::Display for LoginSiteHostsError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("bundled login-host catalog is invalid")
+    }
+}
+
+impl std::error::Error for LoginSiteHostsError {}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LoginFamilyMatchRequest<'a> {
     pub(crate) left: &'a str,
     pub(crate) right: &'a str,
@@ -84,6 +97,10 @@ impl LoginSiteHosts {
         }
     }
 
+    pub(crate) fn require_bundled() -> Result<&'static Self, LoginSiteHostsError> {
+        Self::bundled().ok_or(LoginSiteHostsError::InvalidBundledCatalog)
+    }
+
     /// Normalize a hostname the same way login matching strips `www.`.
     #[must_use]
     fn normalize_host(raw: &str) -> String {
@@ -114,11 +131,8 @@ impl LoginSiteHosts {
 mod tests {
     use super::*;
 
-    fn bundled() -> &'static LoginSiteHosts {
-        match LoginSiteHosts::bundled() {
-            Some(catalog) => catalog,
-            None => panic!("bundled login-host catalog"),
-        }
+    fn bundled() -> anyhow::Result<&'static LoginSiteHosts> {
+        LoginSiteHosts::bundled().ok_or_else(|| anyhow::anyhow!("bundled login-host catalog"))
     }
 
     #[test]
@@ -138,41 +152,45 @@ mod tests {
     }
 
     #[test]
-    fn maps_popular_sso_shells_to_brand_families() {
+    fn maps_popular_sso_shells_to_brand_families() -> anyhow::Result<()> {
+        let bundled = bundled()?;
         assert_eq!(
-            bundled().family("login.microsoftonline.com"),
+            bundled.family("login.microsoftonline.com"),
             Some("microsoft")
         );
-        assert_eq!(bundled().family("login.live.com"), Some("microsoft"));
-        assert_eq!(bundled().family("www.microsoft.com"), Some("microsoft"));
-        assert_eq!(bundled().family("app.slack.com"), Some("slack"));
-        assert_eq!(bundled().family("accounts.google.com"), Some("google"));
-        assert_eq!(bundled().family("github.com"), Some("github"));
-        assert_eq!(bundled().family("m.facebook.com"), Some("facebook"));
-        assert_eq!(bundled().family("amazon.com"), Some("amazon"));
+        assert_eq!(bundled.family("login.live.com"), Some("microsoft"));
+        assert_eq!(bundled.family("www.microsoft.com"), Some("microsoft"));
+        assert_eq!(bundled.family("app.slack.com"), Some("slack"));
+        assert_eq!(bundled.family("accounts.google.com"), Some("google"));
+        assert_eq!(bundled.family("github.com"), Some("github"));
+        assert_eq!(bundled.family("m.facebook.com"), Some("facebook"));
+        assert_eq!(bundled.family("amazon.com"), Some("amazon"));
+        Ok(())
     }
 
     #[test]
-    fn unrelated_or_unknown_hosts_do_not_share_a_family() {
-        assert!(!bundled().share_family(LoginFamilyMatchRequest {
+    fn unrelated_or_unknown_hosts_do_not_share_a_family() -> anyhow::Result<()> {
+        let bundled = bundled()?;
+        assert!(!bundled.share_family(LoginFamilyMatchRequest {
             left: "example.com",
             right: "microsoft.com",
         }));
-        assert!(!bundled().share_family(LoginFamilyMatchRequest {
+        assert!(!bundled.share_family(LoginFamilyMatchRequest {
             left: "evil-microsoft.com",
             right: "microsoft.com",
         }));
-        assert!(!bundled().share_family(LoginFamilyMatchRequest {
+        assert!(!bundled.share_family(LoginFamilyMatchRequest {
             left: "slack.com",
             right: "microsoft.com",
         }));
-        assert!(bundled().share_family(LoginFamilyMatchRequest {
+        assert!(bundled.share_family(LoginFamilyMatchRequest {
             left: "login.microsoftonline.com",
             right: "microsoft.com",
         }));
-        assert!(bundled().share_family(LoginFamilyMatchRequest {
+        assert!(bundled.share_family(LoginFamilyMatchRequest {
             left: "app.slack.com",
             right: "slack.com",
         }));
+        Ok(())
     }
 }

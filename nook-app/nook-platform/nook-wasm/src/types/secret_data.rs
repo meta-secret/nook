@@ -20,7 +20,9 @@ impl NookSecretPage {
                 .records
                 .into_iter()
                 .zip(group_keys)
-                .map(|(item, group_key)| NookSecretListItem::from_core(item, group_key))
+                .map(|(item, group_key)| {
+                    NookSecretListItem::from_core(item, group_key.into_string())
+                })
                 .collect(),
             total: u32::try_from(usize::from(page.total)).unwrap_or(u32::MAX),
             offset: u32::try_from(usize::from(page.offset)).unwrap_or(u32::MAX),

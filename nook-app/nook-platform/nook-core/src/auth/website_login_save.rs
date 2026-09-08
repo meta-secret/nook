@@ -11,7 +11,7 @@
 )]
 
 use crate::secrets::secret_view::WebsiteHost;
-use crate::{LoginHostMatchRequest, LoginSecret, SecretId};
+use crate::{LoginHostMatchRequest, LoginSecret, LoginSiteHostsError, SecretId};
 
 /// Candidate login already stored for the requesting origin.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -63,7 +63,7 @@ impl WebsiteLoginSaveRequest<'_> {
     /// `candidates` should already be filtered to the requesting origin when
     /// possible; host matching is still enforced here as a defense in depth.
     #[must_use]
-    pub fn decide(&self) -> WebsiteLoginSaveDecision {
+    pub fn decide(&self) -> Result<WebsiteLoginSaveDecision, LoginSiteHostsError> {
         WebsiteLoginSavePolicy::decide_parts(
             self.origin,
             self.username,
@@ -79,14 +79,14 @@ impl WebsiteLoginSavePolicy {
         username: &str,
         password: &str,
         candidates: &[WebsiteLoginSaveCandidate<'_>],
-    ) -> WebsiteLoginSaveDecision {
+    ) -> Result<WebsiteLoginSaveDecision, LoginSiteHostsError> {
         let username = username.trim();
         let password = password.trim();
         if username.is_empty() || password.is_empty() {
-            return WebsiteLoginSaveDecision::Invalid;
+            return Ok(WebsiteLoginSaveDecision::Invalid);
         }
         if WebsiteHost::normalize(origin).is_empty() {
-            return WebsiteLoginSaveDecision::Invalid;
+            return Ok(WebsiteLoginSaveDecision::Invalid);
         }
 
         let mut matching_username: Option<&WebsiteLoginSaveCandidate<'_>> = None;
@@ -95,7 +95,7 @@ impl WebsiteLoginSavePolicy {
                 website_url: &candidate.login.website_url,
                 origin,
             })
-            .matches()
+            .matches()?
             {
                 continue;
             }
@@ -104,18 +104,18 @@ impl WebsiteLoginSavePolicy {
             }
             matching_username = Some(candidate);
             if candidate.login.password == password {
-                return WebsiteLoginSaveDecision::AlreadySaved {
+                return Ok(WebsiteLoginSaveDecision::AlreadySaved {
                     secret_id: candidate.secret_id.clone(),
-                };
+                });
             }
         }
 
         if let Some(candidate) = matching_username {
-            return WebsiteLoginSaveDecision::Update {
+            return Ok(WebsiteLoginSaveDecision::Update {
                 secret_id: candidate.secret_id.clone(),
-            };
+            });
         }
-        WebsiteLoginSaveDecision::Create
+        Ok(WebsiteLoginSaveDecision::Create)
     }
 }
 
@@ -135,7 +135,7 @@ mod tests {
         username: &str,
         password: &str,
         candidates: &[WebsiteLoginSaveCandidate<'_>],
-    ) -> WebsiteLoginSaveDecision {
+    ) -> anyhow::Result<WebsiteLoginSaveDecision> {
         WebsiteLoginSaveRequest {
             origin,
             username,
@@ -143,6 +143,7 @@ mod tests {
             candidates,
         }
         .decide()
+        .map_err(Into::into)
     }
 
     fn login(website_url: &str, username: &str, password: &str) -> LoginSecret {
@@ -163,11 +164,11 @@ mod tests {
             login: &existing,
         }];
         assert_eq!(
-            decide_website_login_save("https://example.com", "  ", "password", &candidates),
+            decide_website_login_save("https://example.com", "  ", "password", &candidates)?,
             WebsiteLoginSaveDecision::Invalid
         );
         assert_eq!(
-            decide_website_login_save("https://example.com", "alice", "", &candidates),
+            decide_website_login_save("https://example.com", "alice", "", &candidates)?,
             WebsiteLoginSaveDecision::Invalid
         );
         Ok(())
@@ -187,7 +188,7 @@ mod tests {
                 "alice@nook.test",
                 "new-password",
                 &candidates
-            ),
+            )?,
             WebsiteLoginSaveDecision::Create
         );
         Ok(())
@@ -202,7 +203,7 @@ mod tests {
             login: &existing,
         }];
         assert_eq!(
-            decide_website_login_save("https://example.com", "alice", "new-password", &candidates),
+            decide_website_login_save("https://example.com", "alice", "new-password", &candidates)?,
             WebsiteLoginSaveDecision::Update {
                 secret_id: id.clone()
             }
@@ -219,7 +220,12 @@ mod tests {
             login: &existing,
         }];
         assert_eq!(
-            decide_website_login_save("https://example.com", "alice", "same-password", &candidates),
+            decide_website_login_save(
+                "https://example.com",
+                "alice",
+                "same-password",
+                &candidates
+            )?,
             WebsiteLoginSaveDecision::AlreadySaved {
                 secret_id: id.clone()
             }
@@ -228,10 +234,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_empty_origin() {
+    fn rejects_empty_origin() -> anyhow::Result<()> {
         assert_eq!(
-            decide_website_login_save("", "alice", "password", &[]),
+            decide_website_login_save("", "alice", "password", &[])?,
             WebsiteLoginSaveDecision::Invalid
         );
+        Ok(())
     }
 }

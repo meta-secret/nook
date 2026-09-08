@@ -34,7 +34,7 @@ impl AuthenticatorWebsiteHostRequest<'_> {
     pub(crate) fn explicit_or_domain_host(&self) -> Option<String> {
         let from_url = WebsiteHost::normalize(self.website_url);
         if !from_url.is_empty() {
-            return Some(from_url);
+            return Some(from_url.into_string());
         }
 
         let issuer = self.issuer.trim();
@@ -42,7 +42,7 @@ impl AuthenticatorWebsiteHostRequest<'_> {
             return None;
         }
         let host = WebsiteHost::normalize(issuer);
-        (!host.is_empty()).then_some(host)
+        (!host.is_empty()).then(|| host.into_string())
     }
 }
 
@@ -141,11 +141,8 @@ impl AuthenticatorIssuerHosts {
 mod tests {
     use super::*;
 
-    fn bundled() -> &'static AuthenticatorIssuerHosts {
-        match AuthenticatorIssuerHosts::bundled() {
-            Some(catalog) => catalog,
-            None => panic!("bundled issuer catalog"),
-        }
+    fn bundled() -> anyhow::Result<&'static AuthenticatorIssuerHosts> {
+        AuthenticatorIssuerHosts::bundled().ok_or_else(|| anyhow::anyhow!("bundled issuer catalog"))
     }
 
     #[test]
@@ -169,44 +166,51 @@ mod tests {
     }
 
     #[test]
-    fn maps_popular_brand_issuers() {
-        assert_eq!(bundled().mapped_host("OpenAI"), Some("openai.com"));
-        assert_eq!(bundled().mapped_host("GitHub"), Some("github.com"));
-        assert_eq!(bundled().mapped_host("Namecheap"), Some("namecheap.com"));
-        assert_eq!(bundled().mapped_host("Epic Games"), Some("epicgames.com"));
+    fn maps_popular_brand_issuers() -> anyhow::Result<()> {
+        let bundled = bundled()?;
+        assert_eq!(bundled.mapped_host("OpenAI"), Some("openai.com"));
+        assert_eq!(bundled.mapped_host("GitHub"), Some("github.com"));
+        assert_eq!(bundled.mapped_host("Namecheap"), Some("namecheap.com"));
+        assert_eq!(bundled.mapped_host("Epic Games"), Some("epicgames.com"));
+        Ok(())
     }
 
     #[test]
-    fn unknown_issuer_has_no_mapping() {
-        assert_eq!(bundled().mapped_host("Totally Unknown Service"), None);
+    fn unknown_issuer_has_no_mapping() -> anyhow::Result<()> {
+        assert_eq!(bundled()?.mapped_host("Totally Unknown Service"), None);
+        Ok(())
     }
 
     #[test]
-    fn resolve_prefers_explicit_website_url() {
+    fn resolve_prefers_explicit_website_url() -> anyhow::Result<()> {
+        let bundled = bundled()?;
         assert_eq!(
-            bundled().resolve_website_host(AuthenticatorWebsiteHostRequest {
+            bundled.resolve_website_host(AuthenticatorWebsiteHostRequest {
                 website_url: "https://www.openai.com/account",
                 issuer: "GitHub",
             }),
             Some("openai.com".to_owned())
         );
+        Ok(())
     }
 
     #[test]
-    fn resolve_uses_domain_like_issuer_then_map() {
+    fn resolve_uses_domain_like_issuer_then_map() -> anyhow::Result<()> {
+        let bundled = bundled()?;
         assert_eq!(
-            bundled().resolve_website_host(AuthenticatorWebsiteHostRequest {
+            bundled.resolve_website_host(AuthenticatorWebsiteHostRequest {
                 website_url: "",
                 issuer: "https://github.com",
             }),
             Some("github.com".to_owned())
         );
         assert_eq!(
-            bundled().resolve_website_host(AuthenticatorWebsiteHostRequest {
+            bundled.resolve_website_host(AuthenticatorWebsiteHostRequest {
                 website_url: "",
                 issuer: "OpenAI",
             }),
             Some("openai.com".to_owned())
         );
+        Ok(())
     }
 }

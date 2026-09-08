@@ -7,22 +7,22 @@
 use super::{SecretListItem, SecretListItemData, SecretType, Url};
 use crate::secrets::{
     authenticator_issuer_hosts::{AuthenticatorIssuerHosts, AuthenticatorWebsiteHostRequest},
-    login_site_hosts::{LoginFamilyMatchRequest, LoginSiteHosts},
+    login_site_hosts::{LoginFamilyMatchRequest, LoginSiteHosts, LoginSiteHostsError},
 };
 use crate::vault_session::SecretPage;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct WebsiteHost;
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct WebsiteHost(String);
 
 impl WebsiteHost {
     #[must_use]
-    pub fn normalize(raw: &str) -> String {
+    pub fn normalize(raw: &str) -> Self {
         let value = raw.trim();
         if value.is_empty() {
-            return String::new();
+            return Self(String::new());
         }
 
-        Url::parse(value)
+        let host = Url::parse(value)
             .or_else(|error| {
                 if value.contains("://") {
                     Err(error)
@@ -34,22 +34,64 @@ impl WebsiteHost {
             .and_then(|url| url.host_str().map(ToOwned::to_owned))
             .unwrap_or_default()
             .trim_start_matches("www.")
-            .to_owned()
+            .to_owned();
+        Self(host)
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[must_use]
+    pub fn into_string(self) -> String {
+        self.0
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct SecretTitle;
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SecretTitle {
+    title: String,
+    unnamed: String,
+}
 
 impl SecretTitle {
     #[must_use]
-    pub(crate) fn group_key(title: &str, unnamed: &str) -> String {
-        let title = title.trim();
+    pub(crate) fn new(title: &str, unnamed: &str) -> Self {
+        Self {
+            title: title.to_owned(),
+            unnamed: unnamed.to_owned(),
+        }
+    }
+
+    #[must_use]
+    pub(crate) fn group_key(&self) -> String {
+        let title = self.title.trim();
         if title.is_empty() {
-            unnamed.to_owned()
+            self.unnamed.clone()
         } else {
             title.to_owned()
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SecretGroupKey(String);
+
+impl SecretGroupKey {
+    #[must_use]
+    pub(crate) fn from_string(value: String) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub fn into_string(self) -> String {
+        self.0
     }
 }
 
@@ -68,19 +110,24 @@ pub struct LoginHostMatchRequest<'a> {
 
 impl LoginHostMatchRequest<'_> {
     #[must_use]
-    pub fn matches(&self) -> bool {
+    pub fn matches(&self) -> Result<bool, LoginSiteHostsError> {
         let secret_host = WebsiteHost::normalize(self.website_url);
         let origin_host = WebsiteHost::normalize(self.origin);
         if secret_host.is_empty() || origin_host.is_empty() {
-            return false;
+            return Ok(false);
         }
-        secret_host.eq_ignore_ascii_case(&origin_host)
-            || LoginSiteHosts::bundled().is_some_and(|catalog| {
-                catalog.share_family(LoginFamilyMatchRequest {
-                    left: &secret_host,
-                    right: &origin_host,
-                })
-            })
+        if secret_host
+            .as_str()
+            .eq_ignore_ascii_case(origin_host.as_str())
+        {
+            return Ok(true);
+        }
+        Ok(
+            LoginSiteHosts::require_bundled()?.share_family(LoginFamilyMatchRequest {
+                left: secret_host.as_str(),
+                right: origin_host.as_str(),
+            }),
+        )
     }
 }
 
@@ -209,7 +256,9 @@ impl SecretListItem {
     pub fn website_host(&self) -> String {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
-            | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url),
+            | SecretListItemData::ApiKey { website_url, .. } => {
+                WebsiteHost::normalize(website_url).into_string()
+            }
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
@@ -243,7 +292,7 @@ impl SecretListItem {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => {
-                let host = WebsiteHost::normalize(website_url);
+                let host = WebsiteHost::normalize(website_url).into_string();
                 if host.is_empty() {
                     "No Website".to_owned()
                 } else {
@@ -259,7 +308,7 @@ impl SecretListItem {
                 }
             }
             SecretListItemData::SecureNote { title } => {
-                SecretTitle::group_key(title, "Unnamed Note")
+                SecretTitle::new(title, "Unnamed Note").group_key()
             }
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator {
@@ -272,7 +321,7 @@ impl SecretListItem {
             }
             .resolve(),
             SecretListItemData::CreditCard { title, .. } => {
-                SecretTitle::group_key(title, "Unnamed Card")
+                SecretTitle::new(title, "Unnamed Card").group_key()
             }
             SecretListItemData::FileAttachment {
                 title, file_name, ..
@@ -346,18 +395,36 @@ impl SecretListItem {
             SecretListItemData::FileAttachment { file_name, .. } => file_name.trim().to_owned(),
         }
     }
+
+    fn site_anchor_account(&self) -> &str {
+        match &self.data {
+            SecretListItemData::Login { username, .. } => username.trim(),
+            SecretListItemData::Passkey { user_name, .. } => user_name.trim(),
+            SecretListItemData::Authenticator { account, .. } => account.trim(),
+            _ => "",
+        }
+    }
+
+    fn is_site_anchor(&self) -> bool {
+        matches!(
+            self.data,
+            SecretListItemData::Login { .. }
+                | SecretListItemData::ApiKey { .. }
+                | SecretListItemData::Passkey { .. }
+        )
+    }
 }
 
 impl SecretPage {
     /// Resolve display group keys so brand authenticators cluster with site hosts.
     #[must_use]
-    pub fn entity_group_keys(&self) -> Vec<String> {
+    pub fn entity_group_keys(&self) -> Vec<SecretGroupKey> {
         let intrinsic: Vec<String> = self.records.iter().map(SecretListItem::group_key).collect();
         let anchors: Vec<(usize, String)> = self
             .records
             .iter()
             .enumerate()
-            .filter(|(_, item)| Self::is_site_anchor(item))
+            .filter(|(_, item)| item.is_site_anchor())
             .map(|(index, _)| (index, intrinsic[index].clone()))
             .filter(|(_, key)| key.contains('.') && key != "No Website")
             .collect();
@@ -385,7 +452,8 @@ impl SecretPage {
                         continue;
                     }
                     let account_match = !account.is_empty()
-                        && Self::site_anchor_account(&self.records[*anchor_index])
+                        && self.records[*anchor_index]
+                            .site_anchor_account()
                             .eq_ignore_ascii_case(account);
                     let candidate = (account_match, host.len(), host.clone());
                     best = Some(match best {
@@ -402,6 +470,7 @@ impl SecretPage {
                 }
                 best.map_or_else(|| key.clone(), |(_, _, host)| host)
             })
+            .map(SecretGroupKey::from_string)
             .collect()
     }
 
@@ -419,24 +488,6 @@ impl SecretPage {
             return true;
         }
         host.split('.').any(|label| label == brand)
-    }
-
-    fn site_anchor_account(item: &SecretListItem) -> &str {
-        match &item.data {
-            SecretListItemData::Login { username, .. } => username.trim(),
-            SecretListItemData::Passkey { user_name, .. } => user_name.trim(),
-            SecretListItemData::Authenticator { account, .. } => account.trim(),
-            _ => "",
-        }
-    }
-
-    fn is_site_anchor(item: &SecretListItem) -> bool {
-        matches!(
-            item.data,
-            SecretListItemData::Login { .. }
-                | SecretListItemData::ApiKey { .. }
-                | SecretListItemData::Passkey { .. }
-        )
     }
 }
 
@@ -466,6 +517,9 @@ mod tests {
             limit: items.len().into(),
         }
         .entity_group_keys()
+        .into_iter()
+        .map(SecretGroupKey::into_string)
+        .collect()
     }
 
     #[test]
@@ -487,70 +541,71 @@ mod tests {
     }
 
     #[test]
-    fn login_host_matches_origin_uses_normalized_host_equality() {
+    fn login_host_matches_origin_uses_normalized_host_equality() -> anyhow::Result<()> {
         assert!(
             LoginHostMatchRequest {
                 website_url: "https://www.example.com/login",
                 origin: "https://example.com",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             !LoginHostMatchRequest {
                 website_url: "example.com",
                 origin: "http://127.0.0.1:4173/login",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             LoginHostMatchRequest {
                 website_url: "http://127.0.0.1:4173/account",
                 origin: "http://127.0.0.1:4199/login",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             !LoginHostMatchRequest {
                 website_url: "https://example.com",
                 origin: "https://evil-example.com",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             !LoginHostMatchRequest {
                 website_url: "https://notexample.com",
                 origin: "https://example.com",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             !LoginHostMatchRequest {
                 website_url: "https://",
                 origin: "https://example.com",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             LoginHostMatchRequest {
                 website_url: "https://microsoft.com/account",
                 origin: "https://login.microsoftonline.com",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             LoginHostMatchRequest {
                 website_url: "https://slack.com",
                 origin: "https://app.slack.com",
             }
-            .matches()
+            .matches()?
         );
         assert!(
             !LoginHostMatchRequest {
                 website_url: "https://microsoft.com",
                 origin: "https://evil-microsoft.com",
             }
-            .matches()
+            .matches()?
         );
+        Ok(())
     }
 
     #[test]
