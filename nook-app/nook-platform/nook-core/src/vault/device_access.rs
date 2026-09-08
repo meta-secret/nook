@@ -92,12 +92,12 @@ pub struct PasskeyAccessProfile {
     pub provider_label: String,
     #[serde(
         default,
-        deserialize_with = "passkey_observation::deserialize_created_at_evidence"
+        deserialize_with = "passkey_observation::PasskeyCreatedAtEvidence::deserialize_legacy"
     )]
     pub created_at: PasskeyCreatedAtEvidence,
     #[serde(
         default,
-        deserialize_with = "passkey_observation::deserialize_last_used_at_evidence"
+        deserialize_with = "passkey_observation::PasskeyLastUsedAtEvidence::deserialize_legacy"
     )]
     pub last_used_at: PasskeyLastUsedAtEvidence,
     #[serde(default)]
