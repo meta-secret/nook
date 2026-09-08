@@ -328,17 +328,27 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "non-transient BuildKit failure; not retrying",
         "transient BuildKit failure; retrying in 2s...",
         "for attempt in 1 2; do",
+        "preparation_seconds=%.1f registry_send_seconds=%.1f",
+        "fatal error: concurrent map writes",
+        "BuildKit concurrent-map fault",
     ] {
         assert!(
             bake_retry.contains(required),
             "Bake frontend-flake retry helper is missing: {required}"
         );
     }
+    let docker_setup = read(root, ".github/actions/nook-docker-setup/action.yml");
+    assert!(
+        docker_setup.contains("monitor-buildkit-storage")
+            && docker_setup.contains("timeout 8s docker buildx du")
+            && docker_setup.contains("BuildKit cache near GC ceiling")
+            && docker_setup.contains("112 GB max-use target"),
+        "Main must surface bounded actionable ARC BuildKit storage-pressure diagnostics"
+    );
     for required in [
         "docker:ci:cache:publish:rust-base",
-        "cache-publish:native-core-deps",
         "cache-publish:native-debug",
-        "cache-publish:native-preflight",
+        "cache-publish:preflight",
         "docker:ci:cache:publish:wasm",
         "docker:ci:cache:publish:web",
     ] {
@@ -458,18 +468,33 @@ fn assert_rust_cache_export_hardening(bake: &str) {
 
 fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
-    let rust = section(&main, "  rust:\n", "\n  wasm:\n");
+    let preflight = section(&main, "  preflight:\n", "\n  preflight-cache-publish:\n");
+    let preflight_cache_publish = section(&main, "  preflight-cache-publish:\n", "\n  rust:\n");
+    let rust = section(&main, "  rust:\n", "\n  native-cache-publish:\n");
+    let native_cache_publish = section(&main, "  native-cache-publish:\n", "\n  wasm:\n");
     let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
     let wasm_cache_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
     let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web:\n");
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
     let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
     let rust_verify = rust
-        .find("task ci:pr:rust")
+        .find("task ci:main:rust")
         .context("Main Rust job must verify")?;
+    let preflight_verify = preflight
+        .find("task preflight")
+        .context("Main preflight job must verify")?;
+    let preflight_publish_id = preflight
+        .find("id: publish_preflight_cache")
+        .context("Main preflight producer must expose its cache publication outcome")?;
+    let preflight_publish = preflight
+        .find("task ci:main:publish-preflight-cache")
+        .context("Main preflight producer must export its verified cache")?;
+    let rust_publish_id = rust
+        .find("id: publish_native_cache")
+        .context("Main Rust producer must expose its cache publication outcome")?;
     let rust_publish = rust
         .find("task ci:main:publish-native-cache")
-        .context("Main Rust job must publish its cache")?;
+        .context("Main Rust producer must export its verified cache")?;
     let wasm_verify = wasm
         .find("task ci:pr:wasm")
         .context("Main WASM job must verify")?;
@@ -495,10 +520,52 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("- name: Headless UI demos")
         .context("Main UI demo job must declare its verification step")?;
     assert!(
-        rust_verify < rust_publish
+        preflight.contains("task preflight")
+            && preflight.contains("cache-selection: preflight")
+            && preflight_verify < preflight_publish_id
+            && preflight_publish_id < preflight_publish
+            && preflight.contains(
+                "cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}"
+            )
+            && preflight[preflight_publish_id..preflight_publish]
+                .contains("continue-on-error: true")
+            && preflight[preflight_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && preflight_cache_publish.contains("needs: [preflight]")
+            && preflight_cache_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.preflight.outputs.cache_publication_outcome }}"
+            )
+            && preflight_cache_publish
+                .contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
+            && !preflight_cache_publish.contains("task ci:main:publish-preflight-cache")
+            && !preflight_cache_publish.contains("nook-docker-setup")
+            && !preflight_cache_publish.contains("actions/checkout")
+            && !preflight_cache_publish.contains("continue-on-error")
+            && rust.contains("needs: [product-paths, preflight]")
+            && rust_verify < rust_publish_id
+            && rust_publish_id < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && rust
+                .contains("cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}")
+            && rust[rust_publish_id..rust_publish].contains("continue-on-error: true")
             && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && wasm.contains("needs: [rust]")
+            && rust.contains("cache-selection: native")
+            && rust.contains("monitor-buildkit-storage: \"true\"")
+            && native_cache_publish.contains("needs: [rust]")
+            && !native_cache_publish.contains("continue-on-error")
+            && native_cache_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.rust.outputs.cache_publication_outcome }}"
+            )
+            && native_cache_publish
+                .contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
+            && !native_cache_publish.contains("task ci:main:publish-native-cache")
+            && !native_cache_publish.contains("nook-docker-setup")
+            && !native_cache_publish.contains("actions/checkout")
+            && main.matches("task ci:main:publish-native-cache").count() == 1
+            && main.matches("task ci:main:publish-preflight-cache").count() == 1
+            && wasm.contains("needs: [rust, preflight]")
+            && !wasm.contains("native-cache-publish")
+            && !wasm.contains("preflight-cache-publish")
+            && wasm.contains("cache-selection: wasm")
             && wasm_verify < wasm_node
             && wasm_node < wasm_publish_id
             && wasm_publish_id < wasm_publish
@@ -518,7 +585,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !wasm_cache_publish.contains("actions/upload-artifact")
             && main.matches("task ci:main:publish-wasm-cache").count() == 1
             && wasm_cache_proof.contains("needs: [wasm-cache-publish]")
+            && wasm_cache_proof.contains("cache-selection: wasm-proof")
             && web.contains("needs: [wasm]")
+            && web.contains("cache-selection: web-e2e")
             && !web.contains("wasm-cache-publish")
             && web.contains("uses: actions/download-artifact@v8")
             && web.contains("name: main-wasm-${{ github.run_id }}")
@@ -554,6 +623,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         read(root, "nook-app/nook-platform/docker/Taskfile.yml"),
         read(root, "nook-app/nook-web/docker/Taskfile.yml")
     );
+    let rust_cache_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let core_cache_bake = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
     assert!(
         docker_tasks.contains("rust-format-check.output=type=cacheonly\" ci-rust'")
             && !docker_tasks.contains("ci-rust builder-core-deps")
@@ -561,32 +632,36 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("nook-web-ci web-deps")
             && docker_tasks.contains("docker:ci:cache:publish:rust-base:")
             && docker_tasks.contains("docker:ci:cache:publish:native:")
+            && docker_tasks.contains("docker:ci:cache:publish:preflight:")
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
             && docker_tasks.contains("docker:ci:cache:publish:web-e2e:")
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("rust-base-publish")
-            && docker_tasks.contains("builder-core-deps-publish")
+            && !docker_tasks.contains("builder-core-deps-publish")
             && docker_tasks.contains("web-deps-publish")
             && docker_tasks.contains("nook-web-e2e-publish")
             && docker_tasks.contains("preflight-test")
-            && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned ARC publishers must bake scoped targets without owning the portable WASM dependency ref"
+            && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX")
+            && core_cache_bake.contains("target \"builder-core-deps-publish\"")
+            && core_cache_bake.contains("cache-to   = rust_deps_cache_to")
+            && rust_cache_bake.contains("rust_native_source_cache_to")
+            && rust_cache_bake.contains("nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}"),
+        "scoped producer targets must remain available while Main owns one portable native source graph and not the portable WASM dependency ref"
     );
     assert_no_empty_cache_overrides(&docker_tasks);
     let native_publish = docker_tasks
         .split("docker:ci:cache:publish:native:")
         .nth(1)
-        .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
+        .and_then(|tail| tail.split("docker:ci:cache:publish:preflight:").next())
         .unwrap_or("");
     assert!(
-        native_publish.contains("preflight-test")
-            && native_publish.contains("PREFLIGHT_SOURCE_CONTEXT=\"{{.REPO_ROOT}}\"")
-            && native_publish.contains("task: docker:ci:cache:publish:rust-base")
-            && native_publish.contains("builder-core-deps-publish")
-            && native_publish.contains("builder-debug")
-            && !native_publish.contains("builder-core-deps-publish builder-debug"),
-        "native cache publish must stage rust-base, deps, source, then preflight as separate solves with the full repository source context"
+        native_publish.contains("builder-debug")
+            && !native_publish.contains("preflight-test")
+            && !native_publish.contains("task: docker:ci:cache:publish:rust-base")
+            && !native_publish.contains("builder-core-deps-publish")
+            && native_publish.matches("buildx bake").count() == 1,
+        "native cache publish must export only the complete source graph and avoid overlapping full-graph preparation"
     );
     let wasm_publish = docker_tasks
         .split("docker:ci:cache:publish:wasm:")
@@ -704,10 +779,11 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
         .context("Main must define the development deployment job")?;
     assert!(
         main.contains("\n  rust:\n")
+            && main.contains("\n  preflight:\n")
             && main.contains("\n  wasm:\n")
             && main.contains("\n  web:\n")
             && main.contains("\n  web-e2e:\n")
-            && main.contains("task ci:pr:rust")
+            && main.contains("task ci:main:rust")
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task _ci:main:web:e2e-only")

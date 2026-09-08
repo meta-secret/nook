@@ -257,20 +257,13 @@ tasks:
         rust-base-publish
 
   docker:ci:cache:publish:native:
-    desc: Export the already-verified native dependency/source graph from this job's builder.
+    desc: Export the one complete verified native source graph from this job's builder.
     env:
       GHA_CACHE_WRITE_ENABLED: "1"
     cmds:
-      # Stage scoped publishers alone. Context parents have no cache-to, so linked
-      # leaves cannot thin-export another scope.
-      - task: docker:ci:cache:publish:rust-base
-      - >-
-        bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
-        "cache-publish:native-core-deps"
-        {{.DOCKER}} buildx bake
-        {{.NOOK_BAKE_FILES}}
-        --set "*.output=type=cacheonly"
-        builder-core-deps-publish
+      # builder-debug's mode=max source scope embeds the verified dependency and
+      # rust-base lineage for fresh-node/cross-node restore. Publishing those
+      # overlapping complete graphs again only repeats cache preparation.
       - >-
         bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
         "cache-publish:native-debug"
@@ -278,10 +271,16 @@ tasks:
         {{.NOOK_BAKE_FILES}}
         --set "*.output=type=cacheonly"
         builder-debug
+
+  docker:ci:cache:publish:preflight:
+    desc: Export the independently verified preflight graph from its Main job's builder.
+    env:
+      GHA_CACHE_WRITE_ENABLED: "1"
+    cmds:
       - >-
         PREFLIGHT_SOURCE_CONTEXT="{{.REPO_ROOT}}"
         bash "{{.REPO_ROOT}}/.github/scripts/bake-with-frontend-flake-retry.sh"
-        "cache-publish:native-preflight"
+        "cache-publish:preflight"
         {{.DOCKER}} buildx bake
         --allow=fs.read={{.REPO_ROOT}}
         {{.SCCACHE_S3_BUILD_SECRETS}}

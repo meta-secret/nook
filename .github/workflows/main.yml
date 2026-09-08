@@ -114,11 +114,70 @@ jobs:
       fuzz_seconds: "20"
       isolated_cache_write: "false"
 
-  rust:
-    name: Native Rust verification
+  preflight:
+    name: Repository preflight
     needs: [product-paths]
     if: needs.product-paths.outputs.changed == 'true'
-    # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
+    outputs:
+      cache_publication_outcome: ${{ steps.publish_preflight_cache.outcome }}
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: preflight
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+
+      - name: Repository invariant validation
+        run: task preflight
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: ""
+
+      - name: Publish verified preflight BuildKit cache
+        id: publish_preflight_cache
+        continue-on-error: true
+        run: task ci:main:publish-preflight-cache
+        env:
+          CI: true
+          GHA_CACHE_WRITE_ENABLED: "1"
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  preflight-cache-publish:
+    name: Preflight cache publication
+    needs: [preflight]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    steps:
+      - name: Require successful preflight cache publication
+        env:
+          CACHE_PUBLICATION_OUTCOME: ${{ needs.preflight.outputs.cache_publication_outcome }}
+        run: |
+          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
+            echo "Preflight cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
+            exit 1
+          fi
+
+  rust:
+    name: Native Rust verification
+    needs: [product-paths, preflight]
+    if: needs.product-paths.outputs.changed == 'true'
+    outputs:
+      cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
+    # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -130,6 +189,8 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: native
+          monitor-buildkit-storage: "true"
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -138,7 +199,7 @@ jobs:
           sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
           sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
       - name: Native Rust format, tests, and coverage
-        run: task ci:pr:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
+        run: task ci:main:rust CI_ARTIFACT_DIR=${{ runner.temp }}/nook-ci-artifacts/rust
         env:
           CI: true
           # Verify the complete native graph before refreshing any shared Main cache scope.
@@ -164,21 +225,36 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
       - name: Publish verified native BuildKit cache
-        if: success()
+        id: publish_native_cache
+        continue-on-error: true
         run: task ci:main:publish-native-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  native-cache-publish:
+    name: Native cache publication
+    needs: [rust]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    steps:
+      - name: Require successful native cache publication
+        env:
+          CACHE_PUBLICATION_OUTCOME: ${{ needs.rust.outputs.cache_publication_outcome }}
+        run: |
+          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
+            echo "Native cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
+            exit 1
+          fi
+
   wasm:
     name: WASM verification and artifact
-    needs: [rust]
+    needs: [rust, preflight]
     outputs:
       cache_publication_outcome: ${{ steps.publish_wasm_cache.outcome }}
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
@@ -192,6 +268,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: wasm
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -278,6 +355,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: wasm-proof
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
@@ -312,6 +390,7 @@ jobs:
       - name: Docker setup
         uses: ./.github/actions/nook-docker-setup
         with:
+          cache-selection: web-e2e
           registry-host: registry.dev.nokey.sh
           registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
           registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}

@@ -13,6 +13,17 @@ tasks:
       - task: _buildx:healthy
         vars: { BUILD_TASK: _ci:pr:rust:host }
 
+  ci:main:rust:
+    desc: Main native Rust verification after the authoritative preflight job succeeds.
+    cmds:
+      - task: _buildx:healthy
+        vars: { BUILD_TASK: _ci:main:rust:host }
+
+  _ci:main:rust:host:
+    internal: true
+    cmds:
+      - task: docker:ci:rust:export
+
   _ci:pr:rust:host:
     # Repository invariants must reject forbidden Dockerfile/cache changes before app setup begins.
     cmds:
@@ -177,6 +188,12 @@ tasks:
       - task: _ci:main:publish-cache
         vars: { HOST_TASK: _ci:main:publish-native-cache:host }
 
+  ci:main:publish-preflight-cache:
+    desc: Publish the independently verified preflight scope to the portable Zot fallback.
+    cmds:
+      - task: _ci:main:publish-cache
+        vars: { HOST_TASK: _ci:main:publish-preflight-cache:host }
+
   ci:main:publish-wasm-cache:
     desc: Publish verified WASM cache scopes to the portable Zot fallback.
     cmds:
@@ -277,6 +294,10 @@ tasks:
   _ci:main:publish-native-cache:host:
     cmds:
       - task: docker:ci:cache:publish:native
+
+  _ci:main:publish-preflight-cache:host:
+    cmds:
+      - task: docker:ci:cache:publish:preflight
 
   _ci:main:publish-wasm-cache:host:
     cmds:

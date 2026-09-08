@@ -124,6 +124,7 @@ fn assert_remote_compose_contract() -> anyhow::Result<()> {
         "kubernetes-tools",
         "k0s",
         "k0s-workers",
+        "k0s-worker-restore",
         "k0s-worker-mesh",
         "kata",
         "neo4j",
