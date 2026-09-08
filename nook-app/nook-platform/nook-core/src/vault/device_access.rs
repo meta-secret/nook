@@ -4,6 +4,12 @@
 //! module keeps protection naming and safe passkey identifiers consistent for
 //! every host without exposing credential bytes or private device material.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 #[cfg(test)]
 use crate::{DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata};
 use serde::{Deserialize, Serialize, de::Error as _};
@@ -101,27 +107,29 @@ pub struct PasskeyAccessProfile {
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VerifiedVaultAccess {
-    #[serde(deserialize_with = "deserialize_verified_device_id")]
+    #[serde(deserialize_with = "VerifiedVaultAccess::deserialize_device_id")]
     pub device_id: DeviceId,
-    #[serde(deserialize_with = "deserialize_verified_store_id")]
+    #[serde(deserialize_with = "VerifiedVaultAccess::deserialize_store_id")]
     pub store_id: StoreId,
     pub verified_at: IsoTimestamp,
 }
 
-fn deserialize_verified_device_id<'de, D>(deserializer: D) -> Result<DeviceId, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let raw = String::deserialize(deserializer)?;
-    DeviceId::parse(&raw).map_err(D::Error::custom)
-}
+impl VerifiedVaultAccess {
+    fn deserialize_device_id<'de, D>(deserializer: D) -> Result<DeviceId, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        DeviceId::parse(&raw).map_err(D::Error::custom)
+    }
 
-fn deserialize_verified_store_id<'de, D>(deserializer: D) -> Result<StoreId, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let raw = String::deserialize(deserializer)?;
-    StoreId::parse(&raw).map_err(D::Error::custom)
+    fn deserialize_store_id<'de, D>(deserializer: D) -> Result<StoreId, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        StoreId::parse(&raw).map_err(D::Error::custom)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]

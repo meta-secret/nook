@@ -3,6 +3,12 @@
 //! Host adapters supply raw configuration values. Core decides which values
 //! are safe to honor and provides production-safe defaults.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 pub const DEFAULT_VAULT_IDLE_TIMEOUT_MS: u32 = 5 * 60_000;
 pub const DEFAULT_VAULT_IDLE_WARNING_MS: u32 = 30_000;
 pub const MIN_VAULT_IDLE_TIMEOUT_MS: u32 = 1_000;
@@ -81,7 +87,7 @@ impl VaultRuntimePolicy {
         if !self.allow_fast_idle() {
             return DEFAULT_VAULT_IDLE_TIMEOUT_MS.into();
         }
-        parse_config_millis(raw, MIN_VAULT_IDLE_TIMEOUT_MS)
+        Self::parse_config_millis(raw, MIN_VAULT_IDLE_TIMEOUT_MS)
             .unwrap_or(DEFAULT_VAULT_IDLE_TIMEOUT_MS)
             .into()
     }
@@ -94,7 +100,7 @@ impl VaultRuntimePolicy {
         if !self.allow_fast_idle() {
             return DEFAULT_VAULT_IDLE_WARNING_MS.into();
         }
-        parse_config_millis(raw, 0)
+        Self::parse_config_millis(raw, 0)
             .unwrap_or(DEFAULT_VAULT_IDLE_WARNING_MS)
             .into()
     }
@@ -107,22 +113,21 @@ impl VaultRuntimePolicy {
         if !self.allow_fast_sync() {
             return DEFAULT_VAULT_SYNC_INTERVAL_MS.into();
         }
-        parse_config_millis(raw, MIN_VAULT_SYNC_INTERVAL_MS)
+        Self::parse_config_millis(raw, MIN_VAULT_SYNC_INTERVAL_MS)
             .unwrap_or(DEFAULT_VAULT_SYNC_INTERVAL_MS)
             .into()
     }
-}
-
-fn parse_config_millis(raw: RuntimeConfigValue<'_>, min: u32) -> Result<u32, ()> {
-    let RuntimeConfigValue::Set(raw) = raw else {
-        return Err(());
-    };
-    let raw = raw.trim();
-    if raw.is_empty() {
-        return Err(());
+    fn parse_config_millis(raw: RuntimeConfigValue<'_>, min: u32) -> Result<u32, ()> {
+        let RuntimeConfigValue::Set(raw) = raw else {
+            return Err(());
+        };
+        let raw = raw.trim();
+        if raw.is_empty() {
+            return Err(());
+        }
+        let value = raw.parse::<u32>().map_err(|_| ())?;
+        if value >= min { Ok(value) } else { Err(()) }
     }
-    let value = raw.parse::<u32>().map_err(|_| ())?;
-    if value >= min { Ok(value) } else { Err(()) }
 }
 
 #[cfg(test)]
