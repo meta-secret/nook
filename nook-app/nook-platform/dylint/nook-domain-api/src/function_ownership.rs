@@ -247,3 +247,27 @@ impl<'tcx> LateLintPass<'tcx> for FunctionOwnership {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::FunctionOwnership;
+
+    #[test]
+    fn test_only_configuration_requires_positive_test_gate() {
+        assert!(FunctionOwnership::is_test_only_configuration(
+            "#[cfg(test)]"
+        ));
+        assert!(FunctionOwnership::is_test_only_configuration(
+            "#[cfg(all(test, feature = \"fixtures\"))]"
+        ));
+        assert!(!FunctionOwnership::is_test_only_configuration(
+            "#[cfg(not(test))]"
+        ));
+        assert!(!FunctionOwnership::is_test_only_configuration(
+            "#[cfg(any(test, feature = \"fixtures\"))]"
+        ));
+        assert!(!FunctionOwnership::is_test_only_configuration(
+            "#[cfg_attr(test, allow(dead_code))]"
+        ));
+    }
+}
