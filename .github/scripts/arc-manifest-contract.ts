@@ -995,12 +995,13 @@ for (const [label, frame] of [
     );
   }
 }
-const activeRunnerSelector = workerInstallSource.match(
+const activeRunnerSelectorMatch = workerInstallSource.match(
   /active_runners=.*?\| jq \\\s*\n\s*'([^']+)'/s,
-)?.[1];
-if (activeRunnerSelector === undefined) {
+);
+if (!Array.isArray(activeRunnerSelectorMatch)) {
   throw new Error("k0s worker install active-runner selector is missing");
 }
+const activeRunnerSelector = activeRunnerSelectorMatch[1];
 const activeRunnerSelection = Bun.spawnSync({
   cmd: [
     "jq",
@@ -1009,13 +1010,13 @@ const activeRunnerSelection = Bun.spawnSync({
     "input",
     JSON.stringify({
       items: [
-        { metadata: { deletionTimestamp: null }, status: { phase: "Pending" } },
-        { metadata: { deletionTimestamp: null }, status: { phase: "Running" } },
+        { metadata: {}, status: { phase: "Pending" } },
+        { metadata: {}, status: { phase: "Running" } },
         {
           metadata: { deletionTimestamp: "2026-09-08T05:17:03Z" },
           status: { phase: "Running" },
         },
-        { metadata: { deletionTimestamp: null }, status: { phase: "Succeeded" } },
+        { metadata: {}, status: { phase: "Succeeded" } },
       ],
     }),
     `$input | ${activeRunnerSelector}`,

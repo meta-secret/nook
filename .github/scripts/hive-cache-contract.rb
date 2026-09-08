@@ -42,9 +42,17 @@ docker_setup_selection = docker_setup_action.dig("inputs", "cache-selection")
 docker_setup_cache_script = docker_setup_action.fetch("runs").fetch("steps").find do |step|
   step["name"] == "Select hosted BuildKit cache"
 end&.fetch("run", "")
+docker_setup_cache_selections = %w[
+  general native wasm wasm-proof preflight web-e2e hive connection-only
+]
+docker_setup_cache_selection_case = docker_setup_cache_selections.join("|")
+docker_setup_cache_selection_error =
+  "cache-selection must be general, native, wasm, wasm-proof, preflight, " \
+  "web-e2e, hive, or connection-only"
 unless docker_setup_selection&.fetch("default") == "general" &&
-       docker_setup_cache_script.include?("general|hive|connection-only") &&
-       docker_setup_cache_script.include?("cache-selection must be general, hive, or connection-only") &&
+       docker_setup_cache_script.match?(
+         /case "\$cache_selection" in\s+#{Regexp.escape(docker_setup_cache_selection_case)}\) ;;\s+\*\).*?#{Regexp.escape(docker_setup_cache_selection_error)}.*?exit 1\s+;;\s+esac/m
+       ) &&
        docker_setup_cache_script.include?('if [ "$cache_selection" = "general" ]; then') &&
        docker_setup_cache_script.match?(
          /case "\$cache_selection" in\s+general\|hive\)\s+hive_remote_ref=.*?\s+;;\s+esac/m
@@ -52,14 +60,19 @@ unless docker_setup_selection&.fetch("default") == "general" &&
   raise "Docker setup cache selection must be closed, validated, and general by default"
 end
 
-general_probe_start = docker_setup_cache_script.index(
-  'if [ "$cache_selection" = "general" ]; then'
-)
-general_probe_end = docker_setup_cache_script.index(
+profile_probe_end = docker_setup_cache_script.index(
   'echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1"',
-  general_probe_start
 )
 hive_probe_start = docker_setup_cache_script.index('if [ -n "$hive_remote_ref" ]; then')
+non_hive_probe_guards = [
+  'general|native|wasm|wasm-proof)',
+  'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then',
+  'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then',
+  'if [ "$cache_selection" = "general" ]; then',
+  'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then',
+  'if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then',
+  'general|native|wasm|preflight|web-e2e)'
+]
 irrelevant_hive_probes = [
   "GHA_CACHE_EXACT_RUST_BASE_AVAILABLE",
   "GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE",
@@ -76,11 +89,12 @@ irrelevant_hive_probes = [
   "GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE",
   "GHA_CACHE_EXACT_WEB_E2E_AVAILABLE"
 ]
-unless general_probe_start && general_probe_end && hive_probe_start &&
-       general_probe_end < hive_probe_start &&
+unless profile_probe_end && hive_probe_start &&
+       profile_probe_end < hive_probe_start &&
+       non_hive_probe_guards.all? { |guard| docker_setup_cache_script.include?(guard) } &&
        irrelevant_hive_probes.all? do |probe|
          probe_index = docker_setup_cache_script.index(probe)
-         probe_index && general_probe_start < probe_index && probe_index < general_probe_end
+         probe_index && probe_index < profile_probe_end
        end
   raise "Hive cache selection must not issue general Rust, WASM, preflight, or web probes"
 end
