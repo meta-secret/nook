@@ -62,7 +62,7 @@ is_frontend_authorization_timeout() {
   ' "$log_file"
 }
 
-report_cache_export_phases() {
+report_buildkit_cache_diagnostics() {
   local log_file="$1"
   local label="$2"
   awk -v label="$label" '
@@ -87,10 +87,6 @@ report_cache_export_phases() {
       }
     }
   ' "$log_file"
-}
-
-report_buildkit_faults() {
-  local log_file="$1"
   if grep -Fqi 'fatal error: concurrent map writes' "$log_file"; then
     echo "::error title=BuildKit concurrent-map fault::The selected BuildKit shard reported concurrent map writes; inspect the shard logs and remove it from service before retrying"
   fi
@@ -108,8 +104,7 @@ for attempt in 1 2; do
   "$@" 2>&1 | tee -a "$log_file"
   status=${PIPESTATUS[0]}
   set -e
-  report_cache_export_phases "$log_file" "$label"
-  report_buildkit_faults "$log_file"
+  report_buildkit_cache_diagnostics "$log_file" "$label"
   if [ "$status" -eq 0 ]; then
     exit 0
   fi

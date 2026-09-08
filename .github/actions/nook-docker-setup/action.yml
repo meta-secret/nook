@@ -326,14 +326,14 @@ runs:
         esac
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
-          # Native consumes the base, native dependency, and complete native source scopes.
-          # Main-source availability is distinct only for git-scoped isolated restores.
+          # Native consumes exact dependency scopes and the complete native source graph.
+          # Main source also owns fresh dependency-only restores after publication.
           publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
           if [ -n "$scope_suffix" ]; then
-            publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
           fi
+          publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
         fi
 
         if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then

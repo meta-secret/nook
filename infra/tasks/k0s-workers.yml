@@ -754,12 +754,10 @@ tasks:
         fi
         sudo -n systemctl is-active --quiet k0sworker.service'
         encoded_program="$(printf '%s' "$remote_program" | base64 | tr -d '\n')"
-        {
-          printf '%s\n' "$encoded_program"
-          printf '%s' "$token"
-        } |
-          ssh -o BatchMode=yes -J "$controller_target" "$worker_target" \
-            "bash '$remote_dir/infra/k0s/scripts/k0s-worker-restore-transport' '$worker_mesh_address' '$worker_arc_tier'"
+        printf '%s' "$token" |
+          bun "{{.REPO_ROOT}}/.github/scripts/k0s-worker-restore-transport.ts" \
+            "$controller_target" "$worker_target" "$worker_mesh_address" \
+            "$worker_arc_tier" "$encoded_program"
         token=
 
         ssh -o BatchMode=yes "$controller_target" bash -s -- \

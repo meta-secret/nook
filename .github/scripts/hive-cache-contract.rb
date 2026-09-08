@@ -102,6 +102,21 @@ end
 rust_bake = File.read(File.join(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl"))
 wasm_bake = File.read(File.join(root, "nook-app/nook-platform/nook-wasm/docker-bake.hcl"))
 core_bake = File.read(File.join(root, "nook-app/nook-platform/nook-core/docker-bake.hcl"))
+rust_deps_restore = rust_bake.match(
+  /rust_deps_cache_from = (?<body>.*?)\n\nrust_deps_cache_to/m
+)&.[](:body)
+unless rust_deps_restore&.include?("GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE") &&
+       rust_deps_restore.include?("nook-rust-native-source-v4:buildcache") &&
+       !rust_deps_restore.include?("nook/buildcache/nook-rust-deps-v4:buildcache")
+  raise "Native dependency restores must follow the one fresh Main source graph"
+end
+deterministic_restore = rust_bake.match(
+  /rust_ecosystem_deterministic_cache_from = (?<body>.*?)\n\nrust_ecosystem_deterministic_cache_to/m
+)&.[](:body)
+unless deterministic_restore&.include?("nook-rust-native-source-v4:buildcache") &&
+       !deterministic_restore.include?("nook/buildcache/nook-rust-deps-v4:buildcache")
+  raise "Native ecosystem restores must not consume the stale Main dependency ref"
+end
 rust_product = File.read(File.join(root, "nook-app/nook-platform/docker/rust/product.Dockerfile"))
 node_deps_start = rust_product.index("FROM wasm-coverage-toolchain AS builder-wasm-node-deps")
 node_source_join = rust_product.index("FROM builder-wasm-node-deps AS builder-wasm-handoff")
