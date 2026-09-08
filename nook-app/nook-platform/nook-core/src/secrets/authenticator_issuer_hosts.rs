@@ -131,7 +131,10 @@ mod tests {
     use super::*;
 
     fn bundled() -> &'static AuthenticatorIssuerHosts {
-        AuthenticatorIssuerHosts::bundled().expect("bundled issuer catalog")
+        match AuthenticatorIssuerHosts::bundled() {
+            Some(catalog) => catalog,
+            None => panic!("bundled issuer catalog"),
+        }
     }
 
     #[test]
