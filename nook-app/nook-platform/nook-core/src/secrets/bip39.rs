@@ -338,7 +338,7 @@ mod tests {
         assert_eq!(
             Bip39WordSequenceRequest {
                 text: "abandon notaword",
-                expected_word_count: 12.into(),
+                expected_word_count: 2.into(),
             }
             .validate(),
             Bip39WordSequenceValidation::UnknownWord
