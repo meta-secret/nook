@@ -151,9 +151,8 @@ describe('authentication workflow snapshot messages', () => {
     const inheritedDisclosureEnvelopePrototype: { kind: string } = {
       kind: 'absent',
     }
-    const inheritedDisclosureEnvelope: object = Object.create(
-      inheritedDisclosureEnvelopePrototype,
-    )
+    const inheritedDisclosureEnvelope: { readonly kind?: unknown } =
+      Object.create(inheritedDisclosureEnvelopePrototype)
     for (const credentialDisclosureControl of [
       JSON.parse('null'),
       inheritedDisclosureEnvelope,

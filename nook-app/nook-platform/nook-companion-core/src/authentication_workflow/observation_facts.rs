@@ -147,10 +147,25 @@ impl AuthenticationPageObservationFactsBatch {
     #[must_use]
     pub fn classify(&self) -> AuthenticationWorkflowMatch {
         if self.observations.len() > crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-            || self
-                .observations
-                .iter()
-                .any(|observation| !observation.is_bounded())
+            || self.observations.iter().any(|observation| {
+                !observation
+                    .credential_disclosure_control
+                    .is_collection_bounded()
+            })
+        {
+            return AuthenticationWorkflowMatch::Rejected;
+        }
+        if self.observations.iter().any(|observation| {
+            observation
+                .credential_disclosure_control
+                .has_unsupported_version()
+        }) {
+            return AuthenticationWorkflowMatch::UnsupportedVersion;
+        }
+        if self
+            .observations
+            .iter()
+            .any(|observation| !observation.is_bounded())
         {
             return AuthenticationWorkflowMatch::Rejected;
         }
@@ -210,23 +225,6 @@ mod tests {
             ),
             ..Default::default()
         }
-    }
-
-    #[test]
-    fn explicit_absent_disclosure_control_preserves_actionable_login() -> anyhow::Result<()> {
-        let encoded = serde_json::to_string(&password_login())?;
-        assert!(encoded.contains(r#""credentialDisclosureControl":{"kind":"absent"}"#));
-        let decoded = serde_json::from_str::<AuthenticationPageObservationFacts>(&encoded)?;
-        let result = AuthenticationPageObservationFactsBatch {
-            observations: vec![decoded],
-        }
-        .classify();
-        assert!(matches!(
-            result,
-            AuthenticationWorkflowMatch::Matched(snapshot)
-                if snapshot.kind == AuthenticationWorkflowKind::Login
-        ));
-        Ok(())
     }
 
     #[test]

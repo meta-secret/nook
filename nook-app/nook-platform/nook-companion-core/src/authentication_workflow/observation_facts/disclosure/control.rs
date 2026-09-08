@@ -302,26 +302,150 @@ pub enum AuthenticationCredentialDisclosureControlObservation {
 }
 
 impl AuthenticationCredentialDisclosureControlObservation {
-    pub(in crate::authentication_workflow::observation_facts) fn is_bounded(&self) -> bool {
+    pub(in crate::authentication_workflow::observation_facts) fn is_collection_bounded(
+        &self,
+    ) -> bool {
         matches!(self, Self::Absent)
             || matches!(self, Self::Observed(observations)
-            if !observations.is_empty()
-                && observations.len() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize
-                && observations.iter().all(
+                if !observations.is_empty()
+                    && observations.len() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize)
+    }
+
+    pub(in crate::authentication_workflow::observation_facts) fn has_unsupported_version(
+        &self,
+    ) -> bool {
+        matches!(self, Self::Observed(observations) if observations.iter().any(|observation| {
+            matches!(
+                observation.classify(),
+                AuthenticationDisclosureControlDecision::UnsupportedVersion
+            )
+        }))
+    }
+
+    pub(in crate::authentication_workflow::observation_facts) fn is_bounded(&self) -> bool {
+        self.is_collection_bounded()
+            && (matches!(self, Self::Absent)
+                || matches!(self, Self::Observed(observations)
+                if observations.iter().all(
                     VersionedAuthenticationDisclosureControlObservation::is_bounded
-                ))
+                )))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::AuthenticationPageObservationFacts;
     use crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
+    use crate::{
+        AuthenticationDetailedAdvanceControlObservation, AuthenticationFieldObservationFacts,
+        AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
+        AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    };
 
     struct ExactDisclosureControlScenario;
 
     impl ExactDisclosureControlScenario {
+        fn password_login_facts() -> AuthenticationPageObservationFacts {
+            AuthenticationPageObservationFacts {
+                fields: AuthenticationFieldObservationFacts {
+                    username_field_count: 1.into(),
+                    current_password_field_count: 1.into(),
+                    actionable_password_field_count: 1.into(),
+                    ..Default::default()
+                },
+                detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
+                    AuthenticationAdvanceControlObservation {
+                        actionability: PageControlActionability::Actionable,
+                        ownership: PageControlOwnership::OwnedForm,
+                        semantics: PageControlSemantics::SemanticSubmit,
+                        authentication_username: AuthenticationUsernameEvidence::Strong,
+                        password_field_count: 1.into(),
+                        new_password_field_count: 0.into(),
+                        one_time_code_field_count: 0.into(),
+                        semantic_submit_control_count: 1.into(),
+                        source_origin: "https://example.test".to_owned(),
+                        form_identity: "login".to_owned(),
+                        destination_identity: "https://example.test/login".to_owned(),
+                        label: "Continue".to_owned(),
+                        machine_identity: String::new(),
+                        submission_method: PageControlSubmissionMethod::Absent,
+                        submission_destination_source:
+                            PageControlSubmissionDestinationSource::Authored,
+                    },
+                ),
+                ..Default::default()
+            }
+        }
+
+        fn assert_explicit_absent_preserves_actionable_login() -> anyhow::Result<()> {
+            let encoded = serde_json::to_string(&Self::password_login_facts())?;
+            assert!(encoded.contains(r#""credentialDisclosureControl":{"kind":"absent"}"#));
+            let decoded = serde_json::from_str::<AuthenticationPageObservationFacts>(&encoded)?;
+            assert!(matches!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![decoded],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::Matched(snapshot)
+                    if snapshot.kind == AuthenticationWorkflowKind::Login
+            ));
+            Ok(())
+        }
+
+        fn assert_page_facts_preserve_unsupported_version() -> anyhow::Result<()> {
+            let mut encoded = serde_json::to_value(Self::password_login_facts())?;
+            encoded["credentialDisclosureControl"] = serde_json::json!({
+                "kind": "observed",
+                "observations": [{ "schemaVersion": 2 }]
+            });
+            let decoded = serde_json::from_value::<AuthenticationPageObservationFacts>(encoded)?;
+            assert_eq!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![decoded],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::UnsupportedVersion
+            );
+            Ok(())
+        }
+
+        fn assert_oversized_collections_precede_unsupported_version() -> anyhow::Result<()> {
+            let unsupported = serde_json::from_value::<
+                VersionedAuthenticationDisclosureControlObservation,
+            >(serde_json::json!({ "schemaVersion": 2 }))?;
+            let mut nested_oversized = Self::password_login_facts();
+            nested_oversized.credential_disclosure_control =
+                AuthenticationCredentialDisclosureControlObservation::Observed(vec![
+                    unsupported
+                        .clone();
+                    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+                        as usize
+                        + 1
+                ]);
+            assert_eq!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![nested_oversized],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::Rejected
+            );
+
+            let mut unsupported_facts = Self::password_login_facts();
+            unsupported_facts.credential_disclosure_control =
+                AuthenticationCredentialDisclosureControlObservation::Observed(vec![unsupported]);
+            assert_eq!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![
+                        unsupported_facts;
+                        crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1
+                    ],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::Rejected
+            );
+            Ok(())
+        }
+
         fn control(
             actionability: PageControlActionability,
         ) -> VersionedAuthenticationDisclosureControlObservation {
@@ -570,6 +694,21 @@ mod tests {
     #[test]
     fn unsupported_version_is_typed_and_round_trips() -> anyhow::Result<()> {
         ExactDisclosureControlScenario::assert_unsupported_version_is_typed_and_round_trips()
+    }
+
+    #[test]
+    fn page_facts_preserve_unsupported_version() -> anyhow::Result<()> {
+        ExactDisclosureControlScenario::assert_page_facts_preserve_unsupported_version()
+    }
+
+    #[test]
+    fn oversized_collections_precede_unsupported_version() -> anyhow::Result<()> {
+        ExactDisclosureControlScenario::assert_oversized_collections_precede_unsupported_version()
+    }
+
+    #[test]
+    fn explicit_absent_preserves_actionable_login() -> anyhow::Result<()> {
+        ExactDisclosureControlScenario::assert_explicit_absent_preserves_actionable_login()
     }
 
     #[test]

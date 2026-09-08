@@ -210,6 +210,35 @@ describe('authentication workflow routing', () => {
     })
   })
 
+  test('preserves unsupported observation versions as a typed failure', async () => {
+    const dependencies = {
+      companionWasmReady: Promise.resolve(),
+      authenticationPasskeyEvidenceIsSafe: () => false,
+      matchingPasskeyAvailabilityForOriginSafe: async () => ({
+        kind: 'ready',
+        accountCount: 0,
+      }),
+      authenticationWorkflowSnapshot: async () => ({
+        kind: 'unsupported-version',
+      }),
+      authenticationWorkflowSavedLoginCapability: () => 'unavailable',
+      authenticationWorkflowRequiresLoginMatchAvailability: () => false,
+      websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
+    } as AuthenticationWorkflowRoutingDependencies
+    const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
+      { message, sender, dependencies }
+
+    await expect(
+      authenticationWorkflowMessageResponse(request),
+    ).resolves.toEqual({
+      workflow: {
+        ok: false,
+        reason: 'unsupported-authentication-observation-version',
+      },
+      loginMatches: { kind: 'unavailable' },
+    })
+  })
+
   test('preserves non-passkey classification when lookup is unavailable', async () => {
     const observedAvailability: string[] = []
     const dependencies = {

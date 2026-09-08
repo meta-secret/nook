@@ -53,7 +53,12 @@ export function authenticationWorkflowRequiresLoginMatchAvailability(
 export type AuthenticationWorkflowRoutingResponse = {
   workflow:
     | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
-    | { ok: false; reason: 'workflow-snapshot-failed' }
+    | {
+        ok: false
+        reason:
+          | 'workflow-snapshot-failed'
+          | 'unsupported-authentication-observation-version'
+      }
   loginMatches: WebsiteLoginMatchAvailability
   selectedFacts?: AuthenticationPageObservationView
 }
@@ -131,6 +136,15 @@ export async function authenticationWorkflowMessageResponse({
       observations,
     }
     const result = await authenticationWorkflowSnapshot(snapshotRequest)
+    if (result.kind === 'unsupported-version') {
+      return {
+        workflow: {
+          ok: false,
+          reason: 'unsupported-authentication-observation-version',
+        },
+        loginMatches: { kind: 'unavailable' },
+      }
+    }
     if ('snapshot' in result) {
       const selectedFacts = observations[result.snapshot.observationIndex]
       if (!selectedFacts) {

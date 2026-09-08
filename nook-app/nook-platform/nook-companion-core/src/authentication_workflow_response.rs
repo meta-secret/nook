@@ -90,6 +90,9 @@ pub enum AuthenticationWorkflowSnapshotResponse {
         kind: AuthenticationWorkflowSnapshotResponseKind,
         reason: String,
     },
+    UnsupportedVersion {
+        kind: AuthenticationWorkflowSnapshotResponseKind,
+    },
 }
 
 #[wasm_bindgen]
@@ -98,6 +101,7 @@ pub enum AuthenticationWorkflowSnapshotResponseKind {
     Matched,
     NoMatch,
     Rejected,
+    UnsupportedVersion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -195,6 +199,13 @@ pub fn decode_authentication_workflow_snapshot_response(
         ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
             kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
         }),
+        AuthenticationWorkflowSnapshotResponseWire::Rejected(
+            AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
+        ) if reason == "unsupported-authentication-observation-version" => {
+            Ok(AuthenticationWorkflowSnapshotResponse::UnsupportedVersion {
+                kind: AuthenticationWorkflowSnapshotResponseKind::UnsupportedVersion,
+            })
+        }
         AuthenticationWorkflowSnapshotResponseWire::Rejected(
             AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
         ) if !reason.trim().is_empty() => Ok(AuthenticationWorkflowSnapshotResponse::Rejected {
@@ -361,6 +372,16 @@ mod tests {
             AuthenticationWorkflowSnapshotResponse::Rejected {
                 kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
                 reason: "vault-locked".to_owned(),
+            }
+        );
+
+        let unsupported = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+            r#"{"ok":false,"reason":"unsupported-authentication-observation-version"}"#,
+        )?;
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(unsupported)?,
+            AuthenticationWorkflowSnapshotResponse::UnsupportedVersion {
+                kind: AuthenticationWorkflowSnapshotResponseKind::UnsupportedVersion,
             }
         );
 

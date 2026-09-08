@@ -211,7 +211,7 @@ class AuthenticationPageObservationWireContract {
   private static hasDisclosureControlEnvelope(value: unknown): boolean {
     if (typeof value !== 'object') return false
     try {
-      return Object.hasOwn(value as object, 'kind')
+      return Object.hasOwn(value as { readonly kind?: unknown }, 'kind')
     } catch {
       return false
     }

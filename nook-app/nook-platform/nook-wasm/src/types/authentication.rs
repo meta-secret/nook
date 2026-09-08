@@ -89,6 +89,7 @@ pub enum NookAuthenticationWorkflowMatchState {
     NoMatch,
     Rejected,
     Matched,
+    UnsupportedVersion,
 }
 
 #[wasm_bindgen]
@@ -107,6 +108,9 @@ impl NookAuthenticationWorkflowMatch {
         match self.0 {
             AuthenticationWorkflowMatch::NoMatch => NookAuthenticationWorkflowMatchState::NoMatch,
             AuthenticationWorkflowMatch::Rejected => NookAuthenticationWorkflowMatchState::Rejected,
+            AuthenticationWorkflowMatch::UnsupportedVersion => {
+                NookAuthenticationWorkflowMatchState::UnsupportedVersion
+            }
             AuthenticationWorkflowMatch::Matched(_) => {
                 NookAuthenticationWorkflowMatchState::Matched
             }
@@ -120,6 +124,9 @@ impl NookAuthenticationWorkflowMatch {
             }
             AuthenticationWorkflowMatch::Rejected => Err(JsError::new(
                 "authentication workflow observations were rejected",
+            )),
+            AuthenticationWorkflowMatch::UnsupportedVersion => Err(JsError::new(
+                "authentication workflow observation version is unsupported",
             )),
             AuthenticationWorkflowMatch::Matched(snapshot) => {
                 Ok(NookAuthenticationWorkflowSnapshot::from_core(snapshot))
@@ -471,6 +478,14 @@ mod browser_tests {
             NookAuthenticationWorkflowMatchState::Rejected
         );
         assert!(rejected.snapshot().is_err());
+        let unsupported = NookAuthenticationWorkflowMatch::from_core(
+            AuthenticationWorkflowMatch::UnsupportedVersion,
+        );
+        assert_eq!(
+            unsupported.state(),
+            NookAuthenticationWorkflowMatchState::UnsupportedVersion
+        );
+        assert!(unsupported.snapshot().is_err());
 
         for (verdict, allows) in [
             (AuthenticationOutcomeVerdict::Sufficient, true),
