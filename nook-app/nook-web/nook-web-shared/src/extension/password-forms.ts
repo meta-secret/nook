@@ -1,5 +1,8 @@
 import { companionWasmReady } from "./companion-ready";
-import { assembleAuthenticationPageObservationFacts } from "./authentication-page-observation-facts";
+import {
+  assembleAuthenticationPageObservationFacts,
+  type AuthenticationPageObservationFactsAssemblyRequest,
+} from "./authentication-page-observation-facts";
 import {
   authentication_advance_control_is_safe,
   authentication_page_observation_facts_priority,
@@ -586,7 +589,7 @@ export function authenticationPageObservationFacts({
       },
     };
   }
-  return assembleAuthenticationPageObservationFacts({
+  const assemblyRequest: AuthenticationPageObservationFactsAssemblyRequest = {
     summary: observation.summary,
     actionablePasswordFieldCount:
       passwordFields.length - readonlyPasswordFieldCount,
@@ -609,7 +612,8 @@ export function authenticationPageObservationFacts({
     detailedPasskeyControl,
     credentialSubmission,
     detailedAdvanceControl,
-  });
+  };
+  return assembleAuthenticationPageObservationFacts(assemblyRequest);
 }
 export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
   const root = document;

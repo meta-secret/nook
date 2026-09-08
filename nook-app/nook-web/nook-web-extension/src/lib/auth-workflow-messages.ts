@@ -132,12 +132,8 @@ function isDetailedAdvanceControl(
 }
 
 function isCredentialDisclosureControlAbsent(value: unknown): boolean {
-  return (
-    Boolean(value) &&
-    typeof value === 'object' &&
-    'kind' in value &&
-    value.kind === 'absent'
-  )
+  if (!value || typeof value !== 'object' || !('kind' in value)) return false
+  return value.kind === 'absent'
 }
 
 function isDetailedPasskeyControl(

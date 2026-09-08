@@ -131,8 +131,11 @@ describe('authentication workflow snapshot messages', () => {
 
   test('rejects observations that omit disclosure-control state', () => {
     const observation = validMessage.payload.observations[0]
-    const { credentialDisclosureControl: _omitted, ...withoutDisclosure } =
-      observation
+    const {
+      credentialDisclosureControl: omittedDisclosure,
+      ...withoutDisclosure
+    } = observation
+    expect(omittedDisclosure).toEqual({ kind: 'absent' })
     expect(
       isAuthenticationWorkflowSnapshotMessage({
         ...validMessage,
