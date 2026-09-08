@@ -1,11 +1,14 @@
 use super::{NookVaultManager, VaultNameState};
 use nook_companion_core::{
-    AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint,
+    AdmittedCompanionPairingApproval, CompanionExtensionPairingEndpoint, CompanionPairingApproval,
     CompanionPairingApprovalAttempt, CompanionPairingFailure, CompanionPairingRequest,
     ConsumedCompanionPairingAuthority, ExtensionConnectScope,
 };
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+mod activation;
+pub use activation::NookPreparedCompanionPairingActivation;
 
 #[wasm_bindgen]
 pub struct NookCompanionPairingExtensionEndpoint {
@@ -114,8 +117,9 @@ impl NookCompanionPairingApprovalAuthority {
             .authenticate_credentials_for(&identity)
             .map_err(|_| CompanionPairingFailure::ProviderRecipientMismatch)?;
         Ok(NookPrevalidatedCompanionPairingApproval {
-            approval: authorized.admit(),
-            providers,
+            binding: approval.clone(),
+            _approval: authorized.admit(),
+            _providers: providers,
         })
     }
 }
@@ -127,10 +131,9 @@ fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
 /// Opaque proof of a manager-bound approval and its sealed provider snapshot.
 #[wasm_bindgen]
 pub struct NookPrevalidatedCompanionPairingApproval {
-    #[allow(dead_code)]
-    approval: AdmittedCompanionPairingApproval,
-    #[allow(dead_code)]
-    providers: AuthProvidersSnapshotData,
+    binding: CompanionPairingApproval,
+    _approval: AdmittedCompanionPairingApproval,
+    _providers: AuthProvidersSnapshotData,
 }
 
 #[cfg(test)]
@@ -305,11 +308,11 @@ mod tests {
                 )
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
-                admitted.providers.active_vault_store_id.as_deref(),
+                admitted._providers.active_vault_store_id.as_deref(),
                 Some("store-1")
             );
             assert_eq!(
-                admitted.providers.providers.len(),
+                admitted._providers.providers.len(),
                 usize::from(with_provider)
             );
         }

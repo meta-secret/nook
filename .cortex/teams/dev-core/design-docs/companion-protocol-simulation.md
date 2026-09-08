@@ -195,6 +195,16 @@ Its purpose is deterministic execution, not imitation by expectation.
 - Secret recipient material must not survive completion or rejection.
 - Sentinel extension access remains unrepresentable.
 
+## Inert pairing activation preparation
+
+This slice stops after Rust validates a prevalidated approval against typed event
+records and produces an opaque prepared typestate. Preparation has no storage,
+publication, acknowledgement, or live-reader effect and exposes no authority.
+
+The serial activation-storage PR owns manager revalidation, effect-time expiry,
+DEK access, candidate persistence, integrity gates, replay handling, and loading.
+Later adoption still owns live-reader integration, reset, and migration semantics.
+
 ## Sequential delivery
 
 ### Framework PR

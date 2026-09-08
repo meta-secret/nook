@@ -9,9 +9,9 @@ use crate::{PasswordEnvelope, PasswordUnlockEntry, SecretFingerprint, SentinelSh
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use nook_auth2::{
     AgeArmoredCiphertext, AuthKeyId, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
-    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SecretId, SecretType,
-    SentinelParticipantCount, SentinelShareIndex, SentinelThreshold, Sha256Hex, StoreId,
-    StoredRecordPayload, StoredSecretRecord,
+    IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId, SENTINEL_SHARE_RECORD_PREFIX,
+    SecretId, SecretType, SentinelParticipantCount, SentinelShareIndex, SentinelThreshold,
+    Sha256Hex, StoreId, StoredRecordPayload, StoredSecretRecord,
 };
 use serde::{Deserialize, Serialize, ser::Error as _};
 use serde_json::{Value, json};
@@ -266,6 +266,25 @@ pub enum VaultOperation {
         )]
         password_entries: EpochPasswordState,
     },
+}
+
+impl VaultOperation {
+    /// Whether immutable operation history proves Sentinel architecture.
+    pub(crate) fn is_sentinel_architecture_evidence(&self) -> bool {
+        match self {
+            Self::SentinelParticipantEnrolled { .. } | Self::SentinelSharesIssued { .. } => true,
+            Self::EpochCheckpoint {
+                rotated_meta_records: EpochMetadataState::Replace(records),
+                ..
+            } => records.iter().any(|record| {
+                record
+                    .key
+                    .as_str()
+                    .starts_with(SENTINEL_SHARE_RECORD_PREFIX)
+            }),
+            _ => false,
+        }
+    }
 }
 
 /// Signed event body (everything except the signature field).
@@ -533,6 +552,23 @@ mod tests {
             }
         ));
         Ok(())
+    }
+
+    #[test]
+    fn reserved_sentinel_checkpoint_key_is_architecture_evidence() {
+        let malformed_share = StoredSecretRecord {
+            key: SecretId::from_vault_record("sentinel_share:not-a-device"),
+            secret_type: None,
+            value: StoredRecordPayload::from_trusted("malformed".to_owned()),
+        };
+        let operation = VaultOperation::EpochCheckpoint {
+            secrets: Vec::new(),
+            members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+            rotated_meta_records: EpochMetadataState::Replace(vec![malformed_share]),
+            password_entries: EpochPasswordState::Replace(Vec::new()),
+        };
+
+        assert!(operation.is_sentinel_architecture_evidence());
     }
 
     #[test]
