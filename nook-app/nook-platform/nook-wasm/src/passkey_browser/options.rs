@@ -618,8 +618,10 @@ mod wasm_tests {
         let eval_by_credential = js_sys::Object::new();
         for (name, first_byte, second_byte) in [("first", 7, 8), ("second", 9, 10)] {
             let values = js_sys::Object::new();
-            let first = Uint8Array::new_from_slice(&[first_byte as u8]);
-            let second = Uint8Array::new_from_slice(&[second_byte as u8]);
+            let first = ArrayBuffer::new(1);
+            Uint8Array::new(&first).copy_from(&[first_byte as u8]);
+            let second = ArrayBuffer::new(1);
+            Uint8Array::new(&second).copy_from(&[second_byte as u8]);
             Reflect::set(&values, &JsString::from("first"), first.as_ref())
                 .map_err(|_| JsError::new("failed to set first PRF value"))?;
             Reflect::set(&values, &JsString::from("second"), second.as_ref())
