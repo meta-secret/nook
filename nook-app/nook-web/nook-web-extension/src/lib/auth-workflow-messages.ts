@@ -200,7 +200,7 @@ class AuthenticationPageObservationWireContract {
       typeof authenticator.backupCodesCopy === 'string' &&
       Array.from(authenticator.backupCodesCopy).length <= 128 &&
       ['absent', 'present'].includes(authenticator.passkeyControl) &&
-      this.hasExplicitAbsentDisclosureControl(
+      this.hasDisclosureControlEnvelope(
         observation.credentialDisclosureControl,
       ) &&
       isDetailedAdvanceControl(observation.detailedAdvanceControl) &&
@@ -208,9 +208,12 @@ class AuthenticationPageObservationWireContract {
     )
   }
 
-  private static hasExplicitAbsentDisclosureControl(value: unknown): boolean {
-    if (!value || typeof value !== 'object' || !('kind' in value)) return false
-    return value.kind === 'absent'
+  private static hasDisclosureControlEnvelope(value: unknown): boolean {
+    return (
+      Boolean(value) &&
+      typeof value === 'object' &&
+      Object.hasOwn(value, 'kind')
+    )
   }
 }
 

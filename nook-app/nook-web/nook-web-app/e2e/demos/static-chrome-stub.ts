@@ -121,12 +121,38 @@ export type DemoChromeStubArgs = {
   barcodeRawValue?: string
 }
 
+type DemoRuntimeMessage = {
+  type: string
+  payload?: { secretId?: string; observations?: unknown[] }
+}
+
+class DemoAuthenticationObservationRecorder {
+  private readonly enabled: boolean
+
+  constructor(enabled: boolean) {
+    this.enabled = enabled
+  }
+
+  record(message: DemoRuntimeMessage): void {
+    if (
+      !this.enabled ||
+      message.type !== 'nook:authentication-workflow-snapshot'
+    ) {
+      return
+    }
+    const demoWindow = globalThis as unknown as {
+      __nookDemoAuthenticationObservations?: unknown[][]
+    }
+    demoWindow.__nookDemoAuthenticationObservations = ((value) =>
+      value ? value : [])(demoWindow.__nookDemoAuthenticationObservations)
+    demoWindow.__nookDemoAuthenticationObservations.push(
+      ((value) => (value ? value : []))(message.payload?.observations),
+    )
+  }
+}
+
 /** Self-contained init/evaluate helper shared by Pilot UI demos. */
 export function installDemoChromeStub(args: DemoChromeStubArgs) {
-  type RuntimeMessage = {
-    type: string
-    payload?: { secretId?: string; observations?: unknown[] }
-  }
   type RuntimeCallback = (response?: unknown) => void
   type AuthenticationSnapshotResponse = {
     snapshot?: { observationIndex?: number }
@@ -163,6 +189,8 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     recordAuthenticationObservations = false,
     barcodeRawValue,
   } = args
+  const authenticationObservationRecorder =
+    new DemoAuthenticationObservationRecorder(recordAuthenticationObservations)
   let loginOptionsCalls = 0
   enum StagedOfferKind {
     Empty = 'empty',
@@ -194,7 +222,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     ) => boolean
   > = []
 
-  const responseFor = (message: RuntimeMessage): unknown => {
+  const responseFor = (message: DemoRuntimeMessage): unknown => {
     if (message.type && message.type in responsesByType) {
       return responsesByType[message.type]
     }
@@ -670,7 +698,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
       getURL(resource: string) {
         return resource === 'icons/nook.png' ? '/favicon.png' : resource
       },
-      sendMessage(message: RuntimeMessage, callback?: RuntimeCallback) {
+      sendMessage(message: DemoRuntimeMessage, callback?: RuntimeCallback) {
         if (recordRuntimeMessageTypes && message.type) {
           const demoWindow = globalThis as unknown as {
             __nookDemoRuntimeMessageTypes?: string[]
@@ -680,19 +708,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           )
           demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
         }
-        if (
-          recordAuthenticationObservations &&
-          message.type === 'nook:authentication-workflow-snapshot'
-        ) {
-          const demoWindow = globalThis as unknown as {
-            __nookDemoAuthenticationObservations?: unknown[][]
-          }
-          demoWindow.__nookDemoAuthenticationObservations = ((v) =>
-            v ? v : [])(demoWindow.__nookDemoAuthenticationObservations)
-          demoWindow.__nookDemoAuthenticationObservations.push(
-            ((v) => (v ? v : []))(message.payload?.observations),
-          )
-        }
+        authenticationObservationRecorder.record(message)
         const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {
           message,
           response: responseFor(message),

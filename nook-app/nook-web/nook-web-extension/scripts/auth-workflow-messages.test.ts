@@ -147,6 +147,49 @@ describe('authentication workflow snapshot messages', () => {
     ).toBe(false)
   })
 
+  test('forwards observed disclosure envelopes to the Rust decoder', () => {
+    const observation = validMessage.payload.observations[0]
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [
+            {
+              ...observation,
+              credentialDisclosureControl: {
+                kind: 'observed',
+                observations: [
+                  {
+                    schemaVersion: 1,
+                    observation: {
+                      actionability: 'actionable',
+                      ownership: 'owned-form',
+                      semantics: 'activation',
+                      authenticationUsername: 'explicit',
+                      passwordFieldCount: 1,
+                      newPasswordFieldCount: 0,
+                      oneTimeCodeFieldCount: 0,
+                      semanticSubmitControlCount: 0,
+                      sourceOrigin: 'https://login.example.com',
+                      formIdentity: '',
+                      destinationIdentity: 'https://login.example.com/login',
+                      label: 'Sign in',
+                      machineIdentity: '',
+                      submissionMethod: 'absent',
+                      submissionDestinationSource: 'omitted',
+                    },
+                    genericPasswordFieldCount: 0,
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      }),
+    ).toBe(true)
+  })
+
   test('accepts WebAuthn email evidence from the generated WASM contract', () => {
     const observation = validMessage.payload.observations[0]
     expect(
