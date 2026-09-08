@@ -664,7 +664,8 @@ tasks:
             active_runners="$(kubectl get pods --namespace arc-runners \
               --field-selector "spec.nodeName=$node" \
               -l actions.github.com/scale-set-name -o json | jq \
-              '[.items[] | select(.status.phase == "Pending" or .status.phase == "Running")] | length')"
+              '[.items[] | select(.metadata.deletionTimestamp == null and \
+                (.status.phase == "Pending" or .status.phase == "Running"))] | length')"
             if test "$active_runners" = 0; then
               break
             fi

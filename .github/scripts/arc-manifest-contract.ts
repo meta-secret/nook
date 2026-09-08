@@ -874,7 +874,8 @@ workerTasks.count({
 workerInstall.requireAll([
   "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   "actions.github.com/scale-set-name",
-  'select(.status.phase == "Pending" or .status.phase == "Running")',
+  `select(.metadata.deletionTimestamp == null and \\
+                (.status.phase == "Pending" or .status.phase == "Running"))`,
   "Timed out waiting for $active_runners ARC runner(s) on $node",
   "worker_was_active=false",
   "sudo -n systemctl restart k0sworker.service",
