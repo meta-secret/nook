@@ -388,6 +388,8 @@ function coherentReviewHead(args: {
   );
 }
 
+class EventDecodeError extends Error {}
+
 export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
   let parsed: UntrustedYamlNode;
   try {
@@ -397,16 +399,17 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
       ) as UntrustedYamlNode,
     );
   } catch {
-    throw new Error('event payload is not valid UTF-8 JSON');
+    throw new EventDecodeError('event payload is not valid UTF-8 JSON');
   }
-  if (!isRecord(parsed)) throw new Error('event payload must be an object');
+  if (!isRecord(parsed))
+    throw new EventDecodeError('event payload must be an object');
   const encodedData = property({ record: parsed, key: 'data_base64' });
   if (
     typeof encodedData !== 'string' ||
     encodedData.length % 4 !== 0 ||
     !/^[A-Za-z0-9+/]+={0,2}$/.test(encodedData)
   ) {
-    throw new Error('event envelope is invalid');
+    throw new EventDecodeError('event envelope is invalid');
   }
   let eventData: UntrustedYamlNode;
   try {
@@ -415,13 +418,13 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
     );
     eventData = asUntrustedYamlNode(JSON.parse(decoded) as UntrustedYamlNode);
   } catch {
-    throw new Error('event data is invalid');
+    throw new EventDecodeError('event data is invalid');
   }
-  if (!isRecord(eventData)) throw new Error('event data is invalid');
+  if (!isRecord(eventData)) throw new EventDecodeError('event data is invalid');
   const headers = property({ record: eventData, key: 'headers' });
   const body = property({ record: eventData, key: 'body' });
   if (!isRecord(headers) || !isRecord(body))
-    throw new Error('event data is invalid');
+    throw new EventDecodeError('event data is invalid');
 
   const id = boundedText({
     value: property({ record: parsed, key: 'id' }),
@@ -446,7 +449,7 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
     githubEvent === false ||
     deliveryId === false
   )
-    throw new Error('event identity is invalid');
+    throw new EventDecodeError('event identity is invalid');
 
   const action = boundedText({
     value: property({ record: body, key: 'action' }),
@@ -543,10 +546,16 @@ export async function writeAssignedEvents(args: {
   readonly write: (line: string) => void;
 }): Promise<void> {
   for await (const message of args.messages) {
-    const event = assignedPrEvent({
-      data: message.data,
-      pullRequest: args.pullRequest,
-    });
+    let event: PrStewardRoutingHint | false;
+    try {
+      event = assignedPrEvent({
+        data: message.data,
+        pullRequest: args.pullRequest,
+      });
+    } catch (error) {
+      if (error instanceof EventDecodeError) continue;
+      throw error;
+    }
     if (event !== false) args.write(`${JSON.stringify(event)}\n`);
   }
 }

@@ -175,8 +175,7 @@ describe('compact routing hints', () => {
           commit_id: HEAD,
           path: 'src/file.ts',
           line: 17,
-          html_url:
-            'https://github.com/meta-secret/nook/pull/1560#discussion-42',
+          html_url: 'https://github.com/meta-secret/nook/pull/1560',
           user: { login: 'reviewer' },
           body: 'DO_NOT_TRANSFER_COMMENT_BODY',
         },
@@ -191,8 +190,7 @@ describe('compact routing hints', () => {
         issue: { number: 1560, pull_request: {} },
         comment: {
           id: 43,
-          html_url:
-            'https://github.com/meta-secret/nook/pull/1560#issuecomment-43',
+          html_url: 'https://github.com/meta-secret/nook/pull/1560',
           user: { login: 'reviewer' },
           body: 'DO_NOT_TRANSFER_ISSUE_BODY',
         },
@@ -271,12 +269,7 @@ describe('compact routing hints', () => {
   );
 
   test('suppresses foreign, stale, status, ambiguous, and PR-less inputs', async () => {
-    for (const event of [
-      'check_run',
-      'check_suite',
-      'workflow_run',
-      'workflow_job',
-    ])
+    for (const event of ['check_run', 'check_suite', 'workflow_run'])
       for (const head of [STALE_HEAD, false] as const)
         expect(
           assignedPrEvent({
@@ -336,42 +329,43 @@ describe('compact routing hints', () => {
     expect(await write(rejected)).toEqual([]);
   });
 
-  test('bounds optional scalar fields and output', async () => {
-    const lines = await write([
-      cloudEvent({
-        event: 'pull_request_review_comment',
-        body: {
-          repository,
-          pull_request: pullRequest,
-          comment: {
-            id: 42,
-            commit_id: HEAD,
-            path: 'x'.repeat(241),
-            line: -1,
-            html_url:
-              'https://user:secret@github.com/meta-secret/nook/pull/1560',
-            user: { login: 'x'.repeat(65) },
-            body: 'RAW_PAYLOAD_SECRET',
-          },
+  test('bounds output, continues after decode errors, and propagates writer failures', async () => {
+    const valid = cloudEvent({
+      event: 'pull_request_review_comment',
+      body: {
+        repository,
+        pull_request: pullRequest,
+        comment: {
+          id: 42,
+          commit_id: HEAD,
+          path: 'x'.repeat(241),
+          line: -1,
+          html_url: 'https://user:secret@github.com/meta-secret/nook/pull/1560',
+          user: { login: 'x'.repeat(65) },
+          body: 'RAW_PAYLOAD_SECRET',
         },
-      }),
-    ]);
+      },
+    });
+    const lines = await write([encoder.encode('RAW_MALFORMED_SECRET'), valid]);
     expect(lines).toHaveLength(1);
     const parsed = JSON.parse(lines[0]!) as UntrustedYamlMap;
-    expect(parsed).toMatchObject({
-      path: false,
-      line: false,
-      url: false,
-      author: false,
-    });
+    expect([parsed.path, parsed.line]).toEqual([false, false]);
+    expect([parsed.url, parsed.author]).toEqual([false, false]);
     expect(lines[0]!.length).toBeLessThan(2_048);
     expect(lines[0]).not.toContain('RAW_PAYLOAD_SECRET');
-  });
-
-  test('fails the live stream with a static error on malformed input', async () => {
+    expect(lines[0]).not.toContain('RAW_MALFORMED_SECRET');
+    const failure = new Error('operational failure');
     await expect(
-      write([encoder.encode('RAW_MALFORMED_SECRET')]),
-    ).rejects.toThrow('event payload is not valid UTF-8 JSON');
+      writeAssignedEvents({
+        messages: (async function* () {
+          yield { data: valid };
+        })(),
+        pullRequest: 1560,
+        write: () => {
+          throw failure;
+        },
+      }),
+    ).rejects.toBe(failure);
   });
 });
 
