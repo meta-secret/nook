@@ -9,8 +9,9 @@ declare_lint! {
     /// Detects authored free functions, including private and nested definitions.
     /// An owning type states where an operation belongs; semantic cohesion and
     /// valid typestate transitions still require domain review.
-    /// Compiler entrypoints, registered tests, and external macro output have
-    /// external owners. Required standalone callbacks need a checked expectation.
+    /// Compiler entrypoints, test modules, registered tests, and external macro
+    /// output have external owners. Required standalone callbacks need a checked
+    /// expectation.
     pub UNOWNED_FUNCTION,
     Allow,
     "authored function has no struct, enum, or trait owner"
@@ -28,7 +29,30 @@ declare_lint_pass! {
     FunctionOwnership => [UNOWNED_FUNCTION, INVALID_UNOWNED_FUNCTION_SUPPRESSION]
 }
 
+struct FunctionOwnershipRequest<'cx, 'item, 'tcx> {
+    cx: &'cx LateContext<'tcx>,
+    item: &'item Item<'tcx>,
+}
+
 impl FunctionOwnership {
+    fn is_test_code(request: FunctionOwnershipRequest<'_, '_, '_>) -> bool {
+        request
+            .cx
+            .tcx
+            .def_path_str(request.item.owner_id.def_id.to_def_id())
+            .split("::")
+            .any(|segment| segment == "tests" || segment.ends_with("_tests"))
+    }
+
+    fn has_unowned_function_attribute(request: FunctionOwnershipRequest<'_, '_, '_>) -> bool {
+        request
+            .cx
+            .tcx
+            .hir_attrs(request.item.hir_id())
+            .iter()
+            .any(Self::mentions_lint)
+    }
+
     fn requires_owner(cx: &LateContext<'_>, item: &Item<'_>) -> bool {
         let def_id = item.owner_id.def_id;
         if !matches!(item.kind, ItemKind::Fn { .. })
@@ -37,6 +61,8 @@ impl FunctionOwnership {
                 .tcx
                 .entry_fn(())
                 .is_some_and(|(entry, _)| entry == def_id.to_def_id())
+            || (Self::is_test_code(FunctionOwnershipRequest { cx, item })
+                && !Self::has_unowned_function_attribute(FunctionOwnershipRequest { cx, item }))
         {
             return false;
         }

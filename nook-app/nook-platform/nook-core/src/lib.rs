@@ -228,7 +228,7 @@ pub use auth::vault_meta_actions::{
     SentinelMemberRecordProjection, SentinelMemberRecordProjectionRequest,
     VaultMetaGraphProjection, VaultMetaOperationApplier, VaultMetaOperationRequest,
 };
-pub use multi_device::{SimpleIdentityGenesisOperationsInput, simple_identity_genesis_operations};
+pub use multi_device::SimpleIdentityGenesisOperationsInput;
 pub use nook_auth2::{
     AppId, AppKey, IdentityDirectory, IdentityId, IdentityMember, IdentityRecord,
     IdentitySelection, IdentityVaultDek, IdentityVaultDekEpoch, IdentityVaultDekEpochUpdate,
@@ -307,8 +307,8 @@ pub use validation::{
     STORAGE_MODE_GITHUB, STORAGE_MODE_LOCAL, StorageMode, StorageProviderType, SyncProviderTarget,
 };
 pub use vault::vault_recovery_options::{
-    VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword, VaultRecoverySummary,
-    recovery_device_id_hint, vault_recovery_options,
+    VaultRecoveryDevice, VaultRecoveryOptions, VaultRecoveryPassword,
+    VaultRecoveryProjectionRequest, VaultRecoverySummary,
 };
 pub use vault_access_diagnostics::{
     DiagnosticEpoch, ProjectionDiagnosticInput, VaultAccessDiagnosticRequest,
@@ -361,7 +361,6 @@ pub use vault_search_catalog::{
 };
 pub use vault_sentinel_genesis::{
     SentinelGenesisOutput, SentinelGenesisPhase, StartSentinelGenesisArgs,
-    sentinel_genesis_operations,
 };
 pub use vault_sentinel_unlock::SentinelUnlockSigning;
 pub use vault_session::{

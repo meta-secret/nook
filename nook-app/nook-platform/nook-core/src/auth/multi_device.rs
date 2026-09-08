@@ -4,6 +4,12 @@
 //! module keeps `nook-core`'s existing public API stable and owns the small
 //! adapter that replays core event-log operations into auth metadata state.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::MemberLabel;
 use nook_auth2::MultiDeviceError;
 
@@ -20,62 +26,64 @@ pub struct SimpleIdentityGenesisOperationsInput<'a> {
     pub created_at: &'a str,
 }
 
-/// Build one signed-log authorization operation for every identity app key.
-///
-/// Identity membership is portable ownership state. The event log must carry
-/// the complete roster because encrypted metadata projections are disposable.
-pub fn simple_identity_genesis_operations(
-    input: &SimpleIdentityGenesisOperationsInput<'_>,
-) -> nook_auth2::MultiDeviceResult<Vec<VaultOperation>> {
-    let identity = input.identity;
-    let keys = input.keys;
-    let current_app_id = input.current_app_id;
-    let current_signing_public_key = input.current_signing_public_key;
-    let created_at = input.created_at;
-    if identity
-        .members
-        .iter()
-        .all(|member| &member.app_id != current_app_id)
-    {
-        return Err(MultiDeviceError::IdentityEnrollmentRequired);
-    }
-    let records = crate::identity_vault_genesis_records(identity, keys, created_at)?;
-    identity
-        .members
-        .iter()
-        .map(|member| {
-            let record = records
-                .iter()
-                .find(|record| record.key.as_str() == member.auth_id.as_str())
-                .ok_or_else(|| {
-                    MultiDeviceError::InvalidDeviceIdentity(
-                        "identity genesis is missing a member authorization envelope".to_owned(),
-                    )
-                })?;
-            let envelopes = crate::AuthEnvelopes::parse(record.value.as_str())?;
-            Ok(VaultOperation::JoinApproved {
-                device_id: member.app_id.clone(),
-                encryption_public_key: member.public_key.clone(),
-                signing_public_key: if &member.app_id == current_app_id {
-                    current_signing_public_key.clone()
-                } else if member.signing_public_key.is_empty() {
-                    return Err(MultiDeviceError::InvalidDeviceIdentity(
-                        "identity member is missing its event signing public key".to_owned(),
-                    ));
-                } else {
-                    member.signing_public_key.clone()
-                },
-                label: MemberLabel::from_trusted(
-                    member
-                        .label
-                        .clone()
-                        .unwrap_or_else(|| "Identity app key".to_owned()),
-                ),
-                secrets_key_ciphertext: envelopes.secrets_key,
-                members_key_ciphertext: envelopes.members_key,
+impl SimpleIdentityGenesisOperationsInput<'_> {
+    /// Build one signed-log authorization operation for every identity app key.
+    ///
+    /// Identity membership is portable ownership state. The event log must
+    /// carry the complete roster because encrypted metadata projections are
+    /// disposable.
+    pub fn operations(&self) -> nook_auth2::MultiDeviceResult<Vec<VaultOperation>> {
+        let identity = self.identity;
+        let keys = self.keys;
+        let current_app_id = self.current_app_id;
+        let current_signing_public_key = self.current_signing_public_key;
+        let created_at = self.created_at;
+        if identity
+            .members
+            .iter()
+            .all(|member| &member.app_id != current_app_id)
+        {
+            return Err(MultiDeviceError::IdentityEnrollmentRequired);
+        }
+        let records = crate::identity_vault_genesis_records(identity, keys, created_at)?;
+        identity
+            .members
+            .iter()
+            .map(|member| {
+                let record = records
+                    .iter()
+                    .find(|record| record.key.as_str() == member.auth_id.as_str())
+                    .ok_or_else(|| {
+                        MultiDeviceError::InvalidDeviceIdentity(
+                            "identity genesis is missing a member authorization envelope"
+                                .to_owned(),
+                        )
+                    })?;
+                let envelopes = crate::AuthEnvelopes::parse(record.value.as_str())?;
+                Ok(VaultOperation::JoinApproved {
+                    device_id: member.app_id.clone(),
+                    encryption_public_key: member.public_key.clone(),
+                    signing_public_key: if &member.app_id == current_app_id {
+                        current_signing_public_key.clone()
+                    } else if member.signing_public_key.is_empty() {
+                        return Err(MultiDeviceError::InvalidDeviceIdentity(
+                            "identity member is missing its event signing public key".to_owned(),
+                        ));
+                    } else {
+                        member.signing_public_key.clone()
+                    },
+                    label: MemberLabel::from_trusted(
+                        member
+                            .label
+                            .clone()
+                            .unwrap_or_else(|| "Identity app key".to_owned()),
+                    ),
+                    secrets_key_ciphertext: envelopes.secrets_key,
+                    members_key_ciphertext: envelopes.members_key,
+                })
             })
-        })
-        .collect()
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -96,131 +104,135 @@ mod tests {
         VaultMetaOperationApplier, VaultMetaOperationRequest,
     };
 
-    fn signed_event(
-        signing: &SigningIdentity,
-        store_id: &StoreId,
-        parents: Vec<EventId>,
-        operations: Vec<VaultOperation>,
-        timestamp: &str,
-    ) -> anyhow::Result<VaultEvent> {
-        Ok(VaultEvent::sign(
-            VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store_id.clone(),
-                actor_id: signing.actor_id()?,
-                actor_signing_public_key: signing.public_key(),
-                parents,
-                created_at: IsoTimestamp::parse(timestamp)?,
-                key_epoch: EventId::from_sha256_hex(
-                    nook_auth2::Sha256Hex::from_bytes(store_id.as_str().as_bytes()).as_str(),
-                )?,
-                operations,
-            },
-            signing.signing_key(),
-        )?)
-    }
+    struct Fixtures;
 
-    fn owner_access_graph(
-        owner: &DeviceIdentity,
-        signing: &SigningIdentity,
-        store_id: &StoreId,
-        envelopes: AuthEnvelopes,
-    ) -> anyhow::Result<(EventGraph, EventId)> {
-        let root = signed_event(
-            signing,
-            store_id,
-            vec![],
-            vec![
-                VaultOperation::VaultImported {
-                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
-                    secrets: vec![],
-                    password_entries: vec![],
+    impl Fixtures {
+        fn signed_event(
+            signing: &SigningIdentity,
+            store_id: &StoreId,
+            parents: Vec<EventId>,
+            operations: Vec<VaultOperation>,
+            timestamp: &str,
+        ) -> anyhow::Result<VaultEvent> {
+            Ok(VaultEvent::sign(
+                VaultEventBody {
+                    schema_version: VaultEventSchemaVersion::CURRENT,
+                    store_id: store_id.clone(),
+                    actor_id: signing.actor_id()?,
+                    actor_signing_public_key: signing.public_key(),
+                    parents,
+                    created_at: IsoTimestamp::parse(timestamp)?,
+                    key_epoch: EventId::from_sha256_hex(
+                        nook_auth2::Sha256Hex::from_bytes(store_id.as_str().as_bytes()).as_str(),
+                    )?,
+                    operations,
                 },
-                VaultOperation::JoinApproved {
-                    device_id: owner.device_id().clone(),
-                    encryption_public_key: owner.public_key(),
-                    signing_public_key: signing.public_key(),
-                    label: MemberLabel::from_trusted("Owner".to_owned()),
-                    secrets_key_ciphertext: envelopes.secrets_key,
-                    members_key_ciphertext: envelopes.members_key,
-                },
-            ],
-            "2026-08-15T00:00:00Z",
-        )?;
-        let root_id = root.id()?;
-        let mut graph = EventGraph::new();
-        graph.insert(root, store_id.as_str())?;
-        Ok((graph, root_id))
-    }
+                signing.signing_key(),
+            )?)
+        }
 
-    fn append_password_rotation_checkpoint(
-        graph: &mut EventGraph,
-        signing: &SigningIdentity,
-        store_id: &StoreId,
-        parent: EventId,
-        device: &DeviceIdentity,
-    ) -> anyhow::Result<(EventId, AuthEnvelopes)> {
-        let replacement_keys = crate::VaultKeys::generate()?;
-        let replacement_record =
-            device.auth_record(&replacement_keys.secrets_key, &replacement_keys.members_key)?;
-        let replacement_auth = crate::AuthEnvelopes::parse(replacement_record.value.as_str())?;
-        let trigger = signed_event(
-            signing,
-            store_id,
-            vec![parent],
-            vec![VaultOperation::PasswordRotated {
-                entry_id: PasswordEntryId::parse("pwdentry001")?,
-                envelope: crate::PasswordEnvelope {
-                    version: crate::PasswordEnvelopeVersion::CURRENT,
-                    kdf: "scrypt".to_owned(),
-                    work_factor: 10.into(),
-                    recipient: "recipient".to_owned(),
-                    wrapped_keys: "wrapped".to_owned(),
-                    ciphertext: "ciphertext".to_owned(),
-                },
-            }],
-            "2026-08-15T00:01:30Z",
-        )?;
-        let trigger_id = trigger.id()?;
-        graph.insert(trigger, store_id.as_str())?;
-        let checkpoint = VaultEvent::sign(
-            VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: store_id.clone(),
-                actor_id: signing.actor_id()?,
-                actor_signing_public_key: signing.public_key(),
-                parents: vec![trigger_id.clone()],
-                created_at: IsoTimestamp::parse("2026-08-15T00:01:31Z")?,
-                key_epoch: trigger_id,
-                operations: vec![VaultOperation::EpochCheckpoint {
-                    secrets: Vec::new(),
-                    members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
-                    rotated_meta_records: EpochMetadataState::Replace(vec![replacement_record]),
-                    password_entries: EpochPasswordState::Replace(Vec::new()),
+        fn owner_access_graph(
+            owner: &DeviceIdentity,
+            signing: &SigningIdentity,
+            store_id: &StoreId,
+            envelopes: AuthEnvelopes,
+        ) -> anyhow::Result<(EventGraph, EventId)> {
+            let root = Fixtures::signed_event(
+                signing,
+                store_id,
+                vec![],
+                vec![
+                    VaultOperation::VaultImported {
+                        source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
+                        secrets: vec![],
+                        password_entries: vec![],
+                    },
+                    VaultOperation::JoinApproved {
+                        device_id: owner.device_id().clone(),
+                        encryption_public_key: owner.public_key(),
+                        signing_public_key: signing.public_key(),
+                        label: MemberLabel::from_trusted("Owner".to_owned()),
+                        secrets_key_ciphertext: envelopes.secrets_key,
+                        members_key_ciphertext: envelopes.members_key,
+                    },
+                ],
+                "2026-08-15T00:00:00Z",
+            )?;
+            let root_id = root.id()?;
+            let mut graph = EventGraph::new();
+            graph.insert(root, store_id.as_str())?;
+            Ok((graph, root_id))
+        }
+
+        fn append_password_rotation_checkpoint(
+            graph: &mut EventGraph,
+            signing: &SigningIdentity,
+            store_id: &StoreId,
+            parent: EventId,
+            device: &DeviceIdentity,
+        ) -> anyhow::Result<(EventId, AuthEnvelopes)> {
+            let replacement_keys = crate::VaultKeys::generate()?;
+            let replacement_record =
+                device.auth_record(&replacement_keys.secrets_key, &replacement_keys.members_key)?;
+            let replacement_auth = crate::AuthEnvelopes::parse(replacement_record.value.as_str())?;
+            let trigger = Fixtures::signed_event(
+                signing,
+                store_id,
+                vec![parent],
+                vec![VaultOperation::PasswordRotated {
+                    entry_id: PasswordEntryId::parse("pwdentry001")?,
+                    envelope: crate::PasswordEnvelope {
+                        version: crate::PasswordEnvelopeVersion::CURRENT,
+                        kdf: "scrypt".to_owned(),
+                        work_factor: 10.into(),
+                        recipient: "recipient".to_owned(),
+                        wrapped_keys: "wrapped".to_owned(),
+                        ciphertext: "ciphertext".to_owned(),
+                    },
                 }],
-            },
-            signing.signing_key(),
-        )?;
-        let checkpoint_id = checkpoint.id()?;
-        graph.insert(checkpoint, store_id.as_str())?;
-        Ok((checkpoint_id, replacement_auth))
-    }
+                "2026-08-15T00:01:30Z",
+            )?;
+            let trigger_id = trigger.id()?;
+            graph.insert(trigger, store_id.as_str())?;
+            let checkpoint = VaultEvent::sign(
+                VaultEventBody {
+                    schema_version: VaultEventSchemaVersion::CURRENT,
+                    store_id: store_id.clone(),
+                    actor_id: signing.actor_id()?,
+                    actor_signing_public_key: signing.public_key(),
+                    parents: vec![trigger_id.clone()],
+                    created_at: IsoTimestamp::parse("2026-08-15T00:01:31Z")?,
+                    key_epoch: trigger_id,
+                    operations: vec![VaultOperation::EpochCheckpoint {
+                        secrets: Vec::new(),
+                        members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted(
+                            "0".repeat(64),
+                        ),
+                        rotated_meta_records: EpochMetadataState::Replace(vec![replacement_record]),
+                        password_entries: EpochPasswordState::Replace(Vec::new()),
+                    }],
+                },
+                signing.signing_key(),
+            )?;
+            let checkpoint_id = checkpoint.id()?;
+            graph.insert(checkpoint, store_id.as_str())?;
+            Ok((checkpoint_id, replacement_auth))
+        }
 
-    fn active_envelopes_for(
-        graph: &EventGraph,
-        device: &DeviceIdentity,
-        signing: &SigningIdentity,
-    ) -> anyhow::Result<Option<AuthEnvelopes>> {
-        let public_key = device.public_key();
-        Ok(
-            EventGraphDeviceAccess::new(graph).active_envelopes(
+        fn active_envelopes_for(
+            graph: &EventGraph,
+            device: &DeviceIdentity,
+            signing: &SigningIdentity,
+        ) -> anyhow::Result<Option<AuthEnvelopes>> {
+            let public_key = device.public_key();
+            Ok(EventGraphDeviceAccess::new(graph).active_envelopes(
                 &EventGraphDeviceAccessRequest {
                     expected_device_id: device.device_id(),
                     expected_public_key: &public_key,
                     expected_signing_public_key: &signing.public_key(),
                 },
-            )?,
-        )
+            )?)
+        }
     }
 
     #[test]
@@ -291,14 +303,14 @@ mod tests {
             label: Some("Phone".to_owned()),
         })?;
         let keys = crate::VaultKeys::generate()?;
-        let operations =
-            simple_identity_genesis_operations(&SimpleIdentityGenesisOperationsInput {
-                identity: &identity,
-                keys: &keys,
-                current_app_id: current.app_id(),
-                current_signing_public_key: &current_signing.public_key(),
-                created_at: "2026-08-14T00:00:00Z",
-            })?;
+        let operations = (SimpleIdentityGenesisOperationsInput {
+            identity: &identity,
+            keys: &keys,
+            current_app_id: current.app_id(),
+            current_signing_public_key: &current_signing.public_key(),
+            created_at: "2026-08-14T00:00:00Z",
+        })
+        .operations()?;
 
         assert_eq!(operations.len(), 2);
         assert!(operations.iter().any(|operation| matches!(
@@ -345,7 +357,7 @@ mod tests {
         let envelopes = crate::AuthEnvelopes::parse(auth.value.as_str())?;
         let store_id = crate::StoreId::generate()?;
         let mut graph = EventGraph::new();
-        let approval = signed_event(
+        let approval = Fixtures::signed_event(
             &signing,
             &store_id,
             vec![],
@@ -406,7 +418,7 @@ mod tests {
                 .is_ok_and(|active| !active)
         );
 
-        let revocation = signed_event(
+        let revocation = Fixtures::signed_event(
             &signing,
             &store_id,
             vec![approval_id],
@@ -540,7 +552,7 @@ mod tests {
                 .as_str(),
         )?;
         let (mut graph, root_id) =
-            owner_access_graph(&owner, &owner_signing, &store_id, owner_auth)?;
+            Fixtures::owner_access_graph(&owner, &owner_signing, &store_id, owner_auth)?;
 
         let old_keys = crate::VaultKeys::generate()?;
         let old_auth = crate::AuthEnvelopes::parse(
@@ -549,7 +561,7 @@ mod tests {
                 .value
                 .as_str(),
         )?;
-        let approval = signed_event(
+        let approval = Fixtures::signed_event(
             &owner_signing,
             &store_id,
             vec![root_id],
@@ -565,7 +577,7 @@ mod tests {
         )?;
         let approval_id = approval.id()?;
         graph.insert(approval, store_id.as_str())?;
-        let (checkpoint_id, replacement_auth) = append_password_rotation_checkpoint(
+        let (checkpoint_id, replacement_auth) = Fixtures::append_password_rotation_checkpoint(
             &mut graph,
             &owner_signing,
             &store_id,
@@ -573,10 +585,10 @@ mod tests {
             &extension,
         )?;
         assert_eq!(
-            active_envelopes_for(&graph, &extension, &extension_signing)?,
+            Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?,
             Some(replacement_auth)
         );
-        let revocation = signed_event(
+        let revocation = Fixtures::signed_event(
             &owner_signing,
             &store_id,
             vec![checkpoint_id],
@@ -587,7 +599,7 @@ mod tests {
         )?;
         let revocation_id = revocation.id()?;
         graph.insert(revocation, store_id.as_str())?;
-        assert!(active_envelopes_for(&graph, &extension, &extension_signing)?.is_none());
+        assert!(Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?.is_none());
 
         let replacement_keys = crate::VaultKeys::generate()?;
         let replacement_auth = crate::AuthEnvelopes::parse(
@@ -597,7 +609,7 @@ mod tests {
                 .as_str(),
         )?;
         let expected = replacement_auth.clone();
-        let reapproval = signed_event(
+        let reapproval = Fixtures::signed_event(
             &owner_signing,
             &store_id,
             vec![revocation_id],
@@ -614,7 +626,7 @@ mod tests {
         graph.insert(reapproval, store_id.as_str())?;
 
         assert_eq!(
-            active_envelopes_for(&graph, &extension, &extension_signing)?,
+            Fixtures::active_envelopes_for(&graph, &extension, &extension_signing)?,
             Some(expected)
         );
         Ok(())
