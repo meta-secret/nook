@@ -573,6 +573,8 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         read(root, "nook-app/nook-platform/docker/Taskfile.yml"),
         read(root, "nook-app/nook-web/docker/Taskfile.yml")
     );
+    let rust_cache_bake = read(root, "nook-app/nook-platform/docker/rust/docker-bake.hcl");
+    let core_cache_bake = read(root, "nook-app/nook-platform/nook-core/docker-bake.hcl");
     assert!(
         docker_tasks.contains("rust-format-check.output=type=cacheonly\" ci-rust'")
             && !docker_tasks.contains("ci-rust builder-core-deps")
@@ -586,24 +588,29 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("docker:ci:cache:publish:web-e2e:")
             && docker_tasks.contains("task: docker:ci:cache:publish:rust-base")
             && docker_tasks.contains("rust-base-publish")
-            && docker_tasks.contains("builder-core-deps-publish")
+            && !docker_tasks.contains("builder-core-deps-publish")
             && docker_tasks.contains("web-deps-publish")
             && docker_tasks.contains("nook-web-e2e-publish")
             && docker_tasks.contains("preflight-test")
-            && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX"),
-        "producer-owned ARC publishers must bake scoped targets without owning the portable WASM dependency ref"
+            && docker_tasks.contains("GHA_CACHE_SCOPE_SUFFIX")
+            && core_cache_bake.contains("target \"builder-core-deps-publish\"")
+            && core_cache_bake.contains("cache-to   = rust_deps_cache_to")
+            && rust_cache_bake.contains("rust_native_source_cache_to")
+            && rust_cache_bake.contains("nook-rust-native-source-v4${GHA_CACHE_SCOPE_SUFFIX}"),
+        "scoped producer targets must remain available while Main owns one portable native source graph and not the portable WASM dependency ref"
     );
     assert_no_empty_cache_overrides(&docker_tasks);
     let native_publish = docker_tasks
         .split("docker:ci:cache:publish:native:")
         .nth(1)
-        .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
+        .and_then(|tail| tail.split("docker:ci:cache:publish:preflight:").next())
         .unwrap_or("");
     assert!(
         native_publish.contains("builder-debug")
             && !native_publish.contains("preflight-test")
             && !native_publish.contains("task: docker:ci:cache:publish:rust-base")
-            && !native_publish.contains("builder-core-deps-publish"),
+            && !native_publish.contains("builder-core-deps-publish")
+            && native_publish.matches("buildx bake").count() == 1,
         "native cache publish must export only the complete source graph and avoid overlapping full-graph preparation"
     );
     let wasm_publish = docker_tasks

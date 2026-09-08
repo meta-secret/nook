@@ -952,7 +952,9 @@ tasks:
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" \
           'sudo -n k0s kubectl get nodes -o wide --show-labels'
       - |
-        ssh -o BatchMode=yes "{{.INFRA_WORKER_SSH_TARGET}}" 'bash -s' <<'REMOTE'
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        ssh -o BatchMode=yes -J "$controller_target" \
+          "{{.INFRA_WORKER_SSH_TARGET}}" 'bash -s' <<'REMOTE'
         set -euo pipefail
         sudo -n systemctl is-active wg-quick@wg-nook.service k0sworker.service
         sudo -n wg show wg-nook latest-handshakes

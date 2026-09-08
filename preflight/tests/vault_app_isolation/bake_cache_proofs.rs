@@ -208,7 +208,7 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             "rust_deps_cache_from",
             "GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE",
             "nook-rust-deps-v4${GHA_CACHE_SCOPE_SUFFIX}",
-            "nook/buildcache/nook-rust-deps-v4",
+            "nook/buildcache/nook-rust-native-source-v4",
         ),
         (
             rust_bake.as_str(),
@@ -252,6 +252,14 @@ fn theorem_exact_scope_excludes_main_then_cold_scope_falls_back() -> anyhow::Res
             exact.contains(exact_marker) && !exact.contains(main_ref),
             "{name} must import only its exact full-graph ref when {availability} is set"
         );
+        if name == "rust_deps_cache_from" {
+            assert!(
+                body.contains("GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE")
+                    && body.find("GHA_CACHE_SCOPE_SUFFIX == \"\"")
+                        < body.find("GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE"),
+                "Main dependency restores must use the fresh complete source graph while isolated exact deps remain preferred"
+            );
+        }
         if matches!(
             name,
             "rust_native_source_cache_from" | "rust_wasm_source_cache_from"

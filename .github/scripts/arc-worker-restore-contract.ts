@@ -183,6 +183,11 @@ class ArcWorkerRestoreContract {
       "k0s:worker:restore",
       "k0s:worker:status",
     );
+    const status = ArcWorkerRestoreContract.taskSection(
+      tasksSource,
+      "k0s:worker:status",
+      "k0s:worker:deploy",
+    );
     const mesh = new TextContract({
       label: "k0s fleet worker mesh reconciliation",
       source: await Bun.file(
@@ -264,6 +269,12 @@ class ArcWorkerRestoreContract {
       "arc:deploy",
       "rollout restart",
     ]);
+    status.requireAll([
+      'controller_target="{{.INFRA_SSH_TARGET}}"',
+      'ssh -o BatchMode=yes -J "$controller_target" \\',
+      '"{{.INFRA_WORKER_SSH_TARGET}}" \'bash -s\'',
+    ]);
+    status.forbid('ssh -o BatchMode=yes "{{.INFRA_WORKER_SSH_TARGET}}"');
     mesh.count({
       fragment: "sudo -n systemctl restart k0sworker.service",
       expected: 1,

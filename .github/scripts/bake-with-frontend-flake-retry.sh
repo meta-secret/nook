@@ -52,7 +52,7 @@ is_frontend_authorization_timeout() {
   # loaded. Require the transient transport error on that same BuildKit vertex
   # so a later application vertex cannot reuse a successful frontend marker.
   awk '
-    /resolve image config for docker-image:\/\/docker\.io\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
+    /resolve image config for docker-image:\/\/(docker\.io|registry\.dev\.nokey\.sh)\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
       frontend_vertex = $1
     }
     /failed to authorize:.*TLS handshake timeout/ && frontend_vertex != "" && $1 == frontend_vertex {

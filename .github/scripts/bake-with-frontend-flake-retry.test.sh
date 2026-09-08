@@ -58,6 +58,48 @@ if ! bash "$retry_script" frontend-authorization "$authorization_command" "$auth
 fi
 assert_equals "$(<"$authorization_count")" 2 'frontend authorization retry count'
 
+mirror_authorization_count="$test_dir/mirror-authorization-count"
+mirror_authorization_command="$test_dir/mirror-authorization-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'if [ "$count" -eq 1 ]; then' \
+  '  printf "%s\n" "#4 resolve image config for docker-image://registry.dev.nokey.sh/docker/dockerfile:1.27.0" "#4 ERROR: failed to authorize: failed to fetch anonymous token: TLS handshake timeout"' \
+  '  exit 1' \
+  'fi' >"$mirror_authorization_command"
+chmod +x "$mirror_authorization_command"
+if ! bash "$retry_script" mirror-frontend-authorization \
+  "$mirror_authorization_command" "$mirror_authorization_count"; then
+  echo 'mirror frontend authorization timeout should retry' >&2
+  exit 1
+fi
+assert_equals "$(<"$mirror_authorization_count")" 2 'mirror frontend authorization retry count'
+
+foreign_mirror_count="$test_dir/foreign-mirror-count"
+foreign_mirror_command="$test_dir/foreign-mirror-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'set -euo pipefail' \
+  'count_file="$1"' \
+  'count=0' \
+  'if [ -f "$count_file" ]; then count="$(<"$count_file")"; fi' \
+  'count=$((count + 1))' \
+  'printf "%s" "$count" >"$count_file"' \
+  'printf "%s\n" "#4 resolve image config for docker-image://example.invalid/docker/dockerfile:1.27.0" "#4 ERROR: failed to authorize: failed to fetch anonymous token: TLS handshake timeout"' \
+  'exit 1' >"$foreign_mirror_command"
+chmod +x "$foreign_mirror_command"
+if bash "$retry_script" foreign-frontend-mirror \
+  "$foreign_mirror_command" "$foreign_mirror_count"; then
+  echo 'foreign frontend mirror timeout must not retry or succeed' >&2
+  exit 1
+fi
+assert_equals "$(<"$foreign_mirror_count")" 1 'foreign mirror retry count'
+
 session_count="$test_dir/session-count"
 session_command="$test_dir/session-command"
 printf '%s\n' \
