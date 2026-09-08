@@ -186,7 +186,10 @@ impl NookPrevalidatedCompanionPairingApproval {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::manager::{NookVaultManager, VaultNameState, event_log::ExternalEventLogRecord};
+    use crate::manager::{
+        NookCompanionPairingExtensionEndpoint, NookVaultManager, VaultNameState,
+        event_log::ExternalEventLogRecord,
+    };
     use nook_companion_core::{
         CompanionPairingApproval, CompanionPairingApprovalAttempt,
         CompanionPairingEpochMilliseconds, CompanionPairingInstallation,
@@ -262,7 +265,7 @@ mod tests {
                     providers.companion_pairing_manifest_digest()?.as_str(),
                 )?,
             };
-            let mut endpoint = crate::manager::NookCompanionPairingExtensionEndpoint::new(request)
+            let mut endpoint = NookCompanionPairingExtensionEndpoint::new(request)
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let authority = endpoint
                 .take_authority()
