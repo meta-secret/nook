@@ -57,7 +57,7 @@ impl From<Bip39WordSequenceExpectedCount> for usize {
 }
 
 /// A BIP-39 mnemonic input owned by its text and normalization operations.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct Bip39Mnemonic<'a> {
     text: &'a str,
 }

@@ -7,7 +7,7 @@
 use crate::{AppId, AuthKeyId, SecretRecord};
 
 /// A borrowed search over user-owned secret records.
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 pub struct SecretRecordSearch<'a> {
     pub records: &'a [SecretRecord],
     pub query: &'a str,
