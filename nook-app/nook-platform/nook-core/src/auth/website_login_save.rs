@@ -57,7 +57,7 @@ impl WebsiteLoginSaveDecision {
     }
 }
 
-impl<'a> WebsiteLoginSaveRequest<'a> {
+impl WebsiteLoginSaveRequest<'_> {
     /// Decide create / update / already-saved / invalid for a captured login.
     ///
     /// `candidates` should already be filtered to the requesting origin when
