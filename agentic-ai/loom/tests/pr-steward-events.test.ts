@@ -11,7 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   loadCredential,
-  PrStewardEventWriter,
+  PrStewardEventObserver,
   PrStewardInvocationCodec,
 } from '../src/pr-steward-events.ts';
 import {
@@ -21,14 +21,72 @@ import {
   PrStewardSource,
   PrStewardUrlTrust,
 } from '../src/pr-steward-contract.ts';
+import { PrStewardGithubUnavailableError } from '../src/pr-steward-github.ts';
+import type {
+  PrStewardHeadSha,
+  PrStewardPullRequest,
+} from '../src/pr-steward-contract.ts';
+import type {
+  PrStewardAssignedPullRequest,
+  PrStewardAssignedPrReader,
+  PrStewardAssignedPrRequest,
+} from '../src/pr-steward-github.ts';
 import type { UntrustedYamlMap } from '../src/lib/guards.ts';
 
 const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const ASSIGNED_HEAD: PrStewardHeadSha = PrStewardNdjsonCodec.headSha(HEAD);
+const ASSIGNED_PR: PrStewardPullRequest =
+  PrStewardNdjsonCodec.pullRequest(1560);
 const STALE_HEAD = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const encoder = new TextEncoder();
 const temporaryPaths: string[] = [];
 const repository = { full_name: PR_STEWARD_REPOSITORY };
 const pullRequest = { number: 1560, head: { sha: HEAD } };
+const assignedUrl = {
+  trust: PrStewardUrlTrust.GithubOwned,
+  value: 'https://github.com/meta-secret/nook/pull/1560',
+} as const;
+
+class FixturePrReader implements PrStewardAssignedPrReader {
+  async read(_request: PrStewardAssignedPrRequest) {
+    return { headSha: ASSIGNED_HEAD, url: assignedUrl } as const;
+  }
+}
+class UnavailablePrReader implements PrStewardAssignedPrReader {
+  async read(_request: PrStewardAssignedPrRequest): Promise<never> {
+    throw new PrStewardGithubUnavailableError({ cause: false });
+  }
+}
+class PendingPrReader implements PrStewardAssignedPrReader {
+  readonly pending = Promise.withResolvers<PrStewardAssignedPullRequest>();
+  reads = 0;
+
+  read(_request: PrStewardAssignedPrRequest) {
+    this.reads += 1;
+    return this.pending.promise;
+  }
+}
+class OrderedPrReader implements PrStewardAssignedPrReader {
+  readonly first = Promise.withResolvers<PrStewardAssignedPullRequest>();
+  readonly second = Promise.withResolvers<PrStewardAssignedPullRequest>();
+  reads = 0;
+
+  read(_request: PrStewardAssignedPrRequest) {
+    this.reads += 1;
+    return this.reads === 1 ? this.first.promise : this.second.promise;
+  }
+}
+class UnexpectedPrReader implements PrStewardAssignedPrReader {
+  readonly #error: Error;
+
+  constructor(request: { readonly error: Error }) {
+    this.#error = request.error;
+  }
+
+  async read(_request: PrStewardAssignedPrRequest): Promise<never> {
+    throw this.#error;
+  }
+}
 
 class PrStewardEventFixture {
   static associated(args: {
@@ -66,12 +124,22 @@ class PrStewardEventFixture {
   }
 
   static async write(data: readonly Uint8Array[]): Promise<readonly string[]> {
+    return PrStewardEventFixture.observe({
+      data,
+      reader: new FixturePrReader(),
+    });
+  }
+
+  static async observe(request: {
+    readonly data: readonly Uint8Array[];
+    readonly reader: PrStewardAssignedPrReader;
+  }): Promise<readonly string[]> {
     const lines: string[] = [];
-    await PrStewardEventWriter.write({
+    await new PrStewardEventObserver({ reader: request.reader }).observe({
       messages: (async function* () {
-        for (const item of data) yield { data: item };
+        for (const item of request.data) yield { data: item };
       })(),
-      pullRequest: 1560,
+      pullRequest: ASSIGNED_PR,
       write: (line) => lines.push(line),
     });
     return lines;
@@ -119,9 +187,9 @@ describe('PR Steward credentials and invocation codec', () => {
   });
 
   test('requires one positive PR and an absolute optional config', () => {
-    expect(PrStewardInvocationCodec.parse(['--pr', '1560'])).toMatchObject({
-      pullRequest: 1560,
-    });
+    const invocation = PrStewardInvocationCodec.parse(['--pr', '1560']);
+    const assignedPullRequest: PrStewardPullRequest = invocation.pullRequest;
+    expect(Number(assignedPullRequest)).toBe(1560);
     expect(() => PrStewardInvocationCodec.parse(['--pr', '0'])).toThrow(
       'positive integer',
     );
@@ -131,7 +199,7 @@ describe('PR Steward credentials and invocation codec', () => {
   });
 });
 
-describe('compact routing hints', () => {
+describe('exact-head routing observations', () => {
   test.each([
     {
       event: 'pull_request',
@@ -245,7 +313,7 @@ describe('compact routing hints', () => {
       expect(hint).toMatchObject({
         kind: PrStewardRecordKind.Routing,
         repository: PR_STEWARD_REPOSITORY,
-        pullRequest: 1560,
+        pullRequest: ASSIGNED_PR,
         source,
       });
       expect(JSON.stringify(hint)).not.toContain('DO_NOT_TRANSFER');
@@ -300,6 +368,13 @@ describe('compact routing hints', () => {
         },
       }),
       cloudEvent({
+        event: 'pull_request',
+        body: {
+          repository,
+          pull_request: { number: 1560, head: { sha: STALE_HEAD } },
+        },
+      }),
+      cloudEvent({
         event: 'pull_request_review',
         body: {
           repository,
@@ -310,6 +385,16 @@ describe('compact routing hints', () => {
       cloudEvent({
         event: 'status',
         body: { repository, sha: HEAD, id: 48, state: 'failure' },
+      }),
+      cloudEvent({
+        event: 'workflow_job',
+        body: {
+          repository,
+          workflow_job: {
+            head_sha: HEAD,
+            pull_requests: [{ number: 1560 }, { number: 1559 }],
+          },
+        },
       }),
       cloudEvent({
         event: 'workflow_job',
@@ -381,26 +466,124 @@ describe('compact routing hints', () => {
     expect(lines.join('')).not.toContain('RAW_UNATTRIBUTED_SECRET');
     const failure = new Error('operational failure');
     await expect(
-      PrStewardEventWriter.write({
+      new PrStewardEventObserver({ reader: new FixturePrReader() }).observe({
         messages: (async function* () {
           yield { data: valid };
         })(),
-        pullRequest: 1560,
+        pullRequest: ASSIGNED_PR,
         write: () => {
           throw failure;
         },
       }),
     ).rejects.toBe(failure);
     await expect(
-      PrStewardEventWriter.write({
+      new PrStewardEventObserver({ reader: new FixturePrReader() }).observe({
         messages: (async function* () {
           yield { data: valid };
           throw failure;
         })(),
-        pullRequest: 1560,
+        pullRequest: ASSIGNED_PR,
         write: () => false,
       }),
     ).rejects.toBe(failure);
+  });
+
+  test('emits a safe unavailable blocker and propagates unexpected reader errors', async () => {
+    const event = cloudEvent({
+      event: 'pull_request',
+      body: { repository, pull_request: pullRequest },
+    });
+    const lines = await PrStewardEventFixture.observe({
+      data: [event],
+      reader: new UnavailablePrReader(),
+    });
+    expect(lines).toHaveLength(1);
+    expect(PrStewardNdjsonCodec.decode(lines[0]!).record).toMatchObject({
+      kind: PrStewardRecordKind.Blocker,
+      eventId: 'event-pull_request',
+      headSha: HEAD,
+    });
+    const failure = new Error('unexpected reader failure');
+    await expect(
+      PrStewardEventFixture.observe({
+        data: [event],
+        reader: new UnexpectedPrReader({ error: failure }),
+      }),
+    ).rejects.toBe(failure);
+  });
+
+  test('bounds concurrent observations while continuing message consumption', async () => {
+    const reader = new PendingPrReader();
+    const event = cloudEvent({
+      event: 'pull_request',
+      body: { repository, pull_request: pullRequest },
+    });
+    const observation = PrStewardEventFixture.observe({
+      data: [event, event, event, event, event],
+      reader,
+    });
+    await Bun.sleep(0);
+    expect(reader.reads).toBe(4);
+    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    expect(await observation).toHaveLength(5);
+  });
+
+  test('emits independently resolved observations in input order', async () => {
+    const reader = new OrderedPrReader();
+    const lines: string[] = [];
+    const observation = new PrStewardEventObserver({ reader }).observe({
+      messages: (async function* () {
+        yield {
+          data: cloudEvent({
+            event: 'pull_request',
+            body: { repository, pull_request: pullRequest },
+            id: 'first',
+          }),
+        };
+        yield {
+          data: cloudEvent({
+            event: 'pull_request',
+            body: { repository, pull_request: pullRequest },
+            id: 'second',
+          }),
+        };
+      })(),
+      pullRequest: ASSIGNED_PR,
+      write: (line) => lines.push(line),
+    });
+    await Bun.sleep(0);
+    reader.second.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    await Bun.sleep(0);
+    expect(lines).toHaveLength(0);
+    reader.first.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    await observation;
+    expect(
+      lines.map((line) => PrStewardNdjsonCodec.decode(line).record),
+    ).toMatchObject([{ eventId: 'first' }, { eventId: 'second' }]);
+  });
+
+  test('settles and discards pending work before propagating stream failure', async () => {
+    const reader = new PendingPrReader();
+    const failure = new Error('stream failure');
+    const lines: string[] = [];
+    const observation = new PrStewardEventObserver({ reader }).observe({
+      messages: (async function* () {
+        yield {
+          data: cloudEvent({
+            event: 'pull_request',
+            body: { repository, pull_request: pullRequest },
+          }),
+        };
+        throw failure;
+      })(),
+      pullRequest: ASSIGNED_PR,
+      write: (line) => lines.push(line),
+    });
+    await Bun.sleep(0);
+    expect(reader.reads).toBe(1);
+    reader.pending.resolve({ headSha: ASSIGNED_HEAD, url: assignedUrl });
+    await expect(observation).rejects.toBe(failure);
+    expect(lines).toHaveLength(0);
   });
 });
 
@@ -415,9 +598,9 @@ test('documents the direct foreground process', () => {
   expect(lifecycle).toContain(
     'bun agentic-ai/loom/src/pr-steward-events.ts --pr <number>',
   );
-  expect(lifecycle).toContain('closed `pr-steward-ndjson/v1` envelope');
+  expect(lifecycle).toContain('closed `pr-steward-ndjson/v2` envelope');
   expect(lifecycle).toContain('No compatibility reader exists.');
   expect(lifecycle).toContain('Stop the subscriber and report a blocker.');
   expect(lifecycle).not.toContain('Roll back');
-  expect(lifecycle).not.toContain('pr-steward-routing/v1');
+  expect(lifecycle).not.toContain('pr-steward-ndjson/v1');
 });
