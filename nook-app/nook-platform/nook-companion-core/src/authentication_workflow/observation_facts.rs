@@ -8,6 +8,7 @@ use tsify::Tsify;
 
 mod authenticator;
 mod ceremony;
+mod disclosure;
 mod fields;
 mod passkey;
 mod submission;
@@ -20,6 +21,18 @@ pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
     AuthenticationImplicitSubmitActuationObservation,
+};
+pub use disclosure::{
+    AuthenticationCredentialDisclosureCapability,
+    AuthenticationCredentialDisclosureControlObservation,
+    AuthenticationCredentialDisclosurePlanningCapability,
+    AuthenticationCredentialDisclosurePlanningDecision,
+    AuthenticationCredentialDisclosurePlanningRequest,
+    AuthenticationCredentialDisclosurePreflightRequest, AuthenticationDisclosureControlDecision,
+    AuthenticationDisclosureObservationSchemaVersion, AuthenticationPasswordDisclosureContinuation,
+    AuthenticationPasswordDisclosureRequest, AuthorizedAuthenticationUsernameDisclosure,
+    CurrentAuthenticationDisclosureControlRequest,
+    VersionedAuthenticationDisclosureControlObservation,
 };
 pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{
@@ -45,6 +58,9 @@ pub struct AuthenticationPageObservationFacts {
     /// Detailed control evidence is classified in Rust; the reduced ceremony flag stays fail-closed.
     #[serde(default)]
     pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
+    /// Separately versioned evidence for the exceptional two-stage disclosure transaction.
+    #[serde(default)]
+    pub credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
 
 impl AuthenticationPageObservationFacts {
@@ -53,6 +69,7 @@ impl AuthenticationPageObservationFacts {
             && self.authenticator.is_bounded()
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
+            && self.credential_disclosure_control.is_bounded()
             && self.authenticator.detailed_passkey_control.is_bounded()
             && self.credential_submission.is_bounded()
     }
@@ -94,6 +111,9 @@ impl AuthenticationPageObservationFacts {
             self.detailed_advance_control.evidence(self.fields),
             AuthenticationAdvanceControlEvidence::Present
         ) || self.authenticator.passkey_control_present(self.fields)
+            || self
+                .credential_disclosure_control
+                .has_planning_evidence(self.fields)
             || self.ceremony.has_safe_implicit_submission(self.fields)
             || matches!(
                 self.ceremony.manual_checkpoint,

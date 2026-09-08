@@ -53,6 +53,18 @@ pub use authentication_outcome_response::{
     AuthenticationOutcomeResponseKind, AuthenticationOutcomeResponseWire,
     decode_authentication_outcome_response,
 };
+pub use authentication_workflow::observation_facts::{
+    AuthenticationCredentialDisclosureCapability,
+    AuthenticationCredentialDisclosureControlObservation,
+    AuthenticationCredentialDisclosurePlanningCapability,
+    AuthenticationCredentialDisclosurePlanningDecision,
+    AuthenticationCredentialDisclosurePlanningRequest,
+    AuthenticationCredentialDisclosurePreflightRequest, AuthenticationDisclosureControlDecision,
+    AuthenticationDisclosureObservationSchemaVersion, AuthenticationPasswordDisclosureContinuation,
+    AuthenticationPasswordDisclosureRequest, AuthorizedAuthenticationUsernameDisclosure,
+    CurrentAuthenticationDisclosureControlRequest,
+    VersionedAuthenticationDisclosureControlObservation,
+};
 pub use authentication_workflow::{
     AuthenticationAdvanceControlEvidence, AuthenticationApprovalRequirement,
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,

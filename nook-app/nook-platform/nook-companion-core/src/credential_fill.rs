@@ -265,6 +265,9 @@ pub enum CredentialFillRejection {
     /// The scope contains multiple writable username targets.
     #[error("the observed scope has multiple writable username fields")]
     AmbiguousUsernameField,
+    /// Full-page authentication evidence did not authorize exceptional credential disclosure.
+    #[error("the authentication context does not authorize credential disclosure")]
+    AuthenticationContextRejected,
 }
 
 /// Whether credential-fill planning produced a plan or a typed rejection.
@@ -802,6 +805,10 @@ mod tests {
             (
                 CredentialFillRejection::AmbiguousUsernameField,
                 r#""AmbiguousUsernameField""#,
+            ),
+            (
+                CredentialFillRejection::AuthenticationContextRejected,
+                r#""AuthenticationContextRejected""#,
             ),
         ] {
             assert_eq!(serde_json::to_string(&value)?, expected);

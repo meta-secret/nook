@@ -7,7 +7,7 @@
 mod candidate_selection;
 mod enrollment;
 mod observation_binding;
-mod observation_facts;
+pub(crate) mod observation_facts;
 mod observation_validation;
 mod snapshot_contract;
 mod vocabulary;
