@@ -18,6 +18,38 @@ impl Bip39MnemonicWordCount {
     pub const WORDS_24: Self = Self(24);
 }
 
+/// Maximum number of matching BIP-39 word suggestions to return.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bip39WordSuggestionLimit(usize);
+
+impl From<usize> for Bip39WordSuggestionLimit {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Bip39WordSuggestionLimit> for usize {
+    fn from(value: Bip39WordSuggestionLimit) -> Self {
+        value.0
+    }
+}
+
+/// Expected BIP-39 word count for membership validation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Bip39WordSequenceExpectedCount(usize);
+
+impl From<usize> for Bip39WordSequenceExpectedCount {
+    fn from(value: usize) -> Self {
+        Self(value)
+    }
+}
+
+impl From<Bip39WordSequenceExpectedCount> for usize {
+    fn from(value: Bip39WordSequenceExpectedCount) -> Self {
+        value.0
+    }
+}
+
 /// A BIP-39 mnemonic input owned by its text and normalization operations.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Bip39Mnemonic<'a> {
