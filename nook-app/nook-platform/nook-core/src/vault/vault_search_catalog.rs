@@ -53,6 +53,12 @@ struct SecretSearchCatalogEntry {
     normalized_search_text: String,
 }
 
+struct SecretSearchCatalogEntryRequest<'a> {
+    payload_digest: SecretSearchCatalogPayloadDigest,
+    item: SecretListItem,
+    integrity_key: &'a SymmetricKey,
+}
+
 struct SecretSearchCatalogIntegrityTagRequest<'a> {
     payload_digest: SecretSearchCatalogPayloadDigest,
     item: &'a SecretListItem,
@@ -60,11 +66,12 @@ struct SecretSearchCatalogIntegrityTagRequest<'a> {
 }
 
 impl SecretSearchCatalogEntry {
-    fn new(
-        payload_digest: SecretSearchCatalogPayloadDigest,
-        item: SecretListItem,
-        integrity_key: &SymmetricKey,
-    ) -> VaultResult<Self> {
+    fn new(request: SecretSearchCatalogEntryRequest<'_>) -> VaultResult<Self> {
+        let SecretSearchCatalogEntryRequest {
+            payload_digest,
+            item,
+            integrity_key,
+        } = request;
         let normalized_search_text = item.normalized_search_text();
         let integrity_request = SecretSearchCatalogIntegrityTagRequest {
             payload_digest,
@@ -300,7 +307,11 @@ impl SecretSearchCatalog {
             record.zeroize_plaintext();
             next.insert(
                 id.clone(),
-                SecretSearchCatalogEntry::new(digest, item, integrity_key)?,
+                SecretSearchCatalogEntry::new(SecretSearchCatalogEntryRequest {
+                    payload_digest: digest,
+                    item,
+                    integrity_key,
+                })?,
             );
         }
         self.entries = next;
@@ -380,11 +391,13 @@ mod tests {
             let item = login_item(index, username);
             catalog.entries.insert(
                 item.id.clone(),
-                SecretSearchCatalogEntry::new(
-                    SecretSearchCatalogPayloadDigest::from([0_u8; PAYLOAD_DIGEST_BYTES]),
+                SecretSearchCatalogEntry::new(SecretSearchCatalogEntryRequest {
+                    payload_digest: SecretSearchCatalogPayloadDigest::from(
+                        [0_u8; PAYLOAD_DIGEST_BYTES],
+                    ),
                     item,
-                    &integrity_key,
-                )?,
+                    integrity_key: &integrity_key,
+                })?,
             );
         }
 
@@ -406,11 +419,13 @@ mod tests {
         let bucket = SecretSearchCatalog::bucket_for(&item.id);
         catalog.entries.insert(
             item.id.clone(),
-            SecretSearchCatalogEntry::new(
-                SecretSearchCatalogPayloadDigest::from([1_u8; PAYLOAD_DIGEST_BYTES]),
+            SecretSearchCatalogEntry::new(SecretSearchCatalogEntryRequest {
+                payload_digest: SecretSearchCatalogPayloadDigest::from(
+                    [1_u8; PAYLOAD_DIGEST_BYTES],
+                ),
                 item,
-                &keys.secrets_key,
-            )?,
+                integrity_key: &keys.secrets_key,
+            })?,
         );
 
         let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {
