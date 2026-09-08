@@ -7,7 +7,7 @@ async function demoBeat(page: Parameters<typeof connectLocalVault>[0]) {
   await page.waitForTimeout(DEMO_BEAT_MS)
 }
 
-test('add a two-factor authenticator and reveal its current code', async ({
+test('add a two-factor authenticator, group it by host, and reveal its current code', async ({
   page,
 }) => {
   await connectLocalVault(page)
@@ -31,6 +31,7 @@ test('add a two-factor authenticator and reveal its current code', async ({
     .getByTestId('vault-site-group')
     .filter({ hasText: 'chatgpt.com' })
   await expect(group).toBeVisible({ timeout: UI_TIMEOUT_MS })
+  await expect(group).toHaveCount(1)
   const row = group
     .getByTestId('secret-row')
     .filter({ hasText: 'demo.user@example.com' })
