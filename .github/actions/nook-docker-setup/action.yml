@@ -4,8 +4,10 @@ description: Task, Buildx, and authenticated registry BuildKit cache setup.
 inputs:
   cache-selection:
     description: >-
-      Closed cache probe set: general probes every shared Bake lineage, hive probes
-      only the Hive lineage, and connection-only performs no registry cache probes.
+      Closed cache probe set: general probes every shared Bake lineage; native,
+      wasm, preflight, and web-e2e probe only the named consumer graph;
+      wasm-proof computes its dependency fingerprint without probing; hive probes
+      only the Hive lineage; connection-only performs no registry cache probes.
     required: false
     default: general
   cache-write:
@@ -26,6 +28,10 @@ inputs:
     default: "false"
   require-e2e-cache:
     description: Require the browser-image cache lineage for this job.
+    required: false
+    default: "false"
+  monitor-buildkit-storage:
+    description: Warn when the selected ARC BuildKit shard approaches its GC ceiling.
     required: false
     default: "false"
   registry-host:
@@ -153,9 +159,9 @@ runs:
         git_ref="${{ github.ref }}"
         cache_selection="${{ inputs.cache-selection }}"
         case "$cache_selection" in
-          general|hive|connection-only) ;;
+          general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only) ;;
           *)
-            echo "cache-selection must be general, hive, or connection-only (got: ${cache_selection:-empty})" >&2
+            echo "cache-selection must be general, native, wasm, wasm-proof, preflight, web-e2e, hive, or connection-only (got: ${cache_selection:-empty})" >&2
             exit 1
             ;;
         esac
@@ -302,7 +308,8 @@ runs:
           echo "$env_name=$available" >> "$GITHUB_ENV"
         }
 
-        if [ "$cache_selection" = "general" ]; then
+        case "$cache_selection" in
+          general|native|wasm|wasm-proof)
           # Use the same worktree-content fingerprint as local sealed formatting.
           # Bake cache wiring and source files do not rotate this dependency scope.
           rust_deps_fingerprint="$(
@@ -315,27 +322,58 @@ runs:
           fi
           echo "NOOK_RUST_DEPS_INPUT_FINGERPRINT=$rust_deps_fingerprint" >> "$GITHUB_ENV"
           echo "GHA_RUST_WASM_DEPS_SCOPE=nook-rust-wasm-deps-v6-$rust_deps_fingerprint" >> "$GITHUB_ENV"
+          ;;
+        esac
 
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "native" ]; then
+          # Native consumes exact dependency scopes and the complete native source graph.
+          # Main source also owns fresh dependency-only restores after publication.
+          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
+          if [ -n "$scope_suffix" ]; then
+            publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
+            publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
+          fi
+          publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
+        fi
+
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "wasm" ]; then
+          # WASM consumes the base, fingerprinted dependency, and complete WASM source scopes.
           wasm_deps_exact_scope="nook-rust-wasm-deps-v6-$rust_deps_fingerprint"
           if [ -n "$scope_suffix" ]; then
             wasm_deps_exact_scope="nook-rust-wasm-deps-v6$scope_suffix"
           fi
-          publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
+          if [ "$cache_selection" != "general" ]; then
+            publish_exact_availability GHA_CACHE_EXACT_RUST_BASE_AVAILABLE "nook-rust-base-v2$scope_suffix"
+          fi
+          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
+          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
+          if [ -n "$scope_suffix" ]; then
+            publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
+          fi
+        fi
+
+        if [ "$cache_selection" = "general" ]; then
           publish_exact_availability GHA_CACHE_EXACT_RUST_DYLINT_AVAILABLE "nook-rust-ecosystem-dylint-v4$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_RUST_FUZZ_AVAILABLE "nook-rust-ecosystem-fuzz-v4$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_RUST_POLICY_TOOLS_AVAILABLE "nook-rust-ecosystem-policy-tools-v5$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_RUST_DETERMINISTIC_AVAILABLE "nook-rust-ecosystem-deterministic-v2$scope_suffix"
           publish_exact_availability GHA_CACHE_EXACT_RUST_KANI_AVAILABLE "nook-rust-ecosystem-kani-v2$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_DEPS_AVAILABLE "nook-rust-deps-v4$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_DEPS_AVAILABLE "$wasm_deps_exact_scope"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4$scope_suffix"
-          publish_main_availability GHA_CACHE_MAIN_RUST_NATIVE_SOURCE_AVAILABLE "nook-rust-native-source-v4"
-          publish_exact_availability GHA_CACHE_EXACT_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3$scope_suffix"
-          publish_main_availability GHA_CACHE_MAIN_RUST_WASM_SOURCE_AVAILABLE "nook-rust-wasm-source-v3"
-          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
-          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
-          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
+          if [ -z "$scope_suffix" ]; then
+            # On Main these duplicate the exact source refs and have no consumer decision.
+            :
+          fi
         fi
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "preflight" ]; then
+          publish_exact_availability GHA_CACHE_EXACT_PREFLIGHT_AVAILABLE "nook-preflight-v1$scope_suffix"
+        fi
+        if [ "$cache_selection" = "general" ] || [ "$cache_selection" = "web-e2e" ]; then
+          publish_exact_availability GHA_CACHE_EXACT_WEB_E2E_AVAILABLE "nook-web-e2e-v1$scope_suffix"
+        fi
+        case "$cache_selection" in
+          general|native|wasm|preflight|web-e2e)
+          echo "GHA_CACHE_EXACT_PROBES_COMPLETE=1" >> "$GITHUB_ENV"
+          ;;
+        esac
 
         if [ -n "$hive_remote_ref" ]; then
           hive_ref="${hive_remote_ref#type=registry,ref=}"
@@ -384,6 +422,30 @@ runs:
       shell: bash
       run: |
         echo "NOOK_ENV=ci" >> "$GITHUB_ENV"
+
+    - name: Check ARC BuildKit storage pressure
+      if: ${{ inputs.monitor-buildkit-storage == 'true' && startsWith(runner.name, 'nook-k0s-') }}
+      continue-on-error: true
+      shell: bash
+      run: |
+        set -euo pipefail
+        usage="$(mktemp)"
+        trap 'rm -f "$usage"' EXIT
+        if ! timeout 8s docker buildx du >"$usage"; then
+          echo "::warning::BuildKit storage usage check did not finish within 8 seconds"
+          exit 0
+        fi
+        total="$(sed -n 's/^Total:[[:space:]]*//p' "$usage" | tail -1)"
+        case "$total" in
+          *GB) whole="${total%GB}"; whole="${whole%%.*}" ;;
+          *GiB) whole="${total%GiB}"; whole="${whole%%.*}" ;;
+          *) echo "::warning::BuildKit storage total was not parseable: ${total:-missing}"; exit 0 ;;
+        esac
+        if [ "$whole" -ge 100 ]; then
+          echo "::warning title=BuildKit cache near GC ceiling::Shard usage is $total; investigate GC before the 112 GB max-use target is crossed"
+        else
+          echo "BuildKit shard usage: $total (below the 100 GB warning threshold)"
+        fi
 
     - name: Start cache telemetry
       continue-on-error: true

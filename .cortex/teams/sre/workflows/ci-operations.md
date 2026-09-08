@@ -54,6 +54,35 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 ## Registry transport performance
 
+Main finishes repository preflight before native Rust verification begins.
+Preflight and native cache exports stay in their verified jobs on the same
+node-local shards that solved them.
+Each explicit outcome feeds an independent required status gate.
+Publication failures do not erase successful Rust evidence or suppress WASM,
+web, and browser consumers.
+Each publisher exports only its verified complete graph.
+Preflight publishes `nook-preflight-v1`.
+Native publishes the mode-max `nook-rust-native-source-v4` graph, which embeds
+its rust-base and dependency lineage.
+Isolated dependency readers prefer their exact `nook-rust-deps-v4` scope, then
+fall back to that fresh Main source graph for dependency-only restores.
+Main does not serially export overlapping native dependency or rust-base graphs;
+those exports made BuildKit prepare and recompress the same complete lineage.
+WASM dependency publication remains a distinct verified ref owned by its
+dedicated proof path; native publication never owns or overwrites it.
+
+Docker setup selects probes by the graph consumed by that job (`native`,
+`wasm`, `preflight`, or `web-e2e`). Use `general` only for a caller that can
+execute all of those graphs. The cache-export wrapper reports preparation,
+registry-send, and total export seconds separately. A concurrent-map panic is
+an actionable shard fault, and the native Main lane warns when BuildKit usage
+reaches 100 GB ahead of the configured 112 GB GC maximum.
+The portable WASM proof uses `wasm-proof` to compute the immutable dependency
+fingerprint. It performs no availability probes because the proof owns its
+explicit repair and verification refs.
+
+### Network transport evidence
+
 The OVH registry sender and home worker use TCP BBR for new connections.
 The policy applies only to `ovh-us` and `bynull-servo`.
 The registry keeps its public hostname and verified TLS path.

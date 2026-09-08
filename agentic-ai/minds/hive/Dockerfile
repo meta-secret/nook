@@ -1,4 +1,4 @@
-# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
 ARG RUST_VERSION=1.97
 ARG DEBIAN_RELEASE=trixie

@@ -52,7 +52,7 @@ is_frontend_authorization_timeout() {
   # loaded. Require the transient transport error on that same BuildKit vertex
   # so a later application vertex cannot reuse a successful frontend marker.
   awk '
-    /resolve image config for docker-image:\/\/docker\.io\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
+    /resolve image config for docker-image:\/\/(docker\.io|registry\.dev\.nokey\.sh)\/docker\/dockerfile:/ && $1 ~ /^#[0-9]+$/ {
       frontend_vertex = $1
     }
     /failed to authorize:.*TLS handshake timeout/ && frontend_vertex != "" && $1 == frontend_vertex {
@@ -60,6 +60,36 @@ is_frontend_authorization_timeout() {
     }
     END { exit(found ? 0 : 1) }
   ' "$log_file"
+}
+
+report_buildkit_cache_diagnostics() {
+  local log_file="$1"
+  local label="$2"
+  awk -v label="$label" '
+    /^#[0-9]+ exporting cache to registry/ {
+      export_vertex[$1] = 1
+    }
+    export_vertex[$1] && /preparing build cache for export [0-9.]+s done$/ {
+      value = $(NF - 1)
+      sub(/s$/, "", value)
+      preparation[$1] = value + 0
+    }
+    export_vertex[$1] && /^#[0-9]+ DONE [0-9.]+s$/ {
+      value = $3
+      sub(/s$/, "", value)
+      total[$1] = value + 0
+    }
+    END {
+      for (vertex in total) {
+        registry = total[vertex] - preparation[vertex]
+        if (registry < 0) registry = 0
+        printf "BuildKit cache phase metric: label=%s vertex=%s preparation_seconds=%.1f registry_send_seconds=%.1f total_export_seconds=%.1f\n", label, vertex, preparation[vertex], registry, total[vertex]
+      }
+    }
+  ' "$log_file"
+  if grep -Fqi 'fatal error: concurrent map writes' "$log_file"; then
+    echo "::error title=BuildKit concurrent-map fault::The selected BuildKit shard reported concurrent map writes; inspect the shard logs and remove it from service before retrying"
+  fi
 }
 
 # BSD/macOS mktemp requires the X template to end the path.
@@ -74,6 +104,7 @@ for attempt in 1 2; do
   "$@" 2>&1 | tee -a "$log_file"
   status=${PIPESTATUS[0]}
   set -e
+  report_buildkit_cache_diagnostics "$log_file" "$label"
   if [ "$status" -eq 0 ]; then
     exit 0
   fi
