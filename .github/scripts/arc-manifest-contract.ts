@@ -318,9 +318,13 @@ const workerInstallEnd = workerTasksSource.indexOf(
 if (workerInstallStart < 0 || workerInstallEnd < 0) {
   throw new Error("k0s worker install task is missing");
 }
+const workerInstallSource = workerTasksSource.slice(
+  workerInstallStart,
+  workerInstallEnd,
+);
 const workerInstall = new TextContract({
   label: "k0s worker install",
-  source: workerTasksSource.slice(workerInstallStart, workerInstallEnd),
+  source: workerInstallSource,
 });
 const workerRestoreStart = workerTasksSource.indexOf("  k0s:worker:restore:");
 const workerRestoreEnd = workerTasksSource.indexOf(
@@ -906,14 +910,49 @@ workerInstall.requireAll([
   'ssh -n -o BatchMode=yes -J "$controller_target" \\',
   "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   "actions.github.com/scale-set-name",
-  `select(.metadata.deletionTimestamp == null and \\
-                (.status.phase == "Pending" or .status.phase == "Running"))`,
+  'select(.metadata.deletionTimestamp == null and (.status.phase == "Pending" or .status.phase == "Running"))',
   "Timed out waiting for $active_runners ARC runner(s) on $node",
   "worker_was_active=false",
   "sudo -n systemctl restart k0sworker.service",
   "sudo -n systemctl is-active --quiet k0sworker.service",
   'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
 ]);
+const activeRunnerSelector = workerInstallSource.match(
+  /active_runners=.*?\| jq \\\s*\n\s*'([^']+)'/s,
+)?.[1];
+if (activeRunnerSelector === undefined) {
+  throw new Error("k0s worker install active-runner selector is missing");
+}
+const activeRunnerSelection = Bun.spawnSync({
+  cmd: [
+    "jq",
+    "-nr",
+    "--argjson",
+    "input",
+    JSON.stringify({
+      items: [
+        { metadata: { deletionTimestamp: null }, status: { phase: "Pending" } },
+        { metadata: { deletionTimestamp: null }, status: { phase: "Running" } },
+        {
+          metadata: { deletionTimestamp: "2026-09-08T05:17:03Z" },
+          status: { phase: "Running" },
+        },
+        { metadata: { deletionTimestamp: null }, status: { phase: "Succeeded" } },
+      ],
+    }),
+    `$input | ${activeRunnerSelector}`,
+  ],
+  stdout: "pipe",
+  stderr: "pipe",
+});
+if (
+  activeRunnerSelection.exitCode !== 0 ||
+  activeRunnerSelection.stdout.toString().trim() !== "2"
+) {
+  throw new Error(
+    `k0s worker install active-runner selector failed: ${activeRunnerSelection.stderr.toString()}`,
+  );
+}
 workerInstall.requireBefore({
   first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
