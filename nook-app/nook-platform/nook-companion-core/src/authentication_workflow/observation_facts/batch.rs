@@ -16,8 +16,7 @@ pub use wire::{
     CurrentAuthenticationPageObservationFactsRequest,
     CurrentAuthenticationPageObservationFactsWire,
     CurrentAuthenticationPageObservationFactsWireFacts,
-    VersionedAuthenticationPageObservationFacts,
-    VersionedAuthenticationPageObservationFactsBatch,
+    VersionedAuthenticationPageObservationFacts, VersionedAuthenticationPageObservationFactsBatch,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]

@@ -25,8 +25,7 @@ pub use batch::{
     CurrentAuthenticationPageObservationFactsRequest,
     CurrentAuthenticationPageObservationFactsWire,
     CurrentAuthenticationPageObservationFactsWireFacts,
-    VersionedAuthenticationPageObservationFacts,
-    VersionedAuthenticationPageObservationFactsBatch,
+    VersionedAuthenticationPageObservationFacts, VersionedAuthenticationPageObservationFactsBatch,
 };
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,

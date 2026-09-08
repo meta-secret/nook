@@ -608,5 +608,4 @@ mod tests {
     fn unknown_v1_fields_are_rejected() -> anyhow::Result<()> {
         ExactDisclosureControlScenario::assert_unknown_v1_fields_are_rejected()
     }
-
 }

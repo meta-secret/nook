@@ -4,9 +4,8 @@ use super::{AuthenticationPageObservationFacts, AuthenticationPageObservationFac
 use crate::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationCeremonyObservationFacts,
     AuthenticationCredentialDisclosureControlObservation,
-    AuthenticationCredentialSubmissionObservation,
-    AuthenticationDetailedAdvanceControlObservation, AuthenticationFieldObservationFacts,
-    AuthenticationWorkflowMatch,
+    AuthenticationCredentialSubmissionObservation, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationFieldObservationFacts, AuthenticationWorkflowMatch,
 };
 use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -168,9 +167,8 @@ impl AuthenticationPageObservationFactsUntrustedWireDecoder {
                 ),
             });
         }
-        let current = serde_json::from_value::<RequiredCurrentAuthenticationPageObservationFacts>(
-            encoded,
-        )?;
+        let current =
+            serde_json::from_value::<RequiredCurrentAuthenticationPageObservationFacts>(encoded)?;
         Ok(VersionedAuthenticationPageObservationFacts {
             schema_version: current.schema_version,
             facts: current.facts.into(),
@@ -211,10 +209,9 @@ impl VersionedAuthenticationPageObservationFacts {
 
     fn current_body_is_bounded(&self) -> bool {
         match &self.body {
-            AuthenticationPageObservationFactsBody::Current(body) => {
-                body.credential_disclosure_control
-                    .supported_observations_are_bounded()
-            }
+            AuthenticationPageObservationFactsBody::Current(body) => body
+                .credential_disclosure_control
+                .supported_observations_are_bounded(),
             AuthenticationPageObservationFactsBody::Unsupported(_) => true,
         }
     }
@@ -361,7 +358,10 @@ mod tests {
             let object = Self::object_mut(&mut encoded)?;
             object.insert("schemaVersion".to_owned(), serde_json::json!(2));
             object.remove("credentialDisclosureControl");
-            object.insert("renamedFutureBody".to_owned(), serde_json::json!({"safe": true}));
+            object.insert(
+                "renamedFutureBody".to_owned(),
+                serde_json::json!({"safe": true}),
+            );
             Ok(serde_json::from_value(encoded)?)
         }
 
@@ -407,13 +407,17 @@ mod tests {
             assert!(CurrentAuthenticationPageObservationFactsWire::DECL.contains(
                 "credentialDisclosureControl: AuthenticationCredentialDisclosureControlObservation"
             ));
-            assert!(!CurrentAuthenticationPageObservationFactsWire::DECL
-                .contains("credentialDisclosureControl?:"));
+            assert!(
+                !CurrentAuthenticationPageObservationFactsWire::DECL
+                    .contains("credentialDisclosureControl?:")
+            );
             assert!(CurrentAuthenticationPageObservationFactsRequest::DECL.contains(
                 "credentialDisclosureControl: AuthenticationCredentialDisclosureControlObservation"
             ));
-            assert!(!CurrentAuthenticationPageObservationFactsRequest::DECL
-                .contains("credentialDisclosureControl?:"));
+            assert!(
+                !CurrentAuthenticationPageObservationFactsRequest::DECL
+                    .contains("credentialDisclosureControl?:")
+            );
             Ok(())
         }
 
