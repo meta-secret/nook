@@ -270,13 +270,12 @@ mod tests {
         fn load(
             &self,
             vault_store_id: &StoreId,
-        ) -> Result<EncodedCandidate, CompanionPairingCandidateFailure> {
+        ) -> Result<Option<EncodedCandidate>, CompanionPairingCandidateFailure> {
             let gate_key = CandidateSchema::gate_key(vault_store_id.as_str());
-            let gate = CandidateSchema::decode_gate(
-                self.vault
-                    .get(&gate_key)
-                    .ok_or_else(CandidateSchema::integrity)?,
-            )?;
+            let Some(gate_json) = self.vault.get(&gate_key) else {
+                return Ok(None);
+            };
+            let gate = CandidateSchema::decode_gate(gate_json)?;
             let events = gate
                 .event_payload_keys
                 .iter()
@@ -295,12 +294,12 @@ mod tests {
                 .get(&gate.provider_payload_key)
                 .ok_or_else(CandidateSchema::integrity)?
                 .clone();
-            Ok(EncodedCandidate {
+            Ok(Some(EncodedCandidate {
                 gate_key,
                 gate,
                 events,
                 providers,
-            })
+            }))
         }
 
         fn interrupted_commit(
@@ -357,7 +356,10 @@ mod tests {
         let vault_store_id = candidate.vault_store_id.clone();
         let mut store = MemoryActivationStore::default();
         store.commit(EncodedCandidate::new(&candidate)?)?;
-        store.load(&vault_store_id)?.decode()?;
+        store
+            .load(&vault_store_id)?
+            .ok_or_else(CandidateSchema::integrity)?
+            .decode()?;
         assert!(
             store
                 .vault
@@ -374,7 +376,7 @@ mod tests {
         let mut store = MemoryActivationStore::default();
         let (key, value) = &encoded.events[0];
         store.vault.insert(key.clone(), value.clone());
-        assert!(store.load(&candidate.vault_store_id).is_err());
+        assert!(store.load(&candidate.vault_store_id)?.is_none());
         Ok(())
     }
 
@@ -396,7 +398,9 @@ mod tests {
             let vault_store_id = candidate.vault_store_id.clone();
             let mut store = MemoryActivationStore::default();
             store.commit(EncodedCandidate::new(&candidate)?)?;
-            let encoded = store.load(&vault_store_id)?;
+            let encoded = store
+                .load(&vault_store_id)?
+                .ok_or_else(CandidateSchema::integrity)?;
             if corruption == 0 {
                 store.vault.remove(&encoded.gate.event_payload_keys[0]);
             } else {
@@ -404,12 +408,12 @@ mod tests {
                     .vault
                     .insert(encoded.gate.provider_payload_key.clone(), "{}".to_owned());
             }
-            assert!(
+            assert!(matches!(
                 store
                     .load(&vault_store_id)
-                    .and_then(|value| value.decode())
-                    .is_err()
-            );
+                    .and_then(|value| value.ok_or_else(CandidateSchema::integrity)?.decode()),
+                Err(CompanionPairingCandidateFailure::Integrity)
+            ));
         }
         Ok(())
     }

@@ -80,7 +80,10 @@ impl PairingActivationStorageAdmission<'_> {
                 .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?;
             role_keys.push(Zeroizing::new(key.into_inner()));
         }
-        if role_keys[0].as_str() == role_keys[1].as_str() {
+        if role_keys[0]
+            .as_str()
+            .eq_ignore_ascii_case(role_keys[1].as_str())
+        {
             return Err(CompanionPairingCandidateFailure::EventAuthorization);
         }
         drop(role_keys);
@@ -661,8 +664,9 @@ mod tests {
         let identity = fixture.manager.device_identity()?;
         let secrets_key =
             Zeroizing::new(identity.open_utf8(&fixture.prepared.envelopes.secrets_key)?);
+        let same_key = Zeroizing::new(secrets_key.to_ascii_uppercase());
         fixture.prepared.envelopes.members_key =
-            identity.public_key().seal_bytes(secrets_key.as_bytes())?;
+            identity.public_key().seal_bytes(same_key.as_bytes())?;
         assert!(matches!(
             fixture.prepare_at(ActivationFixture::epoch("160")?),
             Err(CompanionPairingCandidateFailure::EventAuthorization)
