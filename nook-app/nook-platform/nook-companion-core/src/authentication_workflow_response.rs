@@ -90,9 +90,6 @@ pub enum AuthenticationWorkflowSnapshotResponse {
         kind: AuthenticationWorkflowSnapshotResponseKind,
         reason: String,
     },
-    UnsupportedVersion {
-        kind: AuthenticationWorkflowSnapshotResponseKind,
-    },
 }
 
 #[wasm_bindgen]
@@ -101,7 +98,6 @@ pub enum AuthenticationWorkflowSnapshotResponseKind {
     Matched,
     NoMatch,
     Rejected,
-    UnsupportedVersion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -199,13 +195,6 @@ pub fn decode_authentication_workflow_snapshot_response(
         ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
             kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
         }),
-        AuthenticationWorkflowSnapshotResponseWire::Rejected(
-            AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
-        ) if reason == "unsupported-authentication-observation-version" => {
-            Ok(AuthenticationWorkflowSnapshotResponse::UnsupportedVersion {
-                kind: AuthenticationWorkflowSnapshotResponseKind::UnsupportedVersion,
-            })
-        }
         AuthenticationWorkflowSnapshotResponseWire::Rejected(
             AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
         ) if !reason.trim().is_empty() => Ok(AuthenticationWorkflowSnapshotResponse::Rejected {
@@ -325,7 +314,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_each_rust_snapshot_response_variant() -> anyhow::Result<()> {
+    fn enforces_the_rust_snapshot_contract() -> anyhow::Result<()> {
         let valid = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
             r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":0}}"#,
         )?;
@@ -333,6 +322,23 @@ mod tests {
             decode_authentication_workflow_snapshot_response(valid)?,
             AuthenticationWorkflowSnapshotResponse::Matched { .. }
         ));
+
+        let continue_without_saved_login = serde_json::from_str::<
+            AuthenticationWorkflowSnapshotResponseWire,
+        >(
+            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"unavailable","observationIndex":0}}"#,
+        )?;
+        assert_eq!(
+            decode_authentication_workflow_snapshot_response(continue_without_saved_login),
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
+        );
+
+        assert!(
+            serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
+                r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":-1,"totalSteps":300,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":-1}}"#,
+            )
+            .is_err()
+        );
 
         let no_match = AuthenticationWorkflowSnapshotResponseWire::NoMatch(
             AuthenticationWorkflowNoMatchResponseWire { ok: true },
@@ -356,37 +362,6 @@ mod tests {
                 kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
                 reason: "vault-locked".to_owned(),
             }
-        );
-
-        let unsupported = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-            r#"{"ok":false,"reason":"unsupported-authentication-observation-version"}"#,
-        )?;
-        assert_eq!(
-            decode_authentication_workflow_snapshot_response(unsupported)?,
-            AuthenticationWorkflowSnapshotResponse::UnsupportedVersion {
-                kind: AuthenticationWorkflowSnapshotResponseKind::UnsupportedVersion,
-            }
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn rejects_contradictory_or_out_of_bounds_snapshot_responses() -> anyhow::Result<()> {
-        let continue_without_saved_login = serde_json::from_str::<
-            AuthenticationWorkflowSnapshotResponseWire,
-        >(
-            r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":1,"totalSteps":3,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"unavailable","observationIndex":0}}"#,
-        )?;
-        assert_eq!(
-            decode_authentication_workflow_snapshot_response(continue_without_saved_login),
-            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
-        );
-
-        assert!(
-            serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-                r#"{"ok":true,"snapshot":{"kind":0,"stage":0,"action":0,"currentStep":-1,"totalSteps":300,"approvalRequirement":"explicit-user-approval","savedLoginCapability":"fill-saved-login","observationIndex":-1}}"#,
-            )
-            .is_err()
         );
 
         let contradictory_matched = serde_json::from_str::<

@@ -14,7 +14,6 @@ test('fill only the local login inside a page-wide ASP.NET form', async ({
     localizedMessages: messages,
     ...demoDomainEnumArgs,
     loginPilotFlow: true,
-    recordAuthenticationObservations: true,
   }
   await page.addInitScript(installDemoChromeStub, stubArgs)
   await page.goto('/')
@@ -31,24 +30,6 @@ test('fill only the local login inside a page-wide ASP.NET form', async ({
 
   const widget = page.locator('#nook-auth-widget')
   await expect(widget.getByText('Ready to sign in')).toBeVisible()
-  const outboundObservations = await page.evaluate(() =>
-    ((v) => (v ? v : []))(
-      (
-        globalThis as unknown as {
-          __nookDemoAuthenticationObservations?: unknown[][]
-        }
-      ).__nookDemoAuthenticationObservations,
-    ),
-  )
-  expect(outboundObservations).toEqual(
-    expect.arrayContaining([
-      expect.arrayContaining([
-        expect.objectContaining({
-          credentialDisclosureControl: { kind: 'absent' },
-        }),
-      ]),
-    ]),
-  )
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
   await widget.getByRole('button', { name: 'Continue with Nook' }).click()
 

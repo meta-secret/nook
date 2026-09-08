@@ -1,7 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthenticationWorkflowSnapshotMessage } from '../src/lib/auth-workflow-messages'
 import {
-  AuthenticationWorkflowRoutingFailureReason,
   authenticationWorkflowMessageResponse,
   type AuthenticationWorkflowRoutingDependencies,
 } from '../src/background/service-worker/authentication-workflow-routing'
@@ -206,40 +205,7 @@ describe('authentication workflow routing', () => {
     await expect(
       authenticationWorkflowMessageResponse(request),
     ).resolves.toEqual({
-      workflow: {
-        ok: false,
-        reason: AuthenticationWorkflowRoutingFailureReason.SnapshotFailed,
-      },
-      loginMatches: { kind: 'unavailable' },
-    })
-  })
-
-  test('preserves unsupported observation versions as a typed failure', async () => {
-    const dependencies = {
-      companionWasmReady: Promise.resolve(),
-      authenticationPasskeyEvidenceIsSafe: () => false,
-      matchingPasskeyAvailabilityForOriginSafe: async () => ({
-        kind: 'ready',
-        accountCount: 0,
-      }),
-      authenticationWorkflowSnapshot: async () => ({
-        kind: 'unsupported-version',
-      }),
-      authenticationWorkflowSavedLoginCapability: () => 'unavailable',
-      authenticationWorkflowRequiresLoginMatchAvailability: () => false,
-      websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
-    } as AuthenticationWorkflowRoutingDependencies
-    const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
-      { message, sender, dependencies }
-
-    await expect(
-      authenticationWorkflowMessageResponse(request),
-    ).resolves.toEqual({
-      workflow: {
-        ok: false,
-        reason:
-          AuthenticationWorkflowRoutingFailureReason.UnsupportedObservationVersion,
-      },
+      workflow: { ok: false, reason: 'workflow-snapshot-failed' },
       loginMatches: { kind: 'unavailable' },
     })
   })

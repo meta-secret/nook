@@ -439,8 +439,6 @@ mod tests {
                         .repeat(nook_companion_core::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1),
                     ..Default::default()
                 },
-                credential_disclosure_control:
-                    nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
                 ..Default::default()
             }],
         };

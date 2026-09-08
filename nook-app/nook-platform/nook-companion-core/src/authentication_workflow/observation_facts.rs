@@ -23,8 +23,7 @@ pub use ceremony::{
     AuthenticationImplicitSubmitActuationObservation,
 };
 pub use disclosure::{
-    AuthenticationCredentialDisclosureControlObservation, AuthenticationDisclosureControlDecision,
-    AuthenticationDisclosureObservationSchemaVersion,
+    AuthenticationDisclosureControlDecision, AuthenticationDisclosureObservationSchemaVersion,
     CurrentAuthenticationDisclosureControlRequest,
     VersionedAuthenticationDisclosureControlObservation,
 };
@@ -52,8 +51,6 @@ pub struct AuthenticationPageObservationFacts {
     /// Detailed control evidence is classified in Rust; the reduced ceremony flag stays fail-closed.
     #[serde(default)]
     pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
-    /// Separately versioned evidence for exceptional disclosure-control classification.
-    pub credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
 
 impl AuthenticationPageObservationFacts {
@@ -62,7 +59,6 @@ impl AuthenticationPageObservationFacts {
             && self.authenticator.is_bounded()
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
-            && self.credential_disclosure_control.is_bounded()
             && self.authenticator.detailed_passkey_control.is_bounded()
             && self.credential_submission.is_bounded()
     }
@@ -147,25 +143,10 @@ impl AuthenticationPageObservationFactsBatch {
     #[must_use]
     pub fn classify(&self) -> AuthenticationWorkflowMatch {
         if self.observations.len() > crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-            || self.observations.iter().any(|observation| {
-                !observation
-                    .credential_disclosure_control
-                    .is_collection_bounded()
-            })
-        {
-            return AuthenticationWorkflowMatch::Rejected;
-        }
-        if self.observations.iter().any(|observation| {
-            observation
-                .credential_disclosure_control
-                .has_unsupported_version()
-        }) {
-            return AuthenticationWorkflowMatch::UnsupportedVersion;
-        }
-        if self
-            .observations
-            .iter()
-            .any(|observation| !observation.is_bounded())
+            || self
+                .observations
+                .iter()
+                .any(|observation| !observation.is_bounded())
         {
             return AuthenticationWorkflowMatch::Rejected;
         }
@@ -225,6 +206,19 @@ mod tests {
             ),
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn detailed_control_produces_actionable_login() {
+        let result = AuthenticationPageObservationFactsBatch {
+            observations: vec![password_login()],
+        }
+        .classify();
+        assert!(matches!(
+            result,
+            AuthenticationWorkflowMatch::Matched(snapshot)
+                if snapshot.kind == AuthenticationWorkflowKind::Login
+        ));
     }
 
     #[test]

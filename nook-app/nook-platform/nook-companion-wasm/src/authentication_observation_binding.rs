@@ -56,8 +56,6 @@ mod tests {
                         destination_identity: "https://example.test/session".to_owned(),
                     },
                 ),
-                credential_disclosure_control:
-                    nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
                 ..Default::default()
             }],
         }

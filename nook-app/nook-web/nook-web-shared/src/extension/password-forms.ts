@@ -1,9 +1,5 @@
 import { companionWasmReady } from "./companion-ready";
 import {
-  AuthenticationPageObservationFactsAssembler,
-  type AuthenticationPageObservationFactsAssemblyRequest,
-} from "./authentication-page-observation-facts";
-import {
   authentication_advance_control_is_safe,
   authentication_page_observation_facts_priority,
   authentication_passkey_control_candidate_is_safe,
@@ -15,6 +11,7 @@ import type {
   AuthenticationDetailedPasskeyControlObservation,
   AuthenticationCredentialSubmissionObservation,
   AuthenticationPageObservationFacts,
+  AuthenticationPasskeyControlObservation,
   AuthenticationUsernameEvidence,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
@@ -130,6 +127,10 @@ export {
   type PasswordFormScopeQuery,
 } from "./password-form-submission-controls";
 void companionWasmReady;
+const passkeyControlAbsent =
+  "absent" satisfies AuthenticationPasskeyControlObservation;
+const passkeyControlPresent =
+  "present" satisfies AuthenticationPasskeyControlObservation;
 const credentialSubmissionAbsent =
   "absent" satisfies AuthenticationCredentialSubmissionObservation["kind"];
 const credentialSubmissionObserved =
@@ -589,38 +590,54 @@ export function authenticationPageObservationFacts({
       },
     };
   }
-  const assemblyRequest: AuthenticationPageObservationFactsAssemblyRequest = {
-    summary: observation.summary,
-    actionablePasswordFieldCount:
-      passwordFields.length - readonlyPasswordFieldCount,
-    readonlyPasswordFieldCount,
-    oneTimeCodeHandlerSignals,
-    authenticationUsername,
-    sourceOrigin: location.origin,
-    formIdentity: contextFormIdentity,
-    destinationIdentity: contextDestinationIdentity,
-    manualCheckpoint: observation.summary.manualCheckpointPresent
-      ? "present"
-      : "absent",
-    implicitSubmissionMethod:
-      observation.formScope.kind === PasswordFormScopeKind.Owned &&
-      !ownedObservationIsLocallyBounded(observation)
-        ? formSubmissionMethod(observation.formScope.owner)
-        : PageControlSubmissionMethod.Absent,
-    advanceControl: implicitSubmissionAvailable
-      ? "implicit-submission"
-      : "absent",
-    authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
-    backupCodesCopy: ((...[v = backupCodesHint ? "Save backup codes" : ""]) =>
-      v)(backupCodesCopy),
-    passkeyControl: passkeyControls.length > 0 ? "present" : "absent",
-    detailedPasskeyControl,
+  return {
+    fields: {
+      usernameFieldCount: observation.summary.usernameFieldCount,
+      currentPasswordFieldCount: observation.summary.currentPasswordFieldCount,
+      newPasswordFieldCount: observation.summary.newPasswordFieldCount,
+      genericPasswordFieldCount: observation.summary.genericPasswordFieldCount,
+      oneTimeCodeFieldCount: observation.summary.oneTimeCodeFieldCount,
+      actionablePasswordFieldCount:
+        passwordFields.length - readonlyPasswordFieldCount,
+      readonlyPasswordFieldCount,
+    },
+    ceremony: {
+      oneTimeCodeProgression: "advance-control-required",
+      oneTimeCodeHandlerSignal: "",
+      oneTimeCodeHandlerSignals,
+      authenticationContext: {
+        authenticationUsername,
+        sourceOrigin: location.origin,
+        formIdentity: contextFormIdentity,
+        destinationIdentity: contextDestinationIdentity,
+      },
+      manualCheckpoint: observation.summary.manualCheckpointPresent
+        ? "present"
+        : "absent",
+      implicitSubmissionMethod:
+        observation.formScope.kind === PasswordFormScopeKind.Owned &&
+        !ownedObservationIsLocallyBounded(observation)
+          ? formSubmissionMethod(observation.formScope.owner)
+          : PageControlSubmissionMethod.Absent,
+      advanceControl: implicitSubmissionAvailable
+        ? "implicit-submission"
+        : "absent",
+    },
+    authenticator: {
+      authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
+      backupCodesCopy:
+        ((...[v = backupCodesHint ? "Save backup codes" : ""]) => v)(backupCodesCopy),
+      passkeyControl:
+        passkeyControls.length > 0
+          ? passkeyControlPresent
+          : passkeyControlAbsent,
+      passkeyAccountAvailability: "unavailable",
+      matchingPasskeyAccountCount: 0,
+      detailedPasskeyControl,
+    },
     credentialSubmission,
     detailedAdvanceControl,
   };
-  return new AuthenticationPageObservationFactsAssembler(
-    assemblyRequest,
-  ).assemble();
 }
 export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
   const root = document;

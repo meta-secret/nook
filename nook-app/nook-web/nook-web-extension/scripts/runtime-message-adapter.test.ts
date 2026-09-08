@@ -3,7 +3,6 @@ import {
   AuthenticationOutcomeVerdict,
   AuthenticationOutcomeResponseKind,
   AuthenticationWorkflowSnapshotResponseKind,
-  CompanionAuthenticationWorkflowMatchKind,
   AuthenticatorBackupAttachResponseKind,
   AuthenticatorCodeResponseKind,
   AuthenticatorEnrollmentConfirmResponseKind,
@@ -14,9 +13,6 @@ import {
   GeneratedPasswordResponseKind,
   LoginPickerOpenResponseKind,
   WebsiteLoginOptionsKind,
-  classify_companion_authentication_workflow_facts,
-  companion_authentication_workflow_match_kind,
-  decode_authentication_workflow_runtime_response,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   RuntimeMessageDeliveryKind,
@@ -55,85 +51,6 @@ import { WebsiteLoginSaveOfferMessageType } from '../src/lib/login-save-messages
 import { AuthenticationOutcomeClassifyMessageType } from '../src/lib/outcome-evidence-messages'
 
 type TestAcknowledgement = { accepted: true }
-
-class GeneratedUnsupportedAuthenticationObservationScenario {
-  private static futureFactsBatch(): Parameters<
-    typeof classify_companion_authentication_workflow_facts
-  >[0] {
-    return {
-      observations: [
-        {
-          fields: {
-            usernameFieldCount: 1,
-            currentPasswordFieldCount: 1,
-            newPasswordFieldCount: 0,
-            genericPasswordFieldCount: 0,
-            oneTimeCodeFieldCount: 0,
-            actionablePasswordFieldCount: 1,
-            readonlyPasswordFieldCount: 0,
-          },
-          ceremony: {
-            oneTimeCodeProgression: 'advance-control-required',
-            oneTimeCodeHandlerSignal: '',
-            oneTimeCodeHandlerSignals: [],
-            authenticationContext: {
-              authenticationUsername: 'strong',
-              sourceOrigin: 'https://example.test',
-              formIdentity: 'login',
-              destinationIdentity: '/login',
-            },
-            manualCheckpoint: 'absent',
-            advanceControl: 'absent',
-            implicitSubmissionMethod: 'absent',
-          },
-          authenticator: {
-            authenticatorSetup: 'absent',
-            backupCodesCopy: '',
-            passkeyControl: 'absent',
-            passkeyAccountAvailability: 'ready',
-            matchingPasskeyAccountCount: 0,
-            detailedPasskeyControl: { kind: 'absent' },
-          },
-          credentialDisclosureControl: {
-            kind: 'observed',
-            observations: [{ schemaVersion: 2 }],
-          },
-          credentialSubmission: { kind: 'absent' },
-          detailedAdvanceControl: { kind: 'absent' },
-        },
-      ],
-    } as unknown as Parameters<
-      typeof classify_companion_authentication_workflow_facts
-    >[0]
-  }
-
-  static assertGeneratedAbiPreservesUnsupportedVersion(): void {
-    const futureFactsBatch: Parameters<
-      typeof classify_companion_authentication_workflow_facts
-    >[0] = this.futureFactsBatch()
-    const workflowMatch =
-      classify_companion_authentication_workflow_facts(futureFactsBatch)
-    expect(companion_authentication_workflow_match_kind(workflowMatch)).toBe(
-      CompanionAuthenticationWorkflowMatchKind.UnsupportedVersion,
-    )
-
-    const unsupportedRuntimeResponseWire: Parameters<
-      typeof decode_authentication_workflow_runtime_response
-    >[0] = {
-      workflow: {
-        ok: false,
-        reason: 'unsupported-authentication-observation-version',
-      },
-      loginMatches: { kind: 'unavailable' },
-    }
-    const decoded = decode_authentication_workflow_runtime_response(
-      unsupportedRuntimeResponseWire,
-    )
-    expect(decoded.workflow.kind).toBe(
-      AuthenticationWorkflowSnapshotResponseKind.UnsupportedVersion,
-    )
-  }
-}
 
 function isTestAcknowledgement(
   response: unknown,
@@ -285,10 +202,6 @@ const authenticationOutcomeMessage: Parameters<
 }
 
 describe('runtime message adapters', () => {
-  test('preserves unsupported versions through the generated WASM ABI', () => {
-    GeneratedUnsupportedAuthenticationObservationScenario.assertGeneratedAbiPreservesUnsupportedVersion()
-  })
-
   test('initializes companion WASM before decoding a valid login options wire', async () => {
     const response = {
       ok: true,
@@ -469,7 +382,6 @@ describe('runtime message adapters', () => {
         matchingPasskeyAccountCount: 2,
         detailedPasskeyControl: { kind: 'absent' },
       },
-      credentialDisclosureControl: { kind: 'absent' },
       detailedAdvanceControl: { kind: 'absent' },
     }
     const response = {
@@ -506,21 +418,6 @@ describe('runtime message adapters', () => {
         count: 2,
       })
     }
-
-    const {
-      credentialDisclosureControl: omittedDisclosure,
-      ...withoutDisclosure
-    } = selectedFacts
-    expect(omittedDisclosure).toEqual({ kind: 'absent' })
-    installRuntimeMock({
-      kind: RuntimeMockKind.Response,
-      response: { ...response, selectedFacts: withoutDisclosure },
-    })
-    const malformedDelivery =
-      await sendAuthenticationWorkflowSnapshotRuntimeMessage(
-        workflowSnapshotMessage,
-      )
-    expect(malformedDelivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
   test('rejects the legacy ambiguous workflow approval boolean', async () => {

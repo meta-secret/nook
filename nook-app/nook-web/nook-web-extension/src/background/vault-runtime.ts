@@ -131,12 +131,10 @@ export async function reconcileExtensionPairingItems({
 export enum AuthenticationWorkflowSnapshotKind {
   Matched = 'matched',
   NoMatch = 'no-match',
-  UnsupportedVersion = 'unsupported-version',
 }
 
 export type AuthenticationWorkflowSnapshot =
   | { kind: AuthenticationWorkflowSnapshotKind.NoMatch }
-  | { kind: AuthenticationWorkflowSnapshotKind.UnsupportedVersion }
   | {
       kind: AuthenticationWorkflowSnapshotKind.Matched
       snapshot: AuthenticationWorkflowSnapshotView
@@ -150,11 +148,6 @@ export async function authenticationWorkflowSnapshot(
   const matchKind = companion_authentication_workflow_match_kind(workflowMatch)
   if (matchKind === CompanionAuthenticationWorkflowMatchKind.Rejected) {
     throw new Error('authentication workflow observations were rejected')
-  }
-  if (
-    matchKind === CompanionAuthenticationWorkflowMatchKind.UnsupportedVersion
-  ) {
-    return { kind: AuthenticationWorkflowSnapshotKind.UnsupportedVersion }
   }
   if (matchKind === CompanionAuthenticationWorkflowMatchKind.NoMatch) {
     return { kind: AuthenticationWorkflowSnapshotKind.NoMatch }

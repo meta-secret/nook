@@ -98,7 +98,6 @@ pub enum CompanionAuthenticationWorkflowMatchKind {
     NoMatch,
     Rejected,
     Matched,
-    UnsupportedVersion,
 }
 
 #[wasm_bindgen]
@@ -113,9 +112,6 @@ pub fn companion_authentication_workflow_match_kind(
         }
         nook_companion_core::AuthenticationWorkflowMatch::Rejected => {
             CompanionAuthenticationWorkflowMatchKind::Rejected
-        }
-        nook_companion_core::AuthenticationWorkflowMatch::UnsupportedVersion => {
-            CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion
         }
         nook_companion_core::AuthenticationWorkflowMatch::Matched(_) => {
             CompanionAuthenticationWorkflowMatchKind::Matched
@@ -137,10 +133,6 @@ mod tests {
             (
                 nook_companion_core::AuthenticationWorkflowMatch::Rejected,
                 super::CompanionAuthenticationWorkflowMatchKind::Rejected,
-            ),
-            (
-                nook_companion_core::AuthenticationWorkflowMatch::UnsupportedVersion,
-                super::CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion,
             ),
             (
                 super::authentication_enrollment_workflow_match(

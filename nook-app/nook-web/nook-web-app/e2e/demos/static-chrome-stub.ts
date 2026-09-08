@@ -116,8 +116,6 @@ export type DemoChromeStubArgs = {
   authenticatorPickerFlow?: boolean
   /** Record runtime message types so demos can assert cross-domain sequencing. */
   recordRuntimeMessageTypes?: boolean
-  /** Record outbound authentication facts so demos can assert the wire contract. */
-  recordAuthenticationObservations?: boolean
   barcodeRawValue?: string
 }
 
@@ -142,31 +140,6 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     vaultName: string
   }
 
-  class AuthenticationObservationRecorder {
-    private readonly enabled: boolean
-
-    constructor(enabled: boolean) {
-      this.enabled = enabled
-    }
-
-    record(message: RuntimeMessage): void {
-      if (
-        !this.enabled ||
-        message.type !== 'nook:authentication-workflow-snapshot'
-      ) {
-        return
-      }
-      const demoWindow = globalThis as unknown as {
-        __nookDemoAuthenticationObservations?: unknown[][]
-      }
-      demoWindow.__nookDemoAuthenticationObservations = ((value) =>
-        value ? value : [])(demoWindow.__nookDemoAuthenticationObservations)
-      demoWindow.__nookDemoAuthenticationObservations.push(
-        ((value) => (value ? value : []))(message.payload?.observations),
-      )
-    }
-  }
-
   const {
     localizedMessages,
     loginSaveCreateDecision,
@@ -185,11 +158,8 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     enrollPilotFlow = false,
     authenticatorPickerFlow = false,
     recordRuntimeMessageTypes = false,
-    recordAuthenticationObservations = false,
     barcodeRawValue,
   } = args
-  const authenticationObservationRecorder =
-    new AuthenticationObservationRecorder(recordAuthenticationObservations)
   let loginOptionsCalls = 0
   enum StagedOfferKind {
     Empty = 'empty',
@@ -707,7 +677,6 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
           )
           demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
         }
-        authenticationObservationRecorder.record(message)
         const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {
           message,
           response: responseFor(message),

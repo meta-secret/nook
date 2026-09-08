@@ -41,7 +41,6 @@ const validMessage = {
           matchingPasskeyAccountCount: 0,
           detailedPasskeyControl: { kind: 'absent' },
         },
-        credentialDisclosureControl: { kind: 'absent' },
         detailedAdvanceControl: { kind: 'absent' },
       },
     ],
@@ -127,94 +126,6 @@ describe('authentication workflow snapshot messages', () => {
 
   test('accepts bounded structural page observations', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
-  })
-
-  test('rejects observations that omit disclosure-control state', () => {
-    const observation = validMessage.payload.observations[0]
-    const {
-      credentialDisclosureControl: omittedDisclosure,
-      ...withoutDisclosure
-    } = observation
-    expect(omittedDisclosure).toEqual({ kind: 'absent' })
-    expect(
-      isAuthenticationWorkflowSnapshotMessage({
-        ...validMessage,
-        payload: {
-          ...validMessage.payload,
-          observations: [withoutDisclosure],
-        },
-      }),
-    ).toBe(false)
-  })
-
-  test('rejects decoded null and inherited disclosure envelopes', () => {
-    const inheritedDisclosureEnvelopePrototype: { kind: string } = {
-      kind: 'absent',
-    }
-    const inheritedDisclosureEnvelope: { readonly kind?: unknown } =
-      Object.create(inheritedDisclosureEnvelopePrototype)
-    for (const credentialDisclosureControl of [
-      JSON.parse('null'),
-      inheritedDisclosureEnvelope,
-    ]) {
-      expect(
-        isAuthenticationWorkflowSnapshotMessage({
-          ...validMessage,
-          payload: {
-            ...validMessage.payload,
-            observations: [
-              {
-                ...validMessage.payload.observations[0],
-                credentialDisclosureControl,
-              },
-            ],
-          },
-        }),
-      ).toBe(false)
-    }
-  })
-
-  test('forwards observed disclosure envelopes to the Rust decoder', () => {
-    const observation = validMessage.payload.observations[0]
-    expect(
-      isAuthenticationWorkflowSnapshotMessage({
-        ...validMessage,
-        payload: {
-          ...validMessage.payload,
-          observations: [
-            {
-              ...observation,
-              credentialDisclosureControl: {
-                kind: 'observed',
-                observations: [
-                  {
-                    schemaVersion: 1,
-                    observation: {
-                      actionability: 'actionable',
-                      ownership: 'owned-form',
-                      semantics: 'activation',
-                      authenticationUsername: 'explicit',
-                      passwordFieldCount: 1,
-                      newPasswordFieldCount: 0,
-                      oneTimeCodeFieldCount: 0,
-                      semanticSubmitControlCount: 0,
-                      sourceOrigin: 'https://login.example.com',
-                      formIdentity: '',
-                      destinationIdentity: 'https://login.example.com/login',
-                      label: 'Sign in',
-                      machineIdentity: '',
-                      submissionMethod: 'absent',
-                      submissionDestinationSource: 'omitted',
-                    },
-                    genericPasswordFieldCount: 0,
-                  },
-                ],
-              },
-            },
-          ],
-        },
-      }),
-    ).toBe(true)
   })
 
   test('accepts WebAuthn email evidence from the generated WASM contract', () => {
