@@ -912,10 +912,17 @@ fn bake_callers_never_clear_cache_from_or_cache_to() {
     }
 }
 
-struct MainRustEntrypointContract;
+struct MainRustEntrypointContract {
+    root: PathBuf,
+}
 
 impl MainRustEntrypointContract {
-    fn assert(root: &Path) {
+    fn new(root: PathBuf) -> Self {
+        Self { root }
+    }
+
+    fn assert(&self) {
+        let root = &self.root;
         let entrypoint = Command::new("task")
             .args(["--dry", "ci:main:rust"])
             .env("REPO_ROOT", root)
@@ -954,7 +961,7 @@ impl MainRustEntrypointContract {
 
 #[test]
 fn main_rust_entrypoint_reaches_its_dynamic_host_task() {
-    MainRustEntrypointContract::assert(&repository_root());
+    MainRustEntrypointContract::new(repository_root()).assert();
 }
 
 fn assert_no_empty_cache_overrides(text: &str) {
