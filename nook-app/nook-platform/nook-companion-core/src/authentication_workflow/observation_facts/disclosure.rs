@@ -187,6 +187,24 @@ impl AuthenticationCredentialDisclosureControlObservation {
                 && observations[0].is_exact_inert_planning_control())
     }
 
+    fn reader_rejection(&self) -> Option<AuthenticationCredentialDisclosureRejection> {
+        let Self::Observed(observations) = self else {
+            return Some(AuthenticationCredentialDisclosureRejection::ControlObservationAbsent);
+        };
+        let [observation] = observations.as_slice() else {
+            return Some(AuthenticationCredentialDisclosureRejection::MalformedControlObservation);
+        };
+        if !observation.schema_version.is_supported() {
+            return Some(
+                AuthenticationCredentialDisclosureRejection::UnsupportedVersion(
+                    observation.schema_version,
+                ),
+            );
+        }
+        (!observation.is_bounded())
+            .then_some(AuthenticationCredentialDisclosureRejection::MalformedControlObservation)
+    }
+
     fn has_actionable_consumption_evidence(
         &self,
         fields: AuthenticationFieldObservationFacts,
@@ -217,24 +235,99 @@ pub struct AuthenticationCredentialDisclosurePlanningCapability {
     approved_facts: AuthenticationPageObservationFacts,
 }
 
+/// Typed failure produced by the exceptional disclosure transaction.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error, Serialize, Deserialize, Tsify)]
+#[serde(tag = "kind", content = "detail", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationCredentialDisclosureRejection {
+    #[error("the disclosure control observation is absent")]
+    ControlObservationAbsent,
+    #[error("the disclosure control observation is malformed")]
+    MalformedControlObservation,
+    #[error("the disclosure control observation version is unsupported")]
+    UnsupportedVersion(AuthenticationDisclosureObservationSchemaVersion),
+    #[error("the authentication context does not authorize credential disclosure")]
+    AuthenticationContextRejected,
+    #[error("the credential fields do not authorize disclosure: {0}")]
+    CredentialFieldsRejected(credential_fill::CredentialFillRejection),
+    #[error("the credential fields do not have the exact disclosure shape")]
+    CredentialFieldsNotExact,
+    #[error("the credential field assignments changed after planning")]
+    CredentialAssignmentsChanged,
+}
+
 /// Typed result of validating full-page evidence for exceptional disclosure planning.
 #[derive(Debug)]
 pub enum AuthenticationCredentialDisclosurePlanningDecision {
-    Rejected(credential_fill::CredentialFillRejection),
+    Rejected(AuthenticationCredentialDisclosureRejection),
     Approved(Box<AuthenticationCredentialDisclosurePlanningCapability>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ExactAuthenticationCredentialDisclosureAssignments {
+    username: credential_fill::Assignment,
+    password: credential_fill::Assignment,
+}
+
+impl ExactAuthenticationCredentialDisclosureAssignments {
+    fn from_fields(
+        fields: &[field::Observation],
+    ) -> Result<Self, AuthenticationCredentialDisclosureRejection> {
+        let plan = credential_fill::Plan::from_fields(fields)
+            .map_err(AuthenticationCredentialDisclosureRejection::CredentialFieldsRejected)?;
+        let [username, password] = plan.assignments.as_slice() else {
+            return Err(AuthenticationCredentialDisclosureRejection::CredentialFieldsNotExact);
+        };
+        let exact_fields = fields.len() == 2
+            && fields.iter().any(|field| {
+                matches!(
+                    field,
+                    field::Observation::Credential(field::Credential {
+                        role: field::CredentialRole::Username,
+                        editability: field::Editability::Writable,
+                        ..
+                    })
+                )
+            })
+            && fields.iter().any(|field| {
+                matches!(
+                    field,
+                    field::Observation::Credential(field::Credential {
+                        role: field::CredentialRole::Password(field::Password::Current),
+                        editability: field::Editability::Writable,
+                        ..
+                    })
+                )
+            })
+            && matches!(
+                username.credential,
+                credential_fill::CredentialKind::Username
+            )
+            && matches!(
+                password.credential,
+                credential_fill::CredentialKind::CurrentPassword
+            );
+        if !exact_fields {
+            return Err(AuthenticationCredentialDisclosureRejection::CredentialFieldsNotExact);
+        }
+        Ok(Self {
+            username: username.clone(),
+            password: password.clone(),
+        })
+    }
 }
 
 /// Opaque authority that must be checked before the username is written.
 #[derive(Debug)]
 pub struct AuthenticationCredentialDisclosureCapability {
     approved_facts: AuthenticationPageObservationFacts,
-    username_assignment: credential_fill::Assignment,
-    password_assignment: credential_fill::Assignment,
+    assignments: ExactAuthenticationCredentialDisclosureAssignments,
 }
 
 /// Named fresh-facts request for the pre-username effect boundary.
 pub struct AuthenticationCredentialDisclosurePreflightRequest<'a> {
     pub fresh_facts: &'a AuthenticationPageObservationFacts,
+    pub fields: &'a [field::Observation],
 }
 
 /// Exact username assignment plus the one-shot authority for the password stage.
@@ -254,82 +347,39 @@ pub struct AuthorizedAuthenticationUsernameDisclosure {
 ///     first: AuthenticationPasswordDisclosureRequest<'_>,
 ///     second: AuthenticationPasswordDisclosureRequest<'_>,
 /// ) {
-///     let _ = continuation.consume(first);
-///     let _ = continuation.consume(second);
+///     let _ = continuation.consume(&first);
+///     let _ = continuation.consume(&second);
 /// }
 /// ```
 #[derive(Debug)]
 pub struct AuthenticationPasswordDisclosureContinuation {
     approved_facts: AuthenticationPageObservationFacts,
-    password_assignment: credential_fill::Assignment,
+    assignments: ExactAuthenticationCredentialDisclosureAssignments,
 }
 
 /// Named fresh-facts request for the password effect boundary.
 pub struct AuthenticationPasswordDisclosureRequest<'a> {
     pub fresh_facts: &'a AuthenticationPageObservationFacts,
+    pub fields: &'a [field::Observation],
 }
 
 impl AuthenticationCredentialDisclosurePlanningDecision {
     pub fn plan(
         self,
-        request: AuthenticationCredentialDisclosurePlanningRequest<'_>,
+        request: &AuthenticationCredentialDisclosurePlanningRequest<'_>,
     ) -> Result<
         AuthenticationCredentialDisclosureCapability,
-        credential_fill::CredentialFillRejection,
+        AuthenticationCredentialDisclosureRejection,
     > {
-        let AuthenticationCredentialDisclosurePlanningRequest { fields } = request;
-        let Self::Approved(approval) = self else {
-            return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
+        let approval = match self {
+            Self::Approved(approval) => approval,
+            Self::Rejected(rejection) => return Err(rejection),
         };
-        let exact_fields = fields.len() == 2
-            && fields
-                .iter()
-                .filter(|observation| {
-                    matches!(
-                        observation,
-                        field::Observation::Credential(field::Credential {
-                            role: field::CredentialRole::Username,
-                            editability: field::Editability::Writable,
-                            ..
-                        })
-                    )
-                })
-                .count()
-                == 1
-            && fields
-                .iter()
-                .filter(|observation| {
-                    matches!(
-                        observation,
-                        field::Observation::Credential(field::Credential {
-                            role: field::CredentialRole::Password(field::Password::Current),
-                            editability: field::Editability::Writable,
-                            ..
-                        })
-                    )
-                })
-                .count()
-                == 1;
-        if !exact_fields {
-            return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
-        }
-        let plan = credential_fill::Plan::from_fields(fields)?;
-        let [username_assignment, password_assignment] = plan.assignments.as_slice() else {
-            return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
-        };
-        if !matches!(
-            username_assignment.credential,
-            credential_fill::CredentialKind::Username
-        ) || !matches!(
-            password_assignment.credential,
-            credential_fill::CredentialKind::CurrentPassword
-        ) {
-            return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
-        }
+        let assignments =
+            ExactAuthenticationCredentialDisclosureAssignments::from_fields(request.fields)?;
         Ok(AuthenticationCredentialDisclosureCapability {
             approved_facts: approval.approved_facts,
-            username_assignment: username_assignment.clone(),
-            password_assignment: password_assignment.clone(),
+            assignments,
         })
     }
 }
@@ -337,23 +387,33 @@ impl AuthenticationCredentialDisclosurePlanningDecision {
 impl AuthenticationCredentialDisclosureCapability {
     pub fn preflight(
         self,
-        request: AuthenticationCredentialDisclosurePreflightRequest<'_>,
-    ) -> Result<AuthorizedAuthenticationUsernameDisclosure, credential_fill::CredentialFillRejection>
-    {
-        let AuthenticationCredentialDisclosurePreflightRequest { fresh_facts } = request;
+        request: &AuthenticationCredentialDisclosurePreflightRequest<'_>,
+    ) -> Result<
+        AuthorizedAuthenticationUsernameDisclosure,
+        AuthenticationCredentialDisclosureRejection,
+    > {
+        let fresh_facts = request.fresh_facts;
+        if let Some(rejection) = fresh_facts.credential_disclosure_control.reader_rejection() {
+            return Err(rejection);
+        }
         if fresh_facts != &self.approved_facts
             || !fresh_facts.is_bounded()
             || !fresh_facts
                 .credential_disclosure_control
                 .has_planning_evidence(fresh_facts.fields)
         {
-            return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
+            return Err(AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected);
+        }
+        let assignments =
+            ExactAuthenticationCredentialDisclosureAssignments::from_fields(request.fields)?;
+        if assignments != self.assignments {
+            return Err(AuthenticationCredentialDisclosureRejection::CredentialAssignmentsChanged);
         }
         Ok(AuthorizedAuthenticationUsernameDisclosure {
-            username_assignment: self.username_assignment,
+            username_assignment: assignments.username.clone(),
             password_continuation: AuthenticationPasswordDisclosureContinuation {
                 approved_facts: self.approved_facts,
-                password_assignment: self.password_assignment,
+                assignments,
             },
         })
     }
@@ -362,24 +422,32 @@ impl AuthenticationCredentialDisclosureCapability {
 impl AuthenticationPasswordDisclosureContinuation {
     pub fn consume(
         self,
-        request: AuthenticationPasswordDisclosureRequest<'_>,
-    ) -> Result<credential_fill::Assignment, credential_fill::CredentialFillRejection> {
-        let AuthenticationPasswordDisclosureRequest { fresh_facts } = request;
+        request: &AuthenticationPasswordDisclosureRequest<'_>,
+    ) -> Result<credential_fill::Assignment, AuthenticationCredentialDisclosureRejection> {
+        let fresh_facts = request.fresh_facts;
+        if let Some(rejection) = fresh_facts.credential_disclosure_control.reader_rejection() {
+            return Err(rejection);
+        }
         if !fresh_facts.is_bounded()
             || !fresh_facts
                 .credential_disclosure_control
                 .has_actionable_consumption_evidence(fresh_facts.fields)
         {
-            return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
+            return Err(AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected);
         }
         let mut normalized = fresh_facts.clone();
         normalized
             .credential_disclosure_control
             .normalize_expected_actionability();
         if normalized != self.approved_facts {
-            return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
+            return Err(AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected);
         }
-        Ok(self.password_assignment)
+        let assignments =
+            ExactAuthenticationCredentialDisclosureAssignments::from_fields(request.fields)?;
+        if assignments != self.assignments {
+            return Err(AuthenticationCredentialDisclosureRejection::CredentialAssignmentsChanged);
+        }
+        Ok(assignments.password)
     }
 }
 
@@ -389,6 +457,9 @@ impl AuthenticationPageObservationFacts {
     pub fn credential_disclosure_planning_decision(
         &self,
     ) -> AuthenticationCredentialDisclosurePlanningDecision {
+        if let Some(rejection) = self.credential_disclosure_control.reader_rejection() {
+            return AuthenticationCredentialDisclosurePlanningDecision::Rejected(rejection);
+        }
         if self.is_bounded()
             && self
                 .credential_disclosure_control
@@ -401,7 +472,7 @@ impl AuthenticationPageObservationFacts {
             ))
         } else {
             AuthenticationCredentialDisclosurePlanningDecision::Rejected(
-                credential_fill::CredentialFillRejection::AuthenticationContextRejected,
+                AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected,
             )
         }
     }
@@ -411,6 +482,8 @@ impl AuthenticationPageObservationFacts {
 mod tests {
     use super::*;
     use crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
+
+    mod fresh_field_drift;
 
     struct OmittedMethodDisclosureScenario;
 
@@ -468,38 +541,75 @@ mod tests {
             facts
         }
 
+        fn versioned_facts(
+            actionability: PageControlActionability,
+            schema_version: u32,
+        ) -> AuthenticationPageObservationFacts {
+            let mut facts = Self::facts(actionability);
+            let AuthenticationCredentialDisclosureControlObservation::Observed(controls) =
+                &mut facts.credential_disclosure_control
+            else {
+                unreachable!("fixture always owns one disclosure control");
+            };
+            controls[0].schema_version = schema_version.into();
+            facts
+        }
+
+        fn field(
+            field_index: field::Index,
+            role: field::CredentialRole,
+            editability: field::Editability,
+        ) -> field::Observation {
+            field::Credential {
+                field_index,
+                role,
+                editability,
+            }
+            .into()
+        }
+
         fn fields() -> [field::Observation; 2] {
             [
-                field::Credential {
-                    field_index: field::Index::ZERO,
-                    role: field::CredentialRole::Username,
-                    editability: field::Editability::Writable,
-                }
-                .into(),
-                field::Credential {
-                    field_index: field::Index::ONE,
-                    role: field::CredentialRole::Password(field::Password::Current),
-                    editability: field::Editability::Writable,
-                }
-                .into(),
+                Self::field(
+                    field::Index::ZERO,
+                    field::CredentialRole::Username,
+                    field::Editability::Writable,
+                ),
+                Self::field(
+                    field::Index::ONE,
+                    field::CredentialRole::Password(field::Password::Current),
+                    field::Editability::Writable,
+                ),
             ]
         }
 
         fn planned() -> Result<
             AuthenticationCredentialDisclosureCapability,
-            credential_fill::CredentialFillRejection,
+            AuthenticationCredentialDisclosureRejection,
         > {
             let facts = Self::facts(PageControlActionability::Inert);
             facts.credential_disclosure_planning_decision().plan(
-                AuthenticationCredentialDisclosurePlanningRequest {
+                &AuthenticationCredentialDisclosurePlanningRequest {
                     fields: &Self::fields(),
                 },
             )
         }
+
+        fn authorized() -> Result<
+            AuthorizedAuthenticationUsernameDisclosure,
+            AuthenticationCredentialDisclosureRejection,
+        > {
+            let facts = Self::facts(PageControlActionability::Inert);
+            let fields = Self::fields();
+            Self::planned()?.preflight(&AuthenticationCredentialDisclosurePreflightRequest {
+                fresh_facts: &facts,
+                fields: &fields,
+            })
+        }
     }
 
     #[test]
-    fn versioned_control_reports_unsupported_versions_without_classifying() -> anyhow::Result<()> {
+    fn unsupported_version_survives_every_disclosure_stage() -> anyhow::Result<()> {
         let mut control =
             OmittedMethodDisclosureScenario::control(PageControlActionability::Actionable);
         control.schema_version = 2.into();
@@ -514,10 +624,49 @@ mod tests {
             )?,
             control
         );
-        assert_eq!(
-            AuthenticationDisclosureObservationSchemaVersion::CURRENT.0,
-            1
+        let inert =
+            OmittedMethodDisclosureScenario::versioned_facts(PageControlActionability::Inert, 2);
+        assert!(matches!(
+            inert.credential_disclosure_planning_decision(),
+            AuthenticationCredentialDisclosurePlanningDecision::Rejected(
+                AuthenticationCredentialDisclosureRejection::UnsupportedVersion(version)
+            ) if u32::from(version) == 2
+        ));
+        assert!(matches!(
+            inert.credential_disclosure_planning_decision().plan(
+                &AuthenticationCredentialDisclosurePlanningRequest {
+                    fields: &OmittedMethodDisclosureScenario::fields(),
+                }
+            ),
+            Err(AuthenticationCredentialDisclosureRejection::UnsupportedVersion(version))
+                if u32::from(version) == 2
+        ));
+        let fields = OmittedMethodDisclosureScenario::fields();
+        assert!(matches!(
+            OmittedMethodDisclosureScenario::planned()?.preflight(
+                &AuthenticationCredentialDisclosurePreflightRequest {
+                    fresh_facts: &inert,
+                    fields: &fields,
+                }
+            ),
+            Err(AuthenticationCredentialDisclosureRejection::UnsupportedVersion(version))
+                if u32::from(version) == 2
+        ));
+        let authorized = OmittedMethodDisclosureScenario::authorized()?;
+        let actionable = OmittedMethodDisclosureScenario::versioned_facts(
+            PageControlActionability::Actionable,
+            2,
         );
+        assert!(matches!(
+            authorized.password_continuation.consume(
+                &AuthenticationPasswordDisclosureRequest {
+                    fresh_facts: &actionable,
+                    fields: &fields,
+                }
+            ),
+            Err(AuthenticationCredentialDisclosureRejection::UnsupportedVersion(version))
+                if u32::from(version) == 2
+        ));
         Ok(())
     }
 
@@ -557,6 +706,28 @@ mod tests {
         assert!(matches!(
             decoded.credential_disclosure_control,
             AuthenticationCredentialDisclosureControlObservation::Absent
+        ));
+        assert!(matches!(
+            decoded.credential_disclosure_planning_decision(),
+            AuthenticationCredentialDisclosurePlanningDecision::Rejected(
+                AuthenticationCredentialDisclosureRejection::ControlObservationAbsent
+            )
+        ));
+        let mut invalid = OmittedMethodDisclosureScenario::facts(PageControlActionability::Inert);
+        invalid.fields.username_field_count = 0.into();
+        assert!(matches!(
+            invalid.credential_disclosure_planning_decision(),
+            AuthenticationCredentialDisclosurePlanningDecision::Rejected(
+                AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected
+            )
+        ));
+        invalid.credential_disclosure_control =
+            AuthenticationCredentialDisclosureControlObservation::Observed(Vec::new());
+        assert!(matches!(
+            invalid.credential_disclosure_planning_decision(),
+            AuthenticationCredentialDisclosurePlanningDecision::Rejected(
+                AuthenticationCredentialDisclosureRejection::MalformedControlObservation
+            )
         ));
         Ok(())
     }
@@ -625,32 +796,35 @@ mod tests {
         assert!(matches!(
             initial_facts
                 .credential_disclosure_planning_decision()
-                .plan(AuthenticationCredentialDisclosurePlanningRequest {
+                .plan(&AuthenticationCredentialDisclosurePlanningRequest {
                     fields: &generic_fields,
                 }),
-            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
+            Err(AuthenticationCredentialDisclosureRejection::CredentialFieldsNotExact)
         ));
-        let capability = OmittedMethodDisclosureScenario::planned()?;
-        let authorized =
-            capability.preflight(AuthenticationCredentialDisclosurePreflightRequest {
-                fresh_facts: &initial_facts,
-            })?;
+        let fields = OmittedMethodDisclosureScenario::fields();
+        let authorized = OmittedMethodDisclosureScenario::authorized()?;
         assert_eq!(
             authorized.username_assignment.credential,
             credential_fill::CredentialKind::Username
+        );
+        assert_eq!(
+            authorized.username_assignment.field_index,
+            field::Index::ZERO
         );
         let actionable_facts =
             OmittedMethodDisclosureScenario::facts(PageControlActionability::Actionable);
         let password =
             authorized
                 .password_continuation
-                .consume(AuthenticationPasswordDisclosureRequest {
+                .consume(&AuthenticationPasswordDisclosureRequest {
                     fresh_facts: &actionable_facts,
+                    fields: &fields,
                 })?;
         assert_eq!(
             password.credential,
             credential_fill::CredentialKind::CurrentPassword
         );
+        assert_eq!(password.field_index, field::Index::ONE);
         Ok(())
     }
 
@@ -661,7 +835,7 @@ mod tests {
         assert!(matches!(
             readonly_planning.credential_disclosure_planning_decision(),
             AuthenticationCredentialDisclosurePlanningDecision::Rejected(
-                credential_fill::CredentialFillRejection::AuthenticationContextRejected
+                AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected
             )
         ));
 
@@ -669,70 +843,53 @@ mod tests {
             OmittedMethodDisclosureScenario::readonly_facts(PageControlActionability::Inert);
         assert!(matches!(
             OmittedMethodDisclosureScenario::planned()?.preflight(
-                AuthenticationCredentialDisclosurePreflightRequest {
+                &AuthenticationCredentialDisclosurePreflightRequest {
                     fresh_facts: &readonly_preflight,
+                    fields: &OmittedMethodDisclosureScenario::fields(),
                 }
             ),
-            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
+            Err(AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected)
         ));
 
-        let initial = OmittedMethodDisclosureScenario::facts(PageControlActionability::Inert);
-        let authorized = OmittedMethodDisclosureScenario::planned()?.preflight(
-            AuthenticationCredentialDisclosurePreflightRequest {
-                fresh_facts: &initial,
-            },
-        )?;
+        let fields = OmittedMethodDisclosureScenario::fields();
+        let authorized = OmittedMethodDisclosureScenario::authorized()?;
         let readonly_consumption =
             OmittedMethodDisclosureScenario::readonly_facts(PageControlActionability::Actionable);
         assert!(matches!(
             authorized
                 .password_continuation
-                .consume(AuthenticationPasswordDisclosureRequest {
+                .consume(&AuthenticationPasswordDisclosureRequest {
                     fresh_facts: &readonly_consumption,
+                    fields: &fields,
                 }),
-            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
+            Err(AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected)
         ));
         Ok(())
     }
 
     #[test]
-    fn preflight_and_consumption_reject_drift() -> anyhow::Result<()> {
-        let mut preflight_drift =
-            OmittedMethodDisclosureScenario::facts(PageControlActionability::Inert);
-        preflight_drift.fields.username_field_count = 2.into();
-        assert!(matches!(
-            OmittedMethodDisclosureScenario::planned()?.preflight(
-                AuthenticationCredentialDisclosurePreflightRequest {
-                    fresh_facts: &preflight_drift,
-                }
-            ),
-            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
-        ));
-
-        let initial = OmittedMethodDisclosureScenario::facts(PageControlActionability::Inert);
-        let authorized = OmittedMethodDisclosureScenario::planned()?.preflight(
-            AuthenticationCredentialDisclosurePreflightRequest {
-                fresh_facts: &initial,
-            },
-        )?;
-        let mut password_drift =
+    fn consumption_rejects_fresh_field_and_route_drift() -> anyhow::Result<()> {
+        let fields = OmittedMethodDisclosureScenario::fields();
+        let authorized = OmittedMethodDisclosureScenario::authorized()?;
+        let actionable =
             OmittedMethodDisclosureScenario::facts(PageControlActionability::Actionable);
-        password_drift.fields.generic_password_field_count = 1.into();
-        password_drift.fields.current_password_field_count = 0.into();
+        let mut password_drift = fields;
+        password_drift[1] = OmittedMethodDisclosureScenario::field(
+            field::Index::TWO,
+            field::CredentialRole::Password(field::Password::Current),
+            field::Editability::Writable,
+        );
         assert!(matches!(
             authorized
                 .password_continuation
-                .consume(AuthenticationPasswordDisclosureRequest {
-                    fresh_facts: &password_drift,
+                .consume(&AuthenticationPasswordDisclosureRequest {
+                    fresh_facts: &actionable,
+                    fields: &password_drift,
                 }),
-            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
+            Err(AuthenticationCredentialDisclosureRejection::CredentialAssignmentsChanged)
         ));
 
-        let authorized = OmittedMethodDisclosureScenario::planned()?.preflight(
-            AuthenticationCredentialDisclosurePreflightRequest {
-                fresh_facts: &initial,
-            },
-        )?;
+        let authorized = OmittedMethodDisclosureScenario::authorized()?;
         let mut route_drift =
             OmittedMethodDisclosureScenario::facts(PageControlActionability::Actionable);
         let AuthenticationCredentialDisclosureControlObservation::Observed(controls) =
@@ -748,10 +905,11 @@ mod tests {
         assert!(matches!(
             authorized
                 .password_continuation
-                .consume(AuthenticationPasswordDisclosureRequest {
+                .consume(&AuthenticationPasswordDisclosureRequest {
                     fresh_facts: &route_drift,
+                    fields: &fields,
                 }),
-            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
+            Err(AuthenticationCredentialDisclosureRejection::AuthenticationContextRejected)
         ));
         Ok(())
     }
