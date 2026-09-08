@@ -1,7 +1,10 @@
-import { chmod, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { resolve } from "node:path";
 
+import {
+  WorkerRestoreTransport,
+  WorkerRestoreTransportArguments,
+  type WorkerRestoreTransportWire,
+} from "./k0s-worker-restore-transport";
 import { TextContract } from "./text-contract";
 
 enum SelectorDecodeKind {
@@ -80,78 +83,101 @@ class WorkerRestoreTransportContract {
       'if ! test -s "$program_file"; then',
       'bash -n "$program_file"',
       'bash "$program_file" "$@"',
-      'stdin: new Blob([argumentsValue.encodedProgram, "\\n", token])',
+      "stdin: new Blob([wire.payload])",
     ]);
-    const probeDirectory = await mkdtemp(
-      join(tmpdir(), "nook-restore-contract-"),
-    );
-    try {
-      const sshProbe = join(probeDirectory, "ssh");
-      await writeFile(
-        sshProbe,
-        '#!/usr/bin/env bash\nset -euo pipefail\nfor value in "$@"; do\n' +
-          '  test "$value" != framed-token\ndone\nremote="${!#}"\n' +
-          'bash -c "$remote"\n',
-      );
-      await chmod(sshProbe, 0o700);
-      const restoreProbe = `set -euo pipefail
-test "$1" = 10.202.0.3
-test "$2" = secondary
+    const restoreProbe = `set -euo pipefail
 IFS= read -r token
 test "$token" = framed-token
-printf restore-transport-ok`;
-      const environment = {
-        ...process.env,
-        PATH: `${probeDirectory}:${process.env.PATH}`,
-      };
-      const success = Bun.spawnSync({
-        cmd: [
-          "bun",
-          transportPath,
+printf restore-transport-ok
+exit 0`;
+    const successArguments = WorkerRestoreTransportArguments.parse([
+      "controller",
+      "worker",
+      "10.202.0.3",
+      "secondary",
+      Buffer.from(restoreProbe).toString("base64"),
+    ]);
+    const successWire = WorkerRestoreTransport.wire(
+      successArguments,
+      "framed-token\n",
+    );
+    WorkerRestoreTransportContract.assertTokenOutsideArguments(successWire);
+    const output = await WorkerRestoreTransportContract.execute(successWire);
+    if (output !== "restore-transport-ok") {
+      throw new Error("k0s worker restore transport round trip failed");
+    }
+    for (const frame of Object.values(RestoreProgramFrame)) {
+      let rejected = false;
+      try {
+        const argumentsValue = WorkerRestoreTransportArguments.parse([
           "controller",
           "worker",
           "10.202.0.3",
           "secondary",
-          Buffer.from(restoreProbe).toString("base64"),
-        ],
-        env: environment,
-        stdin: new Blob(["framed-token\n"]),
-        stdout: "pipe",
-        stderr: "pipe",
-      });
-      if (
-        success.exitCode !== 0 ||
-        success.stdout.toString() !== "restore-transport-ok"
-      ) {
+          frame,
+        ]);
+        const wire = WorkerRestoreTransport.wire(
+          argumentsValue,
+          "framed-token\n",
+        );
+        await WorkerRestoreTransportContract.execute(wire);
+      } catch {
+        rejected = true;
+      }
+      if (!rejected) {
         throw new Error(
-          `k0s worker restore transport round trip failed: ${success.stderr.toString()}`,
+          "k0s worker restore transport accepted an invalid frame",
         );
       }
-      for (const frame of Object.values(RestoreProgramFrame)) {
-        const failure = Bun.spawnSync({
-          cmd: [
-            "bun",
-            transportPath,
-            "controller",
-            "worker",
-            "10.202.0.3",
-            "secondary",
-            frame,
-          ],
-          env: environment,
-          stdin: new Blob(["framed-token\n"]),
-          stdout: "pipe",
-          stderr: "pipe",
-        });
-        if (failure.exitCode === 0) {
-          throw new Error(
-            "k0s worker restore transport accepted an invalid frame",
-          );
-        }
-      }
-    } finally {
-      await rm(probeDirectory, { recursive: true, force: true });
     }
+  }
+
+  private static assertTokenOutsideArguments(
+    wire: WorkerRestoreTransportWire,
+  ): void {
+    if (wire.sshArguments.some((value) => value.includes("framed-token"))) {
+      throw new Error("k0s worker restore token entered SSH arguments");
+    }
+    const remoteCommand = wire.sshArguments.join(" ");
+    if (
+      !remoteCommand.includes(wire.meshAddress) ||
+      !remoteCommand.includes(wire.arcTier)
+    ) {
+      throw new Error("k0s worker restore arguments left the SSH wire");
+    }
+  }
+
+  private static async execute(
+    wire: WorkerRestoreTransportWire,
+  ): Promise<string> {
+    const frameEnd = wire.payload.indexOf("\n");
+    if (frameEnd < 1) throw new Error("missing encoded program frame");
+    const encodedProgram = wire.payload.slice(0, frameEnd);
+    const token = wire.payload.slice(frameEnd + 1);
+    const decoded = Bun.spawnSync({
+      cmd: ["base64", "-d"],
+      stdin: new Blob([encodedProgram]),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (decoded.exitCode !== 0 || decoded.stdout.length === 0) {
+      throw new Error("invalid encoded program frame");
+    }
+    const syntax = Bun.spawnSync({
+      cmd: ["bash", "-n"],
+      stdin: new Blob([decoded.stdout]),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (syntax.exitCode !== 0) throw new Error("invalid decoded program");
+    const execution = Bun.spawnSync({
+      cmd: ["bash"],
+      stdin: new Blob([decoded.stdout, "\n", token]),
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    if (execution.exitCode !== 0) throw new Error("decoded program failed");
+    return execution.stdout.toString();
   }
 }
 
@@ -272,7 +298,7 @@ class ArcWorkerRestoreContract {
     status.requireAll([
       'controller_target="{{.INFRA_SSH_TARGET}}"',
       'ssh -o BatchMode=yes -J "$controller_target" \\',
-      '"{{.INFRA_WORKER_SSH_TARGET}}" \'bash -s\'',
+      "\"{{.INFRA_WORKER_SSH_TARGET}}\" 'bash -s'",
     ]);
     status.forbid('ssh -o BatchMode=yes "{{.INFRA_WORKER_SSH_TARGET}}"');
     mesh.count({

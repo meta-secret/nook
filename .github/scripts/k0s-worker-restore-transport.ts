@@ -18,7 +18,7 @@ fi
 bash -n "$program_file"
 bash "$program_file" "$@"`;
 
-class WorkerRestoreTransportArguments {
+export class WorkerRestoreTransportArguments {
   private constructor(
     readonly controller: string,
     readonly worker: string,
@@ -43,22 +43,43 @@ class WorkerRestoreTransportArguments {
   }
 }
 
-class WorkerRestoreTransport {
+export interface WorkerRestoreTransportWire {
+  readonly arcTier: string;
+  readonly meshAddress: string;
+  readonly payload: string;
+  readonly sshArguments: readonly string[];
+}
+
+export class WorkerRestoreTransport {
+  static wire(
+    argumentsValue: WorkerRestoreTransportArguments,
+    token: string,
+  ): WorkerRestoreTransportWire {
+    if (token.length === 0) {
+      throw new Error("k0s worker restore: missing worker token");
+    }
+    const remoteCommand = WorkerRestoreTransport.remoteCommand(argumentsValue);
+    return {
+      arcTier: argumentsValue.arcTier,
+      meshAddress: argumentsValue.meshAddress,
+      payload: `${argumentsValue.encodedProgram}\n${token}`,
+      sshArguments: [
+        "-o",
+        "BatchMode=yes",
+        "-J",
+        argumentsValue.controller,
+        argumentsValue.worker,
+        remoteCommand,
+      ],
+    };
+  }
+
   static async run(
     argumentsValue: WorkerRestoreTransportArguments,
   ): Promise<number> {
     const token = await Bun.stdin.text();
-    if (token.length === 0) {
-      throw new Error("k0s worker restore: missing worker token");
-    }
-    const remoteCommand = [
-      "bash",
-      "-c",
-      WorkerRestoreTransport.shellQuote(remoteDecoder),
-      "bash",
-      WorkerRestoreTransport.shellQuote(argumentsValue.meshAddress),
-      WorkerRestoreTransport.shellQuote(argumentsValue.arcTier),
-    ].join(" ");
+    const wire = WorkerRestoreTransport.wire(argumentsValue, token);
+    const remoteCommand = WorkerRestoreTransport.remoteCommand(argumentsValue);
     const process = Bun.spawnSync({
       cmd: [
         "ssh",
@@ -69,11 +90,24 @@ class WorkerRestoreTransport {
         argumentsValue.worker,
         remoteCommand,
       ],
-      stdin: new Blob([argumentsValue.encodedProgram, "\n", token]),
+      stdin: new Blob([wire.payload]),
       stdout: "inherit",
       stderr: "inherit",
     });
     return process.exitCode;
+  }
+
+  private static remoteCommand(
+    argumentsValue: WorkerRestoreTransportArguments,
+  ): string {
+    return [
+      "bash",
+      "-c",
+      WorkerRestoreTransport.shellQuote(remoteDecoder),
+      "bash",
+      WorkerRestoreTransport.shellQuote(argumentsValue.meshAddress),
+      WorkerRestoreTransport.shellQuote(argumentsValue.arcTier),
+    ].join(" ");
   }
 
   private static shellQuote(value: string): string {
@@ -81,13 +115,15 @@ class WorkerRestoreTransport {
   }
 }
 
-try {
-  const argumentsValue = WorkerRestoreTransportArguments.parse(
-    process.argv.slice(2),
-  );
-  process.exit(await WorkerRestoreTransport.run(argumentsValue));
-} catch (error) {
-  const message = error instanceof Error ? error.message : String(error);
-  console.error(message);
-  process.exit(2);
+if (import.meta.main) {
+  try {
+    const argumentsValue = WorkerRestoreTransportArguments.parse(
+      process.argv.slice(2),
+    );
+    process.exit(await WorkerRestoreTransport.run(argumentsValue));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(message);
+    process.exit(2);
+  }
 }
