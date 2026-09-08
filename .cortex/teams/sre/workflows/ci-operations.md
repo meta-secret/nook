@@ -54,8 +54,12 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 ## Registry transport performance
 
-Main runs repository preflight beside native Rust verification.
-Each lane publishes only its verified complete graph.
+Main finishes repository preflight before native Rust verification begins.
+After each validation succeeds, its cache publisher runs independently.
+Publication failures remain visible.
+They do not erase successful evidence or suppress WASM, web, and browser
+consumers.
+Each publisher exports only its verified complete graph.
 Preflight publishes `nook-preflight-v1`.
 Native publishes the mode-max `nook-rust-native-source-v4` graph, which embeds
 its rust-base and dependency lineage.

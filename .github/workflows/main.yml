@@ -143,6 +143,32 @@ jobs:
           CI: true
           GHA_CACHE_WRITE_ENABLED: ""
 
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
+
+  preflight-cache-publish:
+    name: Preflight cache publication
+    needs: [preflight]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: preflight
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+
       - name: Publish verified preflight BuildKit cache
         run: task ci:main:publish-preflight-cache
         env:
@@ -155,9 +181,9 @@ jobs:
 
   rust:
     name: Native Rust verification
-    needs: [product-paths]
+    needs: [product-paths, preflight]
     if: needs.product-paths.outputs.changed == 'true'
-    # Main refreshes the default-branch GHA native cache that new PRs are allowed to restore.
+    # Validation remains read-only; its independent publisher refreshes the trusted Main cache.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -209,13 +235,39 @@ jobs:
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
 
+  native-cache-publish:
+    name: Native cache publication
+    needs: [rust]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Docker setup
+        uses: ./.github/actions/nook-docker-setup
+        with:
+          cache-selection: native
+          monitor-buildkit-storage: "true"
+          registry-host: registry.dev.nokey.sh
+          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
+          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
+          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
+          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
+          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
+          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
+
       - name: Publish verified native BuildKit cache
-        if: success()
         run: task ci:main:publish-native-cache
         env:
           CI: true
           GHA_CACHE_WRITE_ENABLED: "1"
           WASM_BUILD_MODE: dev
+
+      - name: Preserve cache telemetry
+        if: always()
+        uses: ./.github/actions/nook-cache-telemetry
 
   wasm:
     name: WASM verification and artifact

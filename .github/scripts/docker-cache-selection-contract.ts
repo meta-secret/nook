@@ -13,9 +13,57 @@ enum DockerCacheSelection {
   WebE2e = "web-e2e",
 }
 
+interface DefaultedDockerActionInput {
+  default: string;
+  description: string;
+  required: false;
+}
+
+interface DockerCacheSelectionInput extends DefaultedDockerActionInput {
+  default: DockerCacheSelection;
+}
+
+interface RequiredDockerActionInput {
+  description: string;
+  required: true;
+}
+
+interface DockerSetupActionInputs {
+  "cache-selection": DockerCacheSelectionInput;
+  "cache-write": DefaultedDockerActionInput;
+  "isolated-cache-write": DefaultedDockerActionInput;
+  "main-cache-only": DefaultedDockerActionInput;
+  "monitor-buildkit-storage": DefaultedDockerActionInput;
+  "registry-host": DefaultedDockerActionInput;
+  "registry-password": RequiredDockerActionInput;
+  "registry-username": RequiredDockerActionInput;
+  "require-e2e-cache": DefaultedDockerActionInput;
+  "sccache-access-key": DefaultedDockerActionInput;
+  "sccache-bucket": DefaultedDockerActionInput;
+  "sccache-endpoint": DefaultedDockerActionInput;
+  "sccache-secret-key": DefaultedDockerActionInput;
+}
+
+interface DockerSetupRunStep {
+  name: string;
+  run: string;
+}
+
+interface DockerSetupUsesStep {
+  name: string;
+  uses: string;
+}
+
+type DockerSetupStep = DockerSetupRunStep | DockerSetupUsesStep;
+
+interface DockerSetupActionRuns {
+  steps: DockerSetupStep[];
+  using: "composite";
+}
+
 interface DockerCacheSelectionAction {
-  inputs: Record<string, { default: string }>;
-  runs: { steps: Array<{ name: string; run: string }> };
+  inputs: DockerSetupActionInputs;
+  runs: DockerSetupActionRuns;
 }
 
 export class DockerCacheSelectionContract {
@@ -29,12 +77,18 @@ export class DockerCacheSelectionContract {
     if (selection.default !== DockerCacheSelection.General) {
       throw new Error("Docker cache selection must default to general");
     }
-    const script = action.runs.steps.find(
-      (step) => step.name === "Select hosted BuildKit cache",
-    );
-    if (!script) throw new Error("Docker cache selection step is missing");
+    const script = DockerCacheSelectionContract.selectionStep(action.runs);
     DockerCacheSelectionContract.assertClosedSet(script.run);
     DockerCacheSelectionContract.assertHiveProfile(script.run);
+  }
+
+  private static selectionStep(runs: DockerSetupActionRuns): DockerSetupRunStep {
+    for (const step of runs.steps) {
+      if (step.name === "Select hosted BuildKit cache" && "run" in step) {
+        return step;
+      }
+    }
+    throw new Error("Docker cache selection step is missing");
   }
 
   private static assertClosedSet(source: string): void {

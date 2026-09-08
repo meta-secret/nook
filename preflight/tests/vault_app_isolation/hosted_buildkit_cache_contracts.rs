@@ -468,8 +468,10 @@ fn assert_rust_cache_export_hardening(bake: &str) {
 
 fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
-    let preflight = section(&main, "  preflight:\n", "\n  rust:\n");
-    let rust = section(&main, "  rust:\n", "\n  wasm:\n");
+    let preflight = section(&main, "  preflight:\n", "\n  preflight-cache-publish:\n");
+    let preflight_cache_publish = section(&main, "  preflight-cache-publish:\n", "\n  rust:\n");
+    let rust = section(&main, "  rust:\n", "\n  native-cache-publish:\n");
+    let native_cache_publish = section(&main, "  native-cache-publish:\n", "\n  wasm:\n");
     let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
     let wasm_cache_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
     let wasm_cache_proof = section(&main, "  wasm-cache-proof:\n", "\n  web:\n");
@@ -478,9 +480,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let rust_verify = rust
         .find("task ci:main:rust")
         .context("Main Rust job must verify")?;
-    let rust_publish = rust
+    let rust_publish = native_cache_publish
         .find("task ci:main:publish-native-cache")
-        .context("Main Rust job must publish its cache")?;
+        .context("Main native publisher must export its cache")?;
     let wasm_verify = wasm
         .find("task ci:pr:wasm")
         .context("Main WASM job must verify")?;
@@ -507,14 +509,25 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .context("Main UI demo job must declare its verification step")?;
     assert!(
         preflight.contains("task preflight")
-            && preflight.contains("task ci:main:publish-preflight-cache")
             && preflight.contains("cache-selection: preflight")
-            && rust_verify < rust_publish
-            && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && !preflight.contains("publish-preflight-cache")
+            && preflight_cache_publish.contains("needs: [preflight]")
+            && preflight_cache_publish.contains("task ci:main:publish-preflight-cache")
+            && preflight_cache_publish.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && !preflight_cache_publish.contains("continue-on-error")
+            && rust.contains("needs: [product-paths, preflight]")
+            && rust[rust_verify..].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && !rust.contains("publish-native-cache")
             && rust.contains("cache-selection: native")
             && rust.contains("monitor-buildkit-storage: \"true\"")
+            && native_cache_publish.contains("needs: [rust]")
+            && native_cache_publish[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
+            && !native_cache_publish.contains("continue-on-error")
+            && main.matches("task ci:main:publish-native-cache").count() == 1
+            && main.matches("task ci:main:publish-preflight-cache").count() == 1
             && wasm.contains("needs: [rust, preflight]")
+            && !wasm.contains("native-cache-publish")
+            && !wasm.contains("preflight-cache-publish")
             && wasm.contains("cache-selection: wasm")
             && wasm_verify < wasm_node
             && wasm_node < wasm_publish_id
