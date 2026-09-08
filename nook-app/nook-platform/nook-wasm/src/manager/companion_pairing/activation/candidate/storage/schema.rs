@@ -144,25 +144,31 @@ mod tests {
         provider_digest: Sha256Hex,
     }
 
+    impl GateEvidence {
+        fn assert_real_v1_payload_relationships() -> anyhow::Result<()> {
+            let encoded = EncodedCandidate::new(&CandidateFixture::candidate()?)?;
+            let gate: Self = serde_json::from_str(&CandidateSchema::encode(&encoded.gate)?)?;
+            assert_eq!(gate.event_count, encoded.events.len());
+            assert_eq!(gate.provider_count, 0);
+            for ((key, payload), (expected_key, digest)) in encoded
+                .events
+                .iter()
+                .zip(gate.event_payload_keys.iter().zip(&gate.event_digests))
+            {
+                assert_eq!(key, expected_key);
+                assert_eq!(*digest, Sha256Hex::from_bytes(payload.as_bytes()));
+            }
+            assert_eq!(gate.provider_payload_key, encoded.gate.provider_payload_key);
+            assert_eq!(
+                gate.provider_digest,
+                Sha256Hex::from_bytes(encoded.providers.as_bytes())
+            );
+            Ok(())
+        }
+    }
+
     #[test]
     fn serialized_v1_gate_commits_exact_payload_relationships() -> anyhow::Result<()> {
-        let encoded = EncodedCandidate::new(&CandidateFixture::candidate()?)?;
-        let gate: GateEvidence = serde_json::from_str(&CandidateSchema::encode(&encoded.gate)?)?;
-        assert_eq!(gate.event_count, encoded.events.len());
-        assert_eq!(gate.provider_count, 0);
-        for ((key, payload), (expected_key, digest)) in encoded
-            .events
-            .iter()
-            .zip(gate.event_payload_keys.iter().zip(&gate.event_digests))
-        {
-            assert_eq!(key, expected_key);
-            assert_eq!(*digest, Sha256Hex::from_bytes(payload.as_bytes()));
-        }
-        assert_eq!(gate.provider_payload_key, encoded.gate.provider_payload_key);
-        assert_eq!(
-            gate.provider_digest,
-            Sha256Hex::from_bytes(encoded.providers.as_bytes())
-        );
-        Ok(())
+        GateEvidence::assert_real_v1_payload_relationships()
     }
 }

@@ -512,61 +512,73 @@ mod tests {
         CandidateFixture::assert_real_candidate()
     }
 
-    #[test]
-    fn internal_failures_have_stable_public_categories() {
-        for (failure, public) in [
-            (
-                CompanionPairingCandidateFailure::Expiry,
-                NookCompanionPairingCandidateFailure::Expiry,
-            ),
-            (
-                CompanionPairingCandidateFailure::ManagerBinding,
-                NookCompanionPairingCandidateFailure::ManagerBinding,
-            ),
-            (
-                CompanionPairingCandidateFailure::ProviderBinding,
-                NookCompanionPairingCandidateFailure::ProviderBinding,
-            ),
-            (
-                CompanionPairingCandidateFailure::EventAuthorization,
-                NookCompanionPairingCandidateFailure::Integrity,
-            ),
-            (
+    struct CandidateOutcomeFixture;
+
+    impl CandidateOutcomeFixture {
+        fn assert_public_failure_projection() {
+            for (failure, public) in [
+                (
+                    CompanionPairingCandidateFailure::Expiry,
+                    NookCompanionPairingCandidateFailure::Expiry,
+                ),
+                (
+                    CompanionPairingCandidateFailure::ManagerBinding,
+                    NookCompanionPairingCandidateFailure::ManagerBinding,
+                ),
+                (
+                    CompanionPairingCandidateFailure::ProviderBinding,
+                    NookCompanionPairingCandidateFailure::ProviderBinding,
+                ),
+                (
+                    CompanionPairingCandidateFailure::EventAuthorization,
+                    NookCompanionPairingCandidateFailure::Integrity,
+                ),
+                (
+                    CompanionPairingCandidateFailure::Replay,
+                    NookCompanionPairingCandidateFailure::Replay,
+                ),
+                (
+                    CompanionPairingCandidateFailure::Integrity,
+                    NookCompanionPairingCandidateFailure::Integrity,
+                ),
+                (
+                    CompanionPairingCandidateFailure::Storage,
+                    NookCompanionPairingCandidateFailure::Storage,
+                ),
+            ] {
+                assert_eq!(failure.public(), public);
+            }
+        }
+
+        fn assert_wrong_access_rejected() -> anyhow::Result<()> {
+            let rejected = NookCompanionPairingCandidateOutcome::from_result(Err(
                 CompanionPairingCandidateFailure::Replay,
-                NookCompanionPairingCandidateFailure::Replay,
-            ),
-            (
-                CompanionPairingCandidateFailure::Integrity,
-                NookCompanionPairingCandidateFailure::Integrity,
-            ),
-            (
-                CompanionPairingCandidateFailure::Storage,
-                NookCompanionPairingCandidateFailure::Storage,
-            ),
-        ] {
-            assert_eq!(failure.public(), public);
+            ));
+            assert!(matches!(
+                rejected.into_stored(),
+                Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
+            ));
+            let stored = NookCompanionPairingCandidateOutcome::from_result(Ok(
+                storage::StoredPairingActivationCandidate {
+                    _candidate: CandidateFixture::candidate()?,
+                },
+            ));
+            assert!(matches!(
+                stored.into_failure(),
+                Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
+            ));
+            Ok(())
         }
     }
 
     #[test]
+    fn internal_failures_have_stable_public_categories() {
+        CandidateOutcomeFixture::assert_public_failure_projection();
+    }
+
+    #[test]
     fn outcome_accessors_reject_the_wrong_state_without_panicking() -> anyhow::Result<()> {
-        let rejected = NookCompanionPairingCandidateOutcome::from_result(Err(
-            CompanionPairingCandidateFailure::Replay,
-        ));
-        assert!(matches!(
-            rejected.into_stored(),
-            Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
-        ));
-        let stored = NookCompanionPairingCandidateOutcome::from_result(Ok(
-            storage::StoredPairingActivationCandidate {
-                _candidate: CandidateFixture::candidate()?,
-            },
-        ));
-        assert!(matches!(
-            stored.into_failure(),
-            Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
-        ));
-        Ok(())
+        CandidateOutcomeFixture::assert_wrong_access_rejected()
     }
 
     #[test]

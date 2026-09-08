@@ -602,6 +602,16 @@ mod tests {
             ));
             Ok(())
         }
+
+        fn assert_approval_revalidation() -> anyhow::Result<()> {
+            let approval = Self::approval()?;
+            approval.revalidate_at(Self::epoch("175")?)?;
+            assert!(matches!(
+                approval.revalidate_at(Self::epoch("200")?),
+                Err(CompanionPairingError::RequestExpired)
+            ));
+            Ok(())
+        }
     }
 
     #[test]
@@ -611,13 +621,7 @@ mod tests {
 
     #[test]
     fn approval_revalidates_at_effect_time() -> anyhow::Result<()> {
-        let approval = PairingFixture::approval()?;
-        approval.revalidate_at(PairingFixture::epoch("175")?)?;
-        assert!(matches!(
-            approval.revalidate_at(PairingFixture::epoch("200")?),
-            Err(CompanionPairingError::RequestExpired)
-        ));
-        Ok(())
+        PairingFixture::assert_approval_revalidation()
     }
 
     #[test]
