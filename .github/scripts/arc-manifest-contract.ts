@@ -342,6 +342,14 @@ const workerMeshTasks = new TextContract({
   label: "k0s fleet worker mesh reconciliation",
   source: await read("infra/k0s/scripts/k0s-worker-mesh-reconcile"),
 });
+const workerRestoreTransportPath = resolve(
+  root,
+  "infra/k0s/scripts/k0s-worker-restore-transport",
+);
+const workerRestoreTransport = new TextContract({
+  label: "k0s worker restore transport",
+  source: await read("infra/k0s/scripts/k0s-worker-restore-transport"),
+});
 
 const values = Bun.YAML.parse(runnersSource) as ArcValues;
 if (
@@ -908,6 +916,8 @@ workerInstall.requireAll([
   'worker_ssh_user="$(ssh -n -o BatchMode=yes -J "$controller_target"',
   'ssh -o BatchMode=yes -J "$controller_target" "$worker_target" bash -s --',
   'ssh -n -o BatchMode=yes -J "$controller_target" \\',
+  "printf '%s\\n' \"$encoded_program\"",
+  "infra/k0s/scripts/k0s-worker-restore-transport",
   "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   "actions.github.com/scale-set-name",
   'select(.metadata.deletionTimestamp == null and (.status.phase == "Pending" or .status.phase == "Running"))',
@@ -917,6 +927,53 @@ workerInstall.requireAll([
   "sudo -n systemctl is-active --quiet k0sworker.service",
   'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
 ]);
+workerInstall.forbid('bash -c "\\$(printf %s');
+workerRestoreTransport.requireAll([
+  'if ! IFS= read -r encoded_program || test -z "$encoded_program"; then',
+  'if ! printf \'%s\' "$encoded_program" | base64 -d > "$program_file"; then',
+  'if ! test -s "$program_file"; then',
+  'bash -n "$program_file"',
+  'bash "$program_file" "$@"',
+]);
+const restoreProbe = `set -euo pipefail
+test "$1" = 10.202.0.3
+test "$2" = secondary
+IFS= read -r token
+test "$token" = framed-token
+printf restore-transport-ok`;
+const restoreProbeRun = Bun.spawnSync({
+  cmd: [workerRestoreTransportPath, "10.202.0.3", "secondary"],
+  stdin: new Blob([
+    Buffer.from(restoreProbe).toString("base64"),
+    "\nframed-token\n",
+  ]),
+  stdout: "pipe",
+  stderr: "pipe",
+});
+if (
+  restoreProbeRun.exitCode !== 0 ||
+  restoreProbeRun.stdout.toString() !== "restore-transport-ok"
+) {
+  throw new Error(
+    `k0s worker restore transport round trip failed: ${restoreProbeRun.stderr.toString()}`,
+  );
+}
+for (const [label, frame] of [
+  ["invalid", "not-base64!\nframed-token\n"],
+  ["empty", "\nframed-token\n"],
+] as const) {
+  const failure = Bun.spawnSync({
+    cmd: [workerRestoreTransportPath, "10.202.0.3", "secondary"],
+    stdin: new Blob([frame]),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (failure.exitCode === 0) {
+    throw new Error(
+      `k0s worker restore transport accepted ${label} program frame`,
+    );
+  }
+}
 const activeRunnerSelector = workerInstallSource.match(
   /active_runners=.*?\| jq \\\s*\n\s*'([^']+)'/s,
 )?.[1];
