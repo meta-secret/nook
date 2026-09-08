@@ -150,6 +150,9 @@ impl VersionedAuthenticationDisclosureControlObservation {
     fn fields_match(&self, fields: AuthenticationFieldObservationFacts) -> bool {
         fields.is_compatible_with_detailed_control(&self.observation)
             && fields.generic_password_field_count == self.generic_password_field_count
+            && fields.current_password_field_count.raw() == 1
+            && fields.actionable_password_field_count.raw() == 1
+            && fields.readonly_password_field_count.raw() == 0
     }
 }
 
@@ -456,6 +459,15 @@ mod tests {
             }
         }
 
+        fn readonly_facts(
+            actionability: PageControlActionability,
+        ) -> AuthenticationPageObservationFacts {
+            let mut facts = Self::facts(actionability);
+            facts.fields.actionable_password_field_count = 0.into();
+            facts.fields.readonly_password_field_count = 1.into();
+            facts
+        }
+
         fn fields() -> [field::Observation; 2] {
             [
                 field::Credential {
@@ -528,6 +540,24 @@ mod tests {
                 .is_err()
             );
         }
+        Ok(())
+    }
+
+    #[test]
+    fn legacy_page_facts_without_disclosure_evidence_decode_to_absent() -> anyhow::Result<()> {
+        let mut encoded = serde_json::to_value(AuthenticationPageObservationFacts::default())?;
+        let serde_json::Value::Object(fields) = &mut encoded else {
+            anyhow::bail!("authentication page facts must encode as an object");
+        };
+        match fields.remove("credentialDisclosureControl") {
+            Some(_) => {}
+            None => anyhow::bail!("current page facts lack disclosure evidence"),
+        }
+        let decoded = serde_json::from_value::<AuthenticationPageObservationFacts>(encoded)?;
+        assert!(matches!(
+            decoded.credential_disclosure_control,
+            AuthenticationCredentialDisclosureControlObservation::Absent
+        ));
         Ok(())
     }
 
@@ -620,6 +650,47 @@ mod tests {
             password.credential,
             credential_fill::CredentialKind::CurrentPassword
         );
+        Ok(())
+    }
+
+    #[test]
+    fn readonly_password_evidence_rejects_every_disclosure_stage() -> anyhow::Result<()> {
+        let readonly_planning =
+            OmittedMethodDisclosureScenario::readonly_facts(PageControlActionability::Inert);
+        assert!(matches!(
+            readonly_planning.credential_disclosure_planning_decision(),
+            AuthenticationCredentialDisclosurePlanningDecision::Rejected(
+                credential_fill::CredentialFillRejection::AuthenticationContextRejected
+            )
+        ));
+
+        let readonly_preflight =
+            OmittedMethodDisclosureScenario::readonly_facts(PageControlActionability::Inert);
+        assert!(matches!(
+            OmittedMethodDisclosureScenario::planned()?.preflight(
+                AuthenticationCredentialDisclosurePreflightRequest {
+                    fresh_facts: &readonly_preflight,
+                }
+            ),
+            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
+        ));
+
+        let initial = OmittedMethodDisclosureScenario::facts(PageControlActionability::Inert);
+        let authorized = OmittedMethodDisclosureScenario::planned()?.preflight(
+            AuthenticationCredentialDisclosurePreflightRequest {
+                fresh_facts: &initial,
+            },
+        )?;
+        let readonly_consumption =
+            OmittedMethodDisclosureScenario::readonly_facts(PageControlActionability::Actionable);
+        assert!(matches!(
+            authorized
+                .password_continuation
+                .consume(AuthenticationPasswordDisclosureRequest {
+                    fresh_facts: &readonly_consumption,
+                }),
+            Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected)
+        ));
         Ok(())
     }
 
