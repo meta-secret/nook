@@ -5,6 +5,12 @@
 //! capability as separate concerns. UI and WASM callers should ask this module
 //! for decisions instead of re-encoding the matrix in TypeScript.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::VaultMetaRecord;
 
 use crate::StoredSecretRecord;
@@ -22,13 +28,11 @@ pub use application::{VaultApplication, VaultConnectIntent};
 pub use device_mode::DeviceMode;
 pub use provider_replication::{
     ProviderJoinerIdentity, ProviderOauthPreset, ProviderReplicationCapability,
-    SharedJoinerIdentityKind, provider_replication_capability, validate_architecture_for_provider,
-    validate_provider_replication,
+    SharedJoinerIdentityKind,
 };
 pub use shared_storage_grant::{
     SharedStorageGrantCredential, SharedStorageGrantOutcome, SharedStorageGrantRequest,
     SharedStorageGrantTarget, SharedStorageTargetHint, SharedStorageTargetSelection,
-    prepare_shared_storage_grant, should_flush_shared_storage_grant,
 };
 
 #[wasm_bindgen]
@@ -110,6 +114,12 @@ impl ReplicationType {
                 replication_type: other.to_owned(),
             }),
         }
+    }
+
+    #[must_use]
+    #[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T.
+    fn is_default(&self) -> bool {
+        *self == Self::Personal
     }
 }
 
@@ -214,16 +224,11 @@ pub struct VaultArchitecture {
     pub vault_type: VaultType,
     /// New vault genesis does not select or derive behavior from replication;
     /// providers are configured after creation.
-    #[serde(default, skip_serializing_if = "replication_is_default")]
+    #[serde(default, skip_serializing_if = "ReplicationType::is_default")]
     pub replication_type: ReplicationType,
     /// Sentinel quorum policy.
     #[serde(default)]
     pub sentinel: SentinelConfiguration,
-}
-
-#[allow(clippy::trivially_copy_pass_by_ref)] // serde skip_serializing_if requires &T.
-fn replication_is_default(value: &ReplicationType) -> bool {
-    *value == ReplicationType::Personal
 }
 
 impl Default for VaultArchitecture {

@@ -13,8 +13,7 @@ use crate::errors::{ValidationError, ValidationResult};
 use crate::{
     DEFAULT_DRIVE_BACKUP_NAME, DEFAULT_GITHUB_REPO_NAME, GoogleDriveMode, ICloudMode,
     ICloudSharedTarget, OauthFilePreset, ProviderReplicationCapability, ReplicationType,
-    StorageMode, StorageProviderType, provider_replication_capability,
-    validate_provider_replication,
+    StorageMode, StorageProviderType,
 };
 
 mod active_credentials;

@@ -12,8 +12,7 @@ use super::{
     ProviderVaultScope, ReplicationType, StorageMode, StorageProviderData, StorageProviderType,
     StoredGithubPat, StoredGithubRepository, StoredLocalFolderConfiguration,
     StoredOAuthAccessCredential, StoredOAuthFileConfiguration, StoredOAuthRemoteFileName,
-    ValidationError, ValidationResult, provider_replication_capability,
-    validate_provider_replication,
+    ValidationError, ValidationResult,
 };
 
 /// Optional connection field interpreted with the persisted whitespace policy.
@@ -182,7 +181,7 @@ impl StorageProviderData {
 
         let provider_type = provider.provider_type;
         let oauth_preset = provider.oauth_file.as_ref().map(|oauth| oauth.preset);
-        provider_replication_capability(
+        ProviderReplicationCapability::for_provider(
             provider_type,
             match oauth_preset {
                 Some(preset) => ProviderOauthPreset::Preset(preset),
@@ -201,7 +200,7 @@ impl StorageProviderData {
 
         let provider_type = provider.provider_type;
         let oauth_preset = provider.oauth_file.as_ref().map(|oauth| oauth.preset);
-        let capability = validate_provider_replication(
+        let capability = ProviderReplicationCapability::validate(
             provider_type,
             match oauth_preset {
                 Some(preset) => ProviderOauthPreset::Preset(preset),
