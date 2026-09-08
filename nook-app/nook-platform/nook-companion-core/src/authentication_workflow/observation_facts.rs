@@ -8,6 +8,7 @@ use tsify::Tsify;
 
 mod authenticator;
 mod ceremony;
+mod disclosure;
 mod fields;
 mod passkey;
 mod submission;
@@ -20,6 +21,11 @@ pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
     AuthenticationImplicitSubmitActuationObservation,
+};
+pub use disclosure::{
+    AuthenticationDisclosureControlDecision, AuthenticationDisclosureObservationSchemaVersion,
+    CurrentAuthenticationDisclosureControlRequest,
+    VersionedAuthenticationDisclosureControlObservation,
 };
 pub use fields::AuthenticationFieldObservationFacts;
 pub use passkey::{
