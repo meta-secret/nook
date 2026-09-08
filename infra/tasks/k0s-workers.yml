@@ -902,6 +902,11 @@ tasks:
           "$node" "$guest_kernel"
         REMOTE
 
+  k0s:worker:restore:
+    desc: Restore an existing k0s worker without reconciling the wider fleet.
+    cmds:
+      - task: k0s:worker:install
+
   k0s:worker:status:
     desc: Show bounded compute-node, mesh, KVM, and ARC storage status.
     silent: true

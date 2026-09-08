@@ -322,6 +322,18 @@ const workerInstall = new TextContract({
   label: "k0s worker install",
   source: workerTasksSource.slice(workerInstallStart, workerInstallEnd),
 });
+const workerRestoreStart = workerTasksSource.indexOf("  k0s:worker:restore:");
+const workerRestoreEnd = workerTasksSource.indexOf(
+  "  k0s:worker:status:",
+  workerRestoreStart,
+);
+if (workerRestoreStart < 0 || workerRestoreEnd < 0) {
+  throw new Error("k0s worker restore task is missing");
+}
+const workerRestore = new TextContract({
+  label: "k0s worker restore",
+  source: workerTasksSource.slice(workerRestoreStart, workerRestoreEnd),
+});
 const workerMeshTasks = new TextContract({
   label: "k0s fleet worker mesh reconciliation",
   source: await read("infra/k0s/scripts/k0s-worker-mesh-reconcile"),
@@ -906,6 +918,15 @@ workerInstall.requireBefore({
   first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
 });
+workerRestore.require("- task: k0s:worker:install");
+workerRestore.forbidAll([
+  "k0s:mesh:ensure",
+  "k0s:worker-mesh:reconcile",
+  "kata:install",
+  "k0s:worker:kata:verify",
+  "arc:deploy",
+  "rollout restart",
+]);
 workerInstall.requireBefore({
   first: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
   second: "sudo -n systemctl restart k0sworker.service",
