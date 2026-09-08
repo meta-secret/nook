@@ -29,20 +29,30 @@ impl NookVaultManager {
             }
             let mut record =
                 nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
-            if let SecretValue::Login(login) = &record.data
-                && (nook_core::LoginHostMatchRequest {
+            let matches = match &record.data {
+                SecretValue::Login(login) => (nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
                     origin,
                 })
                 .matches()
-                .map_err(|error| NookError::Database(error.to_string()))?
-            {
-                accounts.push(NookLoginAccount::from_projection(&LoginAccountProjection {
-                    secret_id: id,
-                    login,
-                }));
-            }
+                .map_err(|error| NookError::Database(error.to_string())),
+                _ => Ok(false),
+            };
+            let account = match (&record.data, &matches) {
+                (SecretValue::Login(login), Ok(true)) => {
+                    Some(NookLoginAccount::from_projection(&LoginAccountProjection {
+                        secret_id: id,
+                        login,
+                    }))
+                }
+                _ => None,
+            };
             record.zeroize_plaintext();
+            if matches? {
+                if let Some(account) = account {
+                    accounts.push(account);
+                }
+            }
         }
         Ok(accounts)
     }
@@ -55,29 +65,37 @@ impl NookVaultManager {
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
-        let matches = match &record.data {
+        let match_result = match &record.data {
             SecretValue::Login(login) => nook_core::LoginHostMatchRequest {
                 website_url: &login.website_url,
                 origin: request.origin,
             }
             .matches()
-            .map_err(|error| NookError::Database(error.to_string()))?,
-            _ => false,
+            .map_err(|error| NookError::Database(error.to_string())),
+            _ => Ok(false),
         };
-        let credential = match &record.data {
-            SecretValue::Login(login) if matches => Ok(NookLoginFillCredential::new(
-                login.username.clone(),
-                login.password.clone(),
-            )),
-            SecretValue::Login(_) => Err(NookError::Decryption(
-                "Login does not match the requesting website origin.".to_owned(),
-            )),
-            _ => Err(NookError::Decryption(
-                "Selected secret is not a login credential.".to_owned(),
-            )),
+        let is_login = matches!(&record.data, SecretValue::Login(_));
+        let credential_parts = match (&record.data, &match_result) {
+            (SecretValue::Login(login), Ok(true)) => {
+                Some((login.username.clone(), login.password.clone()))
+            }
+            _ => None,
         };
         record.zeroize_plaintext();
-        credential
+        match match_result {
+            Err(error) => Err(error),
+            Ok(true) => credential_parts
+                .map(|(username, password)| NookLoginFillCredential::new(username, password))
+                .ok_or_else(|| {
+                    NookError::Decryption("Selected secret is not a login credential.".to_owned())
+                }),
+            Ok(false) if is_login => Err(NookError::Decryption(
+                "Login does not match the requesting website origin.".to_owned(),
+            )),
+            Ok(false) => Err(NookError::Decryption(
+                "Selected secret is not a login credential.".to_owned(),
+            )),
+        }
     }
 }
 

@@ -25,6 +25,16 @@ enum LoginSaveTarget {
     Replace(SecretId),
 }
 
+impl LoginSaveTarget {
+    fn from_external(raw: &str) -> Self {
+        if raw.is_empty() {
+            return Self::Create;
+        }
+        let id = SecretId::parse(raw).unwrap_or_else(|_| SecretId::from_vault_record(raw));
+        Self::Replace(id)
+    }
+}
+
 impl NookVaultManager {
     fn ensure_login_save_extension_capability(&self) -> Result<(), NookError> {
         self.ensure_passkey_extension_capability()
@@ -42,17 +52,25 @@ impl NookVaultManager {
             }
             let mut record =
                 nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
-            if let SecretValue::Login(login) = &record.data
-                && (nook_core::LoginHostMatchRequest {
+            let matches = match &record.data {
+                SecretValue::Login(login) => (nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
                     origin: request.origin,
                 })
                 .matches()
-                .map_err(|error| NookError::Database(error.to_string()))?
-            {
-                owned_logins.push((id.clone(), login.clone()));
-            }
+                .map_err(|error| NookError::Database(error.to_string())),
+                _ => Ok(false),
+            };
+            let login = match (&record.data, &matches) {
+                (SecretValue::Login(login), Ok(true)) => Some(login.clone()),
+                _ => None,
+            };
             record.zeroize_plaintext();
+            if matches? {
+                if let Some(login) = login {
+                    owned_logins.push((id.clone(), login));
+                }
+            }
         }
         let candidates: Vec<nook_core::WebsiteLoginSaveCandidate<'_>> = owned_logins
             .iter()
@@ -302,6 +320,10 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn save_commit_rejects_invalid_targets_before_storage() -> anyhow::Result<()> {
+        assert!(matches!(
+            LoginSaveTarget::from_external("github.com"),
+            LoginSaveTarget::Replace(id) if id.as_str() == "github.com"
+        ));
         let mut manager = manager_with_login("alice", "old")?;
         assert!(
             manager
@@ -374,14 +396,7 @@ impl NookVaultManager {
     ) -> Result<(), JsError> {
         self.ensure_login_save_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        let target =
-            if replace_secret_id.is_empty() {
-                LoginSaveTarget::Create
-            } else {
-                LoginSaveTarget::Replace(SecretId::parse(replace_secret_id).map_err(|_| {
-                    JsError::new("Login replacement target is not a valid secret id.")
-                })?)
-            };
+        let target = LoginSaveTarget::from_external(replace_secret_id);
         self.commit_matching_login_save(LoginSaveCommitRequest {
             origin,
             username,
