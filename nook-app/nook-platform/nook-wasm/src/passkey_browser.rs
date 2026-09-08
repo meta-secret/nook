@@ -14,7 +14,7 @@ pub(crate) use options::{
     creation_options, normalized_passkey_label, recovery_options, request_options,
 };
 
-use wasm_bindgen::{JsCast, JsError, JsValue};
+use wasm_bindgen::{JsCast, JsError};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{CredentialCreationOptions, CredentialRequestOptions, PublicKeyCredential};
 
@@ -371,7 +371,9 @@ mod browser_tests {
 
         let target = Object::new();
         assert!(get_optional_object(&target, "missing")?.is_none());
-        Reflect::set(&target, &JsString::from("nullable"), &JsValue::NULL)
+        let null = js_sys::JSON::parse("null")
+            .map_err(|_| JsError::new("failed to create null fixture"))?;
+        Reflect::set(&target, &JsString::from("nullable"), &null)
             .map_err(|_| JsError::new("failed to set nullable fixture"))?;
         assert!(get_optional_object(&target, "nullable")?.is_none());
         assert!(get_required_object(&target, "missing").is_err());
@@ -383,11 +385,19 @@ mod browser_tests {
             .map_err(|_| JsError::new("failed to set buffer fixture"))?;
         assert!(get_optional_buffer(&target, "buffer")?.is_some());
 
-        Reflect::set(&target, &JsString::from("enabled"), &JsValue::TRUE)
-            .map_err(|_| JsError::new("failed to set bool fixture"))?;
+        Reflect::set(
+            &target,
+            &JsString::from("enabled"),
+            &js_sys::Boolean::from(true),
+        )
+        .map_err(|_| JsError::new("failed to set bool fixture"))?;
         assert_eq!(get_optional_bool(&target, "enabled")?, Some(true));
-        Reflect::set(&target, &JsString::from("enabled"), &JsValue::FALSE)
-            .map_err(|_| JsError::new("failed to set bool fixture"))?;
+        Reflect::set(
+            &target,
+            &JsString::from("enabled"),
+            &js_sys::Boolean::from(false),
+        )
+        .map_err(|_| JsError::new("failed to set bool fixture"))?;
         assert_eq!(get_optional_bool(&target, "enabled")?, Some(false));
         Reflect::set(&target, &JsString::from("enabled"), &JsString::from("true"))
             .map_err(|_| JsError::new("failed to set string fixture"))?;
@@ -467,13 +477,21 @@ mod browser_tests {
         Reflect::set(&extension_results, &JsString::from("prf"), &prf)
             .map_err(|_| JsError::new("failed to set PRF object"))?;
         assert_eq!(prf_output(&credential, false)?, None);
-        Reflect::set(&prf, &JsString::from("enabled"), &JsValue::FALSE)
-            .map_err(|_| JsError::new("failed to set disabled PRF"))?;
+        Reflect::set(
+            &prf,
+            &JsString::from("enabled"),
+            &js_sys::Boolean::from(false),
+        )
+        .map_err(|_| JsError::new("failed to set disabled PRF"))?;
         assert!(prf_output(&credential, true).is_err());
 
         let results = Object::new();
-        Reflect::set(&prf, &JsString::from("enabled"), &JsValue::TRUE)
-            .map_err(|_| JsError::new("failed to set enabled PRF"))?;
+        Reflect::set(
+            &prf,
+            &JsString::from("enabled"),
+            &js_sys::Boolean::from(true),
+        )
+        .map_err(|_| JsError::new("failed to set enabled PRF"))?;
         Reflect::set(&prf, &JsString::from("results"), &results)
             .map_err(|_| JsError::new("failed to set PRF results"))?;
         assert_eq!(prf_output(&credential, true)?, None);

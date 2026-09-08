@@ -72,7 +72,6 @@ mod tests {
         serialize_event_storage_yaml,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
-    use wasm_bindgen_test::wasm_bindgen_test;
 
     struct EventFixture {
         event_id: EventId,

@@ -618,8 +618,8 @@ mod wasm_tests {
         let eval_by_credential = js_sys::Object::new();
         for (name, first_byte, second_byte) in [("first", 7, 8), ("second", 9, 10)] {
             let values = js_sys::Object::new();
-            let first = js_sys::Array::of1(&wasm_bindgen::JsValue::from(first_byte));
-            let second = js_sys::Array::of1(&wasm_bindgen::JsValue::from(second_byte));
+            let first = js_sys::Array::of1(&JsString::from(first_byte.to_string()));
+            let second = js_sys::Array::of1(&JsString::from(second_byte.to_string()));
             Reflect::set(&values, &JsString::from("first"), &first)
                 .map_err(|_| JsError::new("failed to set first PRF value"))?;
             Reflect::set(&values, &JsString::from("second"), &second)

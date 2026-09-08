@@ -587,6 +587,7 @@ pub(crate) fn security_conflicts_to_vec(
 #[cfg(test)]
 mod projection_conflict_tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[wasm_bindgen_test]
     fn replacement_conflict_exposes_candidate_ids_without_web_mapping() {

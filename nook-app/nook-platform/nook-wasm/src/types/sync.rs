@@ -516,7 +516,6 @@ impl NookVaultSyncResult {
 mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
-    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
