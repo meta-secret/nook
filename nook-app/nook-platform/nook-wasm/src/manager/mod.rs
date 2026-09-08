@@ -52,7 +52,8 @@ mod sync;
 mod verified_access;
 
 pub use companion_pairing::{
-    NookCompanionPairingApprovalAuthority, NookCompanionPairingExtensionEndpoint,
+    NookCompanionPairingApprovalAuthority, NookCompanionPairingCandidateFailure,
+    NookCompanionPairingCandidateOutcome, NookCompanionPairingExtensionEndpoint,
     NookPreparedCompanionPairingActivation, NookPrevalidatedCompanionPairingApproval,
     NookStoredCompanionPairingActivationCandidate,
 };

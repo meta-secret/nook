@@ -12,19 +12,24 @@ use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 mod candidate;
-pub use candidate::NookStoredCompanionPairingActivationCandidate;
+pub use candidate::{
+    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
+    NookStoredCompanionPairingActivationCandidate,
+};
 
 /// Opaque proof that pairing approval and event graph relationships were prepared.
 /// It performs no storage or activation effect and conveys no live vault authority.
 #[wasm_bindgen]
 pub struct NookPreparedCompanionPairingActivation {
     approval: NookPrevalidatedCompanionPairingApproval,
+    store_id: StoreId,
     records: NookExternalEventLogRecords,
     heads: Vec<EventId>,
     envelopes: AuthEnvelopes,
 }
 
 struct PreparedEventGraph {
+    store_id: StoreId,
     heads: Vec<EventId>,
     envelopes: AuthEnvelopes,
 }
@@ -156,6 +161,7 @@ impl NookPrevalidatedCompanionPairingApproval {
             return Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch);
         }
         Ok(PreparedEventGraph {
+            store_id,
             heads: graph.heads(),
             envelopes,
         })
@@ -168,6 +174,7 @@ impl NookPrevalidatedCompanionPairingApproval {
         let prepared = self.prepare_event_graph(&records)?;
         Ok(NookPreparedCompanionPairingActivation {
             approval: self,
+            store_id: prepared.store_id,
             records,
             heads: prepared.heads,
             envelopes: prepared.envelopes,

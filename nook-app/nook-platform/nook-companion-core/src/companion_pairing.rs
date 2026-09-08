@@ -5,7 +5,7 @@
 )]
 
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
 use std::mem;
 use tsify::Tsify;
 
@@ -88,7 +88,7 @@ impl<'de> Deserialize<'de> for CompanionPairingEpochMilliseconds {
         DeserializerType: Deserializer<'de>,
     {
         let epoch = Self(f64::deserialize(deserializer)?);
-        epoch.validate().map_err(serde::de::Error::custom)?;
+        epoch.validate().map_err(DeserializerType::Error::custom)?;
         Ok(epoch)
     }
 }

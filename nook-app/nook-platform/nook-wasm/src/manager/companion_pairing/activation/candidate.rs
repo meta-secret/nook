@@ -9,9 +9,9 @@ use nook_companion_core::{
 };
 use nook_core::{
     AuthProvidersSnapshotData, DeviceIdentity, EventId, EventStorageBytes, SigningIdentity,
-    SymmetricKey, VaultApplication, VaultType, serialize_event_storage_yaml,
+    StoreId, SymmetricKey, VaultApplication, VaultType, serialize_event_storage_yaml,
 };
-use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
 
 mod storage;
@@ -29,7 +29,7 @@ struct PairingActivationEvent {
 
 struct PairingActivationCandidate {
     request_id: String,
-    vault_store_id: String,
+    vault_store_id: StoreId,
     approval: CompanionPairingApproval,
     application: VaultApplication,
     events: Vec<PairingActivationEvent>,
@@ -59,8 +59,66 @@ enum CompanionPairingCandidateFailure {
 }
 
 impl CompanionPairingCandidateFailure {
-    fn js_error(&self) -> JsError {
-        JsError::new(&self.to_string())
+    fn public(&self) -> NookCompanionPairingCandidateFailure {
+        match self {
+            Self::Expiry => NookCompanionPairingCandidateFailure::Expiry,
+            Self::ManagerBinding => NookCompanionPairingCandidateFailure::ManagerBinding,
+            Self::ProviderBinding => NookCompanionPairingCandidateFailure::ProviderBinding,
+            Self::Replay => NookCompanionPairingCandidateFailure::Replay,
+            Self::EventAuthorization | Self::UnsupportedSchema | Self::Integrity => {
+                NookCompanionPairingCandidateFailure::Integrity
+            }
+            Self::Storage => NookCompanionPairingCandidateFailure::Storage,
+        }
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookCompanionPairingCandidateFailure {
+    Expiry,
+    ManagerBinding,
+    ProviderBinding,
+    Replay,
+    Integrity,
+    Storage,
+}
+
+/// Generated typed result for storing or loading an inert candidate.
+#[wasm_bindgen]
+pub struct NookCompanionPairingCandidateOutcome {
+    candidate: Option<NookStoredCompanionPairingActivationCandidate>,
+    failure: Option<NookCompanionPairingCandidateFailure>,
+}
+
+impl NookCompanionPairingCandidateOutcome {
+    fn from_result(
+        result: Result<storage::StoredPairingActivationCandidate, CompanionPairingCandidateFailure>,
+    ) -> Self {
+        match result {
+            Ok(inner) => Self {
+                candidate: Some(NookStoredCompanionPairingActivationCandidate { _inner: inner }),
+                failure: None,
+            },
+            Err(failure) => Self {
+                candidate: None,
+                failure: Some(failure.public()),
+            },
+        }
+    }
+}
+
+#[wasm_bindgen]
+impl NookCompanionPairingCandidateOutcome {
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn failure(&self) -> Option<NookCompanionPairingCandidateFailure> {
+        self.failure
+    }
+
+    #[must_use]
+    pub fn take_candidate(&mut self) -> Option<NookStoredCompanionPairingActivationCandidate> {
+        self.candidate.take()
     }
 }
 
@@ -84,6 +142,7 @@ impl ActivationClock for BrowserActivationClock {
 
 struct CurrentActivationBinding<'a> {
     approval: &'a CompanionPairingApproval,
+    store_id: &'a StoreId,
     providers: &'a AuthProvidersSnapshotData,
     manager: &'a NookVaultManager,
     observed_at: CompanionPairingEpochMilliseconds,
@@ -114,7 +173,8 @@ impl CurrentActivationBinding<'_> {
         };
         if self.manager.application != VaultApplication::Extension
             || self.manager.vault.architecture.vault_type != VaultType::Simple
-            || self.manager.vault.store_id != self.approval.vault_store_id
+            || self.manager.vault.store_id != self.store_id.as_str()
+            || self.store_id.as_str() != self.approval.vault_store_id
             || vault_name != &self.approval.vault_name
         {
             return Err(CompanionPairingCandidateFailure::ManagerBinding);
@@ -173,6 +233,7 @@ impl NookPreparedCompanionPairingActivation {
         let observed = request.clock.observe()?;
         let identity = CurrentActivationBinding {
             approval: &self.approval.binding,
+            store_id: &self.store_id,
             providers: &self.approval._providers,
             manager: request.manager,
             observed_at: observed.epoch,
@@ -204,7 +265,7 @@ impl NookPreparedCompanionPairingActivation {
         let approval = self.approval.binding;
         Ok(PairingActivationCandidate {
             request_id: approval.request.request_id.clone(),
-            vault_store_id: approval.vault_store_id.clone(),
+            vault_store_id: self.store_id,
             approval,
             application: request.manager.application,
             events,
@@ -217,24 +278,22 @@ impl NookPreparedCompanionPairingActivation {
 
 #[wasm_bindgen]
 impl NookPreparedCompanionPairingActivation {
-    pub async fn commit(
-        self,
-        manager: &NookVaultManager,
-    ) -> Result<NookStoredCompanionPairingActivationCandidate, JsError> {
+    pub async fn commit(self, manager: &NookVaultManager) -> NookCompanionPairingCandidateOutcome {
         let clock = BrowserActivationClock;
-        let candidate = self
-            .into_candidate(CandidatePreparation {
-                manager,
+        let candidate = match self.into_candidate(CandidatePreparation {
+            manager,
+            clock: &clock,
+        }) {
+            Ok(candidate) => candidate,
+            Err(failure) => return NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
+        };
+        NookCompanionPairingCandidateOutcome::from_result(
+            storage::PairingActivationStore::commit(storage::PairingActivationCommit {
+                candidate,
                 clock: &clock,
             })
-            .map_err(|error| error.js_error())?;
-        storage::PairingActivationStore::commit(storage::PairingActivationCommit {
-            candidate,
-            clock: &clock,
-        })
-        .await
-        .map(|inner| NookStoredCompanionPairingActivationCandidate { _inner: inner })
-        .map_err(|error| error.js_error())
+            .await,
+        )
     }
 }
 
@@ -242,24 +301,41 @@ impl NookPreparedCompanionPairingActivation {
 impl NookVaultManager {
     pub async fn load_companion_pairing_activation_candidate(
         &self,
-    ) -> Result<NookStoredCompanionPairingActivationCandidate, JsError> {
-        let candidate = storage::PairingActivationStore::load(&self.vault.store_id)
-            .await
-            .map_err(|error| error.js_error())?;
+    ) -> NookCompanionPairingCandidateOutcome {
+        let store_id = match StoreId::parse(&self.vault.store_id) {
+            Ok(store_id) => store_id,
+            Err(_) => {
+                return NookCompanionPairingCandidateOutcome::from_result(Err(
+                    CompanionPairingCandidateFailure::ManagerBinding,
+                ));
+            }
+        };
+        let candidate = match storage::PairingActivationStore::load(&store_id).await {
+            Ok(candidate) => candidate,
+            Err(failure) => return NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
+        };
         let clock = BrowserActivationClock;
-        CurrentActivationBinding {
+        let validated = CurrentActivationBinding {
             approval: &candidate.approval,
+            store_id: &candidate.vault_store_id,
             providers: &candidate.providers,
             manager: self,
-            observed_at: clock.observe().map_err(|error| error.js_error())?.epoch,
-        }
-        .validate()
-        .map_err(|error| error.js_error())?;
-        Ok(NookStoredCompanionPairingActivationCandidate {
-            _inner: storage::StoredPairingActivationCandidate {
-                _candidate: candidate,
+            observed_at: match clock.observe() {
+                Ok(observed) => observed.epoch,
+                Err(failure) => {
+                    return NookCompanionPairingCandidateOutcome::from_result(Err(failure));
+                }
             },
-        })
+        }
+        .validate();
+        match validated {
+            Ok(_) => NookCompanionPairingCandidateOutcome::from_result(Ok(
+                storage::StoredPairingActivationCandidate {
+                    _candidate: candidate,
+                },
+            )),
+            Err(failure) => NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
+        }
     }
 }
 
@@ -345,8 +421,49 @@ mod tests {
             .map_err(|failure| anyhow::anyhow!(failure.to_string()))?;
         assert_eq!(candidate.events.len(), 1);
         assert_eq!(candidate.event_heads.len(), 1);
+        assert_eq!(candidate.vault_store_id.as_str(), "store_testtoken11");
         assert!(candidate.providers.providers.is_empty());
         Ok(())
+    }
+
+    #[test]
+    fn internal_failures_have_stable_public_categories() {
+        for (failure, public) in [
+            (
+                CompanionPairingCandidateFailure::Expiry,
+                NookCompanionPairingCandidateFailure::Expiry,
+            ),
+            (
+                CompanionPairingCandidateFailure::ManagerBinding,
+                NookCompanionPairingCandidateFailure::ManagerBinding,
+            ),
+            (
+                CompanionPairingCandidateFailure::ProviderBinding,
+                NookCompanionPairingCandidateFailure::ProviderBinding,
+            ),
+            (
+                CompanionPairingCandidateFailure::EventAuthorization,
+                NookCompanionPairingCandidateFailure::Integrity,
+            ),
+            (
+                CompanionPairingCandidateFailure::Replay,
+                NookCompanionPairingCandidateFailure::Replay,
+            ),
+            (
+                CompanionPairingCandidateFailure::UnsupportedSchema,
+                NookCompanionPairingCandidateFailure::Integrity,
+            ),
+            (
+                CompanionPairingCandidateFailure::Integrity,
+                NookCompanionPairingCandidateFailure::Integrity,
+            ),
+            (
+                CompanionPairingCandidateFailure::Storage,
+                NookCompanionPairingCandidateFailure::Storage,
+            ),
+        ] {
+            assert_eq!(failure.public(), public);
+        }
     }
 
     #[test]

@@ -31,6 +31,7 @@ import {
   companion_pairing_provider_manifest_digest,
   configure_vault_application,
   NookCompanionExtensionEndpoint,
+  NookCompanionPairingCandidateFailure,
   NookCompanionPairingExtensionEndpoint,
   NookExternalEventLogRecords,
   NookPreparedCompanionPairingActivation,
@@ -276,18 +277,27 @@ describe('generated companion protocol composition', () => {
     const records = NookExternalEventLogRecords.from_array(eventRecords)
     const prepared = approval.with_event_log(records)
     expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
-    const stored = await prepared.commit(extension)
+    const commit = await prepared.commit(extension)
+    expect(commit.failure).toBeUndefined()
+    const stored = commit.take_candidate()
     expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
-    stored.free()
-    const loaded = await extension.load_companion_pairing_activation_candidate()
+    stored?.free()
+    commit.free()
+    const load = await extension.load_companion_pairing_activation_candidate()
+    expect(load.failure).toBeUndefined()
+    const loaded = load.take_candidate()
     expect(loaded).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
-    loaded.free()
+    loaded?.free()
+    load.free()
 
     const replayApproval = pairingAttempt('pairing-activation-replay', false)
     const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
-    await expect(
-      replayApproval.with_event_log(replayRecords).commit(extension),
-    ).rejects.toThrow('pairing candidate replay rejected')
+    const replay = await replayApproval
+      .with_event_log(replayRecords)
+      .commit(extension)
+    expect(replay.failure).toBe(NookCompanionPairingCandidateFailure.Replay)
+    expect(replay.take_candidate()).toBeUndefined()
+    replay.free()
 
     const invalidApproval = pairingAttempt('pairing-activation-empty', false)
     const invalidRecords = NookExternalEventLogRecords.from_array([])
