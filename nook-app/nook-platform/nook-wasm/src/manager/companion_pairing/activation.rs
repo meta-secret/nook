@@ -218,7 +218,7 @@ mod tests {
         manager: &'a NookVaultManager,
         signer: &'a SigningIdentity,
         parents: Vec<EventId>,
-        created_at: &'a str,
+        created_at: IsoTimestamp,
         operation: VaultOperation,
     }
 
@@ -308,7 +308,7 @@ mod tests {
                 signing_identity: &website_signing,
                 parents: Vec::new(),
                 key_epoch: &key_epoch,
-                created_at: &IsoTimestamp::from_trusted("2026-09-08T00:00:00Z".to_owned()),
+                created_at: &IsoTimestamp::parse("2026-09-08T00:00:00Z")?,
                 operations: vec![
                     VaultOperation::VaultImported {
                         source_content_hash: Sha256Hex::from_trusted("0".repeat(64)),
@@ -345,7 +345,7 @@ mod tests {
                 manager: &self.manager,
                 signer: &signing,
                 parents: vec![parent],
-                created_at: "2026-09-08T00:00:01Z",
+                created_at: IsoTimestamp::parse("2026-09-08T00:00:01Z")?,
                 operation: VaultOperation::SentinelParticipantEnrolled {
                     device_id: participant.device_id().clone(),
                     encryption_public_key: participant.public_key(),
@@ -364,7 +364,7 @@ mod tests {
                 manager: &self.manager,
                 signer: &signing,
                 parents: vec![parent],
-                created_at: "2026-09-08T00:00:07Z",
+                created_at: IsoTimestamp::parse("2026-09-08T00:00:07Z")?,
                 operation: VaultOperation::DeviceRevoked {
                     device_id: DeviceIdentity::generate()?.device_id().clone(),
                 },
@@ -382,7 +382,7 @@ mod tests {
                 signing_identity: &signing,
                 parents: vec![trigger_id.clone()],
                 key_epoch: &trigger_id,
-                created_at: &IsoTimestamp::from_trusted("2026-09-08T00:00:08Z".to_owned()),
+                created_at: &IsoTimestamp::parse("2026-09-08T00:00:08Z")?,
                 operations: vec![VaultOperation::EpochCheckpoint {
                     secrets: Vec::new(),
                     members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
@@ -413,7 +413,7 @@ mod tests {
                 signing_identity: signer,
                 parents,
                 key_epoch: &key_epoch,
-                created_at: &IsoTimestamp::from_trusted(created_at.to_owned()),
+                created_at: &created_at,
                 operations: vec![operation],
             })?;
             Ok(ExternalEventLogRecord {
@@ -513,7 +513,7 @@ mod tests {
             manager: &fixture.manager,
             signer: &other_signer,
             parents: vec![parent],
-            created_at: "2026-09-08T00:00:02Z",
+            created_at: IsoTimestamp::parse("2026-09-08T00:00:02Z")?,
             operation: VaultOperation::VaultCleared,
         })?;
         fixture.records.0[0].event.signature = other_record.event.signature;
@@ -538,7 +538,7 @@ mod tests {
                 parents: vec![EventId::parse(
                     "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
                 )?],
-                created_at: "2026-09-08T00:00:03Z",
+                created_at: IsoTimestamp::parse("2026-09-08T00:00:03Z")?,
                 operation: VaultOperation::MemberRenamed {
                     device_id: fixture.identity.device_id().clone(),
                     label: MemberLabel::from_trusted("Pending".to_owned()),
@@ -563,7 +563,7 @@ mod tests {
                 manager: &fixture.manager,
                 signer: &unauthorized,
                 parents: vec![parent],
-                created_at: "2026-09-08T00:00:04Z",
+                created_at: IsoTimestamp::parse("2026-09-08T00:00:04Z")?,
                 operation: VaultOperation::MemberRenamed {
                     device_id: fixture.identity.device_id().clone(),
                     label: MemberLabel::from_trusted("Unauthorized".to_owned()),
@@ -589,7 +589,7 @@ mod tests {
                 manager: &fixture.manager,
                 signer: &signing,
                 parents: vec![parent.clone()],
-                created_at: "2026-09-08T00:00:05Z",
+                created_at: IsoTimestamp::parse("2026-09-08T00:00:05Z")?,
                 operation: VaultOperation::DeviceRevoked {
                     device_id: DeviceId::parse("abcd1234ef567890")?,
                 },
@@ -601,7 +601,7 @@ mod tests {
                 manager: &fixture.manager,
                 signer: &signing,
                 parents: vec![parent],
-                created_at: "2026-09-08T00:00:06Z",
+                created_at: IsoTimestamp::parse("2026-09-08T00:00:06Z")?,
                 operation: VaultOperation::VaultCleared,
             })?);
         assert!(matches!(
