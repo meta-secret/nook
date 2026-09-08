@@ -273,7 +273,9 @@ describe('compact routing hints', () => {
         repository,
         check_suite: {
           ...associated({ id: 45, head: HEAD }),
-          status: 'completed',
+          path: 'not-review.ts',
+          line: 4,
+          pull_request_review_id: 41,
         },
       },
     },

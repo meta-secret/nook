@@ -262,13 +262,14 @@ function routingMetadata(args: {
     value: property({ record: object, key: 'target_url' }),
     limit: 240,
   });
-  const line = optionalNumber(property({ record: object, key: 'line' }));
-  const originalLine = optionalNumber(
-    property({ record: object, key: 'original_line' }),
+  const review = args.source === PrStewardSource.PullRequestReviewComment;
+  const line = optionalNumber(
+    property({ record: review ? object : {}, key: 'line' }),
   );
-  const comment =
-    args.source === PrStewardSource.IssueComment ||
-    args.source === PrStewardSource.PullRequestReviewComment;
+  const originalLine = optionalNumber(
+    property({ record: review ? object : {}, key: 'original_line' }),
+  );
+  const comment = args.source === PrStewardSource.IssueComment || review;
   const objectId = optionalNumber(property({ record: object, key: 'id' }));
   return {
     objectId,
@@ -277,7 +278,7 @@ function routingMetadata(args: {
         ? objectId
         : optionalNumber(property({ record: object, key: 'run_id' })),
     reviewId: optionalNumber(
-      property({ record: object, key: 'pull_request_review_id' }),
+      property({ record: review ? object : {}, key: 'pull_request_review_id' }),
     ),
     commentId: comment
       ? optionalNumber(property({ record: object, key: 'id' }))
@@ -302,7 +303,7 @@ function routingMetadata(args: {
           ? PrStewardNdjsonCodec.externalUrl(external)
           : false,
     path: boundedText({
-      value: property({ record: object, key: 'path' }),
+      value: property({ record: review ? object : {}, key: 'path' }),
       limit: 240,
     }),
     line: line !== false ? line : originalLine,

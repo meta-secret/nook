@@ -7,16 +7,13 @@ import {
 import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
 
 export const PR_STEWARD_REPOSITORY = 'meta-secret/nook';
-
 export enum PrStewardSchemaVersion {
   V1 = 'pr-steward-ndjson/v1',
 }
-
 export enum PrStewardRecordKind {
   Blocker = 'github-pr-blocker',
   Routing = 'github-pr-routing',
 }
-
 export enum PrStewardSource {
   CheckRun = 'check-run',
   CheckSuite = 'check-suite',
@@ -38,7 +35,6 @@ export enum PrStewardGithubEvent {
   WorkflowJob = 'workflow_job',
   WorkflowRun = 'workflow_run',
 }
-
 const EVENTS: Record<PrStewardSource, PrStewardGithubEvent> = {
   [PrStewardSource.CheckRun]: PrStewardGithubEvent.CheckRun,
   [PrStewardSource.CheckSuite]: PrStewardGithubEvent.CheckSuite,
@@ -50,17 +46,14 @@ const EVENTS: Record<PrStewardSource, PrStewardGithubEvent> = {
   [PrStewardSource.WorkflowJob]: PrStewardGithubEvent.WorkflowJob,
   [PrStewardSource.WorkflowRun]: PrStewardGithubEvent.WorkflowRun,
 };
-
 export enum PrStewardUrlTrust {
   GithubOwned = 'github-owned',
   UntrustedExternal = 'untrusted-external',
 }
-
 export type PrStewardUrl = {
   readonly trust: PrStewardUrlTrust;
   readonly value: string;
 };
-
 export type PrStewardRoutingRecord = {
   readonly kind: PrStewardRecordKind.Routing;
   readonly eventId: string;
@@ -81,12 +74,10 @@ export type PrStewardRoutingRecord = {
   readonly line: number | false;
   readonly author: string | false;
 };
-
 export enum PrStewardBlockerCode {
   GithubObservationUnavailable = 'github-observation-unavailable',
   MalformedEvent = 'malformed-event',
 }
-
 export type PrStewardMalformedBlocker = {
   readonly kind: PrStewardRecordKind.Blocker;
   readonly code: PrStewardBlockerCode.MalformedEvent;
