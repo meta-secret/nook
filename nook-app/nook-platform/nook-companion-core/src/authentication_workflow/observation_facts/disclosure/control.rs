@@ -542,7 +542,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn future_version_body_is_not_decoded_as_version_one() -> anyhow::Result<()> {
         ExactDisclosureControlScenario::assert_future_version_body_is_not_decoded_as_version_one()
     }
