@@ -154,7 +154,8 @@ pub fn classify_authentication_workflow_candidates(
             super::AuthenticationWorkflowObservationIndex(u32::try_from(index).unwrap_or(u32::MAX));
         let replace = match selected {
             AuthenticationWorkflowMatch::NoMatch => true,
-            AuthenticationWorkflowMatch::Rejected => false,
+            AuthenticationWorkflowMatch::Rejected
+            | AuthenticationWorkflowMatch::UnsupportedVersion => false,
             AuthenticationWorkflowMatch::Matched(current) => {
                 candidate.candidate_priority() > current.candidate_priority()
             }

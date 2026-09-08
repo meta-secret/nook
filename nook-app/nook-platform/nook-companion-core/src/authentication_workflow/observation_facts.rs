@@ -1,12 +1,12 @@
 use super::{
     AuthenticationAdvanceControlEvidence, AuthenticationFormObservationPriority,
-    AuthenticationManualCheckpoint, AuthenticationPageObservation, AuthenticationPageObservations,
-    AuthenticationWorkflowMatch,
+    AuthenticationManualCheckpoint, AuthenticationPageObservation,
 };
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 mod authenticator;
+mod batch;
 mod ceremony;
 mod disclosure;
 mod fields;
@@ -17,12 +17,14 @@ pub use authenticator::{
     AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
     classify_authentication_backup_codes_observation,
 };
+pub use batch::AuthenticationPageObservationFactsBatch;
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
     AuthenticationImplicitSubmitActuationObservation,
 };
 pub use disclosure::{
+    AuthenticationCredentialDisclosureControlObservation,
     AuthenticationDisclosureControlDecision, AuthenticationDisclosureObservationSchemaVersion,
     CurrentAuthenticationDisclosureControlRequest,
     VersionedAuthenticationDisclosureControlObservation,
@@ -51,14 +53,24 @@ pub struct AuthenticationPageObservationFacts {
     /// Detailed control evidence is classified in Rust; the reduced ceremony flag stays fail-closed.
     #[serde(default)]
     pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
+    /// Separately versioned evidence for exceptional disclosure-control classification.
+    pub credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
 
 impl AuthenticationPageObservationFacts {
     pub(super) fn is_bounded(&self) -> bool {
+        self.version_independent_facts_are_bounded()
+            && self.credential_disclosure_control.is_bounded()
+    }
+
+    fn version_independent_facts_are_bounded(&self) -> bool {
         self.fields.is_bounded()
             && self.authenticator.is_bounded()
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
+            && self
+                .credential_disclosure_control
+                .is_collection_bounded()
             && self.authenticator.detailed_passkey_control.is_bounded()
             && self.credential_submission.is_bounded()
     }
@@ -123,58 +135,14 @@ pub fn authentication_page_observation_facts_priority(
     facts.form_priority()
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
-#[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
-pub struct AuthenticationPageObservationFactsBatch {
-    pub observations: Vec<AuthenticationPageObservationFacts>,
-}
-
-impl AuthenticationPageObservationFactsBatch {
-    pub(super) fn is_valid_binding(&self) -> bool {
-        !self.observations.is_empty()
-            && self.observations.len() <= crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-            && self
-                .observations
-                .iter()
-                .all(AuthenticationPageObservationFacts::is_bounded)
-    }
-
-    #[must_use]
-    pub fn classify(&self) -> AuthenticationWorkflowMatch {
-        if self.observations.len() > crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS
-            || self
-                .observations
-                .iter()
-                .any(|observation| !observation.is_bounded())
-        {
-            return AuthenticationWorkflowMatch::Rejected;
-        }
-        let observations = AuthenticationPageObservations {
-            observations: self
-                .observations
-                .iter()
-                .cloned()
-                .map(|observation| {
-                    if observation.has_progression() {
-                        observation.into_observation()
-                    } else {
-                        AuthenticationPageObservation::default()
-                    }
-                })
-                .collect(),
-        };
-        super::classify_authentication_workflow_candidates(&observations.observations)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::{
         AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence,
-        AuthenticationWorkflowKind, PageControlActionability, PageControlOwnership,
-        PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
+        AuthenticationWorkflowKind, AuthenticationWorkflowMatch, PageControlActionability,
+        PageControlOwnership, PageControlSemantics, PageControlSubmissionDestinationSource,
+        PageControlSubmissionMethod,
     };
 
     fn password_login() -> AuthenticationPageObservationFacts {

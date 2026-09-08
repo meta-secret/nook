@@ -291,14 +291,215 @@ impl VersionedAuthenticationDisclosureControlObservation {
     }
 }
 
+/// Optional versioned evidence dedicated to exceptional disclosure-control classification.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize, Tsify)]
+#[serde(tag = "kind", content = "observations", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationCredentialDisclosureControlObservation {
+    #[default]
+    Absent,
+    Observed(Vec<VersionedAuthenticationDisclosureControlObservation>),
+}
+
+impl AuthenticationCredentialDisclosureControlObservation {
+    pub(in crate::authentication_workflow::observation_facts) fn is_collection_bounded(
+        &self,
+    ) -> bool {
+        matches!(self, Self::Absent)
+            || matches!(self, Self::Observed(observations)
+                if !observations.is_empty()
+                    && observations.len() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize)
+    }
+
+    pub(in crate::authentication_workflow::observation_facts) fn has_unsupported_version(
+        &self,
+    ) -> bool {
+        matches!(self, Self::Observed(observations) if observations.iter().any(|observation| {
+            matches!(
+                observation.classify(),
+                AuthenticationDisclosureControlDecision::UnsupportedVersion
+            )
+        }))
+    }
+
+    pub(in crate::authentication_workflow::observation_facts) fn is_bounded(&self) -> bool {
+        self.is_collection_bounded()
+            && (matches!(self, Self::Absent)
+                || matches!(self, Self::Observed(observations)
+                    if observations.iter().all(
+                        VersionedAuthenticationDisclosureControlObservation::is_bounded
+                    )))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
+    use crate::{
+        AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
+        AuthenticationDetailedAdvanceControlObservation,
+        AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
+        AuthenticationPageObservationFacts, AuthenticationPageObservationFactsBatch,
+        AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    };
 
     struct ExactDisclosureControlScenario;
 
     impl ExactDisclosureControlScenario {
+        fn password_login_facts() -> AuthenticationPageObservationFacts {
+            AuthenticationPageObservationFacts {
+                fields: AuthenticationFieldObservationFacts {
+                    username_field_count: 1.into(),
+                    current_password_field_count: 1.into(),
+                    actionable_password_field_count: 1.into(),
+                    ..Default::default()
+                },
+                detailed_advance_control: AuthenticationDetailedAdvanceControlObservation::observed(
+                    AuthenticationAdvanceControlObservation {
+                        actionability: PageControlActionability::Actionable,
+                        ownership: PageControlOwnership::OwnedForm,
+                        semantics: PageControlSemantics::SemanticSubmit,
+                        authentication_username: AuthenticationUsernameEvidence::Strong,
+                        password_field_count: 1.into(),
+                        new_password_field_count: 0.into(),
+                        one_time_code_field_count: 0.into(),
+                        semantic_submit_control_count: 1.into(),
+                        source_origin: "https://example.test".to_owned(),
+                        form_identity: "login".to_owned(),
+                        destination_identity: "https://example.test/login".to_owned(),
+                        label: "Continue".to_owned(),
+                        machine_identity: String::new(),
+                        submission_method: PageControlSubmissionMethod::Absent,
+                        submission_destination_source:
+                            PageControlSubmissionDestinationSource::Authored,
+                    },
+                ),
+                ..Default::default()
+            }
+        }
+
+        fn unsupported_page_facts() -> anyhow::Result<AuthenticationPageObservationFacts> {
+            let unsupported = serde_json::from_value::<
+                VersionedAuthenticationDisclosureControlObservation,
+            >(serde_json::json!({ "schemaVersion": 2 }))?;
+            let mut facts = Self::password_login_facts();
+            facts.credential_disclosure_control =
+                AuthenticationCredentialDisclosureControlObservation::Observed(vec![unsupported]);
+            Ok(facts)
+        }
+
+        fn assert_current_writer_is_explicit_and_strict() -> anyhow::Result<()> {
+            let facts = Self::password_login_facts();
+            let mut encoded = serde_json::to_value(&facts)?;
+            assert_eq!(
+                encoded.get("credentialDisclosureControl"),
+                Some(&serde_json::json!({ "kind": "absent" }))
+            );
+            let serde_json::Value::Object(fields) = &mut encoded else {
+                anyhow::bail!("authentication page facts must encode as an object");
+            };
+            fields
+                .remove("credentialDisclosureControl")
+                .ok_or_else(|| anyhow::anyhow!("current writer omitted disclosure evidence"))?;
+            assert!(serde_json::from_value::<AuthenticationPageObservationFacts>(encoded).is_err());
+            assert!(matches!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![facts],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::Matched(snapshot)
+                    if snapshot.kind == AuthenticationWorkflowKind::Login
+            ));
+            Ok(())
+        }
+
+        fn assert_unsupported_version_follows_sibling_validation() -> anyhow::Result<()> {
+            assert_eq!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![Self::unsupported_page_facts()?],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::UnsupportedVersion
+            );
+
+            let mutations: &[fn(&mut AuthenticationPageObservationFacts)] = &[
+                |facts| {
+                    facts.fields.username_field_count =
+                        (MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT + 1).into();
+                },
+                |facts| {
+                    facts.authenticator.backup_codes_copy =
+                        "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+                },
+                |facts| {
+                    facts.ceremony.one_time_code_handler_signal =
+                        "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+                },
+                |facts| {
+                    facts.detailed_advance_control =
+                        AuthenticationDetailedAdvanceControlObservation::Observed(Vec::new());
+                },
+                |facts| {
+                    facts.authenticator.detailed_passkey_control =
+                        AuthenticationDetailedPasskeyControlObservation::Candidates(Vec::new());
+                },
+                |facts| {
+                    facts.credential_submission =
+                        AuthenticationCredentialSubmissionObservation::Observed(
+                            AuthenticationCredentialSubmissionFacts {
+                                actionability: PageControlActionability::Actionable,
+                                method: PageControlSubmissionMethod::Absent,
+                                source_origin: "https://example.test".to_owned(),
+                                form_identity: "login".to_owned(),
+                                destination_identity: "not a destination".to_owned(),
+                            },
+                        );
+                },
+            ];
+            for mutation in mutations {
+                let mut rejected = Self::unsupported_page_facts()?;
+                mutation(&mut rejected);
+                assert_eq!(
+                    (AuthenticationPageObservationFactsBatch {
+                        observations: vec![rejected],
+                    })
+                    .classify(),
+                    AuthenticationWorkflowMatch::Rejected
+                );
+            }
+
+            let unsupported_control = serde_json::from_value::<
+                VersionedAuthenticationDisclosureControlObservation,
+            >(serde_json::json!({ "schemaVersion": 2 }))?;
+            let mut oversized_disclosure = Self::password_login_facts();
+            oversized_disclosure.credential_disclosure_control =
+                AuthenticationCredentialDisclosureControlObservation::Observed(vec![
+                    unsupported_control;
+                    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT as usize + 1
+                ]);
+            assert_eq!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![oversized_disclosure],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::Rejected
+            );
+
+            let unsupported = Self::unsupported_page_facts()?;
+            assert_eq!(
+                (AuthenticationPageObservationFactsBatch {
+                    observations: vec![
+                        unsupported;
+                        crate::MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS + 1
+                    ],
+                })
+                .classify(),
+                AuthenticationWorkflowMatch::Rejected
+            );
+            Ok(())
+        }
+
         fn control(
             actionability: PageControlActionability,
         ) -> VersionedAuthenticationDisclosureControlObservation {
@@ -557,5 +758,15 @@ mod tests {
     #[test]
     fn unknown_v1_fields_are_rejected() -> anyhow::Result<()> {
         ExactDisclosureControlScenario::assert_unknown_v1_fields_are_rejected()
+    }
+
+    #[test]
+    fn current_page_writer_is_explicit_and_strict() -> anyhow::Result<()> {
+        ExactDisclosureControlScenario::assert_current_writer_is_explicit_and_strict()
+    }
+
+    #[test]
+    fn unsupported_version_follows_sibling_validation() -> anyhow::Result<()> {
+        ExactDisclosureControlScenario::assert_unsupported_version_follows_sibling_validation()
     }
 }
