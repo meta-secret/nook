@@ -65,18 +65,25 @@ const previousIndexedDBRuntime = {
   indexedDB: globalThis.indexedDB,
 }
 
+type CompanionPairingApprovalFixtureRequest = {
+  readonly requestId: string
+  readonly substituteProvider: boolean
+}
+
 class CompanionPairingApprovalFixture {
   static assertManifestPrevalidation(): void {
     for (const [requestId, substituteProvider] of [
       ['pairing-success', false],
       ['pairing-substitution', true],
     ] as const) {
+      const request: CompanionPairingApprovalFixtureRequest = {
+        requestId,
+        substituteProvider,
+      }
       if (substituteProvider) {
-        expect(() => this.attempt(requestId, true)).toThrow(
-          'ProviderManifestMismatch',
-        )
+        expect(() => this.attempt(request)).toThrow('ProviderManifestMismatch')
       } else {
-        const admission = this.attempt(requestId, false)
+        const admission = this.attempt(request)
         expect(admission).toBeInstanceOf(
           NookPrevalidatedCompanionPairingApproval,
         )
@@ -85,8 +92,9 @@ class CompanionPairingApprovalFixture {
     }
   }
 
-  static attempt(requestId: string, substituteProvider: boolean) {
-    const request = {
+  static attempt(request: CompanionPairingApprovalFixtureRequest) {
+    const { requestId, substituteProvider } = request
+    const pairingRequest = {
       requestId,
       nonce: `nonce-${requestId}`,
       issuedAt: 100,
@@ -101,11 +109,13 @@ class CompanionPairingApprovalFixture {
       },
       scopes: ['vault-access', 'sync-provider-credentials'],
     } satisfies CompanionPairingRequest
-    const extensionProtocol = new NookCompanionPairingExtensionEndpoint(request)
+    const extensionProtocol = new NookCompanionPairingExtensionEndpoint(
+      pairingRequest,
+    )
     const authority = extensionProtocol.take_authority()
     extensionProtocol.free()
     const websiteProtocol = new NookCompanionPairingWebsiteProtocol({
-      request: structuredClone(request),
+      request: structuredClone(pairingRequest),
       observedAt: 120,
     })
     const providers = seal_auth_providers_for_device_public_key(
@@ -132,7 +142,7 @@ class CompanionPairingApprovalFixture {
       },
     )
     const authorization = {
-      request: structuredClone(request),
+      request: structuredClone(pairingRequest),
       observedAt: 130,
       vaultStoreId: extension.vaultStoreId,
       vaultName: extension.vaultName,
@@ -197,19 +207,23 @@ class PairingActivationScenario {
     const eventRecords = exported.to_array()
     exported.free()
 
-    const approval = CompanionPairingApprovalFixture.attempt(
-      'pairing-activation',
-      false,
-    )
+    const approvalRequest: CompanionPairingApprovalFixtureRequest = {
+      requestId: 'pairing-activation',
+      substituteProvider: false,
+    }
+    const approval = CompanionPairingApprovalFixture.attempt(approvalRequest)
     const records = NookExternalEventLogRecords.from_array(eventRecords)
     const prepared = approval.with_event_log(records)
     expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
     const stored = this.storedCandidate(await prepared.commit(extension))
     expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
     stored.free()
+    const replayApprovalRequest: CompanionPairingApprovalFixtureRequest = {
+      requestId: 'pairing-activation-replay',
+      substituteProvider: false,
+    }
     const replayApproval = CompanionPairingApprovalFixture.attempt(
-      'pairing-activation-replay',
-      false,
+      replayApprovalRequest,
     )
     const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
     const replay = await replayApproval
@@ -219,9 +233,12 @@ class PairingActivationScenario {
       NookCompanionPairingCandidateFailure.Replay,
     )
 
+    const invalidApprovalRequest: CompanionPairingApprovalFixtureRequest = {
+      requestId: 'pairing-activation-empty',
+      substituteProvider: false,
+    }
     const invalidApproval = CompanionPairingApprovalFixture.attempt(
-      'pairing-activation-empty',
-      false,
+      invalidApprovalRequest,
     )
     const invalidRecords = NookExternalEventLogRecords.from_array([])
     expect(() => invalidApproval.with_event_log(invalidRecords)).toThrow()
