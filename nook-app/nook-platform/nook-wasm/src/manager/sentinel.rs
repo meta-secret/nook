@@ -445,8 +445,9 @@ mod tests {
         AgeArmoredCiphertext, DeviceId, DeviceIdentity, DeviceMode, SentinelVaultUnlockState,
         SigningIdentity, VaultArchitecture,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn genesis_status_exposes_public_roster_without_persisting_a_vault() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let (signing, _) = SigningIdentity::generate()?;
@@ -466,14 +467,14 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn inactive_genesis_status_is_explicit() {
         let manager = NookVaultManager::new();
         let status = manager.sentinel_genesis_status();
         assert_eq!(status.phase(), SentinelGenesisPhase::Inactive);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn invalid_share_version_preserves_ceremony_session() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let participants = [DeviceIdentity::generate()?, DeviceIdentity::generate()?];
@@ -509,7 +510,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn architecture_is_inferred_from_share_envelopes_without_hardcoded_threshold()
     -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
@@ -534,7 +535,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn architecture_rejects_share_policy_above_participant_limit() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.vault.meta.sentinel_shares.insert(
@@ -557,7 +558,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn one_local_share_is_openable_before_reconstruction_quorum() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.vault.architecture = VaultArchitecture::sentinel_personal(
@@ -585,7 +586,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn architecture_rejects_duplicate_or_mismatched_share_metadata() -> anyhow::Result<()> {
         let duplicate = |second: nook_core::SentinelShareEnvelope| {
             let mut manager = NookVaultManager::new();
@@ -657,7 +658,7 @@ mod tests {
         )
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn prepare_sentinel_ceremony_session_hydrates_valid_share_metadata() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let yaml = sentinel_yaml(&keys, "store_prepare0001")?;
@@ -675,7 +676,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn prepare_sentinel_ceremony_session_rejects_non_sentinel_architecture() -> anyhow::Result<()> {
         let yaml = nook_core::VaultRecordSet::serialize_yaml_with_unlock_name_architecture(
             &[],
@@ -698,7 +699,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn loading_sentinel_content_requires_cached_keys_then_hydrates_with_them() -> anyhow::Result<()>
     {
         let keys = nook_core::VaultKeys::generate()?;

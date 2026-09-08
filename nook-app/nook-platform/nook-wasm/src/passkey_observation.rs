@@ -214,8 +214,9 @@ fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn decodes_backup_flags_without_claiming_provider_identity() {
         let mut data = vec![0; 53];
         data[32] = 0x08;
@@ -226,7 +227,7 @@ mod tests {
         assert_eq!(backup_state(&data), PasskeyBackupState::NotEligible);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn formats_only_nonzero_attested_aaguid() {
         let mut data = vec![0; 53];
         data[32] = 0x40;
@@ -238,7 +239,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_ios_browser_tokens_before_safari_fallback() {
         assert_eq!(
             observed_browser("Mozilla/5.0 FxiOS/140.0 Mobile/15E148 Safari/605.1.15"),
@@ -250,7 +251,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_edge_on_android_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser(
@@ -260,7 +261,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn distinguishes_touch_capable_ipad_desktop_mode_from_macos() {
         let desktop_safari =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Safari/605.1.15";
@@ -274,7 +275,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_opera_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser("Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36 OPR/117.0.0.0"),
@@ -282,7 +283,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_samsung_internet_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser(

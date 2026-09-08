@@ -305,8 +305,9 @@ fn get_optional_bool(target: &js_sys::Object, field: &str) -> Result<Option<bool
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn not_allowed_ceremony_is_classified_without_claiming_an_exact_cause() {
         assert_eq!(
             credential_ceremony_error_message(
@@ -318,7 +319,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn other_ceremony_errors_keep_the_browser_detail() {
         assert_eq!(
             credential_ceremony_error_message(
@@ -330,7 +331,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn ceremony_error_message_covers_partial_and_missing_browser_details() {
         assert_eq!(
             credential_ceremony_error_message("get", Some("AbortError"), None),

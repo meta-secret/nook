@@ -6,6 +6,7 @@ use nook_companion_core::{
     CompanionIdentityStatusAdmissionRequest, CompanionInstallationAppKey, CompanionUnlockedAppKey,
     ExtensionConnectScope, ExtensionPairingVaultType,
 };
+use wasm_bindgen_test::wasm_bindgen_test;
 
 fn epoch_milliseconds(
     serialized: &str,
@@ -108,7 +109,7 @@ impl DirectHandoffScenario {
     }
 }
 
-#[test]
+#[wasm_bindgen_test]
 #[allow(
     unknown_lints,
     non_local_effect_before_unhandled_error,
@@ -177,7 +178,7 @@ fn real_managers_complete_handoff_reject_replay_and_clear_pending_state()
     Ok(())
 }
 
-#[test]
+#[wasm_bindgen_test]
 #[allow(
     unknown_lints,
     non_local_effect_before_unhandled_error,
@@ -231,7 +232,7 @@ fn rejected_discovery_and_context_clear_existing_pending_secret()
     Ok(())
 }
 
-#[test]
+#[wasm_bindgen_test]
 #[allow(
     unknown_lints,
     non_local_effect_before_unhandled_error,
@@ -256,7 +257,7 @@ fn sealing_failure_consumes_nonce_and_requires_fresh_discovery()
     Ok(())
 }
 
-#[test]
+#[wasm_bindgen_test]
 #[allow(
     unknown_lints,
     non_local_effect_before_unhandled_error,
@@ -311,7 +312,7 @@ fn production_endpoint_consumes_stale_and_concurrent_transactions()
     Ok(())
 }
 
-#[test]
+#[wasm_bindgen_test]
 #[allow(
     unknown_lints,
     non_local_effect_before_unhandled_error,

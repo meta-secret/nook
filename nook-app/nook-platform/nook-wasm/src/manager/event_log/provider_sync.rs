@@ -673,7 +673,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn projected_epoch_keys_use_the_current_auth_envelopes() -> anyhow::Result<()> {
         let identity = DeviceIdentity::generate()?;
         let keys = nook_core::VaultKeys::generate()?;
@@ -686,7 +686,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn durable_outbox_rejects_an_event_removed_from_the_active_index() -> anyhow::Result<()> {
         let retained = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let quarantined = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
@@ -708,7 +708,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     #[allow(
         unknown_lints,
         non_local_effect_before_unhandled_error,
@@ -733,7 +733,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn empty_and_same_store_classifications_leave_no_pending_issue() -> Result<(), JsError> {
         let mut manager = NookVaultManager::new();
         for classification in [
@@ -751,7 +751,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     #[allow(
         non_local_effect_before_unhandled_error,
         reason = "the test intentionally observes and then inspects the stored multi-store issue"
@@ -772,7 +772,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn provider_classification_errors_include_the_provider_and_store_context() {
         let mismatch = NookVaultManager::provider_store_mismatch_error(
             "Drive",
@@ -796,7 +796,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn event_export_round_trips_content_addressed_records() -> anyhow::Result<()> {
         let (event_id, bytes, event) = event_fixture()?;
         let mut store = nook_core::LocalEventStore::new();
@@ -811,7 +811,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn event_export_rejects_corrupt_local_bytes() -> anyhow::Result<()> {
         let event_id = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
         let mut store = nook_core::LocalEventStore::new();

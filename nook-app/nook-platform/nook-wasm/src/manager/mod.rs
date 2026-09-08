@@ -300,8 +300,9 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use nook_core::{VaultNameRef, VaultStoreIdentityRef, VaultVersionWrite};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn vault_name_assignment_trims_and_clears_blank_values() {
         let mut manager = NookVaultManager::new();
 
@@ -315,7 +316,7 @@ mod tests {
         assert!(matches!(manager.vault.vault_name, VaultNameState::Unnamed));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn device_public_key_projects_only_a_valid_identity() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         assert!(manager.device_public_key().is_empty());
@@ -330,7 +331,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn reset_session_keeps_device_and_provider_configuration() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         let identity = DeviceIdentity::generate()?;
@@ -358,7 +359,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn projection_serialization_requires_a_store_identity() {
         let manager = NookVaultManager::new();
         assert!(matches!(
@@ -367,7 +368,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn capture_unlock_adopts_metadata_and_version() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         let store_id = nook_core::StoreId::generate()?;
@@ -394,7 +395,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn ensure_device_identity_requires_authorization() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         assert!(manager.ensure_device_identity().is_err());
@@ -408,7 +409,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn local_cache_reference_tracks_provider_mode_and_path() {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Github;
@@ -420,7 +421,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn stored_snapshot_and_genesis_requirement_follow_current_records() -> Result<(), NookError> {
         let manager = NookVaultManager::new();
         assert!(manager.stored_records_snapshot().is_empty());

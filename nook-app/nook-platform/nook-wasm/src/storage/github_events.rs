@@ -270,7 +270,7 @@ mod tests {
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn tree_path_filter_accepts_only_flat_event_yaml_files() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
@@ -295,7 +295,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn tree_path_filter_rejects_invalid_digests_and_accepts_case_insensitive_yaml() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert_eq!(
@@ -319,7 +319,7 @@ mod tests {
         assert!(!GitHubEventStore::is_sha256_base64url_digest("short"));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_tree_response_decodes_entries_and_truncation() -> anyhow::Result<()> {
         let response: GitTreeResponse = serde_json::from_str(
             r#"{"truncated":true,"tree":[{"path":"nook-log/v1/events/event.yaml","type":"blob"}]}"#,
@@ -333,7 +333,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_repo_response_projects_missing_errors_and_json() {
         assert!(
             GitHubEventStore::github_repo_response(StatusCode::NOT_FOUND, "", "owner/repo")
@@ -363,7 +363,7 @@ mod tests {
         assert_eq!(repo.default_branch, "release");
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_tree_response_projects_missing_errors_truncation_and_entries() {
         assert!(
             GitHubEventStore::github_tree_response(StatusCode::NOT_FOUND, "")
@@ -398,7 +398,7 @@ mod tests {
         assert_eq!(tree.tree.len(), 1);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn event_tree_projection_filters_non_event_entries_and_retries() -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         let entries: Vec<GitTreeEntry> = serde_json::from_str(&format!(
@@ -425,7 +425,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn event_content_accepts_utf8_and_rejects_binary_payloads() {
         assert_eq!(
             GitHubEventStore::event_content(b"event: yaml").unwrap(),

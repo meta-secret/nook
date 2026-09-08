@@ -401,7 +401,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn select_matching_skips_unreadable_duplicate_and_keeps_valid_event() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(
@@ -412,7 +412,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn select_matching_treats_all_unreadable_candidates_as_absent() -> anyhow::Result<()> {
         let EventFixture(event_id, _, _) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(
@@ -423,7 +423,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn select_matching_accepts_identical_duplicates() -> anyhow::Result<()> {
         let EventFixture(event_id, _, bytes) = EventFixture::new()?;
         let selected = DriveEventStore::select_matching_drive_event_bytes(
@@ -434,7 +434,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn select_matching_rejects_same_id_divergent_envelopes() -> anyhow::Result<()> {
         let EventFixture(event_id, mut event, bytes) = EventFixture::new()?;
         event.signature = Ed25519Signature::from_trusted(format!("ed25519:{}", "11".repeat(64)));
@@ -449,7 +449,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn select_matching_ignores_a_valid_event_for_a_different_requested_id() -> anyhow::Result<()> {
         let EventFixture(event_id, _, _) = EventFixture::new()?;
         let EventFixture(other_id, _, other_bytes) = EventFixture::new()?;
@@ -460,7 +460,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn multipart_upload_body_preserves_parent_event_id_and_yaml() -> anyhow::Result<()> {
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let parent = DriveEventParent::SharedFolder {
@@ -500,7 +500,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn private_and_shared_queries_keep_their_original_scope() {
         let private = DriveEventParent::AppDataFolder;
         let shared = DriveEventParent::SharedFolder {
@@ -529,7 +529,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn listed_event_id_requires_matching_app_property() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         let name = format!("{digest}.yaml");
@@ -552,7 +552,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn list_response_projection_accepts_only_matching_event_rows() -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         let event_id = format!("sha256u:{digest}");
@@ -576,7 +576,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn list_response_projection_preserves_page_token_only_when_string() {
         let body = serde_json::json!({"nextPageToken": "page-2"});
         assert_eq!(
@@ -589,7 +589,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn digest_filter_rejects_wrong_length_and_non_base64url_bytes() {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert!(DriveEventStore::is_sha256_base64url_digest(digest));

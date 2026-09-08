@@ -62,7 +62,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn ceremony_error_classification_preserves_variants_and_case_sensitive_markers() {
         let variants: [fn(String) -> NookError; 2] = [NookError::Encryption, NookError::Database];
         for variant in variants {
