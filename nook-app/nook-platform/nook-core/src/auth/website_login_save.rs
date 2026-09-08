@@ -54,7 +54,7 @@ impl WebsiteLoginSaveDecision {
     }
 }
 
-impl WebsiteLoginSaveRequest<'_> {
+impl<'a> WebsiteLoginSaveRequest<'a> {
     /// Decide create / update / already-saved / invalid for a captured login.
     ///
     /// `candidates` should already be filtered to the requesting origin when
@@ -99,7 +99,7 @@ impl WebsiteLoginSaveRequest<'_> {
         WebsiteLoginSaveDecision::Create
     }
 
-    pub(crate) fn legacy_decide<'a>(
+    pub(crate) fn legacy_decide(
         origin: &'a str,
         username: &'a str,
         password: &'a str,

@@ -12,7 +12,6 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 mod secret_presentation;
-pub(crate) use secret_presentation::SecretTitle;
 pub use secret_presentation::{AuthenticatorGroupKeyRequest, LoginHostMatchRequest, WebsiteHost};
 mod secret_record_presentation;
 
