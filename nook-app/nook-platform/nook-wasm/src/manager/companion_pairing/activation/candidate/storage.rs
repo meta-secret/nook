@@ -10,7 +10,10 @@ use nook_core::StoreId;
 use rexie::TransactionMode;
 
 mod schema;
-use schema::{CandidateLocatorValidation, CandidateSchema, EncodedCandidate};
+use schema::{
+    CandidateLocatorValidation, CandidateReadbackFailure, CandidateReadbackIntegrityStage,
+    CandidateSchema, EncodedCandidate,
+};
 
 const VAULT_STORE: &str = "vault";
 
@@ -182,59 +185,96 @@ impl PairingActivationStore {
     pub(super) async fn load(
         request: PairingActivationLoad<'_>,
     ) -> Result<Option<StoredPairingActivationCandidate>, CompanionPairingCandidateFailure> {
-        let store_id = StoreId::parse(&request.manager.vault.store_id)
-            .map_err(|_| CompanionPairingCandidateFailure::Integrity)?;
+        Self::load_staged(request)
+            .await
+            .map_err(CandidateReadbackFailure::public)
+    }
+
+    async fn load_staged(
+        request: PairingActivationLoad<'_>,
+    ) -> Result<Option<StoredPairingActivationCandidate>, CandidateReadbackFailure> {
+        let store_id = StoreId::parse(&request.manager.vault.store_id).map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::Locator)
+        })?;
         let gate_key = CandidateSchema::gate_key(&store_id);
         let connection = open_nook_database()
             .await
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
         let transaction = connection
             .transaction(&[VAULT_STORE], TransactionMode::ReadOnly)
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
         let vault = transaction
             .store(VAULT_STORE)
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
         let Some(gate_json) = Self::get_string(StoredStringRead {
             store: &vault,
             key: &gate_key,
         })
-        .await?
+        .await
+        .map_err(|failure| {
+            CandidateReadbackFailure::from_candidate(
+                &failure,
+                CandidateReadbackIntegrityStage::Gate,
+            )
+        })?
         else {
             transaction
                 .done()
                 .await
-                .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
+                .map_err(|_| CandidateReadbackFailure::Storage)?;
             return Ok(None);
         };
-        let gate = CandidateSchema::decode(&gate_json)?;
+        let gate = CandidateSchema::decode(&gate_json).map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::Gate)
+        })?;
         EncodedCandidate::validate_locator(&CandidateLocatorValidation {
             gate: &gate,
             store_id: &store_id,
+        })
+        .map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::Locator)
         })?;
         let mut events = Vec::with_capacity(gate.event_payload_keys.len());
         for key in &gate.event_payload_keys {
             let value = Self::get_string(StoredStringRead { store: &vault, key })
-                .await?
-                .ok_or(CompanionPairingCandidateFailure::Integrity)?;
+                .await
+                .map_err(|failure| {
+                    CandidateReadbackFailure::from_candidate(
+                        &failure,
+                        CandidateReadbackIntegrityStage::Payload,
+                    )
+                })?
+                .ok_or(CandidateReadbackFailure::Integrity(
+                    CandidateReadbackIntegrityStage::Payload,
+                ))?;
             events.push((key.clone(), value));
         }
         let providers = Self::get_string(StoredStringRead {
             store: &vault,
             key: &gate.provider_payload_key,
         })
-        .await?
-        .ok_or(CompanionPairingCandidateFailure::Integrity)?;
+        .await
+        .map_err(|failure| {
+            CandidateReadbackFailure::from_candidate(
+                &failure,
+                CandidateReadbackIntegrityStage::Provider,
+            )
+        })?
+        .ok_or(CandidateReadbackFailure::Integrity(
+            CandidateReadbackIntegrityStage::Provider,
+        ))?;
         transaction
             .done()
             .await
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
+            .map_err(|_| CandidateReadbackFailure::Storage)?;
         let candidate = EncodedCandidate {
             gate_key,
             gate,
             events,
             providers,
         }
-        .decode()?;
+        .decode_staged()
+        .map_err(CandidateReadbackFailure::Integrity)?;
         CurrentActivationBinding {
             approval: &candidate.approval,
             store_id: &candidate.vault_store_id,
@@ -243,7 +283,9 @@ impl PairingActivationStore {
             observed_at: candidate.stored_at,
         }
         .validate()
-        .map_err(|_| CompanionPairingCandidateFailure::Integrity)?;
+        .map_err(|_| {
+            CandidateReadbackFailure::Integrity(CandidateReadbackIntegrityStage::CurrentBinding)
+        })?;
         Ok(Some(StoredPairingActivationCandidate {
             _candidate: candidate,
         }))
@@ -767,9 +809,9 @@ mod browser_tests {
         async fn load(
             manager: &NookVaultManager,
         ) -> Result<Option<StoredPairingActivationCandidate>, NookError> {
-            PairingActivationStore::load(PairingActivationLoad { manager })
+            PairingActivationStore::load_staged(PairingActivationLoad { manager })
                 .await
-                .map_err(|failure| NookError::Database(failure.to_string()))
+                .map_err(|failure| NookError::Database(format!("readback stage: {failure:?}")))
         }
 
         async fn delete_key(key: &str) -> Result<(), NookError> {

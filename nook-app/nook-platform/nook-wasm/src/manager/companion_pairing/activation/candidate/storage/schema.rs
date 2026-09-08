@@ -19,6 +19,46 @@ use serde::{
 
 type SchemaResult<T> = Result<T, CompanionPairingCandidateFailure>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CandidateReadbackIntegrityStage {
+    Gate,
+    Locator,
+    Payload,
+    Provider,
+    EventRow,
+    EventEnvelope,
+    Graph,
+    Recipient,
+    CurrentBinding,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum CandidateReadbackFailure {
+    Integrity(CandidateReadbackIntegrityStage),
+    Storage,
+}
+
+impl CandidateReadbackFailure {
+    pub(super) fn from_candidate(
+        failure: &CompanionPairingCandidateFailure,
+        stage: CandidateReadbackIntegrityStage,
+    ) -> Self {
+        match failure {
+            CompanionPairingCandidateFailure::Storage => Self::Storage,
+            _ => Self::Integrity(stage),
+        }
+    }
+
+    pub(super) fn public(self) -> CompanionPairingCandidateFailure {
+        match self {
+            Self::Integrity(_) => CompanionPairingCandidateFailure::Integrity,
+            Self::Storage => CompanionPairingCandidateFailure::Storage,
+        }
+    }
+}
+
+type ReadbackResult<T> = Result<T, CandidateReadbackIntegrityStage>;
+
 #[derive(Clone, Copy)]
 struct PairingActivationSchemaVersion;
 
@@ -221,19 +261,29 @@ impl EncodedCandidate {
         Ok(())
     }
 
+    #[cfg(test)]
     pub(super) fn decode(self) -> SchemaResult<PairingActivationCandidate> {
-        self.validate_payload_integrity()?;
-        let store_id =
-            StoreId::parse(&self.gate.vault_store_id).map_err(|_| CandidateSchema::integrity())?;
+        self.decode_staged()
+            .map_err(|_| CandidateSchema::integrity())
+    }
+
+    pub(super) fn decode_staged(self) -> ReadbackResult<PairingActivationCandidate> {
+        self.validate_payload_integrity()
+            .map_err(|_| CandidateReadbackIntegrityStage::Payload)?;
+        let store_id = StoreId::parse(&self.gate.vault_store_id)
+            .map_err(|_| CandidateReadbackIntegrityStage::Locator)?;
         Self::validate_locator(&CandidateLocatorValidation {
             gate: &self.gate,
             store_id: &store_id,
-        })?;
+        })
+        .map_err(|_| CandidateReadbackIntegrityStage::Locator)?;
         self.gate
             .approval
             .revalidate_at(self.gate.stored_at)
-            .map_err(|_| CandidateSchema::integrity())?;
-        let providers = self.decode_providers(&store_id)?;
+            .map_err(|_| CandidateReadbackIntegrityStage::Gate)?;
+        let providers = self
+            .decode_providers(&store_id)
+            .map_err(|_| CandidateReadbackIntegrityStage::Provider)?;
         let decoded_events = self.decode_events(&store_id)?;
         Ok(PairingActivationCandidate {
             request_id: self.gate.request_id,
@@ -292,65 +342,67 @@ impl EncodedCandidate {
         Ok(providers)
     }
 
-    fn decode_events(&self, store_id: &StoreId) -> SchemaResult<DecodedCandidateEvents> {
+    fn decode_events(&self, store_id: &StoreId) -> ReadbackResult<DecodedCandidateEvents> {
         let mut event_store = LocalEventStore::new();
         let events = self
             .events
             .iter()
             .map(|(key, value)| {
-                let row: ActivationEventRow = CandidateSchema::decode(value)?;
-                let event_id =
-                    EventId::parse(&row.event_id).map_err(|_| CandidateSchema::integrity())?;
+                let row: ActivationEventRow = CandidateSchema::decode(value)
+                    .map_err(|_| CandidateReadbackIntegrityStage::EventRow)?;
+                let event_id = EventId::parse(&row.event_id)
+                    .map_err(|_| CandidateReadbackIntegrityStage::EventRow)?;
                 let expected_key = CandidateSchema::event_key(&CandidateEventLocation {
                     request: &self.gate.request_id,
                     vault_store: store_id,
                     event: &event_id,
                 });
                 if key != &expected_key {
-                    return Err(CandidateSchema::integrity());
+                    return Err(CandidateReadbackIntegrityStage::EventRow);
                 }
                 let bytes = EventStorageBytes::from(row.bytes);
-                let event =
-                    parse_event_storage_bytes(&bytes).map_err(|_| CandidateSchema::integrity())?;
-                if serialize_event_storage_yaml(&event).map_err(|_| CandidateSchema::integrity())?
+                let event = parse_event_storage_bytes(&bytes)
+                    .map_err(|_| CandidateReadbackIntegrityStage::EventEnvelope)?;
+                if serialize_event_storage_yaml(&event)
+                    .map_err(|_| CandidateReadbackIntegrityStage::EventEnvelope)?
                     != bytes
                 {
-                    return Err(CandidateSchema::integrity());
+                    return Err(CandidateReadbackIntegrityStage::EventEnvelope);
                 }
                 let checked = CheckedRemoteEvent::parse(&event_id, &bytes)
-                    .map_err(|_| CandidateSchema::integrity())?;
+                    .map_err(|_| CandidateReadbackIntegrityStage::EventEnvelope)?;
                 if !checked.belongs_to_store(store_id.as_str())
                     || event_store.get_bytes(&event_id).is_some()
                 {
-                    return Err(CandidateSchema::integrity());
+                    return Err(CandidateReadbackIntegrityStage::EventEnvelope);
                 }
                 event_store.put_event(event_id.clone(), bytes.clone());
                 Ok(PairingActivationEvent { event_id, bytes })
             })
-            .collect::<SchemaResult<Vec<_>>>()?;
+            .collect::<ReadbackResult<Vec<_>>>()?;
         let graph = event_store
             .load_graph(store_id.as_str())
-            .map_err(|_| CandidateSchema::integrity())?;
+            .map_err(|_| CandidateReadbackIntegrityStage::Graph)?;
         if graph.classify_vault_architecture() == EventGraphVaultArchitecture::Sentinel
             || !graph.pending_events().is_empty()
             || !graph.quarantined().is_empty()
         {
-            return Err(CandidateSchema::integrity());
+            return Err(CandidateReadbackIntegrityStage::Graph);
         }
         graph
             .validate_authorizations()
-            .map_err(|_| CandidateSchema::integrity())?;
+            .map_err(|_| CandidateReadbackIntegrityStage::Graph)?;
         let projection = VaultProjection::from_graph(&graph, store_id.as_str())
-            .map_err(|_| CandidateSchema::integrity())?;
+            .map_err(|_| CandidateReadbackIntegrityStage::Graph)?;
         let heads = graph.heads();
         if !projection.security_conflicts.is_empty() || heads != self.gate.event_heads {
-            return Err(CandidateSchema::integrity());
+            return Err(CandidateReadbackIntegrityStage::Graph);
         }
         PairingRecipientAccess::validate(&PairingRecipientAccessRequest {
             graph: &graph,
             approval: &self.gate.approval,
         })
-        .map_err(|_| CandidateSchema::integrity())?;
+        .map_err(|_| CandidateReadbackIntegrityStage::Recipient)?;
         Ok(DecodedCandidateEvents { events, heads })
     }
 }
