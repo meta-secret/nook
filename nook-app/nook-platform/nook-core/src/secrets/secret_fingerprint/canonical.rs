@@ -341,17 +341,20 @@ mod tests {
 
     #[test]
     fn seed_phrase_whitespace_is_collapsed_only_in_the_version_field() {
-        let value = SecretValue::SeedPhrase(SeedPhraseSecret {
-            name: " Recovery\r\n ".to_owned(),
-            seed: " alpha\t beta\n gamma ".to_owned(),
-        });
+        let value = SecretValue::SeedPhrase(
+            SeedPhraseSecret::try_new(
+                " Recovery\r\n ".to_owned(),
+                " abandon\t abandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon about ".to_owned(),
+            )
+            .expect("valid seed phrase"),
+        );
         assert_eq!(
             CanonicalSecretBytes::identity(&value).0,
             b"11:seed-phrase\x008:Recovery\x00"
         );
         assert_eq!(
             CanonicalSecretBytes::version(&value).0,
-            b"11:seed-phrase\x008:Recovery\x0016:alpha beta gamma\x00"
+            b"11:seed-phrase\x008:Recovery\x0093:abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about\x00"
         );
     }
 

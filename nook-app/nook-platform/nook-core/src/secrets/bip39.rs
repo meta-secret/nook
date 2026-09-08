@@ -8,6 +8,7 @@
 
 use crate::errors::{ValidationError, ValidationResult};
 use bip39::{Language, Mnemonic};
+use zeroize::Zeroize;
 
 /// A supported BIP-39 mnemonic word count inferred from normalized input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -69,14 +70,16 @@ impl<'a> Bip39MnemonicInput<'a> {
     }
 
     /// Validates an English BIP-39 mnemonic and returns the validated value.
-    pub fn validate(self) -> ValidationResult<Bip39Mnemonic<'a>> {
+    pub fn validate(self) -> ValidationResult<Bip39Mnemonic> {
         let normalized = self.text.trim();
         if normalized.is_empty() {
             return Err(ValidationError::Bip39Empty);
         }
 
         Mnemonic::parse_in_normalized(Language::English, normalized)
-            .map(|_| Bip39Mnemonic { text: normalized })
+            .map(|_| Bip39Mnemonic {
+                text: normalized.to_owned(),
+            })
             .map_err(|_| ValidationError::Bip39Invalid)
     }
 
@@ -104,24 +107,40 @@ impl<'a> Bip39MnemonicInput<'a> {
 }
 
 /// A validated English BIP-39 mnemonic.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Bip39Mnemonic<'a> {
-    text: &'a str,
+#[derive(Clone, PartialEq, Eq)]
+pub struct Bip39Mnemonic {
+    text: String,
 }
 
-impl Bip39Mnemonic<'_> {
+impl Bip39Mnemonic {
     #[must_use]
-    pub fn parse_words(self) -> Vec<String> {
-        Bip39MnemonicInput::parse_words_from(self.text)
+    pub fn as_str(&self) -> &str {
+        &self.text
     }
 
     #[must_use]
-    pub fn infer_length(self) -> Option<Bip39MnemonicWordCount> {
+    pub fn into_string(self) -> String {
+        self.text
+    }
+
+    #[must_use]
+    pub fn parse_words(&self) -> Vec<String> {
+        Bip39MnemonicInput::parse_words_from(&self.text)
+    }
+
+    #[must_use]
+    pub fn infer_length(&self) -> Option<Bip39MnemonicWordCount> {
         match self.parse_words().len() {
             12 => Some(Bip39MnemonicWordCount::WORDS_12),
             24 => Some(Bip39MnemonicWordCount::WORDS_24),
             _ => None,
         }
+    }
+}
+
+impl Zeroize for Bip39Mnemonic {
+    fn zeroize(&mut self) {
+        self.text.zeroize();
     }
 }
 
@@ -211,13 +230,6 @@ pub enum Bip39WordSequenceValidation {
     Valid,
     WrongWordCount,
     UnknownWord,
-}
-
-impl Bip39WordSequenceValidation {
-    #[must_use]
-    pub const fn is_valid(self) -> bool {
-        matches!(self, Self::Valid)
-    }
 }
 
 /// Normalized BIP-39 words that can be joined for presentation.

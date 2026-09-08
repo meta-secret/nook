@@ -59,7 +59,7 @@ impl PlaintextSecretSession<'_> {
             return Err(SessionError::SecretAlreadyExists { id: new_id });
         }
 
-        let typed_value = SecretValue::from_yaml(input.secret_type, &payload)?;
+        let typed_value = SecretValue::from_yaml_str(input.secret_type, payload.as_str())?;
         db.remove_and_zeroize(&old_id);
         db.insert(new_id.clone(), typed_value);
 
@@ -160,7 +160,7 @@ impl<'a> EncryptedSecretSession<'a> {
             return Err(SessionError::SecretAlreadyExists { id: new_id });
         }
 
-        let mut typed_value = SecretValue::from_yaml(input.secret_type, &payload)?;
+        let mut typed_value = SecretValue::from_yaml_str(input.secret_type, payload.as_str())?;
         typed_value.zeroize_plaintext();
         let encrypted = crypto.encrypt_value(payload.as_str())?;
         Ok(PreparedEncryptedSecretReplacement {

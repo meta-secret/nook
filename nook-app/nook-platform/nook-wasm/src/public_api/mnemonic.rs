@@ -62,12 +62,14 @@ pub fn suggest_bip39_words(prefix: &str, limit: u32) -> Vec<String> {
     )
 )]
 pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> bool {
-    Bip39WordSequenceRequest {
-        text,
-        expected_word_count: (expected_word_count as usize).into(),
-    }
-    .validate()
-    .is_valid()
+    matches!(
+        Bip39WordSequenceRequest {
+            text,
+            expected_word_count: (expected_word_count as usize).into(),
+        }
+        .validate(),
+        nook_core::Bip39WordSequenceValidation::Valid
+    )
 }
 
 #[wasm_bindgen]

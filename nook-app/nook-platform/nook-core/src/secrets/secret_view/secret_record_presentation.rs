@@ -235,10 +235,14 @@ mod tests {
         let record = SecretRecord {
             id: SecretId::from_vault_record("secret_seed"),
             secret_type: SecretType::SeedPhrase,
-            data: SecretValue::SeedPhrase(crate::SeedPhraseSecret {
-                name: "wallet".to_owned(),
-                seed: "abandon ability able about above absent absorb abstract absurd abuse access accident".to_owned(),
-            }),
+            data: SecretValue::SeedPhrase(
+                crate::SeedPhraseSecret::try_new(
+                    "wallet".to_owned(),
+                    "abandon ability able about above absent absorb abstract absurd abuse access accident"
+                        .to_owned(),
+                )
+                .expect("valid seed phrase"),
+            ),
         };
         let item = record.list_item();
         assert_eq!(

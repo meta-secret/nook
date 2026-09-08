@@ -382,7 +382,7 @@ pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
     SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultYaml, SymmetricKey,
-    Url64EncodedString,
+    Url64EncodedString, ValidatedSecretPayloadYaml,
 };
 
 #[cfg(test)]
