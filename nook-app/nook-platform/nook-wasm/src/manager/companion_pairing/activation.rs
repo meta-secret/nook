@@ -210,6 +210,14 @@ mod tests {
         identity: &'a DeviceIdentity,
     }
 
+    struct EventRecordRequest<'a> {
+        manager: &'a NookVaultManager,
+        signer: &'a SigningIdentity,
+        parents: Vec<EventId>,
+        created_at: &'a str,
+        operation: VaultOperation,
+    }
+
     impl ActivationFixture {
         fn epoch(value: &str) -> anyhow::Result<CompanionPairingEpochMilliseconds> {
             Ok(serde_json::from_str(value)?)
@@ -324,32 +332,49 @@ mod tests {
         }
 
         fn append_sentinel_membership(&mut self) -> anyhow::Result<()> {
-            let store_id = StoreId::parse(&self.manager.vault.store_id)?;
             let parent = EventId::parse(&self.records.0[0].event_id)?;
-            let key_epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
             let signing =
                 SigningIdentity::from_seed_hex_stored(&self.manager.event_log.signing_seed)?;
             let participant = DeviceIdentity::generate()?;
             let (participant_signing, _) = SigningIdentity::generate()?;
-            let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
-                store_id: &store_id,
-                actor_id: &signing.actor_id()?,
-                signing_identity: &signing,
+            self.records.0.push(Self::event_record(EventRecordRequest {
+                manager: &self.manager,
+                signer: &signing,
                 parents: vec![parent],
-                key_epoch: &key_epoch,
-                created_at: &IsoTimestamp::from_trusted("2026-09-08T00:00:01Z".to_owned()),
-                operations: vec![VaultOperation::SentinelParticipantEnrolled {
+                created_at: "2026-09-08T00:00:01Z",
+                operation: VaultOperation::SentinelParticipantEnrolled {
                     device_id: participant.device_id().clone(),
                     encryption_public_key: participant.public_key(),
                     signing_public_key: participant_signing.public_key(),
                     label: MemberLabel::from_trusted("Sentinel".to_owned()),
-                }],
+                },
+            })?);
+            Ok(())
+        }
+
+        fn event_record(request: EventRecordRequest<'_>) -> anyhow::Result<ExternalEventLogRecord> {
+            let EventRecordRequest {
+                manager,
+                signer,
+                parents,
+                created_at,
+                operation,
+            } = request;
+            let store_id = StoreId::parse(&manager.vault.store_id)?;
+            let key_epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+            let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
+                store_id: &store_id,
+                actor_id: &signer.actor_id()?,
+                signing_identity: signer,
+                parents,
+                key_epoch: &key_epoch,
+                created_at: &IsoTimestamp::from_trusted(created_at.to_owned()),
+                operations: vec![operation],
             })?;
-            self.records.0.push(ExternalEventLogRecord {
+            Ok(ExternalEventLogRecord {
                 event_id: event.id()?.as_str().to_owned(),
                 event,
-            });
-            Ok(())
+            })
         }
 
         fn prepare(
@@ -419,6 +444,124 @@ mod tests {
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::EventIdMismatch)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_invalid_event_identifier() -> anyhow::Result<()> {
+        let mut fixture = ActivationFixture::new()?;
+        fixture.records.0[0].event_id = "not-an-event-identifier".to_owned();
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::IdentifierInvalid)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_event_with_invalid_signature() -> anyhow::Result<()> {
+        let mut fixture = ActivationFixture::new()?;
+        let (other_signer, _) = SigningIdentity::generate()?;
+        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        let other_record = ActivationFixture::event_record(EventRecordRequest {
+            manager: &fixture.manager,
+            signer: &other_signer,
+            parents: vec![parent],
+            created_at: "2026-09-08T00:00:02Z",
+            operation: VaultOperation::VaultCleared,
+        })?;
+        fixture.records.0[0].event.signature = other_record.event.signature;
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::RecordInvalid)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_event_graph_with_missing_parent() -> anyhow::Result<()> {
+        let mut fixture = ActivationFixture::new()?;
+        let signing =
+            SigningIdentity::from_seed_hex_stored(&fixture.manager.event_log.signing_seed)?;
+        fixture
+            .records
+            .0
+            .push(ActivationFixture::event_record(EventRecordRequest {
+                manager: &fixture.manager,
+                signer: &signing,
+                parents: vec![EventId::parse(
+                    "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo",
+                )?],
+                created_at: "2026-09-08T00:00:03Z",
+                operation: VaultOperation::MemberRenamed {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: MemberLabel::from_trusted("Pending".to_owned()),
+                },
+            })?);
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::GraphPending)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_quarantined_unauthorized_event() -> anyhow::Result<()> {
+        let mut fixture = ActivationFixture::new()?;
+        let (unauthorized, _) = SigningIdentity::generate()?;
+        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        fixture
+            .records
+            .0
+            .push(ActivationFixture::event_record(EventRecordRequest {
+                manager: &fixture.manager,
+                signer: &unauthorized,
+                parents: vec![parent],
+                created_at: "2026-09-08T00:00:04Z",
+                operation: VaultOperation::MemberRenamed {
+                    device_id: fixture.identity.device_id().clone(),
+                    label: MemberLabel::from_trusted("Unauthorized".to_owned()),
+                },
+            })?);
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::GraphQuarantined)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_concurrent_projection_security_conflict() -> anyhow::Result<()> {
+        let mut fixture = ActivationFixture::new()?;
+        let signing =
+            SigningIdentity::from_seed_hex_stored(&fixture.manager.event_log.signing_seed)?;
+        let parent = EventId::parse(&fixture.records.0[0].event_id)?;
+        fixture
+            .records
+            .0
+            .push(ActivationFixture::event_record(EventRecordRequest {
+                manager: &fixture.manager,
+                signer: &signing,
+                parents: vec![parent.clone()],
+                created_at: "2026-09-08T00:00:05Z",
+                operation: VaultOperation::DeviceRevoked {
+                    device_id: DeviceId::parse("abcd1234ef567890")?,
+                },
+            })?);
+        fixture
+            .records
+            .0
+            .push(ActivationFixture::event_record(EventRecordRequest {
+                manager: &fixture.manager,
+                signer: &signing,
+                parents: vec![parent],
+                created_at: "2026-09-08T00:00:06Z",
+                operation: VaultOperation::VaultCleared,
+            })?);
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::ProjectionConflict)
         ));
         Ok(())
     }
