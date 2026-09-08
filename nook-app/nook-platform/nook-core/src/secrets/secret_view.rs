@@ -272,7 +272,10 @@ impl SecretFormFields {
             }
         };
         let yaml = serde_yaml::to_string(&filtered).map_err(SecretPayloadError::Serialize)?;
-        SecretPayloadYaml::parse(self.secret_type(), &yaml)
+        SecretPayloadYaml::parse(crate::SecretPayloadValidationRequest {
+            secret_type: self.secret_type(),
+            raw: &yaml,
+        })
     }
 }
 

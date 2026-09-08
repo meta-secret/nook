@@ -41,7 +41,7 @@ mod tests {
     use crate::{ApiKeySecret, SecretId, SecretRecord, SecretType, SecretValue, StoreId};
 
     use super::SecretRecordSearch;
-    use crate::SecretPayloadYaml;
+    use crate::{SecretPayloadValidationRequest, SecretPayloadYaml};
 
     fn value(key: &str) -> SecretValue {
         SecretValue::ApiKey(ApiKeySecret {
@@ -73,8 +73,20 @@ mod tests {
             SecretId::parse(" secret_SMypl8K0w9Y ")?.as_str(),
             "secret_SMypl8K0w9Y"
         );
-        assert!(SecretPayloadYaml::validate(SecretType::Login, "").is_err());
-        assert!(SecretPayloadYaml::validate(SecretType::Login, "x").is_err());
+        assert!(
+            SecretPayloadYaml::validate(SecretPayloadValidationRequest {
+                secret_type: SecretType::Login,
+                raw: "",
+            })
+            .is_err()
+        );
+        assert!(
+            SecretPayloadYaml::validate(SecretPayloadValidationRequest {
+                secret_type: SecretType::Login,
+                raw: "x",
+            })
+            .is_err()
+        );
         assert!(SecretId::parse("abc123def4567890").is_err());
         assert!(SecretId::parse(&"a".repeat(64)).is_err());
         assert_eq!(
@@ -147,7 +159,13 @@ mod tests {
 
     #[test]
     fn allows_whitespace_secret_data() {
-        assert!(SecretPayloadYaml::validate(SecretType::Login, "   ").is_err());
+        assert!(
+            SecretPayloadYaml::validate(SecretPayloadValidationRequest {
+                secret_type: SecretType::Login,
+                raw: "   ",
+            })
+            .is_err()
+        );
     }
 
     #[test]

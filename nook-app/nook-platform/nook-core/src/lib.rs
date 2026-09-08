@@ -179,8 +179,8 @@ pub use secret_types::{
     ApiKeySecret, FILE_ATTACHMENT_MAX_BYTES, FileAttachmentByteCount, FileAttachmentSecret,
     LoginSecret, PASSKEY_SECRET_VERSION, PasskeyCredentialKey, PasskeyPrivateKeyPkcs8,
     PasskeyPublicKeyCose, PasskeySecret, PasskeySecretVersion, PasskeySignatureCount, SecretRecord,
-    SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret, StoredRecordPayload,
-    StoredSecretRecord,
+    SecretType, SecretValue, SecureNoteSecret, SeedPhraseSecret, SeedPhraseSecretRequest,
+    StoredRecordPayload, StoredSecretRecord,
 };
 pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
@@ -381,8 +381,8 @@ pub use vault_sync_store::{
 pub use vault_wire::{
     AgeArmoredCiphertext, DecryptedPlaintext, DeviceIdentitySecret, DevicePublicKey,
     DeviceSigningPublicKey, IsoTimestamp, MemberLabel, OpaqueCiphertext, PasswordEntryId,
-    SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob, StoredVaultYaml, SymmetricKey,
-    Url64EncodedString, ValidatedSecretPayloadYaml,
+    SecretPayloadValidationRequest, SecretPayloadYaml, Sha256Hex, SigningSeedHex, StoredVaultBlob,
+    StoredVaultYaml, SymmetricKey, Url64EncodedString, ValidatedSecretPayloadYaml,
 };
 
 #[cfg(test)]

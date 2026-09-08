@@ -393,10 +393,11 @@ mod browser_tests {
         let seed = record(
             SecretType::SeedPhrase,
             SecretValue::SeedPhrase(
-                SeedPhraseSecret::try_new(
-                    "Recovery".into(),
-                    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-                )
+                SeedPhraseSecret::try_new(nook_core::SeedPhraseSecretRequest {
+                    name: "Recovery".into(),
+                    seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+                        .into(),
+                })
                 .expect("valid seed phrase"),
             ),
         );

@@ -342,10 +342,10 @@ mod tests {
     #[test]
     fn seed_phrase_whitespace_is_collapsed_only_in_the_version_field() {
         let value = SecretValue::SeedPhrase(
-            SeedPhraseSecret::try_new(
-                " Recovery\r\n ".to_owned(),
-                " abandon\t abandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon about ",
-            )
+            SeedPhraseSecret::try_new(crate::SeedPhraseSecretRequest {
+                name: " Recovery\r\n ".to_owned(),
+                seed: " abandon\t abandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon about ".to_owned(),
+            })
             .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
         );
         assert_eq!(

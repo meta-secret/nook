@@ -236,10 +236,11 @@ mod tests {
             id: SecretId::from_vault_record("secret_seed"),
             secret_type: SecretType::SeedPhrase,
             data: SecretValue::SeedPhrase(
-                crate::SeedPhraseSecret::try_new(
-                    "wallet".to_owned(),
-                    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
-                )
+                crate::SeedPhraseSecret::try_new(crate::SeedPhraseSecretRequest {
+                    name: "wallet".to_owned(),
+                    seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+                        .to_owned(),
+                })
                 .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
             ),
         };

@@ -8,7 +8,6 @@
 
 use crate::errors::{ValidationError, ValidationResult};
 use bip39::{Language, Mnemonic};
-use std::mem;
 use zeroize::Zeroize;
 
 /// A supported BIP-39 mnemonic word count inferred from normalized input.
@@ -117,11 +116,6 @@ impl Bip39Mnemonic {
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.text
-    }
-
-    #[must_use]
-    pub fn into_string(mut self) -> String {
-        mem::take(&mut self.text)
     }
 
     #[must_use]
