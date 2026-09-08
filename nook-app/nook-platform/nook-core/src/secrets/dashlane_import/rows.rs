@@ -186,7 +186,10 @@ impl CredentialColumns {
             otp_url: headers.optional(&["otpUrl", "otp_url"]),
         })
     }
-    fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
+    fn convert(
+        &self,
+        record: &StringRecord,
+    ) -> Result<(Vec<SecretValue>, usize), DashlaneImportError> {
         let csv_fields = CsvRecordFields::new(record);
         let username = csv_fields.trimmed(self.username);
         let username2 = csv_fields.optional(self.username2);
