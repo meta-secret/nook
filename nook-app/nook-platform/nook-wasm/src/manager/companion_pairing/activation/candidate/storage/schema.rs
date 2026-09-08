@@ -16,7 +16,6 @@ use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
     de::{DeserializeOwned, Error as DeserializerError},
 };
-use serde_json::Value;
 
 type SchemaResult<T> = Result<T, CompanionPairingCandidateFailure>;
 
@@ -137,10 +136,8 @@ impl CandidateSchema {
     where
         T: DeserializeOwned + Serialize,
     {
-        let encoded: Value = serde_json::from_str(value).map_err(|_| Self::integrity())?;
-        let decoded = serde_json::from_value(encoded.clone()).map_err(|_| Self::integrity())?;
-        let canonical = serde_json::to_value(&decoded).map_err(|_| Self::integrity())?;
-        if canonical != encoded {
+        let decoded = serde_json::from_str(value).map_err(|_| Self::integrity())?;
+        if Self::encode(&decoded)? != value {
             return Err(Self::integrity());
         }
         Ok(decoded)
@@ -309,7 +306,7 @@ impl EncodedCandidate {
                     store_id,
                     event_id: &event_id,
                 });
-                if key != expected_key {
+                if key != &expected_key {
                     return Err(CandidateSchema::integrity());
                 }
                 let bytes = EventStorageBytes::from(row.bytes);
@@ -368,6 +365,7 @@ mod tests {
         SigningIdentity, StorageProviderData, VaultOperation, serialize_event_storage_yaml,
     };
     use serde::Deserialize;
+    use serde_json::Value;
 
     #[derive(Deserialize)]
     struct GateEvidence {
@@ -435,6 +433,17 @@ mod tests {
                 .insert("unexpected".to_owned(), true.into());
             assert!(matches!(
                 CandidateSchema::decode::<ActivationGate>(&serde_json::to_string(&value)?),
+                Err(CompanionPairingCandidateFailure::Integrity)
+            ));
+            Ok(())
+        }
+
+        fn assert_duplicate_gate_field_rejected() -> anyhow::Result<()> {
+            let encoded = EncodedCandidate::new(&CandidateFixture::candidate()?)?;
+            let gate_json = CandidateSchema::encode(&encoded.gate)?;
+            let duplicate = gate_json.replacen('{', "{\"schema_version\":1,", 1);
+            assert!(matches!(
+                CandidateSchema::decode::<ActivationGate>(&duplicate),
                 Err(CompanionPairingCandidateFailure::Integrity)
             ));
             Ok(())
@@ -512,6 +521,53 @@ mod tests {
             providers.providers = serde_json::to_string(&value)?;
             providers.gate.provider_digest = Sha256Hex::from_bytes(providers.providers.as_bytes());
             Self::assert_integrity(providers);
+            Ok(())
+        }
+
+        fn assert_duplicate_event_field_rejected() -> anyhow::Result<()> {
+            let mut encoded = EncodedCandidate::new(&CandidateFixture::candidate()?)?;
+            let row: ActivationEventRow = serde_json::from_str(&encoded.events[0].1)?;
+            let duplicate_prefix =
+                format!("{{\"event_id\":{},", serde_json::to_string(&row.event_id)?);
+            encoded.events[0].1 = encoded.events[0].1.replacen('{', &duplicate_prefix, 1);
+            encoded.gate.event_digests[0] = Sha256Hex::from_bytes(encoded.events[0].1.as_bytes());
+            Self::assert_integrity(encoded);
+            Ok(())
+        }
+
+        fn assert_duplicate_nested_provider_field_rejected() -> anyhow::Result<()> {
+            let candidate = Self::candidate_with_provider()?;
+            let mut encoded = EncodedCandidate::new(&candidate)?;
+            let provider = &candidate.providers.providers[0];
+            let provider_json = CandidateSchema::encode(provider)?;
+            let duplicate_prefix = format!("{{\"id\":{},", serde_json::to_string(&provider.id)?);
+            let duplicate_provider = provider_json.replacen('{', &duplicate_prefix, 1);
+            encoded.providers = encoded
+                .providers
+                .replacen(&provider_json, &duplicate_provider, 1);
+            encoded.gate.provider_digest = Sha256Hex::from_bytes(encoded.providers.as_bytes());
+            Self::assert_integrity(encoded);
+            Ok(())
+        }
+
+        fn assert_noncanonical_event_json_rejected() -> anyhow::Result<()> {
+            let candidate = CandidateFixture::candidate()?;
+            let mut whitespace = EncodedCandidate::new(&candidate)?;
+            whitespace.events[0].1.insert(0, ' ');
+            whitespace.gate.event_digests[0] =
+                Sha256Hex::from_bytes(whitespace.events[0].1.as_bytes());
+            Self::assert_integrity(whitespace);
+
+            let mut reordered = EncodedCandidate::new(&candidate)?;
+            let row: ActivationEventRow = serde_json::from_str(&reordered.events[0].1)?;
+            reordered.events[0].1 = format!(
+                "{{\"bytes\":{},\"event_id\":{}}}",
+                serde_json::to_string(&row.bytes)?,
+                serde_json::to_string(&row.event_id)?
+            );
+            reordered.gate.event_digests[0] =
+                Sha256Hex::from_bytes(reordered.events[0].1.as_bytes());
+            Self::assert_integrity(reordered);
             Ok(())
         }
 
@@ -624,6 +680,11 @@ mod tests {
     }
 
     #[test]
+    fn strict_gate_rejects_duplicate_known_field() -> anyhow::Result<()> {
+        SchemaReadbackScenarios::assert_duplicate_gate_field_rejected()
+    }
+
+    #[test]
     fn readback_rejects_digest_and_correlation_substitution() -> anyhow::Result<()> {
         SchemaReadbackScenarios::assert_digest_and_correlation_rejections()
     }
@@ -631,6 +692,21 @@ mod tests {
     #[test]
     fn readback_rejects_noncanonical_event_and_provider_payloads() -> anyhow::Result<()> {
         SchemaReadbackScenarios::assert_strict_payload_rejections()
+    }
+
+    #[test]
+    fn readback_rejects_duplicate_event_field_with_matching_digest() -> anyhow::Result<()> {
+        SchemaReadbackScenarios::assert_duplicate_event_field_rejected()
+    }
+
+    #[test]
+    fn readback_rejects_duplicate_provider_field_with_matching_digest() -> anyhow::Result<()> {
+        SchemaReadbackScenarios::assert_duplicate_nested_provider_field_rejected()
+    }
+
+    #[test]
+    fn readback_rejects_noncanonical_event_json_with_matching_digest() -> anyhow::Result<()> {
+        SchemaReadbackScenarios::assert_noncanonical_event_json_rejected()
     }
 
     #[test]
