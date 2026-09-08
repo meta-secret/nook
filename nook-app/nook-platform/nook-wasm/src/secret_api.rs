@@ -2,8 +2,8 @@ use super::types::{NookOtpauthPreview, NookTotpCode};
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
 use js_sys::Date;
 use nook_core::{
-    AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData, SecretType, SecretTypeFilter,
-    ValidationError,
+    AuthenticatorIssuerHosts, AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData,
+    SecretType, SecretTypeFilter, ValidationError,
 };
 
 mod secret_record;
@@ -580,12 +580,11 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn issuer_host_map_loads_under_wasm() {
         assert_eq!(
-            nook_core::AuthenticatorIssuerHosts::bundled()
-                .and_then(|catalog| catalog.mapped_host("OpenAI")),
+            AuthenticatorIssuerHosts::bundled().and_then(|catalog| catalog.mapped_host("OpenAI")),
             Some("openai.com")
         );
         assert_eq!(
-            nook_core::AuthenticatorIssuerHosts::bundled().and_then(|catalog| {
+            AuthenticatorIssuerHosts::bundled().and_then(|catalog| {
                 catalog.resolve_website_host(nook_core::AuthenticatorWebsiteHostRequest {
                     website_url: "",
                     issuer: "GitHub",

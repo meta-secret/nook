@@ -36,10 +36,6 @@ impl WebsiteHost {
             .trim_start_matches("www.")
             .to_owned()
     }
-
-    pub(crate) fn legacy_hostname_from_url(raw: &str) -> String {
-        Self::normalize(raw)
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -86,21 +82,6 @@ impl LoginHostMatchRequest<'_> {
                 })
             })
     }
-
-    pub(crate) fn legacy_matches(website_url: &str, origin: &str) -> bool {
-        let secret_host = WebsiteHost::normalize(website_url);
-        let origin_host = WebsiteHost::normalize(origin);
-        if secret_host.is_empty() || origin_host.is_empty() {
-            return false;
-        }
-        secret_host.eq_ignore_ascii_case(&origin_host)
-            || LoginSiteHosts::bundled().is_some_and(|catalog| {
-                catalog.share_family(LoginFamilyMatchRequest {
-                    left: &secret_host,
-                    right: &origin_host,
-                })
-            })
-    }
 }
 
 /// Named request for deriving an authenticator's intrinsic grouping key.
@@ -112,32 +93,21 @@ pub struct AuthenticatorGroupKeyRequest<'a> {
 
 impl AuthenticatorGroupKeyRequest<'_> {
     #[must_use]
-    pub fn resolve(&self) -> String {
+    pub fn website_host(&self) -> Option<String> {
         let request = AuthenticatorWebsiteHostRequest {
             website_url: self.website_url,
             issuer: self.issuer,
         };
-        request
-            .explicit_or_domain_host()
-            .or_else(|| {
-                AuthenticatorIssuerHosts::bundled()
-                    .and_then(|catalog| catalog.resolve_website_host(request))
-            })
-            .unwrap_or_else(|| self.issuer.trim().to_owned())
+        request.explicit_or_domain_host().or_else(|| {
+            AuthenticatorIssuerHosts::bundled()
+                .and_then(|catalog| catalog.resolve_website_host(request))
+        })
     }
 
-    pub(crate) fn legacy_resolve(website_url: &str, issuer: &str) -> String {
-        let request = AuthenticatorWebsiteHostRequest {
-            website_url,
-            issuer,
-        };
-        request
-            .explicit_or_domain_host()
-            .or_else(|| {
-                AuthenticatorIssuerHosts::bundled()
-                    .and_then(|catalog| catalog.resolve_website_host(request))
-            })
-            .unwrap_or_else(|| issuer.trim().to_owned())
+    #[must_use]
+    pub fn resolve(&self) -> String {
+        self.website_host()
+            .unwrap_or_else(|| self.issuer.trim().to_owned())
     }
 }
 
@@ -248,7 +218,8 @@ impl SecretListItem {
                 website_url,
                 issuer,
             }
-            .resolve(),
+            .website_host()
+            .unwrap_or_default(),
             _ => String::new(),
         }
     }
@@ -432,16 +403,6 @@ impl SecretPage {
                 best.map_or_else(|| key.clone(), |(_, _, host)| host)
             })
             .collect()
-    }
-
-    pub(crate) fn legacy_entity_group_keys(items: &[SecretListItem]) -> Vec<String> {
-        Self {
-            records: items.to_vec(),
-            total: items.len().into(),
-            offset: 0.into(),
-            limit: items.len().into(),
-        }
-        .entity_group_keys()
     }
 
     fn brand_matches_host(request: BrandHostMatchRequest<'_>) -> bool {

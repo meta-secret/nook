@@ -108,19 +108,6 @@ impl LoginSiteHosts {
             _ => false,
         }
     }
-
-    pub(crate) fn legacy_normalize_host(raw: &str) -> String {
-        Self::normalize_host(raw)
-    }
-
-    pub(crate) fn legacy_family(host: &str) -> Option<&'static str> {
-        Self::bundled().and_then(|catalog| catalog.family(host))
-    }
-
-    pub(crate) fn legacy_share_family(left: &str, right: &str) -> bool {
-        Self::bundled()
-            .is_some_and(|catalog| catalog.share_family(LoginFamilyMatchRequest { left, right }))
-    }
 }
 
 #[cfg(test)]

@@ -1,5 +1,7 @@
 use super::wasm_bindgen;
-use nook_core::{AuthenticationWorkflowMatch, WebsiteLoginSaveDecision};
+use nook_core::{
+    AuthenticationWorkflowMatch, LoginSecret, SecretId, WebsiteHost, WebsiteLoginSaveDecision,
+};
 use wasm_bindgen::JsError;
 
 #[wasm_bindgen]
@@ -9,6 +11,11 @@ pub struct NookLoginAccount {
     username: String,
     website_url: String,
     website_host: String,
+}
+
+pub(crate) struct LoginAccountProjection<'a> {
+    pub(crate) secret_id: &'a SecretId,
+    pub(crate) login: &'a LoginSecret,
 }
 
 #[wasm_bindgen]
@@ -272,12 +279,12 @@ impl NookAuthenticationWorkflowSnapshot {
 
 #[wasm_bindgen]
 impl NookLoginAccount {
-    pub(crate) fn from_login(id: &nook_core::SecretId, login: &nook_core::LoginSecret) -> Self {
+    pub(crate) fn from_projection(projection: LoginAccountProjection<'_>) -> Self {
         Self {
-            secret_id: id.to_string(),
-            username: login.username.clone(),
-            website_url: login.website_url.clone(),
-            website_host: nook_core::WebsiteHost::normalize(&login.website_url),
+            secret_id: projection.secret_id.to_string(),
+            username: projection.login.username.clone(),
+            website_url: projection.login.website_url.clone(),
+            website_host: WebsiteHost::normalize(&projection.login.website_url),
         }
     }
 
@@ -487,15 +494,16 @@ mod browser_tests {
     #[wasm_bindgen_test]
     fn login_account_and_save_plan_wrappers_project_success_and_errors() {
         let id = SecretId::from_vault_record("secret-1");
-        let account = NookLoginAccount::from_login(
-            &id,
-            &LoginSecret {
-                website_url: "https://login.example.test/path".into(),
-                username: "alice".into(),
-                password: "secret".into(),
-                notes: String::new(),
-            },
-        );
+        let login = LoginSecret {
+            website_url: "https://login.example.test/path".into(),
+            username: "alice".into(),
+            password: "secret".into(),
+            notes: String::new(),
+        };
+        let account = NookLoginAccount::from_projection(LoginAccountProjection {
+            secret_id: &id,
+            login: &login,
+        });
         assert_eq!(account.secret_id(), "secret-1");
         assert_eq!(account.username(), "alice");
         assert_eq!(account.website_url(), "https://login.example.test/path");

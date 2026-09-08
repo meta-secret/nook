@@ -117,15 +117,6 @@ impl WebsiteLoginSavePolicy {
         }
         WebsiteLoginSaveDecision::Create
     }
-
-    pub(crate) fn legacy_decide(
-        origin: &str,
-        username: &str,
-        password: &str,
-        candidates: &[WebsiteLoginSaveCandidate<'_>],
-    ) -> WebsiteLoginSaveDecision {
-        Self::decide_parts(origin, username, password, candidates)
-    }
 }
 
 #[cfg(test)]

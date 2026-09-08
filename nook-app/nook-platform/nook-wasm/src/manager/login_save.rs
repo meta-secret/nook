@@ -7,6 +7,19 @@ use nook_core::{SecretFormFields, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 use zeroize::Zeroize;
 
+struct LoginSavePlanRequest<'a> {
+    origin: &'a str,
+    username: &'a str,
+    password: &'a str,
+}
+
+struct LoginSaveCommitRequest<'a> {
+    origin: &'a str,
+    username: &'a str,
+    password: &'a str,
+    replace_secret_id: Option<&'a str>,
+}
+
 impl NookVaultManager {
     fn ensure_login_save_extension_capability(&self) -> Result<(), NookError> {
         self.ensure_passkey_extension_capability()
@@ -14,9 +27,7 @@ impl NookVaultManager {
 
     fn plan_matching_login_save(
         &self,
-        origin: &str,
-        username: &str,
-        password: &str,
+        request: LoginSavePlanRequest<'_>,
     ) -> Result<NookWebsiteLoginSavePlan, NookError> {
         let crypto = self.vault.crypto.get()?;
         let mut owned_logins = Vec::new();
@@ -29,7 +40,7 @@ impl NookVaultManager {
             if let SecretValue::Login(login) = &record.data
                 && (nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
-                    origin,
+                    origin: request.origin,
                 })
                 .matches()
             {
@@ -45,9 +56,9 @@ impl NookVaultManager {
             })
             .collect();
         let decision = nook_core::WebsiteLoginSaveRequest {
-            origin,
-            username,
-            password,
+            origin: request.origin,
+            username: request.username,
+            password: request.password,
             candidates: &candidates,
         }
         .decide();
@@ -59,13 +70,10 @@ impl NookVaultManager {
 
     async fn commit_matching_login_save(
         &mut self,
-        origin: &str,
-        username: &str,
-        password: &str,
-        replace_secret_id: Option<&str>,
+        request: LoginSaveCommitRequest<'_>,
     ) -> Result<(), NookError> {
-        let mut username = username.trim().to_owned();
-        let mut password = password.trim().to_owned();
+        let mut username = request.username.trim().to_owned();
+        let mut password = request.password.trim().to_owned();
         if username.is_empty() || password.is_empty() {
             username.zeroize();
             password.zeroize();
@@ -73,7 +81,11 @@ impl NookVaultManager {
                 "Login username and password are required.".to_owned(),
             ));
         }
-        let plan = self.plan_matching_login_save(origin, &username, &password)?;
+        let plan = self.plan_matching_login_save(LoginSavePlanRequest {
+            origin: request.origin,
+            username: &username,
+            password: &password,
+        })?;
         let decision = plan.decision();
         let planned_replace = plan.secret_id();
         match decision {
@@ -93,7 +105,7 @@ impl NookVaultManager {
                 let expected = planned_replace.map_err(|_| {
                     NookError::Database("Login update is missing the existing secret.".to_owned())
                 })?;
-                let provided = replace_secret_id.unwrap_or_default();
+                let provided = request.replace_secret_id.unwrap_or_default();
                 if provided != expected {
                     username.zeroize();
                     password.zeroize();
@@ -103,7 +115,10 @@ impl NookVaultManager {
                 }
             }
             NookWebsiteLoginSaveDecision::Create => {
-                if replace_secret_id.is_some_and(|value| !value.is_empty()) {
+                if request
+                    .replace_secret_id
+                    .is_some_and(|value| !value.is_empty())
+                {
                     username.zeroize();
                     password.zeroize();
                     return Err(NookError::Database(
@@ -115,7 +130,7 @@ impl NookVaultManager {
 
         let yaml = nook_core::build_secret_yaml_from_form(&SecretFormFields::Login(
             nook_core::LoginSecretForm {
-                website_url: origin.to_owned(),
+                website_url: request.origin.to_owned(),
                 username: username.clone(),
                 password: password.clone(),
                 notes: String::new(),
@@ -128,7 +143,7 @@ impl NookVaultManager {
         let secret_type = SecretType::Login;
 
         if decision == NookWebsiteLoginSaveDecision::Update {
-            let old_id = replace_secret_id.unwrap_or_default().to_owned();
+            let old_id = request.replace_secret_id.unwrap_or_default().to_owned();
             let new_id = nook_core::SecretId::generate()?.to_string();
             let records = self
                 .replace_secret(old_id, new_id, secret_type, data)
@@ -205,31 +220,51 @@ mod browser_tests {
         empty.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
         assert_eq!(
             empty
-                .plan_matching_login_save("https://example.com", "alice", "new")?
+                .plan_matching_login_save(LoginSavePlanRequest {
+                    origin: "https://example.com",
+                    username: "alice",
+                    password: "new",
+                })?
                 .decision(),
             NookWebsiteLoginSaveDecision::Create
         );
         assert_eq!(
             empty
-                .plan_matching_login_save("", "alice", "new")?
+                .plan_matching_login_save(LoginSavePlanRequest {
+                    origin: "",
+                    username: "alice",
+                    password: "new",
+                })?
                 .decision(),
             NookWebsiteLoginSaveDecision::Invalid
         );
         assert_eq!(
             empty
-                .plan_matching_login_save("https://example.com", "", "new")?
+                .plan_matching_login_save(LoginSavePlanRequest {
+                    origin: "https://example.com",
+                    username: "",
+                    password: "new",
+                })?
                 .decision(),
             NookWebsiteLoginSaveDecision::Invalid
         );
 
         let mut existing = manager_with_login("alice", "old")?;
-        let update = existing.plan_matching_login_save("https://example.com", "alice", "new")?;
+        let update = existing.plan_matching_login_save(LoginSavePlanRequest {
+            origin: "https://example.com",
+            username: "alice",
+            password: "new",
+        })?;
         assert_eq!(update.decision(), NookWebsiteLoginSaveDecision::Update);
         assert_eq!(
             update.secret_id().ok().as_deref(),
             Some("secret_existing_login")
         );
-        let already = existing.plan_matching_login_save("https://example.com", "alice", "old")?;
+        let already = existing.plan_matching_login_save(LoginSavePlanRequest {
+            origin: "https://example.com",
+            username: "alice",
+            password: "old",
+        })?;
         assert_eq!(
             already.decision(),
             NookWebsiteLoginSaveDecision::AlreadySaved
@@ -240,7 +275,11 @@ mod browser_tests {
         );
         assert_eq!(
             existing
-                .plan_matching_login_save("https://other.example", "alice", "new")?
+                .plan_matching_login_save(LoginSavePlanRequest {
+                    origin: "https://other.example",
+                    username: "alice",
+                    password: "new",
+                })?
                 .decision(),
             NookWebsiteLoginSaveDecision::Create
         );
@@ -252,13 +291,23 @@ mod browser_tests {
         let mut manager = manager_with_login("alice", "old")?;
         assert!(
             manager
-                .commit_matching_login_save("https://example.com", "", "new", None)
+                .commit_matching_login_save(LoginSaveCommitRequest {
+                    origin: "https://example.com",
+                    username: "",
+                    password: "new",
+                    replace_secret_id: None,
+                })
                 .await
                 .is_err()
         );
         assert!(
             manager
-                .commit_matching_login_save("https://example.com", "alice", "new", Some("wrong"))
+                .commit_matching_login_save(LoginSaveCommitRequest {
+                    origin: "https://example.com",
+                    username: "alice",
+                    password: "new",
+                    replace_secret_id: Some("wrong"),
+                })
                 .await
                 .is_err()
         );
@@ -269,12 +318,12 @@ mod browser_tests {
         empty.vault.crypto = VaultCryptoState::Unlocked(crypto);
         assert!(
             empty
-                .commit_matching_login_save(
-                    "https://example.com",
-                    "alice",
-                    "new",
-                    Some("unexpected")
-                )
+                .commit_matching_login_save(LoginSaveCommitRequest {
+                    origin: "https://example.com",
+                    username: "alice",
+                    password: "new",
+                    replace_secret_id: Some("unexpected"),
+                })
                 .await
                 .is_err()
         );
@@ -293,8 +342,12 @@ impl NookVaultManager {
     ) -> Result<NookWebsiteLoginSavePlan, JsError> {
         self.ensure_login_save_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        self.plan_matching_login_save(origin, username, password)
-            .map_err(Into::into)
+        self.plan_matching_login_save(LoginSavePlanRequest {
+            origin,
+            username,
+            password,
+        })
+        .map_err(Into::into)
     }
 
     #[wasm_bindgen]
@@ -308,8 +361,13 @@ impl NookVaultManager {
         self.ensure_login_save_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
         let replace = (!replace_secret_id.is_empty()).then_some(replace_secret_id);
-        self.commit_matching_login_save(origin, username, password, replace)
-            .await
-            .map_err(Into::into)
+        self.commit_matching_login_save(LoginSaveCommitRequest {
+            origin,
+            username,
+            password,
+            replace_secret_id: replace,
+        })
+        .await
+        .map_err(Into::into)
     }
 }

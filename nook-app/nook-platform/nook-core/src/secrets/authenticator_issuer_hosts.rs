@@ -121,14 +121,6 @@ impl AuthenticatorIssuerHosts {
         self.by_issuer.get(&key).map(String::as_str)
     }
 
-    pub(crate) fn legacy_normalize_lookup_key(raw: &str) -> String {
-        Self::normalize_lookup_key(raw)
-    }
-
-    pub(crate) fn legacy_mapped_host(issuer: &str) -> Option<&'static str> {
-        Self::bundled().and_then(|catalog| catalog.mapped_host(issuer))
-    }
-
     /// Resolve a website host for authenticator clustering / optional URL inference.
     ///
     /// Order: explicit `website_url`, domain-like issuer text, then bundled map.
@@ -142,15 +134,6 @@ impl AuthenticatorIssuerHosts {
         }
 
         self.mapped_host(request.issuer).map(str::to_owned)
-    }
-
-    pub(crate) fn legacy_resolve_website_host(website_url: &str, issuer: &str) -> Option<String> {
-        Self::bundled().and_then(|catalog| {
-            catalog.resolve_website_host(AuthenticatorWebsiteHostRequest {
-                website_url,
-                issuer,
-            })
-        })
     }
 }
 

@@ -33,6 +33,8 @@ pub use sentinel::*;
 pub use sync::*;
 pub use sync_state::*;
 
+pub(crate) use authentication::LoginAccountProjection;
+
 pub(crate) use access::password_entries_to_vec;
 pub(crate) use conflicts::{replacement_conflicts_to_vec, security_conflicts_to_vec};
 pub(crate) use secret_data::{joins_to_vec, members_to_vec, records_to_vec};
