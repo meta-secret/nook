@@ -9,7 +9,9 @@ use super::super::import_support::{
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{ApplePasswordsImportError, ApplePasswordsImportPlan};
-use crate::{AuthenticatorSecret, LoginSecret, SecretValue};
+use crate::{
+    AuthenticatorIssuerHostsError, AuthenticatorSecret, LoginSecret, SecretValue, ValidationError,
+};
 use csv::StringRecord;
 #[derive(Clone, Copy)]
 struct ApplePasswordColumns {
@@ -77,7 +79,7 @@ struct CheckedApplePasswordsCsv<'a> {
 }
 impl CheckedApplePasswordsCsv<'_> {
     fn collect(self) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
-        let collection = self.reader.collect(CsvImportConversion {
+        let collection = self.reader.collect_fallible(CsvImportConversion {
             too_many_records: ApplePasswordsImportError::TooManyRecords,
             convert: |record: &StringRecord| self.columns.convert(record),
         })?;
@@ -145,7 +147,10 @@ impl ApplePasswordTitle<'_> {
     }
 }
 impl ApplePasswordColumns {
-    fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
+    fn convert(
+        &self,
+        record: &StringRecord,
+    ) -> Result<(Vec<SecretValue>, usize), ApplePasswordsImportError> {
         let csv_fields = CsvRecordFields::new(record);
         let title = csv_fields.trimmed(self.title);
         let url = csv_fields.trimmed(self.url);
@@ -161,7 +166,7 @@ impl ApplePasswordColumns {
             && notes.is_empty()
             && otp_auth.is_empty()
         {
-            return (Vec::new(), 1);
+            return Ok((Vec::new(), 1));
         }
 
         let website_url = if url.is_empty() { title.clone() } else { url };
@@ -192,17 +197,19 @@ impl ApplePasswordColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    if authenticator.apply_inferred_website_url_if_empty().is_ok() {
-                        items.push(SecretValue::Authenticator(authenticator));
-                    } else {
-                        skipped_unsupported += 1;
-                    }
+                    authenticator.apply_inferred_website_url_if_empty()?;
+                    items.push(SecretValue::Authenticator(authenticator));
+                }
+                Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
+                    return Err(ApplePasswordsImportError::InvalidIssuerCatalog(
+                        AuthenticatorIssuerHostsError::InvalidBundledCatalog,
+                    ));
                 }
                 Err(_) => skipped_unsupported += 1,
             }
         }
 
-        (items, skipped_unsupported)
+        Ok((items, skipped_unsupported))
     }
 }
 

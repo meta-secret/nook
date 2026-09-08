@@ -5,7 +5,7 @@ use crate::NookError;
 use crate::types::{NookWebsiteLoginSaveDecision, NookWebsiteLoginSavePlan};
 use nook_core::{SecretFormFields, SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
-use zeroize::Zeroize;
+use zeroize::{Zeroize, Zeroizing};
 
 struct LoginSavePlanRequest<'a> {
     origin: &'a str,
@@ -105,8 +105,8 @@ impl NookVaultManager {
         &mut self,
         request: LoginSaveCommitRequest<'_>,
     ) -> Result<(), NookError> {
-        let mut username = request.username.trim().to_owned();
-        let mut password = request.password.trim().to_owned();
+        let mut username = Zeroizing::new(request.username.trim().to_owned());
+        let mut password = Zeroizing::new(request.password.trim().to_owned());
         if username.is_empty() || password.is_empty() {
             username.zeroize();
             password.zeroize();
@@ -167,8 +167,8 @@ impl NookVaultManager {
         let yaml = nook_core::build_secret_yaml_from_form(&SecretFormFields::Login(
             nook_core::LoginSecretForm {
                 website_url: request.origin.to_owned(),
-                username: username.clone(),
-                password: password.clone(),
+                username: username.as_str().to_owned(),
+                password: password.as_str().to_owned(),
                 notes: String::new(),
             },
         ))

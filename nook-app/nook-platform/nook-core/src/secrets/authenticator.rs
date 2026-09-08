@@ -212,7 +212,7 @@ impl AuthenticatorSecret {
         }
         item.backup_codes = backup_codes.lines().map(str::to_owned).collect();
         item.apply_inferred_website_url_if_empty()
-            .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?;
+            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?;
         item.normalize()?;
         Ok(item)
     }

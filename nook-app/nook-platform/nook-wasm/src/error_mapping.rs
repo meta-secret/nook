@@ -86,6 +86,7 @@ impl From<nook_core::ValidationError> for NookError {
             | ValidationError::Bip39Invalid
             | ValidationError::AuthenticatorIssuerRequired
             | ValidationError::AuthenticatorSecretInvalid
+            | ValidationError::AuthenticatorIssuerCatalogInvalid
             | ValidationError::AuthenticatorDigitsInvalid
             | ValidationError::AuthenticatorPeriodInvalid
             | ValidationError::AuthenticatorUriInvalid

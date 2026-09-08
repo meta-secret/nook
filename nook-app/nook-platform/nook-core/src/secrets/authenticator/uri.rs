@@ -217,7 +217,7 @@ impl CheckedOtpauthInput {
             backup_codes: Vec::new(),
         };
         item.apply_inferred_website_url_if_empty()
-            .map_err(|_| ValidationError::AuthenticatorSecretInvalid)?;
+            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?;
         item.normalize()?;
         Ok(item)
     }

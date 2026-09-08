@@ -86,6 +86,24 @@ impl<'a> CsvImportReader<'a> {
             too_many_records,
             mut convert,
         } = conversion;
+        self.collect_fallible(CsvImportConversion {
+            too_many_records,
+            convert: move |record| Ok(convert(record)),
+        })
+    }
+
+    pub(crate) fn collect_fallible<T, E, F>(
+        mut self,
+        conversion: CsvImportConversion<E, F>,
+    ) -> Result<CsvImportCollection<T>, E>
+    where
+        E: From<csv::Error>,
+        F: FnMut(&StringRecord) -> Result<(Vec<T>, usize), E>,
+    {
+        let CsvImportConversion {
+            too_many_records,
+            mut convert,
+        } = conversion;
         let mut collection = CsvImportCollection {
             items: Vec::new(),
             source_count: 0,
@@ -97,7 +115,7 @@ impl<'a> CsvImportReader<'a> {
             }
             let record = record?;
             collection.source_count += 1;
-            let (mut converted, skipped) = convert(&record);
+            let (mut converted, skipped) = convert(&record)?;
             collection.items.append(&mut converted);
             collection.skipped_unsupported += skipped;
         }

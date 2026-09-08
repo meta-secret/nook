@@ -175,6 +175,9 @@ pub enum ValidationError {
     #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_SECRET_INVALID)]
     AuthenticatorSecretInvalid,
 
+    #[error("authenticator issuer catalog is invalid")]
+    AuthenticatorIssuerCatalogInvalid,
+
     #[error("{}", i18n_keys::ERRORS_VALIDATION_AUTHENTICATOR_DIGITS_INVALID)]
     AuthenticatorDigitsInvalid,
 

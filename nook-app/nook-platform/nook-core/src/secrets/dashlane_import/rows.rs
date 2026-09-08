@@ -9,7 +9,10 @@ use super::super::import_support::{
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{DashlaneImportError, DashlaneImportPlan};
-use crate::{AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
+use crate::{
+    AuthenticatorIssuerHostsError, AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue,
+    SecureNoteSecret, ValidationError,
+};
 use csv::StringRecord;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DashlaneCsvKind {
@@ -61,7 +64,7 @@ pub(super) struct CheckedDashlaneCsv<'a> {
 }
 impl CheckedDashlaneCsv<'_> {
     pub(super) fn collect(self) -> Result<DashlaneImportPlan, DashlaneImportError> {
-        let collection = self.reader.collect(CsvImportConversion {
+        let collection = self.reader.collect_fallible(CsvImportConversion {
             too_many_records: DashlaneImportError::TooManyRecords,
             convert: |record: &StringRecord| self.columns.convert(record),
         })?;
@@ -78,11 +81,14 @@ enum DashlaneColumns {
     Payments(PaymentColumns),
 }
 impl DashlaneColumns {
-    fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
+    fn convert(
+        &self,
+        record: &StringRecord,
+    ) -> Result<(Vec<SecretValue>, usize), DashlaneImportError> {
         match self {
             Self::Credentials(columns) => columns.convert(record),
-            Self::SecureNotes(columns) => columns.convert(record),
-            Self::Payments(columns) => columns.convert(record),
+            Self::SecureNotes(columns) => Ok(columns.convert(record)),
+            Self::Payments(columns) => Ok(columns.convert(record)),
         }
     }
 }
@@ -201,7 +207,7 @@ impl CredentialColumns {
             && otp_secret.is_empty()
             && otp_url.is_empty()
         {
-            return (Vec::new(), 1);
+            return Ok((Vec::new(), 1));
         }
 
         let website_url = if url.is_empty() { title.clone() } else { url };
@@ -266,17 +272,19 @@ impl CredentialColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    if authenticator.apply_inferred_website_url_if_empty().is_ok() {
-                        items.push(SecretValue::Authenticator(authenticator));
-                    } else {
-                        skipped_unsupported += 1;
-                    }
+                    authenticator.apply_inferred_website_url_if_empty()?;
+                    items.push(SecretValue::Authenticator(authenticator));
+                }
+                Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
+                    return Err(DashlaneImportError::InvalidIssuerCatalog(
+                        AuthenticatorIssuerHostsError::InvalidBundledCatalog,
+                    ));
                 }
                 Err(_) => skipped_unsupported += 1,
             }
         }
 
-        (items, skipped_unsupported)
+        Ok((items, skipped_unsupported))
     }
 }
 impl SecureNoteColumns {
