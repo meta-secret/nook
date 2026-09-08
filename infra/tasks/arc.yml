@@ -356,6 +356,73 @@ tasks:
         BASH
 
 
+  arc:network:configure:
+    desc: Configure BBR for registry transfers on the OVH controller and home worker.
+    silent: true
+    cmds:
+      - |
+        bash <<'BASH'
+        set -euo pipefail
+        controller_target="{{.INFRA_SSH_TARGET}}"
+        for node in ovh-us bynull-servo; do
+          node_json="$(ssh -n -o BatchMode=yes "$controller_target" \
+            "sudo -n k0s kubectl get node '$node' -o json")"
+          test "$(jq -r '.metadata.name' <<<"$node_json")" = "$node"
+          target="$(jq -er '.metadata.annotations["nook.nokey.sh/ssh-target"]' <<<"$node_json")"
+          remote_dir="$(jq -er '.metadata.annotations["nook.nokey.sh/infra-remote-dir"]' <<<"$node_json")"
+          case "$node:$target" in
+            ovh-us:debian@10.202.0.1|bynull-servo:bynull@10.202.0.3) ;;
+            *) echo "Unexpected TCP configuration target: $node" >&2; exit 2 ;;
+          esac
+          [[ "$remote_dir" =~ ^/[a-zA-Z0-9_./-]+$ ]]
+          ssh -o BatchMode=yes -J "$controller_target" "$target" \
+            "bash -s -- '$node' '$remote_dir'" <<'STAGE'
+        set -euo pipefail
+        test "$(hostname -s)" = "$1"
+        install -d -m 0750 "$2/infra/k0s/config"
+        STAGE
+          scp -o BatchMode=yes -o "ProxyJump=$controller_target" \
+            infra/k0s/config/99-nook-tcp-congestion-control.conf \
+            infra/k0s/config/nook-tcp-congestion-control.conf \
+            "$target:$remote_dir/infra/k0s/config/"
+          ssh -o BatchMode=yes -J "$controller_target" "$target" \
+            "bash -s -- '$node' '$remote_dir'" <<'REMOTE'
+        set -euo pipefail
+        expected_node="$1"
+        config_dir="$2/infra/k0s/config"
+        test "$(hostname -s)" = "$expected_node"
+        sudo -n modprobe tcp_bbr
+        sudo -n install -m 0644 "$config_dir/nook-tcp-congestion-control.conf" \
+          /etc/modules-load.d/nook-tcp-congestion-control.conf
+        sudo -n install -m 0644 "$config_dir/99-nook-tcp-congestion-control.conf" \
+          /etc/sysctl.d/99-nook-tcp-congestion-control.conf
+        sudo -n sysctl -p /etc/sysctl.d/99-nook-tcp-congestion-control.conf
+        test "$(cat /proc/sys/net/ipv4/tcp_congestion_control)" = bbr
+
+        # Existing namespaces retain their previous default. Update the home
+        # BuildKit shard for new connections without restarting active solves.
+        if test "$expected_node" = bynull-servo; then
+          tasks="$(sudo -n k0s ctr -n k8s.io tasks list)"
+          while read -r container_id container_pid container_status; do
+            test "$container_id" != TASK || continue
+            [[ "$container_id" =~ ^[a-f0-9]{64}$ ]]
+            [[ "$container_pid" =~ ^[1-9][0-9]*$ ]]
+            test "$container_status" = RUNNING || continue
+            metadata="$(sudo -n k0s ctr -n k8s.io containers info "$container_id")"
+            if jq -e '.Labels["io.kubernetes.pod.namespace"] == "arc-runners" and
+              .Labels["io.kubernetes.pod.name"] == "nook-buildkit-0"' \
+              <<<"$metadata" >/dev/null; then
+              sudo -n nsenter -t "$container_pid" -n sysctl -w \
+                net.ipv4.tcp_congestion_control=bbr
+            fi
+          done <<<"$tasks"
+        fi
+        test "$(sudo -n unshare --net cat /proc/sys/net/ipv4/tcp_congestion_control)" = bbr
+        echo "$expected_node TCP BBR configured; existing connections keep their algorithm"
+        REMOTE
+        done
+        BASH
+
   arc:buildkit:storage:prepare:
     internal: true
     deps: [arc:build-host:sync]
@@ -531,6 +598,7 @@ tasks:
       - task: arc:build-hosts:quarantine
       - task: arc:container-hosts:reconcile
       - task: arc:buildkit:storage:prepare
+      - task: arc:network:configure
       - task: arc:render:check
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'

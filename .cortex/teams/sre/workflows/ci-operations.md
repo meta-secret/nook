@@ -52,6 +52,47 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
   re-enable.
 - Browser E2E remains an independent validation path.
 
+## Registry transport performance
+
+The OVH registry sender and home worker use TCP BBR for new connections.
+The policy applies only to `ovh-us` and `bynull-servo`.
+The registry keeps its public hostname and verified TLS path.
+
+The September 2026 investigation measured 226.77 Mbps with Ookla on the home
+worker. A registry transfer from its BuildKit namespace stalled under CUBIC.
+The same 100 MB range completed in 9.25 seconds after changing the OVH sender
+to BBR. This identifies congestion-control sensitivity on the measured path.
+It does not establish deliberate ISP throttling or a defective MTU.
+
+### Required actions
+
+1. Apply `task infra:arc:network:configure` to the two named hosts.
+   - ARC deployment also invokes this task before applying BuildKit resources.
+   - The task installs the BBR module-load file and dedicated sysctl file.
+   - Systemd loads the module before applying sysctls during boot.
+   - It updates the existing home BuildKit namespace without restarting solves.
+   - New pod namespaces inherit the host's congestion-control default.
+   - Existing TCP connections retain their original algorithm.
+2. Verify `net.ipv4.tcp_congestion_control` on both hosts.
+   - Also verify the actual BuildKit namespace and a fresh namespace.
+   - Require at least two complete 100 MB transfers from the BuildKit namespace.
+   - Record bytes, elapsed time, throughput, and the sender's TCP algorithm.
+3. Restore scheduling after the sustained transfer checks pass.
+   - Uncordon `bynull-servo` if it was excluded during diagnosis.
+   - Confirm every intended node is Ready and schedulable.
+4. To undo the policy, remove only the two dedicated configuration files.
+   - Their paths are `/etc/modules-load.d/nook-tcp-congestion-control.conf`
+     and `/etc/sysctl.d/99-nook-tcp-congestion-control.conf`.
+   - Set `net.ipv4.tcp_congestion_control=cubic` on both hosts.
+   - Restore that value in the existing home BuildKit namespace too.
+   - Revert the repository policy before the next ARC deployment.
+
+### Prohibited actions
+
+- Do not treat a short transfer or aggregate speed test as sustained registry proof.
+- Do not change MTU, TCP buffers, or public DNS without separate evidence.
+- Do not restart BuildKit merely to change the default for new connections.
+
 ## Secrets and env
 
 - **`NOOK_GITHUB_PAT`**
