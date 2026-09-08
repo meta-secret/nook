@@ -52,7 +52,7 @@ impl NookVaultManager {
             }
             let mut record =
                 nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
-            let matches = match &record.data {
+            let match_result = match &record.data {
                 SecretValue::Login(login) => (nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
                     origin: request.origin,
@@ -61,13 +61,13 @@ impl NookVaultManager {
                 .map_err(|error| NookError::Database(error.to_string())),
                 _ => Ok(false),
             };
-            let login = match (&record.data, &matches) {
+            let login = match (&record.data, &match_result) {
                 (SecretValue::Login(login), Ok(true)) => Some(login.clone()),
                 _ => None,
             };
             record.zeroize_plaintext();
-            let matched = match matches {
-                Ok(matched) => matched,
+            let did_match = match match_result {
+                Ok(did_match) => did_match,
                 Err(error) => {
                     for (_, login) in &mut owned_logins {
                         login.password.zeroize();
@@ -75,7 +75,7 @@ impl NookVaultManager {
                     return Err(error);
                 }
             };
-            if matched && let Some(login) = login {
+            if did_match && let Some(login) = login {
                 owned_logins.push((id.clone(), login));
             }
         }
