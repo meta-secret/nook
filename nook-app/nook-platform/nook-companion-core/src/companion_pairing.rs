@@ -5,7 +5,7 @@
 )]
 
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::mem;
 use tsify::Tsify;
 
@@ -62,9 +62,9 @@ impl From<CompanionPairingError> for CompanionPairingFailure {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Tsify)]
 #[serde(transparent)]
-#[tsify(type = "number")]
+#[tsify(type = "number", into_wasm_abi, from_wasm_abi)]
 pub struct CompanionPairingEpochMilliseconds(f64);
 
 impl CompanionPairingEpochMilliseconds {
@@ -77,6 +77,19 @@ impl CompanionPairingEpochMilliseconds {
             return Err(CompanionPairingError::InvalidValue);
         }
         Ok(())
+    }
+}
+
+impl<'de> Deserialize<'de> for CompanionPairingEpochMilliseconds {
+    fn deserialize<DeserializerType>(
+        deserializer: DeserializerType,
+    ) -> Result<Self, DeserializerType::Error>
+    where
+        DeserializerType: Deserializer<'de>,
+    {
+        let epoch = Self(f64::deserialize(deserializer)?);
+        epoch.validate().map_err(serde::de::Error::custom)?;
+        Ok(epoch)
     }
 }
 
@@ -339,6 +352,14 @@ impl CompanionPairingApproval {
     ) -> Result<(), CompanionPairingError> {
         CompanionPairingProviderManifestDigest::parse(digest.as_str()).map(|_| ())
     }
+
+    /// Revalidates approval freshness and structure at an effect boundary.
+    pub fn revalidate_at(
+        &self,
+        observed_at: CompanionPairingEpochMilliseconds,
+    ) -> Result<(), CompanionPairingError> {
+        self.validate_at(observed_at)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Tsify)]
@@ -560,6 +581,24 @@ mod tests {
                 provider_manifest_digest: Self::provider_manifest_digest()?,
             })
         }
+    }
+
+    #[test]
+    fn epoch_deserialization_rejects_invalid_numeric_domains() {
+        for invalid in ["0", "-1", "1.5", "9007199254740992", "1e999"] {
+            assert!(serde_json::from_str::<CompanionPairingEpochMilliseconds>(invalid).is_err());
+        }
+    }
+
+    #[test]
+    fn approval_revalidates_at_effect_time() -> anyhow::Result<()> {
+        let approval = PairingFixture::approval()?;
+        approval.revalidate_at(PairingFixture::epoch("175")?)?;
+        assert!(matches!(
+            approval.revalidate_at(PairingFixture::epoch("200")?),
+            Err(CompanionPairingError::RequestExpired)
+        ));
+        Ok(())
     }
 
     #[test]

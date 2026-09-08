@@ -201,9 +201,23 @@ This slice stops after Rust validates a prevalidated approval against typed even
 records and produces an opaque prepared typestate. Preparation has no storage,
 publication, acknowledgement, or live-reader effect and exposes no authority.
 
-The serial activation-storage PR owns manager revalidation, effect-time expiry,
-DEK access, candidate persistence, integrity gates, replay handling, and loading.
-Later adoption still owns live-reader integration, reset, and migration semantics.
+## Inert pairing activation candidate storage
+
+The storage slice consumes preparation once. It revalidates the current manager,
+approval expiry, sealed provider recipient and manifest, and both event DEK
+envelopes immediately before effects. Decrypted keys live only in scoped
+zeroizing Rust owners and never enter the candidate schema.
+
+One Rexie transaction writes V1 event and sealed-provider payloads under the
+`companion-pairing-activation:` prefix in the existing `nook_db` `vault` store.
+The strict gate is written last. Replay, concurrent publication, late expiry,
+unknown fields, unsupported versions, torn payloads, and digest mismatch fail
+closed. Every failure after a payload write explicitly aborts the transaction.
+
+The gate is only an integrity and publication marker inside mutable same-origin
+storage. Opaque readback remains inert and no authoritative reader uses this
+namespace. Later adoption owns external-root revalidation, `access_granted`,
+final pairing state, acknowledgement, reader integration, reset, and migration.
 
 ## Sequential delivery
 

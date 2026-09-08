@@ -8,7 +8,9 @@ use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, Va
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 mod activation;
-pub use activation::NookPreparedCompanionPairingActivation;
+pub use activation::{
+    NookPreparedCompanionPairingActivation, NookStoredCompanionPairingActivationCandidate,
+};
 
 #[wasm_bindgen]
 pub struct NookCompanionPairingExtensionEndpoint {

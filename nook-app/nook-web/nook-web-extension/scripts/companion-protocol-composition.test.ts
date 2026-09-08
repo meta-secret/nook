@@ -34,6 +34,7 @@ import {
   NookCompanionPairingExtensionEndpoint,
   NookExternalEventLogRecords,
   NookPreparedCompanionPairingActivation,
+  NookStoredCompanionPairingActivationCandidate,
   NookVaultManager,
   NookPrevalidatedCompanionPairingApproval,
   seal_auth_providers_for_device_public_key,
@@ -125,7 +126,7 @@ function pairingAttempt(requestId: string, substituteProvider: boolean) {
     requestId,
     nonce: `nonce-${requestId}`,
     issuedAt: 100,
-    expiresAt: 200,
+    expiresAt: Number.MAX_SAFE_INTEGER,
     vaultType: 'simple',
     installation: {
       extensionRuntimeId: 'composition-runtime',
@@ -266,7 +267,7 @@ describe('generated companion protocol composition', () => {
     }
   })
 
-  test('prepares pairing activation through generated owned wrappers', async () => {
+  test('stores pairing activation through generated owned wrappers', async () => {
     const exported = await extension.export_event_log_records_js()
     const eventRecords = exported.to_array()
     exported.free()
@@ -275,7 +276,18 @@ describe('generated companion protocol composition', () => {
     const records = NookExternalEventLogRecords.from_array(eventRecords)
     const prepared = approval.with_event_log(records)
     expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
-    prepared.free()
+    const stored = await prepared.commit(extension)
+    expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
+    stored.free()
+    const loaded = await extension.load_companion_pairing_activation_candidate()
+    expect(loaded).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
+    loaded.free()
+
+    const replayApproval = pairingAttempt('pairing-activation-replay', false)
+    const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
+    await expect(
+      replayApproval.with_event_log(replayRecords).commit(extension),
+    ).rejects.toThrow('pairing candidate replay rejected')
 
     const invalidApproval = pairingAttempt('pairing-activation-empty', false)
     const invalidRecords = NookExternalEventLogRecords.from_array([])
