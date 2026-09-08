@@ -13,6 +13,7 @@
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
 use std::collections::HashMap;
+use std::error::Error;
 use std::fmt;
 use std::sync::LazyLock;
 
@@ -27,13 +28,13 @@ pub enum LoginSiteHostsError {
     InvalidBundledCatalog,
 }
 
-impl std::fmt::Display for LoginSiteHostsError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for LoginSiteHostsError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str("bundled login-host catalog is invalid")
     }
 }
 
-impl std::error::Error for LoginSiteHostsError {}
+impl Error for LoginSiteHostsError {}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct LoginFamilyMatchRequest<'a> {

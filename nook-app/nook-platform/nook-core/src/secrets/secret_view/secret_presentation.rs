@@ -109,7 +109,6 @@ pub struct LoginHostMatchRequest<'a> {
 }
 
 impl LoginHostMatchRequest<'_> {
-    #[must_use]
     pub fn matches(&self) -> Result<bool, LoginSiteHostsError> {
         let secret_host = WebsiteHost::normalize(self.website_url);
         let origin_host = WebsiteHost::normalize(self.origin);

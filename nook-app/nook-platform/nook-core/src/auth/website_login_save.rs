@@ -62,7 +62,6 @@ impl WebsiteLoginSaveRequest<'_> {
     ///
     /// `candidates` should already be filtered to the requesting origin when
     /// possible; host matching is still enforced here as a defense in depth.
-    #[must_use]
     pub fn decide(&self) -> Result<WebsiteLoginSaveDecision, LoginSiteHostsError> {
         WebsiteLoginSavePolicy::decide_parts(
             self.origin,
