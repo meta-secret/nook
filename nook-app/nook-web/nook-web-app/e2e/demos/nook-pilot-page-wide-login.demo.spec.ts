@@ -1,10 +1,100 @@
 import { expect, test } from '../fixtures'
+import type { Page } from '@playwright/test'
 import {
   demoBeat,
   injectPilotAutofill,
   loadPilotMessages,
 } from './pilot-demo-helpers'
 import { demoDomainEnumArgs, installDemoChromeStub } from './static-chrome-stub'
+import { AuthenticationWorkflowSnapshotMessageType } from '../../../nook-web-extension/src/lib/auth-workflow-messages'
+import type { AuthenticationWorkflowRuntimeResponseWire } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm'
+
+class UnsupportedAuthenticationObservationDemoScenario {
+  private static readonly messageType =
+    AuthenticationWorkflowSnapshotMessageType.NookAuthenticationWorkflowSnapshot
+
+  private static installVisibleExchangeRecorder({
+    messageType,
+  }: {
+    messageType: AuthenticationWorkflowSnapshotMessageType
+  }): void {
+    type RuntimeCallback = (response?: unknown) => void
+    type RuntimeMessage = { type?: unknown; payload?: unknown }
+    const runtime = chrome.runtime as typeof chrome.runtime & {
+      sendMessage(
+        message: RuntimeMessage,
+        callback?: RuntimeCallback,
+      ): Promise<unknown> | void
+    }
+    const sendMessage = runtime.sendMessage.bind(runtime)
+    runtime.sendMessage = (
+      message: RuntimeMessage,
+      callback?: RuntimeCallback,
+    ): void => {
+      sendMessage(message, (response?: unknown) => {
+        if (message.type === messageType) {
+          const exchange = document.querySelector('#typed-observation-exchange')
+          if (exchange) {
+            exchange.textContent = JSON.stringify(
+              { observation: message.payload, response },
+              undefined,
+              2,
+            )
+          }
+        }
+        callback?.(response)
+      })
+    }
+  }
+
+  static async renderFailClosedExchange({ page }: { page: Page }) {
+    const messages = await loadPilotMessages()
+    const unsupportedResponse = {
+      workflow: { ok: false, unsupportedVersion: true },
+      loginMatches: { kind: 'unavailable' },
+    } satisfies AuthenticationWorkflowRuntimeResponseWire
+    const stubArgs = {
+      localizedMessages: messages,
+      ...demoDomainEnumArgs,
+      responsesByType: {
+        [UnsupportedAuthenticationObservationDemoScenario.messageType]:
+          unsupportedResponse,
+      },
+    }
+    await page.addInitScript(installDemoChromeStub, stubArgs)
+    await page.goto('/')
+    await page.setContent(`<!doctype html>
+      <html><head><title>Typed authentication observation</title><style>:root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; } body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #090b12; color: #f7f8fb; } main { width: min(760px, calc(100vw - 48px)); padding: 36px; border: 1px solid #30384d; border-radius: 20px; background: #171b28; } form { display: grid; gap: 14px; } input, button { min-height: 44px; padding: 10px 12px; border: 1px solid #39435b; border-radius: 9px; background: #0e111a; color: inherit; font: inherit; } pre { min-height: 180px; overflow: auto; padding: 18px; border-radius: 12px; background: #0e111a; color: #8fddb0; }</style></head>
+        <body><main><h1>Authentication observation boundary</h1><p>The exchange below shows the exact observation and fail-closed runtime response.</p><form method="post"><label>Email<input name="email" type="email" autocomplete="username"></label><label>Password<input name="password" type="password" autocomplete="current-password"></label><button type="submit">Sign in</button></form><h2>Nook runtime exchange</h2><pre id="typed-observation-exchange" aria-live="polite">Waiting for typed observation…</pre></main></body></html>`)
+    await page.evaluate(installDemoChromeStub, stubArgs)
+    await page.evaluate(
+      UnsupportedAuthenticationObservationDemoScenario.installVisibleExchangeRecorder,
+      {
+        messageType:
+          UnsupportedAuthenticationObservationDemoScenario.messageType,
+      },
+    )
+    await injectPilotAutofill(page)
+
+    const exchange = page.locator('#typed-observation-exchange')
+    await expect(exchange).toContainText(
+      /"credentialDisclosureControl"\s*:\s*\{\s*"kind"\s*:\s*"absent"\s*\}/,
+    )
+    await expect(exchange).toContainText(
+      /"workflow"\s*:\s*\{\s*"ok"\s*:\s*false,\s*"unsupportedVersion"\s*:\s*true\s*\}/,
+    )
+    await expect(page.locator('#nook-auth-widget')).toHaveCount(0)
+    const siteSignIn = page.getByRole('button', { name: 'Sign in' })
+    await expect(siteSignIn).toBeVisible()
+    await expect(siteSignIn).toBeEnabled()
+    await demoBeat(page)
+  }
+}
+
+test(
+  'shows explicit disclosure absence and fails closed on an unsupported observation version',
+  UnsupportedAuthenticationObservationDemoScenario.renderFailClosedExchange,
+)
 
 test('fill only the local login inside a page-wide ASP.NET form', async ({
   page,
