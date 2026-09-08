@@ -14,49 +14,34 @@ import {
   untrustedYamlProperty,
   UntrustedYamlPropertyPresence,
 } from './lib/guards.ts';
+import {
+  PrStewardGithubPrReader,
+  PrStewardGithubUnavailableError,
+} from './pr-steward-github.ts';
+import {
+  PR_STEWARD_REPOSITORY,
+  PrStewardBlockerCode,
+  PrStewardNdjsonCodec,
+  PrStewardRecordKind,
+  PrStewardSource,
+} from './pr-steward-contract.ts';
 
 import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
+import type { PrStewardAssignedPrReader } from './pr-steward-github.ts';
+import type {
+  PrStewardRecord,
+  PrStewardRoutingRecord,
+  PrStewardUrl,
+} from './pr-steward-contract.ts';
 
 export const PR_STEWARD_ENDPOINT = 'wss://events.dev.nokey.sh';
 export const PR_STEWARD_SUBJECT = 'default.github-webhook.pr-lifecycle';
-export const PR_STEWARD_REPOSITORY = 'meta-secret/nook';
-
-export enum PrStewardRoutingVersion {
-  V1 = 'pr-steward-routing/v1',
-}
-
-export enum PrStewardEventKind {
-  GithubPrEvent = 'github-pr-event',
-}
-
-export enum PrStewardSource {
-  CheckRun = 'check-run',
-  CheckSuite = 'check-suite',
-  IssueComment = 'issue-comment',
-  PullRequest = 'pull-request',
-  PullRequestReview = 'pull-request-review',
-  PullRequestReviewComment = 'pull-request-review-comment',
-  WorkflowRun = 'workflow-run',
-}
-
-export enum PrStewardUrlTrust {
-  GithubOwned = 'github-owned',
-  UntrustedExternal = 'untrusted-external',
-}
-
-export type PrStewardUrl = {
-  readonly trust: PrStewardUrlTrust;
-  readonly value: string;
-};
-
 export type PrStewardCredential = {
   readonly username: 'pr-steward';
   readonly password: string;
 };
 
 export type PrStewardEvent = {
-  readonly schemaVersion: PrStewardRoutingVersion.V1;
-  readonly kind: PrStewardEventKind;
   readonly id: string;
   readonly time: string;
   readonly githubEvent: string;
@@ -75,12 +60,6 @@ export type PrStewardEvent = {
   readonly path: string | false;
   readonly line: number | false;
   readonly author: string | false;
-};
-
-export type PrStewardRoutingHint = PrStewardEvent & {
-  readonly repository: typeof PR_STEWARD_REPOSITORY;
-  readonly pullRequest: number;
-  readonly source: PrStewardSource;
 };
 
 function property(args: {
@@ -208,6 +187,8 @@ function sourceForEvent(value: string): PrStewardSource | false {
       return PrStewardSource.PullRequestReview;
     case 'pull_request_review_comment':
       return PrStewardSource.PullRequestReviewComment;
+    case 'workflow_job':
+      return PrStewardSource.WorkflowJob;
     case 'workflow_run':
       return PrStewardSource.WorkflowRun;
     default:
@@ -228,9 +209,11 @@ function eventObject(args: {
           ? 'check_run'
           : args.source === PrStewardSource.CheckSuite
             ? 'check_suite'
-            : args.source === PrStewardSource.WorkflowRun
-              ? 'workflow_run'
-              : 'comment';
+            : args.source === PrStewardSource.WorkflowJob
+              ? 'workflow_job'
+              : args.source === PrStewardSource.WorkflowRun
+                ? 'workflow_run'
+                : 'comment';
   const candidate = property({ record: args.body, key });
   return isRecord(candidate) ? candidate : {};
 }
@@ -251,41 +234,6 @@ function boundedText(args: {
   return normalized.length === 0 || normalized.length > args.limit
     ? false
     : normalized;
-}
-
-function githubUrl(value: string): PrStewardUrl | false {
-  const parsed = safeUrl(value);
-  const repositoryPath = `/${PR_STEWARD_REPOSITORY}`;
-  return parsed !== false &&
-    parsed.hostname === 'github.com' &&
-    (parsed.pathname === repositoryPath ||
-      parsed.pathname.startsWith(`${repositoryPath}/`))
-    ? { trust: PrStewardUrlTrust.GithubOwned, value: parsed.toString() }
-    : false;
-}
-
-function externalUrl(value: string): PrStewardUrl | false {
-  const parsed = safeUrl(value);
-  return parsed === false
-    ? false
-    : { trust: PrStewardUrlTrust.UntrustedExternal, value: parsed.origin };
-}
-
-function safeUrl(value: string): URL | false {
-  try {
-    const parsed = new URL(value);
-    if (
-      parsed.protocol !== 'https:' ||
-      parsed.username.length > 0 ||
-      parsed.password.length > 0
-    )
-      return false;
-    parsed.search = '';
-    parsed.hash = '';
-    return parsed.toString().length <= 240 ? parsed : false;
-  } catch {
-    return false;
-  }
 }
 
 type PrStewardMetadata = Pick<
@@ -349,9 +297,9 @@ function routingMetadata(args: {
       }),
     url:
       github !== false
-        ? githubUrl(github)
+        ? PrStewardNdjsonCodec.githubUrl(github)
         : external !== false
-          ? externalUrl(external)
+          ? PrStewardNdjsonCodec.externalUrl(external)
           : false,
     path: boundedText({
       value: property({ record: object, key: 'path' }),
@@ -390,7 +338,7 @@ function coherentReviewHead(args: {
 
 class EventDecodeError extends Error {}
 
-export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
+function decodeWebhookEvent(data: Uint8Array): PrStewardEvent {
   let parsed: UntrustedYamlNode;
   try {
     parsed = asUntrustedYamlNode(
@@ -482,8 +430,6 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
         }
       : routingMetadata({ body, source });
   return {
-    schemaVersion: PrStewardRoutingVersion.V1,
-    kind: PrStewardEventKind.GithubPrEvent,
     id,
     time,
     githubEvent,
@@ -497,7 +443,14 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
   };
 }
 
+export class PrStewardWebhookDecoder {
+  decode(request: { readonly data: Uint8Array }): PrStewardEvent {
+    return decodeWebhookEvent(request.data);
+  }
+}
+
 export type PrStewardInvocation = {
+  readonly repository: typeof PR_STEWARD_REPOSITORY;
   readonly pullRequest: number;
   readonly credentialPath: string;
 };
@@ -522,47 +475,117 @@ export class PrStewardInvocationCodec {
         ? argv[3]!
         : join(homedir(), '.nook/events/pr-steward-client.yaml');
     if (!isAbsolute(path)) throw new Error('credential path must be absolute');
-    return { pullRequest, credentialPath: path };
+    return {
+      repository: PR_STEWARD_REPOSITORY,
+      pullRequest,
+      credentialPath: path,
+    };
   }
 }
 
-export function assignedPrEvent(args: {
-  readonly data: Uint8Array;
-  readonly pullRequest: number;
-}): PrStewardRoutingHint | false {
-  const event = decodePrStewardEvent(args.data);
-  if (
-    event.repository !== PR_STEWARD_REPOSITORY ||
-    event.pullRequest !== args.pullRequest ||
-    (event.source === PrStewardSource.PullRequest && event.headSha === false) ||
-    event.source === false
-  )
-    return false;
-  return {
-    ...event,
-    repository: PR_STEWARD_REPOSITORY,
-    pullRequest: event.pullRequest,
-    source: event.source,
-  };
-}
-
-export async function writeAssignedEvents(args: {
+type PrStewardObservationRequest = {
   readonly messages: AsyncIterable<{ readonly data: Uint8Array }>;
+  readonly repository: typeof PR_STEWARD_REPOSITORY;
   readonly pullRequest: number;
   readonly write: (line: string) => void;
-}): Promise<void> {
-  for await (const message of args.messages) {
-    let event: PrStewardRoutingHint | false;
-    try {
-      event = assignedPrEvent({
-        data: message.data,
-        pullRequest: args.pullRequest,
-      });
-    } catch (error) {
-      if (error instanceof EventDecodeError) continue;
-      throw error;
+};
+
+export class PrStewardEventObserver {
+  readonly #decoder = new PrStewardWebhookDecoder();
+  readonly #reader: PrStewardAssignedPrReader;
+
+  constructor(request: { readonly reader: PrStewardAssignedPrReader }) {
+    this.#reader = request.reader;
+  }
+
+  async observe(request: PrStewardObservationRequest): Promise<void> {
+    for await (const message of request.messages) {
+      let event: PrStewardEvent;
+      try {
+        event = this.#decoder.decode({ data: message.data });
+      } catch (error) {
+        if (!(error instanceof EventDecodeError)) throw error;
+        this.#write({
+          write: request.write,
+          record: {
+            kind: PrStewardRecordKind.Blocker,
+            code: PrStewardBlockerCode.MalformedEvent,
+            repository: request.repository,
+            pullRequest: request.pullRequest,
+            summary: 'A malformed GitHub notification was rejected.',
+          },
+        });
+        continue;
+      }
+      if (
+        event.source === false ||
+        event.repository !== request.repository ||
+        (event.pullRequest !== false &&
+          event.pullRequest !== request.pullRequest) ||
+        (event.headSha === false &&
+          event.source !== PrStewardSource.IssueComment) ||
+        (event.pullRequest === false &&
+          (event.source !== PrStewardSource.WorkflowJob ||
+            event.headSha === false))
+      )
+        continue;
+      let assigned;
+      try {
+        assigned = this.#reader.read({
+          repository: request.repository,
+          pullRequest: request.pullRequest,
+        });
+      } catch (error) {
+        if (!(error instanceof PrStewardGithubUnavailableError)) throw error;
+        this.#write({
+          write: request.write,
+          record: {
+            kind: PrStewardRecordKind.Blocker,
+            code: PrStewardBlockerCode.GithubObservationUnavailable,
+            repository: request.repository,
+            pullRequest: request.pullRequest,
+            eventId: event.id,
+            deliveryId: event.deliveryId,
+            source: event.source,
+            headSha: event.headSha,
+            objectId: event.objectId,
+            runId: event.runId,
+            summary: 'Assigned pull request observation is unavailable.',
+          },
+        });
+        continue;
+      }
+      if (event.headSha !== false && event.headSha !== assigned.headSha)
+        continue;
+      const record: PrStewardRoutingRecord = {
+        kind: PrStewardRecordKind.Routing,
+        eventId: event.id,
+        deliveryId: event.deliveryId,
+        repository: request.repository,
+        pullRequest: request.pullRequest,
+        headSha: assigned.headSha,
+        source: event.source,
+        objectId: event.objectId,
+        commentId: event.commentId,
+        runId: event.runId,
+        githubEvent: PrStewardNdjsonCodec.githubEvent({ source: event.source }),
+        action: event.action,
+        state: event.state,
+        reviewId: event.reviewId,
+        url: event.url === false ? assigned.url : event.url,
+        path: event.path,
+        line: event.line,
+        author: event.author,
+      };
+      this.#write({ write: request.write, record });
     }
-    if (event !== false) args.write(`${JSON.stringify(event)}\n`);
+  }
+
+  #write(request: {
+    readonly write: (line: string) => void;
+    readonly record: PrStewardRecord;
+  }): void {
+    request.write(PrStewardNdjsonCodec.encode(request.record));
   }
 }
 
@@ -631,8 +654,11 @@ async function main(): Promise<void> {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
   try {
-    await writeAssignedEvents({
+    await new PrStewardEventObserver({
+      reader: PrStewardGithubPrReader.create(),
+    }).observe({
       messages: subscription,
+      repository: invocation.repository,
       pullRequest: invocation.pullRequest,
       write: (line) => {
         process.stdout.write(line);

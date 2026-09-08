@@ -92,9 +92,9 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    `--config <absolute-path>` after the PR number for an explicit override.
 
 2. Read newline-delimited JSON from standard output.
-   - Each line is one flat `pr-steward-routing/v1` hint.
-   - Emit only directly identified assigned `meta-secret/nook` pull requests.
-     Suppress status, PR-less, foreign, ambiguous, malformed, or mismatched heads; continue the live stream after expected decode failures.
+   - Each line is one closed `pr-steward-ndjson/v1` routing or blocker envelope.
+   - Bind events to the freshly read assigned PR head; a matching `workflow_job` head may supply its missing PR link.
+   - Suppress foreign, stale, ambiguous, or status input; emit a sanitized blocker for malformed input or unavailable PR observation.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
 3. Stop when Gizmo directs the child to finish.
@@ -123,7 +123,7 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 
 ### Output contract
 
-Output contains only bounded hints, never bodies, review text, logs, raw payloads, or credentials. Exact reconciliation and summaries are deferred.
+Output contains only closed, bounded routing or blocker records. It never contains bodies, review text, logs, raw payloads, credentials, or failure summaries.
 
 ### Live reactive pipeline canary
 

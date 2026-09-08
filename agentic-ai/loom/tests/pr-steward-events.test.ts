@@ -10,15 +10,32 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  assignedPrEvent,
   loadCredential,
-  PR_STEWARD_REPOSITORY,
+  PrStewardEventObserver,
   PrStewardInvocationCodec,
-  PrStewardRoutingVersion,
+} from '../src/pr-steward-events.ts';
+import {
+  PR_STEWARD_REPOSITORY,
+  PrStewardBlockerCode,
+  PrStewardDecodeCode,
+  PrStewardDecodeError,
+  PrStewardNdjsonCodec,
+  PrStewardRecordKind,
+  PrStewardSchemaVersion,
   PrStewardSource,
   PrStewardUrlTrust,
-  writeAssignedEvents,
-} from '../src/pr-steward-events.ts';
+} from '../src/pr-steward-contract.ts';
+import {
+  PrStewardGithubPrReader,
+  PrStewardGithubUnavailableError,
+} from '../src/pr-steward-github.ts';
+import type {
+  PrStewardAssignedPrReader,
+  PrStewardAssignedPrRequest,
+  PrStewardCommandRequest,
+  PrStewardCommandResult,
+  PrStewardCommandRunner,
+} from '../src/pr-steward-github.ts';
 import type { UntrustedYamlMap } from '../src/lib/guards.ts';
 
 const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -27,6 +44,36 @@ const encoder = new TextEncoder();
 const temporaryPaths: string[] = [];
 const repository = { full_name: PR_STEWARD_REPOSITORY };
 const pullRequest = { number: 1560, head: { sha: HEAD } };
+const assignedUrl = {
+  trust: PrStewardUrlTrust.GithubOwned,
+  value: 'https://github.com/meta-secret/nook/pull/1560',
+} as const;
+
+class FixturePrReader implements PrStewardAssignedPrReader {
+  read(_request: PrStewardAssignedPrRequest) {
+    return { headSha: HEAD, url: assignedUrl } as const;
+  }
+}
+
+class UnavailablePrReader implements PrStewardAssignedPrReader {
+  read(_request: PrStewardAssignedPrRequest): never {
+    throw new PrStewardGithubUnavailableError();
+  }
+}
+
+class FixtureCommand implements PrStewardCommandRunner {
+  request: PrStewardCommandRequest | false = false;
+  readonly #result: PrStewardCommandResult;
+
+  constructor(request: { readonly result: PrStewardCommandResult }) {
+    this.#result = request.result;
+  }
+
+  run(request: PrStewardCommandRequest): PrStewardCommandResult {
+    this.request = request;
+    return this.#result;
+  }
+}
 
 class PrStewardEventFixture {
   static associated(args: {
@@ -64,11 +111,22 @@ class PrStewardEventFixture {
   }
 
   static async write(data: readonly Uint8Array[]): Promise<readonly string[]> {
+    return PrStewardEventFixture.observe({
+      data,
+      reader: new FixturePrReader(),
+    });
+  }
+
+  static async observe(request: {
+    readonly data: readonly Uint8Array[];
+    readonly reader: PrStewardAssignedPrReader;
+  }): Promise<readonly string[]> {
     const lines: string[] = [];
-    await writeAssignedEvents({
+    await new PrStewardEventObserver({ reader: request.reader }).observe({
       messages: (async function* () {
-        for (const item of data) yield { data: item };
+        for (const item of request.data) yield { data: item };
       })(),
+      repository: PR_STEWARD_REPOSITORY,
       pullRequest: 1560,
       write: (line) => lines.push(line),
     });
@@ -232,15 +290,14 @@ describe('compact routing hints', () => {
     },
   ])(
     'routes directly attributed $event metadata',
-    ({ event, source, body }) => {
-      const hint = assignedPrEvent({
-        data: cloudEvent({ event, body }),
-        pullRequest: 1560,
-      });
+    async ({ event, source, body }) => {
+      const [line] = await write([cloudEvent({ event, body })]);
+      const hint = PrStewardNdjsonCodec.decode(line!).record;
       expect(hint).toMatchObject({
-        schemaVersion: PrStewardRoutingVersion.V1,
+        kind: PrStewardRecordKind.Routing,
         repository: PR_STEWARD_REPOSITORY,
         pullRequest: 1560,
+        headSha: HEAD,
         source,
       });
       expect(JSON.stringify(hint)).not.toContain('DO_NOT_TRANSFER');
@@ -269,21 +326,16 @@ describe('compact routing hints', () => {
   );
 
   test('suppresses foreign, stale, status, ambiguous, and PR-less inputs', async () => {
-    for (const event of ['check_run', 'check_suite', 'workflow_run'])
-      for (const head of [STALE_HEAD, false] as const)
-        expect(
-          assignedPrEvent({
-            data: cloudEvent({
-              event,
-              body: {
-                repository,
-                [event]: associated({ id: 50, head }),
-              },
-            }),
-            pullRequest: 1560,
+    const rejected = ['check_run', 'check_suite', 'workflow_run'].flatMap(
+      (event) =>
+        ([STALE_HEAD, false] as const).map((head) =>
+          cloudEvent({
+            event,
+            body: { repository, [event]: associated({ id: 50, head }) },
           }),
-        ).toBe(false);
-    const rejected = [
+        ),
+    );
+    rejected.push(
       cloudEvent({
         event: 'pull_request',
         body: {
@@ -315,10 +367,6 @@ describe('compact routing hints', () => {
         body: { repository, sha: HEAD, id: 48, state: 'failure' },
       }),
       cloudEvent({
-        event: 'workflow_job',
-        body: { repository, workflow_job: { id: 49, head_sha: HEAD } },
-      }),
-      cloudEvent({
         event: 'check_run',
         body: {
           repository,
@@ -329,8 +377,38 @@ describe('compact routing hints', () => {
           },
         },
       }),
-    ];
+    );
     expect(await write(rejected)).toEqual([]);
+  });
+
+  test('binds a PR-less workflow job to the freshly observed assigned head', async () => {
+    const [line] = await write([
+      cloudEvent({
+        event: 'workflow_job',
+        body: {
+          repository,
+          workflow_job: { id: 49, run_id: 149, head_sha: HEAD },
+        },
+      }),
+    ]);
+    expect(PrStewardNdjsonCodec.decode(line!).record).toMatchObject({
+      kind: PrStewardRecordKind.Routing,
+      source: PrStewardSource.WorkflowJob,
+      objectId: 49,
+      runId: 149,
+      headSha: HEAD,
+    });
+    expect(
+      await write([
+        cloudEvent({
+          event: 'workflow_job',
+          body: {
+            repository,
+            workflow_job: { id: 50, run_id: 150, head_sha: STALE_HEAD },
+          },
+        }),
+      ]),
+    ).toEqual([]);
   });
 
   test('bounds output, continues after decode errors, and propagates writer failures', async () => {
@@ -351,25 +429,153 @@ describe('compact routing hints', () => {
       },
     });
     const lines = await write([encoder.encode('RAW_MALFORMED_SECRET'), valid]);
-    expect(lines).toHaveLength(1);
-    const parsed = JSON.parse(lines[0]!) as UntrustedYamlMap;
-    expect([parsed.path, parsed.line]).toEqual([false, false]);
-    expect([parsed.url, parsed.author]).toEqual([false, false]);
+    expect(lines).toHaveLength(2);
+    const blocker = PrStewardNdjsonCodec.decode(lines[0]!).record;
+    const parsed = PrStewardNdjsonCodec.decode(lines[1]!).record;
+    expect(blocker).toMatchObject({
+      code: PrStewardBlockerCode.MalformedEvent,
+    });
+    expect(PrStewardNdjsonCodec.encode(blocker)).toBe(lines[0]!);
+    expect(parsed).toMatchObject({
+      path: false,
+      line: false,
+      url: assignedUrl,
+      author: false,
+    });
     expect(lines[0]!.length).toBeLessThan(2_048);
-    expect(lines[0]).not.toContain('RAW_PAYLOAD_SECRET');
-    expect(lines[0]).not.toContain('RAW_MALFORMED_SECRET');
+    expect(lines.join('')).not.toContain('RAW_PAYLOAD_SECRET');
+    expect(lines.join('')).not.toContain('RAW_MALFORMED_SECRET');
     const failure = new Error('operational failure');
     await expect(
-      writeAssignedEvents({
+      new PrStewardEventObserver({ reader: new FixturePrReader() }).observe({
         messages: (async function* () {
           yield { data: valid };
         })(),
+        repository: PR_STEWARD_REPOSITORY,
         pullRequest: 1560,
         write: () => {
           throw failure;
         },
       }),
     ).rejects.toBe(failure);
+  });
+
+  test('emits a sanitized blocker when assigned-head observation is unavailable', async () => {
+    const lines = await PrStewardEventFixture.observe({
+      data: [
+        cloudEvent({
+          event: 'pull_request',
+          body: { repository, pull_request: pullRequest },
+        }),
+      ],
+      reader: new UnavailablePrReader(),
+    });
+    const blocker = PrStewardNdjsonCodec.decode(lines[0]!).record;
+    expect(blocker).toMatchObject({
+      kind: PrStewardRecordKind.Blocker,
+      code: PrStewardBlockerCode.GithubObservationUnavailable,
+      eventId: 'event-pull_request',
+      headSha: HEAD,
+    });
+    expect(PrStewardNdjsonCodec.encode(blocker)).toBe(lines[0]!);
+    expect(lines[0]).not.toContain('RAW_PAYLOAD_SECRET');
+  });
+});
+
+describe('closed NDJSON and assigned-PR reader', () => {
+  test('round trips v1 records and rejects unknown, missing, or unsafe shapes', async () => {
+    const [line] = await write([
+      cloudEvent({
+        event: 'pull_request',
+        body: { repository, pull_request: pullRequest },
+      }),
+    ]);
+    const envelope = PrStewardNdjsonCodec.decode(line!);
+    expect(envelope.schemaVersion).toBe(PrStewardSchemaVersion.V1);
+    expect(PrStewardNdjsonCodec.encode(envelope.record)).toBe(line!);
+    const invalid = [
+      { ...envelope, body: 'SECRET_BODY' },
+      { schemaVersion: PrStewardSchemaVersion.V1, record: { kind: 'future' } },
+      {
+        schemaVersion: PrStewardSchemaVersion.V1,
+        record: { kind: PrStewardRecordKind.Routing },
+      },
+      {
+        schemaVersion: PrStewardSchemaVersion.V1,
+        record: { ...envelope.record, body: 'SECRET_BODY' },
+      },
+      {
+        schemaVersion: PrStewardSchemaVersion.V1,
+        record: {
+          ...envelope.record,
+          url: {
+            trust: PrStewardUrlTrust.GithubOwned,
+            value: 'https://user:secret@github.com/meta-secret/nook',
+          },
+        },
+      },
+    ];
+    for (const value of invalid)
+      expect(() => PrStewardNdjsonCodec.decode(JSON.stringify(value))).toThrow(
+        PrStewardDecodeError,
+      );
+    expect(() =>
+      PrStewardNdjsonCodec.decode(
+        JSON.stringify({ schemaVersion: 'pr-steward-ndjson/v0', record: {} }),
+      ),
+    ).toThrow(PrStewardDecodeCode.UnsupportedVersion);
+  });
+
+  test('uses only the fixed bounded gh API read', () => {
+    const command = new FixtureCommand({
+      result: {
+        status: 0,
+        signal: false,
+        stdout: JSON.stringify({
+          head: { sha: HEAD },
+          html_url: 'https://github.com/meta-secret/nook/pull/1560',
+        }),
+      },
+    });
+    const reader = new PrStewardGithubPrReader({ command });
+    expect(
+      reader.read({ repository: PR_STEWARD_REPOSITORY, pullRequest: 1560 }),
+    ).toEqual({ headSha: HEAD, url: assignedUrl });
+    expect(command.request).toEqual({
+      executable: 'gh',
+      arguments: [
+        'api',
+        '--hostname',
+        'github.com',
+        '--method',
+        'GET',
+        '/repos/meta-secret/nook/pulls/1560',
+      ],
+      timeoutMilliseconds: 10_000,
+      outputLimitBytes: 2_097_152,
+    });
+  });
+
+  test.each([
+    `{"head":{"sha":"${HEAD}"}}`,
+    `{"head":{"sha":"${HEAD}"},"html_url":42}`,
+    `{"head":{"sha":"${HEAD}"},"html_url":"https://evil.example/meta-secret/nook/pull/1560"}`,
+    `{"head":{"sha":"${HEAD}"},"html_url":"https://github.com/meta-secret/nook/pull/1559"}`,
+    `{"head":{"sha":"${HEAD}"},"html_url":"https://github.com/meta-secret/nook/issues/1560"}`,
+    `{"head":{"sha":"${HEAD}"},"html_url":"https://github.com:444/meta-secret/nook/pull/1560"}`,
+    `SECRET${'x'.repeat(2_097_152)}`,
+  ])('rejects noncanonical or oversized GitHub output', (stdout) => {
+    const command = new FixtureCommand({
+      result: {
+        status: 0,
+        signal: false,
+        stdout,
+      },
+    });
+    const reader = new PrStewardGithubPrReader({ command });
+    expect(() =>
+      reader.read({ repository: PR_STEWARD_REPOSITORY, pullRequest: 1560 }),
+    ).toThrow('Assigned pull request observation is unavailable.');
   });
 });
 
