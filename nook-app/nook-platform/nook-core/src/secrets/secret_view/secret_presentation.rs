@@ -1,166 +1,84 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use super::{SecretListItem, SecretListItemData, SecretType, Url};
-use crate::secrets::{authenticator_issuer_hosts, login_site_hosts};
+use crate::secrets::{
+    authenticator_issuer_hosts::AuthenticatorIssuerHosts, login_site_hosts::LoginSiteHosts,
+};
+use crate::vault_session::SecretPage;
 
-/// Normalize a website URL or origin to a comparable host (no leading `www.`).
-#[must_use]
-pub fn hostname_from_url(raw: &str) -> String {
-    let value = raw.trim();
-    if value.is_empty() {
-        return String::new();
-    }
-
-    Url::parse(value)
-        .or_else(|error| {
-            if value.contains("://") {
-                Err(error)
-            } else {
-                Url::parse(&format!("https://{value}"))
-            }
-        })
-        .ok()
-        .and_then(|url| url.host_str().map(ToOwned::to_owned))
-        .unwrap_or_default()
-        .trim_start_matches("www.")
-        .to_owned()
+/// Named request for matching a stored login host to a requesting origin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoginHostMatchRequest<'a> {
+    pub website_url: &'a str,
+    pub origin: &'a str,
 }
 
-/// True when a stored login website URL targets the same host as a page origin.
-///
-/// Matching is host equality after URL normalization (credentials, path, query,
-/// fragment, and a leading `www.` are ignored), or an explicit related-login
-/// family from the bundled allowlist (for example `microsoft.com` ↔
-/// `login.microsoftonline.com`). Substring traps such as `evil-example.com` vs
-/// `example.com` do not match.
-#[must_use]
-pub fn login_host_matches_origin(website_url: &str, origin: &str) -> bool {
-    let secret_host = hostname_from_url(website_url);
-    let origin_host = hostname_from_url(origin);
-    if secret_host.is_empty() || origin_host.is_empty() {
-        return false;
-    }
-    secret_host.eq_ignore_ascii_case(&origin_host)
-        || login_site_hosts::login_hosts_share_family(&secret_host, &origin_host)
-}
-
-/// Intrinsic list clustering key for an authenticator.
-///
-/// Prefer an explicit website URL, then a domain-like issuer, then the bundled
-/// popular-issuer host map. Unmapped brand labels stay as trimmed issuer text
-/// until [`resolve_entity_group_keys`] can attach them to a co-present site host.
-#[must_use]
-pub fn authenticator_group_key(website_url: &str, issuer: &str) -> String {
-    if let Some(host) =
-        authenticator_issuer_hosts::resolve_authenticator_website_host(website_url, issuer)
-    {
-        return host;
-    }
-    issuer.trim().to_owned()
-}
-
-fn normalize_brand_label(raw: &str) -> String {
-    authenticator_issuer_hosts::normalize_issuer_lookup_key(raw)
-}
-
-pub(super) fn titled_group_key(title: &str, unnamed: &str) -> String {
-    let title = title.trim();
-    if title.is_empty() {
-        unnamed.to_owned()
-    } else {
-        title.to_owned()
+impl LoginHostMatchRequest<'_> {
+    #[must_use]
+    pub fn matches(&self) -> bool {
+        let secret_host = SecretListItem::hostname_from_url(self.website_url);
+        let origin_host = SecretListItem::hostname_from_url(self.origin);
+        if secret_host.is_empty() || origin_host.is_empty() {
+            return false;
+        }
+        secret_host.eq_ignore_ascii_case(&origin_host)
+            || LoginSiteHosts::share_family(&secret_host, &origin_host)
     }
 }
 
-fn brand_matches_host(brand: &str, host: &str) -> bool {
-    if brand.is_empty() || brand.len() < 2 || brand.contains('.') {
-        return false;
-    }
-    let host = host.to_ascii_lowercase();
-    if host == brand {
-        return true;
-    }
-    if host.starts_with(&format!("{brand}.")) {
-        return true;
-    }
-    host.split('.').any(|label| label == brand)
+/// Named request for deriving an authenticator's intrinsic grouping key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthenticatorGroupKeyRequest<'a> {
+    pub website_url: &'a str,
+    pub issuer: &'a str,
 }
 
-fn site_anchor_account(item: &SecretListItem) -> &str {
-    match &item.data {
-        SecretListItemData::Login { username, .. } => username.trim(),
-        SecretListItemData::Passkey { user_name, .. } => user_name.trim(),
-        SecretListItemData::Authenticator { account, .. } => account.trim(),
-        _ => "",
+impl AuthenticatorGroupKeyRequest<'_> {
+    #[must_use]
+    pub fn resolve(&self) -> String {
+        AuthenticatorIssuerHosts::bundled()
+            .and_then(|catalog| catalog.resolve_website_host(self.website_url, self.issuer))
+            .unwrap_or_else(|| self.issuer.trim().to_owned())
     }
-}
-
-fn is_site_anchor(item: &SecretListItem) -> bool {
-    matches!(
-        item.data,
-        SecretListItemData::Login { .. }
-            | SecretListItemData::ApiKey { .. }
-            | SecretListItemData::Passkey { .. }
-    )
-}
-
-/// Resolve display group keys so brand authenticators cluster with site hosts.
-///
-/// Login / API key / passkey hosts are anchors. Authenticator issuers that are
-/// already hosts stay unchanged. Brand issuers such as `Namecheap` remap onto
-/// `namecheap.com` when that host (or a subdomain) appears in the same item set.
-/// Prefer an anchor whose username/account matches the authenticator account,
-/// then the shortest matching host for a stable site card title.
-#[must_use]
-pub fn resolve_entity_group_keys(items: &[SecretListItem]) -> Vec<String> {
-    let intrinsic: Vec<String> = items.iter().map(SecretListItem::group_key).collect();
-    let anchors: Vec<(usize, String)> = items
-        .iter()
-        .enumerate()
-        .filter(|(_, item)| is_site_anchor(item))
-        .map(|(index, _)| (index, intrinsic[index].clone()))
-        .filter(|(_, key)| key.contains('.') && key != "No Website")
-        .collect();
-
-    items
-        .iter()
-        .enumerate()
-        .map(|(index, item)| {
-            let key = &intrinsic[index];
-            let SecretListItemData::Authenticator { account, .. } = &item.data else {
-                return key.clone();
-            };
-            if key.contains('.') || key.is_empty() {
-                return key.clone();
-            }
-
-            let brand = normalize_brand_label(key);
-            let account = account.trim();
-            let mut best: Option<(bool, usize, String)> = None;
-            for (anchor_index, host) in &anchors {
-                if !brand_matches_host(&brand, host) {
-                    continue;
-                }
-                let account_match = !account.is_empty()
-                    && site_anchor_account(&items[*anchor_index]).eq_ignore_ascii_case(account);
-                let candidate = (account_match, host.len(), host.clone());
-                best = Some(match best {
-                    None => candidate,
-                    Some(current) => {
-                        // Prefer account match, then shorter host, then lexical order.
-                        let better = (candidate.0 && !current.0)
-                            || (candidate.0 == current.0 && candidate.1 < current.1)
-                            || (candidate.0 == current.0
-                                && candidate.1 == current.1
-                                && candidate.2 < current.2);
-                        if better { candidate } else { current }
-                    }
-                });
-            }
-            best.map_or_else(|| key.clone(), |(_, _, host)| host)
-        })
-        .collect()
 }
 
 impl SecretListItem {
+    /// Normalize a website URL or origin to a comparable host (no leading `www.`).
+    #[must_use]
+    pub fn hostname_from_url(raw: &str) -> String {
+        let value = raw.trim();
+        if value.is_empty() {
+            return String::new();
+        }
+
+        Url::parse(value)
+            .or_else(|error| {
+                if value.contains("://") {
+                    Err(error)
+                } else {
+                    Url::parse(&format!("https://{value}"))
+                }
+            })
+            .ok()
+            .and_then(|url| url.host_str().map(ToOwned::to_owned))
+            .unwrap_or_default()
+            .trim_start_matches("www.")
+            .to_owned()
+    }
+
+    pub(crate) fn titled_group_key(title: &str, unnamed: &str) -> String {
+        let title = title.trim();
+        if title.is_empty() {
+            unnamed.to_owned()
+        } else {
+            title.to_owned()
+        }
+    }
+
     /// Lowercase search projection containing only the fields intentionally
     /// included in the unlocked in-memory list/search catalog.
     #[must_use]
@@ -258,15 +176,16 @@ impl SecretListItem {
     pub fn website_host(&self) -> String {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
-            | SecretListItemData::ApiKey { website_url, .. } => hostname_from_url(website_url),
+            | SecretListItemData::ApiKey { website_url, .. } => {
+                Self::hostname_from_url(website_url)
+            }
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
                 ..
-            } => {
-                authenticator_issuer_hosts::resolve_authenticator_website_host(website_url, issuer)
-                    .unwrap_or_default()
-            }
+            } => AuthenticatorIssuerHosts::bundled()
+                .and_then(|catalog| catalog.resolve_website_host(website_url, issuer))
+                .unwrap_or_default(),
             _ => String::new(),
         }
     }
@@ -290,7 +209,7 @@ impl SecretListItem {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => {
-                let host = hostname_from_url(website_url);
+                let host = Self::hostname_from_url(website_url);
                 if host.is_empty() {
                     "No Website".to_owned()
                 } else {
@@ -305,14 +224,22 @@ impl SecretListItem {
                     name.to_owned()
                 }
             }
-            SecretListItemData::SecureNote { title } => titled_group_key(title, "Unnamed Note"),
+            SecretListItemData::SecureNote { title } => {
+                Self::titled_group_key(title, "Unnamed Note")
+            }
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
                 ..
-            } => authenticator_group_key(website_url, issuer),
-            SecretListItemData::CreditCard { title, .. } => titled_group_key(title, "Unnamed Card"),
+            } => AuthenticatorGroupKeyRequest {
+                website_url,
+                issuer,
+            }
+            .resolve(),
+            SecretListItemData::CreditCard { title, .. } => {
+                Self::titled_group_key(title, "Unnamed Card")
+            }
             SecretListItemData::FileAttachment {
                 title, file_name, ..
             } => {
@@ -387,6 +314,93 @@ impl SecretListItem {
     }
 }
 
+impl SecretPage {
+    /// Resolve display group keys so brand authenticators cluster with site hosts.
+    #[must_use]
+    pub fn entity_group_keys(&self) -> Vec<String> {
+        let intrinsic: Vec<String> = self.records.iter().map(SecretListItem::group_key).collect();
+        let anchors: Vec<(usize, String)> = self
+            .records
+            .iter()
+            .enumerate()
+            .filter(|(_, item)| Self::is_site_anchor(item))
+            .map(|(index, _)| (index, intrinsic[index].clone()))
+            .filter(|(_, key)| key.contains('.') && key != "No Website")
+            .collect();
+
+        self.records
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let key = &intrinsic[index];
+                let SecretListItemData::Authenticator { account, .. } = &item.data else {
+                    return key.clone();
+                };
+                if key.contains('.') || key.is_empty() {
+                    return key.clone();
+                }
+
+                let brand = AuthenticatorIssuerHosts::normalize_lookup_key(key);
+                let account = account.trim();
+                let mut best: Option<(bool, usize, String)> = None;
+                for (anchor_index, host) in &anchors {
+                    if !Self::brand_matches_host(&brand, host) {
+                        continue;
+                    }
+                    let account_match = !account.is_empty()
+                        && Self::site_anchor_account(&self.records[*anchor_index])
+                            .eq_ignore_ascii_case(account);
+                    let candidate = (account_match, host.len(), host.clone());
+                    best = Some(match best {
+                        None => candidate,
+                        Some(current) => {
+                            let better = (candidate.0 && !current.0)
+                                || (candidate.0 == current.0 && candidate.1 < current.1)
+                                || (candidate.0 == current.0
+                                    && candidate.1 == current.1
+                                    && candidate.2 < current.2);
+                            if better { candidate } else { current }
+                        }
+                    });
+                }
+                best.map_or_else(|| key.clone(), |(_, _, host)| host)
+            })
+            .collect()
+    }
+
+    fn brand_matches_host(brand: &str, host: &str) -> bool {
+        if brand.is_empty() || brand.len() < 2 || brand.contains('.') {
+            return false;
+        }
+        let host = host.to_ascii_lowercase();
+        if host == brand {
+            return true;
+        }
+        if host.starts_with(&format!("{brand}.")) {
+            return true;
+        }
+        host.split('.').any(|label| label == brand)
+    }
+
+    fn site_anchor_account(item: &SecretListItem) -> &str {
+        match &item.data {
+            SecretListItemData::Login { username, .. } => username.trim(),
+            SecretListItemData::Passkey { user_name, .. } => user_name.trim(),
+            SecretListItemData::Authenticator { account, .. } => account.trim(),
+            _ => "",
+        }
+    }
+
+    fn is_site_anchor(item: &SecretListItem) -> bool {
+        matches!(
+            item.data,
+            SecretListItemData::Login { .. }
+                | SecretListItemData::ApiKey { .. }
+                | SecretListItemData::Passkey { .. }
+        )
+    }
+}
+
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
@@ -403,6 +417,16 @@ mod tests {
                 username: "alice".to_owned(),
             },
         }
+    }
+
+    fn entity_group_keys(items: &[SecretListItem]) -> Vec<String> {
+        SecretPage {
+            records: items.to_vec(),
+            total: items.len().into(),
+            offset: 0.into(),
+            limit: items.len().into(),
+        }
+        .entity_group_keys()
     }
 
     #[test]
@@ -425,42 +449,69 @@ mod tests {
 
     #[test]
     fn login_host_matches_origin_uses_normalized_host_equality() {
-        assert!(login_host_matches_origin(
-            "https://www.example.com/login",
-            "https://example.com",
-        ));
-        assert!(!login_host_matches_origin(
-            "example.com",
-            "http://127.0.0.1:4173/login",
-        ));
-        assert!(login_host_matches_origin(
-            "http://127.0.0.1:4173/account",
-            "http://127.0.0.1:4199/login",
-        ));
-        assert!(!login_host_matches_origin(
-            "https://example.com",
-            "https://evil-example.com",
-        ));
-        assert!(!login_host_matches_origin(
-            "https://notexample.com",
-            "https://example.com",
-        ));
-        assert!(!login_host_matches_origin(
-            "https://",
-            "https://example.com"
-        ));
-        assert!(login_host_matches_origin(
-            "https://microsoft.com/account",
-            "https://login.microsoftonline.com",
-        ));
-        assert!(login_host_matches_origin(
-            "https://slack.com",
-            "https://app.slack.com",
-        ));
-        assert!(!login_host_matches_origin(
-            "https://microsoft.com",
-            "https://evil-microsoft.com",
-        ));
+        assert!(
+            LoginHostMatchRequest {
+                website_url: "https://www.example.com/login",
+                origin: "https://example.com",
+            }
+            .matches()
+        );
+        assert!(
+            !LoginHostMatchRequest {
+                website_url: "example.com",
+                origin: "http://127.0.0.1:4173/login",
+            }
+            .matches()
+        );
+        assert!(
+            LoginHostMatchRequest {
+                website_url: "http://127.0.0.1:4173/account",
+                origin: "http://127.0.0.1:4199/login",
+            }
+            .matches()
+        );
+        assert!(
+            !LoginHostMatchRequest {
+                website_url: "https://example.com",
+                origin: "https://evil-example.com",
+            }
+            .matches()
+        );
+        assert!(
+            !LoginHostMatchRequest {
+                website_url: "https://notexample.com",
+                origin: "https://example.com",
+            }
+            .matches()
+        );
+        assert!(
+            !LoginHostMatchRequest {
+                website_url: "https://",
+                origin: "https://example.com",
+            }
+            .matches()
+        );
+        assert!(
+            LoginHostMatchRequest {
+                website_url: "https://microsoft.com/account",
+                origin: "https://login.microsoftonline.com",
+            }
+            .matches()
+        );
+        assert!(
+            LoginHostMatchRequest {
+                website_url: "https://slack.com",
+                origin: "https://app.slack.com",
+            }
+            .matches()
+        );
+        assert!(
+            !LoginHostMatchRequest {
+                website_url: "https://microsoft.com",
+                origin: "https://evil-microsoft.com",
+            }
+            .matches()
+        );
     }
 
     #[test]
@@ -478,21 +529,51 @@ mod tests {
     #[test]
     fn authenticator_group_key_uses_url_issuer_host_and_popular_map() {
         assert_eq!(
-            authenticator_group_key("https://www.custom.example/login", "OpenAI"),
+            AuthenticatorGroupKeyRequest {
+                website_url: "https://www.custom.example/login",
+                issuer: "OpenAI",
+            }
+            .resolve(),
             "custom.example"
         );
         assert_eq!(
-            authenticator_group_key("", "https://www.namecheap.com"),
+            AuthenticatorGroupKeyRequest {
+                website_url: "",
+                issuer: "https://www.namecheap.com",
+            }
+            .resolve(),
             "namecheap.com"
         );
         assert_eq!(
-            authenticator_group_key("", "namecheap.com"),
+            AuthenticatorGroupKeyRequest {
+                website_url: "",
+                issuer: "namecheap.com",
+            }
+            .resolve(),
             "namecheap.com"
         );
-        assert_eq!(authenticator_group_key("", "OpenAI"), "openai.com");
-        assert_eq!(authenticator_group_key("", "Namecheap"), "namecheap.com");
         assert_eq!(
-            authenticator_group_key("", "Totally Unknown Service"),
+            AuthenticatorGroupKeyRequest {
+                website_url: "",
+                issuer: "OpenAI",
+            }
+            .resolve(),
+            "openai.com"
+        );
+        assert_eq!(
+            AuthenticatorGroupKeyRequest {
+                website_url: "",
+                issuer: "Namecheap",
+            }
+            .resolve(),
+            "namecheap.com"
+        );
+        assert_eq!(
+            AuthenticatorGroupKeyRequest {
+                website_url: "",
+                issuer: "Totally Unknown Service",
+            }
+            .resolve(),
             "Totally Unknown Service"
         );
     }
@@ -518,7 +599,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            resolve_entity_group_keys(&items),
+            entity_group_keys(&items),
             vec!["namecheap.com".to_owned(), "namecheap.com".to_owned()]
         );
     }
@@ -551,7 +632,7 @@ mod tests {
             },
         ];
         assert_eq!(
-            resolve_entity_group_keys(&items),
+            entity_group_keys(&items),
             vec![
                 "accounts.google.com".to_owned(),
                 "google.com".to_owned(),
@@ -572,7 +653,7 @@ mod tests {
             },
         }];
         assert_eq!(
-            resolve_entity_group_keys(&items),
+            entity_group_keys(&items),
             vec!["Totally Unknown Service".to_owned()]
         );
     }

@@ -27,7 +27,11 @@ impl NookVaultManager {
             let mut record =
                 nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
             if let SecretValue::Login(login) = &record.data
-                && nook_core::login_host_matches_origin(&login.website_url, origin)
+                && (nook_core::LoginHostMatchRequest {
+                    website_url: &login.website_url,
+                    origin,
+                })
+                .matches()
             {
                 owned_logins.push((id.clone(), login.clone()));
             }
@@ -40,8 +44,13 @@ impl NookVaultManager {
                 login,
             })
             .collect();
-        let decision =
-            nook_core::decide_website_login_save(origin, username, password, &candidates);
+        let decision = nook_core::WebsiteLoginSaveRequest {
+            origin,
+            username,
+            password,
+            candidates: &candidates,
+        }
+        .decide();
         for (_, login) in &mut owned_logins {
             login.password.zeroize();
         }

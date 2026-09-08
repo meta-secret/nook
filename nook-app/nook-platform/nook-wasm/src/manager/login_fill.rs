@@ -25,7 +25,11 @@ impl NookVaultManager {
             let mut record =
                 nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
             if let SecretValue::Login(login) = &record.data
-                && nook_core::login_host_matches_origin(&login.website_url, origin)
+                && (nook_core::LoginHostMatchRequest {
+                    website_url: &login.website_url,
+                    origin,
+                })
+                .matches()
             {
                 accounts.push(NookLoginAccount::from_login(id, login));
             }
@@ -45,7 +49,11 @@ impl NookVaultManager {
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
         let credential = match &record.data {
             SecretValue::Login(login)
-                if nook_core::login_host_matches_origin(&login.website_url, origin) =>
+                if nook_core::LoginHostMatchRequest {
+                    website_url: &login.website_url,
+                    origin,
+                }
+                .matches() =>
             {
                 Ok(NookLoginFillCredential::new(
                     login.username.clone(),

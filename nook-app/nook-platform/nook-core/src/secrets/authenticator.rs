@@ -106,8 +106,8 @@ impl AuthenticatorSecret {
         if !self.website_url.trim().is_empty() {
             return;
         }
-        if let Some(host) =
-            authenticator_issuer_hosts::resolve_authenticator_website_host("", &self.issuer)
+        if let Some(host) = authenticator_issuer_hosts::AuthenticatorIssuerHosts::bundled()
+            .and_then(|catalog| catalog.resolve_website_host("", &self.issuer))
         {
             self.website_url = format!("https://{host}");
         }

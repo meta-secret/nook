@@ -1,4 +1,4 @@
-use super::secret_presentation::{authenticator_group_key, hostname_from_url, titled_group_key};
+use super::secret_presentation::AuthenticatorGroupKeyRequest;
 use super::{SecretListItem, SecretListItemData, SecretRecord, SecretValue};
 
 impl SecretRecord {
@@ -92,7 +92,7 @@ impl SecretRecord {
     pub fn group_key(&self) -> String {
         match &self.data {
             SecretValue::Login(value) => {
-                let host = hostname_from_url(&value.website_url);
+                let host = SecretListItem::hostname_from_url(&value.website_url);
                 if host.is_empty() {
                     "No Website".to_owned()
                 } else {
@@ -100,7 +100,7 @@ impl SecretRecord {
                 }
             }
             SecretValue::ApiKey(value) => {
-                let host = hostname_from_url(&value.website_url);
+                let host = SecretListItem::hostname_from_url(&value.website_url);
                 if host.is_empty() {
                     "No Website".to_owned()
                 } else {
@@ -115,12 +115,18 @@ impl SecretRecord {
                     name.to_owned()
                 }
             }
-            SecretValue::SecureNote(value) => titled_group_key(&value.title, "Unnamed Note"),
-            SecretValue::Passkey(value) => value.rp_id.clone(),
-            SecretValue::Authenticator(value) => {
-                authenticator_group_key(&value.website_url, &value.issuer)
+            SecretValue::SecureNote(value) => {
+                SecretListItem::titled_group_key(&value.title, "Unnamed Note")
             }
-            SecretValue::CreditCard(value) => titled_group_key(&value.title, "Unnamed Card"),
+            SecretValue::Passkey(value) => value.rp_id.clone(),
+            SecretValue::Authenticator(value) => AuthenticatorGroupKeyRequest {
+                website_url: &value.website_url,
+                issuer: &value.issuer,
+            }
+            .resolve(),
+            SecretValue::CreditCard(value) => {
+                SecretListItem::titled_group_key(&value.title, "Unnamed Card")
+            }
             SecretValue::FileAttachment(value) => {
                 let title = value.title.trim();
                 if title.is_empty() {

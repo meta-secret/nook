@@ -580,15 +580,21 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn issuer_host_map_loads_under_wasm() {
         assert_eq!(
-            nook_core::mapped_host_for_issuer("OpenAI"),
+            nook_core::AuthenticatorIssuerHosts::bundled()
+                .and_then(|catalog| catalog.mapped_host("OpenAI")),
             Some("openai.com")
         );
         assert_eq!(
-            nook_core::resolve_authenticator_website_host("", "GitHub"),
+            nook_core::AuthenticatorIssuerHosts::bundled()
+                .and_then(|catalog| catalog.resolve_website_host("", "GitHub")),
             Some("github.com".to_owned())
         );
         assert_eq!(
-            nook_core::authenticator_group_key("", "Namecheap"),
+            nook_core::AuthenticatorGroupKeyRequest {
+                website_url: "",
+                issuer: "Namecheap",
+            }
+            .resolve(),
             "namecheap.com"
         );
     }

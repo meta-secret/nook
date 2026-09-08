@@ -1,6 +1,12 @@
 //! Bundled issuer → website host mapping for authenticator clustering.
 
-use super::secret_view;
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
+use super::secret_view::SecretListItem;
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
@@ -13,7 +19,7 @@ use std::sync::LazyLock;
 /// Deserialized once from the bundled JSON. Keys are normalized on deserialize
 /// (`OpenAI` / `openai` → `openai`) so WASM and native share one lookup table.
 #[derive(Debug)]
-struct AuthenticatorIssuerHosts {
+pub struct AuthenticatorIssuerHosts {
     by_issuer: HashMap<String, String>,
 }
 
@@ -31,7 +37,7 @@ impl<'de> Deserialize<'de> for AuthenticatorIssuerHosts {
             fn visit_map<M: MapAccess<'de>>(self, mut map: M) -> Result<Self::Value, M::Error> {
                 let mut by_issuer = HashMap::with_capacity(map.size_hint().unwrap_or(0));
                 while let Some((issuer, host)) = map.next_entry::<String, String>()? {
-                    let key = normalize_issuer_lookup_key(&issuer);
+                    let key = AuthenticatorIssuerHosts::normalize_lookup_key(&issuer);
                     let host = host.trim().to_owned();
                     if key.is_empty() {
                         return Err(de::Error::custom("issuer key must not be empty"));
@@ -63,60 +69,70 @@ static ISSUER_HOSTS: LazyLock<AuthenticatorIssuerHostsState> = LazyLock::new(|| 
     )
 });
 
-fn issuer_looks_like_host(issuer: &str) -> bool {
-    issuer.contains("://") || issuer.contains('.')
-}
-
-/// Normalize an authenticator issuer for table lookup (`OpenAI` → `openai`).
-#[must_use]
-pub fn normalize_issuer_lookup_key(raw: &str) -> String {
-    raw.chars()
-        .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
-        .flat_map(char::to_lowercase)
-        .collect()
-}
-
-/// Look up a popular-service host for a brand issuer label.
-#[must_use]
-pub fn mapped_host_for_issuer(issuer: &str) -> Option<&'static str> {
-    let key = normalize_issuer_lookup_key(issuer);
-    if key.is_empty() {
-        return None;
-    }
-    match &*ISSUER_HOSTS {
-        AuthenticatorIssuerHostsState::Ready(hosts) => {
-            hosts.by_issuer.get(&key).map(String::as_str)
-        }
-        AuthenticatorIssuerHostsState::InvalidBundledCatalog => None,
-    }
-}
-
-/// Resolve a website host for authenticator clustering / optional URL inference.
-///
-/// Order: explicit `website_url`, domain-like issuer text, then bundled map.
-#[must_use]
-pub fn resolve_authenticator_website_host(website_url: &str, issuer: &str) -> Option<String> {
-    let from_url = secret_view::hostname_from_url(website_url);
-    if !from_url.is_empty() {
-        return Some(from_url);
-    }
-
-    let issuer = issuer.trim();
-    if issuer.is_empty() {
-        return None;
-    }
-    if issuer_looks_like_host(issuer) {
-        let host = secret_view::hostname_from_url(issuer);
-        if !host.is_empty() {
-            return Some(host);
+impl AuthenticatorIssuerHosts {
+    /// Select the bundled catalog when it is valid.
+    #[must_use]
+    pub fn bundled() -> Option<&'static Self> {
+        match &*ISSUER_HOSTS {
+            AuthenticatorIssuerHostsState::Ready(hosts) => Some(hosts),
+            AuthenticatorIssuerHostsState::InvalidBundledCatalog => None,
         }
     }
-    mapped_host_for_issuer(issuer).map(str::to_owned)
+
+    fn issuer_looks_like_host(issuer: &str) -> bool {
+        issuer.contains("://") || issuer.contains('.')
+    }
+
+    /// Normalize an authenticator issuer for table lookup (`OpenAI` → `openai`).
+    #[must_use]
+    pub fn normalize_lookup_key(raw: &str) -> String {
+        raw.chars()
+            .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
+            .flat_map(char::to_lowercase)
+            .collect()
+    }
+
+    /// Look up a popular-service host for a brand issuer label.
+    #[must_use]
+    pub fn mapped_host(&self, issuer: &str) -> Option<&str> {
+        let key = Self::normalize_lookup_key(issuer);
+        if key.is_empty() {
+            return None;
+        }
+        self.by_issuer.get(&key).map(String::as_str)
+    }
+
+    /// Resolve a website host for authenticator clustering / optional URL inference.
+    ///
+    /// Order: explicit `website_url`, domain-like issuer text, then bundled map.
+    #[must_use]
+    pub fn resolve_website_host(&self, website_url: &str, issuer: &str) -> Option<String> {
+        let from_url = SecretListItem::hostname_from_url(website_url);
+        if !from_url.is_empty() {
+            return Some(from_url);
+        }
+
+        let issuer = issuer.trim();
+        if issuer.is_empty() {
+            return None;
+        }
+        if Self::issuer_looks_like_host(issuer) {
+            let host = SecretListItem::hostname_from_url(issuer);
+            if !host.is_empty() {
+                return Some(host);
+            }
+        }
+        self.mapped_host(issuer).map(str::to_owned)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bundled() -> &'static AuthenticatorIssuerHosts {
+        AuthenticatorIssuerHosts::bundled().expect("bundled issuer catalog")
+    }
 
     #[test]
     fn deserializes_issuer_map_with_normalized_keys() -> anyhow::Result<()> {
@@ -140,21 +156,21 @@ mod tests {
 
     #[test]
     fn maps_popular_brand_issuers() {
-        assert_eq!(mapped_host_for_issuer("OpenAI"), Some("openai.com"));
-        assert_eq!(mapped_host_for_issuer("GitHub"), Some("github.com"));
-        assert_eq!(mapped_host_for_issuer("Namecheap"), Some("namecheap.com"));
-        assert_eq!(mapped_host_for_issuer("Epic Games"), Some("epicgames.com"));
+        assert_eq!(bundled().mapped_host("OpenAI"), Some("openai.com"));
+        assert_eq!(bundled().mapped_host("GitHub"), Some("github.com"));
+        assert_eq!(bundled().mapped_host("Namecheap"), Some("namecheap.com"));
+        assert_eq!(bundled().mapped_host("Epic Games"), Some("epicgames.com"));
     }
 
     #[test]
     fn unknown_issuer_has_no_mapping() {
-        assert_eq!(mapped_host_for_issuer("Totally Unknown Service"), None);
+        assert_eq!(bundled().mapped_host("Totally Unknown Service"), None);
     }
 
     #[test]
     fn resolve_prefers_explicit_website_url() {
         assert_eq!(
-            resolve_authenticator_website_host("https://www.openai.com/account", "GitHub"),
+            bundled().resolve_website_host("https://www.openai.com/account", "GitHub"),
             Some("openai.com".to_owned())
         );
     }
@@ -162,11 +178,11 @@ mod tests {
     #[test]
     fn resolve_uses_domain_like_issuer_then_map() {
         assert_eq!(
-            resolve_authenticator_website_host("", "https://github.com"),
+            bundled().resolve_website_host("", "https://github.com"),
             Some("github.com".to_owned())
         );
         assert_eq!(
-            resolve_authenticator_website_host("", "OpenAI"),
+            bundled().resolve_website_host("", "OpenAI"),
             Some("openai.com".to_owned())
         );
     }
