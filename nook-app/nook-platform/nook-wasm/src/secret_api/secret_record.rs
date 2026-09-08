@@ -395,7 +395,7 @@ mod browser_tests {
             SecretValue::SeedPhrase(
                 SeedPhraseSecret::try_new(
                     "Recovery".into(),
-                    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".into(),
+                    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
                 )
                 .expect("valid seed phrase"),
             ),

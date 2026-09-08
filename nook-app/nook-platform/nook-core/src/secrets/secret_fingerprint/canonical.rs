@@ -344,7 +344,7 @@ mod tests {
         let value = SecretValue::SeedPhrase(
             SeedPhraseSecret::try_new(
                 " Recovery\r\n ".to_owned(),
-                " abandon\t abandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon about ".to_owned(),
+                " abandon\t abandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon about ",
             )
             .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
         );

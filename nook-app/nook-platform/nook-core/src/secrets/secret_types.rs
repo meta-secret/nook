@@ -60,8 +60,8 @@ impl SeedPhraseSecret {
         Self { name, validated }
     }
 
-    pub fn try_new(name: String, seed: String) -> SecretPayloadResult<Self> {
-        let validated = Bip39MnemonicInput::new(&seed).validate()?;
+    pub fn try_new(name: String, seed: &str) -> SecretPayloadResult<Self> {
+        let validated = Bip39MnemonicInput::new(seed).validate()?;
         Ok(Self::from_validated(name, validated))
     }
 

@@ -238,8 +238,7 @@ mod tests {
             data: SecretValue::SeedPhrase(
                 crate::SeedPhraseSecret::try_new(
                     "wallet".to_owned(),
-                    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-                        .to_owned(),
+                    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
                 )
                 .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
             ),
