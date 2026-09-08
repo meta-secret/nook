@@ -611,44 +611,28 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn normalization_handles_multiple_credential_specific_prf_entries()
     -> Result<(), wasm_bindgen::JsError> {
-        let value = js_sys::Object::new();
-        let public_key = js_sys::Object::new();
-        let extensions = js_sys::Object::new();
-        let prf = js_sys::Object::new();
-        let eval_by_credential = js_sys::Object::new();
-        for (name, first_byte, second_byte) in [("first", 7, 8), ("second", 9, 10)] {
-            let values = js_sys::Object::new();
-            let first = js_sys::Array::new();
-            first.push(&first_byte.into());
-            let second = js_sys::Array::new();
-            second.push(&second_byte.into());
-            Reflect::set(&values, &JsString::from("first"), first.as_ref())
-                .map_err(|_| JsError::new("failed to set first PRF value"))?;
-            Reflect::set(&values, &JsString::from("second"), second.as_ref())
-                .map_err(|_| JsError::new("failed to set second PRF value"))?;
-            Reflect::set(
-                &eval_by_credential,
-                &JsString::from(format!("credential-{name}")),
-                values.as_ref(),
-            )
-            .map_err(|_| JsError::new("failed to build credential PRF fixture"))?;
-        }
+        let options = request_options_struct("localhost", &[7; 32], &[9; 32])?;
+        let value = options
+            .serialize(&Serializer::new().serialize_maps_as_objects(true))
+            .map_err(|error| JsError::new(&error.to_string()))?;
+        let value: js_sys::Object = value.unchecked_into();
+        let public_key = get(&value, "publicKey")?;
+        let extensions = get(&public_key, "extensions")?;
+        let prf = get(&extensions, "prf")?;
+        let eval_by_credential = get(&prf, "evalByCredential")?;
+        let keys = Reflect::own_keys(&eval_by_credential)
+            .map_err(|_| JsError::new("failed to inspect serialized PRF entries"))?;
+        let source_key = keys
+            .get(0)
+            .ok_or_else(|| JsError::new("serialized PRF entry is missing"))?;
+        let source = Reflect::get(&eval_by_credential, &source_key)
+            .map_err(|_| JsError::new("failed to read serialized PRF entry"))?;
         Reflect::set(
-            &prf,
-            &JsString::from("evalByCredential"),
-            eval_by_credential.as_ref(),
+            &eval_by_credential,
+            &JsString::from("credential-second"),
+            &source,
         )
-        .map_err(|_| JsError::new("failed to set credential PRF fixture"))?;
-        Reflect::set(&extensions, &JsString::from("prf"), prf.as_ref())
-            .map_err(|_| JsError::new("failed to set PRF fixture"))?;
-        Reflect::set(
-            &public_key,
-            &JsString::from("extensions"),
-            extensions.as_ref(),
-        )
-        .map_err(|_| JsError::new("failed to set extensions fixture"))?;
-        Reflect::set(&value, &JsString::from("publicKey"), public_key.as_ref())
-            .map_err(|_| JsError::new("failed to set public key fixture"))?;
+        .map_err(|_| JsError::new("failed to add serialized PRF entry"))?;
 
         normalize_webauthn_binary_fields(&value)?;
         let first: js_sys::Object =
