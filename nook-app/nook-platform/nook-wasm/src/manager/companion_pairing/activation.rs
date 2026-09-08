@@ -2,10 +2,11 @@
 
 use super::NookPrevalidatedCompanionPairingApproval;
 use crate::manager::NookExternalEventLogRecords;
+use nook_companion_core::CompanionPairingApproval;
 use nook_core::{
     AuthEnvelopes, CheckedRemoteEvent, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
-    EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
-    LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
+    EventGraph, EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture,
+    EventId, LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
     serialize_event_storage_yaml,
 };
 use std::collections::BTreeSet;
@@ -32,6 +33,47 @@ struct PreparedEventGraph {
     store_id: StoreId,
     heads: Vec<EventId>,
     envelopes: AuthEnvelopes,
+}
+
+struct PairingRecipientAccess;
+
+struct PairingRecipientAccessRequest<'a> {
+    graph: &'a EventGraph,
+    approval: &'a CompanionPairingApproval,
+}
+
+impl PairingRecipientAccess {
+    fn validate(
+        request: PairingRecipientAccessRequest<'_>,
+    ) -> Result<AuthEnvelopes, CompanionPairingPreparationFailure> {
+        let installation = &request.approval.request.installation;
+        let device_id = DeviceId::parse(&installation.app_id)
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
+        let public_key = DevicePublicKey::parse(&installation.encryption_public_key)
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
+        let signing_public_key = DeviceSigningPublicKey::parse(&installation.signing_public_key)
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
+        let envelopes = EventGraphDeviceAccess::new(request.graph)
+            .active_envelopes(&EventGraphDeviceAccessRequest {
+                expected_device_id: &device_id,
+                expected_public_key: &public_key,
+                expected_signing_public_key: &signing_public_key,
+            })
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?
+            .ok_or(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
+        let mut meta = VaultMetaState::default();
+        VaultMetaGraphProjection::new(request.graph)
+            .materialize(&mut meta)
+            .map_err(|_| CompanionPairingPreparationFailure::GraphInvalid)?;
+        if !meta.auth.contains_key(
+            &public_key
+                .auth_id()
+                .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?,
+        ) {
+            return Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch);
+        }
+        Ok(envelopes)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -134,32 +176,10 @@ impl NookPrevalidatedCompanionPairingApproval {
         if !projection.security_conflicts.is_empty() {
             return Err(CompanionPairingPreparationFailure::ProjectionConflict);
         }
-        let installation = &self.binding.request.installation;
-        let device_id = DeviceId::parse(&installation.app_id)
-            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
-        let public_key = DevicePublicKey::parse(&installation.encryption_public_key)
-            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
-        let signing_public_key = DeviceSigningPublicKey::parse(&installation.signing_public_key)
-            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
-        let envelopes = EventGraphDeviceAccess::new(&graph)
-            .active_envelopes(&EventGraphDeviceAccessRequest {
-                expected_device_id: &device_id,
-                expected_public_key: &public_key,
-                expected_signing_public_key: &signing_public_key,
-            })
-            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?
-            .ok_or(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
-        let mut meta = VaultMetaState::default();
-        VaultMetaGraphProjection::new(&graph)
-            .materialize(&mut meta)
-            .map_err(|_| CompanionPairingPreparationFailure::GraphInvalid)?;
-        if !meta.auth.contains_key(
-            &public_key
-                .auth_id()
-                .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?,
-        ) {
-            return Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch);
-        }
+        let envelopes = PairingRecipientAccess::validate(PairingRecipientAccessRequest {
+            graph: &graph,
+            approval: &self.binding,
+        })?;
         Ok(PreparedEventGraph {
             store_id,
             heads: graph.heads(),

@@ -215,10 +215,22 @@ and storage failure fail closed. Every failure after a payload write explicitly
 aborts the transaction.
 
 The gate is only an integrity and publication marker inside mutable same-origin
-storage. This slice exposes no candidate reader, and no authoritative reader
-uses this namespace. Later adoption owns external-root revalidation,
+storage. The storage slice alone exposes no candidate reader, and no
+authoritative reader uses this namespace. Later adoption owns external-root revalidation,
 `access_granted`, final pairing state, acknowledgement, reader integration,
 reset, and migration.
+
+## Strict inert pairing activation candidate readback
+
+Readback begins with the V1 publication gate. A missing gate is typed absence;
+after a gate exists, every missing, malformed, unknown, mismatched, or
+unauthorized payload is an integrity rejection.
+
+Rust strictly reconstructs event and sealed-provider payloads. Digest and
+correlation validation precede authorized event-graph reconstruction. Readback
+applies the same exact recipient-access validator used by preparation. Success returns an
+opaque one-shot stored-candidate receipt. It remains inert and nonserializable;
+readback does not grant access, publish acknowledgement, or update live readers.
 
 ## Sequential delivery
 
