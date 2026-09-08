@@ -7,7 +7,7 @@
 mod candidate_selection;
 mod enrollment;
 mod observation_binding;
-pub(crate) mod observation_facts;
+mod observation_facts;
 mod observation_validation;
 mod snapshot_contract;
 mod vocabulary;
@@ -25,13 +25,17 @@ pub use observation_binding::{
 pub use observation_facts::{
     AuthenticationAuthenticatorObservationFacts, AuthenticationAuthenticatorSetupObservation,
     AuthenticationBackupCodesObservation, AuthenticationCeremonyContextObservation,
-    AuthenticationCeremonyObservationFacts, AuthenticationCredentialSubmissionFacts,
-    AuthenticationCredentialSubmissionObservation, AuthenticationDetailedAdvanceControlObservation,
+    AuthenticationCeremonyObservationFacts, AuthenticationCredentialDisclosureControlObservation,
+    AuthenticationCredentialSubmissionFacts, AuthenticationCredentialSubmissionObservation,
+    AuthenticationDetailedAdvanceControlObservation,
     AuthenticationDetailedPasskeyControlCandidateObservation,
-    AuthenticationDetailedPasskeyControlObservation, AuthenticationFieldObservationFacts,
+    AuthenticationDetailedPasskeyControlObservation, AuthenticationDisclosureControlDecision,
+    AuthenticationDisclosureObservationSchemaVersion, AuthenticationFieldObservationFacts,
     AuthenticationImplicitSubmitActuationObservation, AuthenticationPageObservationFacts,
     AuthenticationPageObservationFactsBatch, AuthenticationPasskeyAccountAvailability,
-    AuthenticationPasskeyControlObservation, authentication_page_observation_facts_priority,
+    AuthenticationPasskeyControlObservation, CurrentAuthenticationDisclosureControlRequest,
+    VersionedAuthenticationDisclosureControlObservation,
+    authentication_page_observation_facts_priority,
     authentication_passkey_control_candidate_is_safe,
     authentication_passkey_control_evidence_is_safe,
     classify_authentication_backup_codes_observation,

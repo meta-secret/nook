@@ -5,20 +5,10 @@
 )]
 
 mod control;
-mod transaction;
 
 pub use control::{
     AuthenticationCredentialDisclosureControlObservation, AuthenticationDisclosureControlDecision,
     AuthenticationDisclosureObservationSchemaVersion,
     CurrentAuthenticationDisclosureControlRequest,
     VersionedAuthenticationDisclosureControlObservation,
-};
-pub use transaction::{
-    AuthenticationCredentialDisclosureCapability,
-    AuthenticationCredentialDisclosurePlanningCapability,
-    AuthenticationCredentialDisclosurePlanningDecision,
-    AuthenticationCredentialDisclosurePlanningRequest,
-    AuthenticationCredentialDisclosurePreflightRequest,
-    AuthenticationCredentialDisclosureRejection, AuthenticationPasswordDisclosureContinuation,
-    AuthenticationPasswordDisclosureRequest, AuthorizedAuthenticationUsernameDisclosure,
 };

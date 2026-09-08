@@ -23,15 +23,8 @@ pub use ceremony::{
     AuthenticationImplicitSubmitActuationObservation,
 };
 pub use disclosure::{
-    AuthenticationCredentialDisclosureCapability,
-    AuthenticationCredentialDisclosureControlObservation,
-    AuthenticationCredentialDisclosurePlanningCapability,
-    AuthenticationCredentialDisclosurePlanningDecision,
-    AuthenticationCredentialDisclosurePlanningRequest,
-    AuthenticationCredentialDisclosurePreflightRequest,
-    AuthenticationCredentialDisclosureRejection, AuthenticationDisclosureControlDecision,
-    AuthenticationDisclosureObservationSchemaVersion, AuthenticationPasswordDisclosureContinuation,
-    AuthenticationPasswordDisclosureRequest, AuthorizedAuthenticationUsernameDisclosure,
+    AuthenticationCredentialDisclosureControlObservation, AuthenticationDisclosureControlDecision,
+    AuthenticationDisclosureObservationSchemaVersion,
     CurrentAuthenticationDisclosureControlRequest,
     VersionedAuthenticationDisclosureControlObservation,
 };
@@ -59,7 +52,7 @@ pub struct AuthenticationPageObservationFacts {
     /// Detailed control evidence is classified in Rust; the reduced ceremony flag stays fail-closed.
     #[serde(default)]
     pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
-    /// Separately versioned evidence for the exceptional two-stage disclosure transaction.
+    /// Separately versioned evidence for exceptional disclosure-control classification.
     #[serde(default)]
     pub credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
@@ -112,9 +105,6 @@ impl AuthenticationPageObservationFacts {
             self.detailed_advance_control.evidence(self.fields),
             AuthenticationAdvanceControlEvidence::Present
         ) || self.authenticator.passkey_control_present(self.fields)
-            || self
-                .credential_disclosure_control
-                .has_planning_evidence(self.fields)
             || self.ceremony.has_safe_implicit_submission(self.fields)
             || matches!(
                 self.ceremony.manual_checkpoint,
