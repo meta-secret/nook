@@ -118,6 +118,19 @@ impl NookPrevalidatedCompanionPairingApproval {
             envelopes,
         })
     }
+
+    fn prepare_with_event_log(
+        self,
+        records: NookExternalEventLogRecords,
+    ) -> Result<NookPreparedCompanionPairingActivation, CompanionPairingPreparationFailure> {
+        let prepared = self.prepare_event_graph(&records)?;
+        Ok(NookPreparedCompanionPairingActivation {
+            _approval: self,
+            _records: records,
+            _heads: prepared.heads,
+            _envelopes: prepared.envelopes,
+        })
+    }
 }
 
 #[wasm_bindgen]
@@ -126,15 +139,8 @@ impl NookPrevalidatedCompanionPairingApproval {
         self,
         records: NookExternalEventLogRecords,
     ) -> Result<NookPreparedCompanionPairingActivation, JsError> {
-        let prepared = self
-            .prepare_event_graph(&records)
-            .map_err(|error| error.js_error())?;
-        Ok(NookPreparedCompanionPairingActivation {
-            _approval: self,
-            _records: records,
-            _heads: prepared.heads,
-            _envelopes: prepared.envelopes,
-        })
+        self.prepare_with_event_log(records)
+            .map_err(|error| error.js_error())
     }
 }
 
@@ -281,8 +287,11 @@ mod tests {
             }]))
         }
 
-        fn prepare(self) -> Result<NookPreparedCompanionPairingActivation, JsError> {
-            self.capability.with_event_log(self.records)
+        fn prepare(
+            self,
+        ) -> Result<NookPreparedCompanionPairingActivation, CompanionPairingPreparationFailure>
+        {
+            self.capability.prepare_with_event_log(self.records)
         }
     }
 
@@ -340,7 +349,7 @@ mod tests {
     #[test]
     fn rejects_event_for_another_vault() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
-        fixture.manager.vault.store_id = "store_other_token1".to_owned();
+        fixture.manager.vault.store_id = "store_testtoken12".to_owned();
         fixture.records = ActivationFixture::access_records(AccessRecordsRequest {
             manager: &fixture.manager,
             identity: &fixture.identity,
