@@ -305,11 +305,11 @@ mod tests {
                 )
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
-                admitted.providers.active_vault_store_id.as_deref(),
+                admitted._providers.active_vault_store_id.as_deref(),
                 Some("store-1")
             );
             assert_eq!(
-                admitted.providers.providers.len(),
+                admitted._providers.providers.len(),
                 usize::from(with_provider)
             );
         }
