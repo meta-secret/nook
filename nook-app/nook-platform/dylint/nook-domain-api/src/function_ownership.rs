@@ -56,7 +56,7 @@ impl FunctionOwnership {
         let Some(source) = source_file.src.as_deref() else {
             return false;
         };
-        let offset = (span.lo() - source_file.start_pos).to_usize();
+        let offset = (span.lo() - source_file.start_pos).0 as usize;
         let Some(prefix) = source.get(..offset) else {
             return false;
         };
