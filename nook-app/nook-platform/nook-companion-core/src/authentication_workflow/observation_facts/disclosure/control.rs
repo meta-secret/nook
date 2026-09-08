@@ -23,7 +23,7 @@ impl AuthenticationDisclosureObservationSchemaVersion {
     pub const CURRENT: Self = Self(1);
 
     #[must_use]
-    pub const fn is_supported(self) -> bool {
+    const fn is_supported(self) -> bool {
         self.0 == Self::CURRENT.0
     }
 }
