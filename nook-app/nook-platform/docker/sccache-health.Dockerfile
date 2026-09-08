@@ -1,4 +1,4 @@
-# syntax=registry.dev.nokey.sh/docker/dockerfile:1.4
+# syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e
 
 FROM registry.dev.nokey.sh/amazon/aws-cli:2.27.50@sha256:48c3d4212e2f5b0e24bdc6af7708f9412ce65425a79575e0f78b8f8c0dcd70ab
 

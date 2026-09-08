@@ -6,8 +6,29 @@ import { TextContract } from "./text-contract";
 
 const root = resolve(import.meta.dir, "../..");
 
+const dockerfileFrontend =
+  "# syntax=registry.dev.nokey.sh/docker/dockerfile:1.27.0@sha256:bde3983e9c939224420ddaf6b784cc30e09b035a4dea01f581230c50809f372e";
+const dockerfileFrontendConsumers = [
+  "agentic-ai/minds/hive/Dockerfile",
+  "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+  "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
+  "nook-app/nook-platform/docker/rust/product.Dockerfile",
+  "nook-app/nook-platform/docker/sccache-health.Dockerfile",
+  "nook-app/nook-web/docker/toolchain.Dockerfile",
+  "nook-app/nook-web/docker/web.Dockerfile",
+  "nook-app/nook-web/nook-web-app/Dockerfile",
+  "preflight/Dockerfile",
+] as const;
+
 async function read(relative: string): Promise<string> {
   return Bun.file(resolve(root, relative)).text();
+}
+
+for (const consumer of dockerfileFrontendConsumers) {
+  const firstLine = (await read(consumer)).split("\n", 1)[0];
+  if (firstLine !== dockerfileFrontend) {
+    throw new Error(`${consumer} must pin the trusted Dockerfile frontend`);
+  }
 }
 
 interface ResourceEnvelope {
