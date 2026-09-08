@@ -118,6 +118,26 @@ pub enum PasskeyCreatedAtEvidence {
     },
 }
 
+impl PasskeyCreatedAtEvidence {
+    pub(super) fn deserialize_legacy<'de, D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum WireEvidence {
+            Explicit(PasskeyCreatedAtEvidence),
+            Legacy(Option<IsoTimestamp>),
+        }
+
+        Ok(match WireEvidence::deserialize(deserializer)? {
+            WireEvidence::Explicit(evidence) => evidence,
+            WireEvidence::Legacy(Some(timestamp)) => Self::Known { timestamp },
+            WireEvidence::Legacy(None) => Self::Unavailable,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(tag = "kind", rename_all = "kebab-case")]
 pub enum PasskeyLastUsedAtEvidence {
@@ -129,44 +149,24 @@ pub enum PasskeyLastUsedAtEvidence {
     },
 }
 
-pub(super) fn deserialize_created_at_evidence<'de, D>(
-    deserializer: D,
-) -> Result<PasskeyCreatedAtEvidence, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum WireEvidence {
-        Explicit(PasskeyCreatedAtEvidence),
-        Legacy(Option<IsoTimestamp>),
+impl PasskeyLastUsedAtEvidence {
+    pub(super) fn deserialize_legacy<'de, D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum WireEvidence {
+            Explicit(PasskeyLastUsedAtEvidence),
+            Legacy(Option<IsoTimestamp>),
+        }
+
+        Ok(match WireEvidence::deserialize(deserializer)? {
+            WireEvidence::Explicit(evidence) => evidence,
+            WireEvidence::Legacy(Some(timestamp)) => Self::Known { timestamp },
+            WireEvidence::Legacy(None) => Self::Unavailable,
+        })
     }
-
-    Ok(match WireEvidence::deserialize(deserializer)? {
-        WireEvidence::Explicit(evidence) => evidence,
-        WireEvidence::Legacy(Some(timestamp)) => PasskeyCreatedAtEvidence::Known { timestamp },
-        WireEvidence::Legacy(None) => PasskeyCreatedAtEvidence::Unavailable,
-    })
-}
-
-pub(super) fn deserialize_last_used_at_evidence<'de, D>(
-    deserializer: D,
-) -> Result<PasskeyLastUsedAtEvidence, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum WireEvidence {
-        Explicit(PasskeyLastUsedAtEvidence),
-        Legacy(Option<IsoTimestamp>),
-    }
-
-    Ok(match WireEvidence::deserialize(deserializer)? {
-        WireEvidence::Explicit(evidence) => evidence,
-        WireEvidence::Legacy(Some(timestamp)) => PasskeyLastUsedAtEvidence::Known { timestamp },
-        WireEvidence::Legacy(None) => PasskeyLastUsedAtEvidence::Unavailable,
-    })
 }
 
 #[cfg(test)]
