@@ -33,7 +33,26 @@ describe('mock-auth Pilot expectation catalog', () => {
       }
     }
 
-    expect(continueWithNookTemplateCount).toBe(29)
+    expect(continueWithNookTemplateCount).toBe(30)
     expect(failClosedTemplateIds).toEqual(['enterprise-sso-email'])
+  })
+
+  test('keeps the Airbnb identity label structural and associated', () => {
+    expect(getShellTemplate('airbnb')).toMatchObject({
+      quirks: expect.arrayContaining(['visible-associated-label']),
+      steps: [
+        {
+          fields: [
+            {
+              type: 'text',
+              inputmode: 'email',
+              autocomplete: 'tel-national',
+              label: 'Phone number or email',
+            },
+          ],
+          submit: { type: 'submit', label: 'Continue' },
+        },
+      ],
+    })
   })
 })

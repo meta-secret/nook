@@ -434,10 +434,10 @@ export function controlSubmissionMethod(
 }
 export function controlMachineIdentity(control: HTMLElement): string {
   const namedValue =
-    control instanceof HTMLButtonElement || control instanceof HTMLInputElement
+    (control instanceof HTMLButtonElement || control instanceof HTMLInputElement) && (control.name || control.value)
       ? `${control.name}=${control.value}`
       : "";
-  return `${control.id} ${namedValue} ${((v) => (v ? v : ""))(control.getAttribute("class"))}`;
+  return [control.id, namedValue, ((v) => (v ? v : ""))(control.getAttribute("class"))].filter(Boolean).join(" ");
 }
 
 export function controlLabel(control: HTMLElement): string {

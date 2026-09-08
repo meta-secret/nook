@@ -1,0 +1,26 @@
+{
+  "id": "airbnb",
+  "quirks": [
+    "form-method-omitted",
+    "form-action-omitted",
+    "input-name-omitted",
+    "visible-associated-label",
+    "provider-alternatives-outside-form"
+  ],
+  "steps": [
+    {
+      "fields": [
+        {
+          "type": "text",
+          "inputmode": "email",
+          "autocomplete": "tel-national",
+          "label": "Phone number or email"
+        }
+      ],
+      "submit": {
+        "type": "submit",
+        "label": "Continue"
+      }
+    }
+  ]
+}

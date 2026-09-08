@@ -32,6 +32,8 @@ type SiteFixtureField = {
   type?: string
   id?: string
   autocomplete?: string
+  inputmode?: string
+  label?: string
   placeholder?: string
   'aria-label'?: string
   'data-qa'?: string
@@ -88,6 +90,7 @@ function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
         field.autocomplete
           ? `autocomplete="${escapeAttr(field.autocomplete)}"`
           : '',
+        field.inputmode ? `inputmode="${escapeAttr(field.inputmode)}"` : '',
         field.placeholder
           ? `placeholder="${escapeAttr(field.placeholder)}"`
           : '',
@@ -101,7 +104,13 @@ function renderStepHtml(fixture: ShellTemplate, stepIndex: number): string {
       ]
         .filter(Boolean)
         .join(' ')
-      return `<input ${attrs} />`
+      const input = `<input ${attrs} />`
+      if (!field.label) return input
+      const label = field.label
+        .replace(/&/gu, '&amp;')
+        .replace(/</gu, '&lt;')
+        .replace(/>/gu, '&gt;')
+      return `<label>${label}${input}</label>`
     })
     .join('')
   const submitType = step.submit.type === 'button' ? 'button' : 'submit'

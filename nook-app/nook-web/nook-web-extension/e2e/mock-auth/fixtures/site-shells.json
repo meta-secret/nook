@@ -81,13 +81,13 @@
   },
   "airbnb": {
     "loginUrl": "https://www.airbnb.com/login",
-    "source": "research",
-    "template": "email-password"
+    "source": "capture",
+    "template": "airbnb"
   },
   "airbnb-host": {
     "loginUrl": "https://www.airbnb.com/login",
-    "source": "research",
-    "template": "email-password"
+    "source": "capture",
+    "template": "airbnb"
   },
   "airtable": {
     "loginUrl": "https://www.airtable.com/login",

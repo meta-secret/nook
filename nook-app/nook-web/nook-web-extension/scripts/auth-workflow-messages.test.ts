@@ -174,6 +174,59 @@ describe('authentication workflow snapshot messages', () => {
     ).toBe(true)
   })
 
+  test('accepts mixed phone-or-email evidence without admitting unknown evidence', () => {
+    const observation = validMessage.payload.observations[0]
+    const control = {
+      actionability: 'actionable',
+      ownership: 'owned-form',
+      semantics: 'semantic-submit',
+      authenticationUsername: 'mixed-phone-or-email',
+      passwordFieldCount: 0,
+      newPasswordFieldCount: 0,
+      oneTimeCodeFieldCount: 0,
+      semanticSubmitControlCount: 1,
+      sourceOrigin: 'https://www.airbnb.com',
+      formIdentity: '',
+      destinationIdentity: 'https://www.airbnb.com/login',
+      label: 'Continue',
+      submissionMethod: 'get',
+      submissionDestinationSource: 'omitted',
+    }
+    const messageWithEvidence = (authenticationUsername: string) => ({
+      ...validMessage,
+      payload: {
+        ...validMessage.payload,
+        observations: [
+          {
+            ...observation,
+            ceremony: {
+              ...observation.ceremony,
+              authenticationContext: {
+                ...observation.ceremony.authenticationContext,
+                authenticationUsername,
+              },
+            },
+            detailedAdvanceControl: {
+              kind: 'observed',
+              observations: [{ ...control, authenticationUsername }],
+            },
+          },
+        ],
+      },
+    })
+
+    expect(
+      isAuthenticationWorkflowSnapshotMessage(
+        messageWithEvidence('mixed-phone-or-email'),
+      ),
+    ).toBe(true)
+    expect(
+      isAuthenticationWorkflowSnapshotMessage(
+        messageWithEvidence('mixed-contact-channel'),
+      ),
+    ).toBe(false)
+  })
+
   test('rejects invalid or oversized recovery copy', () => {
     const observation = validMessage.payload.observations[0]
     for (const backupCodesCopy of [42, 'x'.repeat(129)]) {

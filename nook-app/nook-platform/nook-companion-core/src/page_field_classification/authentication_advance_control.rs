@@ -206,6 +206,7 @@ impl AuthenticationAdvanceControlObservation {
                 self.authentication_username,
                 AuthenticationUsernameEvidence::Generic
                     | AuthenticationUsernameEvidence::StandardsBasedEmail
+                    | AuthenticationUsernameEvidence::MixedPhoneOrEmail
                     | AuthenticationUsernameEvidence::WebAuthnEmail
             )
         {
@@ -382,6 +383,7 @@ mod tests {
         for evidence in [
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::MixedPhoneOrEmail,
             AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut report = AuthenticationAdvanceControlObservation::login_control();
@@ -681,6 +683,7 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::MixedPhoneOrEmail,
             AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut rejected = identifier.clone();
@@ -858,6 +861,7 @@ mod tests {
             AuthenticationUsernameEvidence::Absent,
             AuthenticationUsernameEvidence::Generic,
             AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::MixedPhoneOrEmail,
             AuthenticationUsernameEvidence::WebAuthnEmail,
         ] {
             let mut rejected =

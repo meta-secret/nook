@@ -55,6 +55,9 @@ impl AuthenticationAdvanceControlObservation {
     }
 
     pub(super) fn is_identifier_only_get_advance(&self) -> bool {
+        if self.is_mixed_phone_or_email_identifier_advance() {
+            return true;
+        }
         matches!(self.actionability, PageControlActionability::Actionable)
             && matches!(
                 self.ownership,
@@ -80,6 +83,35 @@ impl AuthenticationAdvanceControlObservation {
             && self.new_password_field_count.raw() == 0
             && self.one_time_code_field_count.raw() == 0
             && self.semantic_submit_control_count.raw() == 1
+    }
+
+    fn is_mixed_phone_or_email_identifier_advance(&self) -> bool {
+        if !matches!(self.actionability, PageControlActionability::Actionable)
+            || !matches!(self.ownership, PageControlOwnership::OwnedForm)
+            || !matches!(self.semantics, PageControlSemantics::SemanticSubmit)
+            || !matches!(
+                self.authentication_username,
+                AuthenticationUsernameEvidence::MixedPhoneOrEmail
+            )
+            || !self.form_identity.is_empty()
+            || expand_identity_text(&self.label) != "continue"
+            || !self.machine_identity.is_empty()
+            || !matches!(self.submission_method, PageControlSubmissionMethod::Get)
+            || !matches!(
+                self.submission_destination_source,
+                PageControlSubmissionDestinationSource::Omitted
+            )
+            || self.password_field_count.raw() != 0
+            || self.new_password_field_count.raw() != 0
+            || self.one_time_code_field_count.raw() != 0
+            || self.semantic_submit_control_count.raw() != 1
+        {
+            return false;
+        }
+        canonicalize_control_destination(&self.source_origin, &self.destination_identity)
+            .is_some_and(|destination| {
+                destination.path_identity == "/login" && destination.route_identity == "/login"
+            })
     }
 
     pub(super) fn has_ambiguous_identifier_only_submit(&self) -> bool {
@@ -205,6 +237,7 @@ impl CheckedAuthenticationControl<'_> {
             ) || standards_email_semantic_submit)
                 && username_only_authentication_context)
             || self.has_webauthn_email_oauth_identifier_advance()
+            || observation.is_mixed_phone_or_email_identifier_advance()
             || (authentication_scope_owns_control
                 && AuthenticationRouteIdentity::new(&observation.form_identity)
                     .indicates_authentication())
@@ -255,6 +288,30 @@ mod tests {
     struct BookingDefaultGetScenario;
 
     struct TeslaDefaultGetScenario;
+
+    struct MixedPhoneOrEmailDefaultGetScenario;
+
+    impl MixedPhoneOrEmailDefaultGetScenario {
+        fn observation() -> AuthenticationAdvanceControlObservation {
+            AuthenticationAdvanceControlObservation {
+                actionability: PageControlActionability::Actionable,
+                ownership: PageControlOwnership::OwnedForm,
+                semantics: PageControlSemantics::SemanticSubmit,
+                authentication_username: AuthenticationUsernameEvidence::MixedPhoneOrEmail,
+                password_field_count: 0.into(),
+                new_password_field_count: 0.into(),
+                one_time_code_field_count: 0.into(),
+                semantic_submit_control_count: 1.into(),
+                source_origin: "https://www.airbnb.com".to_owned(),
+                form_identity: String::new(),
+                destination_identity: "https://www.airbnb.com/login".to_owned(),
+                label: "Continue".to_owned(),
+                machine_identity: String::new(),
+                submission_method: PageControlSubmissionMethod::Get,
+                submission_destination_source: PageControlSubmissionDestinationSource::Omitted,
+            }
+        }
+    }
 
     impl TeslaDefaultGetScenario {
         fn observation() -> AuthenticationAdvanceControlObservation {
@@ -433,6 +490,109 @@ mod tests {
             &TeslaDefaultGetScenario::observation()
         ));
         TeslaDefaultGetScenario::assert_hostile_variants_fail_closed();
+    }
+
+    #[test]
+    fn mixed_phone_or_email_default_get_is_narrowly_admitted() {
+        let observation = MixedPhoneOrEmailDefaultGetScenario::observation();
+        assert!(authentication_advance_control_is_safe(&observation));
+
+        for destination in [
+            "https://attacker.example/login",
+            "https://www.airbnb.com/signup",
+            "https://www.airbnb.com/recover",
+            "https://www.airbnb.com/account/delete",
+            "https://www.airbnb.com/login/continue",
+            "https://www.airbnb.com/login?provider=google",
+        ] {
+            let mut rejected = observation.clone();
+            rejected.destination_identity = destination.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{destination}"
+            );
+        }
+
+        for label in [
+            "Next",
+            "Continue with Google",
+            "Create account",
+            "Forgot password",
+        ] {
+            let mut rejected = observation.clone();
+            rejected.label = label.to_owned();
+            assert!(
+                !authentication_advance_control_is_safe(&rejected),
+                "{label}"
+            );
+        }
+
+        for evidence in [
+            AuthenticationUsernameEvidence::Absent,
+            AuthenticationUsernameEvidence::Generic,
+            AuthenticationUsernameEvidence::StandardsBasedEmail,
+            AuthenticationUsernameEvidence::Strong,
+        ] {
+            let mut rejected = observation.clone();
+            rejected.authentication_username = evidence;
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        for established in [
+            AuthenticationUsernameEvidence::WebAuthnEmail,
+            AuthenticationUsernameEvidence::Explicit,
+        ] {
+            let mut admitted = observation.clone();
+            admitted.authentication_username = established;
+            assert!(authentication_advance_control_is_safe(&admitted));
+        }
+
+        for mutation in [
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.semantic_submit_control_count = 2.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.password_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.new_password_field_count = 1.into();
+            },
+            |control: &mut AuthenticationAdvanceControlObservation| {
+                control.one_time_code_field_count = 1.into();
+            },
+        ] {
+            let mut rejected = observation.clone();
+            mutation(&mut rejected);
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+
+        let mut unowned = observation.clone();
+        unowned.ownership = PageControlOwnership::Unowned;
+        assert!(!authentication_advance_control_is_safe(&unowned));
+        let mut locally_scoped = observation.clone();
+        locally_scoped.ownership = PageControlOwnership::LocallyScoped;
+        assert!(!authentication_advance_control_is_safe(&locally_scoped));
+        let mut inert = observation.clone();
+        inert.actionability = PageControlActionability::Inert;
+        assert!(!authentication_advance_control_is_safe(&inert));
+        let mut activation = observation.clone();
+        activation.semantics = PageControlSemantics::Activation;
+        assert!(!authentication_advance_control_is_safe(&activation));
+        let mut authored = observation.clone();
+        authored.submission_destination_source = PageControlSubmissionDestinationSource::Authored;
+        assert!(!authentication_advance_control_is_safe(&authored));
+        for method in [
+            PageControlSubmissionMethod::Absent,
+            PageControlSubmissionMethod::Post,
+            PageControlSubmissionMethod::Dialog,
+        ] {
+            let mut rejected = observation.clone();
+            rejected.submission_method = method;
+            assert!(!authentication_advance_control_is_safe(&rejected));
+        }
+        let mut machine_identity = observation;
+        machine_identity.machine_identity = "primary".to_owned();
+        assert!(!authentication_advance_control_is_safe(&machine_identity));
     }
 
     #[test]

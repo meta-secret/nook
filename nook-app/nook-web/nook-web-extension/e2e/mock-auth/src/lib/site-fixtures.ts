@@ -1,11 +1,17 @@
 import siteShellsJson from '../../fixtures/site-shells.json'
 import pilotExpectationsJson from '../../fixtures/pilot-expectations.json'
 
+export enum SiteFixtureInputMode {
+  Email = 'email',
+}
+
 export type SiteFixtureField = {
   name?: string
   type?: string
   id?: string
   autocomplete?: string
+  inputmode?: SiteFixtureInputMode
+  label?: string
   placeholder?: string
   'aria-label'?: string
   'data-qa'?: string
@@ -229,6 +235,7 @@ export function renderFixtureHtml(
         field.autocomplete
           ? `autocomplete="${escapeAttr(field.autocomplete)}"`
           : '',
+        field.inputmode ? `inputmode="${escapeAttr(field.inputmode)}"` : '',
         field.placeholder
           ? `placeholder="${escapeAttr(field.placeholder)}"`
           : '',
@@ -242,7 +249,10 @@ export function renderFixtureHtml(
       ]
         .filter(Boolean)
         .join(' ')
-      return `<input ${attrs} />`
+      const input = `<input ${attrs} />`
+      return field.label
+        ? `<label>${escapeHtml(field.label)}${input}</label>`
+        : input
     })
     .join('\n')
   const submitType =
