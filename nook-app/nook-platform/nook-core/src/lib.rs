@@ -31,11 +31,13 @@ pub use device_access::{
     PasskeyCreationCeremony, PasskeyKeeperKind, PasskeyLastUsedAtEvidence, PasskeyObservedBrowser,
     PasskeyObservedPlatform, PasskeyTransport, VerifiedVaultAccess,
 };
+use login_site_hosts::LoginSiteHosts;
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
-    import_support, keepassxc_import, keeper_import, lastpass_import, onepassword_import,
-    passkey_authenticator, password, proton_pass_import, secret_types, secret_view, session,
+    import_support, keepassxc_import, keeper_import, lastpass_import, login_site_hosts,
+    onepassword_import, passkey_authenticator, password, proton_pass_import, secret_types,
+    secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
@@ -59,7 +61,7 @@ pub use authenticator::{
     MAX_AUTHENTICATOR_BACKUP_CODES, OtpauthPreview, TotpAlgorithm, TotpCode, TotpDigits,
     TotpPeriod, TotpRemainingSeconds, TotpSecret, TotpUnixSeconds,
 };
-pub use authenticator_issuer_hosts::AuthenticatorIssuerHosts;
+pub use authenticator_issuer_hosts::{AuthenticatorIssuerHosts, AuthenticatorWebsiteHostRequest};
 pub use bip39::{
     Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount, Bip39WordSuggestionLimit,
     bip39_english_wordlist, infer_bip39_mnemonic_length, is_bip39_word_sequence_valid,
@@ -185,7 +187,8 @@ pub use secret_view::{
     ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
     AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm, LoginHostMatchRequest,
     LoginSecretForm, SecretFormFields, SecretListItem, SecretListItemData, SecureNoteSecretForm,
-    SeedPhraseSecretForm, SeedPhraseWordCount, build_secret_yaml, build_secret_yaml_from_form,
+    SeedPhraseSecretForm, SeedPhraseWordCount, WebsiteHost, build_secret_yaml,
+    build_secret_yaml_from_form,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
@@ -205,6 +208,41 @@ pub use vault_sync_state::{
 pub use website_login_save::{
     WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, WebsiteLoginSaveRequest,
 };
+
+// Keep established call paths callable while their implementations live on
+// the owning domain types above.
+#[allow(non_upper_case_globals)]
+pub const hostname_from_url: fn(&str) -> String = WebsiteHost::legacy_hostname_from_url;
+#[allow(non_upper_case_globals)]
+pub const login_host_matches_origin: fn(&str, &str) -> bool = LoginHostMatchRequest::legacy_matches;
+#[allow(non_upper_case_globals)]
+pub const authenticator_group_key: fn(&str, &str) -> String =
+    AuthenticatorGroupKeyRequest::legacy_resolve;
+#[allow(non_upper_case_globals)]
+pub const resolve_entity_group_keys: fn(&[SecretListItem]) -> Vec<String> =
+    SecretPage::legacy_entity_group_keys;
+#[allow(non_upper_case_globals)]
+pub const mapped_host_for_issuer: fn(&str) -> Option<&'static str> =
+    AuthenticatorIssuerHosts::legacy_mapped_host;
+#[allow(non_upper_case_globals)]
+pub const normalize_issuer_lookup_key: fn(&str) -> String =
+    AuthenticatorIssuerHosts::legacy_normalize_lookup_key;
+#[allow(non_upper_case_globals)]
+pub const resolve_authenticator_website_host: fn(&str, &str) -> Option<String> =
+    AuthenticatorIssuerHosts::legacy_resolve_website_host;
+#[allow(non_upper_case_globals)]
+pub const normalize_login_host: fn(&str) -> String = LoginSiteHosts::legacy_normalize_host;
+#[allow(non_upper_case_globals)]
+pub const login_host_family: fn(&str) -> Option<&'static str> = LoginSiteHosts::legacy_family;
+#[allow(non_upper_case_globals)]
+pub const login_hosts_share_family: fn(&str, &str) -> bool = LoginSiteHosts::legacy_share_family;
+#[allow(non_upper_case_globals)]
+pub const decide_website_login_save: for<'a> fn(
+    &'a str,
+    &'a str,
+    &'a str,
+    &'a [WebsiteLoginSaveCandidate<'a>],
+) -> WebsiteLoginSaveDecision = WebsiteLoginSaveRequest::legacy_decide;
 
 pub use nook_auth2::{
     CheckedSentinelGenesisDelivery, CheckedSentinelGenesisResponse, DeviceKeyDerivationIterations,

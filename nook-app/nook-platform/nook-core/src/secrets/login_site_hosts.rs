@@ -22,6 +22,12 @@ pub(crate) struct LoginSiteHosts {
     by_host: HashMap<String, String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LoginFamilyMatchRequest<'a> {
+    pub(crate) left: &'a str,
+    pub(crate) right: &'a str,
+}
+
 impl<'de> Deserialize<'de> for LoginSiteHosts {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct HostsVisitor;
@@ -69,6 +75,15 @@ static LOGIN_SITE_HOSTS: LazyLock<LoginSiteHostsState> = LazyLock::new(|| {
 });
 
 impl LoginSiteHosts {
+    /// Select the bundled catalog when it is valid.
+    #[must_use]
+    pub(crate) fn bundled() -> Option<&'static Self> {
+        match &*LOGIN_SITE_HOSTS {
+            LoginSiteHostsState::Ready(hosts) => Some(hosts),
+            LoginSiteHostsState::InvalidBundledCatalog => None,
+        }
+    }
+
     /// Normalize a hostname the same way login matching strips `www.`.
     #[must_use]
     fn normalize_host(raw: &str) -> String {
@@ -77,30 +92,47 @@ impl LoginSiteHosts {
 
     /// Look up the bundled login family id for a normalized host, if any.
     #[must_use]
-    pub(crate) fn family(host: &str) -> Option<&'static str> {
+    pub(crate) fn family(&self, host: &str) -> Option<&str> {
         let host = Self::normalize_host(host);
         if host.is_empty() {
             return None;
         }
-        match &*LOGIN_SITE_HOSTS {
-            LoginSiteHostsState::Ready(hosts) => hosts.by_host.get(&host).map(String::as_str),
-            LoginSiteHostsState::InvalidBundledCatalog => None,
-        }
+        self.by_host.get(&host).map(String::as_str)
     }
 
     /// True when two hosts share an explicit login family allowlist entry.
     #[must_use]
-    pub(crate) fn share_family(left: &str, right: &str) -> bool {
-        match (Self::family(left), Self::family(right)) {
+    pub(crate) fn share_family(&self, request: LoginFamilyMatchRequest<'_>) -> bool {
+        match (self.family(request.left), self.family(request.right)) {
             (Some(left_family), Some(right_family)) => left_family == right_family,
             _ => false,
         }
+    }
+
+    pub(crate) fn legacy_normalize_host(raw: &str) -> String {
+        Self::normalize_host(raw)
+    }
+
+    pub(crate) fn legacy_family(host: &str) -> Option<&'static str> {
+        Self::bundled().and_then(|catalog| catalog.family(host))
+    }
+
+    pub(crate) fn legacy_share_family(left: &str, right: &str) -> bool {
+        Self::bundled()
+            .is_some_and(|catalog| catalog.share_family(LoginFamilyMatchRequest { left, right }))
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bundled() -> &'static LoginSiteHosts {
+        match LoginSiteHosts::bundled() {
+            Some(catalog) => catalog,
+            None => panic!("bundled login-host catalog"),
+        }
+    }
 
     #[test]
     fn deserializes_host_family_map() -> anyhow::Result<()> {
@@ -121,39 +153,39 @@ mod tests {
     #[test]
     fn maps_popular_sso_shells_to_brand_families() {
         assert_eq!(
-            LoginSiteHosts::family("login.microsoftonline.com"),
+            bundled().family("login.microsoftonline.com"),
             Some("microsoft")
         );
-        assert_eq!(LoginSiteHosts::family("login.live.com"), Some("microsoft"));
-        assert_eq!(
-            LoginSiteHosts::family("www.microsoft.com"),
-            Some("microsoft")
-        );
-        assert_eq!(LoginSiteHosts::family("app.slack.com"), Some("slack"));
-        assert_eq!(
-            LoginSiteHosts::family("accounts.google.com"),
-            Some("google")
-        );
-        assert_eq!(LoginSiteHosts::family("github.com"), Some("github"));
-        assert_eq!(LoginSiteHosts::family("m.facebook.com"), Some("facebook"));
-        assert_eq!(LoginSiteHosts::family("amazon.com"), Some("amazon"));
+        assert_eq!(bundled().family("login.live.com"), Some("microsoft"));
+        assert_eq!(bundled().family("www.microsoft.com"), Some("microsoft"));
+        assert_eq!(bundled().family("app.slack.com"), Some("slack"));
+        assert_eq!(bundled().family("accounts.google.com"), Some("google"));
+        assert_eq!(bundled().family("github.com"), Some("github"));
+        assert_eq!(bundled().family("m.facebook.com"), Some("facebook"));
+        assert_eq!(bundled().family("amazon.com"), Some("amazon"));
     }
 
     #[test]
     fn unrelated_or_unknown_hosts_do_not_share_a_family() {
-        assert!(!LoginSiteHosts::share_family(
-            "example.com",
-            "microsoft.com"
-        ));
-        assert!(!LoginSiteHosts::share_family(
-            "evil-microsoft.com",
-            "microsoft.com"
-        ));
-        assert!(!LoginSiteHosts::share_family("slack.com", "microsoft.com"));
-        assert!(LoginSiteHosts::share_family(
-            "login.microsoftonline.com",
-            "microsoft.com"
-        ));
-        assert!(LoginSiteHosts::share_family("app.slack.com", "slack.com"));
+        assert!(!bundled().share_family(LoginFamilyMatchRequest {
+            left: "example.com",
+            right: "microsoft.com",
+        }));
+        assert!(!bundled().share_family(LoginFamilyMatchRequest {
+            left: "evil-microsoft.com",
+            right: "microsoft.com",
+        }));
+        assert!(!bundled().share_family(LoginFamilyMatchRequest {
+            left: "slack.com",
+            right: "microsoft.com",
+        }));
+        assert!(bundled().share_family(LoginFamilyMatchRequest {
+            left: "login.microsoftonline.com",
+            right: "microsoft.com",
+        }));
+        assert!(bundled().share_family(LoginFamilyMatchRequest {
+            left: "app.slack.com",
+            right: "slack.com",
+        }));
     }
 }

@@ -277,7 +277,7 @@ impl NookLoginAccount {
             secret_id: id.to_string(),
             username: login.username.clone(),
             website_url: login.website_url.clone(),
-            website_host: nook_core::SecretListItem::hostname_from_url(&login.website_url),
+            website_host: nook_core::WebsiteHost::normalize(&login.website_url),
         }
     }
 

@@ -585,8 +585,12 @@ mod wasm_tests {
             Some("openai.com")
         );
         assert_eq!(
-            nook_core::AuthenticatorIssuerHosts::bundled()
-                .and_then(|catalog| catalog.resolve_website_host("", "GitHub")),
+            nook_core::AuthenticatorIssuerHosts::bundled().and_then(|catalog| {
+                catalog.resolve_website_host(nook_core::AuthenticatorWebsiteHostRequest {
+                    website_url: "",
+                    issuer: "GitHub",
+                })
+            }),
             Some("github.com".to_owned())
         );
         assert_eq!(

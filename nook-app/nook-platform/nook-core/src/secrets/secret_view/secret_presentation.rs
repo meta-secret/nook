@@ -6,50 +6,17 @@
 
 use super::{SecretListItem, SecretListItemData, SecretType, Url};
 use crate::secrets::{
-    authenticator_issuer_hosts::AuthenticatorIssuerHosts, login_site_hosts::LoginSiteHosts,
+    authenticator_issuer_hosts::{AuthenticatorIssuerHosts, AuthenticatorWebsiteHostRequest},
+    login_site_hosts::{LoginFamilyMatchRequest, LoginSiteHosts},
 };
 use crate::vault_session::SecretPage;
 
-/// Named request for matching a stored login host to a requesting origin.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct LoginHostMatchRequest<'a> {
-    pub website_url: &'a str,
-    pub origin: &'a str,
-}
+pub struct WebsiteHost;
 
-impl LoginHostMatchRequest<'_> {
+impl WebsiteHost {
     #[must_use]
-    pub fn matches(&self) -> bool {
-        let secret_host = SecretListItem::hostname_from_url(self.website_url);
-        let origin_host = SecretListItem::hostname_from_url(self.origin);
-        if secret_host.is_empty() || origin_host.is_empty() {
-            return false;
-        }
-        secret_host.eq_ignore_ascii_case(&origin_host)
-            || LoginSiteHosts::share_family(&secret_host, &origin_host)
-    }
-}
-
-/// Named request for deriving an authenticator's intrinsic grouping key.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AuthenticatorGroupKeyRequest<'a> {
-    pub website_url: &'a str,
-    pub issuer: &'a str,
-}
-
-impl AuthenticatorGroupKeyRequest<'_> {
-    #[must_use]
-    pub fn resolve(&self) -> String {
-        AuthenticatorIssuerHosts::bundled()
-            .and_then(|catalog| catalog.resolve_website_host(self.website_url, self.issuer))
-            .unwrap_or_else(|| self.issuer.trim().to_owned())
-    }
-}
-
-impl SecretListItem {
-    /// Normalize a website URL or origin to a comparable host (no leading `www.`).
-    #[must_use]
-    pub fn hostname_from_url(raw: &str) -> String {
+    pub fn normalize(raw: &str) -> String {
         let value = raw.trim();
         if value.is_empty() {
             return String::new();
@@ -70,7 +37,17 @@ impl SecretListItem {
             .to_owned()
     }
 
-    pub(crate) fn titled_group_key(title: &str, unnamed: &str) -> String {
+    pub(crate) fn legacy_hostname_from_url(raw: &str) -> String {
+        Self::normalize(raw)
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SecretTitle;
+
+impl SecretTitle {
+    #[must_use]
+    pub(crate) fn group_key(title: &str, unnamed: &str) -> String {
         let title = title.trim();
         if title.is_empty() {
             unnamed.to_owned()
@@ -78,7 +55,80 @@ impl SecretListItem {
             title.to_owned()
         }
     }
+}
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct BrandHostMatchRequest<'a> {
+    brand: &'a str,
+    host: &'a str,
+}
+
+/// Named request for matching a stored login host to a requesting origin.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LoginHostMatchRequest<'a> {
+    pub website_url: &'a str,
+    pub origin: &'a str,
+}
+
+impl LoginHostMatchRequest<'_> {
+    #[must_use]
+    pub fn matches(&self) -> bool {
+        let secret_host = WebsiteHost::normalize(self.website_url);
+        let origin_host = WebsiteHost::normalize(self.origin);
+        if secret_host.is_empty() || origin_host.is_empty() {
+            return false;
+        }
+        secret_host.eq_ignore_ascii_case(&origin_host)
+            || LoginSiteHosts::bundled().is_some_and(|catalog| {
+                catalog.share_family(LoginFamilyMatchRequest {
+                    left: &secret_host,
+                    right: &origin_host,
+                })
+            })
+    }
+
+    pub(crate) fn legacy_matches(website_url: &str, origin: &str) -> bool {
+        Self {
+            website_url,
+            origin,
+        }
+        .matches()
+    }
+}
+
+/// Named request for deriving an authenticator's intrinsic grouping key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthenticatorGroupKeyRequest<'a> {
+    pub website_url: &'a str,
+    pub issuer: &'a str,
+}
+
+impl AuthenticatorGroupKeyRequest<'_> {
+    #[must_use]
+    pub fn resolve(&self) -> String {
+        let request = AuthenticatorWebsiteHostRequest {
+            website_url: self.website_url,
+            issuer: self.issuer,
+        };
+        request
+            .explicit_or_domain_host()
+            .or_else(|| {
+                AuthenticatorIssuerHosts::bundled()
+                    .and_then(|catalog| catalog.resolve_website_host(request))
+            })
+            .unwrap_or_else(|| self.issuer.trim().to_owned())
+    }
+
+    pub(crate) fn legacy_resolve(website_url: &str, issuer: &str) -> String {
+        Self {
+            website_url,
+            issuer,
+        }
+        .resolve()
+    }
+}
+
+impl SecretListItem {
     /// Lowercase search projection containing only the fields intentionally
     /// included in the unlocked in-memory list/search catalog.
     #[must_use]
@@ -176,16 +226,16 @@ impl SecretListItem {
     pub fn website_host(&self) -> String {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
-            | SecretListItemData::ApiKey { website_url, .. } => {
-                Self::hostname_from_url(website_url)
-            }
+            | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url),
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
                 ..
-            } => AuthenticatorIssuerHosts::bundled()
-                .and_then(|catalog| catalog.resolve_website_host(website_url, issuer))
-                .unwrap_or_default(),
+            } => AuthenticatorGroupKeyRequest {
+                website_url,
+                issuer,
+            }
+            .resolve(),
             _ => String::new(),
         }
     }
@@ -209,7 +259,7 @@ impl SecretListItem {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => {
-                let host = Self::hostname_from_url(website_url);
+                let host = WebsiteHost::normalize(website_url);
                 if host.is_empty() {
                     "No Website".to_owned()
                 } else {
@@ -225,7 +275,7 @@ impl SecretListItem {
                 }
             }
             SecretListItemData::SecureNote { title } => {
-                Self::titled_group_key(title, "Unnamed Note")
+                SecretTitle::group_key(title, "Unnamed Note")
             }
             SecretListItemData::Passkey { rp_id, .. } => rp_id.clone(),
             SecretListItemData::Authenticator {
@@ -238,7 +288,7 @@ impl SecretListItem {
             }
             .resolve(),
             SecretListItemData::CreditCard { title, .. } => {
-                Self::titled_group_key(title, "Unnamed Card")
+                SecretTitle::group_key(title, "Unnamed Card")
             }
             SecretListItemData::FileAttachment {
                 title, file_name, ..
@@ -344,7 +394,10 @@ impl SecretPage {
                 let account = account.trim();
                 let mut best: Option<(bool, usize, String)> = None;
                 for (anchor_index, host) in &anchors {
-                    if !Self::brand_matches_host(&brand, host) {
+                    if !Self::brand_matches_host(BrandHostMatchRequest {
+                        brand: &brand,
+                        host,
+                    }) {
                         continue;
                     }
                     let account_match = !account.is_empty()
@@ -368,7 +421,19 @@ impl SecretPage {
             .collect()
     }
 
-    fn brand_matches_host(brand: &str, host: &str) -> bool {
+    pub(crate) fn legacy_entity_group_keys(items: &[SecretListItem]) -> Vec<String> {
+        Self {
+            records: items.to_vec(),
+            total: items.len().into(),
+            offset: 0.into(),
+            limit: items.len().into(),
+        }
+        .entity_group_keys()
+    }
+
+    fn brand_matches_host(request: BrandHostMatchRequest<'_>) -> bool {
+        let brand = request.brand;
+        let host = request.host;
         if brand.is_empty() || brand.len() < 2 || brand.contains('.') {
             return false;
         }

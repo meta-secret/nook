@@ -6,7 +6,7 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use super::secret_view::SecretListItem;
+use super::secret_view::WebsiteHost;
 
 use serde::Deserialize;
 use serde::de::{self, Deserializer, MapAccess, Visitor};
@@ -21,6 +21,29 @@ use std::sync::LazyLock;
 #[derive(Debug)]
 pub struct AuthenticatorIssuerHosts {
     by_issuer: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AuthenticatorWebsiteHostRequest<'a> {
+    pub website_url: &'a str,
+    pub issuer: &'a str,
+}
+
+impl AuthenticatorWebsiteHostRequest<'_> {
+    #[must_use]
+    pub(crate) fn explicit_or_domain_host(&self) -> Option<String> {
+        let from_url = WebsiteHost::normalize(self.website_url);
+        if !from_url.is_empty() {
+            return Some(from_url);
+        }
+
+        let issuer = self.issuer.trim();
+        if issuer.is_empty() || !(issuer.contains("://") || issuer.contains('.')) {
+            return None;
+        }
+        let host = WebsiteHost::normalize(issuer);
+        (!host.is_empty()).then_some(host)
+    }
 }
 
 impl<'de> Deserialize<'de> for AuthenticatorIssuerHosts {
@@ -79,13 +102,9 @@ impl AuthenticatorIssuerHosts {
         }
     }
 
-    fn issuer_looks_like_host(issuer: &str) -> bool {
-        issuer.contains("://") || issuer.contains('.')
-    }
-
     /// Normalize an authenticator issuer for table lookup (`OpenAI` → `openai`).
     #[must_use]
-    pub fn normalize_lookup_key(raw: &str) -> String {
+    pub(crate) fn normalize_lookup_key(raw: &str) -> String {
         raw.chars()
             .filter(|ch| ch.is_ascii_alphanumeric() || *ch == '-' || *ch == '_')
             .flat_map(char::to_lowercase)
@@ -102,27 +121,36 @@ impl AuthenticatorIssuerHosts {
         self.by_issuer.get(&key).map(String::as_str)
     }
 
+    pub(crate) fn legacy_normalize_lookup_key(raw: &str) -> String {
+        Self::normalize_lookup_key(raw)
+    }
+
+    pub(crate) fn legacy_mapped_host(issuer: &str) -> Option<&'static str> {
+        Self::bundled().and_then(|catalog| catalog.mapped_host(issuer))
+    }
+
     /// Resolve a website host for authenticator clustering / optional URL inference.
     ///
     /// Order: explicit `website_url`, domain-like issuer text, then bundled map.
     #[must_use]
-    pub fn resolve_website_host(&self, website_url: &str, issuer: &str) -> Option<String> {
-        let from_url = SecretListItem::hostname_from_url(website_url);
-        if !from_url.is_empty() {
-            return Some(from_url);
+    pub fn resolve_website_host(
+        &self,
+        request: AuthenticatorWebsiteHostRequest<'_>,
+    ) -> Option<String> {
+        if let Some(host) = request.explicit_or_domain_host() {
+            return Some(host);
         }
 
-        let issuer = issuer.trim();
-        if issuer.is_empty() {
-            return None;
-        }
-        if Self::issuer_looks_like_host(issuer) {
-            let host = SecretListItem::hostname_from_url(issuer);
-            if !host.is_empty() {
-                return Some(host);
-            }
-        }
-        self.mapped_host(issuer).map(str::to_owned)
+        self.mapped_host(request.issuer).map(str::to_owned)
+    }
+
+    pub(crate) fn legacy_resolve_website_host(website_url: &str, issuer: &str) -> Option<String> {
+        Self::bundled().and_then(|catalog| {
+            catalog.resolve_website_host(AuthenticatorWebsiteHostRequest {
+                website_url,
+                issuer,
+            })
+        })
     }
 }
 
@@ -173,7 +201,10 @@ mod tests {
     #[test]
     fn resolve_prefers_explicit_website_url() {
         assert_eq!(
-            bundled().resolve_website_host("https://www.openai.com/account", "GitHub"),
+            bundled().resolve_website_host(AuthenticatorWebsiteHostRequest {
+                website_url: "https://www.openai.com/account",
+                issuer: "GitHub",
+            }),
             Some("openai.com".to_owned())
         );
     }
@@ -181,11 +212,17 @@ mod tests {
     #[test]
     fn resolve_uses_domain_like_issuer_then_map() {
         assert_eq!(
-            bundled().resolve_website_host("", "https://github.com"),
+            bundled().resolve_website_host(AuthenticatorWebsiteHostRequest {
+                website_url: "",
+                issuer: "https://github.com",
+            }),
             Some("github.com".to_owned())
         );
         assert_eq!(
-            bundled().resolve_website_host("", "OpenAI"),
+            bundled().resolve_website_host(AuthenticatorWebsiteHostRequest {
+                website_url: "",
+                issuer: "OpenAI",
+            }),
             Some("openai.com".to_owned())
         );
     }

@@ -7,7 +7,9 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::ValidationError;
-use crate::secrets::authenticator_issuer_hosts;
+use crate::secrets::authenticator_issuer_hosts::{
+    AuthenticatorIssuerHosts, AuthenticatorWebsiteHostRequest,
+};
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
@@ -106,9 +108,14 @@ impl AuthenticatorSecret {
         if !self.website_url.trim().is_empty() {
             return;
         }
-        if let Some(host) = authenticator_issuer_hosts::AuthenticatorIssuerHosts::bundled()
-            .and_then(|catalog| catalog.resolve_website_host("", &self.issuer))
-        {
+        let request = AuthenticatorWebsiteHostRequest {
+            website_url: "",
+            issuer: &self.issuer,
+        };
+        if let Some(host) = request.explicit_or_domain_host().or_else(|| {
+            AuthenticatorIssuerHosts::bundled()
+                .and_then(|catalog| catalog.resolve_website_host(request))
+        }) {
             self.website_url = format!("https://{host}");
         }
     }

@@ -10,17 +10,18 @@
     forbid(invalid_unowned_function_suppression)
 )]
 
-use crate::{LoginHostMatchRequest, LoginSecret, SecretId, SecretListItem};
+use crate::secrets::secret_view::WebsiteHost;
+use crate::{LoginHostMatchRequest, LoginSecret, SecretId};
 
 /// Candidate login already stored for the requesting origin.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct WebsiteLoginSaveCandidate<'a> {
     pub secret_id: &'a SecretId,
     pub login: &'a LoginSecret,
 }
 
 /// Named request for the website-login save policy.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq)]
 pub struct WebsiteLoginSaveRequest<'a> {
     pub origin: &'a str,
     pub username: &'a str,
@@ -65,7 +66,7 @@ impl WebsiteLoginSaveRequest<'_> {
         if username.is_empty() || password.is_empty() {
             return WebsiteLoginSaveDecision::Invalid;
         }
-        if SecretListItem::hostname_from_url(self.origin).is_empty() {
+        if WebsiteHost::normalize(self.origin).is_empty() {
             return WebsiteLoginSaveDecision::Invalid;
         }
 
@@ -96,6 +97,21 @@ impl WebsiteLoginSaveRequest<'_> {
             };
         }
         WebsiteLoginSaveDecision::Create
+    }
+
+    pub(crate) fn legacy_decide(
+        origin: &str,
+        username: &str,
+        password: &str,
+        candidates: &[WebsiteLoginSaveCandidate<'_>],
+    ) -> WebsiteLoginSaveDecision {
+        Self {
+            origin,
+            username,
+            password,
+            candidates,
+        }
+        .decide()
     }
 }
 
