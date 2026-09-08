@@ -147,6 +147,34 @@ describe('authentication workflow snapshot messages', () => {
     ).toBe(false)
   })
 
+  test('rejects decoded null and inherited disclosure envelopes', () => {
+    const inheritedDisclosureEnvelopePrototype: { kind: string } = {
+      kind: 'absent',
+    }
+    const inheritedDisclosureEnvelope: object = Object.create(
+      inheritedDisclosureEnvelopePrototype,
+    )
+    for (const credentialDisclosureControl of [
+      JSON.parse('null'),
+      inheritedDisclosureEnvelope,
+    ]) {
+      expect(
+        isAuthenticationWorkflowSnapshotMessage({
+          ...validMessage,
+          payload: {
+            ...validMessage.payload,
+            observations: [
+              {
+                ...validMessage.payload.observations[0],
+                credentialDisclosureControl,
+              },
+            ],
+          },
+        }),
+      ).toBe(false)
+    }
+  })
+
   test('forwards observed disclosure envelopes to the Rust decoder', () => {
     const observation = validMessage.payload.observations[0]
     expect(
