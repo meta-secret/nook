@@ -18,6 +18,12 @@ impl Bip39MnemonicWordCount {
     pub const WORDS_24: Self = Self(24);
 }
 
+impl From<Bip39MnemonicWordCount> for u32 {
+    fn from(value: Bip39MnemonicWordCount) -> Self {
+        value.0
+    }
+}
+
 /// Maximum number of matching BIP-39 word suggestions to return.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bip39WordSuggestionLimit(usize);
