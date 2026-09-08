@@ -44,7 +44,7 @@ struct PairingRecipientAccessRequest<'a> {
 
 impl PairingRecipientAccess {
     fn validate(
-        request: PairingRecipientAccessRequest<'_>,
+        request: &PairingRecipientAccessRequest<'_>,
     ) -> Result<AuthEnvelopes, CompanionPairingPreparationFailure> {
         let installation = &request.approval.request.installation;
         let device_id = DeviceId::parse(&installation.app_id)
@@ -176,7 +176,7 @@ impl NookPrevalidatedCompanionPairingApproval {
         if !projection.security_conflicts.is_empty() {
             return Err(CompanionPairingPreparationFailure::ProjectionConflict);
         }
-        let envelopes = PairingRecipientAccess::validate(PairingRecipientAccessRequest {
+        let envelopes = PairingRecipientAccess::validate(&PairingRecipientAccessRequest {
             graph: &graph,
             approval: &self.binding,
         })?;

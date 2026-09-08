@@ -10,11 +10,13 @@ use nook_companion_core::{
 use nook_core::{
     AuthProvidersSnapshotData, CheckedRemoteEvent, EventGraphVaultArchitecture, EventId,
     EventStorageBytes, LocalEventStore, Sha256Hex, StoreId, VaultApplication, VaultProjection,
+    parse_event_storage_bytes, serialize_event_storage_yaml,
 };
 use serde::{
     Deserialize, Deserializer, Serialize, Serializer,
-    de::{DeserializeOwned, Error as _},
+    de::{DeserializeOwned, Error as DeserializerError},
 };
+use serde_json::Value;
 
 type SchemaResult<T> = Result<T, CompanionPairingCandidateFailure>;
 
@@ -44,9 +46,7 @@ impl<'de> Deserialize<'de> for PairingActivationSchemaVersion {
         if version == 1 {
             Ok(Self)
         } else {
-            Err(DeserializerType::Error::custom(
-                "unsupported activation schema",
-            ))
+            Err(DeserializerError::custom("unsupported activation schema"))
         }
     }
 }
@@ -90,9 +90,43 @@ pub(super) struct CandidateLocatorValidation<'a> {
     pub(super) store_id: &'a StoreId,
 }
 
+struct CandidateEventLocation<'a> {
+    request_id: &'a str,
+    store_id: &'a StoreId,
+    event_id: &'a EventId,
+}
+
+struct CandidateActivationLocation<'a> {
+    request_id: &'a str,
+    store_id: &'a StoreId,
+}
+
+struct DecodedCandidateEvents {
+    events: Vec<PairingActivationEvent>,
+    heads: Vec<EventId>,
+}
+
 impl CandidateSchema {
     pub(super) fn gate_key(store_id: &StoreId) -> String {
         format!("companion-pairing-activation:gate:{}", store_id.as_str())
+    }
+
+    fn payload_prefix(request: &CandidateActivationLocation<'_>) -> String {
+        let activation_id = Sha256Hex::from_bytes(
+            format!("{}:{}", request.request_id, request.store_id.as_str()).as_bytes(),
+        );
+        format!("companion-pairing-activation:{}", activation_id.as_str())
+    }
+
+    fn event_key(request: &CandidateEventLocation<'_>) -> String {
+        format!(
+            "{}:event:{}",
+            Self::payload_prefix(&CandidateActivationLocation {
+                request_id: request.request_id,
+                store_id: request.store_id,
+            }),
+            request.event_id.as_str()
+        )
     }
 
     pub(super) fn encode(value: &impl Serialize) -> SchemaResult<String> {
@@ -103,8 +137,10 @@ impl CandidateSchema {
     where
         T: DeserializeOwned + Serialize,
     {
-        let decoded = serde_json::from_str(value).map_err(|_| Self::integrity())?;
-        if Self::encode(&decoded)? != value {
+        let encoded: Value = serde_json::from_str(value).map_err(|_| Self::integrity())?;
+        let decoded = serde_json::from_value(encoded.clone()).map_err(|_| Self::integrity())?;
+        let canonical = serde_json::to_value(&decoded).map_err(|_| Self::integrity())?;
+        if canonical != encoded {
             return Err(Self::integrity());
         }
         Ok(decoded)
@@ -117,15 +153,10 @@ impl CandidateSchema {
 
 impl EncodedCandidate {
     pub(super) fn new(candidate: &PairingActivationCandidate) -> SchemaResult<Self> {
-        let activation_id = Sha256Hex::from_bytes(
-            format!(
-                "{}:{}",
-                candidate.request_id,
-                candidate.vault_store_id.as_str()
-            )
-            .as_bytes(),
-        );
-        let prefix = format!("companion-pairing-activation:{}", activation_id.as_str());
+        let prefix = CandidateSchema::payload_prefix(&CandidateActivationLocation {
+            request_id: &candidate.request_id,
+            store_id: &candidate.vault_store_id,
+        });
         let events = candidate
             .events
             .iter()
@@ -135,7 +166,11 @@ impl EncodedCandidate {
                     bytes: event.bytes.clone().into(),
                 };
                 Ok((
-                    format!("{prefix}:event:{}", row.event_id),
+                    CandidateSchema::event_key(&CandidateEventLocation {
+                        request_id: &candidate.request_id,
+                        store_id: &candidate.vault_store_id,
+                        event_id: &event.event_id,
+                    }),
                     CandidateSchema::encode(&row)?,
                 ))
             })
@@ -168,11 +203,12 @@ impl EncodedCandidate {
         })
     }
 
-    pub(super) fn validate_locator(request: CandidateLocatorValidation<'_>) -> SchemaResult<()> {
+    pub(super) fn validate_locator(request: &CandidateLocatorValidation<'_>) -> SchemaResult<()> {
         let CandidateLocatorValidation { gate, store_id } = request;
-        let activation_id =
-            Sha256Hex::from_bytes(format!("{}:{}", gate.request_id, store_id.as_str()).as_bytes());
-        let prefix = format!("companion-pairing-activation:{}", activation_id.as_str());
+        let prefix = CandidateSchema::payload_prefix(&CandidateActivationLocation {
+            request_id: &gate.request_id,
+            store_id,
+        });
         if gate.request_id.trim().is_empty()
             || gate.vault_store_id != store_id.as_str()
             || gate.event_payload_keys.len() != gate.event_count as usize
@@ -189,6 +225,32 @@ impl EncodedCandidate {
     }
 
     pub(super) fn decode(self) -> SchemaResult<PairingActivationCandidate> {
+        self.validate_payload_integrity()?;
+        let store_id =
+            StoreId::parse(&self.gate.vault_store_id).map_err(|_| CandidateSchema::integrity())?;
+        Self::validate_locator(&CandidateLocatorValidation {
+            gate: &self.gate,
+            store_id: &store_id,
+        })?;
+        self.gate
+            .approval
+            .revalidate_at(self.gate.stored_at)
+            .map_err(|_| CandidateSchema::integrity())?;
+        let providers = self.decode_providers(&store_id)?;
+        let decoded_events = self.decode_events(&store_id)?;
+        Ok(PairingActivationCandidate {
+            request_id: self.gate.request_id,
+            vault_store_id: store_id,
+            approval: self.gate.approval,
+            application: self.gate.application,
+            events: decoded_events.events,
+            event_heads: decoded_events.heads,
+            providers,
+            stored_at: self.gate.stored_at,
+        })
+    }
+
+    fn validate_payload_integrity(&self) -> SchemaResult<()> {
         if self
             .events
             .iter()
@@ -201,16 +263,10 @@ impl EncodedCandidate {
         {
             return Err(CandidateSchema::integrity());
         }
-        let store_id =
-            StoreId::parse(&self.gate.vault_store_id).map_err(|_| CandidateSchema::integrity())?;
-        Self::validate_locator(CandidateLocatorValidation {
-            gate: &self.gate,
-            store_id: &store_id,
-        })?;
-        self.gate
-            .approval
-            .revalidate_at(self.gate.stored_at)
-            .map_err(|_| CandidateSchema::integrity())?;
+        Ok(())
+    }
+
+    fn decode_providers(&self, store_id: &StoreId) -> SchemaResult<AuthProvidersSnapshotData> {
         let providers: AuthProvidersSnapshotData = CandidateSchema::decode(&self.providers)?;
         if self.gate.application != VaultApplication::Extension
             || self.gate.request_id != self.gate.approval.request.request_id
@@ -236,18 +292,34 @@ impl EncodedCandidate {
         {
             return Err(CandidateSchema::integrity());
         }
+        Ok(providers)
+    }
+
+    fn decode_events(&self, store_id: &StoreId) -> SchemaResult<DecodedCandidateEvents> {
         let mut event_store = LocalEventStore::new();
         let events = self
             .events
-            .into_iter()
+            .iter()
             .map(|(key, value)| {
-                let row: ActivationEventRow = CandidateSchema::decode(&value)?;
-                if !key.ends_with(&format!(":event:{}", row.event_id)) {
-                    return Err(CandidateSchema::integrity());
-                }
+                let row: ActivationEventRow = CandidateSchema::decode(value)?;
                 let event_id =
                     EventId::parse(&row.event_id).map_err(|_| CandidateSchema::integrity())?;
+                let expected_key = CandidateSchema::event_key(&CandidateEventLocation {
+                    request_id: &self.gate.request_id,
+                    store_id,
+                    event_id: &event_id,
+                });
+                if key != expected_key {
+                    return Err(CandidateSchema::integrity());
+                }
                 let bytes = EventStorageBytes::from(row.bytes);
+                let event =
+                    parse_event_storage_bytes(&bytes).map_err(|_| CandidateSchema::integrity())?;
+                if serialize_event_storage_yaml(&event).map_err(|_| CandidateSchema::integrity())?
+                    != bytes
+                {
+                    return Err(CandidateSchema::integrity());
+                }
                 let checked = CheckedRemoteEvent::parse(&event_id, &bytes)
                     .map_err(|_| CandidateSchema::integrity())?;
                 if !checked.belongs_to_store(store_id.as_str())
@@ -277,21 +349,12 @@ impl EncodedCandidate {
         if !projection.security_conflicts.is_empty() || heads != self.gate.event_heads {
             return Err(CandidateSchema::integrity());
         }
-        PairingRecipientAccess::validate(PairingRecipientAccessRequest {
+        PairingRecipientAccess::validate(&PairingRecipientAccessRequest {
             graph: &graph,
             approval: &self.gate.approval,
         })
         .map_err(|_| CandidateSchema::integrity())?;
-        Ok(PairingActivationCandidate {
-            request_id: self.gate.request_id,
-            vault_store_id: store_id,
-            approval: self.gate.approval,
-            application: self.gate.application,
-            events,
-            event_heads: heads,
-            providers,
-            stored_at: self.gate.stored_at,
-        })
+        Ok(DecodedCandidateEvents { events, heads })
     }
 }
 
@@ -346,7 +409,7 @@ mod tests {
             let encoded = EncodedCandidate::new(&CandidateFixture::candidate()?)?;
             let gate_json = CandidateSchema::encode(&encoded.gate)?;
             let gate: ActivationGate = CandidateSchema::decode(&gate_json)?;
-            EncodedCandidate::validate_locator(CandidateLocatorValidation {
+            EncodedCandidate::validate_locator(&CandidateLocatorValidation {
                 gate: &gate,
                 store_id: &StoreId::parse(&encoded.gate.vault_store_id)?,
             })?;
@@ -367,7 +430,7 @@ mod tests {
             value
                 .as_object_mut()
                 .and_then(|gate| gate.get_mut("approval"))
-                .and_then(serde_json::Value::as_object_mut)
+                .and_then(Value::as_object_mut)
                 .ok_or_else(|| anyhow::anyhow!("approval must be an object"))?
                 .insert("unexpected".to_owned(), true.into());
             assert!(matches!(
@@ -406,7 +469,7 @@ mod tests {
         fn assert_strict_payload_rejections() -> anyhow::Result<()> {
             let candidate = CandidateFixture::candidate()?;
             let mut event = EncodedCandidate::new(&candidate)?;
-            let mut event_value: serde_json::Value = serde_json::from_str(&event.events[0].1)?;
+            let mut event_value: Value = serde_json::from_str(&event.events[0].1)?;
             event_value
                 .as_object_mut()
                 .ok_or_else(|| anyhow::anyhow!("event must be an object"))?
@@ -414,8 +477,21 @@ mod tests {
             event.events[0].1 = serde_json::to_string(&event_value)?;
             event.gate.event_digests[0] = Sha256Hex::from_bytes(event.events[0].1.as_bytes());
             Self::assert_integrity(event);
+            let mut inner_event = EncodedCandidate::new(&candidate)?;
+            let mut row: Value = serde_json::from_str(&inner_event.events[0].1)?;
+            let bytes = row
+                .as_object_mut()
+                .and_then(|object| object.get_mut("bytes"))
+                .ok_or_else(|| anyhow::anyhow!("event row bytes must be present"))?;
+            let mut yaml = String::from_utf8(serde_json::from_value(bytes.clone())?)?;
+            yaml.push_str("unexpected: true\n");
+            *bytes = serde_json::to_value(yaml.into_bytes())?;
+            inner_event.events[0].1 = serde_json::to_string(&row)?;
+            inner_event.gate.event_digests[0] =
+                Sha256Hex::from_bytes(inner_event.events[0].1.as_bytes());
+            Self::assert_integrity(inner_event);
             let mut providers = EncodedCandidate::new(&candidate)?;
-            let mut value: serde_json::Value = serde_json::from_str(&providers.providers)?;
+            let mut value: Value = serde_json::from_str(&providers.providers)?;
             value
                 .as_object_mut()
                 .ok_or_else(|| anyhow::anyhow!("providers must be an object"))?
@@ -424,18 +500,29 @@ mod tests {
             providers.gate.provider_digest = Sha256Hex::from_bytes(providers.providers.as_bytes());
             Self::assert_integrity(providers);
             let mut providers = EncodedCandidate::new(&Self::candidate_with_provider()?)?;
-            let mut value: serde_json::Value = serde_json::from_str(&providers.providers)?;
+            let mut value: Value = serde_json::from_str(&providers.providers)?;
             value
                 .as_object_mut()
                 .and_then(|snapshot| snapshot.get_mut("providers"))
-                .and_then(serde_json::Value::as_array_mut)
+                .and_then(Value::as_array_mut)
                 .and_then(|rows| rows.first_mut())
-                .and_then(serde_json::Value::as_object_mut)
+                .and_then(Value::as_object_mut)
                 .ok_or_else(|| anyhow::anyhow!("provider must be an object"))?
                 .insert("unexpected".to_owned(), true.into());
             providers.providers = serde_json::to_string(&value)?;
             providers.gate.provider_digest = Sha256Hex::from_bytes(providers.providers.as_bytes());
             Self::assert_integrity(providers);
+            Ok(())
+        }
+
+        fn assert_event_key_alias_rejected() -> anyhow::Result<()> {
+            let mut encoded = EncodedCandidate::new(&CandidateFixture::candidate()?)?;
+            let canonical_key = &encoded.events[0].0;
+            let alias_key = canonical_key.replacen(":event:", ":event:alias:event:", 1);
+            encoded.events[0].0.clone_from(&alias_key);
+            encoded.gate.event_payload_keys[0] = alias_key;
+            encoded.gate.event_digests[0] = Sha256Hex::from_bytes(encoded.events[0].1.as_bytes());
+            Self::assert_integrity(encoded);
             Ok(())
         }
 
@@ -544,6 +631,11 @@ mod tests {
     #[test]
     fn readback_rejects_noncanonical_event_and_provider_payloads() -> anyhow::Result<()> {
         SchemaReadbackScenarios::assert_strict_payload_rejections()
+    }
+
+    #[test]
+    fn readback_rejects_event_storage_key_alias() -> anyhow::Result<()> {
+        SchemaReadbackScenarios::assert_event_key_alias_rejected()
     }
 
     #[test]

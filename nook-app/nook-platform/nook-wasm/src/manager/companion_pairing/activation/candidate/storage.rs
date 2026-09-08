@@ -207,7 +207,7 @@ impl PairingActivationStore {
             return Ok(None);
         };
         let gate = CandidateSchema::decode(&gate_json)?;
-        EncodedCandidate::validate_locator(CandidateLocatorValidation {
+        EncodedCandidate::validate_locator(&CandidateLocatorValidation {
             gate: &gate,
             store_id: &store_id,
         })?;
@@ -352,7 +352,7 @@ mod tests {
                 return Ok(None);
             };
             let gate = CandidateSchema::decode(gate_json)?;
-            EncodedCandidate::validate_locator(CandidateLocatorValidation {
+            EncodedCandidate::validate_locator(&CandidateLocatorValidation {
                 gate: &gate,
                 store_id: &store_id,
             })?;
