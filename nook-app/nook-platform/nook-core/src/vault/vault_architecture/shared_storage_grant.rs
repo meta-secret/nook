@@ -1,7 +1,13 @@
 //! Shared-provider storage grant request validation and ceremony outcomes.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use super::provider_replication::{
-    ProviderOauthPreset, SharedJoinerIdentityKind, provider_replication_capability,
+    ProviderOauthPreset, ProviderReplicationCapability, SharedJoinerIdentityKind,
 };
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{StorageProviderType, i18n_keys};
@@ -140,62 +146,63 @@ pub enum SharedStorageGrantOutcome {
     },
 }
 
-/// A created or existing shared target needs the current event log before the
-/// enrollment code is issued. Unsupported ceremonies and missing owner
-/// credentials cannot flush that target.
-#[must_use]
-pub fn should_flush_shared_storage_grant(
-    outcome: &SharedStorageGrantOutcome,
-    credential: &SharedStorageGrantCredential,
-) -> bool {
-    !matches!(outcome, SharedStorageGrantOutcome::Unsupported { .. })
-        && matches!(
-            credential,
-            SharedStorageGrantCredential::AccessToken(token) if !token.trim().is_empty()
-        )
+impl SharedStorageGrantOutcome {
+    /// A created or existing shared target needs the current event log before
+    /// the enrollment code is issued. Unsupported ceremonies and missing owner
+    /// credentials cannot flush that target.
+    #[must_use]
+    pub fn should_flush_with(&self, credential: &SharedStorageGrantCredential) -> bool {
+        !matches!(self, Self::Unsupported { .. })
+            && matches!(
+                credential,
+                SharedStorageGrantCredential::AccessToken(token) if !token.trim().is_empty()
+            )
+    }
 }
 
-/// Validate a shared-grant request and return the grant ceremony outcome.
-///
-/// Capability lookup is ceremony-agnostic: providers that cannot share return
-/// [`SharedStorageGrantOutcome::Unsupported`] (typed soft failure for UI copy)
-/// rather than [`ValidationError::UnsupportedProviderReplication`]. Identity
-/// validation still fails closed with hard errors.
-pub fn prepare_shared_storage_grant(
-    request: &SharedStorageGrantRequest,
-) -> ValidationResult<SharedStorageGrantOutcome> {
-    let capability = provider_replication_capability(request.provider_type, request.oauth_preset);
-    let identity = request.joiner_identity.trim();
-    if identity.is_empty() {
-        return Err(ValidationError::SharedJoinerIdentityRequired);
-    }
-    match request.joiner_identity_kind {
-        SharedJoinerIdentityKind::Email => {
-            if (EnrollmentEmail { value: identity })
-                .check_plausibility()
-                .is_err()
-            {
-                return Err(ValidationError::SharedJoinerIdentityInvalid);
-            }
+impl SharedStorageGrantRequest {
+    /// Validate a shared-grant request and return the grant ceremony outcome.
+    ///
+    /// Capability lookup is ceremony-agnostic: providers that cannot share return
+    /// [`SharedStorageGrantOutcome::Unsupported`] (typed soft failure for UI copy)
+    /// rather than [`ValidationError::UnsupportedProviderReplication`]. Identity
+    /// validation still fails closed with hard errors.
+    pub fn prepare(&self) -> ValidationResult<SharedStorageGrantOutcome> {
+        let capability =
+            ProviderReplicationCapability::for_provider(self.provider_type, self.oauth_preset);
+        let identity = self.joiner_identity.trim();
+        if identity.is_empty() {
+            return Err(ValidationError::SharedJoinerIdentityRequired);
         }
-    }
-    if !capability.supports_shared {
-        return Ok(SharedStorageGrantOutcome::Unsupported {
-            reason_key: i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_UNSUPPORTED.to_owned(),
-        });
-    }
-    Ok(SharedStorageGrantOutcome::ManualGrantRequired {
-        instructions_key: i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS.to_owned(),
-        joiner_identity: identity.to_owned(),
-        target: match &request.storage_target {
-            SharedStorageTargetSelection::Create => SharedStorageGrantTarget::Unavailable,
-            SharedStorageTargetSelection::Existing(storage_target_id) => {
-                SharedStorageGrantTarget::Identified {
-                    storage_target_id: storage_target_id.trim().to_owned(),
+        match self.joiner_identity_kind {
+            SharedJoinerIdentityKind::Email => {
+                if (EnrollmentEmail { value: identity })
+                    .check_plausibility()
+                    .is_err()
+                {
+                    return Err(ValidationError::SharedJoinerIdentityInvalid);
                 }
             }
-        },
-    })
+        }
+        if !capability.supports_shared {
+            return Ok(SharedStorageGrantOutcome::Unsupported {
+                reason_key: i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_UNSUPPORTED.to_owned(),
+            });
+        }
+        Ok(SharedStorageGrantOutcome::ManualGrantRequired {
+            instructions_key: i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS
+                .to_owned(),
+            joiner_identity: identity.to_owned(),
+            target: match &self.storage_target {
+                SharedStorageTargetSelection::Create => SharedStorageGrantTarget::Unavailable,
+                SharedStorageTargetSelection::Existing(storage_target_id) => {
+                    SharedStorageGrantTarget::Identified {
+                        storage_target_id: storage_target_id.trim().to_owned(),
+                    }
+                }
+            },
+        })
+    }
 }
 
 #[cfg(test)]
@@ -216,7 +223,7 @@ mod tests {
             storage_target: SharedStorageTargetSelection::Create,
             credential: SharedStorageGrantCredential::AccessToken("ya29.owner-token".to_owned()),
         };
-        let outcome = prepare_shared_storage_grant(&request)?;
+        let outcome = request.prepare()?;
         assert_eq!(
             outcome,
             SharedStorageGrantOutcome::ManualGrantRequired {
@@ -232,7 +239,7 @@ mod tests {
             ..request.clone()
         };
         assert_eq!(
-            prepare_shared_storage_grant(&existing_target)?,
+            existing_target.prepare()?,
             SharedStorageGrantOutcome::ManualGrantRequired {
                 instructions_key: i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_MANUAL_INSTRUCTIONS
                     .to_owned(),
@@ -248,7 +255,7 @@ mod tests {
             ..request.clone()
         };
         assert!(matches!(
-            prepare_shared_storage_grant(&missing),
+            missing.prepare(),
             Err(ValidationError::SharedJoinerIdentityRequired)
         ));
 
@@ -258,7 +265,7 @@ mod tests {
             ..request
         };
         assert_eq!(
-            prepare_shared_storage_grant(&github)?,
+            github.prepare()?,
             SharedStorageGrantOutcome::Unsupported {
                 reason_key: i18n_keys::ARCHITECTURE_MODES_SHARED_GRANT_UNSUPPORTED.to_owned(),
             }
@@ -318,12 +325,9 @@ mod tests {
         };
         let available = SharedStorageGrantCredential::AccessToken(" token ".to_owned());
 
-        assert!(should_flush_shared_storage_grant(&granted, &available));
-        assert!(should_flush_shared_storage_grant(&manual, &available));
-        assert!(!should_flush_shared_storage_grant(
-            &manual,
-            &SharedStorageGrantCredential::Unavailable,
-        ));
-        assert!(!should_flush_shared_storage_grant(&unsupported, &available,));
+        assert!(granted.should_flush_with(&available));
+        assert!(manual.should_flush_with(&available));
+        assert!(!manual.should_flush_with(&SharedStorageGrantCredential::Unavailable));
+        assert!(!unsupported.should_flush_with(&available));
     }
 }

@@ -100,7 +100,7 @@ pub(crate) fn is_google_drive_shared_grant_request(
 pub async fn prepare_shared_storage_grant(
     request: nook_core::SharedStorageGrantRequest,
 ) -> Result<nook_core::SharedStorageGrantOutcome, wasm_bindgen::JsError> {
-    let validated = nook_core::prepare_shared_storage_grant(&request)?;
+    let validated = request.prepare()?;
     let outcome = match validated {
         SharedStorageGrantOutcome::ManualGrantRequired {
             instructions_key,
@@ -159,7 +159,7 @@ pub fn should_flush_shared_storage_grant(
     outcome: nook_core::SharedStorageGrantOutcome,
     credential: nook_core::SharedStorageGrantCredential,
 ) -> bool {
-    nook_core::should_flush_shared_storage_grant(&outcome, &credential)
+    outcome.should_flush_with(&credential)
 }
 
 /// Resolve a shared Drive folder id/URL and verify write access for the current
