@@ -39,6 +39,7 @@ pub enum RuntimeConfigValue<'a> {
     Set(&'a str),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct RuntimeMillisRequest<'a> {
     raw: RuntimeConfigValue<'a>,
     minimum: u32,
