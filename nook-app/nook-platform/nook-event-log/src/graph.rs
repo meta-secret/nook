@@ -22,6 +22,13 @@ pub enum EventInsertStatus {
     Duplicate,
 }
 
+/// Vault architecture implied by immutable operation history.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventGraphVaultArchitecture {
+    Simple,
+    Sentinel,
+}
+
 /// Immutable event set with causal metadata.
 #[derive(Debug, Clone, Default)]
 pub struct EventGraph {
@@ -57,6 +64,24 @@ impl EventGraph {
 
     pub fn events(&self) -> impl Iterator<Item = (&EventId, &VaultEvent)> {
         self.events.iter()
+    }
+
+    /// Classify architecture from every event operation, including non-applied history.
+    #[must_use]
+    pub fn classify_vault_architecture(&self) -> EventGraphVaultArchitecture {
+        if self.events.values().any(|event| {
+            event.body.operations.iter().any(|operation| {
+                matches!(
+                    operation,
+                    crate::VaultOperation::SentinelParticipantEnrolled { .. }
+                        | crate::VaultOperation::SentinelSharesIssued { .. }
+                )
+            })
+        }) {
+            EventGraphVaultArchitecture::Sentinel
+        } else {
+            EventGraphVaultArchitecture::Simple
+        }
     }
 
     #[must_use]

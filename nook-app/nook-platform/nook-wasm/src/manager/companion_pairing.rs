@@ -7,6 +7,9 @@ use nook_companion_core::{
 use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, VaultType};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
+mod activation;
+pub use activation::NookPreparedCompanionPairingActivation;
+
 #[wasm_bindgen]
 pub struct NookCompanionPairingExtensionEndpoint {
     inner: CompanionExtensionPairingEndpoint,
@@ -128,7 +131,7 @@ fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
 /// Opaque proof of a manager-bound approval and its sealed provider snapshot.
 #[wasm_bindgen]
 pub struct NookPrevalidatedCompanionPairingApproval {
-    pub(in crate::manager) binding: CompanionPairingApproval,
+    binding: CompanionPairingApproval,
     _approval: AdmittedCompanionPairingApproval,
     _providers: AuthProvidersSnapshotData,
 }

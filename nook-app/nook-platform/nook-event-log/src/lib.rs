@@ -45,7 +45,7 @@ pub use event::{
 };
 pub use event_bytes::{CanonicalEventBodyBytes, EventStorageBytes};
 pub use fingerprint::SecretFingerprint;
-pub use graph::{EventGraph, EventInsertStatus, EventPendingReason};
+pub use graph::{EventGraph, EventGraphVaultArchitecture, EventInsertStatus, EventPendingReason};
 pub use nook_replication::CausalGraphEventCount as EventCount;
 pub use projection::{
     ProjectedSecret, ProjectedSecretLifecycle, ProjectedSecretOrigin, ProjectionEpoch,

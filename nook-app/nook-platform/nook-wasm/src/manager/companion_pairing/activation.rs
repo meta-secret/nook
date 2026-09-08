@@ -1,10 +1,12 @@
 //! Side-effect-free preparation of an inert companion pairing activation.
 
-use super::{NookExternalEventLogRecords, NookPrevalidatedCompanionPairingApproval};
+use super::NookPrevalidatedCompanionPairingApproval;
+use crate::manager::NookExternalEventLogRecords;
 use nook_core::{
     AuthEnvelopes, CheckedRemoteEvent, DeviceId, DevicePublicKey, DeviceSigningPublicKey,
-    EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventId, LocalEventStore, StoreId,
-    VaultMetaGraphProjection, VaultMetaState, VaultProjection, serialize_event_storage_yaml,
+    EventGraphDeviceAccess, EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId,
+    LocalEventStore, StoreId, VaultMetaGraphProjection, VaultMetaState, VaultProjection,
+    serialize_event_storage_yaml,
 };
 use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
@@ -26,13 +28,46 @@ struct PreparedEventGraph {
 
 #[derive(Debug, thiserror::Error)]
 enum CompanionPairingPreparationFailure {
-    #[error("pairing event authorization rejected")]
-    EventAuthorization,
+    #[error("invalid event record")]
+    RecordInvalid,
+    #[error("invalid event identifier")]
+    IdentifierInvalid,
+    #[error("duplicate event")]
+    DuplicateEvent,
+    #[error("event identifier mismatch")]
+    EventIdMismatch,
+    #[error("event vault mismatch")]
+    VaultMismatch,
+    #[error("invalid event graph")]
+    GraphInvalid,
+    #[error("event graph has pending history")]
+    GraphPending,
+    #[error("event graph has quarantined history")]
+    GraphQuarantined,
+    #[error("event projection conflict")]
+    ProjectionConflict,
+    #[error("unsupported vault architecture")]
+    UnsupportedVaultArchitecture,
+    #[error("recipient authorization mismatch")]
+    RecipientAuthorizationMismatch,
 }
 
 impl CompanionPairingPreparationFailure {
     fn js_error(&self) -> JsError {
-        JsError::new(&self.to_string())
+        let message = match self {
+            Self::RecordInvalid
+            | Self::IdentifierInvalid
+            | Self::DuplicateEvent
+            | Self::EventIdMismatch
+            | Self::VaultMismatch
+            | Self::GraphInvalid
+            | Self::GraphPending
+            | Self::GraphQuarantined
+            | Self::ProjectionConflict
+            | Self::UnsupportedVaultArchitecture
+            | Self::RecipientAuthorizationMismatch => "pairing event authorization rejected",
+        };
+        JsError::new(message)
     }
 }
 
@@ -42,72 +77,80 @@ impl NookPrevalidatedCompanionPairingApproval {
         records: &NookExternalEventLogRecords,
     ) -> Result<PreparedEventGraph, CompanionPairingPreparationFailure> {
         let store_id = StoreId::parse(&self.binding.vault_store_id)
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::VaultMismatch)?;
         let mut unique = BTreeSet::new();
         let mut event_store = LocalEventStore::new();
         for record in &records.0 {
             let event_id = EventId::parse(&record.event_id)
-                .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
-            if !unique.insert(event_id.clone())
-                || record
-                    .event
-                    .id()
-                    .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?
-                    != event_id
+                .map_err(|_| CompanionPairingPreparationFailure::IdentifierInvalid)?;
+            if !unique.insert(event_id.clone()) {
+                return Err(CompanionPairingPreparationFailure::DuplicateEvent);
+            }
+            if record
+                .event
+                .id()
+                .map_err(|_| CompanionPairingPreparationFailure::RecordInvalid)?
+                != event_id
             {
-                return Err(CompanionPairingPreparationFailure::EventAuthorization);
+                return Err(CompanionPairingPreparationFailure::EventIdMismatch);
             }
             let bytes = serialize_event_storage_yaml(&record.event)
-                .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+                .map_err(|_| CompanionPairingPreparationFailure::RecordInvalid)?;
             let checked = CheckedRemoteEvent::parse(&event_id, &bytes)
-                .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+                .map_err(|_| CompanionPairingPreparationFailure::RecordInvalid)?;
             if !checked.belongs_to_store(store_id.as_str()) {
-                return Err(CompanionPairingPreparationFailure::EventAuthorization);
+                return Err(CompanionPairingPreparationFailure::VaultMismatch);
             }
             event_store.put_event(event_id, bytes);
         }
         if unique.is_empty() {
-            return Err(CompanionPairingPreparationFailure::EventAuthorization);
+            return Err(CompanionPairingPreparationFailure::GraphInvalid);
         }
         let graph = event_store
             .load_graph(store_id.as_str())
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
-        if !graph.pending_events().is_empty() || !graph.quarantined().is_empty() {
-            return Err(CompanionPairingPreparationFailure::EventAuthorization);
+            .map_err(|_| CompanionPairingPreparationFailure::GraphInvalid)?;
+        if graph.classify_vault_architecture() == EventGraphVaultArchitecture::Sentinel {
+            return Err(CompanionPairingPreparationFailure::UnsupportedVaultArchitecture);
+        }
+        if !graph.pending_events().is_empty() {
+            return Err(CompanionPairingPreparationFailure::GraphPending);
+        }
+        if !graph.quarantined().is_empty() {
+            return Err(CompanionPairingPreparationFailure::GraphQuarantined);
         }
         graph
             .validate_authorizations()
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::GraphInvalid)?;
         let projection = VaultProjection::from_graph(&graph, store_id.as_str())
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::GraphInvalid)?;
         if !projection.security_conflicts.is_empty() {
-            return Err(CompanionPairingPreparationFailure::EventAuthorization);
+            return Err(CompanionPairingPreparationFailure::ProjectionConflict);
         }
         let installation = &self.binding.request.installation;
         let device_id = DeviceId::parse(&installation.app_id)
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
         let public_key = DevicePublicKey::parse(&installation.encryption_public_key)
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
         let signing_public_key = DeviceSigningPublicKey::parse(&installation.signing_public_key)
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
         let envelopes = EventGraphDeviceAccess::new(&graph)
             .active_envelopes(&EventGraphDeviceAccessRequest {
                 expected_device_id: &device_id,
                 expected_public_key: &public_key,
                 expected_signing_public_key: &signing_public_key,
             })
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?
-            .ok_or(CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?
+            .ok_or(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?;
         let mut meta = VaultMetaState::default();
         VaultMetaGraphProjection::new(&graph)
             .materialize(&mut meta)
-            .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?;
+            .map_err(|_| CompanionPairingPreparationFailure::GraphInvalid)?;
         if !meta.auth.contains_key(
             &public_key
                 .auth_id()
-                .map_err(|_| CompanionPairingPreparationFailure::EventAuthorization)?,
+                .map_err(|_| CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)?,
         ) {
-            return Err(CompanionPairingPreparationFailure::EventAuthorization);
+            return Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch);
         }
         Ok(PreparedEventGraph {
             heads: graph.heads(),
@@ -210,10 +253,7 @@ mod tests {
                     providers.companion_pairing_manifest_digest()?.as_str(),
                 )?,
             };
-            let mut endpoint =
-                super::super::companion_pairing::NookCompanionPairingExtensionEndpoint::new(
-                    request,
-                )
+            let mut endpoint = crate::manager::NookCompanionPairingExtensionEndpoint::new(request)
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?;
             let authority = endpoint
                 .take_authority()
@@ -283,6 +323,35 @@ mod tests {
             }]))
         }
 
+        fn append_sentinel_membership(&mut self) -> anyhow::Result<()> {
+            let store_id = StoreId::parse(&self.manager.vault.store_id)?;
+            let parent = EventId::parse(&self.records.0[0].event_id)?;
+            let key_epoch = EventId::parse("sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo")?;
+            let signing =
+                SigningIdentity::from_seed_hex_stored(&self.manager.event_log.signing_seed)?;
+            let participant = DeviceIdentity::generate()?;
+            let (participant_signing, _) = SigningIdentity::generate()?;
+            let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
+                store_id: &store_id,
+                actor_id: &signing.actor_id()?,
+                signing_identity: &signing,
+                parents: vec![parent],
+                key_epoch: &key_epoch,
+                created_at: &IsoTimestamp::from_trusted("2026-09-08T00:00:01Z".to_owned()),
+                operations: vec![VaultOperation::SentinelParticipantEnrolled {
+                    device_id: participant.device_id().clone(),
+                    encryption_public_key: participant.public_key(),
+                    signing_public_key: participant_signing.public_key(),
+                    label: MemberLabel::from_trusted("Sentinel".to_owned()),
+                }],
+            })?;
+            self.records.0.push(ExternalEventLogRecord {
+                event_id: event.id()?.as_str().to_owned(),
+                event,
+            });
+            Ok(())
+        }
+
         fn prepare(
             self,
         ) -> Result<NookPreparedCompanionPairingActivation, CompanionPairingPreparationFailure>
@@ -313,7 +382,10 @@ mod tests {
             manager: &fixture.manager,
             identity: &other,
         })?;
-        assert!(fixture.prepare().is_err());
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch)
+        ));
         Ok(())
     }
 
@@ -321,7 +393,10 @@ mod tests {
     fn rejects_empty_event_graph() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         fixture.records.0.clear();
-        assert!(fixture.prepare().is_err());
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::GraphInvalid)
+        ));
         Ok(())
     }
 
@@ -329,7 +404,10 @@ mod tests {
     fn rejects_duplicate_event() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         fixture.records.0.push(fixture.records.0[0].clone());
-        assert!(fixture.prepare().is_err());
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::DuplicateEvent)
+        ));
         Ok(())
     }
 
@@ -338,7 +416,10 @@ mod tests {
         let mut fixture = ActivationFixture::new()?;
         fixture.records.0[0].event_id =
             "sha256u:qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqo".to_owned();
-        assert!(fixture.prepare().is_err());
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::EventIdMismatch)
+        ));
         Ok(())
     }
 
@@ -350,7 +431,21 @@ mod tests {
             manager: &fixture.manager,
             identity: &fixture.identity,
         })?;
-        assert!(fixture.prepare().is_err());
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::VaultMismatch)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_sentinel_operation_in_simple_history() -> anyhow::Result<()> {
+        let mut fixture = ActivationFixture::new()?;
+        fixture.append_sentinel_membership()?;
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::UnsupportedVaultArchitecture)
+        ));
         Ok(())
     }
 }
