@@ -298,6 +298,18 @@ const workerTasks = new TextContract({
   label: "k0s worker tasks",
   source: workerTasksSource,
 });
+const workerSyncStart = workerTasksSource.indexOf("  k0s:worker:sync:");
+const workerSyncEnd = workerTasksSource.indexOf(
+  "  k0s:mesh:ensure:",
+  workerSyncStart,
+);
+if (workerSyncStart < 0 || workerSyncEnd < 0) {
+  throw new Error("k0s worker sync task is missing");
+}
+const workerSync = new TextContract({
+  label: "k0s worker sync",
+  source: workerTasksSource.slice(workerSyncStart, workerSyncEnd),
+});
 const workerInstallStart = workerTasksSource.indexOf("  k0s:worker:install:");
 const workerInstallEnd = workerTasksSource.indexOf(
   "  k0s:worker:kata:verify:",
@@ -866,12 +878,20 @@ workerTasks.requireAll([
   "INFRA_WORKER_MESH_ADDRESS",
   "nook.nokey.sh/arc-build=preparing:NoSchedule",
 ]);
+workerSync.requireAll([
+  'controller_target="{{.INFRA_SSH_TARGET}}"',
+  'ssh -n -o BatchMode=yes -J "$controller_target" "$worker_target"',
+  'ssh -o BatchMode=yes -J "$controller_target" "$worker_target"',
+]);
 workerTasks.count({
   fragment:
     'iifname "wg-nook" ip saddr 10.244.0.0/16 tcp dport 10250 accept comment "nook k0s worker kubelet mesh pods"',
   expected: 2,
 });
 workerInstall.requireAll([
+  'worker_ssh_user="$(ssh -n -o BatchMode=yes -J "$controller_target"',
+  'ssh -o BatchMode=yes -J "$controller_target" "$worker_target" bash -s --',
+  'ssh -n -o BatchMode=yes -J "$controller_target" \\',
   "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   "actions.github.com/scale-set-name",
   `select(.metadata.deletionTimestamp == null and \\
