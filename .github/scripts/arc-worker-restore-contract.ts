@@ -34,6 +34,18 @@ enum WorkerServiceInputState {
   MissingInactive = "missing-inactive",
 }
 
+enum WorkerReclaimInputState {
+  ActiveExisting = "active-existing",
+  ActiveWithoutUnit = "active-without-unit",
+  FreshExisting = "fresh-existing",
+  ResumedExisting = "resumed-existing",
+}
+
+enum WorkerReclaimOutcome {
+  Accepted = "accepted",
+  Rejected = "rejected",
+}
+
 enum PreparingTaintCase {
   Ambiguous = "ambiguous",
   Exact = "exact",
@@ -46,10 +58,38 @@ enum WorkerTokenCleanupCase {
   FollowUpFailure = "follow-up-failure",
   FollowUpFailureAndCleanupFailure = "follow-up-and-cleanup-failure",
   Success = "success",
+  SuccessAndCleanupFailure = "success-and-cleanup-failure",
 }
 
 class WorkerTokenCleanupContract {
   static assert(source: string): void {
+    const sessionStart = source.indexOf(
+      "        {\n          printf '%s\\n' \"$worker_mesh_address\"",
+    );
+    const sessionEnd = source.indexOf("        token=\n", sessionStart);
+    if (sessionStart < 0 || sessionEnd < 0) {
+      throw new Error("k0s worker token-bearing SSH session is missing");
+    }
+    const session = new TextContract({
+      label: "k0s worker token-bearing SSH session",
+      source: source.slice(sessionStart, sessionEnd),
+    });
+    session.count({
+      fragment:
+        'ssh -o BatchMode=yes -J "$controller_target" "$worker_target"',
+      expected: 1,
+    });
+    session.requireAll([
+      "printf '%s' \"$token\"",
+      'IFS= read -r worker_mesh_address',
+      'token_temp="$(mktemp)"',
+      "trap cleanup_worker_token EXIT",
+      'cat > "$token_temp"',
+      'sudo -n install -m 0600 "$token_temp" /etc/k0s/worker-token',
+      "sudo -n k0s install worker",
+      "sudo -n rm -f /etc/k0s/worker-token",
+      "sudo -n test ! -e /etc/k0s/worker-token",
+    ]);
     const start = source.indexOf("        cleanup_worker_token() {");
     const end = source.indexOf("        trap cleanup_worker_token EXIT", start);
     if (start < 0 || end < 0) {
@@ -75,20 +115,27 @@ class WorkerTokenCleanupContract {
         cleanupStatus: 9,
         expectedStatus: 37,
       },
+      {
+        kind: WorkerTokenCleanupCase.SuccessAndCleanupFailure,
+        commandStatus: 0,
+        cleanupStatus: 9,
+        expectedStatus: 1,
+      },
     ] as const;
     for (const scenario of cases) {
       const program = `
 set -euo pipefail
-delete_worker_token() {
-  printf 'delete-attempted\\n'
-  if test "$cleanup_result" -ne 0; then
-    return "$cleanup_result"
-  fi
-  worker_token_uploaded=false
+rm() {
+  printf 'temp-delete-attempted\\n'
+  return "$cleanup_result"
+}
+sudo() {
+  printf 'remote-delete-attempted\\n'
+  return "$cleanup_result"
 }
 ${cleanupFunction}
 cleanup_result=${scenario.cleanupStatus}
-worker_token_uploaded=true
+token_temp=/tmp/nook-worker-token-contract
 trap cleanup_worker_token EXIT
 exit ${scenario.commandStatus}
 `;
@@ -100,15 +147,19 @@ exit ${scenario.commandStatus}
       });
       if (
         result.exitCode !== scenario.expectedStatus ||
-        result.stdout.toString() !== "delete-attempted\n"
+        result.stdout.toString() !==
+          "temp-delete-attempted\n" +
+            "remote-delete-attempted\n" +
+            "remote-delete-attempted\n"
       ) {
         throw new Error(`k0s worker token cleanup failed: ${scenario.kind}`);
       }
       const error = result.stderr.toString();
       if (
-        scenario.kind ===
-          WorkerTokenCleanupCase.FollowUpFailureAndCleanupFailure &&
-        !error.includes("token cleanup failed after command status 37")
+        scenario.cleanupStatus !== 0 &&
+        !error.includes(
+          `token cleanup failed after command status ${scenario.commandStatus}`,
+        )
       ) {
         throw new Error("k0s worker token cleanup failure is not actionable");
       }
@@ -212,6 +263,15 @@ class WorkerServiceStateContract {
     [WorkerServiceInputState.MissingActive]: WorkerServiceState.Invalid,
     [WorkerServiceInputState.MissingInactive]: WorkerServiceState.Fresh,
   };
+  private static readonly reclaimOutcomes: Record<
+    WorkerReclaimInputState,
+    WorkerReclaimOutcome
+  > = {
+    [WorkerReclaimInputState.ActiveExisting]: WorkerReclaimOutcome.Accepted,
+    [WorkerReclaimInputState.ActiveWithoutUnit]: WorkerReclaimOutcome.Rejected,
+    [WorkerReclaimInputState.FreshExisting]: WorkerReclaimOutcome.Accepted,
+    [WorkerReclaimInputState.ResumedExisting]: WorkerReclaimOutcome.Accepted,
+  };
 
   static assert(source: string): void {
     const fixtures = [
@@ -238,6 +298,25 @@ class WorkerServiceStateContract {
         throw new Error("k0s worker service-state transition is unsafe");
       }
     }
+    for (const input of [
+      WorkerReclaimInputState.ActiveExisting,
+      WorkerReclaimInputState.FreshExisting,
+      WorkerReclaimInputState.ResumedExisting,
+    ]) {
+      if (
+        WorkerServiceStateContract.reclaimOutcomes[input] !==
+        WorkerReclaimOutcome.Accepted
+      ) {
+        throw new Error(`k0s worker reclaim rejected ${input}`);
+      }
+    }
+    if (
+      WorkerServiceStateContract.reclaimOutcomes[
+        WorkerReclaimInputState.ActiveWithoutUnit
+      ] !== WorkerReclaimOutcome.Rejected
+    ) {
+      throw new Error("k0s worker reclaim accepted active service without unit");
+    }
     const contract = new TextContract({
       label: "k0s worker service-state transition",
       source,
@@ -248,7 +327,17 @@ class WorkerServiceStateContract {
       "printf resumed",
       "printf fresh",
       "active service has no installed unit",
+      'if test "$worker_service_state" = fresh && test -z "$node"; then',
+      'test -n "$node"',
+      '.metadata.labels["nook.nokey.sh/node-role"]',
+      '.metadata.labels["nook.nokey.sh/arc-build"]',
+      'if test "$worker_service_state" != fresh; then',
     ]);
+    contract.requireBefore({
+      first: 'test -n "$node"',
+      second:
+        "Timed out waiting for $active_workloads terminating ARC workload(s) on $node",
+    });
   }
 
   private static resolve(input: WorkerServiceInputState): WorkerServiceState {
@@ -421,8 +510,6 @@ export class ArcWorkerRestoreContract {
       'ssh -n -o BatchMode=yes -J "$controller_target" \\',
       "printf '%s' \"$token\"",
       'token_temp="$(mktemp)"',
-      'cleanup() { rm -f "$token_temp"; }',
-      "trap cleanup EXIT",
       'cat > "$token_temp"',
       'test -s "$token_temp"',
       'worker_service_state="$(',
@@ -454,10 +541,13 @@ export class ArcWorkerRestoreContract {
       "base64 -d",
       'echo "$token"',
       '--token "$token"',
+      "delete_worker_token",
+      "worker_token_uploaded",
     ]);
     ArcWorkloadDrainContract.assert(installSource);
     WorkerServiceStateContract.assert(installSource);
     WorkerTokenCleanupContract.assert(installSource);
+    WorkerPreparingTaintContract.assert(installSource);
     install.requireBefore({
       first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
       second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
@@ -481,13 +571,9 @@ export class ArcWorkerRestoreContract {
       second: "sudo -n k0s install worker",
     });
     install.requireBefore({
-      first: "worker_token_uploaded=true",
-      second: "sudo -n k0s install worker",
+      first: "trap cleanup_worker_token EXIT",
+      second: 'cat > "$token_temp"',
     });
-    install.require(
-      "        REMOTE\n        delete_worker_token\n\n" +
-        '        ssh -o BatchMode=yes "$controller_target" bash -s --',
-    );
     restore.requireAll([
       "- task: k0s:worker:install",
       "test \"$(printf '%s\\n' \"$node\" | sed '/^$/d' | wc -l | tr -d ' ')\" = 1",

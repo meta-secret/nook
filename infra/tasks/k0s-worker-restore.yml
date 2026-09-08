@@ -138,12 +138,22 @@ tasks:
           '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name')"
         test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" -le 1
         node="$(printf '%s\n' "$node" | sed '/^$/d')"
-        if test "$worker_service_state" = fresh; then
-          test -z "$node"
+        if test "$worker_service_state" = fresh && test -z "$node"; then
           exit 0
         fi
         test -n "$node"
-        kubectl wait "node/$node" --for=condition=Ready --timeout=5m
+        node_json="$(kubectl get node "$node" -o json)"
+        test "$(jq -r '.metadata.labels["nook.nokey.sh/node-role"]' <<<"$node_json")" = compute
+        test "$(jq -r '.metadata.labels["nook.nokey.sh/arc-build"]' <<<"$node_json")" = true
+        preparing_taint_state="$(jq -r '[.spec.taints[]? |
+          select(.key == "nook.nokey.sh/arc-build")] |
+          [length, map(select(
+            .value == "preparing" and .effect == "NoSchedule"
+          )) | length] | @tsv' <<<"$node_json")"
+        test "$preparing_taint_state" = $'1\t1'
+        if test "$worker_service_state" != fresh; then
+          kubectl wait "node/$node" --for=condition=Ready --timeout=5m
+        fi
         deadline="$(( $(date +%s) + 900 ))"
         while :; do
           active_workloads="$(kubectl get pods --namespace arc-runners \
@@ -165,65 +175,50 @@ tasks:
         done
         REMOTE
 
-        worker_token_uploaded=false
-        delete_worker_token() {
-          if ! ssh -n -o BatchMode=yes -J "$controller_target" \
-            "$worker_target" 'set -euo pipefail
-            sudo -n rm -f /etc/k0s/worker-token
-            sudo -n test ! -e /etc/k0s/worker-token'; then
-            return 1
-          fi
-          worker_token_uploaded=false
-        }
-        cleanup_worker_token() {
-          original_status="$?"
-          trap - EXIT
-          if test "$worker_token_uploaded" = true; then
-            if ! delete_worker_token; then
+        token="$(ssh -n -o BatchMode=yes "$controller_target" \
+          'sudo -n k0s token create --role worker --expiry 15m')"
+        test "${#token}" -gt 100
+        {
+          printf '%s\n' "$worker_mesh_address" "$worker_arc_tier" "$worker_service_state"
+          printf '%s' "$token"
+        } | ssh -o BatchMode=yes -J "$controller_target" "$worker_target" \
+          'set -euo pipefail
+          IFS= read -r worker_mesh_address
+          IFS= read -r worker_arc_tier
+          IFS= read -r worker_service_state
+          token_temp="$(mktemp)"
+          cleanup_worker_token() {
+            original_status="$?"
+            trap - EXIT
+            cleanup_status=0
+            rm -f "$token_temp" || cleanup_status=1
+            sudo -n rm -f /etc/k0s/worker-token || cleanup_status=1
+            sudo -n test ! -e /etc/k0s/worker-token || cleanup_status=1
+            if test "$cleanup_status" -ne 0; then
               echo "k0s worker: token cleanup failed after command status $original_status" >&2
               test "$original_status" -ne 0 && exit "$original_status"
               exit 1
             fi
+            exit "$original_status"
+          }
+          trap cleanup_worker_token EXIT
+          cat > "$token_temp"
+          test -s "$token_temp"
+          sudo -n install -m 0600 "$token_temp" /etc/k0s/worker-token
+          sudo -n k0s install worker \
+            --force \
+            --token-file /etc/k0s/worker-token \
+            --kubelet-extra-args="--node-ip=$worker_mesh_address --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
+            --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute,nook.nokey.sh/arc-tier=$worker_arc_tier"
+          sudo -n systemctl daemon-reload
+          sudo -n systemctl enable k0sworker
+          if test "$worker_service_state" = fresh; then
+            sudo -n systemctl start k0sworker.service
+          else
+            sudo -n systemctl restart k0sworker.service
           fi
-          exit "$original_status"
-        }
-        trap cleanup_worker_token EXIT
-
-        token="$(ssh -n -o BatchMode=yes "$controller_target" \
-          'sudo -n k0s token create --role worker --expiry 15m')"
-        test "${#token}" -gt 100
-        worker_token_uploaded=true
-        printf '%s' "$token" |
-          ssh -o BatchMode=yes -J "$controller_target" "$worker_target" \
-            'set -euo pipefail
-            token_temp="$(mktemp)"
-            cleanup() { rm -f "$token_temp"; }
-            trap cleanup EXIT
-            cat > "$token_temp"
-            test -s "$token_temp"
-            sudo -n install -m 0600 "$token_temp" /etc/k0s/worker-token'
+          sudo -n systemctl is-active --quiet k0sworker.service'
         token=
-        ssh -o BatchMode=yes -J "$controller_target" "$worker_target" bash -s -- \
-          "$worker_mesh_address" "$worker_arc_tier" "$worker_service_state" <<'REMOTE'
-        set -euo pipefail
-        worker_mesh_address="$1"
-        worker_arc_tier="$2"
-        worker_service_state="$3"
-        sudo -n k0s install worker \
-          --force \
-          --token-file /etc/k0s/worker-token \
-          --kubelet-extra-args="--node-ip=$worker_mesh_address --register-with-taints=nook.nokey.sh/arc-build=preparing:NoSchedule" \
-          --labels="nook.nokey.sh/arc-build=true,nook.nokey.sh/node-role=compute,nook.nokey.sh/arc-tier=$worker_arc_tier"
-        sudo -n systemctl daemon-reload
-        sudo -n systemctl enable k0sworker
-        if test "$worker_service_state" = fresh; then
-          sudo -n systemctl start k0sworker.service
-        else
-          sudo -n systemctl restart k0sworker.service
-        fi
-        sudo -n systemctl is-active --quiet k0sworker.service
-        REMOTE
-        delete_worker_token
 
         ssh -o BatchMode=yes "$controller_target" bash -s -- \
           "$worker_mesh_address" "$worker_ssh_user" "$worker_arc_tier" "$remote_dir" <<'REMOTE'
