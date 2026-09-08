@@ -116,6 +116,8 @@ export type DemoChromeStubArgs = {
   authenticatorPickerFlow?: boolean
   /** Record runtime message types so demos can assert cross-domain sequencing. */
   recordRuntimeMessageTypes?: boolean
+  /** Record outbound authentication facts so demos can assert the wire contract. */
+  recordAuthenticationObservations?: boolean
   barcodeRawValue?: string
 }
 
@@ -158,6 +160,7 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
     enrollPilotFlow = false,
     authenticatorPickerFlow = false,
     recordRuntimeMessageTypes = false,
+    recordAuthenticationObservations = false,
     barcodeRawValue,
   } = args
   let loginOptionsCalls = 0
@@ -676,6 +679,19 @@ export function installDemoChromeStub(args: DemoChromeStubArgs) {
             demoWindow.__nookDemoRuntimeMessageTypes,
           )
           demoWindow.__nookDemoRuntimeMessageTypes.push(message.type)
+        }
+        if (
+          recordAuthenticationObservations &&
+          message.type === 'nook:authentication-workflow-snapshot'
+        ) {
+          const demoWindow = globalThis as unknown as {
+            __nookDemoAuthenticationObservations?: unknown[][]
+          }
+          demoWindow.__nookDemoAuthenticationObservations = ((v) =>
+            v ? v : [])(demoWindow.__nookDemoAuthenticationObservations)
+          demoWindow.__nookDemoAuthenticationObservations.push(
+            ((v) => (v ? v : []))(message.payload?.observations),
+          )
         }
         const responseRequest: AuthenticationSnapshotResponseAdapterRequest = {
           message,
