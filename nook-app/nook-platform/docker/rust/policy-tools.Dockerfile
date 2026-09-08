@@ -39,6 +39,12 @@ RUN curl -fsSL \
       "/tmp/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}" \
     && cargo-audit --version
 
+# cargo-deny's metadata query honors Dylint's pinned toolchain. Install it once
+# from the owning declaration, before the nonce, rather than downloading and
+# retaining another 1.4 GB Rustup tree for every Dylint policy check.
+COPY nook-app/nook-platform/dylint/nook-domain-api/rust-toolchain /opt/nook/policy-nightly/rust-toolchain
+RUN cd /opt/nook/policy-nightly && rustc --version
+
 FROM rust-ecosystem-policy-tools AS rust-ecosystem-dependency-policy
 
 ARG WORKSPACE
