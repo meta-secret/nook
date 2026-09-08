@@ -37,38 +37,43 @@ struct FunctionOwnershipRequest<'cx, 'tcx> {
 
 impl FunctionOwnership {
     fn is_test_code(request: FunctionOwnershipRequest<'_, '_>) -> bool {
-        request
+        Self::has_test_configuration_before(
+            request.cx,
+            request.cx.tcx.hir_span(request.item_hir_id),
+        ) || request
             .cx
             .tcx
-            .hir_attrs(request.item_hir_id)
-            .iter()
-            .any(Self::is_test_configuration)
-            || request
-                .cx
-                .tcx
-                .hir_parent_iter(request.item_hir_id)
-                .any(|(hir_id, _)| {
-                    request
-                        .cx
-                        .tcx
-                        .hir_attrs(hir_id)
-                        .iter()
-                        .any(Self::is_test_configuration)
-                })
+            .hir_parent_iter(request.item_hir_id)
+            .any(|(_, node)| match node {
+                Node::Item(item) => Self::has_test_configuration_before(request.cx, item.span),
+                _ => false,
+            })
     }
 
-    fn is_test_configuration(attribute: &Attribute) -> bool {
-        attribute.has_name(sym::cfg)
-            && attribute.meta_item_list().is_some_and(|items| {
-                items.iter().any(|item| {
-                    item.meta_item().is_some_and(|meta| {
-                        meta.path
-                            .segments
-                            .last()
-                            .is_some_and(|segment| segment.ident.name.as_str() == "test")
-                    })
-                })
-            })
+    fn has_test_configuration_before(cx: &LateContext<'_>, span: rustc_span::Span) -> bool {
+        let source_map = cx.tcx.sess.source_map();
+        let source_file = source_map.lookup_char_pos(span.lo()).file;
+        let Some(source) = source_file.src.as_deref() else {
+            return false;
+        };
+        let offset = (span.lo() - source_file.start_pos).to_usize();
+        let Some(prefix) = source.get(..offset) else {
+            return false;
+        };
+        for line in prefix.lines().rev().take(16) {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("//") {
+                continue;
+            }
+            if line.starts_with("#[") {
+                if line.starts_with("#[cfg(") && line.contains("test") {
+                    return true;
+                }
+                continue;
+            }
+            break;
+        }
+        false
     }
 
     fn has_unowned_function_attribute(request: FunctionOwnershipRequest<'_, '_>) -> bool {
