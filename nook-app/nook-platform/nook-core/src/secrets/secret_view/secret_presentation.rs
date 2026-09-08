@@ -88,13 +88,18 @@ impl LoginHostMatchRequest<'_> {
     }
 
     pub(crate) fn legacy_matches(website_url: &str, origin: &str) -> bool {
-        let website_url = website_url.to_owned();
-        let origin = origin.to_owned();
-        Self {
-            website_url: &website_url,
-            origin: &origin,
+        let secret_host = WebsiteHost::normalize(website_url);
+        let origin_host = WebsiteHost::normalize(origin);
+        if secret_host.is_empty() || origin_host.is_empty() {
+            return false;
         }
-        .matches()
+        secret_host.eq_ignore_ascii_case(&origin_host)
+            || LoginSiteHosts::bundled().is_some_and(|catalog| {
+                catalog.share_family(LoginFamilyMatchRequest {
+                    left: &secret_host,
+                    right: &origin_host,
+                })
+            })
     }
 }
 
@@ -122,13 +127,17 @@ impl AuthenticatorGroupKeyRequest<'_> {
     }
 
     pub(crate) fn legacy_resolve(website_url: &str, issuer: &str) -> String {
-        let website_url = website_url.to_owned();
-        let issuer = issuer.to_owned();
-        Self {
-            website_url: &website_url,
-            issuer: &issuer,
-        }
-        .resolve()
+        let request = AuthenticatorWebsiteHostRequest {
+            website_url,
+            issuer,
+        };
+        request
+            .explicit_or_domain_host()
+            .or_else(|| {
+                AuthenticatorIssuerHosts::bundled()
+                    .and_then(|catalog| catalog.resolve_website_host(request))
+            })
+            .unwrap_or_else(|| issuer.trim().to_owned())
     }
 }
 
