@@ -495,17 +495,21 @@ mod tests {
             }
             Ok(())
         }
+
+        fn assert_real_candidate() -> anyhow::Result<()> {
+            let candidate =
+                Self::candidate().map_err(|failure| anyhow::anyhow!(failure.to_string()))?;
+            assert_eq!(candidate.events.len(), 1);
+            assert_eq!(candidate.event_heads.len(), 1);
+            assert_eq!(candidate.vault_store_id.as_str(), "store_testtoken11");
+            assert!(candidate.providers.providers.is_empty());
+            Ok(())
+        }
     }
 
     #[test]
     fn real_manager_prepares_inert_storage_candidate() -> anyhow::Result<()> {
-        let candidate = CandidateFixture::candidate()
-            .map_err(|failure| anyhow::anyhow!(failure.to_string()))?;
-        assert_eq!(candidate.events.len(), 1);
-        assert_eq!(candidate.event_heads.len(), 1);
-        assert_eq!(candidate.vault_store_id.as_str(), "store_testtoken11");
-        assert!(candidate.providers.providers.is_empty());
-        Ok(())
+        CandidateFixture::assert_real_candidate()
     }
 
     #[test]

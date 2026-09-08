@@ -5,7 +5,7 @@
 )]
 
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::mem;
 use tsify::Tsify;
 
@@ -87,9 +87,7 @@ impl<'de> Deserialize<'de> for CompanionPairingEpochMilliseconds {
     where
         DeserializerType: Deserializer<'de>,
     {
-        let epoch = Self(f64::deserialize(deserializer)?);
-        epoch.validate().map_err(DeserializerType::Error::custom)?;
-        Ok(epoch)
+        Ok(Self(f64::deserialize(deserializer)?))
     }
 }
 
@@ -582,18 +580,33 @@ mod tests {
             })
         }
 
-        fn assert_invalid_epoch_domains() {
-            for invalid in ["0", "-1", "1.5", "9007199254740992", "1e999"] {
-                assert!(
-                    serde_json::from_str::<CompanionPairingEpochMilliseconds>(invalid).is_err()
+        fn assert_invalid_epoch_domains() -> anyhow::Result<()> {
+            for invalid in ["0", "-1", "1.5", "9007199254740992"] {
+                let wire = serde_json::to_string(&Self::request()?)?
+                    .replace("\"issuedAt\":100.0", &format!("\"issuedAt\":{invalid}"));
+                let request: CompanionPairingRequest = serde_json::from_str(&wire)?;
+                let Err(error) = CompanionExtensionPairingEndpoint::issue(request) else {
+                    return Err(anyhow::anyhow!("invalid epoch was admitted"));
+                };
+                assert_eq!(error, CompanionPairingError::InvalidValue);
+                assert_eq!(
+                    CompanionPairingFailure::from(error),
+                    CompanionPairingFailure::InvalidValue
                 );
             }
+            let mut request = Self::request()?;
+            request.issued_at = CompanionPairingEpochMilliseconds(f64::NAN);
+            assert!(matches!(
+                CompanionExtensionPairingEndpoint::issue(request),
+                Err(CompanionPairingError::InvalidValue)
+            ));
+            Ok(())
         }
     }
 
     #[test]
-    fn epoch_deserialization_rejects_invalid_numeric_domains() {
-        PairingFixture::assert_invalid_epoch_domains();
+    fn epoch_wire_values_receive_typed_domain_rejection() -> anyhow::Result<()> {
+        PairingFixture::assert_invalid_epoch_domains()
     }
 
     #[test]
