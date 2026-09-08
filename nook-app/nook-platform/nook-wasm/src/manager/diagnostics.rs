@@ -32,7 +32,12 @@ impl NookVaultManager {
             StoreId::parse(raw_store_id).map_err(|error| JsError::new(&error.to_string()))?;
         let store = load_local_event_store(store_id.as_str()).await?;
         let graph = store.load_graph(store_id.as_str())?;
-        let options = nook_core::vault_recovery_options(&graph, store_id.as_str())?;
+        let options = nook_core::VaultRecoveryOptions::from_request(
+            &nook_core::VaultRecoveryProjectionRequest {
+                graph: &graph,
+                store_id: &store_id,
+            },
+        )?;
         let vault_name = match &self.vault.vault_name {
             VaultNameState::Named(name) => name.clone(),
             VaultNameState::Unnamed => {

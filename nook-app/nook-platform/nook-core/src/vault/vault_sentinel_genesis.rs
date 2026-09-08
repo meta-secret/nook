@@ -1,5 +1,11 @@
 //! Atomic core integration for provider-independent Sentinel genesis.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::{MemberLabel, MultiDeviceError, SentinelConfiguration, VaultOperation};
 
 use crate::i18n_keys;
@@ -91,38 +97,6 @@ pub struct SentinelGenesisOutput {
     pub participants: Vec<crate::SentinelGenesisParticipant>,
 }
 
-/// Complete public genesis operations for an event-log root. Member enrollment
-/// and encrypted shares are emitted together so event-only materialization
-/// never loses the Sentinel roster.
-#[must_use]
-pub fn sentinel_genesis_operations(output: &SentinelGenesisOutput) -> Vec<crate::VaultOperation> {
-    let mut operations = output
-        .participants
-        .iter()
-        .map(|participant| VaultOperation::SentinelParticipantEnrolled {
-            device_id: participant.device_id.clone(),
-            encryption_public_key: participant.encryption_public_key.clone(),
-            signing_public_key: participant.signing_public_key.clone(),
-            label: MemberLabel::from_trusted(participant.label.clone()),
-        })
-        .collect::<Vec<_>>();
-    operations.push(VaultOperation::SentinelSharesIssued {
-        shares: output
-            .participant_deliveries
-            .iter()
-            .map(|delivery| crate::SentinelShareIssuedPayload {
-                device_id: delivery.device_id.clone(),
-                version: delivery.share.version,
-                threshold: delivery.share.threshold,
-                required_participants: delivery.share.required_participants,
-                share_index: delivery.share.share_index,
-                ciphertext: delivery.share.ciphertext.clone(),
-            })
-            .collect(),
-    });
-    operations
-}
-
 impl StartSentinelGenesisArgs {
     pub fn start(
         self,
@@ -142,6 +116,38 @@ impl StartSentinelGenesisArgs {
 /// Generate keys, encrypted member rows, and the complete encrypted share set
 /// as one result after all `N` signed participant responses are verified.
 impl SentinelGenesisOutput {
+    /// Complete public genesis operations for an event-log root. Member
+    /// enrollment and encrypted shares are emitted together so event-only
+    /// materialization never loses the Sentinel roster.
+    #[must_use]
+    pub fn operations(&self) -> Vec<crate::VaultOperation> {
+        let mut operations = self
+            .participants
+            .iter()
+            .map(|participant| VaultOperation::SentinelParticipantEnrolled {
+                device_id: participant.device_id.clone(),
+                encryption_public_key: participant.encryption_public_key.clone(),
+                signing_public_key: participant.signing_public_key.clone(),
+                label: MemberLabel::from_trusted(participant.label.clone()),
+            })
+            .collect::<Vec<_>>();
+        operations.push(VaultOperation::SentinelSharesIssued {
+            shares: self
+                .participant_deliveries
+                .iter()
+                .map(|delivery| crate::SentinelShareIssuedPayload {
+                    device_id: delivery.device_id.clone(),
+                    version: delivery.share.version,
+                    threshold: delivery.share.threshold,
+                    required_participants: delivery.share.required_participants,
+                    share_index: delivery.share.share_index,
+                    ciphertext: delivery.share.ciphertext.clone(),
+                })
+                .collect(),
+        });
+        operations
+    }
+
     pub fn from_ready(
         ready: ReadySentinelGenesis<'_>,
     ) -> Result<SentinelGenesisOutput, crate::MultiDeviceError> {
@@ -254,7 +260,7 @@ mod tests {
                 .map_err(|rejected| rejected.into_parts().1)?,
         )?;
         assert_eq!(output.participant_deliveries.len(), 2);
-        let operations = sentinel_genesis_operations(&output);
+        let operations = output.operations();
         assert_eq!(operations.len(), 3);
         let mut materialized = VaultMetaState::default();
         let requested_at = IsoTimestamp::parse("2026-07-09T00:00:00Z")?;

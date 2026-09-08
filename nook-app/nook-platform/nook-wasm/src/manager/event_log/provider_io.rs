@@ -79,15 +79,14 @@ impl SimpleGenesisOperationsInput<'_> {
                     NookError::Database("Simple genesis identity no longer exists.".to_owned())
                 })?
         };
-        nook_core::simple_identity_genesis_operations(
-            &nook_core::SimpleIdentityGenesisOperationsInput {
-                identity: &identity_record,
-                keys: self.keys,
-                current_app_id: self.identity.device_id(),
-                current_signing_public_key: self.signing_public_key,
-                created_at: self.created_at.as_str(),
-            },
-        )
+        nook_core::SimpleIdentityGenesisOperationsInput {
+            identity: &identity_record,
+            keys: self.keys,
+            current_app_id: self.identity.device_id(),
+            current_signing_public_key: self.signing_public_key,
+            created_at: self.created_at.as_str(),
+        }
+        .operations()
         .map_err(NookError::from)
     }
 }

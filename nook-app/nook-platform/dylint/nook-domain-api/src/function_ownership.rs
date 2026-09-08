@@ -1,16 +1,17 @@
 use clippy_utils::{diagnostics::span_lint_and_help, is_test_function};
 use rustc_ast::attr::AttributeExt;
-use rustc_hir::{Attribute, Item, ItemKind, Node, def::DefKind};
+use rustc_hir::{Attribute, HirId, Item, ItemKind, Node, def::DefKind};
 use rustc_lint::{LateContext, LateLintPass};
 use rustc_session::{declare_lint, declare_lint_pass, lint::LintExpectationId};
-use rustc_span::sym;
+use rustc_span::{Span, sym};
 
 declare_lint! {
     /// Detects authored free functions, including private and nested definitions.
     /// An owning type states where an operation belongs; semantic cohesion and
     /// valid typestate transitions still require domain review.
-    /// Compiler entrypoints, registered tests, and external macro output have
-    /// external owners. Required standalone callbacks need a checked expectation.
+    /// Compiler entrypoints, test modules, registered tests, and external macro
+    /// output have external owners. Required standalone callbacks need a checked
+    /// expectation.
     pub UNOWNED_FUNCTION,
     Allow,
     "authored function has no struct, enum, or trait owner"
@@ -28,15 +29,113 @@ declare_lint_pass! {
     FunctionOwnership => [UNOWNED_FUNCTION, INVALID_UNOWNED_FUNCTION_SUPPRESSION]
 }
 
+#[derive(Clone, Copy)]
+struct FunctionOwnershipRequest<'cx, 'tcx> {
+    cx: &'cx LateContext<'tcx>,
+    item_hir_id: HirId,
+}
+
+#[derive(Clone, Copy)]
+struct SourceScanRequest<'cx, 'tcx> {
+    cx: &'cx LateContext<'tcx>,
+    span: Span,
+}
+
 impl FunctionOwnership {
+    fn is_test_code(request: FunctionOwnershipRequest<'_, '_>) -> bool {
+        Self::has_test_configuration_before(SourceScanRequest {
+            cx: request.cx,
+            span: request.cx.tcx.hir_span(request.item_hir_id),
+        }) || request
+            .cx
+            .tcx
+            .hir_parent_iter(request.item_hir_id)
+            .any(|(_, node)| match node {
+                Node::Item(item) => Self::has_test_configuration_before(SourceScanRequest {
+                    cx: request.cx,
+                    span: item.span,
+                }),
+                _ => false,
+            })
+    }
+
+    fn has_test_configuration_before(request: SourceScanRequest<'_, '_>) -> bool {
+        let source_file = request
+            .cx
+            .tcx
+            .sess
+            .source_map()
+            .lookup_char_pos(request.span.lo())
+            .file;
+        let Some(source) = source_file.src.as_deref() else {
+            return false;
+        };
+        let offset = (request.span.lo() - source_file.start_pos).0 as usize;
+        let Some(prefix) = source.get(..offset) else {
+            return false;
+        };
+        for line in prefix.lines().rev().take(16) {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("//") {
+                continue;
+            }
+            if line.starts_with("#[") {
+                if Self::is_test_only_configuration(line) {
+                    return true;
+                }
+                continue;
+            }
+            break;
+        }
+        false
+    }
+
+    fn is_test_only_configuration(line: &str) -> bool {
+        let Some(predicate) = line
+            .strip_prefix("#[cfg(")
+            .and_then(|line| line.strip_suffix(")]"))
+        else {
+            return false;
+        };
+        let predicate = predicate.trim();
+        if predicate == "test" {
+            return true;
+        }
+        let Some(inner) = predicate
+            .strip_prefix("all(")
+            .and_then(|predicate| predicate.strip_suffix(')'))
+        else {
+            return false;
+        };
+        inner.split(',').map(str::trim).any(|term| term == "test")
+            && inner
+                .split(',')
+                .map(str::trim)
+                .all(|term| !term.starts_with("not(") && !term.starts_with("any("))
+    }
+
+    fn has_unowned_function_attribute(request: FunctionOwnershipRequest<'_, '_>) -> bool {
+        request
+            .cx
+            .tcx
+            .hir_attrs(request.item_hir_id)
+            .iter()
+            .any(Self::mentions_lint)
+    }
+
     fn requires_owner(cx: &LateContext<'_>, item: &Item<'_>) -> bool {
         let def_id = item.owner_id.def_id;
+        let request = FunctionOwnershipRequest {
+            cx,
+            item_hir_id: item.hir_id(),
+        };
         if !matches!(item.kind, ItemKind::Fn { .. })
             || item.span.in_external_macro(cx.tcx.sess.source_map())
             || cx
                 .tcx
                 .entry_fn(())
                 .is_some_and(|(entry, _)| entry == def_id.to_def_id())
+            || (Self::is_test_code(request) && !Self::has_unowned_function_attribute(request))
         {
             return false;
         }
@@ -146,5 +245,29 @@ impl<'tcx> LateLintPass<'tcx> for FunctionOwnership {
             None,
             problem,
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::FunctionOwnership;
+
+    #[test]
+    fn test_only_configuration_requires_positive_test_gate() {
+        assert!(FunctionOwnership::is_test_only_configuration(
+            "#[cfg(test)]"
+        ));
+        assert!(FunctionOwnership::is_test_only_configuration(
+            "#[cfg(all(test, feature = \"fixtures\"))]"
+        ));
+        assert!(!FunctionOwnership::is_test_only_configuration(
+            "#[cfg(not(test))]"
+        ));
+        assert!(!FunctionOwnership::is_test_only_configuration(
+            "#[cfg(any(test, feature = \"fixtures\"))]"
+        ));
+        assert!(!FunctionOwnership::is_test_only_configuration(
+            "#[cfg_attr(test, allow(dead_code))]"
+        ));
     }
 }

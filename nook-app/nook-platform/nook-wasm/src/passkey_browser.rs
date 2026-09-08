@@ -66,7 +66,7 @@ pub(crate) fn passkey_label_with_device_id(passkey_label: &str, device_id: &str)
     let label = normalized_passkey_label(passkey_label);
     let device_id = DeviceId::parse(device_id).map_or_else(
         |_| device_id.trim().to_owned(),
-        |id| nook_core::recovery_device_id_hint(&id),
+        |id| nook_core::VaultRecoveryDevice::passkey_hint_for(&id),
     );
     format!("{label} - device {device_id}")
 }

@@ -478,7 +478,7 @@ mod tests {
                     secrets: Vec::new(),
                     password_entries: Vec::new(),
                 }];
-                operations.extend(nook_core::sentinel_genesis_operations(&fixture.output));
+                operations.extend(fixture.output.operations());
                 let epoch = EventId::from_sha256_hex(
                     nook_auth2::Sha256Hex::from_bytes(fixture.output.store_id.as_str().as_bytes())
                         .as_str(),
