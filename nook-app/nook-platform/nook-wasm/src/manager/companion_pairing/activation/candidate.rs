@@ -184,7 +184,6 @@ impl NookCompanionPairingCandidateOutcome {
         }
     }
 
-    #[must_use]
     pub fn into_stored(
         self,
     ) -> Result<NookStoredCompanionPairingActivationCandidate, NookCompanionPairingCandidateFailure>
@@ -198,7 +197,6 @@ impl NookCompanionPairingCandidateOutcome {
         }
     }
 
-    #[must_use]
     pub fn into_failure(
         self,
     ) -> Result<NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateFailure> {
