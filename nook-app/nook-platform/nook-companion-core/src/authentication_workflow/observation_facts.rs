@@ -24,8 +24,8 @@ pub use ceremony::{
     AuthenticationImplicitSubmitActuationObservation,
 };
 pub use disclosure::{
-    AuthenticationCredentialDisclosureControlObservation,
-    AuthenticationDisclosureControlDecision, AuthenticationDisclosureObservationSchemaVersion,
+    AuthenticationCredentialDisclosureControlObservation, AuthenticationDisclosureControlDecision,
+    AuthenticationDisclosureObservationSchemaVersion,
     CurrentAuthenticationDisclosureControlRequest,
     VersionedAuthenticationDisclosureControlObservation,
 };
@@ -68,9 +68,7 @@ impl AuthenticationPageObservationFacts {
             && self.authenticator.is_bounded()
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
-            && self
-                .credential_disclosure_control
-                .is_collection_bounded()
+            && self.credential_disclosure_control.is_collection_bounded()
             && self.authenticator.detailed_passkey_control.is_bounded()
             && self.credential_submission.is_bounded()
     }

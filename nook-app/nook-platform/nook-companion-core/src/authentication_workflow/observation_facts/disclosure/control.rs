@@ -326,9 +326,9 @@ impl AuthenticationCredentialDisclosureControlObservation {
         self.is_collection_bounded()
             && (matches!(self, Self::Absent)
                 || matches!(self, Self::Observed(observations)
-                    if observations.iter().all(
-                        VersionedAuthenticationDisclosureControlObservation::is_bounded
-                    )))
+                if observations.iter().all(
+                    VersionedAuthenticationDisclosureControlObservation::is_bounded
+                )))
     }
 }
 

@@ -7,8 +7,8 @@
 mod control;
 
 pub use control::{
-    AuthenticationCredentialDisclosureControlObservation,
-    AuthenticationDisclosureControlDecision, AuthenticationDisclosureObservationSchemaVersion,
+    AuthenticationCredentialDisclosureControlObservation, AuthenticationDisclosureControlDecision,
+    AuthenticationDisclosureObservationSchemaVersion,
     CurrentAuthenticationDisclosureControlRequest,
     VersionedAuthenticationDisclosureControlObservation,
 };

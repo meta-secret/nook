@@ -299,19 +299,14 @@ mod tests {
         const LEGACY_REASON_WIRE: &'static str =
             r#"{"ok":false,"reason":"unsupported-authentication-observation-version"}"#;
 
-        fn decode_snapshot(
-            wire: &str,
-        ) -> anyhow::Result<AuthenticationWorkflowSnapshotResponse> {
+        fn decode_snapshot(wire: &str) -> anyhow::Result<AuthenticationWorkflowSnapshotResponse> {
             let wire = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(wire)?;
             Ok(decode_authentication_workflow_snapshot_response(wire)?)
         }
 
-        fn decode_runtime(
-            workflow: &str,
-        ) -> anyhow::Result<AuthenticationWorkflowRuntimeResponse> {
-            let json = format!(
-                r#"{{"workflow":{workflow},"loginMatches":{{"kind":"unavailable"}}}}"#
-            );
+        fn decode_runtime(workflow: &str) -> anyhow::Result<AuthenticationWorkflowRuntimeResponse> {
+            let json =
+                format!(r#"{{"workflow":{workflow},"loginMatches":{{"kind":"unavailable"}}}}"#);
             let wire = serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(&json)?;
             Ok(decode_authentication_workflow_runtime_response(wire)?)
         }
