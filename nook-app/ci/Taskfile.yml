@@ -20,7 +20,6 @@ tasks:
         vars: { BUILD_TASK: _ci:main:rust:host }
 
   _ci:main:rust:host:
-    internal: true
     cmds:
       - task: docker:ci:rust:export
 
