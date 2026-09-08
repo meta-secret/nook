@@ -24,6 +24,100 @@ enum WorkerServiceState {
   Resumed = "resumed",
 }
 
+enum PreparingTaintCase {
+  Ambiguous = "ambiguous",
+  Exact = "exact",
+  Missing = "missing",
+  WrongEffect = "wrong-effect",
+  WrongValue = "wrong-value",
+}
+
+class WorkerPreparingTaintContract {
+  static assert(source: string): void {
+    const contract = new TextContract({
+      label: "k0s worker preparing taint",
+      source,
+    });
+    contract.requireAll([
+      'preparing_taint_state="$(jq -r',
+      'select(.key == "nook.nokey.sh/arc-build")',
+      '.value == "preparing" and .effect == "NoSchedule"',
+      "test \"$preparing_taint_state\" = $'1\\t1'",
+    ]);
+    const fixtures = new Map([
+      [
+        PreparingTaintCase.Exact,
+        [
+          {
+            key: "nook.nokey.sh/arc-build",
+            value: "preparing",
+            effect: "NoSchedule",
+          },
+        ],
+      ],
+      [PreparingTaintCase.Missing, []],
+      [
+        PreparingTaintCase.WrongValue,
+        [
+          {
+            key: "nook.nokey.sh/arc-build",
+            value: "wrong",
+            effect: "NoSchedule",
+          },
+        ],
+      ],
+      [
+        PreparingTaintCase.WrongEffect,
+        [
+          {
+            key: "nook.nokey.sh/arc-build",
+            value: "preparing",
+            effect: "PreferNoSchedule",
+          },
+        ],
+      ],
+      [
+        PreparingTaintCase.Ambiguous,
+        [
+          {
+            key: "nook.nokey.sh/arc-build",
+            value: "preparing",
+            effect: "NoSchedule",
+          },
+          {
+            key: "nook.nokey.sh/arc-build",
+            value: "wrong",
+            effect: "NoSchedule",
+          },
+        ],
+      ],
+    ] as const);
+    const query = `[.spec.taints[]? |
+      select(.key == "nook.nokey.sh/arc-build")] |
+      [length, map(select(.value == "preparing" and .effect == "NoSchedule")) |
+      length] | @tsv`;
+    for (const [label, taints] of fixtures) {
+      const result = Bun.spawnSync({
+        cmd: [
+          "jq",
+          "-nr",
+          "--argjson",
+          "node",
+          JSON.stringify({ spec: { taints } }),
+          `$node | ${query}`,
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const accepted =
+        result.exitCode === 0 && result.stdout.toString().trim() === "1\t1";
+      if (accepted !== (label === PreparingTaintCase.Exact)) {
+        throw new Error(`k0s worker preparing taint accepted ${label}`);
+      }
+    }
+  }
+}
+
 class WorkerServiceStateContract {
   static assert(source: string): void {
     const fixtures = [
@@ -149,11 +243,15 @@ export class ArcWorkerRestoreContract {
       label: "k0s:worker:install",
       source: installSource,
     });
-    const restore = ArcWorkerRestoreContract.taskSection(
+    const restoreSource = ArcWorkerRestoreContract.taskSource(
       tasksSource,
       "k0s:worker:restore",
       "k0s:worker:status",
     );
+    const restore = new TextContract({
+      label: "k0s:worker:restore",
+      source: restoreSource,
+    });
     const status = ArcWorkerRestoreContract.taskSection(
       tasksSource,
       "k0s:worker:status",
@@ -249,13 +347,16 @@ export class ArcWorkerRestoreContract {
       '.metadata.labels["nook.nokey.sh/arc-build"]',
       'kubectl uncordon "$node"',
       "nook.nokey.sh/arc-build=preparing:NoSchedule-",
+      "test \"$preparing_taint_state\" = $'1\\t1'",
       ".spec.unschedulable // false",
       "test \"$(jq -c '[.spec.taints[]?] | sort_by(.key, .effect, .value)'",
     ]);
+    WorkerPreparingTaintContract.assert(restoreSource);
     for (const first of [
       "- task: k0s:worker:install",
       'select(.type == "Ready") | .status',
       'preserved_taints="$(jq -c',
+      "test \"$preparing_taint_state\" = $'1\\t1'",
     ])
       restore.requireBefore({ first, second: 'kubectl uncordon "$node"' });
     restore.forbidAll([

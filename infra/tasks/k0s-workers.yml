@@ -976,18 +976,19 @@ tasks:
         test "$(jq -r '.status.conditions[] | select(.type == "Ready") | .status' <<<"$node_json")" = True
         test "$(jq -r '.metadata.labels["nook.nokey.sh/node-role"]' <<<"$node_json")" = compute
         test "$(jq -r '.metadata.labels["nook.nokey.sh/arc-build"]' <<<"$node_json")" = true
+        preparing_taint_state="$(jq -r '[.spec.taints[]? |
+          select(.key == "nook.nokey.sh/arc-build")] |
+          [length, map(select(
+            .value == "preparing" and .effect == "NoSchedule"
+          )) | length] | @tsv' <<<"$node_json")"
+        test "$preparing_taint_state" = $'1\t1'
         preserved_taints="$(jq -c '[.spec.taints[]? | select(
           .key != "node.kubernetes.io/unschedulable" and
           .key != "nook.nokey.sh/arc-build"
         )] | sort_by(.key, .effect, .value)' <<<"$node_json")"
         kubectl uncordon "$node" >/dev/null
-        preparing_effect="$(kubectl get node "$node" \
-          -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
-        if test -n "$preparing_effect"; then
-          test "$preparing_effect" = NoSchedule
-          kubectl taint node "$node" \
-            nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null
-        fi
+        kubectl taint node "$node" \
+          nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null
         activated_json="$(kubectl get node "$node" -o json)"
         test "$(jq -r '.spec.unschedulable // false' <<<"$activated_json")" = false
         test -z "$(jq -r '.spec.taints[]? | select(

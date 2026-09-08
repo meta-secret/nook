@@ -4,6 +4,7 @@ import { readdir } from "node:fs/promises";
 import { assertHiveRenderContract } from "./arc-hive-render-contract";
 import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
 import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
+import { DockerCacheSelectionContract } from "./docker-cache-selection-contract";
 import { TextContract } from "./text-contract";
 
 const root = resolve(import.meta.dir, "../..");
@@ -854,6 +855,7 @@ remoteWorkflow.require(
   "remote dispatches must permit explicitly distinct concurrent cache proofs",
 );
 await ArcWorkerRestoreContract.assert(root);
+await DockerCacheSelectionContract.assert(root);
 await DockerfileFrontendContract.assert(root);
 await assertHiveRenderContract({ root });
 
