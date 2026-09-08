@@ -7,6 +7,16 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
+mod wire;
+
+pub use wire::{
+    AuthenticationPageObservationFactsClassificationOutcome,
+    AuthenticationPageObservationFactsSchemaVersion,
+    CurrentAuthenticationPageObservationFactsRequest,
+    VersionedAuthenticationPageObservationFacts,
+    VersionedAuthenticationPageObservationFactsBatch,
+};
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -30,21 +40,7 @@ impl AuthenticationPageObservationFactsBatch {
             || self
                 .observations
                 .iter()
-                .any(|observation| !observation.version_independent_facts_are_bounded())
-        {
-            return AuthenticationWorkflowMatch::Rejected;
-        }
-        if self.observations.iter().any(|observation| {
-            observation
-                .credential_disclosure_control
-                .has_unsupported_version()
-        }) {
-            return AuthenticationWorkflowMatch::UnsupportedVersion;
-        }
-        if self
-            .observations
-            .iter()
-            .any(|observation| !observation.is_bounded())
+                .any(|observation| !observation.is_bounded())
         {
             return AuthenticationWorkflowMatch::Rejected;
         }

@@ -17,7 +17,13 @@ pub use authenticator::{
     AuthenticationBackupCodesObservation, AuthenticationPasskeyAccountAvailability,
     classify_authentication_backup_codes_observation,
 };
-pub use batch::AuthenticationPageObservationFactsBatch;
+pub use batch::{
+    AuthenticationPageObservationFactsBatch, AuthenticationPageObservationFactsClassificationOutcome,
+    AuthenticationPageObservationFactsSchemaVersion,
+    CurrentAuthenticationPageObservationFactsRequest,
+    VersionedAuthenticationPageObservationFacts,
+    VersionedAuthenticationPageObservationFactsBatch,
+};
 pub use ceremony::{
     AuthenticationCeremonyContextObservation, AuthenticationCeremonyObservationFacts,
     AuthenticationDetailedAdvanceControlObservation,
@@ -53,22 +59,14 @@ pub struct AuthenticationPageObservationFacts {
     /// Detailed control evidence is classified in Rust; the reduced ceremony flag stays fail-closed.
     #[serde(default)]
     pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
-    /// Separately versioned evidence for exceptional disclosure-control classification.
-    pub credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
 
 impl AuthenticationPageObservationFacts {
     pub(super) fn is_bounded(&self) -> bool {
-        self.version_independent_facts_are_bounded()
-            && self.credential_disclosure_control.is_bounded()
-    }
-
-    fn version_independent_facts_are_bounded(&self) -> bool {
         self.fields.is_bounded()
             && self.authenticator.is_bounded()
             && self.ceremony.is_bounded()
             && self.detailed_advance_control.is_bounded()
-            && self.credential_disclosure_control.is_collection_bounded()
             && self.authenticator.detailed_passkey_control.is_bounded()
             && self.credential_submission.is_bounded()
     }

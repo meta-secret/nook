@@ -66,19 +66,11 @@ pub struct AuthenticationWorkflowRejectedResponseWire {
     reason: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
-#[serde(deny_unknown_fields, rename_all = "camelCase")]
-pub struct AuthenticationWorkflowUnsupportedVersionResponseWire {
-    ok: bool,
-    unsupported_version: bool,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
 #[serde(untagged, rename_all_fields = "camelCase")]
 #[tsify(from_wasm_abi)]
 pub enum AuthenticationWorkflowSnapshotResponseWire {
     Matched(AuthenticationWorkflowMatchedResponseWire),
-    UnsupportedVersion(AuthenticationWorkflowUnsupportedVersionResponseWire),
     Rejected(AuthenticationWorkflowRejectedResponseWire),
     NoMatch(AuthenticationWorkflowNoMatchResponseWire),
 }
@@ -98,9 +90,6 @@ pub enum AuthenticationWorkflowSnapshotResponse {
         kind: AuthenticationWorkflowSnapshotResponseKind,
         reason: String,
     },
-    UnsupportedVersion {
-        kind: AuthenticationWorkflowSnapshotResponseKind,
-    },
 }
 
 #[wasm_bindgen]
@@ -109,7 +98,6 @@ pub enum AuthenticationWorkflowSnapshotResponseKind {
     Matched,
     NoMatch,
     Rejected,
-    UnsupportedVersion,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
@@ -207,14 +195,6 @@ pub fn decode_authentication_workflow_snapshot_response(
         ) => Ok(AuthenticationWorkflowSnapshotResponse::NoMatch {
             kind: AuthenticationWorkflowSnapshotResponseKind::NoMatch,
         }),
-        AuthenticationWorkflowSnapshotResponseWire::UnsupportedVersion(
-            AuthenticationWorkflowUnsupportedVersionResponseWire {
-                ok: false,
-                unsupported_version: true,
-            },
-        ) => Ok(AuthenticationWorkflowSnapshotResponse::UnsupportedVersion {
-            kind: AuthenticationWorkflowSnapshotResponseKind::UnsupportedVersion,
-        }),
         AuthenticationWorkflowSnapshotResponseWire::Rejected(
             AuthenticationWorkflowRejectedResponseWire { ok: false, reason },
         ) if !reason.trim().is_empty() => Ok(AuthenticationWorkflowSnapshotResponse::Rejected {
@@ -222,7 +202,6 @@ pub fn decode_authentication_workflow_snapshot_response(
             reason,
         }),
         AuthenticationWorkflowSnapshotResponseWire::Matched(_)
-        | AuthenticationWorkflowSnapshotResponseWire::UnsupportedVersion(_)
         | AuthenticationWorkflowSnapshotResponseWire::NoMatch(_)
         | AuthenticationWorkflowSnapshotResponseWire::Rejected(_) => {
             Err(AuthenticationWorkflowSnapshotResponseDecodeError)
@@ -291,67 +270,6 @@ pub fn decode_authentication_workflow_runtime_response(
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    struct UnsupportedVersionRuntimeResponseScenario;
-
-    impl UnsupportedVersionRuntimeResponseScenario {
-        const TYPED_WIRE: &'static str = r#"{"ok":false,"unsupportedVersion":true}"#;
-        const LEGACY_REASON_WIRE: &'static str =
-            r#"{"ok":false,"reason":"unsupported-authentication-observation-version"}"#;
-
-        fn decode_snapshot(wire: &str) -> anyhow::Result<AuthenticationWorkflowSnapshotResponse> {
-            let wire = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(wire)?;
-            Ok(decode_authentication_workflow_snapshot_response(wire)?)
-        }
-
-        fn decode_runtime(workflow: &str) -> anyhow::Result<AuthenticationWorkflowRuntimeResponse> {
-            let json =
-                format!(r#"{{"workflow":{workflow},"loginMatches":{{"kind":"unavailable"}}}}"#);
-            let wire = serde_json::from_str::<AuthenticationWorkflowRuntimeResponseWire>(&json)?;
-            Ok(decode_authentication_workflow_runtime_response(wire)?)
-        }
-
-        fn assert_typed_boundary() -> anyhow::Result<()> {
-            let snapshot = Self::decode_snapshot(Self::TYPED_WIRE)?;
-            assert_eq!(
-                snapshot,
-                AuthenticationWorkflowSnapshotResponse::UnsupportedVersion {
-                    kind: AuthenticationWorkflowSnapshotResponseKind::UnsupportedVersion,
-                }
-            );
-            let runtime = Self::decode_runtime(Self::TYPED_WIRE)?;
-            assert_eq!(runtime.workflow, snapshot);
-            assert_eq!(
-                serde_json::to_value(runtime)?,
-                serde_json::json!({
-                    "workflow": { "kind": 3 },
-                    "loginMatches": { "kind": "unavailable" },
-                })
-            );
-
-            assert_eq!(
-                Self::decode_snapshot(Self::LEGACY_REASON_WIRE)?,
-                AuthenticationWorkflowSnapshotResponse::Rejected {
-                    kind: AuthenticationWorkflowSnapshotResponseKind::Rejected,
-                    reason: "unsupported-authentication-observation-version".to_owned(),
-                }
-            );
-
-            for contradictory in [
-                r#"{"ok":true,"unsupportedVersion":true}"#,
-                r#"{"ok":false,"unsupportedVersion":false}"#,
-            ] {
-                let wire = serde_json::from_str::<AuthenticationWorkflowSnapshotResponseWire>(
-                    contradictory,
-                )?;
-                assert_eq!(
-                    decode_authentication_workflow_snapshot_response(wire),
-                    Err(AuthenticationWorkflowSnapshotResponseDecodeError)
-                );
-            }
-            Ok(())
-        }
-    }
 
     #[test]
     fn enforces_closed_approval_requirements() -> anyhow::Result<()> {
@@ -497,11 +415,6 @@ mod tests {
             );
         }
         Ok(())
-    }
-
-    #[test]
-    fn preserves_typed_unsupported_version_across_the_runtime_boundary() -> anyhow::Result<()> {
-        UnsupportedVersionRuntimeResponseScenario::assert_typed_boundary()
     }
 
     #[test]

@@ -93,12 +93,20 @@ pub fn classify_companion_authentication_workflow_facts(
 }
 
 #[wasm_bindgen]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn classify_versioned_companion_authentication_workflow_facts(
+    input: nook_companion_core::VersionedAuthenticationPageObservationFactsBatch,
+) -> nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome {
+    input.classify()
+}
+
+#[wasm_bindgen]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CompanionAuthenticationWorkflowMatchKind {
     NoMatch,
     Rejected,
     Matched,
-    UnsupportedVersion,
 }
 
 #[wasm_bindgen]
@@ -113,9 +121,6 @@ pub fn companion_authentication_workflow_match_kind(
         }
         nook_companion_core::AuthenticationWorkflowMatch::Rejected => {
             CompanionAuthenticationWorkflowMatchKind::Rejected
-        }
-        nook_companion_core::AuthenticationWorkflowMatch::UnsupportedVersion => {
-            CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion
         }
         nook_companion_core::AuthenticationWorkflowMatch::Matched(_) => {
             CompanionAuthenticationWorkflowMatchKind::Matched
@@ -141,10 +146,6 @@ mod tests {
                     super::CompanionAuthenticationWorkflowMatchKind::Rejected,
                 ),
                 (
-                    nook_companion_core::AuthenticationWorkflowMatch::UnsupportedVersion,
-                    super::CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion,
-                ),
-                (
                     super::authentication_enrollment_workflow_match(
                         true,
                         "Save these recovery codes",
@@ -158,15 +159,67 @@ mod tests {
                     expected
                 );
             }
-            assert_eq!(
-                super::CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion as u32,
-                3
+        }
+
+        fn assert_versioned_transport_preserves_typed_outcome() -> anyhow::Result<()> {
+            let current =
+                nook_companion_core::VersionedAuthenticationPageObservationFacts::current(
+                    nook_companion_core::CurrentAuthenticationPageObservationFactsRequest {
+                        facts: nook_companion_core::AuthenticationPageObservationFacts::default(),
+                        credential_disclosure_control:
+                            nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
+                    },
+                );
+            let result = super::classify_versioned_companion_authentication_workflow_facts(
+                nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
+                    observations: vec![current.clone()],
+                },
             );
+            assert_eq!(
+                result,
+                nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome::Classified(
+                    nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
+                )
+            );
+            assert_eq!(
+                serde_json::to_value(result)?,
+                serde_json::json!({
+                    "kind": "classified",
+                    "value": { "kind": "no-match" }
+                })
+            );
+
+            let mut future_wire = serde_json::to_value(current)?;
+            let serde_json::Value::Object(fields) = &mut future_wire else {
+                anyhow::bail!("versioned page observation must encode as an object");
+            };
+            fields.insert("schemaVersion".to_owned(), serde_json::json!(2));
+            fields.remove("credentialDisclosureControl");
+            let future = serde_json::from_value(future_wire)?;
+            let result = super::classify_versioned_companion_authentication_workflow_facts(
+                nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
+                    observations: vec![future],
+                },
+            );
+            assert_eq!(
+                serde_json::to_value(result)?,
+                serde_json::json!({
+                    "kind": "unsupported-version",
+                    "value": { "version": 2 }
+                })
+            );
+            Ok(())
         }
     }
 
     #[wasm_bindgen_test]
     fn match_kind_preserves_every_closed_workflow_variant() {
         AuthenticationWorkflowMatchKindScenario::assert_every_core_variant_has_a_stable_abi_kind();
+    }
+
+    #[wasm_bindgen_test]
+    fn versioned_transport_preserves_its_typed_outcome() -> anyhow::Result<()> {
+        AuthenticationWorkflowMatchKindScenario::assert_versioned_transport_preserves_typed_outcome(
+        )
     }
 }
