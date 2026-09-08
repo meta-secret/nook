@@ -164,14 +164,13 @@ impl NookVaultManager {
             }
         }
 
-        let yaml = nook_core::build_secret_yaml_from_form(&SecretFormFields::Login(
-            nook_core::LoginSecretForm {
-                website_url: request.origin.to_owned(),
-                username: username.as_str().to_owned(),
-                password: password.as_str().to_owned(),
-                notes: String::new(),
-            },
-        ))
+        let yaml = SecretFormFields::Login(nook_core::LoginSecretForm {
+            website_url: request.origin.to_owned(),
+            username: username.as_str().to_owned(),
+            password: password.as_str().to_owned(),
+            notes: String::new(),
+        })
+        .to_yaml()
         .map_err(|error| NookError::Database(error.to_string()))?;
         username.zeroize();
         password.zeroize();

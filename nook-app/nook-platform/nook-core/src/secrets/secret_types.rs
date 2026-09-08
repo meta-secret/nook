@@ -430,7 +430,7 @@ impl SecretValue {
             SecretType::SeedPhrase => {
                 let secret: SeedPhraseSecret =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidSeedPhrase)?;
-                bip39::validate_bip39_mnemonic(&secret.seed)?;
+                bip39::Bip39Mnemonic::validate(&secret.seed)?;
                 Ok(Self::SeedPhrase(secret))
             }
             SecretType::SecureNote => serde_yaml::from_str(yaml)

@@ -1,5 +1,11 @@
 //! Credit-card secret payload parsing and validation.
 
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use crate::ValidationError;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -52,10 +58,10 @@ impl CreditCardSecret {
             return Err(ValidationError::CreditCardTitleRequired);
         }
 
-        let number = normalize_card_number(number)?;
+        let number = Self::normalize_card_number(number)?;
         let (expiration_month, expiration_year) =
-            normalize_expiration(expiration_month, expiration_year)?;
-        let cvv = normalize_cvv(cvv)?;
+            Self::normalize_expiration(expiration_month, expiration_year)?;
+        let cvv = Self::normalize_cvv(cvv)?;
 
         Ok(Self {
             title,
@@ -120,106 +126,106 @@ impl CreditCardSecret {
         self.cvv.zeroize();
         self.notes.zeroize();
     }
+
+    fn normalize_card_number(raw: &str) -> Result<String, ValidationError> {
+        let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
+        if !(MIN_CARD_DIGITS..=MAX_CARD_DIGITS).contains(&digits.len()) {
+            return Err(ValidationError::CreditCardNumberInvalid);
+        }
+        if !Self::luhn_valid(&digits) {
+            return Err(ValidationError::CreditCardNumberInvalid);
+        }
+        Ok(digits)
+    }
+
+    fn normalize_cvv(raw: &str) -> Result<String, ValidationError> {
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return Ok(String::new());
+        }
+        if !(3..=4).contains(&trimmed.len()) || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
+            return Err(ValidationError::CreditCardCvvInvalid);
+        }
+        Ok(trimmed.to_owned())
+    }
+
+    fn normalize_expiration(
+        month_raw: &str,
+        year_raw: &str,
+    ) -> Result<(String, String), ValidationError> {
+        let month_raw = month_raw.trim();
+        let year_raw = year_raw.trim();
+        if month_raw.is_empty() && year_raw.is_empty() {
+            return Ok((String::new(), String::new()));
+        }
+        if month_raw.is_empty() || year_raw.is_empty() {
+            return Err(ValidationError::CreditCardExpirationInvalid);
+        }
+
+        let month = Self::parse_month(month_raw)?;
+        let year = Self::parse_year(year_raw)?;
+        Ok((format!("{month:02}"), format!("{year:04}")))
+    }
+
+    fn parse_month(raw: &str) -> Result<u32, ValidationError> {
+        let month: u32 = raw
+            .parse()
+            .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+        if (1..=12).contains(&month) {
+            Ok(month)
+        } else {
+            Err(ValidationError::CreditCardExpirationInvalid)
+        }
+    }
+
+    fn parse_year(raw: &str) -> Result<u32, ValidationError> {
+        let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
+        match digits.len() {
+            2 => {
+                let yy: u32 = digits
+                    .parse()
+                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+                // Payment cards use a rolling century window around the current era.
+                Ok(2000 + yy)
+            }
+            4 => {
+                let year: u32 = digits
+                    .parse()
+                    .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
+                if (2000..=2100).contains(&year) {
+                    Ok(year)
+                } else {
+                    Err(ValidationError::CreditCardExpirationInvalid)
+                }
+            }
+            _ => Err(ValidationError::CreditCardExpirationInvalid),
+        }
+    }
+
+    fn luhn_valid(digits: &str) -> bool {
+        let mut sum = 0_u32;
+        let mut double = false;
+        for ch in digits.chars().rev() {
+            let Some(mut digit) = ch.to_digit(10) else {
+                return false;
+            };
+            if double {
+                digit *= 2;
+                if digit > 9 {
+                    digit -= 9;
+                }
+            }
+            sum += digit;
+            double = !double;
+        }
+        sum.is_multiple_of(10)
+    }
 }
 
 impl Zeroize for CreditCardSecret {
     fn zeroize(&mut self) {
         self.zeroize_plaintext();
     }
-}
-
-fn normalize_card_number(raw: &str) -> Result<String, ValidationError> {
-    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
-    if !(MIN_CARD_DIGITS..=MAX_CARD_DIGITS).contains(&digits.len()) {
-        return Err(ValidationError::CreditCardNumberInvalid);
-    }
-    if !luhn_valid(&digits) {
-        return Err(ValidationError::CreditCardNumberInvalid);
-    }
-    Ok(digits)
-}
-
-fn normalize_cvv(raw: &str) -> Result<String, ValidationError> {
-    let trimmed = raw.trim();
-    if trimmed.is_empty() {
-        return Ok(String::new());
-    }
-    if !(3..=4).contains(&trimmed.len()) || !trimmed.bytes().all(|b| b.is_ascii_digit()) {
-        return Err(ValidationError::CreditCardCvvInvalid);
-    }
-    Ok(trimmed.to_owned())
-}
-
-fn normalize_expiration(
-    month_raw: &str,
-    year_raw: &str,
-) -> Result<(String, String), ValidationError> {
-    let month_raw = month_raw.trim();
-    let year_raw = year_raw.trim();
-    if month_raw.is_empty() && year_raw.is_empty() {
-        return Ok((String::new(), String::new()));
-    }
-    if month_raw.is_empty() || year_raw.is_empty() {
-        return Err(ValidationError::CreditCardExpirationInvalid);
-    }
-
-    let month = parse_month(month_raw)?;
-    let year = parse_year(year_raw)?;
-    Ok((format!("{month:02}"), format!("{year:04}")))
-}
-
-fn parse_month(raw: &str) -> Result<u32, ValidationError> {
-    let month: u32 = raw
-        .parse()
-        .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-    if (1..=12).contains(&month) {
-        Ok(month)
-    } else {
-        Err(ValidationError::CreditCardExpirationInvalid)
-    }
-}
-
-fn parse_year(raw: &str) -> Result<u32, ValidationError> {
-    let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
-    match digits.len() {
-        2 => {
-            let yy: u32 = digits
-                .parse()
-                .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-            // Payment cards use a rolling century window around the current era.
-            Ok(2000 + yy)
-        }
-        4 => {
-            let year: u32 = digits
-                .parse()
-                .map_err(|_| ValidationError::CreditCardExpirationInvalid)?;
-            if (2000..=2100).contains(&year) {
-                Ok(year)
-            } else {
-                Err(ValidationError::CreditCardExpirationInvalid)
-            }
-        }
-        _ => Err(ValidationError::CreditCardExpirationInvalid),
-    }
-}
-
-fn luhn_valid(digits: &str) -> bool {
-    let mut sum = 0_u32;
-    let mut double = false;
-    for ch in digits.chars().rev() {
-        let Some(mut digit) = ch.to_digit(10) else {
-            return false;
-        };
-        if double {
-            digit *= 2;
-            if digit > 9 {
-                digit -= 9;
-            }
-        }
-        sum += digit;
-        double = !double;
-    }
-    sum.is_multiple_of(10)
 }
 
 #[cfg(test)]

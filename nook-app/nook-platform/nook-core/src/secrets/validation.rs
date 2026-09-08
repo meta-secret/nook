@@ -1,38 +1,47 @@
-use crate::errors::{ValidationError, ValidationResult};
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use crate::{AppId, AuthKeyId, SecretRecord};
 
-#[must_use]
-pub fn filter_secrets(records: &[SecretRecord], query: &str) -> Vec<SecretRecord> {
-    let user_records: Vec<SecretRecord> = records
-        .iter()
-        .filter(|record| {
-            !AppId::is_valid(record.id.as_str()) && !AuthKeyId::is_valid(record.id.as_str())
-        })
-        .cloned()
-        .collect();
-    let needle = query.trim().to_lowercase();
-    if needle.is_empty() {
-        return user_records;
-    }
-
-    user_records
-        .into_iter()
-        .filter(|record| record.id.as_str().to_lowercase().contains(&needle))
-        .collect()
+/// A borrowed search over user-owned secret records.
+#[derive(Debug, Clone, Copy)]
+pub struct SecretRecordSearch<'a> {
+    pub records: &'a [SecretRecord],
+    pub query: &'a str,
 }
 
-pub fn validate_secret_data(data: &str) -> ValidationResult<()> {
-    if data.is_empty() {
-        return Err(ValidationError::SecretDataRequired);
+impl SecretRecordSearch<'_> {
+    #[must_use]
+    pub fn filter(self) -> Vec<SecretRecord> {
+        let user_records: Vec<SecretRecord> = self
+            .records
+            .iter()
+            .filter(|record| {
+                !AppId::is_valid(record.id.as_str()) && !AuthKeyId::is_valid(record.id.as_str())
+            })
+            .cloned()
+            .collect();
+        let needle = self.query.trim().to_lowercase();
+        if needle.is_empty() {
+            return user_records;
+        }
+
+        user_records
+            .into_iter()
+            .filter(|record| record.id.as_str().to_lowercase().contains(&needle))
+            .collect()
     }
-    Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{ApiKeySecret, SecretId, SecretRecord, SecretType, SecretValue, StoreId};
 
-    use super::{filter_secrets, validate_secret_data};
+    use super::SecretRecordSearch;
+    use crate::SecretPayloadYaml;
 
     fn value(key: &str) -> SecretValue {
         SecretValue::ApiKey(ApiKeySecret {
@@ -64,8 +73,8 @@ mod tests {
             SecretId::parse(" secret_SMypl8K0w9Y ")?.as_str(),
             "secret_SMypl8K0w9Y"
         );
-        assert!(validate_secret_data("").is_err());
-        assert!(validate_secret_data("x").is_ok());
+        assert!(SecretPayloadYaml::validate("").is_err());
+        assert!(SecretPayloadYaml::validate("x").is_ok());
         assert!(SecretId::parse("abc123def4567890").is_err());
         assert!(SecretId::parse(&"a".repeat(64)).is_err());
         assert_eq!(
@@ -83,7 +92,12 @@ mod tests {
 
     #[test]
     fn filters_case_insensitively() -> anyhow::Result<()> {
-        let filtered = filter_secrets(&sample_records()?, "W9Y");
+        let records = sample_records()?;
+        let filtered = SecretRecordSearch {
+            records: &records,
+            query: "W9Y",
+        }
+        .filter();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
         Ok(())
@@ -91,19 +105,41 @@ mod tests {
 
     #[test]
     fn empty_query_returns_all() -> anyhow::Result<()> {
-        assert_eq!(filter_secrets(&sample_records()?, "  ").len(), 2);
+        let records = sample_records()?;
+        assert_eq!(
+            SecretRecordSearch {
+                records: &records,
+                query: "  ",
+            }
+            .filter()
+            .len(),
+            2
+        );
         Ok(())
     }
 
     #[test]
     fn no_match_returns_empty() -> anyhow::Result<()> {
-        assert!(filter_secrets(&sample_records()?, "aws").is_empty());
+        let records = sample_records()?;
+        assert!(
+            SecretRecordSearch {
+                records: &records,
+                query: "aws",
+            }
+            .filter()
+            .is_empty()
+        );
         Ok(())
     }
 
     #[test]
     fn matches_substring_in_id() -> anyhow::Result<()> {
-        let filtered = filter_secrets(&sample_records()?, "K0w9Y");
+        let records = sample_records()?;
+        let filtered = SecretRecordSearch {
+            records: &records,
+            query: "K0w9Y",
+        }
+        .filter();
         assert_eq!(filtered.len(), 1);
         assert_eq!(filtered[0].id.as_str(), "secret_SMypl8K0w9Y");
         Ok(())
@@ -111,7 +147,7 @@ mod tests {
 
     #[test]
     fn allows_whitespace_secret_data() {
-        assert!(validate_secret_data("   ").is_ok());
+        assert!(SecretPayloadYaml::validate("   ").is_ok());
     }
 
     #[test]
@@ -121,7 +157,14 @@ mod tests {
             secret_type: SecretType::ApiKey,
             data: value("find-me"),
         }];
-        assert!(filter_secrets(&records, "find-me").is_empty());
+        assert!(
+            SecretRecordSearch {
+                records: &records,
+                query: "find-me",
+            }
+            .filter()
+            .is_empty()
+        );
         Ok(())
     }
 }

@@ -288,15 +288,15 @@ impl NookSecretListItem {
 }
 
 /// Serialize validated form fields into the YAML payload expected by `add_secret`.
-fn build_secret_yaml_inner(fields: &NookSecretFormFields) -> Result<String, NookError> {
-    Ok(nook_core::build_secret_yaml_from_form(&fields.inner)?
-        .as_str()
-        .to_owned())
+impl NookSecretFormFields {
+    fn to_yaml_string(&self) -> Result<String, NookError> {
+        Ok(self.inner.to_yaml()?.as_str().to_owned())
+    }
 }
 
 #[wasm_bindgen]
 pub fn build_secret_yaml(fields: &NookSecretFormFields) -> Result<String, wasm_bindgen::JsError> {
-    build_secret_yaml_inner(fields).map_err(Into::into)
+    fields.to_yaml_string().map_err(Into::into)
 }
 
 #[wasm_bindgen]

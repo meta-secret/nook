@@ -62,6 +62,13 @@ impl serde::Serialize for StoredVaultYaml {
 pub struct SecretPayloadYaml(String);
 
 impl SecretPayloadYaml {
+    pub fn validate(raw: &str) -> errors::ValidationResult<()> {
+        if raw.is_empty() {
+            return Err(errors::ValidationError::SecretDataRequired);
+        }
+        Ok(())
+    }
+
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0

@@ -1,3 +1,9 @@
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+
 use getrandom::fill;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
@@ -70,28 +76,28 @@ impl PasswordGenerationOptions {
         }
         chars
     }
-}
 
-pub fn generate_password(options: PasswordGenerationOptions) -> PasswordResult<String> {
-    options.validate()?;
-    let charset = options.charset();
-    let charset_bytes = charset.as_bytes();
-    let password_length = usize::from(options.length);
-    let mut random = vec![0u8; password_length * 4];
-    fill(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
+    pub fn generate(self) -> PasswordResult<String> {
+        self.validate()?;
+        let charset = self.charset();
+        let charset_bytes = charset.as_bytes();
+        let password_length = usize::from(self.length);
+        let mut random = vec![0u8; password_length * 4];
+        fill(&mut random).map_err(|e| PasswordError::RandomBytes(e.to_string()))?;
 
-    let mut password = String::with_capacity(password_length);
-    for chunk in random.chunks(4) {
-        if password.len() >= password_length {
-            break;
+        let mut password = String::with_capacity(password_length);
+        for chunk in random.chunks(4) {
+            if password.len() >= password_length {
+                break;
+            }
+            let n = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize;
+            let idx = n % charset_bytes.len();
+            password.push(charset_bytes[idx] as char);
         }
-        let n = u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]) as usize;
-        let idx = n % charset_bytes.len();
-        password.push(charset_bytes[idx] as char);
-    }
 
-    password.truncate(password_length);
-    Ok(password)
+        password.truncate(password_length);
+        Ok(password)
+    }
 }
 
 #[cfg(test)]
@@ -125,26 +131,28 @@ mod tests {
 
     #[test]
     fn generates_password_with_requested_length() -> anyhow::Result<()> {
-        let password = generate_password(PasswordGenerationOptions {
+        let password = PasswordGenerationOptions {
             length: 24.into(),
             lowercase: true,
             uppercase: true,
             numbers: true,
             symbols: false,
-        })?;
+        }
+        .generate()?;
         assert_eq!(password.len(), 24);
         Ok(())
     }
 
     #[test]
     fn rejects_empty_charset() -> anyhow::Result<()> {
-        let err = generate_password(PasswordGenerationOptions {
+        let err = PasswordGenerationOptions {
             length: 16.into(),
             lowercase: false,
             uppercase: false,
             numbers: false,
             symbols: false,
-        })
+        }
+        .generate()
         .err()
         .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
         assert!(err.to_string().contains("at least one character set"));
@@ -153,13 +161,14 @@ mod tests {
 
     #[test]
     fn rejects_invalid_length() -> anyhow::Result<()> {
-        let err = generate_password(PasswordGenerationOptions {
+        let err = PasswordGenerationOptions {
             length: 4.into(),
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
-        })
+        }
+        .generate()
         .err()
         .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
         assert!(err.to_string().contains("between 8 and 128"));
@@ -168,13 +177,14 @@ mod tests {
 
     #[test]
     fn uses_only_selected_charsets() -> anyhow::Result<()> {
-        let password = generate_password(PasswordGenerationOptions {
+        let password = PasswordGenerationOptions {
             length: 32.into(),
             lowercase: true,
             uppercase: false,
             numbers: true,
             symbols: false,
-        })?;
+        }
+        .generate()?;
         assert!(
             password
                 .chars()
@@ -185,35 +195,38 @@ mod tests {
 
     #[test]
     fn accepts_min_and_max_length() -> anyhow::Result<()> {
-        let min = generate_password(PasswordGenerationOptions {
+        let min = PasswordGenerationOptions {
             length: MIN_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
-        })?;
+        }
+        .generate()?;
         assert_eq!(min.len(), usize::from(MIN_PASSWORD_LENGTH));
 
-        let max = generate_password(PasswordGenerationOptions {
+        let max = PasswordGenerationOptions {
             length: MAX_PASSWORD_LENGTH,
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
-        })?;
+        }
+        .generate()?;
         assert_eq!(max.len(), usize::from(MAX_PASSWORD_LENGTH));
         Ok(())
     }
 
     #[test]
     fn rejects_length_above_max() -> anyhow::Result<()> {
-        let err = generate_password(PasswordGenerationOptions {
+        let err = PasswordGenerationOptions {
             length: (usize::from(MAX_PASSWORD_LENGTH) + 1).into(),
             lowercase: true,
             uppercase: false,
             numbers: false,
             symbols: false,
-        })
+        }
+        .generate()
         .err()
         .ok_or_else(|| anyhow::anyhow!("password test should reject invalid input"))?;
         assert!(err.to_string().contains("between 8 and 128"));
@@ -222,13 +235,14 @@ mod tests {
 
     #[test]
     fn symbols_only_charset() -> anyhow::Result<()> {
-        let password = generate_password(PasswordGenerationOptions {
+        let password = PasswordGenerationOptions {
             length: 16.into(),
             lowercase: false,
             uppercase: false,
             numbers: false,
             symbols: true,
-        })?;
+        }
+        .generate()?;
         assert!(password.chars().all(|c| SYMBOLS.contains(c)));
         Ok(())
     }
