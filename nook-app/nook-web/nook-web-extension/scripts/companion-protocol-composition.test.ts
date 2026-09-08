@@ -177,10 +177,12 @@ class PairingActivationScenario {
       case NookCompanionPairingCandidateOutcomeState.Stored:
         return outcome.into_stored()
       case NookCompanionPairingCandidateOutcomeState.Absent:
+        outcome.free()
         throw new Error('candidate is absent')
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
       default:
+        outcome.free()
         throw new Error(
           `unreachable candidate outcome: ${state satisfies never}`,
         )
@@ -196,10 +198,12 @@ class PairingActivationScenario {
         outcome.into_stored().free()
         throw new Error('candidate storage unexpectedly succeeded')
       case NookCompanionPairingCandidateOutcomeState.Absent:
+        outcome.free()
         throw new Error('candidate failure is absent')
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         return outcome.into_failure()
       default:
+        outcome.free()
         throw new Error(
           `unreachable candidate outcome: ${state satisfies never}`,
         )
@@ -221,6 +225,7 @@ class PairingActivationScenario {
     expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
     const absent = await extension.load_companion_pairing_activation_candidate()
     expect(absent.state).toBe(NookCompanionPairingCandidateOutcomeState.Absent)
+    absent.free()
     const stored = this.storedCandidate(await prepared.commit(extension))
     expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
     stored.free()
