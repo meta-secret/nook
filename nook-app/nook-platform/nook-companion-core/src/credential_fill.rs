@@ -773,6 +773,42 @@ mod tests {
         ] {
             assert_eq!(serde_json::to_string(&value)?, expected);
         }
+
+        let observation = Fixture::field(field::Index::ZERO, field::CredentialRole::Username);
+        assert_eq!(
+            serde_json::to_string(&field::Index::ZERO)?,
+            r#"{"value":0}"#
+        );
+        assert_eq!(u32::from(field::Index::THREE), 3);
+        assert_eq!(
+            u32::from(field::Count::MAXIMUM),
+            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+        );
+        assert_eq!(
+            serde_json::to_string(&observation)?,
+            r#"{"Credential":{"field_index":{"value":0},"role":"Username","editability":"Writable"}}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&Fixture::new_password_field(field::Index::ONE))?,
+            r#"{"NewPassword":{"field_index":{"value":1}}}"#
+        );
+        assert_eq!(
+            serde_json::to_string(&Fixture::one_time_code_field(field::Index::TWO))?,
+            r#"{"OneTimeCode":{"field_index":{"value":2}}}"#
+        );
+        let plan = Plan::from_fields(&Fixture::login_form())?;
+        let serialized = serde_json::to_string(&plan)?;
+        assert_eq!(
+            serialized,
+            r#"{"assignments":[{"field_index":{"value":0},"credential":"Username"},{"field_index":{"value":1},"credential":"CurrentPassword"}]}"#
+        );
+        let roundtrip: Plan = serde_json::from_str(&serialized)?;
+        assert_eq!(roundtrip, plan);
+        Ok(())
+    }
+
+    #[test]
+    fn rejection_and_outcome_serialization_preserve_rust_source_names() -> anyhow::Result<()> {
         for (value, expected) in [
             (
                 CredentialFillRejection::TooManyObservedFields,
@@ -819,37 +855,6 @@ mod tests {
         ] {
             assert_eq!(serde_json::to_string(&value)?, expected);
         }
-
-        let observation = Fixture::field(field::Index::ZERO, field::CredentialRole::Username);
-        assert_eq!(
-            serde_json::to_string(&field::Index::ZERO)?,
-            r#"{"value":0}"#
-        );
-        assert_eq!(u32::from(field::Index::THREE), 3);
-        assert_eq!(
-            u32::from(field::Count::MAXIMUM),
-            crate::MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
-        );
-        assert_eq!(
-            serde_json::to_string(&observation)?,
-            r#"{"Credential":{"field_index":{"value":0},"role":"Username","editability":"Writable"}}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&Fixture::new_password_field(field::Index::ONE))?,
-            r#"{"NewPassword":{"field_index":{"value":1}}}"#
-        );
-        assert_eq!(
-            serde_json::to_string(&Fixture::one_time_code_field(field::Index::TWO))?,
-            r#"{"OneTimeCode":{"field_index":{"value":2}}}"#
-        );
-        let plan = Plan::from_fields(&Fixture::login_form())?;
-        let serialized = serde_json::to_string(&plan)?;
-        assert_eq!(
-            serialized,
-            r#"{"assignments":[{"field_index":{"value":0},"credential":"Username"},{"field_index":{"value":1},"credential":"CurrentPassword"}]}"#
-        );
-        let roundtrip: Plan = serde_json::from_str(&serialized)?;
-        assert_eq!(roundtrip, plan);
         Ok(())
     }
 }

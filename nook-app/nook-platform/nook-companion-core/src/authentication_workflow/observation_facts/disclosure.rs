@@ -8,8 +8,8 @@ use super::{AuthenticationFieldObservationFacts, AuthenticationPageObservationFa
 use crate::credential_fill::{self, field};
 use crate::page_field_classification::{
     AuthenticationAdvanceControlObservation, AuthenticationUsernameEvidence,
-    MAX_AUTHENTICATION_CONTROL_TEXT_BYTES, PageControlActionability, PageControlOwnership,
-    PageControlSemantics, PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
+    PageControlActionability, PageControlOwnership, PageControlSemantics,
+    PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
     canonicalize_control_destination, expand_identity_text,
 };
 use crate::{AuthenticationFieldCount, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT};
@@ -277,12 +277,12 @@ impl AuthenticationCredentialDisclosurePlanningDecision {
         AuthenticationCredentialDisclosureCapability,
         credential_fill::CredentialFillRejection,
     > {
+        let AuthenticationCredentialDisclosurePlanningRequest { fields } = request;
         let Self::Approved(approval) = self else {
             return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
         };
-        let exact_fields = request.fields.len() == 2
-            && request
-                .fields
+        let exact_fields = fields.len() == 2
+            && fields
                 .iter()
                 .filter(|observation| {
                     matches!(
@@ -296,8 +296,7 @@ impl AuthenticationCredentialDisclosurePlanningDecision {
                 })
                 .count()
                 == 1
-            && request
-                .fields
+            && fields
                 .iter()
                 .filter(|observation| {
                     matches!(
@@ -314,7 +313,7 @@ impl AuthenticationCredentialDisclosurePlanningDecision {
         if !exact_fields {
             return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
         }
-        let plan = credential_fill::Plan::from_fields(request.fields)?;
+        let plan = credential_fill::Plan::from_fields(fields)?;
         let [username_assignment, password_assignment] = plan.assignments.as_slice() else {
             return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
         };
@@ -341,12 +340,12 @@ impl AuthenticationCredentialDisclosureCapability {
         request: AuthenticationCredentialDisclosurePreflightRequest<'_>,
     ) -> Result<AuthorizedAuthenticationUsernameDisclosure, credential_fill::CredentialFillRejection>
     {
-        if request.fresh_facts != &self.approved_facts
-            || !request.fresh_facts.is_bounded()
-            || !request
-                .fresh_facts
+        let AuthenticationCredentialDisclosurePreflightRequest { fresh_facts } = request;
+        if fresh_facts != &self.approved_facts
+            || !fresh_facts.is_bounded()
+            || !fresh_facts
                 .credential_disclosure_control
-                .has_planning_evidence(request.fresh_facts.fields)
+                .has_planning_evidence(fresh_facts.fields)
         {
             return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
         }
@@ -365,15 +364,15 @@ impl AuthenticationPasswordDisclosureContinuation {
         self,
         request: AuthenticationPasswordDisclosureRequest<'_>,
     ) -> Result<credential_fill::Assignment, credential_fill::CredentialFillRejection> {
-        if !request.fresh_facts.is_bounded()
-            || !request
-                .fresh_facts
+        let AuthenticationPasswordDisclosureRequest { fresh_facts } = request;
+        if !fresh_facts.is_bounded()
+            || !fresh_facts
                 .credential_disclosure_control
-                .has_actionable_consumption_evidence(request.fresh_facts.fields)
+                .has_actionable_consumption_evidence(fresh_facts.fields)
         {
             return Err(credential_fill::CredentialFillRejection::AuthenticationContextRejected);
         }
-        let mut normalized = request.fresh_facts.clone();
+        let mut normalized = fresh_facts.clone();
         normalized
             .credential_disclosure_control
             .normalize_expected_actionability();
@@ -411,6 +410,7 @@ impl AuthenticationPageObservationFacts {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::page_field_classification::MAX_AUTHENTICATION_CONTROL_TEXT_BYTES;
 
     struct OmittedMethodDisclosureScenario;
 
@@ -571,23 +571,24 @@ mod tests {
         );
         let mutations: &[fn(&mut VersionedAuthenticationDisclosureControlObservation)] = &[
             |value| {
-                value.observation.destination_identity = "https://attacker.example/login".to_owned()
+                value.observation.destination_identity =
+                    "https://attacker.example/login".to_owned();
             },
             |value| {
                 value.observation.destination_identity =
-                    "https://login.example.test/recover".to_owned()
+                    "https://login.example.test/recover".to_owned();
             },
             |value| value.observation.label = "Sign in with Google".to_owned(),
             |value| value.observation.form_identity = "signup".to_owned(),
             |value| value.observation.machine_identity = "provider".to_owned(),
             |value| {
-                value.observation.authentication_username = AuthenticationUsernameEvidence::Strong
+                value.observation.authentication_username = AuthenticationUsernameEvidence::Strong;
             },
             |value| value.observation.semantics = PageControlSemantics::SemanticSubmit,
             |value| value.observation.submission_method = PageControlSubmissionMethod::Get,
             |value| {
                 value.observation.submission_destination_source =
-                    PageControlSubmissionDestinationSource::Authored
+                    PageControlSubmissionDestinationSource::Authored;
             },
             |value| value.observation.ownership = PageControlOwnership::Unowned,
             |value| value.observation.actionability = PageControlActionability::Inert,
@@ -598,7 +599,7 @@ mod tests {
             |value| value.observation.semantic_submit_control_count = 1.into(),
             |value| {
                 value.observation.source_origin =
-                    "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1)
+                    "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
             },
         ];
         for mutation in mutations {
