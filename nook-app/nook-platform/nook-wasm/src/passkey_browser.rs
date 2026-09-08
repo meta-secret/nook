@@ -516,10 +516,10 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn promise_credential_conversion_reports_rejection_and_cancellation() {
         let plain_object = Object::new();
-        let cancelled =
-            credential_from_promise("get", Promise::resolve(&plain_object.unchecked_into()))
-                .await
-                .expect_err("plain objects are not credentials");
+        let resolved_object = Promise::resolve(&plain_object);
+        let cancelled = credential_from_promise("get", resolved_object.unchecked_into())
+            .await
+            .expect_err("plain objects are not credentials");
         assert_eq!(
             js_error_message(cancelled),
             "Passkey get ceremony was cancelled."
