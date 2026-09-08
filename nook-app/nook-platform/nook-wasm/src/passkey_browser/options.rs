@@ -636,10 +636,9 @@ mod wasm_tests {
         .map_err(|_| JsError::new("failed to add serialized PRF entry"))?;
 
         normalize_webauthn_binary_fields(&value)?;
-        let first: js_sys::Object =
-            Reflect::get(&eval_by_credential, &JsString::from("credential-first"))
-                .map_err(|_| JsError::new("failed to read first credential PRF"))?
-                .unchecked_into();
+        let first: js_sys::Object = Reflect::get(&eval_by_credential, &source_key)
+            .map_err(|_| JsError::new("failed to read first credential PRF"))?
+            .unchecked_into();
         let second: js_sys::Object =
             Reflect::get(&eval_by_credential, &JsString::from("credential-second"))
                 .map_err(|_| JsError::new("failed to read second credential PRF"))?
