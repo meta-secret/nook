@@ -104,26 +104,28 @@ class ArcActivationScenario {
   }
 }
 
-function assertCpuUnconstrained(container: ArcContainer, label: string): void {
-  const resources = container.resources;
-  if (!resources) {
-    return;
+class ArcContainerResourceContract {
+  static assertCpuUnconstrained(
+    container: ArcContainer,
+    label: string,
+  ): void {
+    const resources = container.resources;
+    if (!resources) {
+      return;
+    }
+    const { limits = {}, requests = {} } = resources;
+    if (
+      Object.keys(requests).includes("cpu") ||
+      Object.keys(limits).includes("cpu")
+    ) {
+      throw new Error(`${label} must not declare CPU requests or limits`);
+    }
   }
-  const { limits = {}, requests = {} } = resources;
-  if (
-    Object.keys(requests).includes("cpu") ||
-    Object.keys(limits).includes("cpu")
-  ) {
-    throw new Error(`${label} must not declare CPU requests or limits`);
-  }
-}
 
-function assertNoResourceEnvelope(
-  container: ArcContainer,
-  label: string,
-): void {
-  if ("resources" in container) {
-    throw new Error(`${label} must not declare resource requests or limits`);
+  static assertNoEnvelope(container: ArcContainer, label: string): void {
+    if ("resources" in container) {
+      throw new Error(`${label} must not declare resource requests or limits`);
+    }
   }
 }
 
@@ -329,7 +331,10 @@ if (
   throw new Error("ARC must carry only the daemon-free Docker client init");
 }
 for (const container of [...pod.initContainers, ...pod.containers]) {
-  assertCpuUnconstrained(container, `general ARC ${container.name}`);
+  ArcContainerResourceContract.assertCpuUnconstrained(
+    container,
+    `general ARC ${container.name}`,
+  );
 }
 const dockerClientInit = pod.initContainers[0];
 if (
@@ -368,7 +373,7 @@ if (
     "ARC runner must expose its Kubernetes worker through the Downward API",
   );
 }
-assertNoResourceEnvelope(runner, "general ARC runner");
+ArcContainerResourceContract.assertNoEnvelope(runner, "general ARC runner");
 
 const containerValues = Bun.YAML.parse(containerRunnersSource) as ArcValues;
 const containerRunner = containerValues.template.spec.containers.find(
@@ -377,8 +382,14 @@ const containerRunner = containerValues.template.spec.containers.find(
 if (!containerRunner) {
   throw new Error("container ARC must retain its runner coordinator");
 }
-assertCpuUnconstrained(containerRunner, "container ARC runner coordinator");
-assertNoResourceEnvelope(containerRunner, "container ARC runner coordinator");
+ArcContainerResourceContract.assertCpuUnconstrained(
+  containerRunner,
+  "container ARC runner coordinator",
+);
+ArcContainerResourceContract.assertNoEnvelope(
+  containerRunner,
+  "container ARC runner coordinator",
+);
 
 const containerHookManifest = Bun.YAML.parse(
   containerHookSource,
@@ -390,7 +401,10 @@ for (const container of [
   ...containerPodTemplate.spec.initContainers,
   ...containerPodTemplate.spec.containers,
 ]) {
-  assertCpuUnconstrained(container, `ARC job Pod ${container.name}`);
+  ArcContainerResourceContract.assertCpuUnconstrained(
+    container,
+    `ARC job Pod ${container.name}`,
+  );
 }
 const jobContainer = containerPodTemplate.spec.containers.find(
   (container) => container.name === "$job",
@@ -398,7 +412,7 @@ const jobContainer = containerPodTemplate.spec.containers.find(
 if (!jobContainer) {
   throw new Error("ARC container hook must retain its job container");
 }
-assertNoResourceEnvelope(jobContainer, "ARC job container");
+ArcContainerResourceContract.assertNoEnvelope(jobContainer, "ARC job container");
 
 runners.requireAll([
   "maxSkew: 2",

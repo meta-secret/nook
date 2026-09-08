@@ -24,6 +24,13 @@ enum WorkerServiceState {
   Resumed = "resumed",
 }
 
+enum WorkerServiceInputState {
+  InstalledActive = "installed-active",
+  InstalledInactive = "installed-inactive",
+  MissingActive = "missing-active",
+  MissingInactive = "missing-inactive",
+}
+
 enum PreparingTaintCase {
   Ambiguous = "ambiguous",
   Exact = "exact",
@@ -193,18 +200,37 @@ class WorkerPreparingTaintContract {
 }
 
 class WorkerServiceStateContract {
+  private static readonly resolutions: Record<
+    WorkerServiceInputState,
+    WorkerServiceState
+  > = {
+    [WorkerServiceInputState.InstalledActive]: WorkerServiceState.Active,
+    [WorkerServiceInputState.InstalledInactive]: WorkerServiceState.Resumed,
+    [WorkerServiceInputState.MissingActive]: WorkerServiceState.Invalid,
+    [WorkerServiceInputState.MissingInactive]: WorkerServiceState.Fresh,
+  };
+
   static assert(source: string): void {
     const fixtures = [
-      { active: true, expected: WorkerServiceState.Active, installed: true },
-      { active: false, expected: WorkerServiceState.Resumed, installed: true },
-      { active: false, expected: WorkerServiceState.Fresh, installed: false },
-      { active: true, expected: WorkerServiceState.Invalid, installed: false },
+      {
+        expected: WorkerServiceState.Active,
+        input: WorkerServiceInputState.InstalledActive,
+      },
+      {
+        expected: WorkerServiceState.Resumed,
+        input: WorkerServiceInputState.InstalledInactive,
+      },
+      {
+        expected: WorkerServiceState.Fresh,
+        input: WorkerServiceInputState.MissingInactive,
+      },
+      {
+        expected: WorkerServiceState.Invalid,
+        input: WorkerServiceInputState.MissingActive,
+      },
     ] as const;
     for (const fixture of fixtures) {
-      const observed = WorkerServiceStateContract.resolve(
-        fixture.installed,
-        fixture.active,
-      );
+      const observed = WorkerServiceStateContract.resolve(fixture.input);
       if (observed !== fixture.expected) {
         throw new Error("k0s worker service-state transition is unsafe");
       }
@@ -222,14 +248,8 @@ class WorkerServiceStateContract {
     ]);
   }
 
-  private static resolve(
-    installed: boolean,
-    active: boolean,
-  ): WorkerServiceState {
-    if (!installed && active) return WorkerServiceState.Invalid;
-    if (!installed) return WorkerServiceState.Fresh;
-    if (active) return WorkerServiceState.Active;
-    return WorkerServiceState.Resumed;
+  private static resolve(input: WorkerServiceInputState): WorkerServiceState {
+    return WorkerServiceStateContract.resolutions[input];
   }
 }
 
