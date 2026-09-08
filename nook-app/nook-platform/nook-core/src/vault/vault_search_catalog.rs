@@ -28,9 +28,25 @@ const PAYLOAD_DIGEST_BYTES: usize = 16;
 const SEARCH_CATALOG_INTEGRITY_DOMAIN: &[u8] = b"nook/secret-search-catalog/v1\0";
 pub const SECRET_SEARCH_CATALOG_BUCKET_COUNT: u8 = 64;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(transparent)]
+struct SecretSearchCatalogPayloadDigest([u8; PAYLOAD_DIGEST_BYTES]);
+
+impl From<[u8; PAYLOAD_DIGEST_BYTES]> for SecretSearchCatalogPayloadDigest {
+    fn from(value: [u8; PAYLOAD_DIGEST_BYTES]) -> Self {
+        Self(value)
+    }
+}
+
+impl SecretSearchCatalogPayloadDigest {
+    fn as_bytes(self) -> [u8; PAYLOAD_DIGEST_BYTES] {
+        self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct SecretSearchCatalogEntry {
-    payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
+    payload_digest: SecretSearchCatalogPayloadDigest,
     item: SecretListItem,
     integrity_tag: String,
     #[serde(skip)]
@@ -38,14 +54,14 @@ struct SecretSearchCatalogEntry {
 }
 
 struct SecretSearchCatalogIntegrityTagRequest<'a> {
-    payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
+    payload_digest: SecretSearchCatalogPayloadDigest,
     item: &'a SecretListItem,
     integrity_key: &'a SymmetricKey,
 }
 
 impl SecretSearchCatalogEntry {
     fn new(
-        payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
+        payload_digest: SecretSearchCatalogPayloadDigest,
         item: SecretListItem,
         integrity_key: &SymmetricKey,
     ) -> VaultResult<Self> {
@@ -75,7 +91,7 @@ impl SecretSearchCatalogEntry {
             return false;
         };
         mac.update(SEARCH_CATALOG_INTEGRITY_DOMAIN);
-        mac.update(&self.payload_digest);
+        mac.update(&self.payload_digest.as_bytes());
         mac.update(&item_json);
         mac.verify_slice(&tag).is_ok()
     }
@@ -84,11 +100,11 @@ impl SecretSearchCatalogEntry {
         self.normalized_search_text = self.item.normalized_search_text();
     }
 
-    fn payload_digest(payload: &str) -> [u8; PAYLOAD_DIGEST_BYTES] {
+    fn payload_digest(payload: &str) -> SecretSearchCatalogPayloadDigest {
         let digest = Sha256::digest(payload.as_bytes());
         let mut truncated = [0_u8; PAYLOAD_DIGEST_BYTES];
         truncated.copy_from_slice(&digest[..PAYLOAD_DIGEST_BYTES]);
-        truncated
+        truncated.into()
     }
 
     fn integrity_tag(request: &SecretSearchCatalogIntegrityTagRequest<'_>) -> VaultResult<String> {
@@ -97,7 +113,7 @@ impl SecretSearchCatalogEntry {
         let mut mac = Hmac::<Sha256>::new_from_slice(request.integrity_key.as_str().as_bytes())
             .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
         mac.update(SEARCH_CATALOG_INTEGRITY_DOMAIN);
-        mac.update(&request.payload_digest);
+        mac.update(&request.payload_digest.as_bytes());
         mac.update(&item_json);
         Ok(hex::encode(mac.finalize().into_bytes()))
     }
@@ -364,7 +380,11 @@ mod tests {
             let item = login_item(index, username);
             catalog.entries.insert(
                 item.id.clone(),
-                SecretSearchCatalogEntry::new([0_u8; PAYLOAD_DIGEST_BYTES], item, &integrity_key)?,
+                SecretSearchCatalogEntry::new(
+                    SecretSearchCatalogPayloadDigest::from([0_u8; PAYLOAD_DIGEST_BYTES]),
+                    item,
+                    &integrity_key,
+                )?,
             );
         }
 
@@ -386,7 +406,11 @@ mod tests {
         let bucket = SecretSearchCatalog::bucket_for(&item.id);
         catalog.entries.insert(
             item.id.clone(),
-            SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &keys.secrets_key)?,
+            SecretSearchCatalogEntry::new(
+                SecretSearchCatalogPayloadDigest::from([1_u8; PAYLOAD_DIGEST_BYTES]),
+                item,
+                &keys.secrets_key,
+            )?,
         );
 
         let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {
