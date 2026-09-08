@@ -3,7 +3,7 @@ use rustc_ast::attr::AttributeExt;
 use rustc_hir::{Attribute, HirId, Item, ItemKind, Node, def::DefKind};
 use rustc_lint::{LateContext, LateLintPass};
 use rustc_session::{declare_lint, declare_lint_pass, lint::LintExpectationId};
-use rustc_span::{def_id::LocalDefId, sym};
+use rustc_span::sym;
 
 declare_lint! {
     /// Detects authored free functions, including private and nested definitions.
@@ -33,7 +33,6 @@ declare_lint_pass! {
 struct FunctionOwnershipRequest<'cx, 'tcx> {
     cx: &'cx LateContext<'tcx>,
     item_hir_id: HirId,
-    item_def_id: LocalDefId,
 }
 
 impl FunctionOwnership {
@@ -41,9 +40,35 @@ impl FunctionOwnership {
         request
             .cx
             .tcx
-            .def_path_str(request.item_def_id.to_def_id())
-            .split("::")
-            .any(|segment| segment == "tests" || segment.ends_with("_tests"))
+            .hir_attrs(request.item_hir_id)
+            .iter()
+            .any(Self::is_test_configuration)
+            || request
+                .cx
+                .tcx
+                .hir_parent_iter(request.item_hir_id)
+                .any(|(hir_id, _)| {
+                    request
+                        .cx
+                        .tcx
+                        .hir_attrs(hir_id)
+                        .iter()
+                        .any(Self::is_test_configuration)
+                })
+    }
+
+    fn is_test_configuration(attribute: &Attribute) -> bool {
+        attribute.has_name(sym::cfg)
+            && attribute.meta_item_list().is_some_and(|items| {
+                items.iter().any(|item| {
+                    item.meta_item().is_some_and(|meta| {
+                        meta.path
+                            .segments
+                            .last()
+                            .is_some_and(|segment| segment.ident.name.as_str() == "test")
+                    })
+                })
+            })
     }
 
     fn has_unowned_function_attribute(request: FunctionOwnershipRequest<'_, '_>) -> bool {
@@ -60,7 +85,6 @@ impl FunctionOwnership {
         let request = FunctionOwnershipRequest {
             cx,
             item_hir_id: item.hir_id(),
-            item_def_id: def_id,
         };
         if !matches!(item.kind, ItemKind::Fn { .. })
             || item.span.in_external_macro(cx.tcx.sess.source_map())
