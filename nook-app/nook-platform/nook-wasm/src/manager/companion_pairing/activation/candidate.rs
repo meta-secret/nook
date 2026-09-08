@@ -18,7 +18,7 @@ use zeroize::Zeroizing;
 mod storage;
 use storage::PairingActivationStore;
 
-/// Opaque readback of an inert candidate. It conveys no live vault authority.
+/// Opaque receipt for an inert candidate publication. It conveys no live vault authority.
 #[wasm_bindgen]
 pub struct NookStoredCompanionPairingActivationCandidate {
     _inner: storage::StoredPairingActivationCandidate,
@@ -103,8 +103,6 @@ enum CompanionPairingCandidateFailure {
     EventAuthorization,
     #[error("pairing candidate replay rejected")]
     Replay,
-    #[error("unsupported pairing candidate schema")]
-    UnsupportedSchema,
     #[error("pairing candidate integrity rejected")]
     Integrity,
     #[error("pairing candidate storage failed")]
@@ -118,7 +116,7 @@ impl CompanionPairingCandidateFailure {
             Self::ManagerBinding => NookCompanionPairingCandidateFailure::ManagerBinding,
             Self::ProviderBinding => NookCompanionPairingCandidateFailure::ProviderBinding,
             Self::Replay => NookCompanionPairingCandidateFailure::Replay,
-            Self::EventAuthorization | Self::UnsupportedSchema | Self::Integrity => {
+            Self::EventAuthorization | Self::Integrity => {
                 NookCompanionPairingCandidateFailure::Integrity
             }
             Self::Storage => NookCompanionPairingCandidateFailure::Storage,
@@ -142,17 +140,15 @@ pub enum NookCompanionPairingCandidateFailure {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookCompanionPairingCandidateOutcomeState {
     Stored,
-    Absent,
     Rejected,
 }
 
 enum CompanionPairingCandidateOutcome {
     Stored(Box<NookStoredCompanionPairingActivationCandidate>),
-    Absent,
     Rejected(NookCompanionPairingCandidateFailure),
 }
 
-/// Generated typed result for storing or loading an inert candidate.
+/// Generated typed result for storing an inert candidate.
 #[wasm_bindgen]
 pub struct NookCompanionPairingCandidateOutcome(CompanionPairingCandidateOutcome);
 
@@ -178,9 +174,6 @@ impl NookCompanionPairingCandidateOutcome {
             CompanionPairingCandidateOutcome::Stored(_) => {
                 NookCompanionPairingCandidateOutcomeState::Stored
             }
-            CompanionPairingCandidateOutcome::Absent => {
-                NookCompanionPairingCandidateOutcomeState::Absent
-            }
             CompanionPairingCandidateOutcome::Rejected(_) => {
                 NookCompanionPairingCandidateOutcomeState::Rejected
             }
@@ -193,8 +186,7 @@ impl NookCompanionPairingCandidateOutcome {
     {
         match self.0 {
             CompanionPairingCandidateOutcome::Stored(candidate) => Ok(*candidate),
-            CompanionPairingCandidateOutcome::Absent
-            | CompanionPairingCandidateOutcome::Rejected(_) => {
+            CompanionPairingCandidateOutcome::Rejected(_) => {
                 Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
             }
         }
@@ -205,8 +197,7 @@ impl NookCompanionPairingCandidateOutcome {
     ) -> Result<NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateFailure> {
         match self.0 {
             CompanionPairingCandidateOutcome::Rejected(failure) => Ok(failure),
-            CompanionPairingCandidateOutcome::Stored(_)
-            | CompanionPairingCandidateOutcome::Absent => {
+            CompanionPairingCandidateOutcome::Stored(_) => {
                 Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
             }
         }
@@ -376,50 +367,6 @@ impl NookPreparedCompanionPairingActivation {
     }
 }
 
-#[wasm_bindgen]
-impl NookVaultManager {
-    pub async fn load_companion_pairing_activation_candidate(
-        &self,
-    ) -> NookCompanionPairingCandidateOutcome {
-        let Ok(store_id) = StoreId::parse(&self.vault.store_id) else {
-            return NookCompanionPairingCandidateOutcome::from_result(Err(
-                CompanionPairingCandidateFailure::ManagerBinding,
-            ));
-        };
-        let candidate = match PairingActivationStore::load(&store_id).await {
-            Ok(Some(candidate)) => candidate,
-            Ok(None) => {
-                return NookCompanionPairingCandidateOutcome(
-                    CompanionPairingCandidateOutcome::Absent,
-                );
-            }
-            Err(failure) => return NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
-        };
-        let clock = BrowserActivationClock;
-        let validated = CurrentActivationBinding {
-            approval: &candidate.approval,
-            store_id: &candidate.vault_store_id,
-            providers: &candidate.providers,
-            manager: self,
-            observed_at: match clock.observe() {
-                Ok(observed) => observed.epoch,
-                Err(failure) => {
-                    return NookCompanionPairingCandidateOutcome::from_result(Err(failure));
-                }
-            },
-        }
-        .validate();
-        match validated {
-            Ok(_) => NookCompanionPairingCandidateOutcome::from_result(Ok(
-                storage::StoredPairingActivationCandidate {
-                    _candidate: candidate,
-                },
-            )),
-            Err(failure) => NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::tests::ActivationFixture;
@@ -517,6 +464,37 @@ mod tests {
                         .map_err(|_| CompanionPairingCandidateFailure::Integrity)?,
                 )
         }
+
+        fn assert_manager_mutation_rejected() -> anyhow::Result<()> {
+            for scenario in [
+                ManagerBindingScenario::Application,
+                ManagerBindingScenario::Store,
+                ManagerBindingScenario::VaultName,
+                ManagerBindingScenario::Identity,
+            ] {
+                let mut fixture = Self::new()?;
+                match scenario {
+                    ManagerBindingScenario::Application => {
+                        fixture.manager.application = VaultApplication::Simple;
+                    }
+                    ManagerBindingScenario::Store => {
+                        fixture.manager.vault.store_id = "store_testtoken12".to_owned();
+                    }
+                    ManagerBindingScenario::VaultName => {
+                        fixture.manager.vault.vault_name = VaultNameState::Unnamed;
+                    }
+                    ManagerBindingScenario::Identity => {
+                        fixture.manager.device.identity_private_key =
+                            DeviceIdentity::generate()?.secret_string().into_inner();
+                    }
+                }
+                assert!(matches!(
+                    fixture.prepare_at(ActivationFixture::epoch("160")?),
+                    Err(CompanionPairingCandidateFailure::ManagerBinding)
+                ));
+            }
+            Ok(())
+        }
     }
 
     #[test]
@@ -552,10 +530,6 @@ mod tests {
             (
                 CompanionPairingCandidateFailure::Replay,
                 NookCompanionPairingCandidateFailure::Replay,
-            ),
-            (
-                CompanionPairingCandidateFailure::UnsupportedSchema,
-                NookCompanionPairingCandidateFailure::Integrity,
             ),
             (
                 CompanionPairingCandidateFailure::Integrity,
@@ -602,34 +576,7 @@ mod tests {
 
     #[test]
     fn current_manager_bindings_are_revalidated() -> anyhow::Result<()> {
-        for scenario in [
-            ManagerBindingScenario::Application,
-            ManagerBindingScenario::Store,
-            ManagerBindingScenario::VaultName,
-            ManagerBindingScenario::Identity,
-        ] {
-            let mut fixture = CandidateFixture::new()?;
-            match scenario {
-                ManagerBindingScenario::Application => {
-                    fixture.manager.application = VaultApplication::Simple;
-                }
-                ManagerBindingScenario::Store => {
-                    fixture.manager.vault.store_id = "store_testtoken12".to_owned();
-                }
-                ManagerBindingScenario::VaultName => {
-                    fixture.manager.vault.vault_name = VaultNameState::Unnamed;
-                }
-                ManagerBindingScenario::Identity => {
-                    fixture.manager.device.identity_private_key =
-                        DeviceIdentity::generate()?.secret_string().into_inner();
-                }
-            }
-            assert!(matches!(
-                fixture.prepare_at(ActivationFixture::epoch("160")?),
-                Err(CompanionPairingCandidateFailure::ManagerBinding)
-            ));
-        }
-        Ok(())
+        CandidateFixture::assert_manager_mutation_rejected()
     }
 
     #[test]

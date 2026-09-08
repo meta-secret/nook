@@ -5,7 +5,6 @@ use super::{
     PairingActivationStorageAdmission,
 };
 use crate::storage::open_nook_database;
-use nook_core::StoreId;
 use rexie::TransactionMode;
 
 mod schema;
@@ -117,7 +116,6 @@ impl PairingActivationStore {
     ) -> Result<StoredPairingActivationCandidate, CompanionPairingCandidateFailure> {
         let PairingActivationCommit { admission, clock } = request;
         let encoded = EncodedCandidate::new(&admission.candidate)?;
-        encoded.decode()?;
         let gate_json = CandidateSchema::encode(&encoded.gate)?;
         let connection = open_nook_database()
             .await
@@ -174,61 +172,6 @@ impl PairingActivationStore {
             _candidate: admission.candidate,
         })
     }
-
-    pub(super) async fn load(
-        vault_store_id: &StoreId,
-    ) -> Result<Option<PairingActivationCandidate>, CompanionPairingCandidateFailure> {
-        let gate_key = CandidateSchema::gate_key(vault_store_id.as_str());
-        let connection = open_nook_database()
-            .await
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-        let transaction = connection
-            .transaction(&[VAULT_STORE], TransactionMode::ReadOnly)
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-        let vault = transaction
-            .store(VAULT_STORE)
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-        let gate_json = Self::get_string(StoredStringRead {
-            store: &vault,
-            key: &gate_key,
-        })
-        .await?;
-        let Some(gate_json) = gate_json else {
-            transaction
-                .done()
-                .await
-                .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-            return Ok(None);
-        };
-        let gate = CandidateSchema::decode_gate(&gate_json)?;
-        let mut events = Vec::with_capacity(gate.event_payload_keys.len());
-        for key in &gate.event_payload_keys {
-            events.push((
-                key.clone(),
-                Self::get_string(StoredStringRead { store: &vault, key })
-                    .await?
-                    .ok_or_else(CandidateSchema::integrity)?,
-            ));
-        }
-        let providers = Self::get_string(StoredStringRead {
-            store: &vault,
-            key: &gate.provider_payload_key,
-        })
-        .await?
-        .ok_or_else(CandidateSchema::integrity)?;
-        transaction
-            .done()
-            .await
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-        EncodedCandidate {
-            gate_key,
-            gate,
-            events,
-            providers,
-        }
-        .decode()
-        .map(Some)
-    }
 }
 
 #[cfg(test)]
@@ -236,7 +179,6 @@ mod tests {
     use super::super::tests::{CandidateFixture, DeterministicClock};
     use super::*;
     use crate::manager::companion_pairing::activation::tests::ActivationFixture;
-    use nook_core::Sha256Hex;
     use std::collections::BTreeMap;
 
     #[derive(Default)]
@@ -265,41 +207,6 @@ mod tests {
             transaction.insert(encoded.gate_key, CandidateSchema::encode(&encoded.gate)?);
             self.vault = transaction;
             Ok(())
-        }
-
-        fn load(
-            &self,
-            vault_store_id: &StoreId,
-        ) -> Result<Option<EncodedCandidate>, CompanionPairingCandidateFailure> {
-            let gate_key = CandidateSchema::gate_key(vault_store_id.as_str());
-            let Some(gate_json) = self.vault.get(&gate_key) else {
-                return Ok(None);
-            };
-            let gate = CandidateSchema::decode_gate(gate_json)?;
-            let events = gate
-                .event_payload_keys
-                .iter()
-                .map(|key| {
-                    Ok((
-                        key.clone(),
-                        self.vault
-                            .get(key)
-                            .ok_or_else(CandidateSchema::integrity)?
-                            .clone(),
-                    ))
-                })
-                .collect::<Result<Vec<_>, CompanionPairingCandidateFailure>>()?;
-            let providers = self
-                .vault
-                .get(&gate.provider_payload_key)
-                .ok_or_else(CandidateSchema::integrity)?
-                .clone();
-            Ok(Some(EncodedCandidate {
-                gate_key,
-                gate,
-                events,
-                providers,
-            }))
         }
 
         fn interrupted_commit(
@@ -349,233 +256,134 @@ mod tests {
         }
     }
 
-    #[test]
-    fn memory_commit_round_trips_real_candidate() -> anyhow::Result<()> {
-        let candidate = CandidateFixture::candidate()
-            .map_err(|failure| anyhow::anyhow!(failure.to_string()))?;
-        let vault_store_id = candidate.vault_store_id.clone();
-        let mut store = MemoryActivationStore::default();
-        store.commit(EncodedCandidate::new(&candidate)?)?;
-        store
-            .load(&vault_store_id)?
-            .ok_or_else(CandidateSchema::integrity)?
-            .decode()?;
-        assert!(
-            store
-                .vault
-                .keys()
-                .all(|key| key.starts_with("companion-pairing-activation:"))
-        );
-        Ok(())
+    struct MemoryStorageScenarios;
+
+    impl MemoryStorageScenarios {
+        fn commit_publishes_only_activation_keys() -> anyhow::Result<()> {
+            let candidate = CandidateFixture::candidate()
+                .map_err(|failure| anyhow::anyhow!(failure.to_string()))?;
+            let mut store = MemoryActivationStore::default();
+            store.commit(EncodedCandidate::new(&candidate)?)?;
+            assert!(
+                store
+                    .vault
+                    .keys()
+                    .all(|key| key.starts_with("companion-pairing-activation:"))
+            );
+            Ok(())
+        }
+
+        fn commit_rejects_replay() -> anyhow::Result<()> {
+            let mut store = MemoryActivationStore::default();
+            store.commit(EncodedCandidate::new(&CandidateFixture::candidate()?)?)?;
+            assert!(matches!(
+                store.commit(EncodedCandidate::new(&CandidateFixture::candidate()?)?),
+                Err(CompanionPairingCandidateFailure::Replay)
+            ));
+            Ok(())
+        }
+
+        fn every_interrupted_write_rolls_back() -> anyhow::Result<()> {
+            let candidate = CandidateFixture::candidate()?;
+            let encoded = EncodedCandidate::new(&candidate)?;
+            for writes_before_failure in 0..(encoded.events.len() + 2) {
+                let mut store = MemoryActivationStore::default();
+                assert!(matches!(
+                    store.interrupted_commit(InterruptedCommit {
+                        encoded: &encoded,
+                        writes_before_failure,
+                    }),
+                    Err(CompanionPairingCandidateFailure::Storage)
+                ));
+                assert!(store.vault.is_empty());
+            }
+            Ok(())
+        }
+
+        fn late_expiry_and_manager_mutation_discard_transaction() -> anyhow::Result<()> {
+            let mut store = MemoryActivationStore::default();
+            for observations in [
+                vec![ActivationFixture::epoch("160")?],
+                vec![ActivationFixture::epoch("160")?; 2],
+            ] {
+                let fixture = CandidateFixture::new()?
+                    .into_commit_fixture(ActivationFixture::epoch("160")?)?;
+                assert!(matches!(
+                    store.commit_with_clock(PairingActivationCommit {
+                        admission: PairingActivationStorageAdmission {
+                            candidate: fixture.candidate,
+                            envelopes: fixture.envelopes,
+                            manager: &fixture.manager,
+                        },
+                        clock: &DeterministicClock::new(observations),
+                    }),
+                    Err(CompanionPairingCandidateFailure::Integrity)
+                ));
+                assert!(store.vault.is_empty());
+            }
+            for observations in [
+                vec![
+                    ActivationFixture::epoch("160")?,
+                    ActivationFixture::epoch("200")?,
+                ],
+                vec![
+                    ActivationFixture::epoch("160")?,
+                    ActivationFixture::epoch("160")?,
+                    ActivationFixture::epoch("200")?,
+                ],
+            ] {
+                let fixture = CandidateFixture::new()?
+                    .into_commit_fixture(ActivationFixture::epoch("160")?)?;
+                assert!(matches!(
+                    store.commit_with_clock(PairingActivationCommit {
+                        admission: PairingActivationStorageAdmission {
+                            candidate: fixture.candidate,
+                            envelopes: fixture.envelopes,
+                            manager: &fixture.manager,
+                        },
+                        clock: &DeterministicClock::new(observations),
+                    }),
+                    Err(CompanionPairingCandidateFailure::Expiry)
+                ));
+                assert!(store.vault.is_empty());
+            }
+            let mut fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            fixture.manager.application = nook_core::VaultApplication::Simple;
+            assert!(matches!(
+                store.commit_with_clock(PairingActivationCommit {
+                    admission: PairingActivationStorageAdmission {
+                        candidate: fixture.candidate,
+                        envelopes: fixture.envelopes,
+                        manager: &fixture.manager,
+                    },
+                    clock: &DeterministicClock::new(vec![ActivationFixture::epoch("160")?]),
+                }),
+                Err(CompanionPairingCandidateFailure::ManagerBinding)
+            ));
+            assert!(store.vault.is_empty());
+            Ok(())
+        }
     }
 
     #[test]
-    fn payload_without_gate_is_inert() -> anyhow::Result<()> {
-        let candidate = CandidateFixture::candidate()?;
-        let encoded = EncodedCandidate::new(&candidate)?;
-        let mut store = MemoryActivationStore::default();
-        let (key, value) = &encoded.events[0];
-        store.vault.insert(key.clone(), value.clone());
-        assert!(store.load(&candidate.vault_store_id)?.is_none());
-        Ok(())
+    fn memory_commit_publishes_only_activation_keys() -> anyhow::Result<()> {
+        MemoryStorageScenarios::commit_publishes_only_activation_keys()
     }
 
     #[test]
     fn memory_commit_rejects_replay() -> anyhow::Result<()> {
-        let mut store = MemoryActivationStore::default();
-        store.commit(EncodedCandidate::new(&CandidateFixture::candidate()?)?)?;
-        assert!(matches!(
-            store.commit(EncodedCandidate::new(&CandidateFixture::candidate()?)?),
-            Err(CompanionPairingCandidateFailure::Replay)
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn missing_or_corrupt_payload_is_rejected() -> anyhow::Result<()> {
-        for corruption in 0..2 {
-            let candidate = CandidateFixture::candidate()?;
-            let vault_store_id = candidate.vault_store_id.clone();
-            let mut store = MemoryActivationStore::default();
-            store.commit(EncodedCandidate::new(&candidate)?)?;
-            let encoded = store
-                .load(&vault_store_id)?
-                .ok_or_else(CandidateSchema::integrity)?;
-            if corruption == 0 {
-                store.vault.remove(&encoded.gate.event_payload_keys[0]);
-            } else {
-                store
-                    .vault
-                    .insert(encoded.gate.provider_payload_key.clone(), "{}".to_owned());
-            }
-            assert!(matches!(
-                store
-                    .load(&vault_store_id)
-                    .and_then(|value| value.ok_or_else(CandidateSchema::integrity)?.decode()),
-                Err(CompanionPairingCandidateFailure::Integrity)
-            ));
-        }
-        Ok(())
-    }
-
-    #[test]
-    fn unsupported_schema_version_has_typed_failure() -> anyhow::Result<()> {
-        let candidate = CandidateFixture::candidate()?;
-        let vault_store_id = candidate.vault_store_id.clone();
-        let mut store = MemoryActivationStore::default();
-        store.commit(EncodedCandidate::new(&candidate)?)?;
-        let gate_key = CandidateSchema::gate_key(vault_store_id.as_str());
-        let gate = store
-            .vault
-            .get(&gate_key)
-            .ok_or_else(|| anyhow::anyhow!("gate missing"))?
-            .replace("\"schema_version\":1", "\"schema_version\":2");
-        store.vault.insert(gate_key, gate);
-        assert!(matches!(
-            store.load(&vault_store_id),
-            Err(CompanionPairingCandidateFailure::UnsupportedSchema)
-        ));
-        Ok(())
-    }
-
-    #[test]
-    fn gate_and_event_rows_reject_unknown_fields() -> anyhow::Result<()> {
-        let candidate = CandidateFixture::candidate()?;
-        let encoded = EncodedCandidate::new(&candidate)?;
-        let mut gate = serde_json::to_value(&encoded.gate)?;
-        gate.as_object_mut()
-            .ok_or_else(|| anyhow::anyhow!("gate must be an object"))?
-            .insert("unknown".to_owned(), true.into());
-        assert!(CandidateSchema::decode_gate(&serde_json::to_string(&gate)?).is_err());
-        let mut row: serde_json::Value = serde_json::from_str(&encoded.events[0].1)?;
-        row.as_object_mut()
-            .ok_or_else(|| anyhow::anyhow!("row must be an object"))?
-            .insert("unknown".to_owned(), true.into());
-        assert!(
-            CandidateSchema::decode::<schema::ActivationEventRow>(&serde_json::to_string(&row)?)
-                .is_err()
-        );
-        Ok(())
-    }
-
-    #[test]
-    fn provider_payload_rejects_unknown_fields_after_digest_substitution() -> anyhow::Result<()> {
-        enum UnknownField {
-            Snapshot,
-            ActiveVaultScope,
-        }
-
-        for unknown_field in [UnknownField::Snapshot, UnknownField::ActiveVaultScope] {
-            let candidate = CandidateFixture::candidate()?;
-            let mut encoded = EncodedCandidate::new(&candidate)?;
-            let mut providers: serde_json::Value = serde_json::from_str(&encoded.providers)?;
-            let provider_object = providers
-                .as_object_mut()
-                .ok_or_else(|| anyhow::anyhow!("provider snapshot must be an object"))?;
-            match unknown_field {
-                UnknownField::Snapshot => {
-                    provider_object.insert("unknown".to_owned(), true.into());
-                }
-                UnknownField::ActiveVaultScope => {
-                    provider_object
-                        .get_mut("activeVaultStoreId")
-                        .and_then(serde_json::Value::as_object_mut)
-                        .ok_or_else(|| anyhow::anyhow!("active vault scope must be an object"))?
-                        .insert("unknown".to_owned(), true.into());
-                }
-            }
-            encoded.providers = serde_json::to_string(&providers)?;
-            encoded.gate.provider_digest = Sha256Hex::from_bytes(encoded.providers.as_bytes());
-            assert!(matches!(
-                encoded.decode(),
-                Err(CompanionPairingCandidateFailure::Integrity)
-            ));
-        }
-        Ok(())
+        MemoryStorageScenarios::commit_rejects_replay()
     }
 
     #[test]
     fn every_interrupted_memory_write_rolls_back() -> anyhow::Result<()> {
-        let candidate = CandidateFixture::candidate()?;
-        let encoded = EncodedCandidate::new(&candidate)?;
-        for writes_before_failure in 0..(encoded.events.len() + 2) {
-            let mut store = MemoryActivationStore::default();
-            assert!(matches!(
-                store.interrupted_commit(InterruptedCommit {
-                    encoded: &encoded,
-                    writes_before_failure,
-                }),
-                Err(CompanionPairingCandidateFailure::Storage)
-            ));
-            assert!(store.vault.is_empty());
-        }
-        Ok(())
+        MemoryStorageScenarios::every_interrupted_write_rolls_back()
     }
 
     #[test]
     fn late_expiry_and_manager_mutation_discard_memory_transaction() -> anyhow::Result<()> {
-        let mut store = MemoryActivationStore::default();
-        for observations in [
-            vec![ActivationFixture::epoch("160")?],
-            vec![ActivationFixture::epoch("160")?; 2],
-        ] {
-            let fixture =
-                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
-            assert!(matches!(
-                store.commit_with_clock(PairingActivationCommit {
-                    admission: PairingActivationStorageAdmission {
-                        candidate: fixture.candidate,
-                        envelopes: fixture.envelopes,
-                        manager: &fixture.manager,
-                    },
-                    clock: &DeterministicClock::new(observations),
-                }),
-                Err(CompanionPairingCandidateFailure::Integrity)
-            ));
-            assert!(store.vault.is_empty());
-        }
-        for observations in [
-            vec![
-                ActivationFixture::epoch("160")?,
-                ActivationFixture::epoch("200")?,
-            ],
-            vec![
-                ActivationFixture::epoch("160")?,
-                ActivationFixture::epoch("160")?,
-                ActivationFixture::epoch("200")?,
-            ],
-        ] {
-            let fixture =
-                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
-            assert!(matches!(
-                store.commit_with_clock(PairingActivationCommit {
-                    admission: PairingActivationStorageAdmission {
-                        candidate: fixture.candidate,
-                        envelopes: fixture.envelopes,
-                        manager: &fixture.manager,
-                    },
-                    clock: &DeterministicClock::new(observations),
-                }),
-                Err(CompanionPairingCandidateFailure::Expiry)
-            ));
-            assert!(store.vault.is_empty());
-        }
-        let mut fixture =
-            CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
-        fixture.manager.application = nook_core::VaultApplication::Simple;
-        assert!(matches!(
-            store.commit_with_clock(PairingActivationCommit {
-                admission: PairingActivationStorageAdmission {
-                    candidate: fixture.candidate,
-                    envelopes: fixture.envelopes,
-                    manager: &fixture.manager,
-                },
-                clock: &DeterministicClock::new(vec![ActivationFixture::epoch("160")?]),
-            }),
-            Err(CompanionPairingCandidateFailure::ManagerBinding)
-        ));
-        assert!(store.vault.is_empty());
-        Ok(())
+        MemoryStorageScenarios::late_expiry_and_manager_mutation_discard_transaction()
     }
 }
 
@@ -633,15 +441,6 @@ mod browser_tests {
             .map_err(|failure| NookError::Database(failure.to_string()))
         }
 
-        async fn load(vault_store_id: &StoreId) -> Result<PairingActivationCandidate, NookError> {
-            PairingActivationStore::load(vault_store_id)
-                .await
-                .map_err(|failure| NookError::Database(failure.to_string()))
-                .and_then(|candidate| {
-                    candidate.ok_or_else(|| NookError::Database("candidate absent".to_owned()))
-                })
-        }
-
         async fn activation_keys() -> Result<Vec<String>, NookError> {
             let connection = open_nook_database().await?;
             let transaction = connection
@@ -692,13 +491,11 @@ mod browser_tests {
             Ok(())
         }
 
-        async fn commit_load_and_replay_remain_inert() -> Result<(), NookError> {
+        async fn commit_and_replay_remain_inert() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
             let authoritative_before = extension_state::read_all().await?;
             let fixture = Self::candidate()?;
-            let vault_store_id = fixture.candidate.vault_store_id.clone();
             Self::commit(fixture).await?;
-            Self::load(&vault_store_id).await?;
             assert!(!Self::activation_keys().await?.is_empty());
             assert_eq!(extension_state::read_all().await?, authoritative_before);
             Self::authoritative_events_exclude_candidates().await?;
@@ -760,21 +557,11 @@ mod browser_tests {
             }
             Ok(())
         }
-
-        async fn load_reports_missing_gate() -> Result<(), NookError> {
-            indexed_db::clear_vault_db().await?;
-            let store_id = StoreId::parse("store_testtoken11")?;
-            let candidate = PairingActivationStore::load(&store_id)
-                .await
-                .map_err(|failure| NookError::Database(failure.to_string()))?;
-            assert!(candidate.is_none());
-            Ok(())
-        }
     }
 
     #[wasm_bindgen_test]
-    async fn indexed_db_commit_load_and_replay_remain_inert() -> Result<(), NookError> {
-        BrowserStorageFixture::commit_load_and_replay_remain_inert().await
+    async fn indexed_db_commit_and_replay_remain_inert() -> Result<(), NookError> {
+        BrowserStorageFixture::commit_and_replay_remain_inert().await
     }
 
     #[wasm_bindgen_test]
@@ -790,10 +577,5 @@ mod browser_tests {
     #[wasm_bindgen_test]
     async fn indexed_db_observation_failure_aborts_payloads_and_gate() -> Result<(), NookError> {
         BrowserStorageFixture::observation_failure_aborts_payloads_and_gate().await
-    }
-
-    #[wasm_bindgen_test]
-    async fn indexed_db_load_reports_missing_gate() -> Result<(), NookError> {
-        BrowserStorageFixture::load_reports_missing_gate().await
     }
 }

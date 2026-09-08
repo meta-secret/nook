@@ -210,14 +210,15 @@ zeroizing Rust owners and never enter the candidate schema.
 
 One Rexie transaction writes V1 event and sealed-provider payloads under the
 `companion-pairing-activation:` prefix in the existing `nook_db` `vault` store.
-The strict gate is written last. Replay, concurrent publication, late expiry,
-unknown fields, unsupported versions, torn payloads, and digest mismatch fail
-closed. Every failure after a payload write explicitly aborts the transaction.
+The typed V1 gate is written last. Replay, concurrent publication, late expiry,
+and storage failure fail closed. Every failure after a payload write explicitly
+aborts the transaction.
 
 The gate is only an integrity and publication marker inside mutable same-origin
-storage. Opaque readback remains inert and no authoritative reader uses this
-namespace. Later adoption owns external-root revalidation, `access_granted`,
-final pairing state, acknowledgement, reader integration, reset, and migration.
+storage. This slice exposes no candidate reader, and no authoritative reader
+uses this namespace. Later adoption owns external-root revalidation,
+`access_granted`, final pairing state, acknowledgement, reader integration,
+reset, and migration.
 
 ## Sequential delivery
 

@@ -73,9 +73,6 @@ class PairingActivationScenario {
     switch (state) {
       case NookCompanionPairingCandidateOutcomeState.Stored:
         return outcome.into_stored()
-      case NookCompanionPairingCandidateOutcomeState.Absent:
-        outcome.free()
-        throw new Error('candidate storage is absent')
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
       default:
@@ -93,9 +90,6 @@ class PairingActivationScenario {
       case NookCompanionPairingCandidateOutcomeState.Stored:
         outcome.into_stored().free()
         throw new Error('candidate storage unexpectedly succeeded')
-      case NookCompanionPairingCandidateOutcomeState.Absent:
-        outcome.free()
-        throw new Error('candidate storage is absent')
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         return outcome.into_failure()
       default:
@@ -106,9 +100,6 @@ class PairingActivationScenario {
   }
 
   static async run(): Promise<void> {
-    const absent = await extension.load_companion_pairing_activation_candidate()
-    expect(absent.state).toBe(NookCompanionPairingCandidateOutcomeState.Absent)
-    absent.free()
     const exported = await extension.export_event_log_records_js()
     const eventRecords = exported.to_array()
     exported.free()
@@ -120,12 +111,6 @@ class PairingActivationScenario {
     const stored = this.storedCandidate(await prepared.commit(extension))
     expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
     stored.free()
-    const loaded = this.storedCandidate(
-      await extension.load_companion_pairing_activation_candidate(),
-    )
-    expect(loaded).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
-    loaded.free()
-
     const replayApproval = pairingAttempt('pairing-activation-replay', false)
     const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
     const replay = await replayApproval

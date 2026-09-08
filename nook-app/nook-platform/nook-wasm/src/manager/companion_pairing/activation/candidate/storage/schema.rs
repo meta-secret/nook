@@ -1,25 +1,14 @@
-//! Strict persisted V1 schema and coherence checks for inert candidates.
+//! Write-only V1 schema for inert activation candidate publication.
 
-use super::super::{
-    CompanionPairingCandidateFailure, PairingActivationCandidate, PairingActivationEvent,
-};
-use nook_companion_core::{
-    CompanionPairingApproval, CompanionPairingEpochMilliseconds, ExtensionConnectScope,
-};
-use nook_core::{
-    AuthProvidersSnapshotData, CheckedRemoteEvent, EventGraphVaultArchitecture, EventId,
-    EventStorageBytes, LocalEventStore, Sha256Hex, StoreId, VaultApplication,
-};
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned, de::Error as _,
-};
+use super::super::{CompanionPairingCandidateFailure, PairingActivationCandidate};
+use nook_companion_core::{CompanionPairingApproval, CompanionPairingEpochMilliseconds};
+use nook_core::{Sha256Hex, VaultApplication};
+use serde::{Serialize, Serializer};
 
 type SchemaResult<T> = Result<T, CompanionPairingCandidateFailure>;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum PairingActivationSchemaVersion {
-    V1,
-}
+#[derive(Clone, Copy)]
+struct PairingActivationSchemaVersion;
 
 impl Serialize for PairingActivationSchemaVersion {
     fn serialize<SerializerType>(
@@ -29,31 +18,18 @@ impl Serialize for PairingActivationSchemaVersion {
     where
         SerializerType: Serializer,
     {
-        PersistedSchemaVersion::V1.serialize(serializer)
+        serializer.serialize_u32(1)
     }
 }
 
-impl<'de> Deserialize<'de> for PairingActivationSchemaVersion {
-    fn deserialize<DeserializerType>(
-        deserializer: DeserializerType,
-    ) -> Result<Self, DeserializerType::Error>
-    where
-        DeserializerType: Deserializer<'de>,
-    {
-        PersistedSchemaVersion::deserialize(deserializer)?
-            .into_schema()
-            .map_err(DeserializerType::Error::custom)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Serialize)]
 #[serde(deny_unknown_fields)]
-pub(super) struct ActivationEventRow {
+struct ActivationEventRow {
     event_id: String,
     bytes: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Serialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct ActivationGate {
     schema_version: PairingActivationSchemaVersion,
@@ -67,7 +43,7 @@ pub(super) struct ActivationGate {
     pub(super) event_payload_keys: Vec<String>,
     pub(super) provider_payload_key: String,
     event_digests: Vec<Sha256Hex>,
-    pub(super) provider_digest: Sha256Hex,
+    provider_digest: Sha256Hex,
     approval: CompanionPairingApproval,
 }
 
@@ -76,26 +52,6 @@ pub(super) struct EncodedCandidate {
     pub(super) gate: ActivationGate,
     pub(super) events: Vec<(String, String)>,
     pub(super) providers: String,
-}
-
-#[derive(Deserialize)]
-struct SchemaVersionProbe {
-    schema_version: PersistedSchemaVersion,
-}
-
-#[derive(Clone, Copy, Deserialize, Serialize)]
-#[serde(transparent)]
-struct PersistedSchemaVersion(u32);
-
-impl PersistedSchemaVersion {
-    const V1: Self = Self(1);
-
-    fn into_schema(self) -> SchemaResult<PairingActivationSchemaVersion> {
-        match self.0 {
-            1 => Ok(PairingActivationSchemaVersion::V1),
-            _ => Err(CompanionPairingCandidateFailure::UnsupportedSchema),
-        }
-    }
 }
 
 pub(super) struct CandidateSchema;
@@ -107,16 +63,6 @@ impl CandidateSchema {
 
     pub(super) fn encode(value: &impl Serialize) -> SchemaResult<String> {
         serde_json::to_string(value).map_err(|_| Self::integrity())
-    }
-
-    pub(super) fn decode<T: DeserializeOwned>(value: &str) -> SchemaResult<T> {
-        serde_json::from_str(value).map_err(|_| Self::integrity())
-    }
-
-    pub(super) fn decode_gate(value: &str) -> SchemaResult<ActivationGate> {
-        let probe: SchemaVersionProbe = Self::decode(value)?;
-        probe.schema_version.into_schema()?;
-        Self::decode(value)
     }
 
     pub(super) fn integrity() -> CompanionPairingCandidateFailure {
@@ -153,7 +99,7 @@ impl EncodedCandidate {
         Ok(Self {
             gate_key: CandidateSchema::gate_key(candidate.vault_store_id.as_str()),
             gate: ActivationGate {
-                schema_version: PairingActivationSchemaVersion::V1,
+                schema_version: PairingActivationSchemaVersion,
                 request_id: candidate.request_id.clone(),
                 vault_store_id: candidate.vault_store_id.as_str().to_owned(),
                 application: candidate.application,
@@ -179,115 +125,5 @@ impl EncodedCandidate {
             events,
             providers,
         })
-    }
-
-    pub(super) fn decode(&self) -> SchemaResult<PairingActivationCandidate> {
-        if self.gate.event_payload_keys.len() != self.events.len()
-            || self.gate.event_digests.len() != self.events.len()
-            || self
-                .events
-                .iter()
-                .zip(&self.gate.event_payload_keys)
-                .zip(&self.gate.event_digests)
-                .any(|(((key, value), expected_key), digest)| {
-                    key != expected_key || *digest != Sha256Hex::from_bytes(value.as_bytes())
-                })
-            || self.gate.provider_digest != Sha256Hex::from_bytes(self.providers.as_bytes())
-        {
-            return Err(CandidateSchema::integrity());
-        }
-        let events = self
-            .events
-            .iter()
-            .map(|(_, value)| {
-                let row: ActivationEventRow = CandidateSchema::decode(value)?;
-                Ok(PairingActivationEvent {
-                    event_id: EventId::parse(&row.event_id)
-                        .map_err(|_| CandidateSchema::integrity())?,
-                    bytes: EventStorageBytes::from(row.bytes),
-                })
-            })
-            .collect::<SchemaResult<Vec<_>>>()?;
-        let providers: AuthProvidersSnapshotData = CandidateSchema::decode(&self.providers)?;
-        if CandidateSchema::encode(&providers)? != self.providers {
-            return Err(CandidateSchema::integrity());
-        }
-        let candidate = PairingActivationCandidate {
-            request_id: self.gate.request_id.clone(),
-            vault_store_id: StoreId::parse(&self.gate.vault_store_id)
-                .map_err(|_| CandidateSchema::integrity())?,
-            approval: self.gate.approval.clone(),
-            application: self.gate.application,
-            stored_at: self.gate.stored_at,
-            event_heads: self
-                .gate
-                .event_heads
-                .iter()
-                .map(|head| EventId::parse(head).map_err(|_| CandidateSchema::integrity()))
-                .collect::<SchemaResult<Vec<_>>>()?,
-            events,
-            providers,
-        };
-        self.validate_candidate(&candidate)?;
-        Ok(candidate)
-    }
-
-    fn validate_candidate(&self, candidate: &PairingActivationCandidate) -> SchemaResult<()> {
-        let approval = &candidate.approval;
-        if CandidateSchema::gate_key(candidate.vault_store_id.as_str()) != self.gate_key
-            || candidate.application != VaultApplication::Extension
-            || candidate.request_id.trim().is_empty()
-            || candidate.request_id != approval.request.request_id
-            || candidate.vault_store_id.as_str() != approval.vault_store_id
-            || candidate.events.len() != self.gate.event_count as usize
-            || candidate.providers.providers.len() != self.gate.provider_count as usize
-            || candidate.providers.active_vault_store_id.as_deref()
-                != Some(candidate.vault_store_id.as_str())
-            || candidate.providers.providers.iter().any(|provider| {
-                provider.store_id.as_deref() != Some(candidate.vault_store_id.as_str())
-            })
-            || (!approval
-                .request
-                .scopes
-                .contains(&ExtensionConnectScope::SyncProviderCredentials)
-                && !candidate.providers.providers.is_empty())
-        {
-            return Err(CandidateSchema::integrity());
-        }
-        approval
-            .revalidate_at(candidate.stored_at)
-            .map_err(|_| CandidateSchema::integrity())?;
-        let digest = candidate
-            .providers
-            .companion_pairing_manifest_digest()
-            .map_err(|_| CandidateSchema::integrity())?;
-        if digest.as_str() != approval.provider_manifest_digest.as_str() {
-            return Err(CandidateSchema::integrity());
-        }
-        let mut store = LocalEventStore::new();
-        for event in &candidate.events {
-            if !CheckedRemoteEvent::parse(&event.event_id, &event.bytes)
-                .map_err(|_| CandidateSchema::integrity())?
-                .belongs_to_store(candidate.vault_store_id.as_str())
-                || store.get_bytes(&event.event_id).is_some()
-            {
-                return Err(CandidateSchema::integrity());
-            }
-            store.put_event(event.event_id.clone(), event.bytes.clone());
-        }
-        let graph = store
-            .load_graph(candidate.vault_store_id.as_str())
-            .map_err(|_| CandidateSchema::integrity())?;
-        graph
-            .validate_authorizations()
-            .map_err(|_| CandidateSchema::integrity())?;
-        if graph.classify_vault_architecture() != EventGraphVaultArchitecture::Simple
-            || !graph.pending_events().is_empty()
-            || !graph.quarantined().is_empty()
-            || graph.heads() != candidate.event_heads
-        {
-            return Err(CandidateSchema::integrity());
-        }
-        Ok(())
     }
 }

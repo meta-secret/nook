@@ -581,13 +581,19 @@ mod tests {
                 provider_manifest_digest: Self::provider_manifest_digest()?,
             })
         }
+
+        fn assert_invalid_epoch_domains() {
+            for invalid in ["0", "-1", "1.5", "9007199254740992", "1e999"] {
+                assert!(
+                    serde_json::from_str::<CompanionPairingEpochMilliseconds>(invalid).is_err()
+                );
+            }
+        }
     }
 
     #[test]
     fn epoch_deserialization_rejects_invalid_numeric_domains() {
-        for invalid in ["0", "-1", "1.5", "9007199254740992", "1e999"] {
-            assert!(serde_json::from_str::<CompanionPairingEpochMilliseconds>(invalid).is_err());
-        }
+        PairingFixture::assert_invalid_epoch_domains();
     }
 
     #[test]
