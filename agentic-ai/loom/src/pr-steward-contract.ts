@@ -8,7 +8,7 @@ import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
 
 export const PR_STEWARD_REPOSITORY = 'meta-secret/nook';
 export enum PrStewardSchemaVersion {
-  V1 = 'pr-steward-ndjson/v1',
+  V2 = 'pr-steward-ndjson/v2',
 }
 export enum PrStewardRecordKind {
   Blocker = 'github-pr-blocker',
@@ -101,7 +101,7 @@ type RoutingCommon = {
   readonly deliveryId: PrStewardDeliveryId;
   readonly repository: typeof PR_STEWARD_REPOSITORY;
   readonly pullRequest: PrStewardPullRequest;
-  readonly headSha: PrStewardHeadSha | false;
+  readonly headSha: PrStewardHeadSha;
   readonly objectId: number | false;
   readonly githubEvent: PrStewardGithubEvent;
   readonly action: string | false;
@@ -110,6 +110,7 @@ type RoutingCommon = {
 };
 export type PrStewardRoutingRecord = RoutingCommon & RoutingVariant;
 export enum PrStewardBlockerCode {
+  GithubObservationUnavailable = 'github-observation-unavailable',
   MalformedEvent = 'malformed-event',
 }
 export type PrStewardMalformedBlocker = {
@@ -119,11 +120,45 @@ export type PrStewardMalformedBlocker = {
   readonly pullRequest: PrStewardPullRequest;
   readonly summary: string;
 };
+type PrStewardUnavailableCommon = {
+  readonly kind: PrStewardRecordKind.Blocker;
+  readonly code: PrStewardBlockerCode.GithubObservationUnavailable;
+  readonly repository: typeof PR_STEWARD_REPOSITORY;
+  readonly pullRequest: PrStewardPullRequest;
+  readonly eventId: PrStewardEventId;
+  readonly deliveryId: PrStewardDeliveryId;
+  readonly objectId: number | false;
+  readonly summary: string;
+};
+type PrStewardUnavailableVariant =
+  | {
+      readonly source: PrStewardSource.IssueComment;
+      readonly headSha: false;
+      readonly runId: false;
+    }
+  | {
+      readonly source: PrStewardSource.CheckRun | PrStewardSource.WorkflowRun;
+      readonly headSha: PrStewardHeadSha;
+      readonly runId: number | false;
+    }
+  | {
+      readonly source:
+        | PrStewardSource.CheckSuite
+        | PrStewardSource.PullRequest
+        | PrStewardSource.PullRequestReview
+        | PrStewardSource.PullRequestReviewComment;
+      readonly headSha: PrStewardHeadSha;
+      readonly runId: false;
+    };
+export type PrStewardUnavailableBlocker = PrStewardUnavailableCommon &
+  PrStewardUnavailableVariant;
 
 export type PrStewardRecord =
-  PrStewardMalformedBlocker | PrStewardRoutingRecord;
+  | PrStewardMalformedBlocker
+  | PrStewardRoutingRecord
+  | PrStewardUnavailableBlocker;
 export type PrStewardEnvelope = {
-  readonly schemaVersion: PrStewardSchemaVersion.V1;
+  readonly schemaVersion: PrStewardSchemaVersion.V2;
   readonly record: PrStewardRecord;
 };
 
@@ -203,6 +238,19 @@ const ROUTING_FIELDS = [
 ] as const;
 const F = Field;
 const MALFORMED = [F.Code, F.Kind, F.Pr, F.Repo, F.Summary] as const;
+const UNAVAILABLE = [
+  F.Code,
+  F.DeliveryId,
+  F.EventId,
+  F.HeadSha,
+  F.Kind,
+  F.ObjectId,
+  F.Pr,
+  F.Repo,
+  F.RunId,
+  F.Source,
+  F.Summary,
+] as const;
 const NDJSON_LIMIT = 8_192;
 type RecordField = {
   readonly record: UntrustedYamlMap;
@@ -210,6 +258,18 @@ type RecordField = {
 };
 
 export class PrStewardNdjsonCodec {
+  static pullRequest(value: UntrustedYamlNode): PrStewardPullRequest {
+    if (typeof value !== 'number' || !Number.isSafeInteger(value) || value <= 0)
+      return this.#reject(PrStewardDecodeCode.InvalidField);
+    return value as PrStewardPullRequest;
+  }
+
+  static headSha(value: UntrustedYamlNode): PrStewardHeadSha {
+    if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value))
+      return this.#reject(PrStewardDecodeCode.InvalidField);
+    return value as PrStewardHeadSha;
+  }
+
   static githubEvent(source: PrStewardSource): PrStewardGithubEvent {
     return EVENTS[source];
   }
@@ -220,7 +280,9 @@ export class PrStewardNdjsonCodec {
       : this.#reject(PrStewardDecodeCode.InvalidRecord);
   }
 
-  static blocker(record: UntrustedYamlNode): PrStewardMalformedBlocker {
+  static blocker(
+    record: UntrustedYamlNode,
+  ): PrStewardMalformedBlocker | PrStewardUnavailableBlocker {
     return isRecord(record)
       ? this.#blocker(record)
       : this.#reject(PrStewardDecodeCode.InvalidRecord);
@@ -228,7 +290,7 @@ export class PrStewardNdjsonCodec {
 
   static encode(record: PrStewardRecord): string {
     const line = JSON.stringify({
-      schemaVersion: PrStewardSchemaVersion.V1,
+      schemaVersion: PrStewardSchemaVersion.V2,
       record,
     });
     this.decode(line);
@@ -258,7 +320,7 @@ export class PrStewardNdjsonCodec {
     });
     if (
       this.#required({ record: parsed, field: Field.SchemaVersion }) !==
-      PrStewardSchemaVersion.V1
+      PrStewardSchemaVersion.V2
     )
       this.#reject(PrStewardDecodeCode.UnsupportedVersion);
     const value = this.#required({ record: parsed, field: Field.Record });
@@ -270,7 +332,7 @@ export class PrStewardNdjsonCodec {
         : kind === PrStewardRecordKind.Blocker
           ? this.#blocker(value)
           : this.#reject(PrStewardDecodeCode.UnsupportedKind);
-    return { schemaVersion: PrStewardSchemaVersion.V1, record };
+    return { schemaVersion: PrStewardSchemaVersion.V2, record };
   }
 
   static githubUrl(value: string): PrStewardUrl | false {
@@ -311,8 +373,7 @@ export class PrStewardNdjsonCodec {
       limit: 64,
     });
     const headSha = this.#head(record);
-    if ((headSha === false) !== (source === PrStewardSource.IssueComment))
-      this.#reject(PrStewardDecodeCode.InvalidCombination);
+    if (headSha === false) this.#reject(PrStewardDecodeCode.InvalidField);
     if (
       source === PrStewardSource.WorkflowJob ||
       (source !== PrStewardSource.PullRequestReviewComment &&
@@ -347,7 +408,7 @@ export class PrStewardNdjsonCodec {
         record,
         field: Field.Pr,
       }) as PrStewardPullRequest,
-      headSha: headSha as PrStewardHeadSha | false,
+      headSha: headSha as PrStewardHeadSha,
       source,
       objectId: this.#optionalInteger({ record, field: Field.ObjectId }),
       commentId,
@@ -363,21 +424,63 @@ export class PrStewardNdjsonCodec {
     } as PrStewardRoutingRecord;
   }
 
-  static #blocker(record: UntrustedYamlMap): PrStewardMalformedBlocker {
+  static #blocker(
+    record: UntrustedYamlMap,
+  ): PrStewardMalformedBlocker | PrStewardUnavailableBlocker {
     const code = this.#required({ record, field: Field.Code });
-    if (code !== PrStewardBlockerCode.MalformedEvent)
+    if (code === PrStewardBlockerCode.MalformedEvent) {
+      this.#exact({ record, fields: MALFORMED });
+      return {
+        kind: PrStewardRecordKind.Blocker,
+        code,
+        repository: this.#repository(record),
+        pullRequest: this.#pullRequest(record),
+        summary: this.#text({ record, field: Field.Summary, limit: 240 }),
+      };
+    }
+    if (code !== PrStewardBlockerCode.GithubObservationUnavailable)
       this.#reject(PrStewardDecodeCode.InvalidField);
-    this.#exact({ record, fields: MALFORMED });
-    return {
+    this.#exact({ record, fields: UNAVAILABLE });
+    const source = this.#source(record);
+    const headSha = this.#head(record);
+    const runId = this.#optionalInteger({ record, field: Field.RunId });
+    const common: PrStewardUnavailableCommon = {
       kind: PrStewardRecordKind.Blocker,
       code,
       repository: this.#repository(record),
-      pullRequest: this.#integer({
+      pullRequest: this.#pullRequest(record),
+      eventId: this.#opaqueText({
         record,
-        field: Field.Pr,
-      }) as PrStewardPullRequest,
-      summary: this.#text({ record, field: Field.Summary, limit: 240 }),
+        field: F.EventId,
+        kind: IdentityKind.Event,
+      }),
+      deliveryId: this.#opaqueText({
+        record,
+        field: F.DeliveryId,
+        kind: IdentityKind.Delivery,
+      }),
+      objectId: this.#optionalInteger({ record, field: F.ObjectId }),
+      summary: this.#text({ record, field: F.Summary, limit: 240 }),
     };
+    if (source === PrStewardSource.IssueComment) {
+      if (headSha !== false || runId !== false)
+        return this.#reject(PrStewardDecodeCode.InvalidCombination);
+      return { ...common, source, headSha, runId };
+    }
+    if (headSha === false)
+      return this.#reject(PrStewardDecodeCode.InvalidCombination);
+    if (
+      source === PrStewardSource.CheckRun ||
+      source === PrStewardSource.WorkflowRun
+    )
+      return { ...common, source, headSha, runId };
+    if (source === PrStewardSource.WorkflowJob || runId !== false)
+      return this.#reject(PrStewardDecodeCode.InvalidCombination);
+    return { ...common, source, headSha, runId };
+  }
+
+  static #pullRequest(record: UntrustedYamlMap): PrStewardPullRequest {
+    return this.pullRequest(this.#required({ record, field: Field.Pr }));
   }
 
   static #opaqueText<Kind extends IdentityKind>(
@@ -458,12 +561,10 @@ export class PrStewardNdjsonCodec {
     return PR_STEWARD_REPOSITORY;
   }
 
-  static #head(record: UntrustedYamlMap): string | false {
+  static #head(record: UntrustedYamlMap): PrStewardHeadSha | false {
     const value = this.#required({ record, field: Field.HeadSha });
     if (value === false) return false;
-    if (typeof value !== 'string' || !/^[0-9a-f]{40}$/.test(value))
-      this.#reject(PrStewardDecodeCode.InvalidField);
-    return value;
+    return this.headSha(value);
   }
 
   static #source(record: UntrustedYamlMap): PrStewardSource {

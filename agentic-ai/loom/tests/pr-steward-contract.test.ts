@@ -35,7 +35,7 @@ const routing = (fields: UntrustedYamlMap = {}) => ({
   ...fields,
 });
 const envelope = (record: UntrustedYamlMap) =>
-  JSON.stringify({ schemaVersion: Version.V1, record });
+  JSON.stringify({ schemaVersion: Version.V2, record });
 
 describe('closed PR Steward NDJSON codec', () => {
   test('round trips every supported source-discriminated routing state', () => {
@@ -52,7 +52,7 @@ describe('closed PR Steward NDJSON codec', () => {
           author: 'reviewer',
         },
       ],
-      [Source.IssueComment, { headSha: false, commentId: 8 }],
+      [Source.IssueComment, { commentId: 8 }],
       [Source.CheckRun, { runId: 10 }],
       [Source.CheckSuite, {}],
       [Source.WorkflowRun, { runId: 11 }],
@@ -75,7 +75,7 @@ describe('closed PR Steward NDJSON codec', () => {
       {
         source: Source.IssueComment,
         githubEvent: GithubEvent.IssueComment,
-        headSha: HEAD,
+        headSha: false,
       },
       { source: Source.WorkflowJob, githubEvent: GithubEvent.WorkflowJob },
       { body: 'forbidden' },
@@ -99,9 +99,35 @@ describe('closed PR Steward NDJSON codec', () => {
     expect(() => Codec.blocker({ ...blocker, pullRequest: 0 })).toThrow(
       DecodeCode.InvalidField,
     );
+    const unavailable = Codec.blocker({
+      kind: Kind.Blocker,
+      code: BlockerCode.GithubObservationUnavailable,
+      repository: REPO,
+      pullRequest: 1564,
+      eventId: 'event-1',
+      deliveryId: 'delivery-1',
+      source: Source.PullRequest,
+      headSha: HEAD,
+      objectId: 8,
+      runId: false,
+      summary: 'Assigned pull request observation is unavailable.',
+    });
+    expect(Codec.decode(Codec.encode(unavailable)).record).toEqual(unavailable);
+    expect(() =>
+      Codec.blocker({ ...unavailable, source: Source.WorkflowJob }),
+    ).toThrow(DecodeCode.InvalidCombination);
+    expect(() =>
+      Codec.blocker({ ...unavailable, source: Source.IssueComment }),
+    ).toThrow(DecodeCode.InvalidCombination);
+    expect(() =>
+      Codec.blocker({ ...unavailable, source: Source.CheckSuite, runId: 9 }),
+    ).toThrow(DecodeCode.InvalidCombination);
+    expect(() => Codec.blocker({ ...unavailable, body: 'forbidden' })).toThrow(
+      DecodeCode.InvalidFields,
+    );
   });
 
-  test('accepts only bounded safe URL forms and exactly v1', () => {
+  test('accepts only bounded safe URL forms and exactly v2', () => {
     expect(
       Codec.githubUrl('https://github.com/meta-secret/nook/pull/1564'),
     ).toMatchObject({ trust: UrlTrust.GithubOwned });
@@ -114,7 +140,7 @@ describe('closed PR Steward NDJSON codec', () => {
     });
     expect(() =>
       Codec.decode(
-        JSON.stringify({ schemaVersion: 'pr-steward-ndjson/v0', record: {} }),
+        JSON.stringify({ schemaVersion: 'pr-steward-ndjson/v1', record: {} }),
       ),
     ).toThrow(DecodeCode.UnsupportedVersion);
   });
