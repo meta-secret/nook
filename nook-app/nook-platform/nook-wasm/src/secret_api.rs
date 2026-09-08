@@ -2,8 +2,8 @@ use super::types::{NookOtpauthPreview, NookTotpCode};
 use super::{NookError, NookSecretFormFields, types, wasm_bindgen};
 use js_sys::Date;
 use nook_core::{
-    AuthenticatorIssuerHosts, AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData,
-    SecretType, SecretTypeFilter, ValidationError,
+    AuthenticatorSecret, BackupCodeAttachMode, SecretListItemData, SecretType, SecretTypeFilter,
+    ValidationError,
 };
 
 mod secret_record;
@@ -374,8 +374,8 @@ mod wasm_tests {
         generate_totp_code, verify_totp_code, wasm_storage_mode_for_provider,
     };
     use nook_core::{
-        AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, CreditCardSecret,
-        OauthFilePreset, SecretId, SecretValue, StorageProviderType,
+        AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, AuthenticatorIssuerHosts,
+        CreditCardSecret, OauthFilePreset, SecretId, SecretValue, StorageProviderType,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
