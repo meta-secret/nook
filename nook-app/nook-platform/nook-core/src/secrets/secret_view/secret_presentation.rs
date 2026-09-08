@@ -87,7 +87,7 @@ impl LoginHostMatchRequest<'_> {
             })
     }
 
-    pub(crate) fn legacy_matches(website_url: &str, origin: &str) -> bool {
+    pub(crate) fn legacy_matches<'a>(website_url: &'a str, origin: &'a str) -> bool {
         Self {
             website_url,
             origin,
@@ -119,7 +119,7 @@ impl AuthenticatorGroupKeyRequest<'_> {
             .unwrap_or_else(|| self.issuer.trim().to_owned())
     }
 
-    pub(crate) fn legacy_resolve(website_url: &str, issuer: &str) -> String {
+    pub(crate) fn legacy_resolve<'a>(website_url: &'a str, issuer: &'a str) -> String {
         Self {
             website_url,
             issuer,

@@ -99,11 +99,11 @@ impl WebsiteLoginSaveRequest<'_> {
         WebsiteLoginSaveDecision::Create
     }
 
-    pub(crate) fn legacy_decide(
-        origin: &str,
-        username: &str,
-        password: &str,
-        candidates: &[WebsiteLoginSaveCandidate<'_>],
+    pub(crate) fn legacy_decide<'a>(
+        origin: &'a str,
+        username: &'a str,
+        password: &'a str,
+        candidates: &'a [WebsiteLoginSaveCandidate<'a>],
     ) -> WebsiteLoginSaveDecision {
         Self {
             origin,
