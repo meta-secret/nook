@@ -499,8 +499,7 @@ mod tests {
         }
 
         fn assert_unknown_v1_fields_are_rejected() -> anyhow::Result<()> {
-            let mut encoded =
-                serde_json::to_value(Self::control(PageControlActionability::Inert))?;
+            let mut encoded = serde_json::to_value(Self::control(PageControlActionability::Inert))?;
             let serde_json::Value::Object(fields) = &mut encoded else {
                 anyhow::bail!("versioned disclosure control must encode as an object");
             };
@@ -512,8 +511,7 @@ mod tests {
                 .is_err()
             );
 
-            let mut encoded =
-                serde_json::to_value(Self::control(PageControlActionability::Inert))?;
+            let mut encoded = serde_json::to_value(Self::control(PageControlActionability::Inert))?;
             let Some(fields) = encoded
                 .get_mut("observation")
                 .and_then(serde_json::Value::as_object_mut)
