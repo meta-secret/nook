@@ -27,9 +27,3 @@ export class DockerfileFrontendContract {
     }
   }
 }
-
-export async function assertDockerfileFrontendContract(input: {
-  root: string;
-}): Promise<void> {
-  await DockerfileFrontendContract.assert(input.root);
-}

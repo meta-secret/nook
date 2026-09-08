@@ -2,8 +2,8 @@ import { resolve } from "node:path";
 import { readdir } from "node:fs/promises";
 
 import { assertHiveRenderContract } from "./arc-hive-render-contract";
-import { assertArcWorkerRestoreContract } from "./arc-worker-restore-contract";
-import { assertDockerfileFrontendContract } from "./dockerfile-frontend-contract";
+import { ArcWorkerRestoreContract } from "./arc-worker-restore-contract";
+import { DockerfileFrontendContract } from "./dockerfile-frontend-contract";
 import { TextContract } from "./text-contract";
 
 const root = resolve(import.meta.dir, "../..");
@@ -117,7 +117,10 @@ function assertCpuUnconstrained(container: ArcContainer, label: string): void {
   }
 }
 
-function assertNoResourceEnvelope(container: ArcContainer, label: string): void {
+function assertNoResourceEnvelope(
+  container: ArcContainer,
+  label: string,
+): void {
   if ("resources" in container) {
     throw new Error(`${label} must not declare resource requests or limits`);
   }
@@ -167,7 +170,9 @@ const buildkit = new TextContract({
   label: "ARC persistent BuildKit",
   source: buildkitSource,
 });
-const buildkitContainerStart = buildkitSource.indexOf("        - name: buildkitd");
+const buildkitContainerStart = buildkitSource.indexOf(
+  "        - name: buildkitd",
+);
 const buildkitContainerEnd = buildkitSource.indexOf(
   "          volumeMounts:",
   buildkitContainerStart,
@@ -327,7 +332,9 @@ if (
   dockerClientInit?.resources?.requests?.memory !== "32Mi" ||
   dockerClientInit.resources.limits?.memory !== "256Mi"
 ) {
-  throw new Error("general ARC Docker client init must retain its memory envelope");
+  throw new Error(
+    "general ARC Docker client init must retain its memory envelope",
+  );
 }
 const runner = pod.containers.find((container) => container.name === "runner");
 if (!runner) {
@@ -440,8 +447,8 @@ containerHook.requireAll([
   "name: nook-arc-container-hook",
   "automountServiceAccountToken: false",
   'name: "$job"',
-  "nook.nokey.sh/arc-build: \"true\"",
-  "nook.nokey.sh/arc-container-job: \"true\"",
+  'nook.nokey.sh/arc-build: "true"',
+  'nook.nokey.sh/arc-container-job: "true"',
   "values: [primary]",
   "values: [secondary]",
   "values: [overflow]",
@@ -519,7 +526,7 @@ buildkit.requireAll([
   "kind: StatefulSet",
   "replicas: 4",
   "requiredDuringSchedulingIgnoredDuringExecution:",
-  "nook.nokey.sh/arc-build: \"true\"",
+  'nook.nokey.sh/arc-build: "true"',
   "v0.32.2-rootless@sha256:60d1f642e29dc938bd6c109ba5500849fccf41921927c5339788b8227f57feb9",
   "--oci-worker-no-process-sandbox",
   'cpu: "4"',
@@ -579,7 +586,7 @@ dockerSetup.requireAll([
 ]);
 runtimeSmoke.requireAll([
   "NOOK_ARC_RUNNER",
-  'type=local,dest=$shared_dir',
+  "type=local,dest=$shared_dir",
   "ARC node-local rootless BuildKit smoke passed",
 ]);
 runtimeSmoke.forbidAll(["--load", "docker run", "docker info", "podman"]);
@@ -611,24 +618,24 @@ tasks.requireAll([
   "disable --now nook-arc-buildkit-cloner.service",
   '"$legacy_image_next"',
   "/etc/sysctl.d/91-nook-buildkit-keyring.conf",
-  'keyring_maxkeys=20000',
-  'keyring_maxbytes=2000000',
-  'inotify_max_user_instances=8000',
-  'inotify_max_user_watches=10485760',
+  "keyring_maxkeys=20000",
+  "keyring_maxbytes=2000000",
+  "inotify_max_user_instances=8000",
+  "inotify_max_user_watches=10485760",
   '"fs.inotify.max_user_instances=$inotify_max_user_instances"',
   '"fs.inotify.max_user_watches=$inotify_max_user_watches"',
   'sysctl -p "$keyring_config"',
-  'cat /proc/sys/kernel/keys/maxkeys',
-  'cat /proc/sys/kernel/keys/maxbytes',
-  'cat /proc/sys/fs/inotify/max_user_instances',
-  'cat /proc/sys/fs/inotify/max_user_watches',
-  'nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite',
+  "cat /proc/sys/kernel/keys/maxkeys",
+  "cat /proc/sys/kernel/keys/maxbytes",
+  "cat /proc/sys/fs/inotify/max_user_instances",
+  "cat /proc/sys/fs/inotify/max_user_watches",
+  "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   "ARC build node $node is quarantined for convergence",
-  'quarantine_failed=0',
+  "quarantine_failed=0",
   'test "$quarantine_failed" = 0',
   "for tier in primary secondary overflow",
   "primary) expected_tier_count=2",
-  'secondary|overflow) expected_tier_count=1',
+  "secondary|overflow) expected_tier_count=1",
   'kubectl taint node "${tier_nodes[@]}"',
   "ARC build tier $tier is active",
   "- task: arc:build-hosts:quarantine\n      - task: arc:container-hosts:reconcile\n      - task: arc:buildkit:storage:prepare",
@@ -652,7 +659,7 @@ mainWorkflow.requireAll([
   "name: Portable WASM cache publication proof",
   "needs: [wasm-cache-publish]",
   "Install Bun for registry cache audit",
-  "NOOK_WASM_CACHE_PROMOTION_ENABLED: \"1\"",
+  'NOOK_WASM_CACHE_PROMOTION_ENABLED: "1"',
   "NOOK_REGISTRY_USERNAME: ${{ secrets.NOOK_REGISTRY_USERNAME }}",
   "bash .github/scripts/verify-wasm-gha-cache.sh",
   "web-e2e:",
@@ -780,10 +787,10 @@ webDockerTasks.requireAll([
 wasmCacheProof.requireAll([
   "Publish from the already-selected node-local rootless BuildKit shard",
   "repair solve never imports the ref it is replacing",
-  'nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}',
+  "nook-rust-wasm-deps-input-v3:fingerprint-${deps_fingerprint}",
   "nook-rust-wasm-source-v3:buildcache,ignore-error=true",
   "compression=zstd,force-compression=true",
-  'builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}',
+  "builder-wasm-deps-cache-proof.cache-to=type=registry,ref=${cache_ref}",
   "verify-registry-cache-blobs.ts",
 ]);
 wasmCacheProof.forbidAll([
@@ -792,11 +799,17 @@ wasmCacheProof.forbidAll([
   "docker buildx rm",
 ]);
 const promotionSolve = wasmCacheProofSource.slice(
-  wasmCacheProofSource.indexOf('if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]'),
-  wasmCacheProofSource.indexOf('bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"'),
+  wasmCacheProofSource.indexOf(
+    'if [ "${NOOK_WASM_CACHE_PROMOTION_ENABLED:-}" = "1" ]',
+  ),
+  wasmCacheProofSource.indexOf(
+    'bun "$repo_root/.github/scripts/verify-registry-cache-blobs.ts"',
+  ),
 );
 if (promotionSolve.includes("cache-from=type=registry,ref=${cache_ref}")) {
-  throw new Error("portable WASM cache promotion must not import its destination");
+  throw new Error(
+    "portable WASM cache promotion must not import its destination",
+  );
 }
 remoteWorkflow.forbidAll(["NOOK_CACHE_RUNS_ON", "nook-k0s-cache"]);
 remoteWorkflow.requireAll([
@@ -840,8 +853,8 @@ remoteWorkflow.require(
   "inputs.dispatch_nonce || 'default'",
   "remote dispatches must permit explicitly distinct concurrent cache proofs",
 );
-await assertArcWorkerRestoreContract({ root });
-await assertDockerfileFrontendContract({ root });
+await ArcWorkerRestoreContract.assert(root);
+await DockerfileFrontendContract.assert(root);
 await assertHiveRenderContract({ root });
 
 const hostedUntrustedBoundary = new Set([
@@ -873,8 +886,13 @@ for (const workflowFile of workflowFiles) {
       }
       observedHostedExceptions.add(identity);
       const { if: condition = "" } = job;
-      if (!condition.includes("head.repo.full_name") || !condition.includes("dependabot[bot]")) {
-        throw new Error(`${identity} must be restricted to forks and Dependabot`);
+      if (
+        !condition.includes("head.repo.full_name") ||
+        !condition.includes("dependabot[bot]")
+      ) {
+        throw new Error(
+          `${identity} must be restricted to forks and Dependabot`,
+        );
       }
       continue;
     }
@@ -884,7 +902,10 @@ for (const workflowFile of workflowFiles) {
       }
       continue;
     }
-    if (!placement.includes("nook-k0s") && !placement.includes("NOOK_RUNS_ON")) {
+    if (
+      !placement.includes("nook-k0s") &&
+      !placement.includes("NOOK_RUNS_ON")
+    ) {
       throw new Error(`${identity} is not routed through an ARC scale set`);
     }
   }

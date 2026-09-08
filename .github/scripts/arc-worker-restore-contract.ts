@@ -1,10 +1,5 @@
 import { resolve } from "node:path";
 
-import {
-  WorkerRestoreTransport,
-  WorkerRestoreTransportArguments,
-  type WorkerRestoreTransportWire,
-} from "./k0s-worker-restore-transport";
 import { TextContract } from "./text-contract";
 
 enum SelectorDecodeKind {
@@ -13,20 +8,71 @@ enum SelectorDecodeKind {
 }
 
 type SelectorDecodeOutcome =
-  | { kind: SelectorDecodeKind.Found; selector: string }
+  | { kind: SelectorDecodeKind.Found; selectors: readonly string[] }
   | { kind: SelectorDecodeKind.Missing };
 
-enum RestoreProgramFrame {
-  Invalid = "not-base64!",
-  Empty = "",
-  InvalidShell = "aWYgdGhlbgo=",
+enum RunnerDrainCase {
+  Live = "live",
+  Terminating = "terminating",
+  Disappeared = "disappeared",
+}
+
+enum WorkerServiceState {
+  Active = "active",
+  Fresh = "fresh",
+  Invalid = "invalid",
+  Resumed = "resumed",
+}
+
+class WorkerServiceStateContract {
+  static assert(source: string): void {
+    const fixtures = [
+      { active: true, expected: WorkerServiceState.Active, installed: true },
+      { active: false, expected: WorkerServiceState.Resumed, installed: true },
+      { active: false, expected: WorkerServiceState.Fresh, installed: false },
+      { active: true, expected: WorkerServiceState.Invalid, installed: false },
+    ] as const;
+    for (const fixture of fixtures) {
+      const observed = WorkerServiceStateContract.resolve(
+        fixture.installed,
+        fixture.active,
+      );
+      if (observed !== fixture.expected) {
+        throw new Error("k0s worker service-state transition is unsafe");
+      }
+    }
+    const contract = new TextContract({
+      label: "k0s worker service-state transition",
+      source,
+    });
+    contract.requireAll([
+      "sudo -n systemctl cat k0sworker.service",
+      "sudo -n systemctl start k0sworker.service",
+      "printf resumed",
+      "printf fresh",
+      "active service has no installed unit",
+    ]);
+  }
+
+  private static resolve(
+    installed: boolean,
+    active: boolean,
+  ): WorkerServiceState {
+    if (!installed && active) return WorkerServiceState.Invalid;
+    if (!installed) return WorkerServiceState.Fresh;
+    if (active) return WorkerServiceState.Active;
+    return WorkerServiceState.Resumed;
+  }
 }
 
 class ActiveRunnerSelectorContract {
   static decode(source: string): SelectorDecodeOutcome {
-    const match = source.match(/active_runners=.*?\| jq \\\s*\n\s*'([^']+)'/s);
-    if (!Array.isArray(match)) return { kind: SelectorDecodeKind.Missing };
-    return { kind: SelectorDecodeKind.Found, selector: match[1] };
+    const selectors = Array.from(
+      source.matchAll(/active_runners=.*?\| jq \\\s*\n\s*'([^']+)'/gs),
+      (match) => match[1],
+    );
+    if (selectors.length !== 2) return { kind: SelectorDecodeKind.Missing };
+    return { kind: SelectorDecodeKind.Found, selectors };
   }
 
   static assert(source: string): void {
@@ -34,154 +80,53 @@ class ActiveRunnerSelectorContract {
     if (outcome.kind === SelectorDecodeKind.Missing) {
       throw new Error("k0s worker install active-runner selector is missing");
     }
-    const selection = Bun.spawnSync({
-      cmd: [
-        "jq",
-        "-nr",
-        "--argjson",
-        "input",
-        JSON.stringify({
-          items: [
-            { metadata: {}, status: { phase: "Pending" } },
-            { metadata: {}, status: { phase: "Running" } },
-            {
-              metadata: { deletionTimestamp: "2026-09-08T05:17:03Z" },
-              status: { phase: "Running" },
-            },
-            { metadata: {}, status: { phase: "Succeeded" } },
-          ],
-        }),
-        `$input | ${outcome.selector}`,
+    const [nonTerminating, allActive] = outcome.selectors;
+    const fixtures = new Map([
+      [
+        RunnerDrainCase.Live,
+        {
+          expected: [1, 1],
+          pod: { metadata: {}, status: { phase: "Running" } },
+        },
       ],
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (
-      selection.exitCode !== 0 ||
-      selection.stdout.toString().trim() !== "2"
-    ) {
-      throw new Error(
-        `k0s worker install active-runner selector failed: ${selection.stderr.toString()}`,
-      );
+      [
+        RunnerDrainCase.Terminating,
+        {
+          expected: [0, 1],
+          pod: {
+            metadata: { deletionTimestamp: "2026-09-08T05:17:03Z" },
+            status: { phase: "Running" },
+          },
+        },
+      ],
+      [RunnerDrainCase.Disappeared, { expected: [0, 0], pod: false }],
+    ] as const);
+    for (const [label, fixture] of fixtures) {
+      const items = fixture.pod === false ? [] : [fixture.pod];
+      const selection = Bun.spawnSync({
+        cmd: [
+          "jq",
+          "-c",
+          "-nr",
+          "--argjson",
+          "input",
+          JSON.stringify({ items }),
+          `$input | [(${nonTerminating}), (${allActive})]`,
+        ],
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      if (
+        selection.exitCode !== 0 ||
+        selection.stdout.toString().trim() !== JSON.stringify(fixture.expected)
+      ) {
+        throw new Error(`k0s worker ${label} drain selector failed`);
+      }
     }
   }
 }
 
-class WorkerRestoreTransportContract {
-  static async assert(root: string): Promise<void> {
-    const transportPath = resolve(
-      root,
-      ".github/scripts/k0s-worker-restore-transport.ts",
-    );
-    const transport = new TextContract({
-      label: "k0s worker restore transport",
-      source: await Bun.file(transportPath).text(),
-    });
-    transport.requireAll([
-      'if ! IFS= read -r encoded_program || test -z "$encoded_program"; then',
-      'if ! printf \'%s\' "$encoded_program" | base64 -d > "$program_file"; then',
-      'if ! test -s "$program_file"; then',
-      'bash -n "$program_file"',
-      'bash "$program_file" "$@"',
-      "stdin: new Blob([wire.payload])",
-    ]);
-    const restoreProbe = `set -euo pipefail
-IFS= read -r token
-test "$token" = framed-token
-printf restore-transport-ok
-exit 0`;
-    const successArguments = WorkerRestoreTransportArguments.parse([
-      "controller",
-      "worker",
-      "10.202.0.3",
-      "secondary",
-      Buffer.from(restoreProbe).toString("base64"),
-    ]);
-    const successWire = WorkerRestoreTransport.wire(
-      successArguments,
-      "framed-token\n",
-    );
-    WorkerRestoreTransportContract.assertTokenOutsideArguments(successWire);
-    const output = await WorkerRestoreTransportContract.execute(successWire);
-    if (output !== "restore-transport-ok") {
-      throw new Error("k0s worker restore transport round trip failed");
-    }
-    for (const frame of Object.values(RestoreProgramFrame)) {
-      let rejected = false;
-      try {
-        const argumentsValue = WorkerRestoreTransportArguments.parse([
-          "controller",
-          "worker",
-          "10.202.0.3",
-          "secondary",
-          frame,
-        ]);
-        const wire = WorkerRestoreTransport.wire(
-          argumentsValue,
-          "framed-token\n",
-        );
-        await WorkerRestoreTransportContract.execute(wire);
-      } catch {
-        rejected = true;
-      }
-      if (!rejected) {
-        throw new Error(
-          "k0s worker restore transport accepted an invalid frame",
-        );
-      }
-    }
-  }
-
-  private static assertTokenOutsideArguments(
-    wire: WorkerRestoreTransportWire,
-  ): void {
-    if (wire.sshArguments.some((value) => value.includes("framed-token"))) {
-      throw new Error("k0s worker restore token entered SSH arguments");
-    }
-    const remoteCommand = wire.sshArguments.join(" ");
-    if (
-      !remoteCommand.includes(wire.meshAddress) ||
-      !remoteCommand.includes(wire.arcTier)
-    ) {
-      throw new Error("k0s worker restore arguments left the SSH wire");
-    }
-  }
-
-  private static async execute(
-    wire: WorkerRestoreTransportWire,
-  ): Promise<string> {
-    const frameEnd = wire.payload.indexOf("\n");
-    if (frameEnd < 1) throw new Error("missing encoded program frame");
-    const encodedProgram = wire.payload.slice(0, frameEnd);
-    const token = wire.payload.slice(frameEnd + 1);
-    const decoded = Bun.spawnSync({
-      cmd: ["base64", "-d"],
-      stdin: new Blob([encodedProgram]),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (decoded.exitCode !== 0 || decoded.stdout.length === 0) {
-      throw new Error("invalid encoded program frame");
-    }
-    const syntax = Bun.spawnSync({
-      cmd: ["bash", "-n"],
-      stdin: new Blob([decoded.stdout]),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (syntax.exitCode !== 0) throw new Error("invalid decoded program");
-    const execution = Bun.spawnSync({
-      cmd: ["bash"],
-      stdin: new Blob([decoded.stdout, "\n", token]),
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    if (execution.exitCode !== 0) throw new Error("decoded program failed");
-    return execution.stdout.toString();
-  }
-}
-
-class ArcWorkerRestoreContract {
+export class ArcWorkerRestoreContract {
   static async assert(root: string): Promise<void> {
     const tasksSource = await Bun.file(
       resolve(root, "infra/tasks/k0s-workers.yml"),
@@ -240,14 +185,25 @@ class ArcWorkerRestoreContract {
       'worker_ssh_user="$(ssh -n -o BatchMode=yes -J "$controller_target"',
       'ssh -o BatchMode=yes -J "$controller_target" "$worker_target" bash -s --',
       'ssh -n -o BatchMode=yes -J "$controller_target" \\',
-      ".github/scripts/k0s-worker-restore-transport.ts",
       "printf '%s' \"$token\"",
+      'token_temp="$(mktemp)"',
+      'cleanup() { rm -f "$token_temp"; }',
+      "trap cleanup EXIT",
+      'cat > "$token_temp"',
+      'test -s "$token_temp"',
+      'worker_service_state="$(',
+      "sudo -n systemctl cat k0sworker.service",
+      "sudo -n systemctl start k0sworker.service",
+      "printf resumed",
+      "printf fresh",
+      'case "$worker_service_state" in active|resumed|fresh)',
       "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
       "actions.github.com/scale-set-name",
       "select(.metadata.deletionTimestamp == n" +
         'ull and (.status.phase == "Pending" or .status.phase == "Running"))',
+      'select(.status.phase == "Pending" or .status.phase == "Running")',
       "Timed out waiting for $active_runners ARC runner(s) on $node",
-      "worker_was_active=false",
+      "Timed out waiting for $active_runners terminating ARC runner(s) on $node",
       "sudo -n systemctl restart k0sworker.service",
       "sudo -n systemctl is-active --quiet k0sworker.service",
       'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
@@ -255,20 +211,35 @@ class ArcWorkerRestoreContract {
     install.forbidAll([
       'bash -c "\\$(printf %s',
       "infra/k0s/scripts/k0s-worker-restore-transport",
+      ".github/scripts/k0s-worker-restore-transport.ts",
+      "encoded_program",
+      "base64 -d",
+      'echo "$token"',
+      '--token "$token"',
     ]);
     ActiveRunnerSelectorContract.assert(installSource);
+    WorkerServiceStateContract.assert(installSource);
     install.requireBefore({
       first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
       second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
     });
     install.requireBefore({
-      first: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
-      second: "sudo -n systemctl restart k0sworker.service",
+      first: "Timed out waiting for $active_runners ARC runner(s) on $node",
+      second: 'worker_service_state="$(',
     });
     install.requireBefore({
-      first: "sudo -n systemctl restart k0sworker.service",
+      first: "printf resumed",
       second:
-        'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
+        "Timed out waiting for $active_runners terminating ARC runner(s) on $node",
+    });
+    install.requireBefore({
+      first:
+        "Timed out waiting for $active_runners terminating ARC runner(s) on $node",
+      second: 'token="$(ssh -n -o BatchMode=yes "$controller_target"',
+    });
+    install.requireBefore({
+      first: 'test -s "$token_temp"',
+      second: "sudo -n k0s install worker",
     });
     restore.requireAll([
       "- task: k0s:worker:install",
@@ -336,7 +307,6 @@ class ArcWorkerRestoreContract {
       first: "sudo -n systemctl restart k0sworker.service",
       second: "k0s worker did not start a clean containerd invocation",
     });
-    await WorkerRestoreTransportContract.assert(root);
   }
 
   private static taskSection(
@@ -360,10 +330,4 @@ class ArcWorkerRestoreContract {
     if (start < 0 || end < 0) throw new Error(`${startName} task is missing`);
     return source.slice(start, end);
   }
-}
-
-export async function assertArcWorkerRestoreContract(input: {
-  root: string;
-}): Promise<void> {
-  await ArcWorkerRestoreContract.assert(input.root);
 }

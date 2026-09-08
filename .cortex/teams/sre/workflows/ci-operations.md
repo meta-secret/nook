@@ -59,8 +59,12 @@ Each lane publishes only its verified complete graph.
 Preflight publishes `nook-preflight-v1`.
 Native publishes the mode-max `nook-rust-native-source-v4` graph, which embeds
 its rust-base and dependency lineage.
-Do not restore the former serial rust-base and native-dependency exports.
-They made BuildKit prepare and recompress overlapping complete graphs.
+Isolated dependency readers prefer their exact `nook-rust-deps-v4` scope, then
+fall back to that fresh Main source graph for dependency-only restores.
+Main does not serially export overlapping native dependency or rust-base graphs;
+those exports made BuildKit prepare and recompress the same complete lineage.
+WASM dependency publication remains a distinct verified ref owned by its
+dedicated proof path; native publication never owns or overwrites it.
 
 Docker setup selects probes by the graph consumed by that job (`native`,
 `wasm`, `preflight`, or `web-e2e`). Use `general` only for a caller that can

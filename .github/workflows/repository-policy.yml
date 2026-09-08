@@ -20,7 +20,6 @@ on:
       - .github/scripts/arc-manifest-contract.ts
       - .github/scripts/arc-worker-restore-contract.ts
       - .github/scripts/dockerfile-frontend-contract.ts
-      - .github/scripts/k0s-worker-restore-transport.ts
       - .github/workflows/**
       - .task/agentic-ai.yml
       - .vale.ini
@@ -99,7 +98,7 @@ jobs:
                 ;;
             esac
             case "$changed_file" in
-              .github/scripts/arc-manifest-contract.ts | .github/scripts/arc-worker-restore-contract.ts | .github/scripts/dockerfile-frontend-contract.ts | .github/scripts/k0s-worker-restore-transport.ts | .github/workflows/*)
+              .github/scripts/arc-manifest-contract.ts | .github/scripts/arc-worker-restore-contract.ts | .github/scripts/dockerfile-frontend-contract.ts | .github/workflows/*)
                 runner_placement_changed=true
                 ;;
             esac
