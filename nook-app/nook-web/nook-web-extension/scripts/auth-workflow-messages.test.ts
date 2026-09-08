@@ -41,7 +41,6 @@ const validMessage = {
           matchingPasskeyAccountCount: 0,
           detailedPasskeyControl: { kind: 'absent' },
         },
-        credentialDisclosureControl: { kind: 'absent' },
         detailedAdvanceControl: { kind: 'absent' },
       },
     ],
@@ -70,38 +69,7 @@ function approvalMatcherDependencies(): Parameters<
   }
 }
 
-class RequiredDisclosureControlMessageScenario {
-  private constructor() {}
-
-  static assertsExplicitStateAndRejectsOmission(): void {
-    expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
-
-    const observationWithoutDisclosure = {
-      ...validMessage.payload.observations[0],
-    }
-    Reflect.deleteProperty(
-      observationWithoutDisclosure,
-      'credentialDisclosureControl',
-    )
-    const omittedDisclosureMessage = {
-      ...validMessage,
-      payload: {
-        ...validMessage.payload,
-        observations: [observationWithoutDisclosure],
-      },
-    }
-    expect(
-      isAuthenticationWorkflowSnapshotMessage(omittedDisclosureMessage),
-    ).toBe(false)
-  }
-}
-
 describe('authentication workflow snapshot messages', () => {
-  test(
-    'requires an explicit disclosure-control observation state',
-    RequiredDisclosureControlMessageScenario.assertsExplicitStateAndRejectsOmission,
-  )
-
   test('invalidates pending approval after an action or fact transition', () => {
     const facts = validMessage.payload.observations[0]
     const approved = { workflowKey: 'login:continue', facts }

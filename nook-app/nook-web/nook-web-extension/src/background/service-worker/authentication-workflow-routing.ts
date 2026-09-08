@@ -20,7 +20,6 @@ import {
   passkeyAccountCountForClassification,
 } from './passkey-availability'
 import type { matchingPasskeyAvailabilityForOriginSafe } from './passkey-operations'
-import { AuthenticationWorkflowSnapshotKind } from '../vault-runtime'
 import type * as VaultRuntime from '../vault-runtime'
 
 export type AuthenticationWorkflowRoutingDependencies = {
@@ -54,7 +53,6 @@ export function authenticationWorkflowRequiresLoginMatchAvailability(
 export type AuthenticationWorkflowRoutingResponse = {
   workflow:
     | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
-    | { ok: false; unsupportedVersion: true }
     | { ok: false; reason: 'workflow-snapshot-failed' }
   loginMatches: WebsiteLoginMatchAvailability
   selectedFacts?: AuthenticationPageObservationView
@@ -133,12 +131,6 @@ export async function authenticationWorkflowMessageResponse({
       observations,
     }
     const result = await authenticationWorkflowSnapshot(snapshotRequest)
-    if (result.kind === AuthenticationWorkflowSnapshotKind.UnsupportedVersion) {
-      return {
-        workflow: { ok: false, unsupportedVersion: true },
-        loginMatches: { kind: 'unavailable' },
-      }
-    }
     if ('snapshot' in result) {
       const selectedFacts = observations[result.snapshot.observationIndex]
       if (!selectedFacts) {

@@ -4,7 +4,6 @@ import {
   authenticationWorkflowMessageResponse,
   type AuthenticationWorkflowRoutingDependencies,
 } from '../src/background/service-worker/authentication-workflow-routing'
-import { AuthenticationWorkflowSnapshotKind } from '../src/background/vault-runtime'
 
 const message = {
   type: 'nook:authentication-workflow-snapshot',
@@ -23,42 +22,7 @@ const message = {
 } as unknown as AuthenticationWorkflowSnapshotMessage
 const sender = {} as chrome.runtime.MessageSender
 
-class UnsupportedVersionAuthenticationRoutingScenario {
-  private constructor() {}
-
-  static async assertsTypedRuntimeResponse(): Promise<void> {
-    const dependencies = {
-      companionWasmReady: Promise.resolve(),
-      authenticationPasskeyEvidenceIsSafe: () => false,
-      matchingPasskeyAvailabilityForOriginSafe: async () => ({
-        kind: 'ready',
-        accountCount: 0,
-      }),
-      authenticationWorkflowSnapshot: async () => ({
-        kind: AuthenticationWorkflowSnapshotKind.UnsupportedVersion,
-      }),
-      authenticationWorkflowSavedLoginCapability: () => 'unavailable',
-      authenticationWorkflowRequiresLoginMatchAvailability: () => false,
-      websiteLoginMatchAvailability: async () => ({ kind: 'unavailable' }),
-    } as AuthenticationWorkflowRoutingDependencies
-    const request: Parameters<typeof authenticationWorkflowMessageResponse>[0] =
-      { message, sender, dependencies }
-
-    await expect(
-      authenticationWorkflowMessageResponse(request),
-    ).resolves.toEqual({
-      workflow: { ok: false, unsupportedVersion: true },
-      loginMatches: { kind: 'unavailable' },
-    })
-  }
-}
-
 describe('authentication workflow routing', () => {
-  test(
-    'preserves unsupported observation versions as a typed response',
-    UnsupportedVersionAuthenticationRoutingScenario.assertsTypedRuntimeResponse,
-  )
-
   test('waits for companion WASM before classifying cold-start passkey evidence', async () => {
     let resolveReady = () => {}
     const ready = new Promise<void>((resolve) => {

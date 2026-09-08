@@ -201,97 +201,6 @@ const authenticationOutcomeMessage: Parameters<
   },
 }
 
-class AuthenticationWorkflowRuntimeBoundaryScenario {
-  private constructor() {}
-
-  static async assertsCurrentSnapshotAndExplicitDisclosureState(): Promise<void> {
-    const selectedFacts = {
-      fields: {
-        usernameFieldCount: 0,
-        currentPasswordFieldCount: 0,
-        newPasswordFieldCount: 0,
-        genericPasswordFieldCount: 0,
-        oneTimeCodeFieldCount: 0,
-      },
-      ceremony: {
-        oneTimeCodeProgression: 'advance-control-required',
-        oneTimeCodeHandlerSignal: '',
-        authenticationContext: {
-          authenticationUsername: 'absent',
-          sourceOrigin: 'https://example.test',
-          formIdentity: 'passkey-login',
-          destinationIdentity: '/login',
-        },
-        manualCheckpoint: 'absent',
-        advanceControl: 'absent',
-      },
-      authenticator: {
-        authenticatorSetup: 'absent',
-        backupCodesCopy: '',
-        passkeyControl: 'present',
-        passkeyAccountAvailability: 'ready',
-        matchingPasskeyAccountCount: 2,
-        detailedPasskeyControl: { kind: 'absent' },
-      },
-      credentialDisclosureControl: { kind: 'absent' },
-      detailedAdvanceControl: { kind: 'absent' },
-    }
-    const response = {
-      workflow: {
-        ok: true,
-        snapshot: {
-          kind: 0,
-          stage: 0,
-          action: 0,
-          currentStep: 1,
-          totalSteps: 3,
-          approvalRequirement: 'explicit-user-approval',
-          savedLoginCapability: 'fill-saved-login',
-          observationIndex: 0,
-        },
-      },
-      loginMatches: { kind: 'ready', count: 2 },
-      selectedFacts,
-    }
-    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
-
-    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
-      workflowSnapshotMessage,
-    )
-
-    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
-    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
-      expect(delivery.response.verdict.kind).toBe(
-        AuthenticationWorkflowSnapshotResponseKind.Matched,
-      )
-      expect(delivery.response.selectedFacts).toEqual(selectedFacts)
-      expect(delivery.response.loginMatches).toEqual({
-        kind: 'ready',
-        count: 2,
-      })
-    }
-  }
-
-  static async assertsTypedUnsupportedVersion(): Promise<void> {
-    const response = {
-      workflow: { ok: false, unsupportedVersion: true },
-      loginMatches: { kind: 'unavailable' },
-    }
-    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
-
-    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
-      workflowSnapshotMessage,
-    )
-
-    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
-    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
-      expect(delivery.response.verdict.kind).toBe(
-        AuthenticationWorkflowSnapshotResponseKind.UnsupportedVersion,
-      )
-    }
-  }
-}
-
 describe('runtime message adapters', () => {
   test('initializes companion WASM before decoding a valid login options wire', async () => {
     const response = {
@@ -444,15 +353,72 @@ describe('runtime message adapters', () => {
     expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
-  test(
-    'decodes a valid workflow snapshot through Rust',
-    AuthenticationWorkflowRuntimeBoundaryScenario.assertsCurrentSnapshotAndExplicitDisclosureState,
-  )
+  test('decodes a valid workflow snapshot through Rust', async () => {
+    const selectedFacts = {
+      fields: {
+        usernameFieldCount: 0,
+        currentPasswordFieldCount: 0,
+        newPasswordFieldCount: 0,
+        genericPasswordFieldCount: 0,
+        oneTimeCodeFieldCount: 0,
+      },
+      ceremony: {
+        oneTimeCodeProgression: 'advance-control-required',
+        oneTimeCodeHandlerSignal: '',
+        authenticationContext: {
+          authenticationUsername: 'absent',
+          sourceOrigin: 'https://example.test',
+          formIdentity: 'passkey-login',
+          destinationIdentity: '/login',
+        },
+        manualCheckpoint: 'absent',
+        advanceControl: 'absent',
+      },
+      authenticator: {
+        authenticatorSetup: 'absent',
+        backupCodesCopy: '',
+        passkeyControl: 'present',
+        passkeyAccountAvailability: 'ready',
+        matchingPasskeyAccountCount: 2,
+        detailedPasskeyControl: { kind: 'absent' },
+      },
+      detailedAdvanceControl: { kind: 'absent' },
+    }
+    const response = {
+      workflow: {
+        ok: true,
+        snapshot: {
+          kind: 0,
+          stage: 0,
+          action: 0,
+          currentStep: 1,
+          totalSteps: 3,
+          approvalRequirement: 'explicit-user-approval',
+          savedLoginCapability: 'fill-saved-login',
+          observationIndex: 0,
+        },
+      },
+      loginMatches: { kind: 'ready', count: 2 },
+      selectedFacts,
+    }
+    installRuntimeMock({ kind: RuntimeMockKind.Response, response })
 
-  test(
-    'preserves a typed unsupported observation version through Rust',
-    AuthenticationWorkflowRuntimeBoundaryScenario.assertsTypedUnsupportedVersion,
-  )
+    const delivery = await sendAuthenticationWorkflowSnapshotRuntimeMessage(
+      workflowSnapshotMessage,
+    )
+
+    expect(delivery.kind).toBe(RuntimeMessageDeliveryKind.Delivered)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Delivered) {
+      expect(delivery.response.verdict.kind).toBe(
+        AuthenticationWorkflowSnapshotResponseKind.Matched,
+      )
+      expect(delivery.response.selectedFacts).toEqual(selectedFacts)
+      expect(delivery.response.loginMatches).toEqual({
+        kind: 'ready',
+        count: 2,
+      })
+    }
+  })
 
   test('rejects the legacy ambiguous workflow approval boolean', async () => {
     const response = {
