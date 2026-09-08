@@ -80,6 +80,8 @@ The portable WASM proof uses `wasm-proof` to compute the immutable dependency
 fingerprint. It performs no availability probes because the proof owns its
 explicit repair and verification refs.
 
+### Network transport evidence
+
 The OVH registry sender and home worker use TCP BBR for new connections.
 The policy applies only to `ovh-us` and `bynull-servo`.
 The registry keeps its public hostname and verified TLS path.
