@@ -39,15 +39,28 @@ RUN curl -fsSL \
       "/tmp/cargo-audit-x86_64-unknown-linux-musl-v${CARGO_AUDIT_VERSION}" \
     && cargo-audit --version
 
+# cargo-deny's metadata query honors Dylint's pinned toolchain. Install it once
+# from the owning declaration, before the nonce, rather than downloading and
+# retaining another 1.4 GB Rustup tree for every Dylint policy check.
+COPY nook-app/nook-platform/dylint/nook-domain-api/rust-toolchain /opt/nook/policy-nightly/rust-toolchain
+RUN cd /opt/nook/policy-nightly && rustc --version
+
 FROM rust-ecosystem-policy-tools AS rust-ecosystem-dependency-policy
 
 ARG WORKSPACE
 ARG POLICY_RUN_NONCE
 WORKDIR /meta-secret/nook
 
+# The nonce must refresh policy checks, but their fetched crates and advisory
+# databases are not reusable outputs. Keep them out of each immutable result:
+# otherwise every workspace/run adds gigabytes and evicts warm product layers.
+# Seed from the tools home so any immutable Cargo inputs remain available.
 RUN --mount=type=bind,source=.,target=/meta-secret/nook,readonly \
     test -n "$WORKSPACE" \
     && test -n "$POLICY_RUN_NONCE" \
+    && trap 'rm -rf /tmp/nook-policy-cargo' EXIT \
+    && cp -a /usr/local/cargo /tmp/nook-policy-cargo \
+    && export CARGO_HOME=/tmp/nook-policy-cargo \
     && cargo-deny --manifest-path "$WORKSPACE/Cargo.toml" --log-level error check --hide-inclusion-graph \
     && cd "$WORKSPACE" \
     && cargo-audit audit --quiet

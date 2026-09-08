@@ -13,6 +13,17 @@ runtime content. Each persistent rootless BuildKit shard applies its own cache
 garbage collection. The repository does not run host Docker pruning from a
 workflow and does not use the legacy registered `nook` runner.
 
+Dependency-policy checks protect warm BuildKit layers from disposable outputs:
+
+- Each workspace check retains its fresh `POLICY_RUN_NONCE`.
+- The immutable policy-tools stage installs Dylint's declared nightly once.
+  Its source is the owning lint crate's `rust-toolchain` file.
+- Each check seeds a temporary Cargo home from the immutable tools home.
+  Shell exit removes newly fetched crates and advisory databases before snapshotting.
+- A hard process kill can bypass that cleanup.
+- Fresh policy-data downloads still occur on each check.
+  The cleanup prevents those downloads from accumulating in retained result layers.
+
 ### CI verification — always check app logs
 
 After tests and static analysis (`task check`, clippy, Playwright report), **app
