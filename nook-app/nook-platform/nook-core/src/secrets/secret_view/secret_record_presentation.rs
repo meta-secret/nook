@@ -241,7 +241,7 @@ mod tests {
                     "abandon ability able about above absent absorb abstract absurd abuse access accident"
                         .to_owned(),
                 )
-                .expect("valid seed phrase"),
+                .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
             ),
         };
         let item = record.list_item();

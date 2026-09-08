@@ -346,7 +346,7 @@ mod tests {
                 " Recovery\r\n ".to_owned(),
                 " abandon\t abandon\n abandon abandon abandon abandon abandon abandon abandon abandon abandon about ".to_owned(),
             )
-            .expect("valid seed phrase"),
+            .unwrap_or_else(|error| panic!("valid seed phrase fixture: {error}")),
         );
         assert_eq!(
             CanonicalSecretBytes::identity(&value).0,

@@ -53,6 +53,7 @@ impl fmt::Debug for SeedPhraseSecret {
             .debug_struct("SeedPhraseSecret")
             .field("name", &self.name)
             .field("seed", &"[REDACTED]")
+            .field("validated", &"[REDACTED]")
             .finish()
     }
 }
