@@ -328,17 +328,27 @@ fn assert_hosted_buildkit_cache_contract(root: &Path) -> anyhow::Result<()> {
         "non-transient BuildKit failure; not retrying",
         "transient BuildKit failure; retrying in 2s...",
         "for attempt in 1 2; do",
+        "preparation_seconds=%.1f registry_send_seconds=%.1f",
+        "fatal error: concurrent map writes",
+        "BuildKit concurrent-map fault",
     ] {
         assert!(
             bake_retry.contains(required),
             "Bake frontend-flake retry helper is missing: {required}"
         );
     }
+    let docker_setup = read(root, ".github/actions/nook-docker-setup/action.yml");
+    assert!(
+        docker_setup.contains("monitor-buildkit-storage")
+            && docker_setup.contains("timeout 8s docker buildx du")
+            && docker_setup.contains("BuildKit cache near GC ceiling")
+            && docker_setup.contains("112 GB max-use target"),
+        "Main must surface bounded actionable ARC BuildKit storage-pressure diagnostics"
+    );
     for required in [
         "docker:ci:cache:publish:rust-base",
-        "cache-publish:native-core-deps",
         "cache-publish:native-debug",
-        "cache-publish:native-preflight",
+        "cache-publish:preflight",
         "docker:ci:cache:publish:wasm",
         "docker:ci:cache:publish:web",
     ] {
@@ -458,6 +468,7 @@ fn assert_rust_cache_export_hardening(bake: &str) {
 
 fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let main = read(root, ".github/workflows/main.yml");
+    let preflight = section(&main, "  preflight:\n", "\n  rust:\n");
     let rust = section(&main, "  rust:\n", "\n  wasm:\n");
     let wasm = section(&main, "  wasm:\n", "\n  wasm-cache-publish:\n");
     let wasm_cache_publish = section(&main, "  wasm-cache-publish:\n", "\n  wasm-cache-proof:\n");
@@ -465,7 +476,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let web = section(&main, "  web:\n", "\n  web-e2e:\n");
     let ui_demo = section(&main, "  ui-demos:\n", "\n  deploy:\n");
     let rust_verify = rust
-        .find("task ci:pr:rust")
+        .find("task ci:main:rust")
         .context("Main Rust job must verify")?;
     let rust_publish = rust
         .find("task ci:main:publish-native-cache")
@@ -495,10 +506,16 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .find("- name: Headless UI demos")
         .context("Main UI demo job must declare its verification step")?;
     assert!(
-        rust_verify < rust_publish
+        preflight.contains("task preflight")
+            && preflight.contains("task ci:main:publish-preflight-cache")
+            && preflight.contains("cache-selection: preflight")
+            && rust_verify < rust_publish
             && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
             && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
-            && wasm.contains("needs: [rust]")
+            && rust.contains("cache-selection: native")
+            && rust.contains("monitor-buildkit-storage: \"true\"")
+            && wasm.contains("needs: [rust, preflight]")
+            && wasm.contains("cache-selection: wasm")
             && wasm_verify < wasm_node
             && wasm_node < wasm_publish_id
             && wasm_publish_id < wasm_publish
@@ -518,7 +535,9 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && !wasm_cache_publish.contains("actions/upload-artifact")
             && main.matches("task ci:main:publish-wasm-cache").count() == 1
             && wasm_cache_proof.contains("needs: [wasm-cache-publish]")
+            && wasm_cache_proof.contains("cache-selection: wasm-proof")
             && web.contains("needs: [wasm]")
+            && web.contains("cache-selection: web-e2e")
             && !web.contains("wasm-cache-publish")
             && web.contains("uses: actions/download-artifact@v8")
             && web.contains("name: main-wasm-${{ github.run_id }}")
@@ -561,6 +580,7 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && docker_tasks.contains("nook-web-ci web-deps")
             && docker_tasks.contains("docker:ci:cache:publish:rust-base:")
             && docker_tasks.contains("docker:ci:cache:publish:native:")
+            && docker_tasks.contains("docker:ci:cache:publish:preflight:")
             && docker_tasks.contains("docker:ci:cache:publish:wasm:")
             && docker_tasks.contains("docker:ci:cache:publish:web:")
             && docker_tasks.contains("docker:ci:cache:publish:web-e2e:")
@@ -580,13 +600,11 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
         .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
         .unwrap_or("");
     assert!(
-        native_publish.contains("preflight-test")
-            && native_publish.contains("PREFLIGHT_SOURCE_CONTEXT=\"{{.REPO_ROOT}}\"")
-            && native_publish.contains("task: docker:ci:cache:publish:rust-base")
-            && native_publish.contains("builder-core-deps-publish")
-            && native_publish.contains("builder-debug")
-            && !native_publish.contains("builder-core-deps-publish builder-debug"),
-        "native cache publish must stage rust-base, deps, source, then preflight as separate solves with the full repository source context"
+        native_publish.contains("builder-debug")
+            && !native_publish.contains("preflight-test")
+            && !native_publish.contains("task: docker:ci:cache:publish:rust-base")
+            && !native_publish.contains("builder-core-deps-publish"),
+        "native cache publish must export only the complete source graph and avoid overlapping full-graph preparation"
     );
     let wasm_publish = docker_tasks
         .split("docker:ci:cache:publish:wasm:")
@@ -704,10 +722,11 @@ fn assert_main_split_pipeline(root: &Path) -> anyhow::Result<()> {
         .context("Main must define the development deployment job")?;
     assert!(
         main.contains("\n  rust:\n")
+            && main.contains("\n  preflight:\n")
             && main.contains("\n  wasm:\n")
             && main.contains("\n  web:\n")
             && main.contains("\n  web-e2e:\n")
-            && main.contains("task ci:pr:rust")
+            && main.contains("task ci:main:rust")
             && main.contains("task ci:pr:wasm")
             && main.contains("task ci:main:web:artifacts")
             && main.contains("task _ci:main:web:e2e-only")

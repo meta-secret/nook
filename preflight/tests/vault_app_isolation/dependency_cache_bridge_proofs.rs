@@ -331,23 +331,12 @@ fn theorem_wasm_and_native_publish_staging() -> anyhow::Result<()> {
         .nth(1)
         .and_then(|tail| tail.split("docker:ci:cache:publish:wasm:").next())
         .context("native publish task missing")?;
-    let native_base = native
-        .find("task: docker:ci:cache:publish:rust-base")
-        .context("native publish must stage rust-base")?;
-    let native_deps = native
-        .find("builder-core-deps-publish")
-        .context("native publish must bake deps")?;
-    let native_source = native
-        .find("builder-debug")
-        .context("native publish must bake source")?;
-    let native_preflight = native
-        .find("preflight-test")
-        .context("native publish must bake preflight-test")?;
     assert!(
-        native_base < native_deps
-            && native_deps < native_source
-            && native_source < native_preflight,
-        "native publish must stage rust-base, deps, source, then preflight as separate solves"
+        native.contains("builder-debug")
+            && !native.contains("task: docker:ci:cache:publish:rust-base")
+            && !native.contains("builder-core-deps-publish")
+            && !native.contains("preflight-test"),
+        "native publish must preserve one portable complete source graph without overlapping exports"
     );
 
     let wasm = docker_tasks

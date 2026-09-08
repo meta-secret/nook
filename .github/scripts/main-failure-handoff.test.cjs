@@ -302,7 +302,7 @@ test('workflow preserves the Main cache order and coalesces only pending runs', 
     /concurrency:\n\s+group: main[\s\S]*cancel-in-progress: false/,
   )
   assert.doesNotMatch(main, /^\s+queue:/m)
-  assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[rust\]/)
+  assert.match(main, /wasm:\n\s+name: WASM verification and artifact[\s\S]*needs: \[rust, preflight\]/)
   assert.match(
     main,
     /Publish verified native BuildKit cache[\s\S]*task ci:main:publish-native-cache/,

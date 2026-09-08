@@ -510,6 +510,14 @@ fn theorem_github_actions_zot_parameter_matrix() -> anyhow::Result<()> {
         "hosted setup must probe exact refs before selecting exact-only, Main-source-only, or cold fallback imports"
     );
     assert!(
+        setup.contains("general|native|wasm|wasm-proof|preflight|web-e2e|hive|connection-only")
+            && setup.contains("[ \"$cache_selection\" = \"native\" ]")
+            && setup.contains("[ \"$cache_selection\" = \"wasm\" ]")
+            && setup.contains("[ \"$cache_selection\" = \"preflight\" ]")
+            && setup.contains("[ \"$cache_selection\" = \"web-e2e\" ]"),
+        "Docker setup must retain consumer-scoped cache probe selections"
+    );
+    assert!(
         app_bake.contains("variable \"GHA_CACHE_EXACT_PROBES_COMPLETE\"")
             && setup.contains("GHA_CACHE_EXACT_PROBES_COMPLETE=1")
             && preflight_bake.contains(

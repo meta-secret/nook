@@ -100,6 +100,33 @@ if ! bash "$retry_script" cache-export "$cache_export_command" "$cache_export_co
 fi
 assert_equals "$(<"$cache_export_count")" 2 'cache-export retry count'
 
+metrics_command="$test_dir/metrics-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'printf "%s\n" "#18 exporting cache to registry" "#18 preparing build cache for export 12.5s done" "#18 DONE 15.5s"' >"$metrics_command"
+chmod +x "$metrics_command"
+metrics_output="$(bash "$retry_script" cache-metrics "$metrics_command")"
+if ! grep -Fq 'label=cache-metrics vertex=#18 preparation_seconds=12.5 registry_send_seconds=3.0 total_export_seconds=15.5' <<<"$metrics_output"; then
+  echo 'cache export phase metrics must separate preparation from registry sending' >&2
+  exit 1
+fi
+
+concurrent_map_command="$test_dir/concurrent-map-command"
+printf '%s\n' \
+  '#!/usr/bin/env bash' \
+  'printf "%s\n" "fatal error: concurrent map writes"' \
+  'exit 2' >"$concurrent_map_command"
+chmod +x "$concurrent_map_command"
+set +e
+concurrent_map_output="$(bash "$retry_script" concurrent-map "$concurrent_map_command" 2>&1)"
+concurrent_map_status=$?
+set -e
+assert_equals "$concurrent_map_status" 2 'concurrent-map failure status'
+if ! grep -Fq '::error title=BuildKit concurrent-map fault::' <<<"$concurrent_map_output"; then
+  echo 'concurrent-map fault must receive an actionable annotation' >&2
+  exit 1
+fi
+
 application_count="$test_dir/application-count"
 application_command="$test_dir/application-command"
 printf '%s\n' \

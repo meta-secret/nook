@@ -54,6 +54,23 @@ E2e serves **production `dist/`** on CI (`vite preview`) with `VITE_VAULT_SYNC_I
 
 ## Registry transport performance
 
+Main runs repository preflight beside native Rust verification. Each lane
+publishes only its verified complete graph: preflight publishes
+`nook-preflight-v1`, while native publishes the mode-max
+`nook-rust-native-source-v4` graph that embeds its rust-base and dependency
+lineage. Do not restore the former serial rust-base and native-dependency
+exports; they made BuildKit prepare and recompress overlapping complete graphs.
+
+Docker setup selects probes by the graph consumed by that job (`native`,
+`wasm`, `preflight`, or `web-e2e`). Use `general` only for a caller that can
+execute all of those graphs. The cache-export wrapper reports preparation,
+registry-send, and total export seconds separately. A concurrent-map panic is
+an actionable shard fault, and the native Main lane warns when BuildKit usage
+reaches 100 GB ahead of the configured 112 GB GC maximum.
+The portable WASM proof uses `wasm-proof`: it computes the immutable dependency
+fingerprint but performs no availability probes because the proof owns its
+explicit repair and verification refs.
+
 The OVH registry sender and home worker use TCP BBR for new connections.
 The policy applies only to `ovh-us` and `bynull-servo`.
 The registry keeps its public hostname and verified TLS path.
