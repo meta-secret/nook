@@ -66,7 +66,16 @@ impl NookVaultManager {
                 _ => None,
             };
             record.zeroize_plaintext();
-            if matches? && let Some(login) = login {
+            let matched = match matches {
+                Ok(matched) => matched,
+                Err(error) => {
+                    for (_, login) in &mut owned_logins {
+                        login.password.zeroize();
+                    }
+                    return Err(error);
+                }
+            };
+            if matched && let Some(login) = login {
                 owned_logins.push((id.clone(), login));
             }
         }
@@ -84,10 +93,11 @@ impl NookVaultManager {
             candidates: &candidates,
         }
         .decide()
-        .map_err(|error| NookError::Database(error.to_string()))?;
+        .map_err(|error| NookError::Database(error.to_string()));
         for (_, login) in &mut owned_logins {
             login.password.zeroize();
         }
+        let decision = decision?;
         Ok(NookWebsiteLoginSavePlan::from_decision(decision))
     }
 

@@ -155,22 +155,29 @@ pub(super) struct CompleteMigrationBatch {
 }
 impl CompleteMigrationBatch {
     #[must_use]
-    pub(super) fn plan(self) -> GoogleAuthenticatorImportPlan {
+    pub(super) fn plan(
+        self,
+    ) -> Result<GoogleAuthenticatorImportPlan, GoogleAuthenticatorImportError> {
         let mut items = Vec::with_capacity(self.source_count);
         let mut skipped_unsupported = 0;
         for part in self.parts {
             for parameter in part.payload.otp_parameters {
                 match parameter.convert() {
                     Ok(item) => items.push(item),
-                    Err(()) => skipped_unsupported += 1,
+                    Err(super::parameters::OtpParameterError::Unsupported) => {
+                        skipped_unsupported += 1;
+                    }
+                    Err(super::parameters::OtpParameterError::IssuerCatalog(error)) => {
+                        return Err(GoogleAuthenticatorImportError::from(error));
+                    }
                 }
             }
         }
-        GoogleAuthenticatorImportPlan {
+        Ok(GoogleAuthenticatorImportPlan {
             items,
             source_count: self.source_count.into(),
             skipped_unsupported: skipped_unsupported.into(),
-        }
+        })
     }
 }
 
@@ -287,7 +294,7 @@ mod tests {
             }
             let parsed = ParsedMigrationBatch::parse(&uris)?;
             if count == 10_000 {
-                let plan = parsed.complete()?.plan();
+                let plan = parsed.complete()?.plan()?;
                 assert_eq!(usize::from(plan.source_count), count);
                 assert_eq!(usize::from(plan.skipped_unsupported), count);
                 assert!(plan.items.is_empty());
