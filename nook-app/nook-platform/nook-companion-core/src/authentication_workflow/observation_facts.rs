@@ -18,9 +18,13 @@ pub use authenticator::{
     classify_authentication_backup_codes_observation,
 };
 pub use batch::{
-    AuthenticationPageObservationFactsBatch, AuthenticationPageObservationFactsClassificationOutcome,
+    AuthenticationPageObservationFactsBatch,
+    AuthenticationPageObservationFactsClassificationOutcome,
     AuthenticationPageObservationFactsSchemaVersion,
+    AuthenticationPageObservationFactsUnsupportedSchemaVersion,
     CurrentAuthenticationPageObservationFactsRequest,
+    CurrentAuthenticationPageObservationFactsWire,
+    CurrentAuthenticationPageObservationFactsWireFacts,
     VersionedAuthenticationPageObservationFacts,
     VersionedAuthenticationPageObservationFactsBatch,
 };

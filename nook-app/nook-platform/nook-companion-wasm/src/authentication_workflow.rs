@@ -94,11 +94,25 @@ pub fn classify_companion_authentication_workflow_facts(
 
 #[wasm_bindgen]
 #[must_use]
-#[allow(clippy::needless_pass_by_value)]
+pub fn current_companion_authentication_page_observation_facts(
+    request: nook_companion_core::CurrentAuthenticationPageObservationFactsRequest,
+) -> nook_companion_core::CurrentAuthenticationPageObservationFactsWire {
+    nook_companion_core::CurrentAuthenticationPageObservationFactsWire::new(request)
+}
+
+#[wasm_bindgen]
+#[must_use]
 pub fn classify_versioned_companion_authentication_workflow_facts(
-    input: nook_companion_core::VersionedAuthenticationPageObservationFactsBatch,
-) -> nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome {
-    input.classify()
+    input: wasm_bindgen::JsValue,
+) -> Result<
+    nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome,
+    wasm_bindgen::JsError,
+> {
+    let input = serde_wasm_bindgen::from_value::<
+        nook_companion_core::VersionedAuthenticationPageObservationFactsBatch,
+    >(input)
+    .map_err(|error| wasm_bindgen::JsError::new(&error.to_string()))?;
+    Ok(input.classify())
 }
 
 #[wasm_bindgen]
@@ -162,19 +176,23 @@ mod tests {
         }
 
         fn assert_versioned_transport_preserves_typed_outcome() -> anyhow::Result<()> {
-            let current =
-                nook_companion_core::VersionedAuthenticationPageObservationFacts::current(
+            let current: nook_companion_core::VersionedAuthenticationPageObservationFacts =
+                super::current_companion_authentication_page_observation_facts(
                     nook_companion_core::CurrentAuthenticationPageObservationFactsRequest {
-                        facts: nook_companion_core::AuthenticationPageObservationFacts::default(),
+                        facts: nook_companion_core::AuthenticationPageObservationFacts::default()
+                            .into(),
                         credential_disclosure_control:
                             nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
                     },
-                );
+                )
+                .into();
             let result = super::classify_versioned_companion_authentication_workflow_facts(
-                nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
-                    observations: vec![current.clone()],
-                },
-            );
+                serde_wasm_bindgen::to_value(
+                    &nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
+                        observations: vec![current.clone()],
+                    },
+                )?,
+            )?;
             assert_eq!(
                 result,
                 nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome::Classified(
@@ -197,15 +215,55 @@ mod tests {
             fields.remove("credentialDisclosureControl");
             let future = serde_json::from_value(future_wire)?;
             let result = super::classify_versioned_companion_authentication_workflow_facts(
-                nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
-                    observations: vec![future],
-                },
-            );
+                serde_wasm_bindgen::to_value(
+                    &nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
+                        observations: vec![future],
+                    },
+                )?,
+            )?;
             assert_eq!(
                 serde_json::to_value(result)?,
                 serde_json::json!({
                     "kind": "unsupported-version",
-                    "value": { "version": 2 }
+                    "value": {
+                        "schema": "page-facts",
+                        "version": 2
+                    }
+                })
+            );
+
+            let mut nested_wire = serde_json::to_value(
+                nook_companion_core::VersionedAuthenticationPageObservationFacts::current(
+                    nook_companion_core::CurrentAuthenticationPageObservationFactsRequest {
+                        facts: nook_companion_core::AuthenticationPageObservationFacts::default()
+                            .into(),
+                        credential_disclosure_control:
+                            nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
+                    },
+                ),
+            )?;
+            let serde_json::Value::Object(fields) = &mut nested_wire else {
+                anyhow::bail!("versioned page observation must encode as an object");
+            };
+            fields.insert(
+                "credentialDisclosureControl".to_owned(),
+                serde_json::json!({
+                    "kind": "observed",
+                    "observations": [{"schemaVersion": 2}]
+                }),
+            );
+            let nested_batch = serde_json::json!({"observations": [nested_wire]});
+            let result = super::classify_versioned_companion_authentication_workflow_facts(
+                serde_wasm_bindgen::to_value(&nested_batch)?,
+            )?;
+            assert_eq!(
+                serde_json::to_value(result)?,
+                serde_json::json!({
+                    "kind": "unsupported-version",
+                    "value": {
+                        "schema": "disclosure-control",
+                        "version": 2
+                    }
                 })
             );
             Ok(())

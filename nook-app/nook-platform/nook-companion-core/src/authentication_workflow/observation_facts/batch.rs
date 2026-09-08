@@ -12,7 +12,10 @@ mod wire;
 pub use wire::{
     AuthenticationPageObservationFactsClassificationOutcome,
     AuthenticationPageObservationFactsSchemaVersion,
+    AuthenticationPageObservationFactsUnsupportedSchemaVersion,
     CurrentAuthenticationPageObservationFactsRequest,
+    CurrentAuthenticationPageObservationFactsWire,
+    CurrentAuthenticationPageObservationFactsWireFacts,
     VersionedAuthenticationPageObservationFacts,
     VersionedAuthenticationPageObservationFactsBatch,
 };

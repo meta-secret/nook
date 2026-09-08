@@ -39,19 +39,41 @@ impl From<AuthenticationPageObservationFactsSchemaVersion> for u32 {
 }
 
 /// Inputs owned by the current page-observation writer.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, Tsify)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[tsify(from_wasm_abi)]
 pub struct CurrentAuthenticationPageObservationFactsRequest {
-    pub facts: AuthenticationPageObservationFacts,
+    pub facts: CurrentAuthenticationPageObservationFactsWireFacts,
     pub credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
 
-/// One versioned authentication page observation.
+/// Exact generated DTO emitted by the current version-one writer.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(
-    type = "{ schemaVersion: number; facts: AuthenticationPageObservationFacts; credentialDisclosureControl?: AuthenticationCredentialDisclosureControlObservation }",
-    into_wasm_abi,
-    from_wasm_abi
+    type = "{ schemaVersion: 1; facts: { fields: AuthenticationFieldObservationFacts; ceremony: AuthenticationCeremonyObservationFacts; authenticator: AuthenticationAuthenticatorObservationFacts; credentialSubmission: AuthenticationCredentialSubmissionObservation; detailedAdvanceControl: AuthenticationDetailedAdvanceControlObservation }; credentialDisclosureControl: AuthenticationCredentialDisclosureControlObservation }",
+    into_wasm_abi
 )]
+pub struct CurrentAuthenticationPageObservationFactsWire {
+    schema_version: AuthenticationPageObservationFactsSchemaVersion,
+    facts: CurrentAuthenticationPageObservationFactsWireFacts,
+    credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
+}
+
+impl CurrentAuthenticationPageObservationFactsWire {
+    #[must_use]
+    pub fn new(request: CurrentAuthenticationPageObservationFactsRequest) -> Self {
+        Self {
+            schema_version: AuthenticationPageObservationFactsSchemaVersion::CURRENT,
+            facts: request.facts,
+            credential_disclosure_control: request.credential_disclosure_control,
+        }
+    }
+}
+
+/// One versioned authentication page observation.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct VersionedAuthenticationPageObservationFacts {
     schema_version: AuthenticationPageObservationFactsSchemaVersion,
     facts: AuthenticationPageObservationFacts,
@@ -79,35 +101,53 @@ struct UnsupportedAuthenticationPageObservationFactsBody {}
 #[serde(rename_all = "camelCase")]
 struct AuthenticationPageObservationFactsEnvelope {
     schema_version: AuthenticationPageObservationFactsSchemaVersion,
-    facts: RequiredAuthenticationPageObservationFacts,
+    facts: CurrentAuthenticationPageObservationFactsWireFacts,
 }
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct RequiredCurrentAuthenticationPageObservationFacts {
     schema_version: AuthenticationPageObservationFactsSchemaVersion,
-    facts: RequiredAuthenticationPageObservationFacts,
+    facts: CurrentAuthenticationPageObservationFactsWireFacts,
     credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
 
-#[derive(Deserialize)]
+/// Exact required common facts shared by current and future page-observation envelopes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct RequiredAuthenticationPageObservationFacts {
-    fields: AuthenticationFieldObservationFacts,
-    ceremony: AuthenticationCeremonyObservationFacts,
-    authenticator: AuthenticationAuthenticatorObservationFacts,
-    credential_submission: AuthenticationCredentialSubmissionObservation,
-    detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct CurrentAuthenticationPageObservationFactsWireFacts {
+    pub fields: AuthenticationFieldObservationFacts,
+    pub ceremony: AuthenticationCeremonyObservationFacts,
+    pub authenticator: AuthenticationAuthenticatorObservationFacts,
+    pub credential_submission: AuthenticationCredentialSubmissionObservation,
+    pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
 }
 
-impl From<RequiredAuthenticationPageObservationFacts> for AuthenticationPageObservationFacts {
-    fn from(required: RequiredAuthenticationPageObservationFacts) -> Self {
+impl From<CurrentAuthenticationPageObservationFactsWireFacts>
+    for AuthenticationPageObservationFacts
+{
+    fn from(required: CurrentAuthenticationPageObservationFactsWireFacts) -> Self {
         Self {
             fields: required.fields,
             ceremony: required.ceremony,
             authenticator: required.authenticator,
             credential_submission: required.credential_submission,
             detailed_advance_control: required.detailed_advance_control,
+        }
+    }
+}
+
+impl From<AuthenticationPageObservationFacts>
+    for CurrentAuthenticationPageObservationFactsWireFacts
+{
+    fn from(facts: AuthenticationPageObservationFacts) -> Self {
+        Self {
+            fields: facts.fields,
+            ceremony: facts.ceremony,
+            authenticator: facts.authenticator,
+            credential_submission: facts.credential_submission,
+            detailed_advance_control: facts.detailed_advance_control,
         }
     }
 }
@@ -157,15 +197,7 @@ impl<'de> Deserialize<'de> for VersionedAuthenticationPageObservationFacts {
 impl VersionedAuthenticationPageObservationFacts {
     #[must_use]
     pub fn current(request: CurrentAuthenticationPageObservationFactsRequest) -> Self {
-        Self {
-            schema_version: AuthenticationPageObservationFactsSchemaVersion::CURRENT,
-            facts: request.facts,
-            body: AuthenticationPageObservationFactsBody::Current(
-                CurrentAuthenticationPageObservationFactsBody {
-                    credential_disclosure_control: request.credential_disclosure_control,
-                },
-            ),
-        }
+        CurrentAuthenticationPageObservationFactsWire::new(request).into()
     }
 
     #[must_use]
@@ -187,25 +219,63 @@ impl VersionedAuthenticationPageObservationFacts {
         }
     }
 
-    fn unsupported_version(&self) -> Option<AuthenticationPageObservationFactsSchemaVersion> {
+    fn unsupported_version(
+        &self,
+    ) -> Option<AuthenticationPageObservationFactsUnsupportedSchemaVersion> {
         if !self.schema_version.is_supported() {
-            return Some(self.schema_version);
+            return Some(
+                AuthenticationPageObservationFactsUnsupportedSchemaVersion::PageFacts {
+                    version: self.schema_version,
+                },
+            );
         }
         let AuthenticationPageObservationFactsBody::Current(body) = &self.body else {
             return None;
         };
         body.credential_disclosure_control
             .first_unsupported_version()
-            .map(|version| u32::from(version).into())
+            .map(|version| {
+                AuthenticationPageObservationFactsUnsupportedSchemaVersion::DisclosureControl {
+                    version,
+                }
+            })
+    }
+}
+
+impl From<CurrentAuthenticationPageObservationFactsWire>
+    for VersionedAuthenticationPageObservationFacts
+{
+    fn from(current: CurrentAuthenticationPageObservationFactsWire) -> Self {
+        Self {
+            schema_version: current.schema_version,
+            facts: current.facts.into(),
+            body: AuthenticationPageObservationFactsBody::Current(
+                CurrentAuthenticationPageObservationFactsBody {
+                    credential_disclosure_control: current.credential_disclosure_control,
+                },
+            ),
+        }
     }
 }
 
 /// A bounded batch of versioned page-observation facts.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct VersionedAuthenticationPageObservationFactsBatch {
     pub observations: Vec<VersionedAuthenticationPageObservationFacts>,
+}
+
+/// Schema namespace and version that the current reader does not support.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[serde(tag = "schema", rename_all = "kebab-case")]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum AuthenticationPageObservationFactsUnsupportedSchemaVersion {
+    PageFacts {
+        version: AuthenticationPageObservationFactsSchemaVersion,
+    },
+    DisclosureControl {
+        version: crate::AuthenticationDisclosureObservationSchemaVersion,
+    },
 }
 
 /// Typed result of classifying a versioned observation batch.
@@ -214,9 +284,7 @@ pub struct VersionedAuthenticationPageObservationFactsBatch {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum AuthenticationPageObservationFactsClassificationOutcome {
     Classified(AuthenticationWorkflowMatch),
-    UnsupportedVersion {
-        version: AuthenticationPageObservationFactsSchemaVersion,
-    },
+    UnsupportedVersion(AuthenticationPageObservationFactsUnsupportedSchemaVersion),
 }
 
 impl VersionedAuthenticationPageObservationFactsBatch {
@@ -236,14 +304,14 @@ impl VersionedAuthenticationPageObservationFactsBatch {
                 AuthenticationWorkflowMatch::Rejected,
             );
         }
-        if let Some(version) = self
+        if let Some(unsupported) = self
             .observations
             .iter()
             .find_map(VersionedAuthenticationPageObservationFacts::unsupported_version)
         {
-            return AuthenticationPageObservationFactsClassificationOutcome::UnsupportedVersion {
-                version,
-            };
+            return AuthenticationPageObservationFactsClassificationOutcome::UnsupportedVersion(
+                unsupported,
+            );
         }
         AuthenticationPageObservationFactsClassificationOutcome::Classified(
             AuthenticationPageObservationFactsBatch {
@@ -268,7 +336,7 @@ mod tests {
         fn current() -> VersionedAuthenticationPageObservationFacts {
             VersionedAuthenticationPageObservationFacts::current(
                 CurrentAuthenticationPageObservationFactsRequest {
-                    facts: AuthenticationPageObservationFacts::default(),
+                    facts: AuthenticationPageObservationFacts::default().into(),
                     credential_disclosure_control:
                         AuthenticationCredentialDisclosureControlObservation::Absent,
                 },
@@ -333,6 +401,19 @@ mod tests {
                 serde_json::from_value::<VersionedAuthenticationPageObservationFacts>(unknown)
                     .is_err()
             );
+            assert!(
+                CurrentAuthenticationPageObservationFactsWire::DECL.contains("schemaVersion: 1")
+            );
+            assert!(CurrentAuthenticationPageObservationFactsWire::DECL.contains(
+                "credentialDisclosureControl: AuthenticationCredentialDisclosureControlObservation"
+            ));
+            assert!(!CurrentAuthenticationPageObservationFactsWire::DECL
+                .contains("credentialDisclosureControl?:"));
+            assert!(CurrentAuthenticationPageObservationFactsRequest::DECL.contains(
+                "credentialDisclosureControl: AuthenticationCredentialDisclosureControlObservation"
+            ));
+            assert!(!CurrentAuthenticationPageObservationFactsRequest::DECL
+                .contains("credentialDisclosureControl?:"));
             Ok(())
         }
 
@@ -401,9 +482,11 @@ mod tests {
             for observations in [vec![future.clone()], vec![current.clone(), future.clone()]] {
                 assert_eq!(
                     (VersionedAuthenticationPageObservationFactsBatch { observations }).classify(),
-                    AuthenticationPageObservationFactsClassificationOutcome::UnsupportedVersion {
-                        version: 2.into()
-                    }
+                    AuthenticationPageObservationFactsClassificationOutcome::UnsupportedVersion(
+                        AuthenticationPageObservationFactsUnsupportedSchemaVersion::PageFacts {
+                            version: 2.into()
+                        }
+                    )
                 );
             }
             assert_eq!(
@@ -411,9 +494,11 @@ mod tests {
                     observations: vec![Self::nested_future()?],
                 })
                 .classify(),
-                AuthenticationPageObservationFactsClassificationOutcome::UnsupportedVersion {
-                    version: 2.into()
-                }
+                AuthenticationPageObservationFactsClassificationOutcome::UnsupportedVersion(
+                    AuthenticationPageObservationFactsUnsupportedSchemaVersion::DisclosureControl {
+                        version: 2.into()
+                    }
+                )
             );
 
             let mut malformed_common = Self::future()?;
