@@ -37,6 +37,8 @@ explicit filesystem group with `OnRootMismatch` ownership handling.
 JetStream persistence is platform retention for ingress durability and final
 reconciliation. Mission-scoped PR Steward agents use Core NATS live fan-out on
 `default.github-webhook.pr-lifecycle`; they do not bind a durable consumer.
+The bounded subscription routes individual `workflow_job` lifecycle events on
+the same subject.
 Missing an event while disconnected is acceptable because Gizmo reconciles the
 final GitHub state before acting.
 

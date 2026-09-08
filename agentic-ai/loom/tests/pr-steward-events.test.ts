@@ -10,185 +10,378 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  decodePrStewardEvent,
+  assignedPrEvent,
   loadCredential,
-  parsePrStewardInvocation,
-  PrStewardEventKind,
+  PR_STEWARD_REPOSITORY,
+  PrStewardInvocationCodec,
+  PrStewardRoutingVersion,
+  PrStewardSource,
+  PrStewardUrlTrust,
   writeAssignedEvents,
 } from '../src/pr-steward-events.ts';
 import type { UntrustedYamlMap } from '../src/lib/guards.ts';
 
-const temporaryPaths: string[] = [];
+const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+const STALE_HEAD = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const encoder = new TextEncoder();
+const temporaryPaths: string[] = [];
+const repository = { full_name: PR_STEWARD_REPOSITORY };
+const pullRequest = { number: 1560, head: { sha: HEAD } };
 
-function cloudEvent(args: {
-  readonly id: string;
-  readonly time: string;
-  readonly headers: Record<string, string | string[]>;
-  readonly body: UntrustedYamlMap;
-}): Uint8Array {
-  const eventData = JSON.stringify({ headers: args.headers, body: args.body });
-  return encoder.encode(
-    JSON.stringify({
+class PrStewardEventFixture {
+  static associated(args: {
+    readonly id: number;
+    readonly head: string | false;
+  }): UntrustedYamlMap {
+    return {
       id: args.id,
-      time: args.time,
-      data_base64: Buffer.from(eventData).toString('base64'),
-    }),
-  );
+      head_sha: HEAD,
+      pull_requests: [
+        { number: 1560, head: args.head === false ? {} : { sha: args.head } },
+      ],
+    };
+  }
+
+  static cloudEvent(args: {
+    readonly event: string;
+    readonly body: UntrustedYamlMap;
+    readonly id?: string;
+  }): Uint8Array {
+    const eventData = JSON.stringify({
+      headers: {
+        'X-Github-Event': args.event,
+        'X-Github-Delivery': `delivery-${args.event}`,
+      },
+      body: args.body,
+    });
+    return encoder.encode(
+      JSON.stringify({
+        id: 'id' in args ? args.id : `event-${args.event}`,
+        time: '2026-09-08T20:00:00Z',
+        data_base64: Buffer.from(eventData).toString('base64'),
+      }),
+    );
+  }
+
+  static async write(data: readonly Uint8Array[]): Promise<readonly string[]> {
+    const lines: string[] = [];
+    await writeAssignedEvents({
+      messages: (async function* () {
+        for (const item of data) yield { data: item };
+      })(),
+      pullRequest: 1560,
+      write: (line) => lines.push(line),
+    });
+    return lines;
+  }
 }
+const { associated, cloudEvent, write } = PrStewardEventFixture;
 
 afterEach(() => {
   for (const path of temporaryPaths.splice(0))
     rmSync(path, { recursive: true, force: true });
 });
 
-function temporaryDirectory(): string {
-  const path = mkdtempSync(join(tmpdir(), 'nook-pr-events-'));
-  temporaryPaths.push(path);
-  return path;
-}
-
-describe('PR Steward credentials', () => {
-  test('accepts only the infrastructure-owned exact credential shape', () => {
-    const path = join(temporaryDirectory(), 'client.yaml');
+describe('PR Steward credentials and invocation codec', () => {
+  test('loads only the infrastructure-owned credential shape', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'nook-pr-events-'));
+    temporaryPaths.push(directory);
+    const path = join(directory, 'client.yaml');
     writeFileSync(path, `username: pr-steward\npassword: ${'a'.repeat(64)}\n`);
     chmodSync(path, 0o600);
     expect(loadCredential(path)).toEqual({
       username: 'pr-steward',
       password: 'a'.repeat(64),
     });
-  });
-
-  test('rejects broad modes and extra fields', () => {
-    const path = join(temporaryDirectory(), 'client.yaml');
     writeFileSync(
       path,
       `username: pr-steward\npassword: ${'a'.repeat(64)}\nextra: true\n`,
     );
-    chmodSync(path, 0o644);
-    expect(() => loadCredential(path)).toThrow('credential mode must be 0600');
-    chmodSync(path, 0o600);
     expect(() => loadCredential(path)).toThrow('credential schema is invalid');
   });
 
-  test('rejects symbolic links', () => {
-    const directory = temporaryDirectory();
+  test('rejects broad modes and symbolic links', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'nook-pr-events-'));
+    temporaryPaths.push(directory);
     const target = join(directory, 'target.yaml');
     const link = join(directory, 'client.yaml');
     writeFileSync(
       target,
       `username: pr-steward\npassword: ${'a'.repeat(64)}\n`,
     );
+    chmodSync(target, 0o644);
+    expect(() => loadCredential(target)).toThrow('mode must be 0600');
     chmodSync(target, 0o600);
     symlinkSync(target, link);
-    expect(() => loadCredential(link)).toThrow(
-      'credential file cannot be opened securely',
-    );
+    expect(() => loadCredential(link)).toThrow('cannot be opened securely');
   });
 
   test('requires one positive PR and an absolute optional config', () => {
-    expect(parsePrStewardInvocation(['--pr', '1492'])).toMatchObject({
-      pullRequest: 1492,
+    expect(PrStewardInvocationCodec.parse(['--pr', '1560'])).toMatchObject({
+      pullRequest: 1560,
     });
-    expect(() => parsePrStewardInvocation(['--pr', '0'])).toThrow(
+    expect(() => PrStewardInvocationCodec.parse(['--pr', '0'])).toThrow(
       'positive integer',
     );
     expect(() =>
-      parsePrStewardInvocation(['--pr', '1492', '--config', 'relative']),
+      PrStewardInvocationCodec.parse(['--pr', '1560', '--config', 'relative']),
     ).toThrow('absolute');
   });
 });
 
-test('documents a direct foreground process without a package wrapper', () => {
+describe('compact routing hints', () => {
+  test.each([
+    {
+      event: 'pull_request',
+      source: PrStewardSource.PullRequest,
+      body: {
+        action: 'closed',
+        repository,
+        pull_request: {
+          ...pullRequest,
+          id: 40,
+          html_url: 'https://github.com/meta-secret/nook/pull/1560?token=no#x',
+          user: { login: 'pr-author' },
+        },
+      },
+    },
+    {
+      event: 'pull_request_review',
+      source: PrStewardSource.PullRequestReview,
+      body: {
+        action: 'submitted',
+        repository,
+        pull_request: pullRequest,
+        review: {
+          id: 41,
+          commit_id: HEAD,
+          state: 'changes_requested',
+          html_url: 'https://github.com/meta-secret/nook/pull/1560#review-41',
+          user: { login: 'reviewer' },
+          body: 'DO_NOT_TRANSFER_REVIEW_BODY',
+        },
+      },
+    },
+    {
+      event: 'pull_request_review_comment',
+      source: PrStewardSource.PullRequestReviewComment,
+      body: {
+        action: 'created',
+        repository,
+        pull_request: pullRequest,
+        comment: {
+          id: 42,
+          pull_request_review_id: 41,
+          commit_id: HEAD,
+          path: 'src/file.ts',
+          line: 17,
+          html_url: 'https://github.com/meta-secret/nook/pull/1560',
+          user: { login: 'reviewer' },
+          body: 'DO_NOT_TRANSFER_COMMENT_BODY',
+        },
+      },
+    },
+    {
+      event: 'issue_comment',
+      source: PrStewardSource.IssueComment,
+      body: {
+        action: 'created',
+        repository,
+        issue: { number: 1560, pull_request: {} },
+        comment: {
+          id: 43,
+          html_url: 'https://github.com/meta-secret/nook/pull/1560',
+          user: { login: 'reviewer' },
+          body: 'DO_NOT_TRANSFER_ISSUE_BODY',
+        },
+      },
+    },
+    {
+      event: 'check_run',
+      source: PrStewardSource.CheckRun,
+      body: {
+        repository,
+        check_run: {
+          ...associated({ id: 44, head: HEAD }),
+          conclusion: 'failure',
+          target_url: 'https://ci.example/private/job/44?secret=value',
+        },
+      },
+    },
+    {
+      event: 'check_suite',
+      source: PrStewardSource.CheckSuite,
+      body: {
+        repository,
+        check_suite: {
+          ...associated({ id: 45, head: HEAD }),
+          status: 'completed',
+        },
+      },
+    },
+    {
+      event: 'workflow_run',
+      source: PrStewardSource.WorkflowRun,
+      body: {
+        repository,
+        workflow_run: {
+          ...associated({ id: 146, head: HEAD }),
+          conclusion: 'failure',
+        },
+      },
+    },
+  ])(
+    'routes directly attributed $event metadata',
+    ({ event, source, body }) => {
+      const hint = assignedPrEvent({
+        data: cloudEvent({ event, body }),
+        pullRequest: 1560,
+      });
+      expect(hint).toMatchObject({
+        schemaVersion: PrStewardRoutingVersion.V1,
+        repository: PR_STEWARD_REPOSITORY,
+        pullRequest: 1560,
+        source,
+      });
+      expect(JSON.stringify(hint)).not.toContain('DO_NOT_TRANSFER');
+      if (event === 'check_run')
+        expect(hint).toMatchObject({
+          url: {
+            trust: PrStewardUrlTrust.UntrustedExternal,
+            value: 'https://ci.example',
+          },
+        });
+      if (event === 'pull_request_review_comment')
+        expect(hint).toMatchObject({
+          objectId: 42,
+          commentId: 42,
+          reviewId: 41,
+          headSha: HEAD,
+          path: 'src/file.ts',
+          line: 17,
+          author: 'reviewer',
+          url: {
+            trust: PrStewardUrlTrust.GithubOwned,
+            value: 'https://github.com/meta-secret/nook/pull/1560',
+          },
+        });
+    },
+  );
+
+  test('suppresses foreign, stale, status, ambiguous, and PR-less inputs', async () => {
+    for (const event of ['check_run', 'check_suite', 'workflow_run'])
+      for (const head of [STALE_HEAD, false] as const)
+        expect(
+          assignedPrEvent({
+            data: cloudEvent({
+              event,
+              body: {
+                repository,
+                [event]: associated({ id: 50, head }),
+              },
+            }),
+            pullRequest: 1560,
+          }),
+        ).toBe(false);
+    const rejected = [
+      cloudEvent({
+        event: 'pull_request',
+        body: {
+          repository: { full_name: 'attacker/nook' },
+          pull_request: pullRequest,
+        },
+      }),
+      cloudEvent({
+        event: 'pull_request',
+        body: {
+          repository,
+          pull_request: { number: 1559, head: { sha: HEAD } },
+        },
+      }),
+      cloudEvent({
+        event: 'pull_request',
+        body: { repository, pull_request: { number: 1560, head: {} } },
+      }),
+      cloudEvent({
+        event: 'pull_request_review',
+        body: {
+          repository,
+          pull_request: pullRequest,
+          review: { id: 41, commit_id: STALE_HEAD },
+        },
+      }),
+      cloudEvent({
+        event: 'status',
+        body: { repository, sha: HEAD, id: 48, state: 'failure' },
+      }),
+      cloudEvent({
+        event: 'workflow_job',
+        body: { repository, workflow_job: { id: 49, head_sha: HEAD } },
+      }),
+      cloudEvent({
+        event: 'check_run',
+        body: {
+          repository,
+          check_run: {
+            id: 50,
+            head_sha: HEAD,
+            pull_requests: [{ number: 1560 }, { number: 1559 }],
+          },
+        },
+      }),
+    ];
+    expect(await write(rejected)).toEqual([]);
+  });
+
+  test('bounds output, continues after decode errors, and propagates writer failures', async () => {
+    const valid = cloudEvent({
+      event: 'pull_request_review_comment',
+      body: {
+        repository,
+        pull_request: pullRequest,
+        comment: {
+          id: 42,
+          commit_id: HEAD,
+          path: 'x'.repeat(241),
+          line: -1,
+          html_url: 'https://user:secret@github.com/meta-secret/nook/pull/1560',
+          user: { login: 'x'.repeat(65) },
+          body: 'RAW_PAYLOAD_SECRET',
+        },
+      },
+    });
+    const lines = await write([encoder.encode('RAW_MALFORMED_SECRET'), valid]);
+    expect(lines).toHaveLength(1);
+    const parsed = JSON.parse(lines[0]!) as UntrustedYamlMap;
+    expect([parsed.path, parsed.line]).toEqual([false, false]);
+    expect([parsed.url, parsed.author]).toEqual([false, false]);
+    expect(lines[0]!.length).toBeLessThan(2_048);
+    expect(lines[0]).not.toContain('RAW_PAYLOAD_SECRET');
+    expect(lines[0]).not.toContain('RAW_MALFORMED_SECRET');
+    const failure = new Error('operational failure');
+    await expect(
+      writeAssignedEvents({
+        messages: (async function* () {
+          yield { data: valid };
+        })(),
+        pullRequest: 1560,
+        write: () => {
+          throw failure;
+        },
+      }),
+    ).rejects.toBe(failure);
+  });
+});
+
+test('documents the direct foreground process', () => {
   const lifecycle = readFileSync(
-    join(
-      import.meta.dir,
+    new URL(
       '../../../.cortex/teams/pr-steward/workflows/pull-request-lifecycle.md',
+      import.meta.url,
     ),
     'utf8',
   );
   expect(lifecycle).toContain(
     'bun agentic-ai/loom/src/pr-steward-events.ts --pr <number>',
   );
-  expect(lifecycle).not.toContain(
-    'bun run --cwd agentic-ai/loom pr-steward-events',
-  );
-});
-
-describe('PR Steward event codec', () => {
-  test('emits the minimal typed pull-request envelope', () => {
-    const payload = cloudEvent({
-      id: 'cloud-event-1',
-      time: '2026-09-06T19:00:00Z',
-      headers: {
-        'X-Github-Event': ['pull_request'],
-        'X-Github-Delivery': ['delivery-1'],
-      },
-      body: {
-        action: 'synchronize',
-        repository: { full_name: 'bynull/nook' },
-        pull_request: { number: 1488, head: { sha: 'abc123' } },
-      },
-    });
-    expect(decodePrStewardEvent(payload)).toEqual({
-      kind: PrStewardEventKind.GithubPrEvent,
-      id: 'cloud-event-1',
-      time: '2026-09-06T19:00:00Z',
-      githubEvent: 'pull_request',
-      deliveryId: 'delivery-1',
-      action: 'synchronize',
-      repository: 'bynull/nook',
-      pullRequest: 1488,
-      headSha: 'abc123',
-    });
-  });
-
-  test('rejects messages without GitHub delivery identity', () => {
-    const payload = cloudEvent({
-      id: 'cloud-event-3',
-      time: '2026-09-06T19:02:00Z',
-      headers: {},
-      body: {},
-    });
-    expect(() => decodePrStewardEvent(payload)).toThrow(
-      'event identity is invalid',
-    );
-  });
-
-  test('keeps concurrent Gizmo subscriptions scoped to their assigned PR', async () => {
-    const payload = (pullRequest: number): Uint8Array =>
-      cloudEvent({
-        id: `event-${pullRequest}`,
-        time: '2026-09-06T19:03:00Z',
-        headers: {
-          'X-Github-Event': 'pull_request',
-          'X-Github-Delivery': `delivery-${pullRequest}`,
-        },
-        body: {
-          pull_request: { number: pullRequest, head: { sha: 'abc123' } },
-        },
-      });
-    const allMessages = [payload(1488), payload(1492)];
-    const stream = async function* (): AsyncIterable<{ data: Uint8Array }> {
-      for (const data of allMessages) yield { data };
-    };
-    const pr1488: string[] = [];
-    const pr1492: string[] = [];
-    await Promise.all([
-      writeAssignedEvents({
-        messages: stream(),
-        pullRequest: 1488,
-        write: (line) => pr1488.push(line),
-      }),
-      writeAssignedEvents({
-        messages: stream(),
-        pullRequest: 1492,
-        write: (line) => pr1492.push(line),
-      }),
-    ]);
-    expect(pr1488).toHaveLength(1);
-    expect(JSON.parse(pr1488[0]!).pullRequest).toBe(1488);
-    expect(pr1492).toHaveLength(1);
-    expect(JSON.parse(pr1492[0]!).pullRequest).toBe(1492);
-  });
 });
