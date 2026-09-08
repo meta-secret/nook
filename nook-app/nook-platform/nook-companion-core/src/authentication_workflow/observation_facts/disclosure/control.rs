@@ -8,6 +8,7 @@ use crate::{
     AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount,
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
 };
+use serde::de::Error as _;
 use serde::{Deserialize, Deserializer, Serialize};
 use tsify::Tsify;
 use url::Url;
@@ -46,16 +47,48 @@ pub struct CurrentAuthenticationDisclosureControlRequest {
 }
 
 /// Versioned control facts used only by exceptional credential disclosure.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[tsify(
+    type = "{ schemaVersion: number; observation: AuthenticationAdvanceControlObservation; genericPasswordFieldCount: number }",
+    into_wasm_abi,
+    from_wasm_abi
+)]
 pub struct VersionedAuthenticationDisclosureControlObservation {
     pub schema_version: AuthenticationDisclosureObservationSchemaVersion,
-    #[serde(
-        deserialize_with = "RequiredAuthenticationAdvanceControlObservation::deserialize_observation"
-    )]
-    pub observation: AuthenticationAdvanceControlObservation,
-    pub generic_password_field_count: AuthenticationFieldCount,
+    #[serde(flatten)]
+    body: AuthenticationDisclosureControlObservationBody,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(untagged)]
+enum AuthenticationDisclosureControlObservationBody {
+    Current(CurrentAuthenticationDisclosureControlObservationBody),
+    Unsupported(UnsupportedAuthenticationDisclosureControlObservationBody),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CurrentAuthenticationDisclosureControlObservationBody {
+    observation: AuthenticationAdvanceControlObservation,
+    generic_password_field_count: AuthenticationFieldCount,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+struct UnsupportedAuthenticationDisclosureControlObservationBody {}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AuthenticationDisclosureObservationEnvelope {
+    schema_version: AuthenticationDisclosureObservationSchemaVersion,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RequiredVersionOneAuthenticationDisclosureControlObservation {
+    schema_version: AuthenticationDisclosureObservationSchemaVersion,
+    observation: RequiredAuthenticationAdvanceControlObservation,
+    generic_password_field_count: AuthenticationFieldCount,
 }
 
 #[derive(Deserialize)]
@@ -78,15 +111,11 @@ struct RequiredAuthenticationAdvanceControlObservation {
     submission_destination_source: PageControlSubmissionDestinationSource,
 }
 
-impl RequiredAuthenticationAdvanceControlObservation {
-    fn deserialize_observation<'de, D>(
-        deserializer: D,
-    ) -> Result<AuthenticationAdvanceControlObservation, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let required = Self::deserialize(deserializer)?;
-        Ok(AuthenticationAdvanceControlObservation {
+impl From<RequiredAuthenticationAdvanceControlObservation>
+    for AuthenticationAdvanceControlObservation
+{
+    fn from(required: RequiredAuthenticationAdvanceControlObservation) -> Self {
+        Self {
             actionability: required.actionability,
             ownership: required.ownership,
             semantics: required.semantics,
@@ -102,6 +131,38 @@ impl RequiredAuthenticationAdvanceControlObservation {
             machine_identity: required.machine_identity,
             submission_method: required.submission_method,
             submission_destination_source: required.submission_destination_source,
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for VersionedAuthenticationDisclosureControlObservation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let encoded = serde_json::Value::deserialize(deserializer)?;
+        let envelope = AuthenticationDisclosureObservationEnvelope::deserialize(&encoded)
+            .map_err(D::Error::custom)?;
+        if !envelope.schema_version.is_supported() {
+            return Ok(Self {
+                schema_version: envelope.schema_version,
+                body: AuthenticationDisclosureControlObservationBody::Unsupported(
+                    UnsupportedAuthenticationDisclosureControlObservationBody {},
+                ),
+            });
+        }
+        let current = serde_json::from_value::<
+            RequiredVersionOneAuthenticationDisclosureControlObservation,
+        >(encoded)
+        .map_err(D::Error::custom)?;
+        Ok(Self {
+            schema_version: current.schema_version,
+            body: AuthenticationDisclosureControlObservationBody::Current(
+                CurrentAuthenticationDisclosureControlObservationBody {
+                    observation: current.observation.into(),
+                    generic_password_field_count: current.generic_password_field_count,
+                },
+            ),
         })
     }
 }
@@ -121,8 +182,12 @@ impl VersionedAuthenticationDisclosureControlObservation {
     pub fn current(request: CurrentAuthenticationDisclosureControlRequest) -> Self {
         Self {
             schema_version: AuthenticationDisclosureObservationSchemaVersion::CURRENT,
-            observation: request.observation,
-            generic_password_field_count: request.generic_password_field_count,
+            body: AuthenticationDisclosureControlObservationBody::Current(
+                CurrentAuthenticationDisclosureControlObservationBody {
+                    observation: request.observation,
+                    generic_password_field_count: request.generic_password_field_count,
+                },
+            ),
         }
     }
 
@@ -141,14 +206,20 @@ impl VersionedAuthenticationDisclosureControlObservation {
     }
 
     fn is_bounded(&self) -> bool {
-        self.observation.is_bounded()
-            && self.generic_password_field_count.raw() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
-            && self.generic_password_field_count.raw()
-                <= self.observation.password_field_count.raw()
+        let AuthenticationDisclosureControlObservationBody::Current(body) = &self.body else {
+            return false;
+        };
+        body.observation.is_bounded()
+            && body.generic_password_field_count.raw() <= MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+            && body.generic_password_field_count.raw()
+                <= body.observation.password_field_count.raw()
     }
 
     fn is_exact_owned_omitted_method_login_activation(&self) -> bool {
-        let control = &self.observation;
+        let AuthenticationDisclosureControlObservationBody::Current(body) = &self.body else {
+            return false;
+        };
+        let control = &body.observation;
         let secure_source =
             Url::parse(control.source_origin.trim()).is_ok_and(|origin| origin.scheme() == "https");
         let secure_destination = Url::parse(control.destination_identity.trim())
@@ -164,7 +235,7 @@ impl VersionedAuthenticationDisclosureControlObservation {
                 AuthenticationUsernameEvidence::Explicit
             )
             || control.password_field_count.raw() != 1
-            || self.generic_password_field_count.raw() != 0
+            || body.generic_password_field_count.raw() != 0
             || control.new_password_field_count.raw() != 0
             || control.one_time_code_field_count.raw() != 0
             || control.semantic_submit_control_count.raw() != 0
@@ -186,6 +257,22 @@ impl VersionedAuthenticationDisclosureControlObservation {
             .is_some_and(|destination| {
                 destination.path_identity == "/login" && destination.route_identity == "/login"
             })
+    }
+
+    #[cfg(test)]
+    fn current_observation_mut(&mut self) -> &mut AuthenticationAdvanceControlObservation {
+        let AuthenticationDisclosureControlObservationBody::Current(body) = &mut self.body else {
+            unreachable!("current test observations always carry the version-one body");
+        };
+        &mut body.observation
+    }
+
+    #[cfg(test)]
+    fn set_generic_password_field_count(&mut self, count: AuthenticationFieldCount) {
+        let AuthenticationDisclosureControlObservationBody::Current(body) = &mut self.body else {
+            unreachable!("current test observations always carry the version-one body");
+        };
+        body.generic_password_field_count = count;
     }
 }
 
@@ -257,40 +344,57 @@ mod tests {
             AuthenticationDisclosureControlDecision::AdvancesAuthentication
         );
         let mutations: &[fn(&mut VersionedAuthenticationDisclosureControlObservation)] = &[
-            |value| value.observation.source_origin = "http://login.example.test".to_owned(),
             |value| {
-                value.observation.destination_identity =
+                value.current_observation_mut().source_origin =
+                    "http://login.example.test".to_owned();
+            },
+            |value| {
+                value.current_observation_mut().destination_identity =
                     "http://login.example.test/login".to_owned();
             },
             |value| {
-                value.observation.destination_identity =
+                value.current_observation_mut().destination_identity =
                     "https://attacker.example/login".to_owned();
             },
             |value| {
-                value.observation.destination_identity =
+                value.current_observation_mut().destination_identity =
                     "https://login.example.test/recover".to_owned();
             },
-            |value| value.observation.label = "Sign in with Google".to_owned(),
-            |value| value.observation.form_identity = "signup".to_owned(),
-            |value| value.observation.machine_identity = "provider".to_owned(),
+            |value| value.current_observation_mut().label = "Sign in with Google".to_owned(),
+            |value| value.current_observation_mut().form_identity = "signup".to_owned(),
+            |value| value.current_observation_mut().machine_identity = "provider".to_owned(),
             |value| {
-                value.observation.authentication_username = AuthenticationUsernameEvidence::Strong;
+                value.current_observation_mut().authentication_username =
+                    AuthenticationUsernameEvidence::Strong;
             },
-            |value| value.observation.semantics = PageControlSemantics::SemanticSubmit,
-            |value| value.observation.submission_method = PageControlSubmissionMethod::Get,
             |value| {
-                value.observation.submission_destination_source =
+                value.current_observation_mut().semantics = PageControlSemantics::SemanticSubmit;
+            },
+            |value| {
+                value.current_observation_mut().submission_method =
+                    PageControlSubmissionMethod::Get;
+            },
+            |value| {
+                value
+                    .current_observation_mut()
+                    .submission_destination_source =
                     PageControlSubmissionDestinationSource::Authored;
             },
-            |value| value.observation.ownership = PageControlOwnership::Unowned,
-            |value| value.observation.actionability = PageControlActionability::Inert,
-            |value| value.observation.password_field_count = 2.into(),
-            |value| value.generic_password_field_count = 1.into(),
-            |value| value.observation.new_password_field_count = 1.into(),
-            |value| value.observation.one_time_code_field_count = 1.into(),
-            |value| value.observation.semantic_submit_control_count = 1.into(),
+            |value| value.current_observation_mut().ownership = PageControlOwnership::Unowned,
             |value| {
-                value.observation.source_origin =
+                value.current_observation_mut().actionability = PageControlActionability::Inert;
+            },
+            |value| value.current_observation_mut().password_field_count = 2.into(),
+            |value| value.set_generic_password_field_count(1.into()),
+            |value| value.current_observation_mut().new_password_field_count = 1.into(),
+            |value| value.current_observation_mut().one_time_code_field_count = 1.into(),
+            |value| {
+                value
+                    .current_observation_mut()
+                    .semantic_submit_control_count = 1.into()
+            },
+            |value| {
+                value.current_observation_mut().source_origin =
                     "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
             },
         ];
@@ -314,10 +418,34 @@ mod tests {
             AuthenticationDisclosureControlDecision::UnsupportedVersion
         );
         let encoded = serde_json::to_string(&observation)?;
+        let decoded =
+            serde_json::from_str::<VersionedAuthenticationDisclosureControlObservation>(&encoded)?;
         assert_eq!(
-            serde_json::from_str::<VersionedAuthenticationDisclosureControlObservation>(&encoded)?,
-            observation
+            decoded.classify(),
+            AuthenticationDisclosureControlDecision::UnsupportedVersion
         );
+        assert_eq!(u32::from(decoded.schema_version), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn future_version_body_is_not_decoded_as_version_one() -> anyhow::Result<()> {
+        for encoded in [
+            serde_json::json!({ "schemaVersion": 2 }),
+            serde_json::json!({
+                "schemaVersion": 2,
+                "futureObservation": { "renamedControl": true }
+            }),
+        ] {
+            let decoded = serde_json::from_value::<
+                VersionedAuthenticationDisclosureControlObservation,
+            >(encoded)?;
+            assert_eq!(
+                decoded.classify(),
+                AuthenticationDisclosureControlDecision::UnsupportedVersion
+            );
+            assert_eq!(u32::from(decoded.schema_version), 2);
+        }
         Ok(())
     }
 

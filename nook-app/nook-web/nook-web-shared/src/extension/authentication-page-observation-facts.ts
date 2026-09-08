@@ -13,7 +13,7 @@ type AuthenticationPageObservationSummary = Pick<
   | "newPasswordFieldCount"
   | "genericPasswordFieldCount"
   | "oneTimeCodeFieldCount"
-> & { manualCheckpointPresent: boolean };
+>;
 
 export type AuthenticationPageObservationFactsAssemblyRequest = {
   summary: AuthenticationPageObservationSummary;
@@ -24,57 +24,59 @@ export type AuthenticationPageObservationFactsAssemblyRequest = {
   sourceOrigin: string;
   formIdentity: string;
   destinationIdentity: string;
+  manualCheckpoint: CeremonyFacts["manualCheckpoint"];
   implicitSubmissionMethod: CeremonyFacts["implicitSubmissionMethod"];
-  implicitSubmissionAvailable: boolean;
-  authenticatorSetupHint: boolean;
+  advanceControl: CeremonyFacts["advanceControl"];
+  authenticatorSetup: AuthenticatorFacts["authenticatorSetup"];
   backupCodesCopy: AuthenticatorFacts["backupCodesCopy"];
-  passkeyControlPresent: boolean;
+  passkeyControl: AuthenticatorFacts["passkeyControl"];
   detailedPasskeyControl: AuthenticatorFacts["detailedPasskeyControl"];
   credentialSubmission: AuthenticationPageObservationFacts["credentialSubmission"];
   detailedAdvanceControl: AuthenticationPageObservationFacts["detailedAdvanceControl"];
 };
 
-export function assembleAuthenticationPageObservationFacts(
-  request: AuthenticationPageObservationFactsAssemblyRequest,
-): AuthenticationPageObservationFacts {
-  return {
-    fields: {
-      usernameFieldCount: request.summary.usernameFieldCount,
-      currentPasswordFieldCount: request.summary.currentPasswordFieldCount,
-      newPasswordFieldCount: request.summary.newPasswordFieldCount,
-      genericPasswordFieldCount: request.summary.genericPasswordFieldCount,
-      oneTimeCodeFieldCount: request.summary.oneTimeCodeFieldCount,
-      actionablePasswordFieldCount: request.actionablePasswordFieldCount,
-      readonlyPasswordFieldCount: request.readonlyPasswordFieldCount,
-    },
-    ceremony: {
-      oneTimeCodeProgression: "advance-control-required",
-      oneTimeCodeHandlerSignal: "",
-      oneTimeCodeHandlerSignals: request.oneTimeCodeHandlerSignals,
-      authenticationContext: {
-        authenticationUsername: request.authenticationUsername,
-        sourceOrigin: request.sourceOrigin,
-        formIdentity: request.formIdentity,
-        destinationIdentity: request.destinationIdentity,
+export class AuthenticationPageObservationFactsAssembler {
+  public constructor(
+    private readonly request: AuthenticationPageObservationFactsAssemblyRequest,
+  ) {}
+
+  public assemble(): AuthenticationPageObservationFacts {
+    const { request } = this;
+    return {
+      fields: {
+        usernameFieldCount: request.summary.usernameFieldCount,
+        currentPasswordFieldCount: request.summary.currentPasswordFieldCount,
+        newPasswordFieldCount: request.summary.newPasswordFieldCount,
+        genericPasswordFieldCount: request.summary.genericPasswordFieldCount,
+        oneTimeCodeFieldCount: request.summary.oneTimeCodeFieldCount,
+        actionablePasswordFieldCount: request.actionablePasswordFieldCount,
+        readonlyPasswordFieldCount: request.readonlyPasswordFieldCount,
       },
-      manualCheckpoint: request.summary.manualCheckpointPresent
-        ? "present"
-        : "absent",
-      implicitSubmissionMethod: request.implicitSubmissionMethod,
-      advanceControl: request.implicitSubmissionAvailable
-        ? "implicit-submission"
-        : "absent",
-    },
-    authenticator: {
-      authenticatorSetup: request.authenticatorSetupHint ? "present" : "absent",
-      backupCodesCopy: request.backupCodesCopy,
-      passkeyControl: request.passkeyControlPresent ? "present" : "absent",
-      passkeyAccountAvailability: "unavailable",
-      matchingPasskeyAccountCount: 0,
-      detailedPasskeyControl: request.detailedPasskeyControl,
-    },
-    credentialDisclosureControl: { kind: "absent" },
-    credentialSubmission: request.credentialSubmission,
-    detailedAdvanceControl: request.detailedAdvanceControl,
-  };
+      ceremony: {
+        oneTimeCodeProgression: "advance-control-required",
+        oneTimeCodeHandlerSignal: "",
+        oneTimeCodeHandlerSignals: request.oneTimeCodeHandlerSignals,
+        authenticationContext: {
+          authenticationUsername: request.authenticationUsername,
+          sourceOrigin: request.sourceOrigin,
+          formIdentity: request.formIdentity,
+          destinationIdentity: request.destinationIdentity,
+        },
+        manualCheckpoint: request.manualCheckpoint,
+        implicitSubmissionMethod: request.implicitSubmissionMethod,
+        advanceControl: request.advanceControl,
+      },
+      authenticator: {
+        authenticatorSetup: request.authenticatorSetup,
+        backupCodesCopy: request.backupCodesCopy,
+        passkeyControl: request.passkeyControl,
+        passkeyAccountAvailability: "unavailable",
+        matchingPasskeyAccountCount: 0,
+        detailedPasskeyControl: request.detailedPasskeyControl,
+      },
+      credentialDisclosureControl: { kind: "absent" },
+      credentialSubmission: request.credentialSubmission,
+      detailedAdvanceControl: request.detailedAdvanceControl,
+    };
+  }
 }

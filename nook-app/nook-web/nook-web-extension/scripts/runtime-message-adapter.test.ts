@@ -382,6 +382,7 @@ describe('runtime message adapters', () => {
         matchingPasskeyAccountCount: 2,
         detailedPasskeyControl: { kind: 'absent' },
       },
+      credentialDisclosureControl: { kind: 'absent' },
       detailedAdvanceControl: { kind: 'absent' },
     }
     const response = {
@@ -418,6 +419,21 @@ describe('runtime message adapters', () => {
         count: 2,
       })
     }
+
+    const {
+      credentialDisclosureControl: omittedDisclosure,
+      ...withoutDisclosure
+    } = selectedFacts
+    expect(omittedDisclosure).toEqual({ kind: 'absent' })
+    installRuntimeMock({
+      kind: RuntimeMockKind.Response,
+      response: { ...response, selectedFacts: withoutDisclosure },
+    })
+    const malformedDelivery =
+      await sendAuthenticationWorkflowSnapshotRuntimeMessage(
+        workflowSnapshotMessage,
+      )
+    expect(malformedDelivery.kind).toBe(RuntimeMessageDeliveryKind.Unavailable)
   })
 
   test('rejects the legacy ambiguous workflow approval boolean', async () => {

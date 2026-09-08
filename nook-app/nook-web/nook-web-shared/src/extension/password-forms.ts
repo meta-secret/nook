@@ -1,6 +1,6 @@
 import { companionWasmReady } from "./companion-ready";
 import {
-  assembleAuthenticationPageObservationFacts,
+  AuthenticationPageObservationFactsAssembler,
   type AuthenticationPageObservationFactsAssemblyRequest,
 } from "./authentication-page-observation-facts";
 import {
@@ -599,21 +599,28 @@ export function authenticationPageObservationFacts({
     sourceOrigin: location.origin,
     formIdentity: contextFormIdentity,
     destinationIdentity: contextDestinationIdentity,
+    manualCheckpoint: observation.summary.manualCheckpointPresent
+      ? "present"
+      : "absent",
     implicitSubmissionMethod:
       observation.formScope.kind === PasswordFormScopeKind.Owned &&
       !ownedObservationIsLocallyBounded(observation)
         ? formSubmissionMethod(observation.formScope.owner)
         : PageControlSubmissionMethod.Absent,
-    implicitSubmissionAvailable,
-    authenticatorSetupHint,
+    advanceControl: implicitSubmissionAvailable
+      ? "implicit-submission"
+      : "absent",
+    authenticatorSetup: authenticatorSetupHint ? "present" : "absent",
     backupCodesCopy: ((...[v = backupCodesHint ? "Save backup codes" : ""]) =>
       v)(backupCodesCopy),
-    passkeyControlPresent: passkeyControls.length > 0,
+    passkeyControl: passkeyControls.length > 0 ? "present" : "absent",
     detailedPasskeyControl,
     credentialSubmission,
     detailedAdvanceControl,
   };
-  return assembleAuthenticationPageObservationFacts(assemblyRequest);
+  return new AuthenticationPageObservationFactsAssembler(
+    assemblyRequest,
+  ).assemble();
 }
 export function summarizeAuthenticationWorkflowForms(): PasswordFormObservation[] {
   const root = document;
