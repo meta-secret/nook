@@ -27,13 +27,8 @@ impl NookVaultManager {
 
     fn plan_matching_login_save(
         &self,
-        request: LoginSavePlanRequest<'_>,
+        request: &LoginSavePlanRequest<'_>,
     ) -> Result<NookWebsiteLoginSavePlan, NookError> {
-        let LoginSavePlanRequest {
-            origin,
-            username,
-            password,
-        } = request;
         let crypto = self.vault.crypto.get()?;
         let mut owned_logins = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
@@ -45,7 +40,7 @@ impl NookVaultManager {
             if let SecretValue::Login(login) = &record.data
                 && (nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
-                    origin,
+                    origin: request.origin,
                 })
                 .matches()
             {
@@ -61,9 +56,9 @@ impl NookVaultManager {
             })
             .collect();
         let decision = nook_core::WebsiteLoginSaveRequest {
-            origin,
-            username,
-            password,
+            origin: request.origin,
+            username: request.username,
+            password: request.password,
             candidates: &candidates,
         }
         .decide();
@@ -86,7 +81,7 @@ impl NookVaultManager {
                 "Login username and password are required.".to_owned(),
             ));
         }
-        let plan = self.plan_matching_login_save(LoginSavePlanRequest {
+        let plan = self.plan_matching_login_save(&LoginSavePlanRequest {
             origin: request.origin,
             username: &username,
             password: &password,
@@ -225,7 +220,7 @@ mod browser_tests {
         empty.vault.crypto = VaultCryptoState::Unlocked(VaultCrypto::new(&keys.secrets_key)?);
         assert_eq!(
             empty
-                .plan_matching_login_save(LoginSavePlanRequest {
+                .plan_matching_login_save(&LoginSavePlanRequest {
                     origin: "https://example.com",
                     username: "alice",
                     password: "new",
@@ -235,7 +230,7 @@ mod browser_tests {
         );
         assert_eq!(
             empty
-                .plan_matching_login_save(LoginSavePlanRequest {
+                .plan_matching_login_save(&LoginSavePlanRequest {
                     origin: "",
                     username: "alice",
                     password: "new",
@@ -245,7 +240,7 @@ mod browser_tests {
         );
         assert_eq!(
             empty
-                .plan_matching_login_save(LoginSavePlanRequest {
+                .plan_matching_login_save(&LoginSavePlanRequest {
                     origin: "https://example.com",
                     username: "",
                     password: "new",
@@ -255,7 +250,7 @@ mod browser_tests {
         );
 
         let mut existing = manager_with_login("alice", "old")?;
-        let update = existing.plan_matching_login_save(LoginSavePlanRequest {
+        let update = existing.plan_matching_login_save(&LoginSavePlanRequest {
             origin: "https://example.com",
             username: "alice",
             password: "new",
@@ -265,7 +260,7 @@ mod browser_tests {
             update.secret_id().ok().as_deref(),
             Some("secret_existing_login")
         );
-        let already = existing.plan_matching_login_save(LoginSavePlanRequest {
+        let already = existing.plan_matching_login_save(&LoginSavePlanRequest {
             origin: "https://example.com",
             username: "alice",
             password: "old",
@@ -280,7 +275,7 @@ mod browser_tests {
         );
         assert_eq!(
             existing
-                .plan_matching_login_save(LoginSavePlanRequest {
+                .plan_matching_login_save(&LoginSavePlanRequest {
                     origin: "https://other.example",
                     username: "alice",
                     password: "new",
@@ -347,7 +342,7 @@ impl NookVaultManager {
     ) -> Result<NookWebsiteLoginSavePlan, JsError> {
         self.ensure_login_save_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        self.plan_matching_login_save(LoginSavePlanRequest {
+        self.plan_matching_login_save(&LoginSavePlanRequest {
             origin,
             username,
             password,

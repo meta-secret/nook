@@ -36,7 +36,7 @@ impl NookVaultManager {
                 })
                 .matches()
             {
-                accounts.push(NookLoginAccount::from_projection(LoginAccountProjection {
+                accounts.push(NookLoginAccount::from_projection(&LoginAccountProjection {
                     secret_id: id,
                     login,
                 }));
@@ -48,10 +48,9 @@ impl NookVaultManager {
 
     fn reveal_matching_login_for_fill(
         &self,
-        request: RevealLoginRequest<'_>,
+        request: &RevealLoginRequest<'_>,
     ) -> Result<NookLoginFillCredential, NookError> {
-        let RevealLoginRequest { secret_id, origin } = request;
-        let id = SecretId::parse(secret_id)?;
+        let id = SecretId::parse(request.secret_id)?;
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
@@ -59,7 +58,7 @@ impl NookVaultManager {
             SecretValue::Login(login)
                 if nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
-                    origin,
+                    origin: request.origin,
                 }
                 .matches() =>
             {
@@ -155,7 +154,7 @@ mod browser_tests {
         assert_eq!(accounts[0].username(), "alice");
         assert_eq!(accounts[0].website_host(), "example.com");
 
-        let credential = manager.reveal_matching_login_for_fill(RevealLoginRequest {
+        let credential = manager.reveal_matching_login_for_fill(&RevealLoginRequest {
             secret_id: "secret_SMypl8K0w9a",
             origin: "https://example.com/account",
         })?;
@@ -163,7 +162,7 @@ mod browser_tests {
         assert_eq!(credential.password(), "correct");
         assert!(
             manager
-                .reveal_matching_login_for_fill(RevealLoginRequest {
+                .reveal_matching_login_for_fill(&RevealLoginRequest {
                     secret_id: "secret_SMypl8K0w9a",
                     origin: "https://other.example",
                 })
@@ -171,7 +170,7 @@ mod browser_tests {
         );
         assert!(
             manager
-                .reveal_matching_login_for_fill(RevealLoginRequest {
+                .reveal_matching_login_for_fill(&RevealLoginRequest {
                     secret_id: "secret_SMypl8K0w9c",
                     origin: "https://example.com",
                 })
@@ -179,7 +178,7 @@ mod browser_tests {
         );
         assert!(
             manager
-                .reveal_matching_login_for_fill(RevealLoginRequest {
+                .reveal_matching_login_for_fill(&RevealLoginRequest {
                     secret_id: "not-a-secret-id",
                     origin: "https://example.com",
                 })
@@ -220,7 +219,7 @@ impl NookVaultManager {
     ) -> Result<NookLoginFillCredential, JsError> {
         self.ensure_login_fill_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        self.reveal_matching_login_for_fill(RevealLoginRequest { secret_id, origin })
+        self.reveal_matching_login_for_fill(&RevealLoginRequest { secret_id, origin })
             .map_err(Into::into)
     }
 }

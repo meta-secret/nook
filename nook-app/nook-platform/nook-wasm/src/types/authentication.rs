@@ -279,13 +279,12 @@ impl NookAuthenticationWorkflowSnapshot {
 
 #[wasm_bindgen]
 impl NookLoginAccount {
-    pub(crate) fn from_projection(projection: LoginAccountProjection<'_>) -> Self {
-        let LoginAccountProjection { secret_id, login } = projection;
+    pub(crate) fn from_projection(projection: &LoginAccountProjection<'_>) -> Self {
         Self {
-            secret_id: secret_id.to_string(),
-            username: login.username.clone(),
-            website_url: login.website_url.clone(),
-            website_host: WebsiteHost::normalize(&login.website_url),
+            secret_id: projection.secret_id.to_string(),
+            username: projection.login.username.clone(),
+            website_url: projection.login.website_url.clone(),
+            website_host: WebsiteHost::normalize(&projection.login.website_url),
         }
     }
 
@@ -501,7 +500,7 @@ mod browser_tests {
             password: "secret".into(),
             notes: String::new(),
         };
-        let account = NookLoginAccount::from_projection(LoginAccountProjection {
+        let account = NookLoginAccount::from_projection(&LoginAccountProjection {
             secret_id: &id,
             login: &login,
         });
