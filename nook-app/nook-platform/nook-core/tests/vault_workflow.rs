@@ -8,8 +8,8 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use nook_core::{
     ApiKeySecret, Database, PasskeyRegistrationRequest, PasskeyRelyingParty, PasskeyUser,
     PasswordGenerationOptions, PlaintextSecretSession, ReplaceSecretInput, SecretId,
-    SecretPayloadYaml, SecretRecordSearch, SecretType, SecretValue, StorageMode,
-    StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultFormatDocument,
+    SecretPayloadValidationRequest, SecretPayloadYaml, SecretRecordSearch, SecretType, SecretValue,
+    StorageMode, StoredRecordPayload, SymmetricKey, VaultCrypto, VaultFormat, VaultFormatDocument,
     VaultMetaState, VaultRecordSet,
 };
 use std::collections::HashMap;

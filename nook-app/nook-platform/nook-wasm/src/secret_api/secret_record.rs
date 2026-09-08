@@ -395,7 +395,7 @@ mod browser_tests {
             SecretValue::SeedPhrase(
                 SeedPhraseSecret::try_new(nook_core::SeedPhraseSecretRequest {
                     name: "Recovery".into(),
-                    seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+                    seed: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
                         .into(),
                 })
                 .expect("valid seed phrase"),
