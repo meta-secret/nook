@@ -59,7 +59,7 @@ pub(super) struct ActivationGate {
     pub(super) event_payload_keys: Vec<String>,
     pub(super) provider_payload_key: String,
     event_digests: Vec<Sha256Hex>,
-    provider_digest: Sha256Hex,
+    pub(super) provider_digest: Sha256Hex,
     approval: CompanionPairingApproval,
 }
 
@@ -181,6 +181,9 @@ impl EncodedCandidate {
             })
             .collect::<SchemaResult<Vec<_>>>()?;
         let providers: AuthProvidersSnapshotData = CandidateSchema::decode(&self.providers)?;
+        if CandidateSchema::encode(&providers)? != self.providers {
+            return Err(CandidateSchema::integrity());
+        }
         let candidate = PairingActivationCandidate {
             request_id: self.gate.request_id.clone(),
             vault_store_id: self.gate.vault_store_id.clone(),

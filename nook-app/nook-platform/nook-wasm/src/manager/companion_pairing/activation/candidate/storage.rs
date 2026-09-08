@@ -31,9 +31,50 @@ struct StoredStringWrite<'a> {
     value: &'a str,
 }
 
-struct TransactionFailure<'a> {
-    transaction: &'a rexie::Transaction,
-    failure: CompanionPairingCandidateFailure,
+struct StoredStringValue<'a> {
+    key: &'a str,
+    value: &'a str,
+}
+
+struct WritableActivationTransaction {
+    transaction: rexie::Transaction,
+    store: rexie::Store,
+}
+
+impl WritableActivationTransaction {
+    async fn write(
+        self,
+        value: StoredStringValue<'_>,
+    ) -> Result<Self, CompanionPairingCandidateFailure> {
+        match PairingActivationStore::put_string(StoredStringWrite {
+            store: &self.store,
+            key: value.key,
+            value: value.value,
+        })
+        .await
+        {
+            Ok(()) => Ok(self),
+            Err(failure) => Err(self.abort(failure).await),
+        }
+    }
+
+    async fn abort(
+        self,
+        failure: CompanionPairingCandidateFailure,
+    ) -> CompanionPairingCandidateFailure {
+        self.transaction
+            .abort()
+            .await
+            .map_or(CompanionPairingCandidateFailure::Storage, |()| failure)
+    }
+
+    async fn done(self) -> Result<(), CompanionPairingCandidateFailure> {
+        self.transaction
+            .done()
+            .await
+            .map(|_| ())
+            .map_err(|_| CompanionPairingCandidateFailure::Storage)
+    }
 }
 
 impl PairingActivationStore {
@@ -67,36 +108,6 @@ impl PairingActivationStore {
             .map_err(|_| CompanionPairingCandidateFailure::Storage)
     }
 
-    async fn abort(
-        request: TransactionFailure<'_>,
-    ) -> Result<CompanionPairingCandidateFailure, CompanionPairingCandidateFailure> {
-        request
-            .transaction
-            .abort()
-            .await
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
-        Ok(request.failure)
-    }
-
-    async fn write_or_abort(
-        request: TransactionWrite<'_>,
-    ) -> Result<(), CompanionPairingCandidateFailure> {
-        if let Err(failure) = Self::put_string(StoredStringWrite {
-            store: request.store,
-            key: request.key,
-            value: request.value,
-        })
-        .await
-        {
-            return Err(Self::abort(TransactionFailure {
-                transaction: request.transaction,
-                failure,
-            })
-            .await?);
-        }
-        Ok(())
-    }
-
     pub(super) async fn commit<Clock: ActivationClock>(
         request: PairingActivationCommit<'_, Clock>,
     ) -> Result<StoredPairingActivationCandidate, CompanionPairingCandidateFailure> {
@@ -126,22 +137,19 @@ impl PairingActivationStore {
             .approval
             .revalidate_at(clock.observe()?.epoch)
             .map_err(|_| CompanionPairingCandidateFailure::Expiry)?;
+        let mut writable = WritableActivationTransaction {
+            transaction,
+            store: vault,
+        };
         for (key, value) in &encoded.events {
-            Self::write_or_abort(TransactionWrite {
-                transaction: &transaction,
-                store: &vault,
-                key,
-                value,
+            writable = writable.write(StoredStringValue { key, value }).await?;
+        }
+        writable = writable
+            .write(StoredStringValue {
+                key: &encoded.gate.provider_payload_key,
+                value: &encoded.providers,
             })
             .await?;
-        }
-        Self::write_or_abort(TransactionWrite {
-            transaction: &transaction,
-            store: &vault,
-            key: &encoded.gate.provider_payload_key,
-            value: &encoded.providers,
-        })
-        .await?;
         let freshness = clock.observe().and_then(|observed| {
             candidate
                 .approval
@@ -149,23 +157,15 @@ impl PairingActivationStore {
                 .map_err(|_| CompanionPairingCandidateFailure::Expiry)
         });
         if let Err(failure) = freshness {
-            return Err(Self::abort(TransactionFailure {
-                transaction: &transaction,
-                failure,
-            })
-            .await?);
+            return Err(writable.abort(failure).await);
         }
-        Self::write_or_abort(TransactionWrite {
-            transaction: &transaction,
-            store: &vault,
-            key: &encoded.gate_key,
-            value: &gate_json,
-        })
-        .await?;
-        transaction
-            .done()
-            .await
-            .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
+        writable = writable
+            .write(StoredStringValue {
+                key: &encoded.gate_key,
+                value: &gate_json,
+            })
+            .await?;
+        writable.done().await?;
         Ok(StoredPairingActivationCandidate {
             _candidate: candidate,
         })
@@ -220,18 +220,12 @@ impl PairingActivationStore {
     }
 }
 
-struct TransactionWrite<'a> {
-    transaction: &'a rexie::Transaction,
-    store: &'a rexie::Store,
-    key: &'a str,
-    value: &'a str,
-}
-
 #[cfg(test)]
 mod tests {
     use super::super::tests::{CandidateFixture, DeterministicClock};
     use super::*;
     use crate::manager::companion_pairing::activation::tests::ActivationFixture;
+    use nook_core::Sha256Hex;
     use std::collections::BTreeMap;
 
     #[derive(Default)]
@@ -304,7 +298,12 @@ mod tests {
         ) -> Result<(), CompanionPairingCandidateFailure> {
             let mut transaction = self.vault.clone();
             let gate_json = CandidateSchema::encode(&request.encoded.gate)?;
-            let mut writes: Vec<(&String, &String)> = request.encoded.events.iter().collect();
+            let mut writes: Vec<(&String, &String)> = request
+                .encoded
+                .events
+                .iter()
+                .map(|(key, value)| (key, value))
+                .collect();
             writes.extend([
                 (
                     &request.encoded.gate.provider_payload_key,
@@ -446,6 +445,42 @@ mod tests {
             CandidateSchema::decode::<schema::ActivationEventRow>(&serde_json::to_string(&row)?)
                 .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn provider_payload_rejects_unknown_fields_after_digest_substitution() -> anyhow::Result<()> {
+        enum UnknownField {
+            Snapshot,
+            ActiveVaultScope,
+        }
+
+        for unknown_field in [UnknownField::Snapshot, UnknownField::ActiveVaultScope] {
+            let candidate = CandidateFixture::candidate()?;
+            let mut encoded = EncodedCandidate::new(&candidate)?;
+            let mut providers: serde_json::Value = serde_json::from_str(&encoded.providers)?;
+            let provider_object = providers
+                .as_object_mut()
+                .ok_or_else(|| anyhow::anyhow!("provider snapshot must be an object"))?;
+            match unknown_field {
+                UnknownField::Snapshot => {
+                    provider_object.insert("unknown".to_owned(), true.into());
+                }
+                UnknownField::ActiveVaultScope => {
+                    provider_object
+                        .get_mut("activeVaultStoreId")
+                        .and_then(serde_json::Value::as_object_mut)
+                        .ok_or_else(|| anyhow::anyhow!("active vault scope must be an object"))?
+                        .insert("unknown".to_owned(), true.into());
+                }
+            }
+            encoded.providers = serde_json::to_string(&providers)?;
+            encoded.gate.provider_digest = Sha256Hex::from_bytes(encoded.providers.as_bytes());
+            assert!(matches!(
+                encoded.decode(),
+                Err(CompanionPairingCandidateFailure::Integrity)
+            ));
+        }
         Ok(())
     }
 
