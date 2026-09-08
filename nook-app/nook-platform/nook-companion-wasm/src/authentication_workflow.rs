@@ -98,6 +98,7 @@ pub enum CompanionAuthenticationWorkflowMatchKind {
     NoMatch,
     Rejected,
     Matched,
+    UnsupportedVersion,
 }
 
 #[wasm_bindgen]
@@ -113,6 +114,9 @@ pub fn companion_authentication_workflow_match_kind(
         nook_companion_core::AuthenticationWorkflowMatch::Rejected => {
             CompanionAuthenticationWorkflowMatchKind::Rejected
         }
+        nook_companion_core::AuthenticationWorkflowMatch::UnsupportedVersion => {
+            CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion
+        }
         nook_companion_core::AuthenticationWorkflowMatch::Matched(_) => {
             CompanionAuthenticationWorkflowMatchKind::Matched
         }
@@ -123,30 +127,46 @@ pub fn companion_authentication_workflow_match_kind(
 mod tests {
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[wasm_bindgen_test]
-    fn match_kind_preserves_every_closed_workflow_variant() {
-        for (workflow_match, expected) in [
-            (
-                nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
-                super::CompanionAuthenticationWorkflowMatchKind::NoMatch,
-            ),
-            (
-                nook_companion_core::AuthenticationWorkflowMatch::Rejected,
-                super::CompanionAuthenticationWorkflowMatchKind::Rejected,
-            ),
-            (
-                super::authentication_enrollment_workflow_match(
-                    true,
-                    "Save these recovery codes",
-                    false,
+    struct AuthenticationWorkflowMatchKindScenario;
+
+    impl AuthenticationWorkflowMatchKindScenario {
+        fn assert_every_core_variant_has_a_stable_abi_kind() {
+            for (workflow_match, expected) in [
+                (
+                    nook_companion_core::AuthenticationWorkflowMatch::NoMatch,
+                    super::CompanionAuthenticationWorkflowMatchKind::NoMatch,
                 ),
-                super::CompanionAuthenticationWorkflowMatchKind::Matched,
-            ),
-        ] {
+                (
+                    nook_companion_core::AuthenticationWorkflowMatch::Rejected,
+                    super::CompanionAuthenticationWorkflowMatchKind::Rejected,
+                ),
+                (
+                    nook_companion_core::AuthenticationWorkflowMatch::UnsupportedVersion,
+                    super::CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion,
+                ),
+                (
+                    super::authentication_enrollment_workflow_match(
+                        true,
+                        "Save these recovery codes",
+                        false,
+                    ),
+                    super::CompanionAuthenticationWorkflowMatchKind::Matched,
+                ),
+            ] {
+                assert_eq!(
+                    super::companion_authentication_workflow_match_kind(workflow_match),
+                    expected
+                );
+            }
             assert_eq!(
-                super::companion_authentication_workflow_match_kind(workflow_match),
-                expected
+                super::CompanionAuthenticationWorkflowMatchKind::UnsupportedVersion as u32,
+                3
             );
         }
+    }
+
+    #[wasm_bindgen_test]
+    fn match_kind_preserves_every_closed_workflow_variant() {
+        AuthenticationWorkflowMatchKindScenario::assert_every_core_variant_has_a_stable_abi_kind();
     }
 }
