@@ -14,7 +14,7 @@ pub(crate) use options::{
     creation_options, normalized_passkey_label, recovery_options, request_options,
 };
 
-use wasm_bindgen::{JsCast, JsError};
+use wasm_bindgen::{JsCast, JsError, JsValue};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{CredentialCreationOptions, CredentialRequestOptions, PublicKeyCredential};
 
@@ -357,12 +357,19 @@ mod browser_tests {
 
     wasm_bindgen_test_configure!(run_in_browser);
 
+    fn js_error_message(error: JsError) -> String {
+        JsValue::from(error)
+            .dyn_into::<js_sys::Error>()
+            .expect("JsError must remain a JavaScript Error")
+            .message()
+    }
+
     #[wasm_bindgen_test]
     fn browser_helpers_cover_binary_and_reflected_option_shapes() -> Result<(), JsError> {
         let empty = ArrayBuffer::new(0);
         let empty_error = bytes_from_buffer(&empty, "passkey rawId")
             .expect_err("empty browser buffers must be rejected");
-        assert_eq!(empty_error.message(), "Empty passkey rawId");
+        assert_eq!(js_error_message(empty_error), "Empty passkey rawId");
 
         let buffer = ArrayBuffer::new(3);
         let bytes = Uint8Array::new(&buffer);
@@ -433,7 +440,7 @@ mod browser_tests {
         .map_err(|_| JsError::new("failed to set error message"))?;
         let converted = credential_ceremony_error("get", &error);
         assert_eq!(
-            converted.message(),
+            js_error_message(converted),
             "Passkey get ceremony failed (AbortError: cancelled)."
         );
 
@@ -447,7 +454,7 @@ mod browser_tests {
         )
         .map_err(|_| JsError::new("failed to set not-allowed error name"))?;
         assert_eq!(
-            credential_ceremony_error("create", &error).message(),
+            js_error_message(credential_ceremony_error("create", &error)),
             format!("{PASSKEY_CEREMONY_NOT_ALLOWED}: Passkey create request did not finish.")
         );
         Ok(())
@@ -508,10 +515,14 @@ mod browser_tests {
 
     #[wasm_bindgen_test]
     async fn promise_credential_conversion_reports_rejection_and_cancellation() {
-        let cancelled = credential_from_promise("get", Promise::resolve(&Object::new()))
+        let plain_object: JsValue = Object::new().into();
+        let cancelled = credential_from_promise("get", Promise::resolve(&plain_object))
             .await
             .expect_err("plain objects are not credentials");
-        assert_eq!(cancelled.message(), "Passkey get ceremony was cancelled.");
+        assert_eq!(
+            js_error_message(cancelled),
+            "Passkey get ceremony was cancelled."
+        );
 
         let rejection = Object::new();
         Reflect::set(
@@ -524,7 +535,7 @@ mod browser_tests {
             .await
             .expect_err("rejected browser promises must remain errors");
         assert_eq!(
-            rejected.message(),
+            js_error_message(rejected),
             format!("{PASSKEY_CEREMONY_NOT_ALLOWED}: Passkey create request did not finish.")
         );
     }
