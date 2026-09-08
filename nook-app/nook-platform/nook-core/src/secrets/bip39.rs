@@ -8,7 +8,6 @@
 
 use crate::errors::{ValidationError, ValidationResult};
 use bip39::{Language, Mnemonic};
-use std::sync::Arc;
 use zeroize::{Zeroize, Zeroizing};
 
 /// A supported BIP-39 mnemonic word count inferred from normalized input.
@@ -79,7 +78,7 @@ impl<'a> Bip39MnemonicInput<'a> {
 
         Mnemonic::parse_in_normalized(Language::English, normalized)
             .map(|_| Bip39Mnemonic {
-                text: Arc::new(Zeroizing::new(normalized.to_owned().into_boxed_str())),
+                text: Zeroizing::new(normalized.to_owned().into_boxed_str()),
             })
             .map_err(|_| ValidationError::Bip39Invalid)
     }
@@ -108,25 +107,20 @@ impl<'a> Bip39MnemonicInput<'a> {
 }
 
 /// A validated English BIP-39 mnemonic.
-#[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct Bip39Mnemonic {
-    text: Arc<Zeroizing<Box<str>>>,
+    text: Zeroizing<Box<str>>,
 }
 
 impl Bip39Mnemonic {
     #[must_use]
     pub fn as_str(&self) -> &str {
-        self.text.as_ref().as_ref()
-    }
-
-    #[must_use]
-    pub fn parse_words(&self) -> Vec<String> {
-        Bip39MnemonicInput::parse_words_from(&self.text)
+        self.text.as_ref()
     }
 
     #[must_use]
     pub fn infer_length(&self) -> Option<Bip39MnemonicWordCount> {
-        match self.parse_words().len() {
+        match self.text.split_whitespace().count() {
             12 => Some(Bip39MnemonicWordCount::WORDS_12),
             24 => Some(Bip39MnemonicWordCount::WORDS_24),
             _ => None,
@@ -136,7 +130,7 @@ impl Bip39Mnemonic {
 
 impl Zeroize for Bip39Mnemonic {
     fn zeroize(&mut self) {
-        self.text = Arc::new(Zeroizing::new(String::new().into_boxed_str()));
+        self.text.zeroize();
     }
 }
 
@@ -274,16 +268,6 @@ mod tests {
         let mnemonic_24 = Mnemonic::from_entropy(&[0u8; 32])?;
         let mnemonic_24 = mnemonic_24.to_string();
         assert!(Bip39MnemonicInput::new(&mnemonic_24).validate().is_ok());
-        Ok(())
-    }
-
-    #[test]
-    fn cloned_validated_mnemonics_share_one_zeroizing_buffer() -> anyhow::Result<()> {
-        let mnemonic = Bip39MnemonicInput::new(VALID_12).validate()?;
-        let clone = mnemonic.clone();
-
-        assert!(Arc::ptr_eq(&mnemonic.text, &clone.text));
-        assert_eq!(clone.as_str(), VALID_12);
         Ok(())
     }
 

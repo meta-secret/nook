@@ -12,6 +12,13 @@ use canonical::{FingerprintKind, FingerprintRequest};
 use metadata::{ImportMetadataPolicy, ProviderNotes};
 use nook_auth2::ValidationResult;
 pub use nook_event_log::SecretFingerprint;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SecretEnrichment {
+    Changed,
+    Unchanged,
+}
+
 impl SecretValue {
     /// Compute the logical item identity without its password or provider metadata.
     pub fn identity_fingerprint(
@@ -55,38 +62,42 @@ impl SecretValue {
     /// Enrich an existing matching version with another provider's fields.
     /// The caller retains responsibility for deciding that the versions match.
     #[must_use]
-    pub fn enriched_with(&self, incoming: &Self) -> Self {
+    pub fn enrich_with(&mut self, incoming: &Self) -> SecretEnrichment {
         match (self, incoming) {
             (SecretValue::Login(existing), SecretValue::Login(incoming)) => {
-                SecretValue::Login(LoginSecret {
-                    website_url: existing.website_url.clone(),
-                    username: existing.username.clone(),
-                    password: existing.password.clone(),
-                    notes: (ProviderNotes {
-                        text: &existing.notes,
-                        policy: ImportMetadataPolicy::Login,
-                    })
-                    .merge(&incoming.notes),
+                let notes = (ProviderNotes {
+                    text: &existing.notes,
+                    policy: ImportMetadataPolicy::Login,
                 })
+                .merge(&incoming.notes);
+                if notes == existing.notes {
+                    SecretEnrichment::Unchanged
+                } else {
+                    existing.notes = notes;
+                    SecretEnrichment::Changed
+                }
             }
             (SecretValue::SecureNote(existing), SecretValue::SecureNote(incoming)) => {
-                SecretValue::SecureNote(SecureNoteSecret {
-                    title: existing.title.clone(),
-                    note: (ProviderNotes {
-                        text: &existing.note,
-                        policy: ImportMetadataPolicy::General,
-                    })
-                    .merge(&incoming.note),
+                let note = (ProviderNotes {
+                    text: &existing.note,
+                    policy: ImportMetadataPolicy::General,
                 })
+                .merge(&incoming.note);
+                if note == existing.note {
+                    SecretEnrichment::Unchanged
+                } else {
+                    existing.note = note;
+                    SecretEnrichment::Changed
+                }
             }
-            _ => self.clone(),
+            _ => SecretEnrichment::Unchanged,
         }
     }
 }
 #[cfg(test)]
 #[allow(clippy::unnecessary_wraps)]
 mod tests {
-    use super::SecretFingerprint;
+    use super::{SecretEnrichment, SecretFingerprint};
     use crate::SymmetricKey;
     use crate::{
         AuthenticatorSecret, CheckedPasskeyRegistration, LoginSecret, PasskeyRegistrationRequest,
@@ -97,7 +108,7 @@ mod tests {
 
     #[test]
     fn enrichment_keeps_existing_credentials_without_claiming_a_match() {
-        let existing = SecretValue::Login(LoginSecret {
+        let mut existing = SecretValue::Login(LoginSecret {
             website_url: "existing".to_owned(),
             username: "alice".to_owned(),
             password: "original".to_owned(),
@@ -109,8 +120,9 @@ mod tests {
             password: "different".to_owned(),
             notes: "second".to_owned(),
         });
+        assert_eq!(existing.enrich_with(&incoming), SecretEnrichment::Changed);
         assert_eq!(
-            existing.enriched_with(&incoming),
+            existing,
             SecretValue::Login(LoginSecret {
                 website_url: "existing".to_owned(),
                 username: "alice".to_owned(),
@@ -118,29 +130,28 @@ mod tests {
                 notes: "first\n\nsecond".to_owned(),
             })
         );
-        assert!(matches!(existing, SecretValue::Login(login) if login.notes == "first"));
         assert!(matches!(incoming, SecretValue::Login(login) if login.notes == "second"));
     }
 
     #[test]
     fn unsupported_enrichment_pairs_return_the_existing_value_unchanged() {
-        let existing = SecretValue::SecureNote(SecureNoteSecret {
+        let mut existing = SecretValue::SecureNote(SecureNoteSecret {
             title: "original".to_owned(),
             note: "first".to_owned(),
         });
-        let incoming = SecretValue::Login(LoginSecret {
+        let mut incoming = SecretValue::Login(LoginSecret {
             website_url: String::new(),
             username: String::new(),
             password: "password".to_owned(),
             notes: "second".to_owned(),
         });
-        assert_eq!(existing.enriched_with(&incoming), existing);
-        assert_eq!(incoming.enriched_with(&existing), incoming);
+        assert_eq!(existing.enrich_with(&incoming), SecretEnrichment::Unchanged);
+        assert_eq!(incoming.enrich_with(&existing), SecretEnrichment::Unchanged);
     }
 
     #[test]
     fn secure_note_enrichment_preserves_the_existing_title() {
-        let existing = SecretValue::SecureNote(SecureNoteSecret {
+        let mut existing = SecretValue::SecureNote(SecureNoteSecret {
             title: "original".to_owned(),
             note: "first".to_owned(),
         });
@@ -148,8 +159,9 @@ mod tests {
             title: "incoming".to_owned(),
             note: "second".to_owned(),
         });
+        assert_eq!(existing.enrich_with(&incoming), SecretEnrichment::Changed);
         assert_eq!(
-            existing.enriched_with(&incoming),
+            existing,
             SecretValue::SecureNote(SecureNoteSecret {
                 title: "original".to_owned(),
                 note: "first\n\nsecond".to_owned(),
@@ -450,26 +462,29 @@ mod tests {
         .prepare(&[])
         .and_then(CheckedPasskeyRegistration::generate)?;
         let first = SecretValue::Passkey(registration.credential);
-        let mut updated = first.clone();
+        let first_identity =
+            first.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)?;
+        let first_version = first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)?;
+        let mut updated = first;
         let SecretValue::Passkey(updated_passkey) = &mut updated else {
             unreachable!();
         };
         updated_passkey.signature_count = 1.into();
 
         assert_eq!(
-            first.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
-            updated.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
+            first_identity,
+            updated.identity_fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)?
         );
         assert_ne!(
-            first.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?),
-            updated.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)
+            first_version,
+            updated.fingerprint(&(FingerprintKeyFixture { byte: 'a' }).key()?)?
         );
         Ok(())
     }
 
     #[test]
     fn matching_login_versions_merge_provider_fields() -> anyhow::Result<()> {
-        let existing = SecretValue::Login(LoginSecret {
+        let mut existing = SecretValue::Login(LoginSecret {
             website_url: "https://example.com".to_owned(),
             username: "alice".to_owned(),
             password: "secret".to_owned(),
@@ -481,14 +496,14 @@ mod tests {
             password: "secret".to_owned(),
             notes: "note\n\n## 1Password\n- Security.TOTP: abc".to_owned(),
         });
-        let SecretValue::Login(merged) = existing.enriched_with(&incoming) else {
+        assert_eq!(existing.enrich_with(&incoming), SecretEnrichment::Changed);
+        let SecretValue::Login(merged) = &existing else {
             panic!("expected login");
         };
         assert!(merged.notes.contains("field.PIN: 1234"));
         assert!(merged.notes.contains("Security.TOTP: abc"));
         assert_eq!(merged.notes.matches("note").count(), 1);
-        let merged_again = (SecretValue::Login(merged.clone())).enriched_with(&incoming);
-        assert_eq!(merged_again, SecretValue::Login(merged));
+        assert_eq!(existing.enrich_with(&incoming), SecretEnrichment::Unchanged);
         Ok(())
     }
 }

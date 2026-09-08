@@ -329,14 +329,12 @@ mod tests {
             CanonicalSecretBytes::version(&value).0,
             b"7:api-key\x007:Example\x005: key \x00"
         );
-        let mut changed = value.clone();
+        let original = CanonicalSecretBytes::version(&value).0;
+        let mut changed = value;
         if let SecretValue::ApiKey(key) = &mut changed {
             key.expires_at = "later".to_owned();
         }
-        assert_eq!(
-            CanonicalSecretBytes::version(&value).0,
-            CanonicalSecretBytes::version(&changed).0
-        );
+        assert_eq!(original, CanonicalSecretBytes::version(&changed).0);
     }
 
     #[test]
@@ -415,12 +413,11 @@ mod tests {
     #[test]
     fn discarding_prepared_bytes_preserves_source_and_key() -> anyhow::Result<()> {
         let fixture = LoginFingerprintFixture::new()?;
-        let original = fixture.value.clone();
         {
             let prepared = fixture.request().prepare(FingerprintKind::Version);
             assert!(ptr::eq(prepared.secrets_key, &raw const fixture.key));
         }
-        assert_eq!(fixture.value, original);
+        assert!(matches!(fixture.value, SecretValue::Login(_)));
         assert_eq!(fixture.key.as_str(), "a".repeat(64));
         assert_eq!(
             fixture.value.fingerprint(&fixture.key)?.as_str(),

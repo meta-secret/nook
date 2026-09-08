@@ -52,7 +52,7 @@ impl Drop for SeedPhraseSecretRequest {
     }
 }
 
-#[derive(Clone, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub struct SeedPhraseSecret {
     pub name: String,
     validated: Bip39Mnemonic,
@@ -456,7 +456,7 @@ fn validate_rp_id(rp_id: &str) -> SecretPayloadResult<()> {
     Ok(())
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum SecretValue {
     Login(LoginSecret),
@@ -591,7 +591,7 @@ impl Zeroize for SecretValue {
 }
 
 /// Typed plaintext secret (in memory only).
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SecretRecord {
     pub id: SecretId,
     #[serde(rename = "type")]

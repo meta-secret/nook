@@ -269,6 +269,7 @@ pub use password_envelope::{
     VaultUnlock,
 };
 pub use secrets::SecretRecordSearch;
+pub use secrets::secret_fingerprint::SecretEnrichment;
 pub use session::{
     EncryptedSecretSession, PlaintextSecretSession, PreparedEncryptedSecretReplacement,
     ReplaceSecretInput, VerifiedAuthenticatorReplacementInput,

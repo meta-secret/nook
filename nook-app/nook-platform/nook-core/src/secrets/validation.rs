@@ -13,16 +13,15 @@ pub struct SecretRecordSearch<'a> {
     pub query: &'a str,
 }
 
-impl SecretRecordSearch<'_> {
+impl<'a> SecretRecordSearch<'a> {
     #[must_use]
-    pub fn filter(self) -> Vec<SecretRecord> {
-        let user_records: Vec<SecretRecord> = self
+    pub fn filter(self) -> Vec<&'a SecretRecord> {
+        let user_records: Vec<&SecretRecord> = self
             .records
             .iter()
             .filter(|record| {
                 !AppId::is_valid(record.id.as_str()) && !AuthKeyId::is_valid(record.id.as_str())
             })
-            .cloned()
             .collect();
         let needle = self.query.trim().to_lowercase();
         if needle.is_empty() {
