@@ -151,7 +151,10 @@ impl PairingActivationStore {
                 value: &encoded.providers,
             })
             .await?;
-        if let Err(failure) = admission.validate_expiry(clock.observe()?.epoch) {
+        let freshness = clock
+            .observe()
+            .and_then(|observed| admission.validate_expiry(observed.epoch));
+        if let Err(failure) = freshness {
             return Err(writable.abort(failure).await);
         }
         writable = writable
@@ -160,7 +163,10 @@ impl PairingActivationStore {
                 value: &gate_json,
             })
             .await?;
-        if let Err(failure) = admission.validate_expiry(clock.observe()?.epoch) {
+        let freshness = clock
+            .observe()
+            .and_then(|observed| admission.validate_expiry(observed.epoch));
+        if let Err(failure) = freshness {
             return Err(writable.abort(failure).await);
         }
         writable.done().await?;
@@ -171,7 +177,7 @@ impl PairingActivationStore {
 
     pub(super) async fn load(
         vault_store_id: &StoreId,
-    ) -> Result<PairingActivationCandidate, CompanionPairingCandidateFailure> {
+    ) -> Result<Option<PairingActivationCandidate>, CompanionPairingCandidateFailure> {
         let gate_key = CandidateSchema::gate_key(vault_store_id.as_str());
         let connection = open_nook_database()
             .await
@@ -186,8 +192,14 @@ impl PairingActivationStore {
             store: &vault,
             key: &gate_key,
         })
-        .await?
-        .ok_or_else(CandidateSchema::integrity)?;
+        .await?;
+        let Some(gate_json) = gate_json else {
+            transaction
+                .done()
+                .await
+                .map_err(|_| CompanionPairingCandidateFailure::Storage)?;
+            return Ok(None);
+        };
         let gate = CandidateSchema::decode_gate(&gate_json)?;
         let mut events = Vec::with_capacity(gate.event_payload_keys.len());
         for key in &gate.event_payload_keys {
@@ -215,6 +227,7 @@ impl PairingActivationStore {
             providers,
         }
         .decode()
+        .map(Some)
     }
 }
 
@@ -499,6 +512,25 @@ mod tests {
     fn late_expiry_and_manager_mutation_discard_memory_transaction() -> anyhow::Result<()> {
         let mut store = MemoryActivationStore::default();
         for observations in [
+            vec![ActivationFixture::epoch("160")?],
+            vec![ActivationFixture::epoch("160")?; 2],
+        ] {
+            let fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            assert!(matches!(
+                store.commit_with_clock(PairingActivationCommit {
+                    admission: PairingActivationStorageAdmission {
+                        candidate: fixture.candidate,
+                        envelopes: fixture.envelopes,
+                        manager: &fixture.manager,
+                    },
+                    clock: &DeterministicClock::new(observations),
+                }),
+                Err(CompanionPairingCandidateFailure::Integrity)
+            ));
+            assert!(store.vault.is_empty());
+        }
+        for observations in [
             vec![
                 ActivationFixture::epoch("160")?,
                 ActivationFixture::epoch("200")?,
@@ -601,6 +633,9 @@ mod browser_tests {
             PairingActivationStore::load(vault_store_id)
                 .await
                 .map_err(|failure| NookError::Database(failure.to_string()))
+                .and_then(|candidate| {
+                    candidate.ok_or_else(|| NookError::Database("candidate absent".to_owned()))
+                })
         }
 
         async fn activation_keys() -> Result<Vec<String>, NookError> {
@@ -655,13 +690,13 @@ mod browser_tests {
 
         async fn commit_load_and_replay_remain_inert() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
-            let authoritative_before = extension_state::load().await?;
+            let authoritative_before = extension_state::read_all().await?;
             let fixture = Self::candidate()?;
             let vault_store_id = fixture.candidate.vault_store_id.clone();
             Self::commit(fixture).await?;
             Self::load(&vault_store_id).await?;
             assert!(!Self::activation_keys().await?.is_empty());
-            assert_eq!(extension_state::load().await?, authoritative_before);
+            assert_eq!(extension_state::read_all().await?, authoritative_before);
             Self::authoritative_events_exclude_candidates().await?;
             assert!(Self::commit(Self::candidate()?).await.is_err());
             Ok(())
@@ -700,10 +735,32 @@ mod browser_tests {
             Self::authoritative_events_exclude_candidates().await
         }
 
-        async fn load_rejects_missing_gate() -> Result<(), NookError> {
+        async fn observation_failure_aborts_payloads_and_gate() -> Result<(), NookError> {
+            for observations in [vec![Self::epoch("160")?], vec![Self::epoch("160")?; 2]] {
+                indexed_db::clear_vault_db().await?;
+                let fixture = Self::expiring_candidate()?;
+                let result = PairingActivationStore::commit(PairingActivationCommit {
+                    admission: PairingActivationStorageAdmission {
+                        candidate: fixture.candidate,
+                        envelopes: fixture.envelopes,
+                        manager: &fixture.manager,
+                    },
+                    clock: &DeterministicClock::new(observations),
+                })
+                .await;
+                assert!(matches!(
+                    result,
+                    Err(CompanionPairingCandidateFailure::Integrity)
+                ));
+                assert!(Self::activation_keys().await?.is_empty());
+            }
+            Ok(())
+        }
+
+        async fn load_reports_missing_gate() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
             let store_id = StoreId::parse("store_testtoken11")?;
-            assert!(Self::load(&store_id).await.is_err());
+            assert!(PairingActivationStore::load(&store_id).await?.is_none());
             Ok(())
         }
     }
@@ -724,7 +781,12 @@ mod browser_tests {
     }
 
     #[wasm_bindgen_test]
-    async fn indexed_db_load_rejects_missing_gate() -> Result<(), NookError> {
-        BrowserStorageFixture::load_rejects_missing_gate().await
+    async fn indexed_db_observation_failure_aborts_payloads_and_gate() -> Result<(), NookError> {
+        BrowserStorageFixture::observation_failure_aborts_payloads_and_gate().await
+    }
+
+    #[wasm_bindgen_test]
+    async fn indexed_db_load_reports_missing_gate() -> Result<(), NookError> {
+        BrowserStorageFixture::load_reports_missing_gate().await
     }
 }

@@ -132,17 +132,20 @@ pub enum NookCompanionPairingCandidateFailure {
     Replay,
     Integrity,
     Storage,
+    OutcomeAccess,
 }
 
 #[wasm_bindgen]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NookCompanionPairingCandidateOutcomeState {
     Stored,
+    Absent,
     Rejected,
 }
 
 enum CompanionPairingCandidateOutcome {
     Stored(Box<NookStoredCompanionPairingActivationCandidate>),
+    Absent,
     Rejected(NookCompanionPairingCandidateFailure),
 }
 
@@ -172,6 +175,9 @@ impl NookCompanionPairingCandidateOutcome {
             CompanionPairingCandidateOutcome::Stored(_) => {
                 NookCompanionPairingCandidateOutcomeState::Stored
             }
+            CompanionPairingCandidateOutcome::Absent => {
+                NookCompanionPairingCandidateOutcomeState::Absent
+            }
             CompanionPairingCandidateOutcome::Rejected(_) => {
                 NookCompanionPairingCandidateOutcomeState::Rejected
             }
@@ -179,19 +185,30 @@ impl NookCompanionPairingCandidateOutcome {
     }
 
     #[must_use]
-    pub fn into_stored(self) -> NookStoredCompanionPairingActivationCandidate {
-        let CompanionPairingCandidateOutcome::Stored(candidate) = self.0 else {
-            unreachable!();
-        };
-        *candidate
+    pub fn into_stored(
+        self,
+    ) -> Result<NookStoredCompanionPairingActivationCandidate, NookCompanionPairingCandidateFailure>
+    {
+        match self.0 {
+            CompanionPairingCandidateOutcome::Stored(candidate) => Ok(*candidate),
+            CompanionPairingCandidateOutcome::Absent
+            | CompanionPairingCandidateOutcome::Rejected(_) => {
+                Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
+            }
+        }
     }
 
     #[must_use]
-    pub fn into_failure(self) -> NookCompanionPairingCandidateFailure {
-        let CompanionPairingCandidateOutcome::Rejected(failure) = self.0 else {
-            unreachable!();
-        };
-        failure
+    pub fn into_failure(
+        self,
+    ) -> Result<NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateFailure> {
+        match self.0 {
+            CompanionPairingCandidateOutcome::Rejected(failure) => Ok(failure),
+            CompanionPairingCandidateOutcome::Stored(_)
+            | CompanionPairingCandidateOutcome::Absent => {
+                Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
+            }
+        }
     }
 }
 
@@ -369,7 +386,12 @@ impl NookVaultManager {
             ));
         };
         let candidate = match PairingActivationStore::load(&store_id).await {
-            Ok(candidate) => candidate,
+            Ok(Some(candidate)) => candidate,
+            Ok(None) => {
+                return NookCompanionPairingCandidateOutcome(
+                    CompanionPairingCandidateOutcome::Absent,
+                );
+            }
             Err(failure) => return NookCompanionPairingCandidateOutcome::from_result(Err(failure)),
         };
         let clock = BrowserActivationClock;
@@ -545,6 +567,27 @@ mod tests {
         ] {
             assert_eq!(failure.public(), public);
         }
+    }
+
+    #[test]
+    fn outcome_accessors_reject_the_wrong_state_without_panicking() -> anyhow::Result<()> {
+        let rejected = NookCompanionPairingCandidateOutcome::from_result(Err(
+            CompanionPairingCandidateFailure::Replay,
+        ));
+        assert!(matches!(
+            rejected.into_stored(),
+            Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
+        ));
+        let stored = NookCompanionPairingCandidateOutcome::from_result(Ok(
+            storage::StoredPairingActivationCandidate {
+                _candidate: CandidateFixture::candidate()?,
+            },
+        ));
+        assert!(matches!(
+            stored.into_failure(),
+            Err(NookCompanionPairingCandidateFailure::OutcomeAccess)
+        ));
+        Ok(())
     }
 
     #[test]
