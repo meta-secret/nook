@@ -647,4 +647,57 @@ mod tests {
         assert!(error.to_string().contains("contains event"));
         Ok(())
     }
+
+    #[wasm_bindgen_test]
+    async fn event_log_and_outbox_projections_round_trip() -> Result<(), NookError> {
+        store_delete(STORE_VAULT, EVENT_LOG_MODE_KEY).await?;
+        assert!(!is_event_log_mode().await?);
+        set_event_log_mode().await?;
+        assert!(is_event_log_mode().await?);
+
+        save_signing_seed("seed-material").await?;
+        assert_eq!(load_signing_seed().await?.as_deref(), Some("seed-material"));
+
+        let store_id = "projection-round-trip";
+        let heads = vec!["head-b".to_owned(), "head-a".to_owned()];
+        save_heads(store_id, &heads).await?;
+        assert_eq!(load_heads(store_id).await?, heads);
+        save_key_epoch(store_id, "epoch-2").await?;
+        assert_eq!(load_key_epoch(store_id).await?.as_deref(), Some("epoch-2"));
+
+        queue_outbox_entry("drive", "event-2", b"encrypted-two").await?;
+        queue_outbox_entry("drive", "event-1", b"encrypted-one").await?;
+        append_outbox_index("drive", "event-2").await?;
+        append_outbox_index("drive", "event-2").await?;
+        append_outbox_index("drive", "event-1").await?;
+        assert_eq!(
+            load_outbox("drive").await?,
+            vec![
+                ("event-2".to_owned(), b"encrypted-two".to_vec()),
+                ("event-1".to_owned(), b"encrypted-one".to_vec()),
+            ]
+        );
+        remove_outbox_entry("drive", "event-2").await?;
+        assert_eq!(
+            load_outbox("drive").await?,
+            vec![("event-1".to_owned(), b"encrypted-one".to_vec())]
+        );
+
+        clear_local_event_store(store_id).await?;
+        store_delete(STORE_OUTBOX, &outbox_key("drive", "event-1")).await?;
+        store_delete(STORE_OUTBOX, "outbox_index:drive").await?;
+        store_delete(STORE_VAULT, SIGNING_SEED_KEY).await?;
+        store_delete(STORE_VAULT, EVENT_LOG_MODE_KEY).await?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn event_projection_rejects_non_utf8_before_persisting() -> Result<(), NookError> {
+        let error = save_event_bytes("non-utf8-projection", "event", &[0xff]).await;
+        assert!(matches!(
+            error,
+            Err(NookError::Serialization(message)) if message.starts_with("Event bytes not UTF-8:")
+        ));
+        Ok(())
+    }
 }
