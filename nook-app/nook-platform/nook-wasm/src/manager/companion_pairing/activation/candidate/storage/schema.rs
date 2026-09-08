@@ -90,14 +90,14 @@ pub(super) struct CandidateLocatorValidation<'a> {
 }
 
 struct CandidateEventLocation<'a> {
-    request_id: &'a str,
-    store_id: &'a StoreId,
-    event_id: &'a EventId,
+    request: &'a str,
+    vault_store: &'a StoreId,
+    event: &'a EventId,
 }
 
 struct CandidateActivationLocation<'a> {
-    request_id: &'a str,
-    store_id: &'a StoreId,
+    request: &'a str,
+    vault_store: &'a StoreId,
 }
 
 struct DecodedCandidateEvents {
@@ -112,7 +112,7 @@ impl CandidateSchema {
 
     fn payload_prefix(request: &CandidateActivationLocation<'_>) -> String {
         let activation_id = Sha256Hex::from_bytes(
-            format!("{}:{}", request.request_id, request.store_id.as_str()).as_bytes(),
+            format!("{}:{}", request.request, request.vault_store.as_str()).as_bytes(),
         );
         format!("companion-pairing-activation:{}", activation_id.as_str())
     }
@@ -121,10 +121,10 @@ impl CandidateSchema {
         format!(
             "{}:event:{}",
             Self::payload_prefix(&CandidateActivationLocation {
-                request_id: request.request_id,
-                store_id: request.store_id,
+                request: request.request,
+                vault_store: request.vault_store,
             }),
-            request.event_id.as_str()
+            request.event.as_str()
         )
     }
 
@@ -151,8 +151,8 @@ impl CandidateSchema {
 impl EncodedCandidate {
     pub(super) fn new(candidate: &PairingActivationCandidate) -> SchemaResult<Self> {
         let prefix = CandidateSchema::payload_prefix(&CandidateActivationLocation {
-            request_id: &candidate.request_id,
-            store_id: &candidate.vault_store_id,
+            request: &candidate.request_id,
+            vault_store: &candidate.vault_store_id,
         });
         let events = candidate
             .events
@@ -164,9 +164,9 @@ impl EncodedCandidate {
                 };
                 Ok((
                     CandidateSchema::event_key(&CandidateEventLocation {
-                        request_id: &candidate.request_id,
-                        store_id: &candidate.vault_store_id,
-                        event_id: &event.event_id,
+                        request: &candidate.request_id,
+                        vault_store: &candidate.vault_store_id,
+                        event: &event.event_id,
                     }),
                     CandidateSchema::encode(&row)?,
                 ))
@@ -203,8 +203,8 @@ impl EncodedCandidate {
     pub(super) fn validate_locator(request: &CandidateLocatorValidation<'_>) -> SchemaResult<()> {
         let CandidateLocatorValidation { gate, store_id } = request;
         let prefix = CandidateSchema::payload_prefix(&CandidateActivationLocation {
-            request_id: &gate.request_id,
-            store_id,
+            request: &gate.request_id,
+            vault_store: store_id,
         });
         if gate.request_id.trim().is_empty()
             || gate.vault_store_id != store_id.as_str()
@@ -302,9 +302,9 @@ impl EncodedCandidate {
                 let event_id =
                     EventId::parse(&row.event_id).map_err(|_| CandidateSchema::integrity())?;
                 let expected_key = CandidateSchema::event_key(&CandidateEventLocation {
-                    request_id: &self.gate.request_id,
-                    store_id,
-                    event_id: &event_id,
+                    request: &self.gate.request_id,
+                    vault_store: store_id,
+                    event: &event_id,
                 });
                 if key != &expected_key {
                     return Err(CandidateSchema::integrity());

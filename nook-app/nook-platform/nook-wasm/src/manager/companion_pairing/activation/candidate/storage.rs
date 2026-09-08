@@ -252,7 +252,7 @@ impl PairingActivationStore {
 
 #[cfg(test)]
 mod tests {
-    use super::super::tests::{CandidateFixture, DeterministicClock};
+    use super::super::tests::{CandidateCommitFixture, CandidateFixture, DeterministicClock};
     use super::*;
     use crate::manager::companion_pairing::activation::tests::ActivationFixture;
     use nook_companion_core::{CompanionPairingProviderManifestDigest, ExtensionConnectScope};
@@ -397,6 +397,63 @@ mod tests {
     struct MemoryStorageScenarios;
 
     impl MemoryStorageScenarios {
+        fn canonical_commit_then_load_is_stored() -> anyhow::Result<()> {
+            let mut fixture =
+                CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+            let identity = fixture.manager.device_identity()?;
+            let vault_store_id = fixture.candidate.vault_store_id.as_str().to_owned();
+            let mut provider = StorageProviderData::github(
+                "github-generated-flow",
+                "GitHub",
+                "github_pat_generated_flow",
+                "nook",
+                "2026-09-08T00:00:00Z",
+            );
+            provider.store_id = ProviderVaultScope::StoreId(vault_store_id.clone());
+            fixture.candidate.providers = AuthProvidersSnapshotData {
+                providers: vec![provider],
+                active_vault_store_id: ActiveVaultScope::StoreId(vault_store_id),
+            };
+            fixture
+                .candidate
+                .providers
+                .seal_credentials_for(&identity.public_key())?;
+            fixture
+                .candidate
+                .approval
+                .request
+                .scopes
+                .push(ExtensionConnectScope::SyncProviderCredentials);
+            fixture.candidate.approval.provider_manifest_digest =
+                CompanionPairingProviderManifestDigest::parse(
+                    fixture
+                        .candidate
+                        .providers
+                        .companion_pairing_manifest_digest()?
+                        .as_str(),
+                )?;
+            let CandidateCommitFixture {
+                candidate,
+                envelopes,
+                manager,
+            } = fixture;
+            let mut store = MemoryActivationStore::default();
+            store.commit_with_clock(PairingActivationCommit {
+                admission: PairingActivationStorageAdmission {
+                    candidate,
+                    envelopes,
+                    manager: &manager,
+                },
+                clock: &DeterministicClock::new(vec![ActivationFixture::epoch("160")?; 3]),
+            })?;
+            assert!(
+                store
+                    .load(MemoryActivationLoad { manager: &manager })?
+                    .is_some()
+            );
+            Ok(())
+        }
+
         fn commit_publishes_only_activation_keys() -> anyhow::Result<()> {
             let candidate = CandidateFixture::candidate()
                 .map_err(|failure| anyhow::anyhow!(failure.to_string()))?;
@@ -593,6 +650,11 @@ mod tests {
             ));
             Ok(())
         }
+    }
+
+    #[test]
+    fn canonical_real_candidate_commit_then_load_is_stored() -> anyhow::Result<()> {
+        MemoryStorageScenarios::canonical_commit_then_load_is_stored()
     }
 
     #[test]
