@@ -14,8 +14,18 @@ pub struct NookSecretPage {
 
 impl NookSecretPage {
     pub(crate) fn from_core(page: nook_core::SecretPage) -> Result<Self, NookError> {
+        let group_keys = page
+            .entity_group_keys()
+            .map_err(|error| NookError::Database(error.to_string()))?;
         Ok(Self {
-            items: list_items_to_vec(page.records),
+            items: page
+                .records
+                .into_iter()
+                .zip(group_keys)
+                .map(|(item, group_key)| {
+                    NookSecretListItem::from_core(item, group_key.into_string())
+                })
+                .collect(),
             total: u32::try_from(usize::from(page.total)).unwrap_or(u32::MAX),
             offset: u32::try_from(usize::from(page.offset)).unwrap_or(u32::MAX),
             limit: u32::try_from(usize::from(page.limit)).unwrap_or(u32::MAX),
@@ -337,15 +347,6 @@ pub(crate) fn records_to_vec(
         .into_iter()
         .map(NookSecretRecord::from_record)
         .collect())
-}
-
-pub(crate) fn list_items_to_vec(items: Vec<nook_core::SecretListItem>) -> Vec<NookSecretListItem> {
-    let group_keys = nook_core::resolve_entity_group_keys(&items);
-    items
-        .into_iter()
-        .zip(group_keys)
-        .map(|(item, group_key)| NookSecretListItem::from_core(item, group_key))
-        .collect()
 }
 
 pub(crate) fn joins_to_vec(joins: Vec<nook_core::JoinRequest>) -> Vec<NookJoinRequest> {

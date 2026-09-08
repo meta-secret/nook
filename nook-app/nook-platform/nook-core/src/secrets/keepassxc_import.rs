@@ -13,7 +13,10 @@ use super::import_support::{
     self, CsvHeader, CsvImportConversion, CsvImportReader, CsvRecordFields, ImportMetadata,
     SourceLabelMetadata,
 };
-use crate::{AuthenticatorSecret, LoginSecret, SecretValue, SecureNoteSecret};
+use crate::{
+    AuthenticatorIssuerHostsError, AuthenticatorSecret, LoginSecret, SecretValue, SecureNoteSecret,
+    ValidationError,
+};
 
 #[derive(Debug, Error)]
 pub enum KeePassXcImportError {
@@ -25,6 +28,8 @@ pub enum KeePassXcImportError {
     MissingColumn(&'static str),
     #[error("The KeePassXC CSV is invalid: {0}")]
     InvalidCsv(#[from] csv::Error),
+    #[error("The bundled authenticator issuer catalog is invalid: {0}")]
+    InvalidIssuerCatalog(#[from] AuthenticatorIssuerHostsError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,10 +124,10 @@ struct KeePassXcTotp<'a> {
     website_url: &'a str,
 }
 impl KeePassXcTotp<'_> {
-    fn convert(&self) -> (Option<SecretValue>, usize) {
+    fn convert(&self) -> Result<(Option<SecretValue>, usize), KeePassXcImportError> {
         let totp = self.text.trim();
         if totp.is_empty() || !totp.to_ascii_lowercase().starts_with("otpauth://") {
-            return (None, 0);
+            return Ok((None, 0));
         }
         match AuthenticatorSecret::from_otpauth_uri(totp) {
             Ok(mut authenticator) => {
@@ -131,16 +136,24 @@ impl KeePassXcTotp<'_> {
                 {
                     self.website_url.clone_into(&mut authenticator.website_url);
                 }
-                authenticator.apply_inferred_website_url_if_empty();
-                (Some(SecretValue::Authenticator(authenticator)), 0)
+                authenticator.apply_inferred_website_url_if_empty()?;
+                Ok((Some(SecretValue::Authenticator(authenticator)), 0))
             }
-            Err(_) => (None, 1),
+            Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
+                Err(KeePassXcImportError::InvalidIssuerCatalog(
+                    AuthenticatorIssuerHostsError::InvalidBundledCatalog,
+                ))
+            }
+            Err(_) => Ok((None, 1)),
         }
     }
 }
 
 impl KeePassXcColumns {
-    fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
+    fn convert(
+        &self,
+        record: &StringRecord,
+    ) -> Result<(Vec<SecretValue>, usize), KeePassXcImportError> {
         let csv_fields = CsvRecordFields::new(record);
         let group = csv_fields.trimmed(self.group);
         let title = csv_fields.trimmed(self.title);
@@ -158,7 +171,7 @@ impl KeePassXcColumns {
             && notes.is_empty()
             && totp.is_empty()
         {
-            return (Vec::new(), 1);
+            return Ok((Vec::new(), 1));
         }
 
         let mut items = Vec::new();
@@ -171,7 +184,7 @@ impl KeePassXcColumns {
                 text: &totp,
                 website_url: &website_url,
             }
-            .convert();
+            .convert()?;
             skipped_unsupported += skipped_totp;
             let totp_for_notes = if authenticator.is_some() {
                 ""
@@ -194,18 +207,18 @@ impl KeePassXcColumns {
             if let Some(authenticator) = authenticator {
                 items.push(authenticator);
             }
-            return (items, skipped_unsupported);
+            return Ok((items, skipped_unsupported));
         }
 
         if title.is_empty() && notes.is_empty() {
-            return (Vec::new(), 1);
+            return Ok((Vec::new(), 1));
         }
 
         let (authenticator, skipped_totp) = KeePassXcTotp {
             text: &totp,
             website_url: "",
         }
-        .convert();
+        .convert()?;
         skipped_unsupported += skipped_totp;
         let totp_for_notes = if authenticator.is_some() {
             ""
@@ -226,7 +239,7 @@ impl KeePassXcColumns {
         if let Some(authenticator) = authenticator {
             items.push(authenticator);
         }
-        (items, skipped_unsupported)
+        Ok((items, skipped_unsupported))
     }
 }
 
@@ -298,10 +311,17 @@ struct CheckedKeePassXcCsv<'a> {
 }
 impl CheckedKeePassXcCsv<'_> {
     fn collect(self) -> Result<KeePassXcImportPlan, KeePassXcImportError> {
-        let collection = self.reader.collect(CsvImportConversion {
-            too_many_records: KeePassXcImportError::TooManyRecords,
-            convert: |record: &StringRecord| self.columns.convert(record),
-        })?;
+        let collection = self.reader.collect_fallible(
+            CsvImportConversion {
+                too_many_records: KeePassXcImportError::TooManyRecords,
+                convert: |record: &StringRecord| self.columns.convert(record),
+            },
+            |items: &mut Vec<SecretValue>| {
+                for item in items {
+                    item.zeroize_plaintext();
+                }
+            },
+        )?;
 
         Ok(KeePassXcImportPlan {
             items: collection.items,

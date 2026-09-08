@@ -7,7 +7,9 @@
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
 
 use crate::ValidationError;
-use crate::secrets::authenticator_issuer_hosts;
+use crate::secrets::authenticator_issuer_hosts::{
+    AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
+};
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha1::Sha1;
@@ -102,15 +104,25 @@ impl AuthenticatorSecret {
     }
 
     /// Fill [`Self::website_url`] from issuer host text or the popular-issuer map.
-    pub fn apply_inferred_website_url_if_empty(&mut self) {
+    pub fn apply_inferred_website_url_if_empty(
+        &mut self,
+    ) -> Result<(), AuthenticatorIssuerHostsError> {
         if !self.website_url.trim().is_empty() {
-            return;
+            return Ok(());
         }
-        if let Some(host) =
-            authenticator_issuer_hosts::resolve_authenticator_website_host("", &self.issuer)
-        {
+        let request = AuthenticatorWebsiteHostRequest {
+            website_url: "",
+            issuer: &self.issuer,
+        };
+        let host = if let Some(host) = request.explicit_or_domain_host() {
+            Some(host)
+        } else {
+            AuthenticatorIssuerHosts::require_bundled()?.resolve_website_host(request)
+        };
+        if let Some(host) = host {
             self.website_url = format!("https://{host}");
         }
+        Ok(())
     }
 
     pub fn current_code(&self, unix_seconds: TotpUnixSeconds) -> Result<TotpCode, ValidationError> {
@@ -199,7 +211,8 @@ impl AuthenticatorSecret {
             website_url.clone_into(&mut item.website_url);
         }
         item.backup_codes = backup_codes.lines().map(str::to_owned).collect();
-        item.apply_inferred_website_url_if_empty();
+        item.apply_inferred_website_url_if_empty()
+            .map_err(|_| ValidationError::AuthenticatorIssuerCatalogInvalid)?;
         item.normalize()?;
         Ok(item)
     }

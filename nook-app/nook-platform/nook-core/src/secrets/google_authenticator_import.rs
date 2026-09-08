@@ -48,6 +48,8 @@ pub enum GoogleAuthenticatorImportError {
     PayloadTooLarge,
     #[error("The Google Authenticator export contains too many accounts.")]
     TooManyItems,
+    #[error("The bundled authenticator issuer catalog is invalid: {0}")]
+    InvalidIssuerCatalog(#[from] crate::AuthenticatorIssuerHostsError),
     #[error("These QR codes belong to different Google Authenticator exports.")]
     MixedBatches,
     #[error("A Google Authenticator QR code was scanned more than once.")]
@@ -97,7 +99,7 @@ impl<'a> GoogleAuthenticatorMigrationInput<'a> {
         Self { uris }
     }
     pub fn plan(self) -> Result<GoogleAuthenticatorImportPlan, GoogleAuthenticatorImportError> {
-        Ok(ParsedMigrationBatch::parse(self.uris)?.complete()?.plan())
+        ParsedMigrationBatch::parse(self.uris)?.complete()?.plan()
     }
 }
 #[cfg(test)]

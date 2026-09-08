@@ -828,6 +828,8 @@ pub const ERRORS_VALIDATION_AUTHENTICATOR_BACKUP_CODES_INVALID: &str =
     "errors.validation.authenticator_backup_codes_invalid";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_DIGITS_INVALID: &str =
     "errors.validation.authenticator_digits_invalid";
+pub const ERRORS_VALIDATION_AUTHENTICATOR_ISSUER_CATALOG_INVALID: &str =
+    "errors.validation.authenticator_issuer_catalog_invalid";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_ISSUER_REQUIRED: &str =
     "errors.validation.authenticator_issuer_required";
 pub const ERRORS_VALIDATION_AUTHENTICATOR_PERIOD_INVALID: &str =

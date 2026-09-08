@@ -374,8 +374,8 @@ mod wasm_tests {
         generate_totp_code, verify_totp_code, wasm_storage_mode_for_provider,
     };
     use nook_core::{
-        AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, CreditCardSecret,
-        OauthFilePreset, SecretId, SecretValue, StorageProviderType,
+        AuthenticationApprovalRequirement, AuthenticationOutcomeVerdict, AuthenticatorIssuerHosts,
+        CreditCardSecret, OauthFilePreset, SecretId, SecretValue, StorageProviderType,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
 
@@ -580,15 +580,25 @@ mod wasm_tests {
     #[wasm_bindgen_test]
     fn issuer_host_map_loads_under_wasm() {
         assert_eq!(
-            nook_core::mapped_host_for_issuer("OpenAI"),
+            AuthenticatorIssuerHosts::bundled().and_then(|catalog| catalog.mapped_host("OpenAI")),
             Some("openai.com")
         );
         assert_eq!(
-            nook_core::resolve_authenticator_website_host("", "GitHub"),
+            AuthenticatorIssuerHosts::bundled().and_then(|catalog| {
+                catalog.resolve_website_host(nook_core::AuthenticatorWebsiteHostRequest {
+                    website_url: "",
+                    issuer: "GitHub",
+                })
+            }),
             Some("github.com".to_owned())
         );
         assert_eq!(
-            nook_core::authenticator_group_key("", "Namecheap"),
+            nook_core::AuthenticatorGroupKeyRequest {
+                website_url: "",
+                issuer: "Namecheap",
+            }
+            .resolve()
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "namecheap.com"
         );
     }

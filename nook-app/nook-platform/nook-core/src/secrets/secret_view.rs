@@ -12,7 +12,10 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 mod secret_presentation;
-pub use secret_presentation::*;
+pub use super::login_site_hosts::LoginSiteHostsError;
+pub use secret_presentation::{
+    AuthenticatorGroupKeyRequest, LoginHostMatchRequest, SecretGroupKey, WebsiteHost,
+};
 mod secret_record_presentation;
 
 /// Number of words exposed by a seed-phrase list projection.

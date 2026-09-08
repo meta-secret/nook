@@ -28,6 +28,8 @@ pub enum ApplePasswordsImportError {
     MissingColumn(&'static str),
     #[error("The Apple Passwords CSV is invalid: {0}")]
     InvalidCsv(#[from] csv::Error),
+    #[error("The bundled authenticator issuer catalog is invalid: {0}")]
+    InvalidIssuerCatalog(#[from] crate::AuthenticatorIssuerHostsError),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

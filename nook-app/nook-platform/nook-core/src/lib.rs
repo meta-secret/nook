@@ -34,9 +34,8 @@ pub use device_access::{
 pub(crate) use secrets::{
     apple_passwords_import, authenticator, authenticator_issuer_hosts, bip39, bitwarden_import,
     chrome_passwords_import, credit_card, dashlane_import, google_authenticator_import,
-    import_support, keepassxc_import, keeper_import, lastpass_import, login_site_hosts,
-    onepassword_import, passkey_authenticator, password, proton_pass_import, secret_types,
-    secret_view, session,
+    import_support, keepassxc_import, keeper_import, lastpass_import, onepassword_import,
+    passkey_authenticator, password, proton_pass_import, secret_types, secret_view, session,
 };
 pub(crate) use sync::{
     sync_provider_credentials, sync_provider_store, validation, vault_sync, vault_sync_conflict,
@@ -61,7 +60,7 @@ pub use authenticator::{
     TotpPeriod, TotpRemainingSeconds, TotpSecret, TotpUnixSeconds,
 };
 pub use authenticator_issuer_hosts::{
-    mapped_host_for_issuer, normalize_issuer_lookup_key, resolve_authenticator_website_host,
+    AuthenticatorIssuerHosts, AuthenticatorIssuerHostsError, AuthenticatorWebsiteHostRequest,
 };
 pub use bip39::{
     Bip39MnemonicWordCount, Bip39WordSequenceExpectedCount, Bip39WordSuggestionLimit,
@@ -112,7 +111,6 @@ pub use import_support::{SecretImportSourceRecordCount, SecretImportUnsupportedR
 pub use keepassxc_import::{KeePassXcCsvInput, KeePassXcImportError, KeePassXcImportPlan};
 pub use keeper_import::{KeeperCsvInput, KeeperImportError, KeeperImportPlan};
 pub use lastpass_import::{LastPassCsvInput, LastPassImportError, LastPassImportPlan};
-pub use login_site_hosts::{login_host_family, login_hosts_share_family, normalize_login_host};
 pub use nook_app_common::i18n_keys;
 pub use nook_app_common::{
     AppLocale, get_translation_catalog, lookup_translation, merge_translation_catalogs,
@@ -186,11 +184,11 @@ pub use secret_types::{
     StoredSecretRecord,
 };
 pub use secret_view::{
-    ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorSecretForm, CreditCardSecretForm,
-    FileAttachmentSecretForm, LoginSecretForm, SecretFormFields, SecretListItem,
+    ApiKeySecretForm, AuthenticatorBackupCodeCount, AuthenticatorGroupKeyRequest,
+    AuthenticatorSecretForm, CreditCardSecretForm, FileAttachmentSecretForm, LoginHostMatchRequest,
+    LoginSecretForm, LoginSiteHostsError, SecretFormFields, SecretGroupKey, SecretListItem,
     SecretListItemData, SecureNoteSecretForm, SeedPhraseSecretForm, SeedPhraseWordCount,
-    authenticator_group_key, build_secret_yaml, build_secret_yaml_from_form, hostname_from_url,
-    login_host_matches_origin, resolve_entity_group_keys,
+    WebsiteHost, build_secret_yaml, build_secret_yaml_from_form,
 };
 pub use vault_security::{VaultSecurityRecommendations, assess_vault_security};
 pub use vault_sentinel_onboarding::{
@@ -208,7 +206,7 @@ pub use vault_sync_state::{
     VaultLastSync, VaultSyncUnixMilliseconds,
 };
 pub use website_login_save::{
-    WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, decide_website_login_save,
+    WebsiteLoginSaveCandidate, WebsiteLoginSaveDecision, WebsiteLoginSaveRequest,
 };
 
 pub use nook_auth2::{

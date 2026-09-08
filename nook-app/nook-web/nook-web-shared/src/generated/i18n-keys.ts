@@ -665,6 +665,7 @@ export const I18N_KEYS = {
   ErrorsSharedProviderOauthRequired: 'errors.shared_provider_oauth_required',
   ErrorsValidationAuthenticatorBackupCodesInvalid: 'errors.validation.authenticator_backup_codes_invalid',
   ErrorsValidationAuthenticatorDigitsInvalid: 'errors.validation.authenticator_digits_invalid',
+  ErrorsValidationAuthenticatorIssuerCatalogInvalid: 'errors.validation.authenticator_issuer_catalog_invalid',
   ErrorsValidationAuthenticatorIssuerRequired: 'errors.validation.authenticator_issuer_required',
   ErrorsValidationAuthenticatorPeriodInvalid: 'errors.validation.authenticator_period_invalid',
   ErrorsValidationAuthenticatorSecretInvalid: 'errors.validation.authenticator_secret_invalid',

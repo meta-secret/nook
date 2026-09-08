@@ -1173,6 +1173,7 @@
       "bip39_invalid": "Invalid BIP39 seed phrase.",
       "authenticator_issuer_required": "Enter the service name for this authenticator.",
       "authenticator_secret_invalid": "Enter a valid Base32 authenticator secret.",
+      "authenticator_issuer_catalog_invalid": "The bundled authenticator issuer catalog is invalid.",
       "authenticator_digits_invalid": "Authenticator codes must contain 6 to 8 digits.",
       "authenticator_period_invalid": "Authenticator period must be between 15 and 300 seconds.",
       "authenticator_uri_invalid": "Enter a valid otpauth:// TOTP URI.",

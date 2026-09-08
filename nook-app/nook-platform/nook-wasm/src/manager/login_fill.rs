@@ -2,9 +2,14 @@
 
 use super::NookVaultManager;
 use crate::NookError;
-use crate::types::{NookLoginAccount, NookLoginFillCredential};
+use crate::types::{LoginAccountProjection, NookLoginAccount, NookLoginFillCredential};
 use nook_core::{SecretId, SecretType, SecretValue};
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
+
+struct RevealLoginRequest<'a> {
+    secret_id: &'a str,
+    origin: &'a str,
+}
 
 impl NookVaultManager {
     fn ensure_login_fill_extension_capability(&self) -> Result<(), NookError> {
@@ -24,43 +29,71 @@ impl NookVaultManager {
             }
             let mut record =
                 nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(id)?;
-            if let SecretValue::Login(login) = &record.data
-                && nook_core::login_host_matches_origin(&login.website_url, origin)
-            {
-                accounts.push(NookLoginAccount::from_login(id, login));
-            }
+            let matches = match &record.data {
+                SecretValue::Login(login) => (nook_core::LoginHostMatchRequest {
+                    website_url: &login.website_url,
+                    origin,
+                })
+                .matches()
+                .map_err(|error| NookError::Database(error.to_string())),
+                _ => Ok(false),
+            };
+            let account = match (&record.data, &matches) {
+                (SecretValue::Login(login), Ok(true)) => {
+                    Some(NookLoginAccount::from_projection(&LoginAccountProjection {
+                        secret_id: id,
+                        login,
+                    }))
+                }
+                _ => None,
+            };
             record.zeroize_plaintext();
+            if matches? && let Some(account) = account {
+                accounts.push(account);
+            }
         }
         Ok(accounts)
     }
 
     fn reveal_matching_login_for_fill(
         &self,
-        secret_id: &str,
-        origin: &str,
+        request: &RevealLoginRequest<'_>,
     ) -> Result<NookLoginFillCredential, NookError> {
-        let id = SecretId::parse(secret_id)?;
+        let id = SecretId::parse(request.secret_id)?;
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
-        let credential = match &record.data {
-            SecretValue::Login(login)
-                if nook_core::login_host_matches_origin(&login.website_url, origin) =>
-            {
-                Ok(NookLoginFillCredential::new(
-                    login.username.clone(),
-                    login.password.clone(),
-                ))
+        let match_result = match &record.data {
+            SecretValue::Login(login) => nook_core::LoginHostMatchRequest {
+                website_url: &login.website_url,
+                origin: request.origin,
             }
-            SecretValue::Login(_) => Err(NookError::Decryption(
-                "Login does not match the requesting website origin.".to_owned(),
-            )),
-            _ => Err(NookError::Decryption(
-                "Selected secret is not a login credential.".to_owned(),
-            )),
+            .matches()
+            .map_err(|error| NookError::Database(error.to_string())),
+            _ => Ok(false),
+        };
+        let is_login = matches!(&record.data, SecretValue::Login(_));
+        let credential_parts = match (&record.data, &match_result) {
+            (SecretValue::Login(login), Ok(true)) => {
+                Some((login.username.clone(), login.password.clone()))
+            }
+            _ => None,
         };
         record.zeroize_plaintext();
-        credential
+        match match_result {
+            Err(error) => Err(error),
+            Ok(true) => credential_parts
+                .map(|(username, password)| NookLoginFillCredential::new(username, password))
+                .ok_or_else(|| {
+                    NookError::Decryption("Selected secret is not a login credential.".to_owned())
+                }),
+            Ok(false) if is_login => Err(NookError::Decryption(
+                "Login does not match the requesting website origin.".to_owned(),
+            )),
+            Ok(false) => Err(NookError::Decryption(
+                "Selected secret is not a login credential.".to_owned(),
+            )),
+        }
     }
 }
 
@@ -139,23 +172,34 @@ mod browser_tests {
         assert_eq!(accounts[0].username(), "alice");
         assert_eq!(accounts[0].website_host(), "example.com");
 
-        let credential = manager
-            .reveal_matching_login_for_fill("secret_SMypl8K0w9a", "https://example.com/account")?;
+        let credential = manager.reveal_matching_login_for_fill(&RevealLoginRequest {
+            secret_id: "secret_SMypl8K0w9a",
+            origin: "https://example.com/account",
+        })?;
         assert_eq!(credential.username(), "alice");
         assert_eq!(credential.password(), "correct");
         assert!(
             manager
-                .reveal_matching_login_for_fill("secret_SMypl8K0w9a", "https://other.example")
+                .reveal_matching_login_for_fill(&RevealLoginRequest {
+                    secret_id: "secret_SMypl8K0w9a",
+                    origin: "https://other.example",
+                })
                 .is_err()
         );
         assert!(
             manager
-                .reveal_matching_login_for_fill("secret_SMypl8K0w9c", "https://example.com")
+                .reveal_matching_login_for_fill(&RevealLoginRequest {
+                    secret_id: "secret_SMypl8K0w9c",
+                    origin: "https://example.com",
+                })
                 .is_err()
         );
         assert!(
             manager
-                .reveal_matching_login_for_fill("not-a-secret-id", "https://example.com")
+                .reveal_matching_login_for_fill(&RevealLoginRequest {
+                    secret_id: "not-a-secret-id",
+                    origin: "https://example.com",
+                })
                 .is_err()
         );
         Ok(())
@@ -193,7 +237,7 @@ impl NookVaultManager {
     ) -> Result<NookLoginFillCredential, JsError> {
         self.ensure_login_fill_extension_capability()?;
         self.ensure_vault_crypto_from_cache().await?;
-        self.reveal_matching_login_for_fill(secret_id, origin)
+        self.reveal_matching_login_for_fill(&RevealLoginRequest { secret_id, origin })
             .map_err(Into::into)
     }
 }

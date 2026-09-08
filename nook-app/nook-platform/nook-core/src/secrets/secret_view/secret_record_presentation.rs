@@ -1,4 +1,4 @@
-use super::secret_presentation::{authenticator_group_key, hostname_from_url, titled_group_key};
+use super::secret_presentation::{AuthenticatorGroupKeyRequest, SecretTitle, WebsiteHost};
 use super::{SecretListItem, SecretListItemData, SecretRecord, SecretValue};
 
 impl SecretRecord {
@@ -91,22 +91,10 @@ impl SecretRecord {
     #[must_use]
     pub fn group_key(&self) -> String {
         match &self.data {
-            SecretValue::Login(value) => {
-                let host = hostname_from_url(&value.website_url);
-                if host.is_empty() {
-                    "No Website".to_owned()
-                } else {
-                    host
-                }
-            }
-            SecretValue::ApiKey(value) => {
-                let host = hostname_from_url(&value.website_url);
-                if host.is_empty() {
-                    "No Website".to_owned()
-                } else {
-                    host
-                }
-            }
+            SecretValue::Login(value) => WebsiteHost::normalize(&value.website_url)
+                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
+            SecretValue::ApiKey(value) => WebsiteHost::normalize(&value.website_url)
+                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
             SecretValue::SeedPhrase(value) => {
                 let name = value.name.trim();
                 if name.is_empty() {
@@ -115,12 +103,19 @@ impl SecretRecord {
                     name.to_owned()
                 }
             }
-            SecretValue::SecureNote(value) => titled_group_key(&value.title, "Unnamed Note"),
-            SecretValue::Passkey(value) => value.rp_id.clone(),
-            SecretValue::Authenticator(value) => {
-                authenticator_group_key(&value.website_url, &value.issuer)
+            SecretValue::SecureNote(value) => {
+                SecretTitle::new(&value.title, "Unnamed Note").group_key()
             }
-            SecretValue::CreditCard(value) => titled_group_key(&value.title, "Unnamed Card"),
+            SecretValue::Passkey(value) => value.rp_id.clone(),
+            SecretValue::Authenticator(value) => AuthenticatorGroupKeyRequest {
+                website_url: &value.website_url,
+                issuer: &value.issuer,
+            }
+            .resolve()
+            .unwrap_or_else(|_| value.issuer.trim().to_owned()),
+            SecretValue::CreditCard(value) => {
+                SecretTitle::new(&value.title, "Unnamed Card").group_key()
+            }
             SecretValue::FileAttachment(value) => {
                 let title = value.title.trim();
                 if title.is_empty() {

@@ -9,7 +9,10 @@ use super::super::import_support::{
     MAX_CSV_BYTES, SourceLabelMetadata,
 };
 use super::{DashlaneImportError, DashlaneImportPlan};
-use crate::{AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue, SecureNoteSecret};
+use crate::{
+    AuthenticatorIssuerHostsError, AuthenticatorSecret, CreditCardSecret, LoginSecret, SecretValue,
+    SecureNoteSecret, ValidationError,
+};
 use csv::StringRecord;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum DashlaneCsvKind {
@@ -61,10 +64,17 @@ pub(super) struct CheckedDashlaneCsv<'a> {
 }
 impl CheckedDashlaneCsv<'_> {
     pub(super) fn collect(self) -> Result<DashlaneImportPlan, DashlaneImportError> {
-        let collection = self.reader.collect(CsvImportConversion {
-            too_many_records: DashlaneImportError::TooManyRecords,
-            convert: |record: &StringRecord| self.columns.convert(record),
-        })?;
+        let collection = self.reader.collect_fallible(
+            CsvImportConversion {
+                too_many_records: DashlaneImportError::TooManyRecords,
+                convert: |record: &StringRecord| self.columns.convert(record),
+            },
+            |items: &mut Vec<SecretValue>| {
+                for item in items {
+                    item.zeroize_plaintext();
+                }
+            },
+        )?;
         Ok(DashlaneImportPlan {
             items: collection.items,
             source_count: collection.source_count.into(),
@@ -78,11 +88,14 @@ enum DashlaneColumns {
     Payments(PaymentColumns),
 }
 impl DashlaneColumns {
-    fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
+    fn convert(
+        &self,
+        record: &StringRecord,
+    ) -> Result<(Vec<SecretValue>, usize), DashlaneImportError> {
         match self {
             Self::Credentials(columns) => columns.convert(record),
-            Self::SecureNotes(columns) => columns.convert(record),
-            Self::Payments(columns) => columns.convert(record),
+            Self::SecureNotes(columns) => Ok(columns.convert(record)),
+            Self::Payments(columns) => Ok(columns.convert(record)),
         }
     }
 }
@@ -180,7 +193,10 @@ impl CredentialColumns {
             otp_url: headers.optional(&["otpUrl", "otp_url"]),
         })
     }
-    fn convert(&self, record: &StringRecord) -> (Vec<SecretValue>, usize) {
+    fn convert(
+        &self,
+        record: &StringRecord,
+    ) -> Result<(Vec<SecretValue>, usize), DashlaneImportError> {
         let csv_fields = CsvRecordFields::new(record);
         let username = csv_fields.trimmed(self.username);
         let username2 = csv_fields.optional(self.username2);
@@ -201,7 +217,7 @@ impl CredentialColumns {
             && otp_secret.is_empty()
             && otp_url.is_empty()
         {
-            return (Vec::new(), 1);
+            return Ok((Vec::new(), 1));
         }
 
         let website_url = if url.is_empty() { title.clone() } else { url };
@@ -266,14 +282,27 @@ impl CredentialColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    authenticator.apply_inferred_website_url_if_empty();
+                    if let Err(error) = authenticator.apply_inferred_website_url_if_empty() {
+                        for item in &mut items {
+                            item.zeroize_plaintext();
+                        }
+                        return Err(error.into());
+                    }
                     items.push(SecretValue::Authenticator(authenticator));
+                }
+                Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
+                    for item in &mut items {
+                        item.zeroize_plaintext();
+                    }
+                    return Err(DashlaneImportError::InvalidIssuerCatalog(
+                        AuthenticatorIssuerHostsError::InvalidBundledCatalog,
+                    ));
                 }
                 Err(_) => skipped_unsupported += 1,
             }
         }
 
-        (items, skipped_unsupported)
+        Ok((items, skipped_unsupported))
     }
 }
 impl SecureNoteColumns {

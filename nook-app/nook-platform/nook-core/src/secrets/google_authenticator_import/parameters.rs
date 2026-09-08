@@ -4,7 +4,10 @@
     forbid(invalid_unowned_function_suppression)
 )]
 //! Decoded parameter conversion preserves wire values and secret cleanup.
-use crate::{AuthenticatorSecret, SecretValue, TotpAlgorithm, TotpDigits, TotpPeriod, TotpSecret};
+use crate::{
+    AuthenticatorIssuerHostsError, AuthenticatorSecret, SecretValue, TotpAlgorithm, TotpDigits,
+    TotpPeriod, TotpSecret,
+};
 use prost::Message;
 use std::mem;
 use zeroize::{Zeroize, Zeroizing};
@@ -64,25 +67,25 @@ pub(super) enum MigrationOtpType {
 }
 
 impl OtpParameters {
-    pub(super) fn convert(mut self) -> Result<SecretValue, ()> {
+    pub(super) fn convert(mut self) -> Result<SecretValue, OtpParameterError> {
         let secret_bytes = Zeroizing::new(mem::take(&mut self.secret));
         let name = Zeroizing::new(mem::take(&mut self.name));
         let issuer = Zeroizing::new(mem::take(&mut self.issuer));
         if MigrationOtpType::try_from(self.otp_type).ok() != Some(MigrationOtpType::Totp) {
-            return Err(());
+            return Err(OtpParameterError::Unsupported);
         }
         let algorithm = match MigrationAlgorithm::try_from(self.algorithm).ok() {
             Some(MigrationAlgorithm::Sha1) => TotpAlgorithm::Sha1,
             Some(MigrationAlgorithm::Sha256) => TotpAlgorithm::Sha256,
             Some(MigrationAlgorithm::Sha512) => TotpAlgorithm::Sha512,
-            _ => return Err(()),
+            _ => return Err(OtpParameterError::Unsupported),
         };
         let digits = match MigrationDigits::try_from(self.digits).ok() {
             Some(MigrationDigits::Unspecified | MigrationDigits::Six) => TotpDigits::try_from(6),
             Some(MigrationDigits::Eight) => TotpDigits::try_from(8),
-            None => return Err(()),
+            None => return Err(OtpParameterError::Unsupported),
         }
-        .map_err(|_| ())?;
+        .map_err(|_| OtpParameterError::Unsupported)?;
         let (account, issuer) = MigrationAccountLabel {
             name: &name,
             issuer: &issuer,
@@ -98,16 +101,27 @@ impl OtpParameters {
             issuer,
             account,
             website_url: String::new(),
-            secret: TotpSecret::parse(&encoded_secret).map_err(|_| ())?,
+            secret: TotpSecret::parse(&encoded_secret)
+                .map_err(|_| OtpParameterError::Unsupported)?,
             algorithm,
             digits,
-            period: TotpPeriod::try_from(30).map_err(|_| ())?,
+            period: TotpPeriod::try_from(30).map_err(|_| OtpParameterError::Unsupported)?,
             backup_codes: Vec::new(),
         };
-        authenticator.apply_inferred_website_url_if_empty();
-        authenticator.normalize().map_err(|_| ())?;
+        authenticator
+            .apply_inferred_website_url_if_empty()
+            .map_err(OtpParameterError::IssuerCatalog)?;
+        authenticator
+            .normalize()
+            .map_err(|_| OtpParameterError::Unsupported)?;
         Ok(SecretValue::Authenticator(authenticator))
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum OtpParameterError {
+    Unsupported,
+    IssuerCatalog(AuthenticatorIssuerHostsError),
 }
 struct MigrationSecretBytes<'a> {
     bytes: &'a [u8],
@@ -213,7 +227,7 @@ mod tests {
         let SecretValue::Authenticator(item) = parameter
             .clone()
             .convert()
-            .map_err(|()| anyhow::anyhow!("unspecified digits must default"))?
+            .map_err(|_| anyhow::anyhow!("unspecified digits must default"))?
         else {
             anyhow::bail!("expected authenticator")
         };
