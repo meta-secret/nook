@@ -912,6 +912,40 @@ fn bake_callers_never_clear_cache_from_or_cache_to() {
     }
 }
 
+#[test]
+fn main_rust_entrypoint_reaches_its_dynamic_host_task() {
+    let root = repository_root();
+    let entrypoint = Command::new("task")
+        .args(["--dry", "ci:main:rust"])
+        .current_dir(&root)
+        .output()
+        .expect("task must render the Main Rust entrypoint");
+    assert!(
+        entrypoint.status.success(),
+        "Main Rust entrypoint did not render: {}",
+        String::from_utf8_lossy(&entrypoint.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&entrypoint.stderr).contains("_ci:main:rust:host"),
+        "Main Rust entrypoint must dispatch its host task through the BuildKit guard"
+    );
+
+    let host = Command::new("task")
+        .args(["--dry", "_ci:main:rust:host"])
+        .current_dir(root)
+        .output()
+        .expect("task must render the dynamic Main Rust host task");
+    assert!(
+        host.status.success(),
+        "dynamic Main Rust host task was rejected: {}",
+        String::from_utf8_lossy(&host.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&host.stderr).contains("docker:ci:rust:export"),
+        "dynamic Main Rust host task must reach native verification"
+    );
+}
+
 fn assert_no_empty_cache_overrides(text: &str) {
     assert_no_empty_cache_overrides_in("docker Taskfiles", text);
 }
