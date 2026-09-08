@@ -67,10 +67,13 @@ It does not establish deliberate ISP throttling or a defective MTU.
 ### Required actions
 
 1. Apply `task infra:arc:network:configure` to the two named hosts.
-   - ARC deployment also invokes this task before applying BuildKit resources.
+   - Run this standalone task after the home BuildKit shard is running.
+   - ARC deployment does not invoke this task or certify network performance.
    - The task installs the BBR module-load file and dedicated sysctl file.
    - Systemd loads the module before applying sysctls during boot.
-   - It updates the existing home BuildKit namespace without restarting solves.
+   - It selects the running home BuildKit container independently of its ordinal.
+   - A missing or ambiguous container match fails the task.
+   - It verifies the existing namespace after updating its default.
    - New pod namespaces inherit the host's congestion-control default.
    - Existing TCP connections retain their original algorithm.
 2. Verify `net.ipv4.tcp_congestion_control` on both hosts.
@@ -85,7 +88,7 @@ It does not establish deliberate ISP throttling or a defective MTU.
      and `/etc/sysctl.d/99-nook-tcp-congestion-control.conf`.
    - Set `net.ipv4.tcp_congestion_control=cubic` on both hosts.
    - Restore that value in the existing home BuildKit namespace too.
-   - Revert the repository policy before the next ARC deployment.
+   - Revert the repository policy before another explicit network apply.
 
 ### Prohibited actions
 

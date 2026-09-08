@@ -403,6 +403,7 @@ tasks:
         # BuildKit shard for new connections without restarting active solves.
         if test "$expected_node" = bynull-servo; then
           tasks="$(sudo -n k0s ctr -n k8s.io tasks list)"
+          buildkit_pids=()
           while read -r container_id container_pid container_status; do
             test "$container_id" != TASK || continue
             [[ "$container_id" =~ ^[a-f0-9]{64}$ ]]
@@ -410,12 +411,20 @@ tasks:
             test "$container_status" = RUNNING || continue
             metadata="$(sudo -n k0s ctr -n k8s.io containers info "$container_id")"
             if jq -e '.Labels["io.kubernetes.pod.namespace"] == "arc-runners" and
-              .Labels["io.kubernetes.pod.name"] == "nook-buildkit-0"' \
+              .Labels["io.kubernetes.container.name"] == "buildkitd" and
+              (.Labels["io.kubernetes.pod.name"] | test("^nook-buildkit-[0-9]+$"))' \
               <<<"$metadata" >/dev/null; then
-              sudo -n nsenter -t "$container_pid" -n sysctl -w \
-                net.ipv4.tcp_congestion_control=bbr
+              buildkit_pids+=("$container_pid")
             fi
           done <<<"$tasks"
+          if test "${#buildkit_pids[@]}" != 1; then
+            echo "Expected exactly one running home BuildKit container" >&2
+            exit 1
+          fi
+          sudo -n nsenter -t "${buildkit_pids[0]}" -n sysctl -w \
+            net.ipv4.tcp_congestion_control=bbr
+          test "$(sudo -n nsenter -t "${buildkit_pids[0]}" -n \
+            cat /proc/sys/net/ipv4/tcp_congestion_control)" = bbr
         fi
         test "$(sudo -n unshare --net cat /proc/sys/net/ipv4/tcp_congestion_control)" = bbr
         echo "$expected_node TCP BBR configured; existing connections keep their algorithm"
@@ -598,7 +607,6 @@ tasks:
       - task: arc:build-hosts:quarantine
       - task: arc:container-hosts:reconcile
       - task: arc:buildkit:storage:prepare
-      - task: arc:network:configure
       - task: arc:render:check
       - |
         ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" 'bash -s' <<'REMOTE'

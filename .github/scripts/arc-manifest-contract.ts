@@ -181,10 +181,48 @@ const network = new TextContract({
   label: "ARC network policy",
   source: await read("infra/k0s/manifests/arc/network-policy.yaml"),
 });
+const arcTasksSource = await read("infra/tasks/arc.yml");
 const tasks = new TextContract({
   label: "ARC operations",
-  source: await read("infra/tasks/arc.yml"),
+  source: arcTasksSource,
 });
+const registryTransport = new TextContract({
+  label: "ARC standalone registry transport configuration",
+  source: arcTasksSource.slice(
+    arcTasksSource.indexOf("  arc:network:configure:"),
+    arcTasksSource.indexOf("  arc:buildkit:storage:prepare:"),
+  ),
+});
+registryTransport.requireAll([
+  "for node in ovh-us bynull-servo; do",
+  "ovh-us:debian@10.202.0.1|bynull-servo:bynull@10.202.0.3)",
+  'test "$(hostname -s)" = "$expected_node"',
+  "sudo -n modprobe tcp_bbr",
+  "/etc/modules-load.d/nook-tcp-congestion-control.conf",
+  "/etc/sysctl.d/99-nook-tcp-congestion-control.conf",
+  '.Labels["io.kubernetes.pod.namespace"] == "arc-runners"',
+  '.Labels["io.kubernetes.container.name"] == "buildkitd"',
+  'test("^nook-buildkit-[0-9]+$")',
+  'if test "${#buildkit_pids[@]}" != 1; then',
+  "Expected exactly one running home BuildKit container",
+  'sudo -n nsenter -t "${buildkit_pids[0]}" -n sysctl -w',
+  'test "$(sudo -n nsenter -t "${buildkit_pids[0]}" -n',
+  "unshare --net cat /proc/sys/net/ipv4/tcp_congestion_control",
+]);
+registryTransport.requireBefore({
+  first: 'if test "${#buildkit_pids[@]}" != 1; then',
+  second: 'sudo -n nsenter -t "${buildkit_pids[0]}" -n sysctl -w',
+});
+registryTransport.forbidAll(["nook-buildkit-0", "rollout restart", "uncordon"]);
+tasks.forbid("- task: arc:network:configure");
+new TextContract({
+  label: "ARC TCP boot module",
+  source: await read("infra/k0s/config/nook-tcp-congestion-control.conf"),
+}).require("tcp_bbr\n");
+new TextContract({
+  label: "ARC TCP congestion policy",
+  source: await read("infra/k0s/config/99-nook-tcp-congestion-control.conf"),
+}).require("net.ipv4.tcp_congestion_control = bbr\n");
 const dockerSetup = new TextContract({
   label: "Docker setup action",
   source: await read(".github/actions/nook-docker-setup/action.yml"),
