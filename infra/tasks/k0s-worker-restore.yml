@@ -158,9 +158,34 @@ tasks:
         done
         REMOTE
 
+        worker_token_uploaded=false
+        delete_worker_token() {
+          if ! ssh -n -o BatchMode=yes -J "$controller_target" \
+            "$worker_target" 'set -euo pipefail
+            sudo -n rm -f /etc/k0s/worker-token
+            sudo -n test ! -e /etc/k0s/worker-token'; then
+            return 1
+          fi
+          worker_token_uploaded=false
+        }
+        cleanup_worker_token() {
+          original_status="$?"
+          trap - EXIT
+          if test "$worker_token_uploaded" = true; then
+            if ! delete_worker_token; then
+              echo "k0s worker: token cleanup failed after command status $original_status" >&2
+              test "$original_status" -ne 0 && exit "$original_status"
+              exit 1
+            fi
+          fi
+          exit "$original_status"
+        }
+        trap cleanup_worker_token EXIT
+
         token="$(ssh -n -o BatchMode=yes "$controller_target" \
           'sudo -n k0s token create --role worker --expiry 15m')"
         test "${#token}" -gt 100
+        worker_token_uploaded=true
         printf '%s' "$token" |
           ssh -o BatchMode=yes -J "$controller_target" "$worker_target" \
             'set -euo pipefail
@@ -191,6 +216,7 @@ tasks:
         fi
         sudo -n systemctl is-active --quiet k0sworker.service
         REMOTE
+        delete_worker_token
 
         ssh -o BatchMode=yes "$controller_target" bash -s -- \
           "$worker_mesh_address" "$worker_ssh_user" "$worker_arc_tier" "$remote_dir" <<'REMOTE'
@@ -259,7 +285,6 @@ tasks:
         ssh -n -o BatchMode=yes -J "$controller_target" \
           "$worker_target" 'bash -s' <<'REMOTE'
         set -euo pipefail
-        sudo -n rm -f /etc/k0s/worker-token
         sudo -n test ! -e /etc/k0s/containerd.d/registry-auth.toml
         invocation="$(sudo -n systemctl show k0sworker.service \
           --property=InvocationID --value)"

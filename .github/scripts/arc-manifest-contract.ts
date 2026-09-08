@@ -266,9 +266,12 @@ const hiveWorkflow = new TextContract({
   label: "Hive workflow",
   source: await read(".github/workflows/hive.yml"),
 });
+const repositoryPolicySource = await read(
+  ".github/workflows/repository-policy.yml",
+);
 const repositoryPolicyWorkflow = new TextContract({
   label: "repository policy workflow",
-  source: await read(".github/workflows/repository-policy.yml"),
+  source: repositoryPolicySource,
 });
 const webResearchWorkflow = new TextContract({
   label: "web research workflow",
@@ -752,6 +755,39 @@ repositoryPolicyWorkflow.requireAll([
   '"$(vale --version)"',
   '"vale version 3.19.0"',
 ]);
+const productionContractInputs = [
+  ".github/actions/nook-docker-setup/action.yml",
+  "agentic-ai/minds/hive/Dockerfile",
+  "infra/k0s/scripts/k0s-worker-mesh-reconcile",
+  "infra/tasks/k0s-worker-restore.yml",
+  "infra/tasks/k0s-workers.yml",
+  "nook-app/nook-platform/docker/rust/nightly.Dockerfile",
+  "nook-app/nook-platform/docker/rust/policy-tools.Dockerfile",
+  "nook-app/nook-platform/docker/rust/product.Dockerfile",
+  "nook-app/nook-platform/docker/sccache-health.Dockerfile",
+  "nook-app/nook-web/docker/toolchain.Dockerfile",
+  "nook-app/nook-web/docker/web.Dockerfile",
+  "nook-app/nook-web/nook-web-app/Dockerfile",
+  "preflight/Dockerfile",
+] as const;
+const policyPushTriggers = new TextContract({
+  label: "repository policy Main push triggers",
+  source: repositoryPolicySource.slice(
+    0,
+    repositoryPolicySource.indexOf("permissions:"),
+  ),
+});
+const runnerContractClassification = new TextContract({
+  label: "repository policy runner contract classification",
+  source: repositoryPolicySource.slice(
+    repositoryPolicySource.indexOf("runner_placement_changed=false"),
+    repositoryPolicySource.indexOf('done <<< "$changed_files"'),
+  ),
+});
+for (const productionInput of productionContractInputs) {
+  policyPushTriggers.require(productionInput);
+  runnerContractClassification.require(productionInput);
+}
 repositoryPolicyWorkflow.forbid('"$("$vale_bin" --version)"');
 repositoryPolicyWorkflow.requireBefore({
   first: "name: Activate Vale 3.19.0",

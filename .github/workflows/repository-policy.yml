@@ -21,6 +21,7 @@ on:
       - .github/scripts/arc-worker-restore-contract.ts
       - .github/scripts/dockerfile-frontend-contract.ts
       - .github/scripts/docker-cache-selection-contract.ts
+      - .github/actions/nook-docker-setup/action.yml
       - .github/workflows/**
       - .task/agentic-ai.yml
       - .vale.ini
@@ -29,6 +30,18 @@ on:
       - CODEX.md
       - README.md
       - agentic-ai/loom/**
+      - agentic-ai/minds/hive/Dockerfile
+      - infra/k0s/scripts/k0s-worker-mesh-reconcile
+      - infra/tasks/k0s-worker-restore.yml
+      - infra/tasks/k0s-workers.yml
+      - nook-app/nook-platform/docker/rust/nightly.Dockerfile
+      - nook-app/nook-platform/docker/rust/policy-tools.Dockerfile
+      - nook-app/nook-platform/docker/rust/product.Dockerfile
+      - nook-app/nook-platform/docker/sccache-health.Dockerfile
+      - nook-app/nook-web/docker/toolchain.Dockerfile
+      - nook-app/nook-web/docker/web.Dockerfile
+      - nook-app/nook-web/nook-web-app/Dockerfile
+      - preflight/Dockerfile
       - preflight/**
 
 permissions:
@@ -100,6 +113,18 @@ jobs:
             esac
             case "$changed_file" in
               .github/scripts/arc-manifest-contract.ts | .github/scripts/arc-worker-restore-contract.ts | .github/scripts/docker-cache-selection-contract.ts | .github/scripts/dockerfile-frontend-contract.ts | .github/workflows/*)
+                runner_placement_changed=true
+                ;;
+              .github/actions/nook-docker-setup/action.yml | infra/k0s/scripts/k0s-worker-mesh-reconcile | infra/tasks/k0s-worker-restore.yml | infra/tasks/k0s-workers.yml)
+                runner_placement_changed=true
+                ;;
+              agentic-ai/minds/hive/Dockerfile | nook-app/nook-platform/docker/rust/nightly.Dockerfile | nook-app/nook-platform/docker/rust/policy-tools.Dockerfile)
+                runner_placement_changed=true
+                ;;
+              nook-app/nook-platform/docker/rust/product.Dockerfile | nook-app/nook-platform/docker/sccache-health.Dockerfile)
+                runner_placement_changed=true
+                ;;
+              nook-app/nook-web/docker/toolchain.Dockerfile | nook-app/nook-web/docker/web.Dockerfile | nook-app/nook-web/nook-web-app/Dockerfile | preflight/Dockerfile)
                 runner_placement_changed=true
                 ;;
             esac

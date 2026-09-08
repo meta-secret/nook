@@ -32,6 +32,80 @@ enum PreparingTaintCase {
   WrongValue = "wrong-value",
 }
 
+enum WorkerTokenCleanupCase {
+  FollowUpFailure = "follow-up-failure",
+  FollowUpFailureAndCleanupFailure = "follow-up-and-cleanup-failure",
+  Success = "success",
+}
+
+class WorkerTokenCleanupContract {
+  static assert(source: string): void {
+    const start = source.indexOf("        cleanup_worker_token() {");
+    const end = source.indexOf("        trap cleanup_worker_token EXIT", start);
+    if (start < 0 || end < 0) {
+      throw new Error("k0s worker token cleanup function is missing");
+    }
+    const cleanupFunction = source.slice(start, end);
+    const cases = [
+      {
+        kind: WorkerTokenCleanupCase.Success,
+        commandStatus: 0,
+        cleanupStatus: 0,
+        expectedStatus: 0,
+      },
+      {
+        kind: WorkerTokenCleanupCase.FollowUpFailure,
+        commandStatus: 37,
+        cleanupStatus: 0,
+        expectedStatus: 37,
+      },
+      {
+        kind: WorkerTokenCleanupCase.FollowUpFailureAndCleanupFailure,
+        commandStatus: 37,
+        cleanupStatus: 9,
+        expectedStatus: 37,
+      },
+    ] as const;
+    for (const scenario of cases) {
+      const program = `
+set -euo pipefail
+delete_worker_token() {
+  printf 'delete-attempted\\n'
+  if test "$cleanup_result" -ne 0; then
+    return "$cleanup_result"
+  fi
+  worker_token_uploaded=false
+}
+${cleanupFunction}
+cleanup_result=${scenario.cleanupStatus}
+worker_token_uploaded=true
+trap cleanup_worker_token EXIT
+exit ${scenario.commandStatus}
+`;
+      const result = Bun.spawnSync({
+        cmd: ["bash"],
+        stdin: new Blob([program]),
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      if (
+        result.exitCode !== scenario.expectedStatus ||
+        result.stdout.toString() !== "delete-attempted\n"
+      ) {
+        throw new Error(`k0s worker token cleanup failed: ${scenario.kind}`);
+      }
+      const error = result.stderr.toString();
+      if (
+        scenario.kind ===
+          WorkerTokenCleanupCase.FollowUpFailureAndCleanupFailure &&
+        !error.includes("token cleanup failed after command status 37")
+      ) {
+        throw new Error("k0s worker token cleanup failure is not actionable");
+      }
+    }
+  }
+}
+
 class WorkerPreparingTaintContract {
   static assert(source: string): void {
     const contract = new TextContract({
@@ -308,6 +382,10 @@ export class ArcWorkerRestoreContract {
       "sudo -n systemctl restart k0sworker.service",
       "sudo -n systemctl is-active --quiet k0sworker.service",
       'sudo -n k0s kubectl wait "node/$node" --for=condition=Ready --timeout=5m',
+      "trap cleanup_worker_token EXIT",
+      "sudo -n rm -f /etc/k0s/worker-token",
+      "sudo -n test ! -e /etc/k0s/worker-token",
+      "token cleanup failed after command status $original_status",
     ]);
     install.forbidAll([
       'bash -c "\\$(printf %s',
@@ -320,6 +398,7 @@ export class ArcWorkerRestoreContract {
     ]);
     ActiveRunnerSelectorContract.assert(installSource);
     WorkerServiceStateContract.assert(installSource);
+    WorkerTokenCleanupContract.assert(installSource);
     install.requireBefore({
       first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
       second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
@@ -342,6 +421,14 @@ export class ArcWorkerRestoreContract {
       first: 'test -s "$token_temp"',
       second: "sudo -n k0s install worker",
     });
+    install.requireBefore({
+      first: "worker_token_uploaded=true",
+      second: "sudo -n k0s install worker",
+    });
+    install.require(
+      "        REMOTE\n        delete_worker_token\n\n" +
+        '        ssh -o BatchMode=yes "$controller_target" bash -s --',
+    );
     restore.requireAll([
       "- task: k0s:worker:install",
       "test \"$(printf '%s\\n' \"$node\" | sed '/^$/d' | wc -l | tr -d ' ')\" = 1",
