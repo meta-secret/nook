@@ -3,7 +3,7 @@ use rustc_ast::attr::AttributeExt;
 use rustc_hir::{Attribute, HirId, Item, ItemKind, Node, def::DefKind};
 use rustc_lint::{LateContext, LateLintPass};
 use rustc_session::{declare_lint, declare_lint_pass, lint::LintExpectationId};
-use rustc_span::sym;
+use rustc_span::{Span, sym};
 
 declare_lint! {
     /// Detects authored free functions, including private and nested definitions.
@@ -35,28 +35,42 @@ struct FunctionOwnershipRequest<'cx, 'tcx> {
     item_hir_id: HirId,
 }
 
+#[derive(Clone, Copy)]
+struct SourceScanRequest<'cx, 'tcx> {
+    cx: &'cx LateContext<'tcx>,
+    span: Span,
+}
+
 impl FunctionOwnership {
     fn is_test_code(request: FunctionOwnershipRequest<'_, '_>) -> bool {
-        Self::has_test_configuration_before(
-            request.cx,
-            request.cx.tcx.hir_span(request.item_hir_id),
-        ) || request
+        Self::has_test_configuration_before(SourceScanRequest {
+            cx: request.cx,
+            span: request.cx.tcx.hir_span(request.item_hir_id),
+        }) || request
             .cx
             .tcx
             .hir_parent_iter(request.item_hir_id)
             .any(|(_, node)| match node {
-                Node::Item(item) => Self::has_test_configuration_before(request.cx, item.span),
+                Node::Item(item) => Self::has_test_configuration_before(SourceScanRequest {
+                    cx: request.cx,
+                    span: item.span,
+                }),
                 _ => false,
             })
     }
 
-    fn has_test_configuration_before(cx: &LateContext<'_>, span: rustc_span::Span) -> bool {
-        let source_map = cx.tcx.sess.source_map();
-        let source_file = source_map.lookup_char_pos(span.lo()).file;
+    fn has_test_configuration_before(request: SourceScanRequest<'_, '_>) -> bool {
+        let source_file = request
+            .cx
+            .tcx
+            .sess
+            .source_map()
+            .lookup_char_pos(request.span.lo())
+            .file;
         let Some(source) = source_file.src.as_deref() else {
             return false;
         };
-        let offset = (span.lo() - source_file.start_pos).0 as usize;
+        let offset = (request.span.lo() - source_file.start_pos).0 as usize;
         let Some(prefix) = source.get(..offset) else {
             return false;
         };
@@ -66,7 +80,7 @@ impl FunctionOwnership {
                 continue;
             }
             if line.starts_with("#[") {
-                if line.starts_with("#[cfg(") && line.contains("test") {
+                if Self::is_test_only_configuration(line) {
                     return true;
                 }
                 continue;
@@ -74,6 +88,30 @@ impl FunctionOwnership {
             break;
         }
         false
+    }
+
+    fn is_test_only_configuration(line: &str) -> bool {
+        let Some(predicate) = line
+            .strip_prefix("#[cfg(")
+            .and_then(|line| line.strip_suffix(")]"))
+        else {
+            return false;
+        };
+        let predicate = predicate.trim();
+        if predicate == "test" {
+            return true;
+        }
+        let Some(inner) = predicate
+            .strip_prefix("all(")
+            .and_then(|predicate| predicate.strip_suffix(')'))
+        else {
+            return false;
+        };
+        inner.split(',').map(str::trim).any(|term| term == "test")
+            && inner
+                .split(',')
+                .map(str::trim)
+                .all(|term| !term.starts_with("not(") && !term.starts_with("any("))
     }
 
     fn has_unowned_function_attribute(request: FunctionOwnershipRequest<'_, '_>) -> bool {
