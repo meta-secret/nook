@@ -467,7 +467,7 @@ mod tests {
         assert_eq!(usize::from(changed.removed), 0);
         assert_eq!(
             changed.changed_buckets().map(u8::from).collect::<Vec<_>>(),
-            vec![SecretSearchCatalog::bucket_for(&changed_id)]
+            vec![u8::from(SecretSearchCatalog::bucket_for(&changed_id))]
         );
         assert_eq!(
             usize::from(
