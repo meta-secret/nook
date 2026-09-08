@@ -166,6 +166,7 @@ mod tests {
         LocalEventStore, MemberLabel, SigningIdentity, VaultOperation,
     };
     use rexie::TransactionMode;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     use super::super::IdentityHandoffCommit;
     use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
@@ -405,7 +406,11 @@ mod tests {
             })
         }
     }
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn selected_checkpoint_ancestors_exclude_concurrent_siblings() -> Result<(), NookError> {
         let fixture = ImportFixture::new()?;
         let events = SignedAccessEvents::new(&fixture)?;

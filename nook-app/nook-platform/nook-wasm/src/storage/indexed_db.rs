@@ -514,8 +514,9 @@ mod unit_tests {
         default_registry_label, label_from_yaml, store_id_from_yaml, upsert_registry_entry,
     };
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn storage_keys_keep_each_namespace_and_bucket_shape() {
         assert_eq!(vault_blob_key("store-a"), "vault:store-a");
         assert_eq!(vault_cache_key("remote"), "vault_cache:remote");
@@ -526,7 +527,7 @@ mod unit_tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn registry_upsert_creates_defaults_updates_labels_and_touches_unlocks() {
         let mut registry = VaultRegistry::default();
         upsert_registry_entry(&mut registry, "store_registry01", None, false);
@@ -541,7 +542,7 @@ mod unit_tests {
         assert_eq!(registry.vaults.len(), 2);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn yaml_projection_fails_closed_and_defaults_unusable_labels() {
         assert!(store_id_from_yaml("not yaml").is_err());
         assert!(label_from_yaml("not yaml").is_none());

@@ -479,7 +479,11 @@ mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn provider_missing_event_errors_are_classified_by_their_storage() {
         assert!(
             NookError::GitHub("Event file missing at path".to_owned()).is_github_event_missing()

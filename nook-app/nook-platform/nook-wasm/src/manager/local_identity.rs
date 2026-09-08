@@ -112,8 +112,9 @@ mod tests {
         PendingExtensionIdentityEnrollment, PendingExtensionIdentityHandoff,
     };
     use nook_core::{AppKey, SigningIdentity, StorageMode};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn cancelled_creation_leaves_no_pending_identity() -> Result<(), &'static str> {
         let mut manager = NookVaultManager::new();
         manager.device.pending_local_identity_label = Some(local_identity_label("Work")?);
@@ -125,7 +126,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn empty_identity_labels_are_rejected() {
         assert_eq!(
             local_identity_label("   "),
@@ -133,7 +134,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn identity_transition_clears_provider_session_state() {
         let mut manager = NookVaultManager::new();
         manager.storage.mode = StorageMode::Github;
@@ -151,7 +152,7 @@ mod tests {
         assert!(manager.sync_outbox.access_token.is_empty());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn identity_transition_drops_pending_extension_authorization() -> Result<(), NookError> {
         let authorizer = AppKey::generate()?;
         let (signing, signing_seed) = SigningIdentity::generate()?;

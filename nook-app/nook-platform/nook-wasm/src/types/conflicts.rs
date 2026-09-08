@@ -380,8 +380,9 @@ mod pending_sync_conflict_tests {
         CurrentVaultReplaceability, IdentityVaultAppGrantKind, ProviderVaultDecision,
         ProviderVaultDecisionReason, ProviderVaultIdentityEligibility, VaultSyncConflictKind,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn pending_store_id_factory_marks_unsaved_provider() -> Result<(), wasm_bindgen::JsError> {
         let conflict = NookPendingSyncConflict::pending_store_id(
             "GitHub".to_owned(),
@@ -402,7 +403,7 @@ mod pending_sync_conflict_tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn testing_factories_keep_conflict_shapes_in_rust() -> Result<(), wasm_bindgen::JsError> {
         let content =
             NookPendingSyncConflict::for_testing_content("Remote provider".to_owned(), 1, 2);
@@ -421,7 +422,7 @@ mod pending_sync_conflict_tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn provider_vault_projection_exposes_only_public_decision_facts() {
         let projection = NookProviderVaultDecisionProjection::from_core(
             CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
@@ -587,7 +588,7 @@ pub(crate) fn security_conflicts_to_vec(
 mod projection_conflict_tests {
     use super::*;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn replacement_conflict_exposes_candidate_ids_without_web_mapping() {
         let conflict = NookReplacementConflict {
             old_secret_id: "secret-old".to_owned(),
@@ -609,7 +610,7 @@ mod projection_conflict_tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn security_conflict_display_parts_are_owned_by_wasm() {
         let conflict = NookSecurityConflict::from_display_parts(
             vec!["event-a".to_owned()],

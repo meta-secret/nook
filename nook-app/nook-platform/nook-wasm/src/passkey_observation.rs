@@ -292,4 +292,82 @@ mod tests {
             PasskeyObservedBrowser::Other
         );
     }
+
+    #[wasm_bindgen_test]
+    fn transport_projection_deduplicates_sorts_and_ignores_unknown_values() {
+        let values = Array::new();
+        for value in ["usb", "ble", "usb", "internal", "nfc", "hybrid", "unknown"] {
+            values.push(&value.into());
+        }
+        values.push(&42.into());
+        assert_eq!(
+            transports(&values),
+            vec![
+                PasskeyTransport::Ble,
+                PasskeyTransport::Hybrid,
+                PasskeyTransport::Internal,
+                PasskeyTransport::Nfc,
+                PasskeyTransport::Usb,
+            ]
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn authenticator_data_and_aaguid_fail_closed_for_short_or_unattested_data() {
+        assert_eq!(authenticator_data(&ArrayBuffer::new(0)), None);
+        let buffer = ArrayBuffer::new(2);
+        Uint8Array::new(&buffer).copy_from(&[1, 2]);
+        assert_eq!(authenticator_data(&buffer), Some(vec![1, 2]));
+
+        assert_eq!(backup_state(&[]), PasskeyBackupState::Unknown);
+        assert_eq!(aaguid(&[0; 10]), None);
+        let mut not_attested = vec![0; 53];
+        not_attested[32] = 0x08;
+        assert_eq!(aaguid(&not_attested), None);
+    }
+
+    #[wasm_bindgen_test]
+    fn browser_and_platform_projection_covers_all_supported_tokens() {
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Safari/605.1.15"),
+            PasskeyObservedBrowser::Safari
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Firefox/140.0"),
+            PasskeyObservedBrowser::Firefox
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Chrome/140.0"),
+            PasskeyObservedBrowser::Chrome
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Edg/140.0"),
+            PasskeyObservedBrowser::Edge
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 unknown"),
+            PasskeyObservedBrowser::Other
+        );
+
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (Linux; Android 15)", 0),
+            PasskeyObservedPlatform::Android
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)", 0),
+            PasskeyObservedPlatform::AppleMobile
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 0),
+            PasskeyObservedPlatform::Windows
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (X11; Linux x86_64)", 0),
+            PasskeyObservedPlatform::Linux
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (X11; Plan9)", 0),
+            PasskeyObservedPlatform::Other
+        );
+    }
 }

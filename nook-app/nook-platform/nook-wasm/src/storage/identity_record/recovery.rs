@@ -283,8 +283,13 @@ mod tests {
     use super::{RecoveryDeletion, RecoveryMarkerPolicy};
     use crate::storage::{device_access, event_db, identity_record, indexed_db};
     use identity_record::simple_genesis;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn scoped_deletion_preserves_shared_profiles_and_genesis_markers() {
         let keys = RecoveryDeletion {
             reconciliation_keys: Vec::new(),
@@ -310,7 +315,11 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn full_deletion_keeps_exact_key_order_and_selected_profiles() {
         let keys = RecoveryDeletion {
             reconciliation_keys: vec![

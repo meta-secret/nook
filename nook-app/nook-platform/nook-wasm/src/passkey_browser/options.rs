@@ -337,8 +337,9 @@ fn base64_url(bytes: &[u8]) -> String {
 mod tests {
     use super::*;
     use serde::de::DeserializeOwned;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn blank_passkey_labels_use_the_persisted_default_name() {
         assert_eq!(normalized_passkey_label("  "), DEFAULT_PASSKEY_LABEL);
         assert_eq!(normalized_passkey_label("  Personal Mac  "), "Personal Mac");
@@ -358,7 +359,7 @@ mod tests {
         })
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn creation_options_use_passkey_prf_types() -> Result<(), JsError> {
         let value =
             creation_options_struct("localhost", "Nook", "Kitchen laptop", &[8; 32], &[9; 32])?;
@@ -409,7 +410,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn blank_rp_id_uses_browser_origin_default() -> Result<(), JsError> {
         let creation =
             creation_options_struct("", "Nook", "Browser extension", &[8; 32], &[9; 32])?;
@@ -426,7 +427,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn request_options_key_prf_input_by_credential_id() -> Result<(), JsError> {
         let credential_id = [7u8; 32];
         let value = request_options_struct("localhost", &credential_id, &[9; 32])?;
@@ -462,7 +463,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recovery_options_use_discoverable_credentials_and_global_prf_input() -> Result<(), JsError> {
         let value = recovery_options_struct("localhost", &[9; 32])?;
         let options = through_json(&value)?;
@@ -566,6 +567,94 @@ mod wasm_tests {
 
         assert_uint8_array(&get(&public_key, "challenge")?, 32);
         assert_uint8_array(&get(&eval, "first")?, 32);
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn normalization_keeps_optional_binary_sections_optional() -> Result<(), wasm_bindgen::JsError>
+    {
+        let value = js_sys::Object::new();
+        let public_key = js_sys::Object::new();
+        Reflect::set(&value, &JsString::from("publicKey"), public_key.as_ref())
+            .map_err(|_| JsError::new("failed to build optional-section fixture"))?;
+        normalize_webauthn_binary_fields(&value)?;
+        assert!(
+            Reflect::get(&public_key, &JsString::from("challenge"))
+                .map_err(|_| JsError::new("failed to inspect challenge"))?
+                .is_undefined()
+        );
+        assert!(
+            Reflect::get(&public_key, &JsString::from("user"))
+                .map_err(|_| JsError::new("failed to inspect user"))?
+                .is_undefined()
+        );
+        assert!(
+            Reflect::get(&public_key, &JsString::from("allowCredentials"))
+                .map_err(|_| JsError::new("failed to inspect credentials"))?
+                .is_undefined()
+        );
+        assert!(
+            Reflect::get(&public_key, &JsString::from("extensions"))
+                .map_err(|_| JsError::new("failed to inspect extensions"))?
+                .is_undefined()
+        );
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    fn short_passkey_handles_use_full_hex_and_long_handles_are_compacted() {
+        assert_eq!(short_byte_id(&[0, 1, 2, 255]), "000102ff");
+        assert_eq!(short_byte_id(&[0, 1, 2, 3, 4, 5]), "000102030405");
+        assert_eq!(short_byte_id(&[0, 1, 2, 3, 4, 5, 6]), "00010203...0506");
+    }
+
+    #[wasm_bindgen_test]
+    fn normalization_handles_multiple_credential_specific_prf_entries()
+    -> Result<(), wasm_bindgen::JsError> {
+        let value = js_sys::Object::new();
+        let public_key = js_sys::Object::new();
+        let extensions = js_sys::Object::new();
+        let prf = js_sys::Object::new();
+        let eval_by_credential = js_sys::Object::new();
+        for (name, first_byte, second_byte) in [("first", 7, 8), ("second", 9, 10)] {
+            let values = js_sys::Object::new();
+            let first = js_sys::Array::of1(&wasm_bindgen::JsValue::from(first_byte));
+            let second = js_sys::Array::of1(&wasm_bindgen::JsValue::from(second_byte));
+            Reflect::set(&values, &JsString::from("first"), &first)
+                .map_err(|_| JsError::new("failed to set first PRF value"))?;
+            Reflect::set(&values, &JsString::from("second"), &second)
+                .map_err(|_| JsError::new("failed to set second PRF value"))?;
+            Reflect::set(
+                &eval_by_credential,
+                &JsString::from(format!("credential-{name}")),
+                &values,
+            )
+            .map_err(|_| JsError::new("failed to build credential PRF fixture"))?;
+        }
+        Reflect::set(
+            &prf,
+            &JsString::from("evalByCredential"),
+            &eval_by_credential,
+        )
+        .map_err(|_| JsError::new("failed to set credential PRF fixture"))?;
+        Reflect::set(&extensions, &JsString::from("prf"), &prf)
+            .map_err(|_| JsError::new("failed to set PRF fixture"))?;
+        Reflect::set(&public_key, &JsString::from("extensions"), &extensions)
+            .map_err(|_| JsError::new("failed to set extensions fixture"))?;
+        Reflect::set(&value, &JsString::from("publicKey"), &public_key)
+            .map_err(|_| JsError::new("failed to set public key fixture"))?;
+
+        normalize_webauthn_binary_fields(&value)?;
+        let first: js_sys::Object =
+            Reflect::get(&eval_by_credential, &JsString::from("credential-first"))
+                .map_err(|_| JsError::new("failed to read first credential PRF"))?
+                .unchecked_into();
+        let second: js_sys::Object =
+            Reflect::get(&eval_by_credential, &JsString::from("credential-second"))
+                .map_err(|_| JsError::new("failed to read second credential PRF"))?
+                .unchecked_into();
+        assert_uint8_array(&first, 1);
+        assert_uint8_array(&second, 1);
         Ok(())
     }
 }

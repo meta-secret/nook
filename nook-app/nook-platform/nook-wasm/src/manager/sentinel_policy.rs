@@ -91,8 +91,9 @@ impl NookVaultManager {
 mod tests {
     use super::*;
     use nook_core::{AgeArmoredCiphertext, DeviceId, DeviceMode, VaultArchitecture};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn sentinel_unlock_status_projects_each_session_state() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         assert_eq!(
@@ -138,7 +139,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn architecture_rejects_invalid_share_indexes_and_versions() -> anyhow::Result<()> {
         let mut manager = NookVaultManager::new();
         manager.vault.meta.sentinel_shares.insert(

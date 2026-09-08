@@ -516,6 +516,7 @@ impl NookVaultSyncResult {
 mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
@@ -581,7 +582,7 @@ mod tests {
         assert!(icloud.shared_joiner_identity().is_err());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn enrollment_inputs_and_sync_targets_keep_typed_values() {
         let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
         let unnamed = NookEnrollmentIssueInput::unnamed(

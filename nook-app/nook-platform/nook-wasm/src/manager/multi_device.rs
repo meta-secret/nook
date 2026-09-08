@@ -319,8 +319,9 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn sentinel_share_issuance_waits_for_quorum_and_projects_ready_participants()
     -> anyhow::Result<()> {
         let first = nook_core::DeviceIdentity::generate()?;
@@ -371,7 +372,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     #[allow(
         unknown_lints,
         non_local_effect_before_unhandled_error,

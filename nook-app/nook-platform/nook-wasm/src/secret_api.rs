@@ -652,8 +652,9 @@ mod wasm_tests {
 mod tests {
     use crate::public_api::is_google_drive_shared_grant_request;
     use nook_core::{OauthFilePreset, ProviderOauthPreset, StorageProviderType};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn google_drive_grant_requires_explicit_preset() -> anyhow::Result<()> {
         assert!(!is_google_drive_shared_grant_request(
             StorageProviderType::OauthFile,

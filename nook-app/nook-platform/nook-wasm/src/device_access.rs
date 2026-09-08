@@ -615,6 +615,7 @@ fn backup_state(value: nook_core::PasskeyBackupState) -> NookPasskeyBackupState 
 mod tests {
     use super::*;
     use nook_core::{AppKey, DeviceId, IdentityRecord, IsoTimestamp};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     fn vault_row(store_id: &nook_core::StoreId, label: &str) -> NookDeviceVaultAccess {
         NookDeviceVaultAccess {
@@ -625,7 +626,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn scopes_current_and_companion_identity_vault_rows() -> anyhow::Result<()> {
         let current_key = AppKey::generate()?;
         let companion_key = AppKey::generate()?;
@@ -651,7 +652,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn scopes_verified_access_to_each_local_identity_profile() -> anyhow::Result<()> {
         let personal_key = AppKey::generate()?;
         let work_key = AppKey::generate()?;

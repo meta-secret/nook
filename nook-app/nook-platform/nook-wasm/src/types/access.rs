@@ -260,8 +260,9 @@ pub(crate) fn password_entries_to_vec(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn access_wrappers_project_owned_bytes_and_metadata() {
         let setup = NookPasskeySetup {
             user_handle: vec![1, 2, 3],

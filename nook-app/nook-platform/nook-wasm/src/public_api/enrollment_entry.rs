@@ -162,6 +162,7 @@ mod tests {
     use super::*;
     use crate::NookEnrollmentProvider;
     use wasm_bindgen_test::wasm_bindgen_test;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     #[cfg(target_arch = "wasm32")]
     #[wasm_bindgen_test]
@@ -190,7 +191,7 @@ mod tests {
         assert!(sentinel_genesis_participant_fingerprint("{}").is_err());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn enrollment_payload_round_trip_preserves_label_and_metadata() -> Result<(), JsError> {
         let input = NookEnrollmentIssueInput::named(
             NookEnrollmentProvider::local(),

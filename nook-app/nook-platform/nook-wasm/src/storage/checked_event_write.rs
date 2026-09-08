@@ -72,6 +72,7 @@ mod tests {
         serialize_event_storage_yaml,
     };
     use wasm_bindgen_test::wasm_bindgen_test;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     struct EventFixture {
         event_id: EventId,
@@ -102,7 +103,11 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn checked_write_preserves_bytes_and_compares_the_complete_event() -> anyhow::Result<()> {
         let mut fixture = EventFixture::new()?;
         let checked = CheckedEventWrite::parse(&fixture.bytes, &fixture.event_id, "Fixture")?;
@@ -118,7 +123,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn checked_write_rejects_malformed_bytes_and_wrong_requested_id() -> anyhow::Result<()> {
         let fixture = EventFixture::new()?;
         let wrong_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;

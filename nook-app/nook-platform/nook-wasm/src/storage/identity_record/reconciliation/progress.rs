@@ -137,6 +137,7 @@ mod tests {
     };
     use crate::NookError;
     use nook_core::{AppKey, IdentityVaultEventId, StoreId};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     struct ProgressFixture {
         prepared: PendingIdentityReconciliation,
@@ -180,7 +181,11 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn progression_preserves_identity_and_accepts_identical_stage_updates() -> Result<(), NookError>
     {
         let fixture = ProgressFixture::new()?;
@@ -207,7 +212,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn checkpoint_requires_the_committed_epoch_and_cannot_change_it() -> Result<(), NookError> {
         let fixture = ProgressFixture::new()?;
         assert!(
@@ -232,7 +241,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn malformed_marker_keeps_decode_error_context() {
         assert!(matches!(PendingIdentityReconciliation::decode("{broken"),
             Err(NookError::IndexedDb(message)) if message.starts_with("Identity reconciliation marker decode error:")));

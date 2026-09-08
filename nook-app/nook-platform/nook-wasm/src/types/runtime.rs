@@ -333,8 +333,9 @@ impl NookRuntimeConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn locale_run_modes_and_storage_wrappers_project_successful_values() {
         let locale = NookBrowserLocale::from_tags(vec!["ru-RU".to_owned(), "en-US".to_owned()]);
         assert_eq!(locale.language_tags(), vec!["ru-RU", "en-US"]);
@@ -363,7 +364,7 @@ mod tests {
         assert_eq!(folder.name(), "Vault");
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn runtime_config_projects_each_mode_and_resolved_defaults() {
         let local = NookRuntimeConfig::new(NookClientRunMode::Local, true);
         assert_eq!(local.run_mode(), NookClientRunMode::Local);

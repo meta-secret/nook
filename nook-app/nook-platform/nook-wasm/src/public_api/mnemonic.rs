@@ -82,10 +82,11 @@ pub fn infer_bip39_mnemonic_length(text: &str) -> NookBip39MnemonicLength {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     const VALID_TWELVE_WORD_MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
-    #[test]
+    #[wasm_bindgen_test]
     fn bip39_exports_cover_validation_word_queries_and_composition() {
         assert!(validate_bip39_mnemonic(VALID_TWELVE_WORD_MNEMONIC));
         assert!(!validate_bip39_mnemonic("abandon abandon"));
@@ -116,7 +117,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn bip39_length_projection_distinguishes_supported_counts() {
         assert_eq!(
             infer_bip39_mnemonic_length(VALID_TWELVE_WORD_MNEMONIC),

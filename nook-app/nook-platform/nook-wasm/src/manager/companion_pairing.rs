@@ -142,6 +142,7 @@ mod tests {
         ExtensionPairingVaultType,
     };
     use nook_core::{ActiveVaultScope, DeviceIdentity, ProviderVaultScope, StorageProviderData};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     struct PairingFixture {
         manager: NookVaultManager,
@@ -246,7 +247,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn endpoint_construction_is_side_effect_free_and_preserves_exact_request() -> anyhow::Result<()>
     {
         let issued_at: CompanionPairingEpochMilliseconds = serde_json::from_str("100")?;
@@ -284,7 +285,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn real_manager_prevalidates_exact_empty_and_sealed_provider_approvals() -> anyhow::Result<()> {
         for with_provider in [false, true] {
             let fixture = PairingFixture::new(with_provider)?;
@@ -315,7 +316,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn manager_vault_binding_rejects_every_incompatible_state() -> anyhow::Result<()> {
         for case in 0..5 {
             let mut fixture = PairingFixture::new(false)?;
@@ -335,7 +336,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn manager_identity_and_signing_material_are_both_required() -> anyhow::Result<()> {
         for case in 0..3 {
             let mut fixture = PairingFixture::new(false)?;
@@ -356,7 +357,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn approval_installation_must_match_manager_keys_exactly() -> anyhow::Result<()> {
         for case in 0..3 {
             let mut fixture = PairingFixture::new(false)?;
@@ -377,7 +378,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn provider_snapshot_requires_exact_active_and_per_provider_scope() -> anyhow::Result<()> {
         for case in 0..2 {
             let mut fixture = PairingFixture::new(true)?;
@@ -394,7 +395,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn provider_snapshot_requires_explicit_credentials_scope() -> anyhow::Result<()> {
         let mut fixture = PairingFixture::new(true)?;
         fixture
@@ -409,7 +410,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn provider_manifest_substitution_is_rejected_before_recipient_admission() -> anyhow::Result<()>
     {
         let mut fixture = PairingFixture::new(true)?;
@@ -421,7 +422,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn sealed_provider_must_authenticate_for_exact_manager_recipient() -> anyhow::Result<()> {
         let mut fixture = PairingFixture::new(true)?;
         let other = DeviceIdentity::generate()?;

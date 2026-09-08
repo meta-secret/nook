@@ -329,7 +329,7 @@ mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn javascript_timestamp_validation_rejects_lossy_values() {
         assert_eq!(valid_javascript_milliseconds(42.0), Ok(42));
         assert!(valid_javascript_milliseconds(-1.0).is_err());
@@ -338,7 +338,7 @@ mod tests {
         assert!(valid_javascript_milliseconds(MAX_SAFE_JAVASCRIPT_INTEGER + 1.0).is_err());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn wasm_states_expose_portable_variant_kinds() {
         assert_eq!(
             NookVaultLastSync::never_synced().state(),

@@ -542,8 +542,9 @@ impl NookVaultSwitchDecision {
 #[cfg(test)]
 mod tests {
     use crate::{NookClientRunMode, NookRuntimeConfig, NookVaultClientPolicy};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn policy_wrappers_project_sync_and_connection_paths() {
         let policy = NookVaultClientPolicy::new();
 
@@ -721,7 +722,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn policy_wrappers_project_login_and_paging_paths() {
         let policy = NookVaultClientPolicy::new();
 
@@ -753,7 +754,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn runtime_config_projects_valid_overrides_and_debug_capabilities() {
         let local = NookRuntimeConfig::new(NookClientRunMode::Local, false);
         assert!(local.allow_fast_idle());

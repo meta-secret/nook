@@ -308,8 +308,9 @@ pub fn belongs_to_sentinel_vault(
 mod tests {
     use super::*;
     use nook_core::BrowserOAuthProvider;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn backup_code_wasm_exports_match_core_policy() {
         let text = [
             "Save your backup codes",
@@ -324,7 +325,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn oauth_origin_wasm_projection_preserves_missing_and_rejected_locations() {
         for (origin, hostname) in [("", "simple.nokey.sh"), ("https://simple.nokey.sh", "")] {
             let report =
@@ -356,7 +357,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn oauth_origin_and_vault_host_wasm_exports_match_core_policy() {
         let supported = resolve_oauth_origin_support(
             BrowserOAuthProvider::GoogleDrive,
@@ -374,7 +375,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn page_form_wasm_exports_match_core_policy() {
         let otp = NookPageInputFieldObservation::new(
             PageInputType::Text,

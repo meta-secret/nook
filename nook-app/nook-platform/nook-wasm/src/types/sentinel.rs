@@ -395,7 +395,7 @@ mod projection_tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn sentinel_projection_wrappers_project_status_and_owned_values() {
         let inactive = NookSentinelUnlockSessionStatus::inactive();
         assert!(!inactive.active());

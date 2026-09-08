@@ -202,7 +202,11 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn preparation_selects_only_pending_empty_bucket_deletions() -> anyhow::Result<()> {
         let fixture = CatalogFixture::new()?;
         let prepared = fixture.prepare("store_catalogtest", (1 << 1) | (1 << 3))?;
@@ -213,7 +217,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn malformed_ciphertext_and_bucket_json_require_rebuild() -> anyhow::Result<()> {
         let fixture = CatalogFixture::new()?;
         assert!(matches!(

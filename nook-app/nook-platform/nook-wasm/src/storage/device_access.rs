@@ -299,7 +299,11 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn corrupt_and_future_profiles_degrade_to_empty_metadata() {
         assert_eq!(
             nook_core::DeviceAccessProfile::decode("not-json"),
@@ -320,7 +324,11 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn passkey_creation_replaces_credential_metadata_and_usage_merges_observations()
     -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
@@ -398,7 +406,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn passkey_usage_clears_metadata_when_the_credential_fingerprint_changes() -> anyhow::Result<()>
     {
         let mut profile = DeviceAccessProfile::default();
@@ -442,7 +454,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn provider_label_update_rejects_a_replaced_credential() -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
         profile.record_passkey_created(
@@ -479,7 +495,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn provider_label_update_initializes_recoverable_missing_metadata() -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
 
@@ -495,7 +515,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn timestamp_evidence_deserializes_legacy_values_without_conflating_new_states()
     -> anyhow::Result<()> {
         let legacy_known = r#"{
@@ -525,7 +549,11 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn verified_access_is_scoped_by_identity_and_store_and_refreshes_one_pair() -> anyhow::Result<()>
     {
         let mut profile = DeviceAccessProfile::default();
