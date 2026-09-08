@@ -39,6 +39,11 @@ pub enum RuntimeConfigValue<'a> {
     Set(&'a str),
 }
 
+struct RuntimeMillisRequest<'a> {
+    raw: RuntimeConfigValue<'a>,
+    minimum: u32,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VaultRuntimePolicy {
     run_mode: ClientRunMode,
@@ -87,9 +92,12 @@ impl VaultRuntimePolicy {
         if !self.allow_fast_idle() {
             return DEFAULT_VAULT_IDLE_TIMEOUT_MS.into();
         }
-        Self::parse_config_millis(raw, MIN_VAULT_IDLE_TIMEOUT_MS)
-            .unwrap_or(DEFAULT_VAULT_IDLE_TIMEOUT_MS)
-            .into()
+        Self::parse_config_millis(RuntimeMillisRequest {
+            raw,
+            minimum: MIN_VAULT_IDLE_TIMEOUT_MS,
+        })
+        .unwrap_or(DEFAULT_VAULT_IDLE_TIMEOUT_MS)
+        .into()
     }
 
     #[must_use]
@@ -100,7 +108,7 @@ impl VaultRuntimePolicy {
         if !self.allow_fast_idle() {
             return DEFAULT_VAULT_IDLE_WARNING_MS.into();
         }
-        Self::parse_config_millis(raw, 0)
+        Self::parse_config_millis(RuntimeMillisRequest { raw, minimum: 0 })
             .unwrap_or(DEFAULT_VAULT_IDLE_WARNING_MS)
             .into()
     }
@@ -113,11 +121,15 @@ impl VaultRuntimePolicy {
         if !self.allow_fast_sync() {
             return DEFAULT_VAULT_SYNC_INTERVAL_MS.into();
         }
-        Self::parse_config_millis(raw, MIN_VAULT_SYNC_INTERVAL_MS)
-            .unwrap_or(DEFAULT_VAULT_SYNC_INTERVAL_MS)
-            .into()
+        Self::parse_config_millis(RuntimeMillisRequest {
+            raw,
+            minimum: MIN_VAULT_SYNC_INTERVAL_MS,
+        })
+        .unwrap_or(DEFAULT_VAULT_SYNC_INTERVAL_MS)
+        .into()
     }
-    fn parse_config_millis(raw: RuntimeConfigValue<'_>, min: u32) -> Result<u32, ()> {
+    fn parse_config_millis(request: RuntimeMillisRequest<'_>) -> Result<u32, ()> {
+        let RuntimeMillisRequest { raw, minimum } = request;
         let RuntimeConfigValue::Set(raw) = raw else {
             return Err(());
         };
@@ -126,7 +138,7 @@ impl VaultRuntimePolicy {
             return Err(());
         }
         let value = raw.parse::<u32>().map_err(|_| ())?;
-        if value >= min { Ok(value) } else { Err(()) }
+        if value >= minimum { Ok(value) } else { Err(()) }
     }
 }
 
