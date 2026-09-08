@@ -5,6 +5,12 @@
 //! labels a person needs to choose a recovery path. It never exposes an
 //! envelope, credential id, private key, or decrypted vault value.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::EventError;
 
 use crate::{DeviceId, EventGraph, StoreId, VaultOperation, VaultProjection, VaultResult};
@@ -22,6 +28,26 @@ pub struct VaultRecoveryDevice {
     pub passkey_hint: String,
 }
 
+impl VaultRecoveryDevice {
+    /// Format the device suffix written into Nook passkey display names.
+    #[must_use]
+    pub fn passkey_hint_for(device_id: &DeviceId) -> String {
+        const PREFIX_LEN: usize = 6;
+        const SUFFIX_LEN: usize = 4;
+
+        let chars = device_id.as_str().chars().collect::<Vec<_>>();
+        if chars.len() <= PREFIX_LEN + SUFFIX_LEN + 3 {
+            return device_id.as_str().to_owned();
+        }
+        let prefix = chars.iter().take(PREFIX_LEN).collect::<String>();
+        let suffix = chars
+            .iter()
+            .skip(chars.len() - SUFFIX_LEN)
+            .collect::<String>();
+        format!("{prefix}...{suffix}")
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -36,6 +62,12 @@ pub struct VaultRecoveryOptions {
     pub devices: Vec<VaultRecoveryDevice>,
     pub password_entries: Vec<VaultRecoveryPassword>,
     pub requires_sentinel_quorum: bool,
+}
+
+/// Validated inputs for projecting recovery choices from a signed event graph.
+pub struct VaultRecoveryProjectionRequest<'a> {
+    pub graph: &'a EventGraph,
+    pub store_id: &'a StoreId,
 }
 
 /// Safe, Rust-owned recovery DTO returned across the WASM boundary.
@@ -68,88 +100,71 @@ impl VaultRecoverySummary {
     }
 }
 
-/// Project the recovery choices present in a signed vault event graph.
-pub fn vault_recovery_options(
-    graph: &EventGraph,
-    store_id: &str,
-) -> VaultResult<VaultRecoveryOptions> {
-    let projection = VaultProjection::from_graph(graph, store_id)?;
-    let mut devices = BTreeMap::<DeviceId, String>::new();
-    let mut requires_sentinel_quorum = false;
+impl VaultRecoveryOptions {
+    /// Project the recovery choices present in a signed vault event graph.
+    pub fn from_request(request: &VaultRecoveryProjectionRequest<'_>) -> VaultResult<Self> {
+        let graph = request.graph;
+        let store_id = request.store_id;
+        let projection = VaultProjection::from_graph(graph, store_id.as_str())?;
+        let mut devices = BTreeMap::<DeviceId, String>::new();
+        let mut requires_sentinel_quorum = false;
 
-    for event_id in graph.topological_order()? {
-        let event = graph
-            .get(&event_id)
-            .ok_or_else(|| EventError::MissingEvent {
-                event_id: event_id.as_str().to_owned(),
-            })?;
-        for operation in &event.body.operations {
-            match operation {
-                VaultOperation::JoinApproved {
-                    device_id, label, ..
-                } => {
-                    devices.insert(device_id.clone(), label.as_str().to_owned());
-                }
-                VaultOperation::SentinelParticipantEnrolled {
-                    device_id, label, ..
-                } => {
-                    requires_sentinel_quorum = true;
-                    devices.insert(device_id.clone(), label.as_str().to_owned());
-                }
-                VaultOperation::MemberRenamed { device_id, label } => {
-                    if let Some(current) = devices.get_mut(device_id) {
-                        current.clone_from(&label.as_str().to_owned());
+        for event_id in graph.topological_order()? {
+            let event = graph
+                .get(&event_id)
+                .ok_or_else(|| EventError::MissingEvent {
+                    event_id: event_id.as_str().to_owned(),
+                })?;
+            for operation in &event.body.operations {
+                match operation {
+                    VaultOperation::JoinApproved {
+                        device_id, label, ..
+                    } => {
+                        devices.insert(device_id.clone(), label.as_str().to_owned());
                     }
+                    VaultOperation::SentinelParticipantEnrolled {
+                        device_id, label, ..
+                    } => {
+                        requires_sentinel_quorum = true;
+                        devices.insert(device_id.clone(), label.as_str().to_owned());
+                    }
+                    VaultOperation::MemberRenamed { device_id, label } => {
+                        if let Some(current) = devices.get_mut(device_id) {
+                            current.clone_from(&label.as_str().to_owned());
+                        }
+                    }
+                    VaultOperation::DeviceRevoked { device_id } => {
+                        devices.remove(device_id);
+                    }
+                    VaultOperation::SentinelSharesIssued { .. } => {
+                        requires_sentinel_quorum = true;
+                    }
+                    _ => {}
                 }
-                VaultOperation::DeviceRevoked { device_id } => {
-                    devices.remove(device_id);
-                }
-                VaultOperation::SentinelSharesIssued { .. } => {
-                    requires_sentinel_quorum = true;
-                }
-                _ => {}
             }
         }
+
+        Ok(Self {
+            devices: devices
+                .into_iter()
+                .map(|(device_id, label)| VaultRecoveryDevice {
+                    passkey_hint: VaultRecoveryDevice::passkey_hint_for(&device_id),
+                    device_id,
+                    label,
+                })
+                .collect(),
+            password_entries: projection
+                .password_entries
+                .into_iter()
+                .map(|entry| VaultRecoveryPassword {
+                    id: entry.id,
+                    label: entry.label,
+                    created_at: entry.created_at,
+                })
+                .collect(),
+            requires_sentinel_quorum,
+        })
     }
-
-    Ok(VaultRecoveryOptions {
-        devices: devices
-            .into_iter()
-            .map(|(device_id, label)| VaultRecoveryDevice {
-                passkey_hint: recovery_device_id_hint(&device_id),
-                device_id,
-                label,
-            })
-            .collect(),
-        password_entries: projection
-            .password_entries
-            .into_iter()
-            .map(|entry| VaultRecoveryPassword {
-                id: entry.id,
-                label: entry.label,
-                created_at: entry.created_at,
-            })
-            .collect(),
-        requires_sentinel_quorum,
-    })
-}
-
-/// Format the device suffix written into Nook passkey display names.
-#[must_use]
-pub fn recovery_device_id_hint(device_id: &DeviceId) -> String {
-    const PREFIX_LEN: usize = 6;
-    const SUFFIX_LEN: usize = 4;
-
-    let chars = device_id.as_str().chars().collect::<Vec<_>>();
-    if chars.len() <= PREFIX_LEN + SUFFIX_LEN + 3 {
-        return device_id.as_str().to_owned();
-    }
-    let prefix = chars.iter().take(PREFIX_LEN).collect::<String>();
-    let suffix = chars
-        .iter()
-        .skip(chars.len() - SUFFIX_LEN)
-        .collect::<String>();
-    format!("{prefix}...{suffix}")
 }
 
 #[cfg(test)]
@@ -165,36 +180,44 @@ mod tests {
 
     const STORE_ID: &str = "store_recovery01x";
 
-    fn timestamp(value: &str) -> anyhow::Result<IsoTimestamp> {
-        Ok(IsoTimestamp::parse(value)?)
-    }
+    struct Fixtures;
 
-    fn append_event(
-        graph: &mut EventGraph,
-        signing: &SigningIdentity,
-        parent: EventId,
-        operations: Vec<VaultOperation>,
-        created_at: &str,
-    ) -> anyhow::Result<EventId> {
-        let body = VaultEventBody {
-            schema_version: VaultEventSchemaVersion::CURRENT,
-            store_id: StoreId::parse(STORE_ID)?,
-            actor_id: signing.actor_id()?,
-            actor_signing_public_key: signing.public_key(),
-            parents: vec![parent],
-            created_at: timestamp(created_at)?,
-            key_epoch: EventId::from_sha256_hex(
-                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
-            )?,
-            operations,
-        };
-        let event = VaultEvent::sign(body, signing.signing_key())?;
-        let id = event.id()?;
-        graph.insert(event, STORE_ID)?;
-        Ok(id)
+    impl Fixtures {
+        fn timestamp(value: &str) -> anyhow::Result<IsoTimestamp> {
+            Ok(IsoTimestamp::parse(value)?)
+        }
+
+        fn append_event(
+            graph: &mut EventGraph,
+            signing: &SigningIdentity,
+            parent: EventId,
+            operations: Vec<VaultOperation>,
+            created_at: &str,
+        ) -> anyhow::Result<EventId> {
+            let body = VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: StoreId::parse(STORE_ID)?,
+                actor_id: signing.actor_id()?,
+                actor_signing_public_key: signing.public_key(),
+                parents: vec![parent],
+                created_at: Fixtures::timestamp(created_at)?,
+                key_epoch: EventId::from_sha256_hex(
+                    nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+                )?,
+                operations,
+            };
+            let event = VaultEvent::sign(body, signing.signing_key())?;
+            let id = event.id()?;
+            graph.insert(event, STORE_ID)?;
+            Ok(id)
+        }
     }
 
     #[test]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "test scenario covers the complete recovery projection lifecycle"
+    )]
     fn reports_only_active_devices_and_current_password_labels() -> anyhow::Result<()> {
         let signing = SigningIdentity::generate()?.0;
         let first = DeviceIdentity::generate()?;
@@ -220,14 +243,14 @@ mod tests {
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },
-            &timestamp("2026-07-22T00:00:00Z")?,
+            &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
             signing.signing_key(),
         )?;
         let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
         graph.insert(genesis, STORE_ID)?;
 
-        let first_id = append_event(
+        let first_id = Fixtures::append_event(
             &mut graph,
             &signing,
             genesis_id,
@@ -245,7 +268,7 @@ mod tests {
             }],
             "2026-07-22T00:00:01Z",
         )?;
-        let second_id = append_event(
+        let second_id = Fixtures::append_event(
             &mut graph,
             &signing,
             first_id,
@@ -263,7 +286,7 @@ mod tests {
             }],
             "2026-07-22T00:00:02Z",
         )?;
-        append_event(
+        Fixtures::append_event(
             &mut graph,
             &signing,
             second_id,
@@ -279,13 +302,17 @@ mod tests {
             "2026-07-22T00:00:03Z",
         )?;
 
-        let options = vault_recovery_options(&graph, STORE_ID)?;
+        let store_id = StoreId::parse(STORE_ID)?;
+        let options = VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest {
+            graph: &graph,
+            store_id: &store_id,
+        })?;
         assert_eq!(
             options.devices,
             vec![VaultRecoveryDevice {
                 device_id: second.device_id().clone(),
                 label: "Current phone".to_owned(),
-                passkey_hint: recovery_device_id_hint(second.device_id()),
+                passkey_hint: VaultRecoveryDevice::passkey_hint_for(second.device_id()),
             }]
         );
         assert_eq!(
@@ -315,13 +342,13 @@ mod tests {
                 secrets: vec![],
                 password_entries: vec![],
             },
-            &timestamp("2026-07-22T00:00:00Z")?,
+            &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
             signing.signing_key(),
         )?;
         let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
         graph.insert(genesis, STORE_ID)?;
-        append_event(
+        Fixtures::append_event(
             &mut graph,
             &signing,
             genesis_id,
@@ -334,7 +361,11 @@ mod tests {
             "2026-07-22T00:00:01Z",
         )?;
 
-        let options = vault_recovery_options(&graph, STORE_ID)?;
+        let store_id = StoreId::parse(STORE_ID)?;
+        let options = VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest {
+            graph: &graph,
+            store_id: &store_id,
+        })?;
         assert!(options.requires_sentinel_quorum);
         assert_eq!(options.devices.len(), 1);
         assert!(options.password_entries.is_empty());
@@ -365,13 +396,13 @@ mod tests {
                 secrets: vec![],
                 password_entries: vec![password.clone()],
             },
-            &timestamp("2026-07-22T00:00:00Z")?,
+            &Fixtures::timestamp("2026-07-22T00:00:00Z")?,
             signing.signing_key(),
         )?;
         let genesis_id = genesis.id()?;
         let mut graph = EventGraph::new();
         graph.insert(genesis, STORE_ID)?;
-        append_event(
+        Fixtures::append_event(
             &mut graph,
             &signing,
             genesis_id,
@@ -381,7 +412,11 @@ mod tests {
             "2026-07-22T00:00:01Z",
         )?;
 
-        let options = vault_recovery_options(&graph, STORE_ID)?;
+        let store_id = StoreId::parse(STORE_ID)?;
+        let options = VaultRecoveryOptions::from_request(&VaultRecoveryProjectionRequest {
+            graph: &graph,
+            store_id: &store_id,
+        })?;
         assert!(options.password_entries.is_empty());
         Ok(())
     }
