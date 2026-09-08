@@ -14,7 +14,7 @@ pub(crate) use options::{
     creation_options, normalized_passkey_label, recovery_options, request_options,
 };
 
-use wasm_bindgen::{JsCast, JsError, JsValue};
+use wasm_bindgen::{JsCast, JsError};
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{CredentialCreationOptions, CredentialRequestOptions, PublicKeyCredential};
 
@@ -352,7 +352,7 @@ mod tests {
 mod browser_tests {
     use super::*;
     use js_sys::{ArrayBuffer, Reflect, Uint8Array};
-    use wasm_bindgen::closure::Closure;
+    use wasm_bindgen::{JsValue, closure::Closure};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
