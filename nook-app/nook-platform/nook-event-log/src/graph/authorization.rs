@@ -163,7 +163,7 @@ impl EventGraph {
                 _ => return Ok(false),
             }
         }
-        if allows_join_approved && self.ancestry_has_sentinel_membership_ops(event) {
+        if allows_join_approved && self.ancestry_has_sentinel_architecture_evidence(event) {
             return Ok(false);
         }
         Ok(allows_join_requested || allows_join_approved)
@@ -184,9 +184,9 @@ impl EventGraph {
         Ok(request_actor == event.body.actor_id)
     }
 
-    /// True when causal ancestry contains sentinel roster/share operations that
-    /// disqualify simple password self-enrol via `JoinApproved`.
-    fn ancestry_has_sentinel_membership_ops(&self, event: &VaultEvent) -> bool {
+    /// True when causal ancestry proves Sentinel architecture and therefore
+    /// disqualifies simple password self-enrol via `JoinApproved`.
+    fn ancestry_has_sentinel_architecture_evidence(&self, event: &VaultEvent) -> bool {
         let mut visited = BTreeSet::new();
         let mut stack = event.body.parents.clone();
         while let Some(id) = stack.pop() {
@@ -196,13 +196,12 @@ impl EventGraph {
             let Some(parent) = self.events.get(&id) else {
                 continue;
             };
-            if parent.body.operations.iter().any(|operation| {
-                matches!(
-                    operation,
-                    VaultOperation::SentinelParticipantEnrolled { .. }
-                        | VaultOperation::SentinelSharesIssued { .. }
-                )
-            }) {
+            if parent
+                .body
+                .operations
+                .iter()
+                .any(VaultOperation::is_sentinel_architecture_evidence)
+            {
                 return true;
             }
             stack.extend(parent.body.parents.iter().cloned());

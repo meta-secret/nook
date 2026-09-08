@@ -70,13 +70,11 @@ impl EventGraph {
     #[must_use]
     pub fn classify_vault_architecture(&self) -> EventGraphVaultArchitecture {
         if self.events.values().any(|event| {
-            event.body.operations.iter().any(|operation| {
-                matches!(
-                    operation,
-                    crate::VaultOperation::SentinelParticipantEnrolled { .. }
-                        | crate::VaultOperation::SentinelSharesIssued { .. }
-                )
-            })
+            event
+                .body
+                .operations
+                .iter()
+                .any(crate::VaultOperation::is_sentinel_architecture_evidence)
         }) {
             EventGraphVaultArchitecture::Sentinel
         } else {

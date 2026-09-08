@@ -194,8 +194,9 @@ mod tests {
         ExtensionPairingVaultType,
     };
     use nook_core::{
-        ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, IsoTimestamp, MemberLabel,
-        Sha256Hex, SigningIdentity, StoreId, VaultApplication, VaultKeys, VaultOperation,
+        ActiveVaultScope, AuthProvidersSnapshotData, DeviceIdentity, EpochMetadataState,
+        EpochPasswordState, IsoTimestamp, MemberLabel, Sha256Hex, SigningIdentity, StoreId,
+        VaultApplication, VaultKeys, VaultOperation, create_sentinel_share_records,
     };
 
     struct ActivationFixture {
@@ -349,6 +350,47 @@ mod tests {
                     label: MemberLabel::from_trusted("Sentinel".to_owned()),
                 },
             })?);
+            Ok(())
+        }
+
+        fn append_sentinel_checkpoint(&mut self) -> anyhow::Result<()> {
+            let parent = EventId::parse(&self.records.0[0].event_id)?;
+            let signing =
+                SigningIdentity::from_seed_hex_stored(&self.manager.event_log.signing_seed)?;
+            let trigger = Self::event_record(EventRecordRequest {
+                manager: &self.manager,
+                signer: &signing,
+                parents: vec![parent],
+                created_at: "2026-09-08T00:00:07Z",
+                operation: VaultOperation::DeviceRevoked {
+                    device_id: DeviceIdentity::generate()?.device_id().clone(),
+                },
+            })?;
+            let trigger_id = EventId::parse(&trigger.event_id)?;
+            self.records.0.push(trigger);
+            let first = DeviceIdentity::generate()?;
+            let second = DeviceIdentity::generate()?;
+            let shares =
+                create_sentinel_share_records(&VaultKeys::generate()?, &[first, second], 2.into())?;
+            let store_id = StoreId::parse(&self.manager.vault.store_id)?;
+            let (event, _) = nook_core::AppendEventInput::build(nook_core::AppendEventInput {
+                store_id: &store_id,
+                actor_id: &signing.actor_id()?,
+                signing_identity: &signing,
+                parents: vec![trigger_id.clone()],
+                key_epoch: &trigger_id,
+                created_at: &IsoTimestamp::from_trusted("2026-09-08T00:00:08Z".to_owned()),
+                operations: vec![VaultOperation::EpochCheckpoint {
+                    secrets: Vec::new(),
+                    members_checkpoint_hash: Sha256Hex::from_trusted("0".repeat(64)),
+                    rotated_meta_records: EpochMetadataState::Replace(shares),
+                    password_entries: EpochPasswordState::Replace(Vec::new()),
+                }],
+            })?;
+            self.records.0.push(ExternalEventLogRecord {
+                event_id: event.id()?.as_str().to_owned(),
+                event,
+            });
             Ok(())
         }
 
@@ -585,6 +627,17 @@ mod tests {
     fn rejects_sentinel_operation_in_simple_history() -> anyhow::Result<()> {
         let mut fixture = ActivationFixture::new()?;
         fixture.append_sentinel_membership()?;
+        assert!(matches!(
+            fixture.prepare(),
+            Err(CompanionPairingPreparationFailure::UnsupportedVaultArchitecture)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_sentinel_checkpoint_in_simple_history() -> anyhow::Result<()> {
+        let mut fixture = ActivationFixture::new()?;
+        fixture.append_sentinel_checkpoint()?;
         assert!(matches!(
             fixture.prepare(),
             Err(CompanionPairingPreparationFailure::UnsupportedVaultArchitecture)

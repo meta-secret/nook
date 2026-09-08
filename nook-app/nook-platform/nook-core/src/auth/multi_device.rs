@@ -98,9 +98,10 @@ mod tests {
     use super::*;
     use crate::{
         EventGraph, EventGraphAuthorizationProjection, EventGraphDeviceAccess,
-        EventGraphDeviceAccessRequest, EventId, IsoTimestamp, MemberLabel,
-        SentinelMemberRecordProjection, SentinelMemberRecordProjectionRequest, SigningIdentity,
-        StoreId, VaultEvent, VaultEventBody, VaultEventSchemaVersion, VaultMetaGraphProjection,
+        EventGraphDeviceAccessRequest, EventGraphVaultArchitecture, EventId, EventInsertStatus,
+        IsoTimestamp, MemberLabel, SentinelMemberRecordProjection,
+        SentinelMemberRecordProjectionRequest, SigningIdentity, StoreId, VaultEvent,
+        VaultEventBody, VaultEventSchemaVersion, VaultMetaGraphProjection,
         VaultMetaOperationApplier, VaultMetaOperationRequest,
     };
 
@@ -534,6 +535,127 @@ mod tests {
             Ok(()) => return Err(anyhow::anyhow!("invalid checkpoint must be rejected")),
         }
         assert_eq!(meta, before);
+        Ok(())
+    }
+
+    #[test]
+    fn checkpoint_history_remains_sentinel_after_share_revocation() -> anyhow::Result<()> {
+        let owner = DeviceIdentity::generate()?;
+        let retired = DeviceIdentity::generate()?;
+        let first = DeviceIdentity::generate()?;
+        let second = DeviceIdentity::generate()?;
+        let (owner_signing, _) = SigningIdentity::generate()?;
+        let store_id = StoreId::generate()?;
+        let owner_keys = VaultKeys::generate()?;
+        let owner_auth = AuthEnvelopes::parse(
+            owner
+                .auth_record(&owner_keys.secrets_key, &owner_keys.members_key)?
+                .value
+                .as_str(),
+        )?;
+        let (mut graph, root_id) =
+            Fixtures::owner_access_graph(&owner, &owner_signing, &store_id, owner_auth)?;
+
+        let trigger = Fixtures::signed_event(
+            &owner_signing,
+            &store_id,
+            vec![root_id],
+            vec![VaultOperation::DeviceRevoked {
+                device_id: retired.device_id().clone(),
+            }],
+            "2026-08-15T00:01:00Z",
+        )?;
+        let trigger_id = trigger.id()?;
+        assert_eq!(
+            graph.insert(trigger, store_id.as_str())?,
+            EventInsertStatus::Applied
+        );
+        let share_records = create_sentinel_share_records(
+            &VaultKeys::generate()?,
+            &[first.clone(), second.clone()],
+            2.into(),
+        )?;
+        let checkpoint = VaultEvent::sign(
+            VaultEventBody {
+                schema_version: VaultEventSchemaVersion::CURRENT,
+                store_id: store_id.clone(),
+                actor_id: owner_signing.actor_id()?,
+                actor_signing_public_key: owner_signing.public_key(),
+                parents: vec![trigger_id.clone()],
+                created_at: IsoTimestamp::parse("2026-08-15T00:01:01Z")?,
+                key_epoch: trigger_id,
+                operations: vec![VaultOperation::EpochCheckpoint {
+                    secrets: Vec::new(),
+                    members_checkpoint_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
+                    rotated_meta_records: EpochMetadataState::Replace(share_records),
+                    password_entries: EpochPasswordState::Replace(Vec::new()),
+                }],
+            },
+            owner_signing.signing_key(),
+        )?;
+        let checkpoint_id = checkpoint.id()?;
+        assert_eq!(
+            graph.insert(checkpoint, store_id.as_str())?,
+            EventInsertStatus::Applied
+        );
+        graph.validate_authorizations()?;
+        assert_eq!(
+            graph.classify_vault_architecture(),
+            EventGraphVaultArchitecture::Sentinel
+        );
+        let mut meta = VaultMetaState::default();
+        VaultMetaGraphProjection::new(&graph).materialize(&mut meta)?;
+        assert!(meta.sentinel_shares.contains_key(first.device_id()));
+
+        let revocation = Fixtures::signed_event(
+            &owner_signing,
+            &store_id,
+            vec![checkpoint_id],
+            vec![VaultOperation::DeviceRevoked {
+                device_id: first.device_id().clone(),
+            }],
+            "2026-08-15T00:01:02Z",
+        )?;
+        let revocation_id = revocation.id()?;
+        assert_eq!(
+            graph.insert(revocation, store_id.as_str())?,
+            EventInsertStatus::Applied
+        );
+        VaultMetaGraphProjection::new(&graph).materialize(&mut meta)?;
+        assert!(!meta.sentinel_shares.contains_key(first.device_id()));
+        assert!(meta.sentinel_shares.contains_key(second.device_id()));
+        assert_eq!(
+            graph.classify_vault_architecture(),
+            EventGraphVaultArchitecture::Sentinel
+        );
+
+        let joiner = DeviceIdentity::generate()?;
+        let (joiner_signing, _) = SigningIdentity::generate()?;
+        let joiner_keys = VaultKeys::generate()?;
+        let joiner_envelopes = AuthEnvelopes::parse(
+            joiner
+                .auth_record(&joiner_keys.secrets_key, &joiner_keys.members_key)?
+                .value
+                .as_str(),
+        )?;
+        let self_approval = Fixtures::signed_event(
+            &joiner_signing,
+            &store_id,
+            vec![revocation_id],
+            vec![VaultOperation::JoinApproved {
+                device_id: joiner.device_id().clone(),
+                encryption_public_key: joiner.public_key(),
+                signing_public_key: joiner_signing.public_key(),
+                label: MemberLabel::from_trusted("Joiner".to_owned()),
+                secrets_key_ciphertext: joiner_envelopes.secrets_key,
+                members_key_ciphertext: joiner_envelopes.members_key,
+            }],
+            "2026-08-15T00:01:03Z",
+        )?;
+        assert!(matches!(
+            graph.insert(self_approval, store_id.as_str())?,
+            EventInsertStatus::Quarantined(_)
+        ));
         Ok(())
     }
 
