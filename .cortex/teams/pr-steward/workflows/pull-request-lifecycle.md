@@ -92,12 +92,20 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    `--config <absolute-path>` after the PR number for an explicit override.
 
 2. Read newline-delimited JSON from standard output.
-   - Each line is one closed `pr-steward-ndjson/v1` envelope.
+   - Each line is one closed `pr-steward-ndjson/v2` envelope.
    - Deploy its writer and reader atomically. No compatibility reader exists.
    - A version mismatch fails closed. Stop the subscriber and report a blocker.
      Never mix writer and reader versions or start a predecessor path.
-   - Emit only directly identified assigned `meta-secret/nook` pull requests.
-     Suppress foreign or unattributable malformed input.
+   - Observe only the assigned `meta-secret/nook` pull request through the
+     fixed read-only GitHub capability.
+   - Emit only exact-current-head routes. Suppress foreign or stale events.
+   - Repository-managed ingress configuration includes workflow-job events.
+     This observer emits no v2 record for them. Unique PR association belongs
+     to later reconciliation.
+   - Keep a rejected or missing event URL rejected. Do not substitute the
+     assigned pull-request URL.
+   - Emit a sanitized blocker when assigned-PR observation is unavailable.
+   - Suppress foreign or unattributable malformed input.
    - Emit a sanitized blocker for attributable malformed input, then continue.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
@@ -127,7 +135,9 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 
 ### Output contract
 
-Output contains only bounded hints, never bodies, review text, logs, raw payloads, or credentials. Exact reconciliation and summaries are deferred.
+Output contains only bounded hints. It never contains bodies, review text,
+logs, raw payloads, or credentials. Failure reconciliation and summaries are
+deferred.
 
 ### Live reactive pipeline canary
 
