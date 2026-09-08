@@ -76,7 +76,9 @@ class PairingActivationScenario {
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
       default:
-        throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+        throw new Error(
+          `unreachable candidate outcome: ${state satisfies never}`,
+        )
     }
   }
 
@@ -91,7 +93,9 @@ class PairingActivationScenario {
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         return outcome.into_failure()
       default:
-        throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+        throw new Error(
+          `unreachable candidate outcome: ${state satisfies never}`,
+        )
     }
   }
 
