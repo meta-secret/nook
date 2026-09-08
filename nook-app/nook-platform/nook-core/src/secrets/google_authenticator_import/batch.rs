@@ -154,7 +154,6 @@ pub(super) struct CompleteMigrationBatch {
     source_count: usize,
 }
 impl CompleteMigrationBatch {
-    #[must_use]
     pub(super) fn plan(
         self,
     ) -> Result<GoogleAuthenticatorImportPlan, GoogleAuthenticatorImportError> {

@@ -227,7 +227,7 @@ mod tests {
         let SecretValue::Authenticator(item) = parameter
             .clone()
             .convert()
-            .map_err(|()| anyhow::anyhow!("unspecified digits must default"))?
+            .map_err(|_| anyhow::anyhow!("unspecified digits must default"))?
         else {
             anyhow::bail!("expected authenticator")
         };

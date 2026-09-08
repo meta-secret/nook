@@ -45,7 +45,7 @@ impl NookVaultManager {
         request: &LoginSavePlanRequest<'_>,
     ) -> Result<NookWebsiteLoginSavePlan, NookError> {
         let crypto = self.vault.crypto.get()?;
-        let mut owned_logins = Vec::new();
+        let mut owned_logins: Vec<(SecretId, nook_core::LoginSecret)> = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
             if *secret_type != SecretType::Login {
                 continue;
