@@ -15,12 +15,12 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 pub struct NookPreparedCompanionPairingActivation {
     _approval: NookPrevalidatedCompanionPairingApproval,
     _records: NookExternalEventLogRecords,
-    _heads: Vec<String>,
+    _heads: Vec<EventId>,
     _envelopes: AuthEnvelopes,
 }
 
 struct PreparedEventGraph {
-    heads: Vec<String>,
+    heads: Vec<EventId>,
     envelopes: AuthEnvelopes,
 }
 
@@ -110,11 +110,7 @@ impl NookPrevalidatedCompanionPairingApproval {
             return Err(CompanionPairingPreparationFailure::EventAuthorization);
         }
         Ok(PreparedEventGraph {
-            heads: graph
-                .heads()
-                .into_iter()
-                .map(|head| head.as_str().to_owned())
-                .collect(),
+            heads: graph.heads(),
             envelopes,
         })
     }
