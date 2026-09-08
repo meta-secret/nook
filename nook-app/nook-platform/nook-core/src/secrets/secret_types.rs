@@ -608,6 +608,7 @@ impl SecretRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ValidationError;
 
     const VALID_SEED_PHRASE: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
