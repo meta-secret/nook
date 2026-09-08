@@ -37,7 +37,7 @@ struct FunctionOwnershipRequest<'cx, 'tcx> {
 }
 
 impl FunctionOwnership {
-    fn is_test_code(request: FunctionOwnershipRequest<'_, '_, '_>) -> bool {
+    fn is_test_code(request: FunctionOwnershipRequest<'_, '_>) -> bool {
         request
             .cx
             .tcx
@@ -46,7 +46,7 @@ impl FunctionOwnership {
             .any(|segment| segment == "tests" || segment.ends_with("_tests"))
     }
 
-    fn has_unowned_function_attribute(request: FunctionOwnershipRequest<'_, '_, '_>) -> bool {
+    fn has_unowned_function_attribute(request: FunctionOwnershipRequest<'_, '_>) -> bool {
         request
             .cx
             .tcx
