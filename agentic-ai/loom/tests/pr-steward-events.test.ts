@@ -299,6 +299,10 @@ describe('compact routing hints', () => {
         },
       }),
       cloudEvent({
+        event: 'pull_request',
+        body: { repository, pull_request: { number: 1560, head: {} } },
+      }),
+      cloudEvent({
         event: 'pull_request_review',
         body: {
           repository,

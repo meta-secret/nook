@@ -497,8 +497,13 @@ export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
   };
 }
 
+export type PrStewardInvocation = {
+  readonly pullRequest: number;
+  readonly credentialPath: string;
+};
+
 export class PrStewardInvocationCodec {
-  static parse(argv: readonly string[]) {
+  static parse(argv: readonly string[]): PrStewardInvocation {
     if (
       (argv.length !== 2 && argv.length !== 4) ||
       argv[0] !== '--pr' ||
@@ -529,6 +534,7 @@ export function assignedPrEvent(args: {
   if (
     event.repository !== PR_STEWARD_REPOSITORY ||
     event.pullRequest !== args.pullRequest ||
+    (event.source === PrStewardSource.PullRequest && event.headSha === false) ||
     event.source === false
   )
     return false;
