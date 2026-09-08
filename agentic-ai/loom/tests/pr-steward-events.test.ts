@@ -10,15 +10,17 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
-  assignedPrEvent,
   loadCredential,
-  PR_STEWARD_REPOSITORY,
+  PrStewardEventWriter,
   PrStewardInvocationCodec,
-  PrStewardRoutingVersion,
+} from '../src/pr-steward-events.ts';
+import {
+  PR_STEWARD_REPOSITORY,
+  PrStewardNdjsonCodec,
+  PrStewardRecordKind,
   PrStewardSource,
   PrStewardUrlTrust,
-  writeAssignedEvents,
-} from '../src/pr-steward-events.ts';
+} from '../src/pr-steward-contract.ts';
 import type { UntrustedYamlMap } from '../src/lib/guards.ts';
 
 const HEAD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -65,7 +67,7 @@ class PrStewardEventFixture {
 
   static async write(data: readonly Uint8Array[]): Promise<readonly string[]> {
     const lines: string[] = [];
-    await writeAssignedEvents({
+    await PrStewardEventWriter.write({
       messages: (async function* () {
         for (const item of data) yield { data: item };
       })(),
@@ -216,6 +218,10 @@ describe('compact routing hints', () => {
         check_suite: {
           ...associated({ id: 45, head: HEAD }),
           status: 'completed',
+          path: 'untrusted/path',
+          line: 9,
+          pull_request_review_id: 8,
+          user: { login: 'untrusted-author' },
         },
       },
     },
@@ -232,13 +238,12 @@ describe('compact routing hints', () => {
     },
   ])(
     'routes directly attributed $event metadata',
-    ({ event, source, body }) => {
-      const hint = assignedPrEvent({
-        data: cloudEvent({ event, body }),
-        pullRequest: 1560,
-      });
+    async ({ event, source, body }) => {
+      const lines = await write([cloudEvent({ event, body })]);
+      expect(lines).toHaveLength(1);
+      const hint = PrStewardNdjsonCodec.decode(lines[0]!).record;
       expect(hint).toMatchObject({
-        schemaVersion: PrStewardRoutingVersion.V1,
+        kind: PrStewardRecordKind.Routing,
         repository: PR_STEWARD_REPOSITORY,
         pullRequest: 1560,
         source,
@@ -269,23 +274,19 @@ describe('compact routing hints', () => {
   );
 
   test('suppresses foreign, stale, status, ambiguous, and PR-less inputs', async () => {
+    const rejected: Uint8Array[] = [];
     for (const event of ['check_run', 'check_suite', 'workflow_run'])
       for (const head of [STALE_HEAD, false] as const)
-        expect(
-          assignedPrEvent({
-            data: cloudEvent({
-              event,
-              body: {
-                repository,
-                [event]: associated({ id: 50, head }),
-              },
-            }),
-            pullRequest: 1560,
+        rejected.push(
+          cloudEvent({
+            event,
+            body: { repository, [event]: associated({ id: 50, head }) },
           }),
-        ).toBe(false);
-    const rejected = [
+        );
+    rejected.push(
       cloudEvent({
         event: 'pull_request',
+        id: '',
         body: {
           repository: { full_name: 'attacker/nook' },
           pull_request: pullRequest,
@@ -297,10 +298,6 @@ describe('compact routing hints', () => {
           repository,
           pull_request: { number: 1559, head: { sha: HEAD } },
         },
-      }),
-      cloudEvent({
-        event: 'pull_request',
-        body: { repository, pull_request: { number: 1560, head: {} } },
       }),
       cloudEvent({
         event: 'pull_request_review',
@@ -329,7 +326,7 @@ describe('compact routing hints', () => {
           },
         },
       }),
-    ];
+    );
     expect(await write(rejected)).toEqual([]);
   });
 
@@ -350,17 +347,41 @@ describe('compact routing hints', () => {
         },
       },
     });
-    const lines = await write([encoder.encode('RAW_MALFORMED_SECRET'), valid]);
-    expect(lines).toHaveLength(1);
-    const parsed = JSON.parse(lines[0]!) as UntrustedYamlMap;
-    expect([parsed.path, parsed.line]).toEqual([false, false]);
-    expect([parsed.url, parsed.author]).toEqual([false, false]);
-    expect(lines[0]!.length).toBeLessThan(2_048);
-    expect(lines[0]).not.toContain('RAW_PAYLOAD_SECRET');
-    expect(lines[0]).not.toContain('RAW_MALFORMED_SECRET');
+    const assignedMalformed = cloudEvent({
+      event: 'pull_request',
+      body: { repository, pull_request: pullRequest },
+      id: '',
+    });
+    const malformedJob = cloudEvent({
+      event: 'workflow_job',
+      body: { repository, workflow_job: associated({ id: 43, head: HEAD }) },
+      id: '',
+    });
+    const lines = await write([
+      encoder.encode('RAW_UNATTRIBUTED_SECRET'),
+      assignedMalformed,
+      malformedJob,
+      valid,
+    ]);
+    expect(lines).toHaveLength(2);
+    expect(PrStewardNdjsonCodec.decode(lines[0]!).record).toMatchObject({
+      kind: PrStewardRecordKind.Blocker,
+      pullRequest: 1560,
+    });
+    const parsed = PrStewardNdjsonCodec.decode(lines[1]!).record;
+    expect(parsed).toMatchObject({
+      kind: PrStewardRecordKind.Routing,
+      path: false,
+      line: false,
+      url: false,
+      author: false,
+    });
+    expect(lines[1]!.length).toBeLessThan(2_048);
+    expect(lines.join('')).not.toContain('RAW_PAYLOAD_SECRET');
+    expect(lines.join('')).not.toContain('RAW_UNATTRIBUTED_SECRET');
     const failure = new Error('operational failure');
     await expect(
-      writeAssignedEvents({
+      PrStewardEventWriter.write({
         messages: (async function* () {
           yield { data: valid };
         })(),
@@ -368,6 +389,16 @@ describe('compact routing hints', () => {
         write: () => {
           throw failure;
         },
+      }),
+    ).rejects.toBe(failure);
+    await expect(
+      PrStewardEventWriter.write({
+        messages: (async function* () {
+          yield { data: valid };
+          throw failure;
+        })(),
+        pullRequest: 1560,
+        write: () => false,
       }),
     ).rejects.toBe(failure);
   });
@@ -384,4 +415,9 @@ test('documents the direct foreground process', () => {
   expect(lifecycle).toContain(
     'bun agentic-ai/loom/src/pr-steward-events.ts --pr <number>',
   );
+  expect(lifecycle).toContain('closed `pr-steward-ndjson/v1` envelope');
+  expect(lifecycle).toContain('No compatibility reader exists.');
+  expect(lifecycle).toContain('Stop the subscriber and report a blocker.');
+  expect(lifecycle).not.toContain('Roll back');
+  expect(lifecycle).not.toContain('pr-steward-routing/v1');
 });

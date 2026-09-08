@@ -14,49 +14,26 @@ import {
   untrustedYamlProperty,
   UntrustedYamlPropertyPresence,
 } from './lib/guards.ts';
+import {
+  PR_STEWARD_REPOSITORY,
+  PrStewardBlockerCode,
+  PrStewardDecodeError,
+  PrStewardNdjsonCodec,
+  PrStewardRecordKind,
+  PrStewardSource,
+} from './pr-steward-contract.ts';
 
 import type { UntrustedYamlMap, UntrustedYamlNode } from './lib/guards.ts';
+import type { PrStewardRecord, PrStewardUrl } from './pr-steward-contract.ts';
 
 export const PR_STEWARD_ENDPOINT = 'wss://events.dev.nokey.sh';
 export const PR_STEWARD_SUBJECT = 'default.github-webhook.pr-lifecycle';
-export const PR_STEWARD_REPOSITORY = 'meta-secret/nook';
-
-export enum PrStewardRoutingVersion {
-  V1 = 'pr-steward-routing/v1',
-}
-
-export enum PrStewardEventKind {
-  GithubPrEvent = 'github-pr-event',
-}
-
-export enum PrStewardSource {
-  CheckRun = 'check-run',
-  CheckSuite = 'check-suite',
-  IssueComment = 'issue-comment',
-  PullRequest = 'pull-request',
-  PullRequestReview = 'pull-request-review',
-  PullRequestReviewComment = 'pull-request-review-comment',
-  WorkflowRun = 'workflow-run',
-}
-
-export enum PrStewardUrlTrust {
-  GithubOwned = 'github-owned',
-  UntrustedExternal = 'untrusted-external',
-}
-
-export type PrStewardUrl = {
-  readonly trust: PrStewardUrlTrust;
-  readonly value: string;
-};
-
 export type PrStewardCredential = {
   readonly username: 'pr-steward';
   readonly password: string;
 };
 
 export type PrStewardEvent = {
-  readonly schemaVersion: PrStewardRoutingVersion.V1;
-  readonly kind: PrStewardEventKind;
   readonly id: string;
   readonly time: string;
   readonly githubEvent: string;
@@ -75,12 +52,6 @@ export type PrStewardEvent = {
   readonly path: string | false;
   readonly line: number | false;
   readonly author: string | false;
-};
-
-export type PrStewardRoutingHint = PrStewardEvent & {
-  readonly repository: typeof PR_STEWARD_REPOSITORY;
-  readonly pullRequest: number;
-  readonly source: PrStewardSource;
 };
 
 function property(args: {
@@ -128,166 +99,12 @@ function headerValue(args: {
   return false;
 }
 
-function pullRequestNumber(args: {
-  readonly body: UntrustedYamlMap;
-  readonly source: PrStewardSource | false;
-}): number | false {
-  if (args.source === PrStewardSource.IssueComment) {
-    const marker = nested({
-      record: args.body,
-      path: ['issue', 'pull_request'],
-    });
-    return isRecord(marker)
-      ? optionalNumber(nested({ record: args.body, path: ['issue', 'number'] }))
-      : false;
-  }
-  if (
-    args.source === PrStewardSource.PullRequest ||
-    args.source === PrStewardSource.PullRequestReview ||
-    args.source === PrStewardSource.PullRequestReviewComment
-  )
-    return optionalNumber(
-      nested({ record: args.body, path: ['pull_request', 'number'] }),
-    );
-  if (args.source === false) return false;
-  const object = eventObject({ body: args.body, source: args.source });
-  const candidates = property({ record: object, key: 'pull_requests' });
-  if (
-    !Array.isArray(candidates) ||
-    candidates.length !== 1 ||
-    !isRecord(candidates[0])
-  )
-    return false;
-  const pullRequest = optionalNumber(
-    property({ record: candidates[0], key: 'number' }),
-  );
-  const associatedHead = optionalString(
-    nested({ record: candidates[0], path: ['head', 'sha'] }),
-  );
-  const eventHead = optionalString(
-    property({ record: object, key: 'head_sha' }),
-  );
-  return pullRequest !== false &&
-    associatedHead !== false &&
-    eventHead !== false &&
-    /^[0-9a-f]{40}$/.test(associatedHead) &&
-    associatedHead === eventHead
-    ? pullRequest
-    : false;
+enum PrStewardWebhookDecodeCode {
+  Data = 'data',
+  Envelope = 'envelope',
+  Identity = 'identity',
+  Payload = 'payload',
 }
-
-function headSha(args: {
-  readonly body: UntrustedYamlMap;
-  readonly source: PrStewardSource | false;
-}): string | false {
-  if (args.source === false || args.source === PrStewardSource.IssueComment)
-    return false;
-  const object = eventObject({ body: args.body, source: args.source });
-  const value = optionalString(
-    args.source === PrStewardSource.PullRequest
-      ? nested({ record: object, path: ['head', 'sha'] })
-      : args.source === PrStewardSource.PullRequestReview ||
-          args.source === PrStewardSource.PullRequestReviewComment
-        ? property({ record: object, key: 'commit_id' })
-        : property({ record: object, key: 'head_sha' }),
-  );
-  return value !== false && /^[0-9a-f]{40}$/.test(value) ? value : false;
-}
-
-function sourceForEvent(value: string): PrStewardSource | false {
-  switch (value) {
-    case 'check_run':
-      return PrStewardSource.CheckRun;
-    case 'check_suite':
-      return PrStewardSource.CheckSuite;
-    case 'issue_comment':
-      return PrStewardSource.IssueComment;
-    case 'pull_request':
-      return PrStewardSource.PullRequest;
-    case 'pull_request_review':
-      return PrStewardSource.PullRequestReview;
-    case 'pull_request_review_comment':
-      return PrStewardSource.PullRequestReviewComment;
-    case 'workflow_run':
-      return PrStewardSource.WorkflowRun;
-    default:
-      return false;
-  }
-}
-
-function eventObject(args: {
-  readonly body: UntrustedYamlMap;
-  readonly source: PrStewardSource;
-}): UntrustedYamlMap {
-  const key =
-    args.source === PrStewardSource.PullRequestReview
-      ? 'review'
-      : args.source === PrStewardSource.PullRequest
-        ? 'pull_request'
-        : args.source === PrStewardSource.CheckRun
-          ? 'check_run'
-          : args.source === PrStewardSource.CheckSuite
-            ? 'check_suite'
-            : args.source === PrStewardSource.WorkflowRun
-              ? 'workflow_run'
-              : 'comment';
-  const candidate = property({ record: args.body, key });
-  return isRecord(candidate) ? candidate : {};
-}
-
-function boundedText(args: {
-  readonly value: UntrustedYamlNode | false;
-  readonly limit: number;
-}): string | false {
-  const candidate = optionalString(args.value);
-  if (candidate === false) return false;
-  const normalized = Array.from(candidate)
-    .map((character) => {
-      const code = character.charCodeAt(0);
-      return code <= 31 || code === 127 ? ' ' : character;
-    })
-    .join('')
-    .trim();
-  return normalized.length === 0 || normalized.length > args.limit
-    ? false
-    : normalized;
-}
-
-function githubUrl(value: string): PrStewardUrl | false {
-  const parsed = safeUrl(value);
-  const repositoryPath = `/${PR_STEWARD_REPOSITORY}`;
-  return parsed !== false &&
-    parsed.hostname === 'github.com' &&
-    (parsed.pathname === repositoryPath ||
-      parsed.pathname.startsWith(`${repositoryPath}/`))
-    ? { trust: PrStewardUrlTrust.GithubOwned, value: parsed.toString() }
-    : false;
-}
-
-function externalUrl(value: string): PrStewardUrl | false {
-  const parsed = safeUrl(value);
-  return parsed === false
-    ? false
-    : { trust: PrStewardUrlTrust.UntrustedExternal, value: parsed.origin };
-}
-
-function safeUrl(value: string): URL | false {
-  try {
-    const parsed = new URL(value);
-    if (
-      parsed.protocol !== 'https:' ||
-      parsed.username.length > 0 ||
-      parsed.password.length > 0
-    )
-      return false;
-    parsed.search = '';
-    parsed.hash = '';
-    return parsed.toString().length <= 240 ? parsed : false;
-  } catch {
-    return false;
-  }
-}
-
 type PrStewardMetadata = Pick<
   PrStewardEvent,
   | 'author'
@@ -300,201 +117,373 @@ type PrStewardMetadata = Pick<
   | 'state'
   | 'url'
 >;
+class EventDecodeError extends Error {
+  readonly attribution:
+    | {
+        readonly repository: typeof PR_STEWARD_REPOSITORY;
+        readonly pullRequest: number;
+      }
+    | false;
 
-function routingMetadata(args: {
-  readonly body: UntrustedYamlMap;
-  readonly source: PrStewardSource;
-}): PrStewardMetadata {
-  const object = eventObject(args);
-  const github = boundedText({
-    value: property({ record: object, key: 'html_url' }),
-    limit: 240,
-  });
-  const external = boundedText({
-    value: property({ record: object, key: 'target_url' }),
-    limit: 240,
-  });
-  const line = optionalNumber(property({ record: object, key: 'line' }));
-  const originalLine = optionalNumber(
-    property({ record: object, key: 'original_line' }),
-  );
-  const comment =
-    args.source === PrStewardSource.IssueComment ||
-    args.source === PrStewardSource.PullRequestReviewComment;
-  const objectId = optionalNumber(property({ record: object, key: 'id' }));
-  return {
-    objectId,
-    runId:
-      args.source === PrStewardSource.WorkflowRun
-        ? objectId
-        : optionalNumber(property({ record: object, key: 'run_id' })),
-    reviewId: optionalNumber(
-      property({ record: object, key: 'pull_request_review_id' }),
-    ),
-    commentId: comment
-      ? optionalNumber(property({ record: object, key: 'id' }))
-      : false,
-    state:
-      boundedText({
-        value: property({ record: object, key: 'state' }),
-        limit: 64,
-      }) ||
-      boundedText({
-        value: property({ record: object, key: 'conclusion' }),
-        limit: 64,
-      }) ||
-      boundedText({
-        value: property({ record: object, key: 'status' }),
-        limit: 64,
-      }),
-    url:
-      github !== false
-        ? githubUrl(github)
-        : external !== false
-          ? externalUrl(external)
-          : false,
-    path: boundedText({
-      value: property({ record: object, key: 'path' }),
-      limit: 240,
-    }),
-    line: line !== false ? line : originalLine,
-    author: boundedText({
-      value: nested({ record: object, path: ['user', 'login'] }),
-      limit: 64,
-    }),
-  };
+  constructor(request: {
+    readonly code: PrStewardWebhookDecodeCode;
+    readonly attribution: EventDecodeError['attribution'];
+  }) {
+    super(`PR Steward webhook decode failed: ${request.code}`);
+    this.name = 'EventDecodeError';
+    this.attribution = request.attribution;
+  }
 }
 
-function coherentReviewHead(args: {
-  readonly body: UntrustedYamlMap;
-  readonly source: PrStewardSource;
-}): boolean {
-  if (
-    args.source !== PrStewardSource.PullRequestReview &&
-    args.source !== PrStewardSource.PullRequestReviewComment
-  )
-    return true;
-  const pullHead = optionalString(
-    nested({ record: args.body, path: ['pull_request', 'head', 'sha'] }),
-  );
-  const objectHead = optionalString(
-    property({ record: eventObject(args), key: 'commit_id' }),
-  );
-  return (
-    pullHead !== false &&
-    objectHead !== false &&
-    /^[0-9a-f]{40}$/.test(pullHead) &&
-    pullHead === objectHead
-  );
-}
+export class PrStewardWebhookDecoder {
+  static #source(value: string): PrStewardSource | false {
+    for (const source of Object.values(PrStewardSource))
+      if (PrStewardNdjsonCodec.githubEvent(source) === value) return source;
+    return false;
+  }
 
-class EventDecodeError extends Error {}
+  static #object(args: {
+    readonly body: UntrustedYamlMap;
+    readonly source: PrStewardSource;
+  }): UntrustedYamlMap {
+    const keys: Record<PrStewardSource, string> = {
+      [PrStewardSource.CheckRun]: 'check_run',
+      [PrStewardSource.CheckSuite]: 'check_suite',
+      [PrStewardSource.IssueComment]: 'comment',
+      [PrStewardSource.PullRequest]: 'pull_request',
+      [PrStewardSource.PullRequestReview]: 'review',
+      [PrStewardSource.PullRequestReviewComment]: 'comment',
+      [PrStewardSource.WorkflowJob]: 'workflow_job',
+      [PrStewardSource.WorkflowRun]: 'workflow_run',
+    };
+    const candidate = property({ record: args.body, key: keys[args.source] });
+    return isRecord(candidate) ? candidate : {};
+  }
 
-export function decodePrStewardEvent(data: Uint8Array): PrStewardEvent {
-  let parsed: UntrustedYamlNode;
-  try {
-    parsed = asUntrustedYamlNode(
-      JSON.parse(
-        new TextDecoder('utf-8', { fatal: true }).decode(data),
-      ) as UntrustedYamlNode,
+  static #pullRequestNumber(args: {
+    readonly body: UntrustedYamlMap;
+    readonly source: PrStewardSource | false;
+  }): number | false {
+    if (args.source === PrStewardSource.IssueComment) {
+      const marker = nested({
+        record: args.body,
+        path: ['issue', 'pull_request'],
+      });
+      return isRecord(marker)
+        ? optionalNumber(
+            nested({ record: args.body, path: ['issue', 'number'] }),
+          )
+        : false;
+    }
+    if (
+      args.source === PrStewardSource.PullRequest ||
+      args.source === PrStewardSource.PullRequestReview ||
+      args.source === PrStewardSource.PullRequestReviewComment
+    )
+      return optionalNumber(
+        nested({ record: args.body, path: ['pull_request', 'number'] }),
+      );
+    const source = args.source;
+    if (source === false) return false;
+    const object = this.#object({ body: args.body, source });
+    const candidates = property({ record: object, key: 'pull_requests' });
+    if (
+      !Array.isArray(candidates) ||
+      candidates.length !== 1 ||
+      !isRecord(candidates[0])
+    )
+      return false;
+    const pullRequest = optionalNumber(
+      property({ record: candidates[0], key: 'number' }),
     );
-  } catch {
-    throw new EventDecodeError('event payload is not valid UTF-8 JSON');
-  }
-  if (!isRecord(parsed))
-    throw new EventDecodeError('event payload must be an object');
-  const encodedData = property({ record: parsed, key: 'data_base64' });
-  if (
-    typeof encodedData !== 'string' ||
-    encodedData.length % 4 !== 0 ||
-    !/^[A-Za-z0-9+/]+={0,2}$/.test(encodedData)
-  ) {
-    throw new EventDecodeError('event envelope is invalid');
-  }
-  let eventData: UntrustedYamlNode;
-  try {
-    const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
-      Buffer.from(encodedData, 'base64'),
+    const associatedHead = optionalString(
+      nested({ record: candidates[0], path: ['head', 'sha'] }),
     );
-    eventData = asUntrustedYamlNode(JSON.parse(decoded) as UntrustedYamlNode);
-  } catch {
-    throw new EventDecodeError('event data is invalid');
-  }
-  if (!isRecord(eventData)) throw new EventDecodeError('event data is invalid');
-  const headers = property({ record: eventData, key: 'headers' });
-  const body = property({ record: eventData, key: 'body' });
-  if (!isRecord(headers) || !isRecord(body))
-    throw new EventDecodeError('event data is invalid');
-
-  const id = boundedText({
-    value: property({ record: parsed, key: 'id' }),
-    limit: 128,
-  });
-  const time = boundedText({
-    value: property({ record: parsed, key: 'time' }),
-    limit: 64,
-  });
-  const githubEvent = boundedText({
-    value: headerValue({ headers, name: 'X-Github-Event' }),
-    limit: 64,
-  });
-  const deliveryId = boundedText({
-    value: headerValue({ headers, name: 'X-Github-Delivery' }),
-    limit: 128,
-  });
-  if (
-    id === false ||
-    time === false ||
-    !Number.isFinite(Date.parse(time)) ||
-    githubEvent === false ||
-    deliveryId === false
-  )
-    throw new EventDecodeError('event identity is invalid');
-
-  const action = boundedText({
-    value: property({ record: body, key: 'action' }),
-    limit: 64,
-  });
-  const repository = boundedText({
-    value: nested({ record: body, path: ['repository', 'full_name'] }),
-    limit: 128,
-  });
-  const candidateSource = sourceForEvent(githubEvent);
-  const source =
-    candidateSource !== false &&
-    coherentReviewHead({ body, source: candidateSource })
-      ? candidateSource
+    const eventHead = optionalString(
+      property({ record: object, key: 'head_sha' }),
+    );
+    return pullRequest !== false &&
+      associatedHead !== false &&
+      eventHead !== false &&
+      /^[0-9a-f]{40}$/.test(associatedHead) &&
+      associatedHead === eventHead
+      ? pullRequest
       : false;
-  const pullRequest = pullRequestNumber({ body, source });
-  const sha = headSha({ body, source });
-  const metadata: PrStewardMetadata =
-    source === false
-      ? {
-          objectId: false,
-          runId: false,
-          reviewId: false,
-          commentId: false,
-          state: false,
-          url: false,
-          path: false,
-          line: false,
-          author: false,
-        }
-      : routingMetadata({ body, source });
-  return {
-    schemaVersion: PrStewardRoutingVersion.V1,
-    kind: PrStewardEventKind.GithubPrEvent,
-    id,
-    time,
-    githubEvent,
-    deliveryId,
-    action,
-    repository,
-    pullRequest,
-    headSha: sha,
-    source,
-    ...metadata,
-  };
+  }
+
+  static #headSha(args: {
+    readonly body: UntrustedYamlMap;
+    readonly source: PrStewardSource | false;
+  }): string | false {
+    const source = args.source;
+    if (source === false || source === PrStewardSource.IssueComment)
+      return false;
+    const object = this.#object({ body: args.body, source });
+    const value = optionalString(
+      args.source === PrStewardSource.PullRequest
+        ? nested({ record: object, path: ['head', 'sha'] })
+        : args.source === PrStewardSource.PullRequestReview ||
+            args.source === PrStewardSource.PullRequestReviewComment
+          ? property({ record: object, key: 'commit_id' })
+          : property({ record: object, key: 'head_sha' }),
+    );
+    return value !== false && /^[0-9a-f]{40}$/.test(value) ? value : false;
+  }
+
+  static #boundedText(args: {
+    readonly value: UntrustedYamlNode | false;
+    readonly limit: number;
+  }): string | false {
+    const candidate = optionalString(args.value);
+    if (candidate === false) return false;
+    const normalized = Array.from(candidate)
+      .map((character) => {
+        const code = character.charCodeAt(0);
+        return code <= 31 || code === 127 ? ' ' : character;
+      })
+      .join('')
+      .trim();
+    return normalized.length === 0 || normalized.length > args.limit
+      ? false
+      : normalized;
+  }
+
+  static #routingMetadata(args: {
+    readonly body: UntrustedYamlMap;
+    readonly source: PrStewardSource;
+  }): PrStewardMetadata {
+    const object = this.#object(args);
+    const github = this.#boundedText({
+      value: property({ record: object, key: 'html_url' }),
+      limit: 240,
+    });
+    const external = this.#boundedText({
+      value: property({ record: object, key: 'target_url' }),
+      limit: 240,
+    });
+    const reviewComment =
+      args.source === PrStewardSource.PullRequestReviewComment;
+    const line = optionalNumber(
+      property({ record: reviewComment ? object : {}, key: 'line' }),
+    );
+    const originalLine = optionalNumber(
+      property({ record: reviewComment ? object : {}, key: 'original_line' }),
+    );
+    const comment =
+      args.source === PrStewardSource.IssueComment || reviewComment;
+    const run =
+      args.source === PrStewardSource.CheckRun ||
+      args.source === PrStewardSource.WorkflowRun;
+    const human =
+      comment ||
+      args.source === PrStewardSource.PullRequest ||
+      args.source === PrStewardSource.PullRequestReview;
+    const objectId = optionalNumber(property({ record: object, key: 'id' }));
+    return {
+      objectId,
+      runId: !run
+        ? false
+        : args.source === PrStewardSource.WorkflowRun
+          ? objectId
+          : optionalNumber(property({ record: object, key: 'run_id' })),
+      reviewId: optionalNumber(
+        property({
+          record: reviewComment ? object : {},
+          key: 'pull_request_review_id',
+        }),
+      ),
+      commentId: comment
+        ? optionalNumber(property({ record: object, key: 'id' }))
+        : false,
+      state:
+        this.#boundedText({
+          value: property({ record: object, key: 'state' }),
+          limit: 64,
+        }) ||
+        this.#boundedText({
+          value: property({ record: object, key: 'conclusion' }),
+          limit: 64,
+        }) ||
+        this.#boundedText({
+          value: property({ record: object, key: 'status' }),
+          limit: 64,
+        }),
+      url:
+        github !== false
+          ? PrStewardNdjsonCodec.githubUrl(github)
+          : external !== false
+            ? PrStewardNdjsonCodec.externalUrl(external)
+            : false,
+      path: this.#boundedText({
+        value: property({ record: reviewComment ? object : {}, key: 'path' }),
+        limit: 240,
+      }),
+      line: line !== false ? line : originalLine,
+      author:
+        human &&
+        this.#boundedText({
+          value: nested({ record: object, path: ['user', 'login'] }),
+          limit: 64,
+        }),
+    };
+  }
+
+  static #coherentReviewHead(args: {
+    readonly body: UntrustedYamlMap;
+    readonly source: PrStewardSource;
+  }): boolean {
+    if (
+      args.source !== PrStewardSource.PullRequestReview &&
+      args.source !== PrStewardSource.PullRequestReviewComment
+    )
+      return true;
+    const pullHead = optionalString(
+      nested({ record: args.body, path: ['pull_request', 'head', 'sha'] }),
+    );
+    const objectHead = optionalString(
+      property({ record: this.#object(args), key: 'commit_id' }),
+    );
+    return (
+      pullHead !== false &&
+      objectHead !== false &&
+      /^[0-9a-f]{40}$/.test(pullHead) &&
+      pullHead === objectHead
+    );
+  }
+
+  static decode(request: { readonly data: Uint8Array }): PrStewardEvent {
+    const data = request.data;
+    let parsed: UntrustedYamlNode;
+    try {
+      parsed = asUntrustedYamlNode(
+        JSON.parse(
+          new TextDecoder('utf-8', { fatal: true }).decode(data),
+        ) as UntrustedYamlNode,
+      );
+    } catch {
+      throw new EventDecodeError({
+        code: PrStewardWebhookDecodeCode.Payload,
+        attribution: false,
+      });
+    }
+    if (!isRecord(parsed))
+      throw new EventDecodeError({
+        code: PrStewardWebhookDecodeCode.Payload,
+        attribution: false,
+      });
+    const encodedData = property({ record: parsed, key: 'data_base64' });
+    if (
+      typeof encodedData !== 'string' ||
+      encodedData.length % 4 !== 0 ||
+      !/^[A-Za-z0-9+/]+={0,2}$/.test(encodedData)
+    ) {
+      throw new EventDecodeError({
+        code: PrStewardWebhookDecodeCode.Envelope,
+        attribution: false,
+      });
+    }
+    let eventData: UntrustedYamlNode;
+    try {
+      const decoded = new TextDecoder('utf-8', { fatal: true }).decode(
+        Buffer.from(encodedData, 'base64'),
+      );
+      eventData = asUntrustedYamlNode(JSON.parse(decoded) as UntrustedYamlNode);
+    } catch {
+      throw new EventDecodeError({
+        code: PrStewardWebhookDecodeCode.Data,
+        attribution: false,
+      });
+    }
+    if (!isRecord(eventData))
+      throw new EventDecodeError({
+        code: PrStewardWebhookDecodeCode.Data,
+        attribution: false,
+      });
+    const headers = property({ record: eventData, key: 'headers' });
+    const body = property({ record: eventData, key: 'body' });
+    if (!isRecord(headers) || !isRecord(body))
+      throw new EventDecodeError({
+        code: PrStewardWebhookDecodeCode.Data,
+        attribution: false,
+      });
+
+    const id = this.#boundedText({
+      value: property({ record: parsed, key: 'id' }),
+      limit: 128,
+    });
+    const time = this.#boundedText({
+      value: property({ record: parsed, key: 'time' }),
+      limit: 64,
+    });
+    const githubEvent = this.#boundedText({
+      value: headerValue({ headers, name: 'X-Github-Event' }),
+      limit: 64,
+    });
+    const deliveryId = this.#boundedText({
+      value: headerValue({ headers, name: 'X-Github-Delivery' }),
+      limit: 128,
+    });
+    const repository = this.#boundedText({
+      value: nested({ record: body, path: ['repository', 'full_name'] }),
+      limit: 128,
+    });
+    const candidateSource =
+      githubEvent === false ? false : this.#source(githubEvent);
+    const source =
+      candidateSource !== false &&
+      this.#coherentReviewHead({ body, source: candidateSource })
+        ? candidateSource
+        : false;
+    const pullRequest = this.#pullRequestNumber({ body, source });
+    if (
+      id === false ||
+      time === false ||
+      !Number.isFinite(Date.parse(time)) ||
+      githubEvent === false ||
+      deliveryId === false
+    )
+      throw new EventDecodeError({
+        code: PrStewardWebhookDecodeCode.Identity,
+        attribution:
+          repository === PR_STEWARD_REPOSITORY &&
+          pullRequest !== false &&
+          source !== PrStewardSource.WorkflowJob
+            ? { repository, pullRequest }
+            : false,
+      });
+
+    const action = this.#boundedText({
+      value: property({ record: body, key: 'action' }),
+      limit: 64,
+    });
+    const sha = this.#headSha({ body, source });
+    const metadata: PrStewardMetadata =
+      source === false
+        ? {
+            objectId: false,
+            runId: false,
+            reviewId: false,
+            commentId: false,
+            state: false,
+            url: false,
+            path: false,
+            line: false,
+            author: false,
+          }
+        : this.#routingMetadata({ body, source });
+    return {
+      id,
+      time,
+      githubEvent,
+      deliveryId,
+      action,
+      repository,
+      pullRequest,
+      headSha: sha,
+      source,
+      ...metadata,
+    };
+  }
 }
 
 export type PrStewardInvocation = {
@@ -526,43 +515,83 @@ export class PrStewardInvocationCodec {
   }
 }
 
-export function assignedPrEvent(args: {
-  readonly data: Uint8Array;
-  readonly pullRequest: number;
-}): PrStewardRoutingHint | false {
-  const event = decodePrStewardEvent(args.data);
-  if (
-    event.repository !== PR_STEWARD_REPOSITORY ||
-    event.pullRequest !== args.pullRequest ||
-    (event.source === PrStewardSource.PullRequest && event.headSha === false) ||
-    event.source === false
-  )
-    return false;
-  return {
-    ...event,
-    repository: PR_STEWARD_REPOSITORY,
-    pullRequest: event.pullRequest,
-    source: event.source,
-  };
-}
-
-export async function writeAssignedEvents(args: {
+type PrStewardWriteRequest = {
   readonly messages: AsyncIterable<{ readonly data: Uint8Array }>;
   readonly pullRequest: number;
   readonly write: (line: string) => void;
-}): Promise<void> {
-  for await (const message of args.messages) {
-    let event: PrStewardRoutingHint | false;
-    try {
-      event = assignedPrEvent({
-        data: message.data,
-        pullRequest: args.pullRequest,
-      });
-    } catch (error) {
-      if (error instanceof EventDecodeError) continue;
-      throw error;
+};
+
+export class PrStewardEventWriter {
+  static async write(request: PrStewardWriteRequest): Promise<void> {
+    for await (const message of request.messages) {
+      let event: PrStewardEvent;
+      try {
+        event = PrStewardWebhookDecoder.decode({ data: message.data });
+      } catch (error) {
+        if (!(error instanceof EventDecodeError)) throw error;
+        if (
+          error.attribution !== false &&
+          error.attribution.pullRequest === request.pullRequest
+        )
+          this.#emitBlocker(request);
+        continue;
+      }
+      if (
+        event.repository !== PR_STEWARD_REPOSITORY ||
+        event.pullRequest !== request.pullRequest ||
+        event.source === false ||
+        event.source === PrStewardSource.WorkflowJob
+      )
+        continue;
+      let record: PrStewardRecord;
+      try {
+        record = PrStewardNdjsonCodec.routing({
+          kind: PrStewardRecordKind.Routing,
+          eventId: event.id,
+          deliveryId: event.deliveryId,
+          repository: PR_STEWARD_REPOSITORY,
+          pullRequest: event.pullRequest,
+          headSha: event.headSha,
+          source: event.source,
+          objectId: event.objectId,
+          commentId: event.commentId,
+          runId: event.runId,
+          githubEvent: PrStewardNdjsonCodec.githubEvent(event.source),
+          action: event.action,
+          state: event.state,
+          reviewId: event.reviewId,
+          url: event.url,
+          path: event.path,
+          line: event.line,
+          author: event.author,
+        });
+      } catch (error) {
+        if (!(error instanceof PrStewardDecodeError)) throw error;
+        this.#emitBlocker(request);
+        continue;
+      }
+      this.#emit({ request, record });
     }
-    if (event !== false) args.write(`${JSON.stringify(event)}\n`);
+  }
+
+  static #emitBlocker(request: PrStewardWriteRequest): void {
+    this.#emit({
+      request,
+      record: PrStewardNdjsonCodec.blocker({
+        kind: PrStewardRecordKind.Blocker,
+        code: PrStewardBlockerCode.MalformedEvent,
+        repository: PR_STEWARD_REPOSITORY,
+        pullRequest: request.pullRequest,
+        summary: 'A malformed assigned GitHub notification was rejected.',
+      }),
+    });
+  }
+
+  static #emit(args: {
+    readonly request: PrStewardWriteRequest;
+    readonly record: PrStewardRecord;
+  }): void {
+    args.request.write(PrStewardNdjsonCodec.encode(args.record));
   }
 }
 
@@ -631,7 +660,7 @@ async function main(): Promise<void> {
   process.once('SIGINT', stop);
   process.once('SIGTERM', stop);
   try {
-    await writeAssignedEvents({
+    await PrStewardEventWriter.write({
       messages: subscription,
       pullRequest: invocation.pullRequest,
       write: (line) => {
