@@ -908,6 +908,43 @@ tasks:
     desc: Restore an existing k0s worker without reconciling the wider fleet.
     cmds:
       - task: k0s:worker:install
+      - |
+        ssh -o BatchMode=yes "{{.INFRA_SSH_TARGET}}" bash -s -- \
+          "{{.INFRA_WORKER_MESH_ADDRESS}}" <<'REMOTE'
+        set -euo pipefail
+        worker_mesh_address="$1"
+        kubectl() { sudo -n k0s kubectl "$@"; }
+        node="$(kubectl get nodes -o json | jq -r \
+          --arg address "$worker_mesh_address" \
+          '.items[] | select(any(.status.addresses[]; .type == "InternalIP" and .address == $address)) | .metadata.name')"
+        test "$(printf '%s\n' "$node" | sed '/^$/d' | wc -l | tr -d ' ')" = 1
+        node="$(printf '%s\n' "$node" | sed '/^$/d')"
+        node_json="$(kubectl get node "$node" -o json)"
+        test "$(jq -r '.status.conditions[] | select(.type == "Ready") | .status' <<<"$node_json")" = True
+        test "$(jq -r '.metadata.labels["nook.nokey.sh/node-role"]' <<<"$node_json")" = compute
+        test "$(jq -r '.metadata.labels["nook.nokey.sh/arc-build"]' <<<"$node_json")" = true
+        preserved_taints="$(jq -c '[.spec.taints[]? | select(
+          .key != "node.kubernetes.io/unschedulable" and
+          .key != "nook.nokey.sh/arc-build"
+        )] | sort_by(.key, .effect, .value)' <<<"$node_json")"
+        kubectl uncordon "$node" >/dev/null
+        preparing_effect="$(kubectl get node "$node" \
+          -o jsonpath='{.spec.taints[?(@.key=="nook.nokey.sh/arc-build")].effect}')"
+        if test -n "$preparing_effect"; then
+          test "$preparing_effect" = NoSchedule
+          kubectl taint node "$node" \
+            nook.nokey.sh/arc-build=preparing:NoSchedule- >/dev/null
+        fi
+        activated_json="$(kubectl get node "$node" -o json)"
+        test "$(jq -r '.spec.unschedulable // false' <<<"$activated_json")" = false
+        test -z "$(jq -r '.spec.taints[]? | select(
+          .key == "node.kubernetes.io/unschedulable" or
+          .key == "nook.nokey.sh/arc-build"
+        ) | .key' <<<"$activated_json")"
+        test "$(jq -c '[.spec.taints[]?] | sort_by(.key, .effect, .value)' \
+          <<<"$activated_json")" = "$preserved_taints"
+        printf 'k0s worker %s restored and schedulable\n' "$node"
+        REMOTE
 
   k0s:worker:status:
     desc: Show bounded compute-node, mesh, KVM, and ARC storage status.

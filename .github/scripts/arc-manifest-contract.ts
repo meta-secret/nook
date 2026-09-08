@@ -1014,7 +1014,29 @@ workerInstall.requireBefore({
   first: "nook.nokey.sh/arc-build=preparing:NoSchedule --overwrite",
   second: "sudo -n rm -f /etc/k0s/containerd.d/registry-auth.toml",
 });
-workerRestore.require("- task: k0s:worker:install");
+workerRestore.requireAll([
+  "- task: k0s:worker:install",
+  'test "$(printf \'%s\\n\' "$node" | sed \'/^$/d\' | wc -l | tr -d \' \')" = 1',
+  'select(.type == "Ready") | .status',
+  '.metadata.labels["nook.nokey.sh/node-role"]',
+  '.metadata.labels["nook.nokey.sh/arc-build"]',
+  'kubectl uncordon "$node"',
+  "nook.nokey.sh/arc-build=preparing:NoSchedule-",
+  '.spec.unschedulable // false',
+  'test "$(jq -c \'[.spec.taints[]?] | sort_by(.key, .effect, .value)\'',
+]);
+workerRestore.requireBefore({
+  first: "- task: k0s:worker:install",
+  second: 'kubectl uncordon "$node"',
+});
+workerRestore.requireBefore({
+  first: 'select(.type == "Ready") | .status',
+  second: 'kubectl uncordon "$node"',
+});
+workerRestore.requireBefore({
+  first: 'preserved_taints="$(jq -c',
+  second: 'kubectl uncordon "$node"',
+});
 workerRestore.forbidAll([
   "k0s:mesh:ensure",
   "k0s:worker-mesh:reconcile",
