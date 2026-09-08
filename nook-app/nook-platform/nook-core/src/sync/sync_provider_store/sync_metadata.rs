@@ -1,3 +1,9 @@
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::ProviderVaultScope;
 
 use super::{
@@ -5,63 +11,67 @@ use super::{
     ProviderSyncedVaultVersion, StorageProviderData,
 };
 
-/// Apply successful provider-sync metadata without duplicating vault parsing
-/// or hashing in host code.
-#[must_use]
-pub fn update_provider_sync_metadata(
-    providers: &[StorageProviderData],
-    provider_id: &str,
-    vault_yaml: &str,
-    revision: ProviderSyncRevisionRef<'_>,
-    manager_store_id: ManagerStoreScopeRef<'_>,
-    synced_at: &str,
-) -> Vec<StorageProviderData> {
-    let version = match crate::VaultFormatDocument::new(vault_yaml).version() {
-        Ok(version) => match i64::try_from(u64::from(version)) {
-            Ok(version) if version > 0 => ProviderSyncedVaultVersion::Version(version.into()),
-            Ok(_) | Err(_) => ProviderSyncedVaultVersion::Unknown,
-        },
-        Err(_) => ProviderSyncedVaultVersion::Unknown,
-    };
-    let content_hash = crate::VaultRevision::content_hash(vault_yaml);
-    providers
-        .iter()
-        .cloned()
-        .map(|mut provider| {
-            if provider.id == provider_id {
-                let (previous_version, previous_revision) = match &provider.sync_checkpoint {
-                    ProviderSyncCheckpoint::Synced {
-                        version, revision, ..
-                    } => (*version, revision.clone()),
-                    ProviderSyncCheckpoint::NeverSynced => (
-                        ProviderSyncedVaultVersion::Unknown,
-                        ProviderSyncRevision::Unknown,
-                    ),
-                };
-                provider.sync_checkpoint = ProviderSyncCheckpoint::Synced {
-                    version: match version {
-                        ProviderSyncedVaultVersion::Unknown => previous_version,
-                        ProviderSyncedVaultVersion::Version(_) => version,
-                    },
-                    synced_at: synced_at.to_owned(),
-                    revision: match revision {
-                        ProviderSyncRevisionRef::Revision(value) if !value.trim().is_empty() => {
-                            ProviderSyncRevision::Revision(value.trim().to_owned())
-                        }
-                        ProviderSyncRevisionRef::Unreported
-                        | ProviderSyncRevisionRef::Revision(_) => previous_revision,
-                    },
-                    common_content_hash: content_hash.clone(),
-                };
-                if let ManagerStoreScopeRef::Store(store_id) = manager_store_id
-                    && !store_id.trim().is_empty()
-                {
-                    provider.store_id = ProviderVaultScope::StoreId(store_id.trim().to_owned());
+impl StorageProviderData {
+    /// Apply successful provider-sync metadata without duplicating vault parsing
+    /// or hashing in host code.
+    #[must_use]
+    pub fn update_sync_metadata(
+        providers: &[Self],
+        provider_id: &str,
+        vault_yaml: &str,
+        revision: ProviderSyncRevisionRef<'_>,
+        manager_store_id: ManagerStoreScopeRef<'_>,
+        synced_at: &str,
+    ) -> Vec<Self> {
+        let version = match crate::VaultFormatDocument::new(vault_yaml).version() {
+            Ok(version) => match i64::try_from(u64::from(version)) {
+                Ok(version) if version > 0 => ProviderSyncedVaultVersion::Version(version.into()),
+                Ok(_) | Err(_) => ProviderSyncedVaultVersion::Unknown,
+            },
+            Err(_) => ProviderSyncedVaultVersion::Unknown,
+        };
+        let content_hash = crate::VaultRevision::content_hash(vault_yaml);
+        providers
+            .iter()
+            .cloned()
+            .map(|mut provider| {
+                if provider.id == provider_id {
+                    let (previous_version, previous_revision) = match &provider.sync_checkpoint {
+                        ProviderSyncCheckpoint::Synced {
+                            version, revision, ..
+                        } => (*version, revision.clone()),
+                        ProviderSyncCheckpoint::NeverSynced => (
+                            ProviderSyncedVaultVersion::Unknown,
+                            ProviderSyncRevision::Unknown,
+                        ),
+                    };
+                    provider.sync_checkpoint = ProviderSyncCheckpoint::Synced {
+                        version: match version {
+                            ProviderSyncedVaultVersion::Unknown => previous_version,
+                            ProviderSyncedVaultVersion::Version(_) => version,
+                        },
+                        synced_at: synced_at.to_owned(),
+                        revision: match revision {
+                            ProviderSyncRevisionRef::Revision(value)
+                                if !value.trim().is_empty() =>
+                            {
+                                ProviderSyncRevision::Revision(value.trim().to_owned())
+                            }
+                            ProviderSyncRevisionRef::Unreported
+                            | ProviderSyncRevisionRef::Revision(_) => previous_revision,
+                        },
+                        common_content_hash: content_hash.clone(),
+                    };
+                    if let ManagerStoreScopeRef::Store(store_id) = manager_store_id
+                        && !store_id.trim().is_empty()
+                    {
+                        provider.store_id = ProviderVaultScope::StoreId(store_id.trim().to_owned());
+                    }
                 }
-            }
-            provider
-        })
-        .collect()
+                provider
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]
@@ -77,35 +87,37 @@ mod tests {
         StorageProviderType,
     };
 
-    use super::update_provider_sync_metadata;
-
-    fn github_provider(id: &str, repo: &str, pat: &str) -> StorageProviderData {
-        StorageProviderData {
-            id: id.to_owned(),
-            provider_type: StorageProviderType::Github,
-            label: "GitHub".to_owned(),
-            github_pat: StoredGithubPat::Token(pat.to_owned()),
-            github_repo: StoredGithubRepository::Repository(repo.to_owned()),
-            oauth_file: StoredOAuthFileConfiguration::NotApplicable,
-            local_folder: StoredLocalFolderConfiguration::NotApplicable,
-            store_id: ProviderVaultScope::Unscoped,
-            sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
-            created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+    impl StorageProviderData {
+        fn sync_metadata_github_provider(id: &str, repo: &str, pat: &str) -> Self {
+            Self {
+                id: id.to_owned(),
+                provider_type: StorageProviderType::Github,
+                label: "GitHub".to_owned(),
+                github_pat: StoredGithubPat::Token(pat.to_owned()),
+                github_repo: StoredGithubRepository::Repository(repo.to_owned()),
+                oauth_file: StoredOAuthFileConfiguration::NotApplicable,
+                local_folder: StoredLocalFolderConfiguration::NotApplicable,
+                store_id: ProviderVaultScope::Unscoped,
+                sync_checkpoint: ProviderSyncCheckpoint::NeverSynced,
+                created_at: "2026-06-24T00:00:00.000Z".to_owned(),
+            }
         }
     }
 
     #[test]
     fn provider_sync_metadata_update_preserves_unreported_fields() {
-        let mut provider = github_provider("github", "owner/repo", "pat");
+        let mut provider =
+            StorageProviderData::sync_metadata_github_provider("github", "owner/repo", "pat");
         provider.sync_checkpoint = ProviderSyncCheckpoint::Synced {
             version: ProviderSyncedVaultVersion::Version(9.into()),
             synced_at: "earlier".to_owned(),
             revision: ProviderSyncRevision::Revision("old-revision".to_owned()),
             common_content_hash: "old-hash".to_owned(),
         };
-        let untouched = github_provider("other", "owner/other", "other-pat");
+        let untouched =
+            StorageProviderData::sync_metadata_github_provider("other", "owner/other", "other-pat");
 
-        let updated = update_provider_sync_metadata(
+        let updated = StorageProviderData::update_sync_metadata(
             &[provider, untouched.clone()],
             "github",
             "",

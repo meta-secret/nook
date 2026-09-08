@@ -221,7 +221,8 @@ impl ProviderSnapshotStore<'_> {
 
         let key = serde_wasm_bindgen::to_value(state_key)
             .map_err(|e| auth_providers::idb_err("nook_auth key error", e))?;
-        let storage_value = nook_core::auth_snapshot_legacy_storage_value(snapshot)
+        let storage_value = snapshot
+            .legacy_storage_value()
             .map_err(|e| auth_providers::idb_err("nook_auth compatibility projection error", e))?;
         let value = storage_value
             .serialize(&Serializer::json_compatible())

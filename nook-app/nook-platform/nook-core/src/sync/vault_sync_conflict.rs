@@ -1,5 +1,11 @@
 //! Typed whole-vault sync conflicts.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::{EventCount, IdentityVaultAppGrantKind, VaultOperation};
 
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -71,119 +77,125 @@ pub struct ProviderVaultDecisionProjection {
     pub identities: Vec<ProviderVaultIdentityProjection>,
 }
 
-/// Derive replaceability from an accepted local event graph.
-///
-/// Missing or ambiguous genesis evidence, pending or quarantined events,
-/// unsupported event schemas, projection failures, and unresolved conflicts
-/// are all unknown. Only one accepted root whose sole operation is an empty
-/// vault import is replaceable. Any accepted descendant or nonempty recognized
-/// genesis must be preserved, even when its final projection has no live data.
-#[must_use]
-pub fn classify_current_vault_replaceability(
-    graph: &crate::EventGraph,
-    store_id: &str,
-) -> CurrentVaultReplaceability {
-    if graph.is_empty() || !graph.pending_events().is_empty() || !graph.quarantined().is_empty() {
-        return CurrentVaultReplaceability::Unknown;
+impl CurrentVaultReplaceability {
+    /// Derive replaceability from an accepted local event graph.
+    ///
+    /// Missing or ambiguous genesis evidence, pending or quarantined events,
+    /// unsupported event schemas, projection failures, and unresolved conflicts
+    /// are all unknown. Only one accepted root whose sole operation is an empty
+    /// vault import is replaceable.
+    #[must_use]
+    pub fn from_event_graph(
+        graph: &crate::EventGraph,
+        store_id: &str,
+    ) -> CurrentVaultReplaceability {
+        if graph.is_empty() || !graph.pending_events().is_empty() || !graph.quarantined().is_empty()
+        {
+            return CurrentVaultReplaceability::Unknown;
+        }
+        let Ok(projection) = crate::VaultProjection::from_graph(graph, store_id) else {
+            return CurrentVaultReplaceability::Unknown;
+        };
+        if projection.unresolved_schema || projection.has_blocking_conflicts() {
+            return CurrentVaultReplaceability::Unknown;
+        }
+        let roots = graph
+            .events()
+            .filter(|(_, event)| event.body.parents.is_empty())
+            .collect::<Vec<_>>();
+        let [(_, root)] = roots.as_slice() else {
+            return CurrentVaultReplaceability::Unknown;
+        };
+        let [
+            VaultOperation::VaultImported {
+                secrets,
+                password_entries,
+                ..
+            },
+        ] = root.body.operations.as_slice()
+        else {
+            return CurrentVaultReplaceability::Unknown;
+        };
+        if !secrets.is_empty()
+            || !password_entries.is_empty()
+            || graph.len() > EventCount::SINGLE_EVENT
+        {
+            return CurrentVaultReplaceability::PreserveRequired;
+        }
+        CurrentVaultReplaceability::Replaceable
     }
-    let Ok(projection) = crate::VaultProjection::from_graph(graph, store_id) else {
-        return CurrentVaultReplaceability::Unknown;
-    };
-    if projection.unresolved_schema || projection.has_blocking_conflicts() {
-        return CurrentVaultReplaceability::Unknown;
-    }
-    let roots = graph
-        .events()
-        .filter(|(_, event)| event.body.parents.is_empty())
-        .collect::<Vec<_>>();
-    let [(_, root)] = roots.as_slice() else {
-        return CurrentVaultReplaceability::Unknown;
-    };
-    let [
-        VaultOperation::VaultImported {
-            secrets,
-            password_entries,
-            ..
-        },
-    ] = root.body.operations.as_slice()
-    else {
-        return CurrentVaultReplaceability::Unknown;
-    };
-    if !secrets.is_empty() || !password_entries.is_empty() || graph.len() > EventCount::SINGLE_EVENT
-    {
-        return CurrentVaultReplaceability::PreserveRequired;
-    }
-    CurrentVaultReplaceability::Replaceable
 }
 
-/// Project a conservative provider-vault choice from public observations.
-///
-/// Adoption is recommended only when the local vault is proven empty and at
-/// least one identity is both linked to the provider vault and prepared on this
-/// device. Every other state preserves both vaults. This function does not
-/// inspect or expose passkey material, app keys, DEKs, or vault contents.
-#[must_use]
-pub fn project_provider_vault_decision(
-    current_vault: CurrentVaultReplaceability,
-    identities: Vec<ProviderVaultIdentityObservation>,
-) -> ProviderVaultDecisionProjection {
-    let identities = identities
-        .into_iter()
-        .map(|identity| ProviderVaultIdentityProjection {
-            eligibility: if !identity.linked_to_provider_vault {
-                ProviderVaultIdentityEligibility::NotLinked
-            } else if identity.protected_local_app_available
-                && identity.app_grant == IdentityVaultAppGrantKind::Granted
-            {
-                ProviderVaultIdentityEligibility::LinkedAndPrepared
-            } else {
-                ProviderVaultIdentityEligibility::LinkedButUnavailable
-            },
-            identity_id: identity.identity_id,
-            identity_label: identity.identity_label,
-            is_current_app: identity.is_current_app,
-        })
-        .collect::<Vec<_>>();
+impl CurrentVaultReplaceability {
+    /// Project a conservative provider-vault choice from public observations.
+    ///
+    /// Adoption is recommended only when the local vault is proven empty and at
+    /// least one identity is both linked to the provider vault and prepared on this
+    /// device. Every other state preserves both vaults. This function does not
+    /// inspect or expose passkey material, app keys, DEKs, or vault contents.
+    #[must_use]
+    pub fn project_provider_vault_decision(
+        self,
+        identities: Vec<ProviderVaultIdentityObservation>,
+    ) -> ProviderVaultDecisionProjection {
+        let identities = identities
+            .into_iter()
+            .map(|identity| ProviderVaultIdentityProjection {
+                eligibility: if !identity.linked_to_provider_vault {
+                    ProviderVaultIdentityEligibility::NotLinked
+                } else if identity.protected_local_app_available
+                    && identity.app_grant == IdentityVaultAppGrantKind::Granted
+                {
+                    ProviderVaultIdentityEligibility::LinkedAndPrepared
+                } else {
+                    ProviderVaultIdentityEligibility::LinkedButUnavailable
+                },
+                identity_id: identity.identity_id,
+                identity_label: identity.identity_label,
+                is_current_app: identity.is_current_app,
+            })
+            .collect::<Vec<_>>();
 
-    let (decision, reason) = match current_vault {
-        CurrentVaultReplaceability::PreserveRequired => (
-            ProviderVaultDecision::PreserveBoth,
-            ProviderVaultDecisionReason::CurrentVaultContainsUserData,
-        ),
-        CurrentVaultReplaceability::Unknown => (
-            ProviderVaultDecision::PreserveBoth,
-            ProviderVaultDecisionReason::CurrentVaultStateUnavailable,
-        ),
-        CurrentVaultReplaceability::Replaceable
-            if identities.iter().any(|identity| {
-                identity.eligibility == ProviderVaultIdentityEligibility::LinkedAndPrepared
-            }) =>
-        {
-            (
-                ProviderVaultDecision::AdoptProviderVault,
-                ProviderVaultDecisionReason::ReadyToAdopt,
-            )
-        }
-        CurrentVaultReplaceability::Replaceable
-            if identities.iter().any(|identity| {
-                identity.eligibility == ProviderVaultIdentityEligibility::LinkedButUnavailable
-            }) =>
-        {
-            (
+        let (decision, reason) = match self {
+            CurrentVaultReplaceability::PreserveRequired => (
                 ProviderVaultDecision::PreserveBoth,
-                ProviderVaultDecisionReason::LinkedIdentityUnavailable,
-            )
-        }
-        CurrentVaultReplaceability::Replaceable => (
-            ProviderVaultDecision::PreserveBoth,
-            ProviderVaultDecisionReason::NoLinkedIdentity,
-        ),
-    };
+                ProviderVaultDecisionReason::CurrentVaultContainsUserData,
+            ),
+            CurrentVaultReplaceability::Unknown => (
+                ProviderVaultDecision::PreserveBoth,
+                ProviderVaultDecisionReason::CurrentVaultStateUnavailable,
+            ),
+            CurrentVaultReplaceability::Replaceable
+                if identities.iter().any(|identity| {
+                    identity.eligibility == ProviderVaultIdentityEligibility::LinkedAndPrepared
+                }) =>
+            {
+                (
+                    ProviderVaultDecision::AdoptProviderVault,
+                    ProviderVaultDecisionReason::ReadyToAdopt,
+                )
+            }
+            CurrentVaultReplaceability::Replaceable
+                if identities.iter().any(|identity| {
+                    identity.eligibility == ProviderVaultIdentityEligibility::LinkedButUnavailable
+                }) =>
+            {
+                (
+                    ProviderVaultDecision::PreserveBoth,
+                    ProviderVaultDecisionReason::LinkedIdentityUnavailable,
+                )
+            }
+            CurrentVaultReplaceability::Replaceable => (
+                ProviderVaultDecision::PreserveBoth,
+                ProviderVaultDecisionReason::NoLinkedIdentity,
+            ),
+        };
 
-    ProviderVaultDecisionProjection {
-        decision,
-        reason,
-        identities,
+        ProviderVaultDecisionProjection {
+            decision,
+            reason,
+            identities,
+        }
     }
 }
 
@@ -229,75 +241,79 @@ mod tests {
 
     const TEST_STORE_ID: &str = "store_conflictux1";
 
-    fn encrypted_secret(secret_id: &str) -> anyhow::Result<EncryptedSecretPayload> {
-        Ok(EncryptedSecretPayload {
-            id: SecretId::parse(secret_id)?,
-            secret_type: SecretType::SecureNote,
-            ciphertext: OpaqueCiphertext::from_trusted("encrypted-secret".to_owned()),
-            identity_fingerprint: SecretFingerprint::from_trusted(
-                "identity-fingerprint".to_owned(),
-            ),
-            fingerprint: SecretFingerprint::from_trusted("version-fingerprint".to_owned()),
-        })
-    }
+    struct Fixtures;
 
-    fn accepted_graph_fixture(
-        with_secret: bool,
-    ) -> anyhow::Result<(EventGraph, SigningIdentity, EventId)> {
-        let signing = SigningIdentity::generate()?.0;
-        let secrets = with_secret
-            .then(|| encrypted_secret("secret_conflictux1"))
-            .transpose()?
-            .into_iter()
-            .collect();
-        let event = build_genesis_import_event(
-            &StoreId::parse(TEST_STORE_ID)?,
-            &signing.actor_id()?,
-            &EventId::from_sha256_hex(
-                nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
-            )?,
-            GenesisImportPayload {
-                source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
-                secrets,
-                password_entries: Vec::new(),
-            },
-            &IsoTimestamp::parse("2026-09-01T00:00:00Z")?,
-            signing.signing_key(),
-        )?;
-        let event_id = event.id()?;
-        let mut graph = EventGraph::new();
-        graph.insert(event, TEST_STORE_ID)?;
-        Ok((graph, signing, event_id))
-    }
+    impl Fixtures {
+        fn encrypted_secret(secret_id: &str) -> anyhow::Result<EncryptedSecretPayload> {
+            Ok(EncryptedSecretPayload {
+                id: SecretId::parse(secret_id)?,
+                secret_type: SecretType::SecureNote,
+                ciphertext: OpaqueCiphertext::from_trusted("encrypted-secret".to_owned()),
+                identity_fingerprint: SecretFingerprint::from_trusted(
+                    "identity-fingerprint".to_owned(),
+                ),
+                fingerprint: SecretFingerprint::from_trusted("version-fingerprint".to_owned()),
+            })
+        }
 
-    fn accepted_graph(with_secret: bool) -> anyhow::Result<EventGraph> {
-        Ok(accepted_graph_fixture(with_secret)?.0)
-    }
-
-    fn append_operation(
-        graph: &mut EventGraph,
-        signing: &SigningIdentity,
-        parent: EventId,
-        operation: crate::VaultOperation,
-    ) -> anyhow::Result<EventId> {
-        let event = VaultEvent::sign(
-            crate::VaultEventBody {
-                schema_version: VaultEventSchemaVersion::CURRENT,
-                store_id: StoreId::parse(TEST_STORE_ID)?,
-                actor_id: signing.actor_id()?,
-                actor_signing_public_key: signing.public_key(),
-                parents: vec![parent],
-                created_at: IsoTimestamp::parse("2026-09-01T00:01:00Z")?,
-                key_epoch: EventId::from_sha256_hex(
+        fn accepted_graph_fixture(
+            with_secret: bool,
+        ) -> anyhow::Result<(EventGraph, SigningIdentity, EventId)> {
+            let signing = SigningIdentity::generate()?.0;
+            let secrets = with_secret
+                .then(|| Self::encrypted_secret("secret_conflictux1"))
+                .transpose()?
+                .into_iter()
+                .collect();
+            let event = build_genesis_import_event(
+                &StoreId::parse(TEST_STORE_ID)?,
+                &signing.actor_id()?,
+                &EventId::from_sha256_hex(
                     nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
                 )?,
-                operations: vec![operation],
-            },
-            signing.signing_key(),
-        )?;
-        let event_id = event.id()?;
-        graph.insert(event, TEST_STORE_ID)?;
-        Ok(event_id)
+                GenesisImportPayload {
+                    source_content_hash: nook_auth2::Sha256Hex::from_trusted("0".repeat(64)),
+                    secrets,
+                    password_entries: Vec::new(),
+                },
+                &IsoTimestamp::parse("2026-09-01T00:00:00Z")?,
+                signing.signing_key(),
+            )?;
+            let event_id = event.id()?;
+            let mut graph = EventGraph::new();
+            graph.insert(event, TEST_STORE_ID)?;
+            Ok((graph, signing, event_id))
+        }
+
+        fn accepted_graph(with_secret: bool) -> anyhow::Result<EventGraph> {
+            Ok(Self::accepted_graph_fixture(with_secret)?.0)
+        }
+
+        fn append_operation(
+            graph: &mut EventGraph,
+            signing: &SigningIdentity,
+            parent: EventId,
+            operation: crate::VaultOperation,
+        ) -> anyhow::Result<EventId> {
+            let event = VaultEvent::sign(
+                crate::VaultEventBody {
+                    schema_version: VaultEventSchemaVersion::CURRENT,
+                    store_id: StoreId::parse(TEST_STORE_ID)?,
+                    actor_id: signing.actor_id()?,
+                    actor_signing_public_key: signing.public_key(),
+                    parents: vec![parent],
+                    created_at: IsoTimestamp::parse("2026-09-01T00:01:00Z")?,
+                    key_epoch: EventId::from_sha256_hex(
+                        nook_auth2::Sha256Hex::from_trusted("1".repeat(64)).as_str(),
+                    )?,
+                    operations: vec![operation],
+                },
+                signing.signing_key(),
+            )?;
+            let event_id = event.id()?;
+            graph.insert(event, TEST_STORE_ID)?;
+            Ok(event_id)
+        }
     }
 
     #[test]
@@ -329,34 +345,34 @@ mod tests {
         ));
     }
 
-    fn identity(
-        identity_id: &str,
-        linked_to_provider_vault: bool,
-        protected_local_app_available: bool,
-    ) -> ProviderVaultIdentityObservation {
-        ProviderVaultIdentityObservation {
-            identity_id: identity_id.to_owned(),
-            identity_label: format!("Identity {identity_id}"),
-            linked_to_provider_vault,
-            protected_local_app_available,
-            is_current_app: identity_id == "personal",
-            app_grant: if protected_local_app_available {
-                IdentityVaultAppGrantKind::Granted
-            } else {
-                IdentityVaultAppGrantKind::NotGranted
-            },
+    impl Fixtures {
+        fn identity(
+            identity_id: &str,
+            linked_to_provider_vault: bool,
+            protected_local_app_available: bool,
+        ) -> ProviderVaultIdentityObservation {
+            ProviderVaultIdentityObservation {
+                identity_id: identity_id.to_owned(),
+                identity_label: format!("Identity {identity_id}"),
+                linked_to_provider_vault,
+                protected_local_app_available,
+                is_current_app: identity_id == "personal",
+                app_grant: if protected_local_app_available {
+                    IdentityVaultAppGrantKind::Granted
+                } else {
+                    IdentityVaultAppGrantKind::NotGranted
+                },
+            }
         }
     }
 
     #[test]
     fn empty_local_vault_recommends_adoption_when_an_identity_is_prepared() {
-        let projection = project_provider_vault_decision(
-            CurrentVaultReplaceability::Replaceable,
-            vec![
-                identity("personal", true, false),
-                identity("work", true, true),
-            ],
-        );
+        let projection =
+            CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
+                Fixtures::identity("personal", true, false),
+                Fixtures::identity("work", true, true),
+            ]);
 
         assert_eq!(
             projection.decision,
@@ -388,8 +404,8 @@ mod tests {
                 ProviderVaultDecisionReason::CurrentVaultStateUnavailable,
             ),
         ] {
-            let projection =
-                project_provider_vault_decision(observation, vec![identity("ready", true, true)]);
+            let projection = observation
+                .project_provider_vault_decision(vec![Fixtures::identity("ready", true, true)]);
             assert_eq!(projection.decision, ProviderVaultDecision::PreserveBoth);
             assert_eq!(projection.reason, reason);
         }
@@ -397,13 +413,11 @@ mod tests {
 
     #[test]
     fn empty_local_vault_explains_unavailable_and_unlinked_identities() {
-        let unavailable = project_provider_vault_decision(
-            CurrentVaultReplaceability::Replaceable,
-            vec![
-                identity("locked", true, false),
-                identity("other", false, true),
-            ],
-        );
+        let unavailable =
+            CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(vec![
+                Fixtures::identity("locked", true, false),
+                Fixtures::identity("other", false, true),
+            ]);
         assert_eq!(unavailable.decision, ProviderVaultDecision::PreserveBoth);
         assert_eq!(
             unavailable.reason,
@@ -414,10 +428,8 @@ mod tests {
             ProviderVaultIdentityEligibility::NotLinked
         );
 
-        let unlinked = project_provider_vault_decision(
-            CurrentVaultReplaceability::Replaceable,
-            vec![identity("other", false, false)],
-        );
+        let unlinked = CurrentVaultReplaceability::Replaceable
+            .project_provider_vault_decision(vec![Fixtures::identity("other", false, false)]);
         assert_eq!(unlinked.decision, ProviderVaultDecision::PreserveBoth);
         assert_eq!(
             unlinked.reason,
@@ -436,13 +448,13 @@ mod tests {
                 IdentityVaultAppGrantKind::NotGranted,
             ),
         ] {
-            let mut observation = identity(identity_id, true, protected);
+            let mut observation = Fixtures::identity(identity_id, true, protected);
             observation.app_grant = grant;
             observations.push(observation);
         }
 
         let projection =
-            project_provider_vault_decision(CurrentVaultReplaceability::Replaceable, observations);
+            CurrentVaultReplaceability::Replaceable.project_provider_vault_decision(observations);
         assert_eq!(projection.decision, ProviderVaultDecision::PreserveBoth);
         assert_eq!(
             projection.reason,
@@ -456,11 +468,17 @@ mod tests {
     #[test]
     fn only_pristine_empty_genesis_is_replaceable() -> anyhow::Result<()> {
         assert_eq!(
-            classify_current_vault_replaceability(&accepted_graph(false)?, TEST_STORE_ID),
+            CurrentVaultReplaceability::from_event_graph(
+                &Fixtures::accepted_graph(false)?,
+                TEST_STORE_ID,
+            ),
             CurrentVaultReplaceability::Replaceable
         );
         assert_eq!(
-            classify_current_vault_replaceability(&accepted_graph(true)?, TEST_STORE_ID),
+            CurrentVaultReplaceability::from_event_graph(
+                &Fixtures::accepted_graph(true)?,
+                TEST_STORE_ID,
+            ),
             CurrentVaultReplaceability::PreserveRequired
         );
         Ok(())
@@ -469,11 +487,14 @@ mod tests {
     #[test]
     fn missing_or_mismatched_graph_evidence_is_unknown() -> anyhow::Result<()> {
         assert_eq!(
-            classify_current_vault_replaceability(&EventGraph::new(), TEST_STORE_ID),
+            CurrentVaultReplaceability::from_event_graph(&EventGraph::new(), TEST_STORE_ID),
             CurrentVaultReplaceability::Unknown
         );
         assert_eq!(
-            classify_current_vault_replaceability(&accepted_graph(false)?, "store_otherstore1"),
+            CurrentVaultReplaceability::from_event_graph(
+                &Fixtures::accepted_graph(false)?,
+                "store_otherstore1",
+            ),
             CurrentVaultReplaceability::Unknown
         );
         Ok(())
@@ -485,7 +506,7 @@ mod tests {
         let mut graph = EventGraph::new();
         let missing_parent =
             EventId::from_sha256_hex(nook_auth2::Sha256Hex::from_trusted("2".repeat(64)).as_str())?;
-        append_operation(
+        Fixtures::append_operation(
             &mut graph,
             &signing,
             missing_parent,
@@ -495,7 +516,7 @@ mod tests {
         assert!(!graph.is_empty());
         assert!(!graph.pending_events().is_empty());
         assert_eq!(
-            classify_current_vault_replaceability(&graph, TEST_STORE_ID),
+            CurrentVaultReplaceability::from_event_graph(&graph, TEST_STORE_ID),
             CurrentVaultReplaceability::Unknown
         );
         Ok(())
@@ -503,11 +524,11 @@ mod tests {
 
     #[test]
     fn accepted_post_genesis_nonsecret_mutation_requires_preservation() -> anyhow::Result<()> {
-        let (mut graph, signing, genesis) = accepted_graph_fixture(false)?;
-        append_operation(&mut graph, &signing, genesis, VaultOperation::VaultCleared)?;
+        let (mut graph, signing, genesis) = Fixtures::accepted_graph_fixture(false)?;
+        Fixtures::append_operation(&mut graph, &signing, genesis, VaultOperation::VaultCleared)?;
 
         assert_eq!(
-            classify_current_vault_replaceability(&graph, TEST_STORE_ID),
+            CurrentVaultReplaceability::from_event_graph(&graph, TEST_STORE_ID),
             CurrentVaultReplaceability::PreserveRequired
         );
         Ok(())
@@ -515,17 +536,17 @@ mod tests {
 
     #[test]
     fn created_then_deleted_secret_still_requires_preservation() -> anyhow::Result<()> {
-        let (mut graph, signing, genesis) = accepted_graph_fixture(false)?;
+        let (mut graph, signing, genesis) = Fixtures::accepted_graph_fixture(false)?;
         let secret_id = SecretId::parse("secret_conflictux2")?;
-        let created = append_operation(
+        let created = Fixtures::append_operation(
             &mut graph,
             &signing,
             genesis,
             VaultOperation::SecretCreated {
-                secret: encrypted_secret(secret_id.as_str())?,
+                secret: Fixtures::encrypted_secret(secret_id.as_str())?,
             },
         )?;
-        append_operation(
+        Fixtures::append_operation(
             &mut graph,
             &signing,
             created,
@@ -533,7 +554,7 @@ mod tests {
         )?;
 
         assert_eq!(
-            classify_current_vault_replaceability(&graph, TEST_STORE_ID),
+            CurrentVaultReplaceability::from_event_graph(&graph, TEST_STORE_ID),
             CurrentVaultReplaceability::PreserveRequired
         );
         Ok(())

@@ -34,7 +34,6 @@ pub use active_credentials::{
 };
 pub use catalog::{DuplicateProviderSelection, LocalProviderRowRequest};
 pub use enrollment::{ProviderEnrollmentRequest, SharedGrantProviderSelection};
-pub use legacy_storage::auth_snapshot_legacy_storage_value;
 pub use oauth::{GoogleOAuthTokenInput, ICloudOAuthTokenInput};
 pub use save::{ProviderSaveOutcome, ProviderSaveRequest, ProviderSaveSetup};
 pub use scope::{ActiveVaultProviderRows, ProviderRows};
@@ -44,7 +43,6 @@ pub use storage_args::{
     ProviderStorageDetailLabels, StagedRemoteConnection, StorageConnectArgs,
     VaultStorageConnection,
 };
-pub use sync_metadata::update_provider_sync_metadata;
 
 /// OAuth-file (Google Drive / iCloud) credential block for a stored provider.
 ///

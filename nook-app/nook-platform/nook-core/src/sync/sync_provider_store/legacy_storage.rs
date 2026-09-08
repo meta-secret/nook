@@ -5,6 +5,12 @@
 //! after a rollback. A future incompatible wire change must use a new schema
 //! version and an explicit forward/backward migration.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use serde::Serialize;
 
 use super::{
@@ -118,20 +124,18 @@ struct LegacyAuthProvidersSnapshot<'a> {
     active_vault_store_id: Option<&'a str>,
 }
 
-pub fn auth_snapshot_legacy_storage_value(
-    snapshot: &AuthProvidersSnapshotData,
-) -> Result<serde_json::Value, serde_json::Error> {
-    serde_json::to_value(LegacyAuthProvidersSnapshot {
-        providers: snapshot.providers.iter().map(Into::into).collect(),
-        active_vault_store_id: snapshot.active_vault_store_id.as_deref(),
-    })
+impl AuthProvidersSnapshotData {
+    pub fn legacy_storage_value(&self) -> Result<serde_json::Value, serde_json::Error> {
+        serde_json::to_value(LegacyAuthProvidersSnapshot {
+            providers: self.providers.iter().map(Into::into).collect(),
+            active_vault_store_id: self.active_vault_store_id.as_deref(),
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{ActiveVaultScope, NormalizedAuthSnapshot, StorageProviderData};
-
-    use super::auth_snapshot_legacy_storage_value;
 
     #[test]
     fn semantic_states_project_to_the_rollback_safe_wire_shape() -> anyhow::Result<()> {
@@ -146,7 +150,7 @@ mod tests {
             active_vault_store_id: ActiveVaultScope::StoreId("store-1".to_owned()),
         };
 
-        let value = auth_snapshot_legacy_storage_value(&snapshot)?;
+        let value = snapshot.legacy_storage_value()?;
         let round_trip = NormalizedAuthSnapshot::from_wire(&value).snapshot;
         assert_eq!(round_trip, snapshot);
         Ok(())

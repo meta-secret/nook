@@ -25,9 +25,7 @@ impl NookVaultManager {
                 .await
                 .map_err(|error| JsError::new(&error.to_string()))?;
             match store.load_graph(current_store_id) {
-                Ok(graph) => {
-                    nook_core::classify_current_vault_replaceability(&graph, current_store_id)
-                }
+                Ok(graph) => CurrentVaultReplaceability::from_event_graph(&graph, current_store_id),
                 Err(_) => CurrentVaultReplaceability::Unknown,
             }
         };
@@ -38,7 +36,7 @@ impl NookVaultManager {
         .await
         .map_err(|error| JsError::new(&error.to_string()))?;
         Ok(NookProviderVaultDecisionProjection::from_core(
-            nook_core::project_provider_vault_decision(current_vault, identities),
+            current_vault.project_provider_vault_decision(identities),
         ))
     }
 
