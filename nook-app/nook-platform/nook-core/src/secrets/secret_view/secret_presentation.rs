@@ -253,7 +253,7 @@ impl SecretListItem {
     ///
     /// Returns an empty string when the item is not URL-backed or the stored
     /// value has no usable host.
-    #[must_use]
+    #[must_use = "use the normalized host or handle the issuer catalog error"]
     pub fn try_website_host(&self) -> Result<String, AuthenticatorIssuerHostsError> {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
@@ -270,7 +270,7 @@ impl SecretListItem {
                 issuer,
             }
             .website_host()
-            .map(|host| host.unwrap_or_default()),
+            .map(Option::unwrap_or_default),
             _ => Ok(String::new()),
         }
     }
@@ -435,7 +435,7 @@ impl SecretListItem {
 
 impl SecretPage {
     /// Resolve display group keys so brand authenticators cluster with site hosts.
-    #[must_use]
+    #[must_use = "use the resolved group keys or handle the issuer catalog error"]
     pub fn entity_group_keys(&self) -> Result<Vec<SecretGroupKey>, AuthenticatorIssuerHostsError> {
         let intrinsic: Vec<String> = self
             .records
