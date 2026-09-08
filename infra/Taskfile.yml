@@ -58,6 +58,10 @@ includes:
     taskfile: tasks/k0s-workers.yml
     dir: ..
     flatten: true
+  k0s-worker-restore:
+    taskfile: tasks/k0s-worker-restore.yml
+    dir: ..
+    flatten: true
   k0s-worker-mesh:
     taskfile: tasks/k0s-worker-mesh.yml
     dir: ..

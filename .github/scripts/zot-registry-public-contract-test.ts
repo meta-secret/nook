@@ -56,6 +56,8 @@ function requireBefore(input: {
 const registryTask = await read("infra/tasks/registry.yml");
 const k0sTask = await read("infra/tasks/k0s.yml");
 const workerTask = await read("infra/tasks/k0s-workers.yml");
+const workerRestoreTask = await read("infra/tasks/k0s-worker-restore.yml");
+const workerTaskFamily = [workerTask, workerRestoreTask].join("\n");
 const workerMesh = await read("infra/k0s/scripts/k0s-worker-mesh-reconcile");
 const completeDeploy = await read("infra/tasks/host-services.yml");
 const controllerAuthReconcile = registryTask.slice(
@@ -460,7 +462,12 @@ requireFragment({
   fragment: 'config_path = "/etc/k0s/containerd.d/certs.d"',
   message: "containerd must load registry hosts through config_path",
 });
-for (const source of [registryTask, k0sTask, workerTask, workerMesh]) {
+for (const source of [
+  registryTask,
+  k0sTask,
+  workerTaskFamily,
+  workerMesh,
+]) {
   forbidFragment({
     source,
     fragment: "registry.configs",
@@ -494,7 +501,7 @@ for (const fragment of [
     message: `controller registry-auth reconciliation is missing: ${fragment}`,
   });
 }
-for (const source of [k0sTask, workerTask, workerMesh]) {
+for (const source of [k0sTask, workerTaskFamily, workerMesh]) {
   requireFragment({
     source,
     fragment: "/var/lib/k0s/nook-containerd-auth-clean-invocation",

@@ -90,7 +90,7 @@ export const AUDITED_SOURCE_SEAMS: readonly AuditedSourceSeam[] = [
   ...[
     'infra/tasks/providers.yml',
     'infra/tasks/kubernetes-tools.yml',
-    'infra/tasks/k0s-workers.yml',
+    'infra/tasks/k0s-worker-restore.yml',
     'infra/tasks/mesh.yml',
   ].map((sourcePath): AuditedSourceSeam => ({
     digest: false,

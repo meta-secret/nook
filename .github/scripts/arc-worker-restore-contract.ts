@@ -222,9 +222,13 @@ class ActiveRunnerSelectorContract {
 
 export class ArcWorkerRestoreContract {
   static async assert(root: string): Promise<void> {
-    const tasksSource = await Bun.file(
+    const workerTasksSource = await Bun.file(
       resolve(root, "infra/tasks/k0s-workers.yml"),
     ).text();
+    const restoreTasksSource = await Bun.file(
+      resolve(root, "infra/tasks/k0s-worker-restore.yml"),
+    ).text();
+    const tasksSource = [workerTasksSource, restoreTasksSource].join("\n");
     const tasks = new TextContract({
       label: "k0s worker tasks",
       source: tasksSource,
@@ -235,18 +239,17 @@ export class ArcWorkerRestoreContract {
       "k0s:mesh:ensure",
     );
     const installSource = ArcWorkerRestoreContract.taskSource(
-      tasksSource,
+      restoreTasksSource,
       "k0s:worker:install",
-      "k0s:worker:kata:verify",
+      "k0s:worker:restore",
     );
     const install = new TextContract({
       label: "k0s:worker:install",
       source: installSource,
     });
-    const restoreSource = ArcWorkerRestoreContract.taskSource(
-      tasksSource,
+    const restoreSource = ArcWorkerRestoreContract.finalTaskSource(
+      restoreTasksSource,
       "k0s:worker:restore",
-      "k0s:worker:status",
     );
     const restore = new TextContract({
       label: "k0s:worker:restore",
@@ -430,5 +433,11 @@ export class ArcWorkerRestoreContract {
     const end = source.indexOf(`  ${endName}:`, start);
     if (start < 0 || end < 0) throw new Error(`${startName} task is missing`);
     return source.slice(start, end);
+  }
+
+  private static finalTaskSource(source: string, taskName: string): string {
+    const start = source.indexOf(`  ${taskName}:`);
+    if (start < 0) throw new Error(`${taskName} task is missing`);
+    return source.slice(start);
   }
 }
