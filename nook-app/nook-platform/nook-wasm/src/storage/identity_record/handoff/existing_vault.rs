@@ -157,22 +157,20 @@ impl CheckedExistingVaultHandoff<'_> {
 }
 #[cfg(test)]
 mod tests {
+    use super::super::IdentityHandoffCommit;
+    use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
     use crate::manager::PendingExtensionIdentityEnrollment;
+    use crate::storage;
+    use crate::storage::event_db;
     use crate::storage::identity_record;
     use crate::storage::indexed_db;
     use futures_util::future;
+    use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use nook_core::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, IdentityDirectory, IsoTimestamp,
         LocalEventStore, MemberLabel, SigningIdentity, VaultOperation,
     };
     use rexie::TransactionMode;
-    use wasm_bindgen_test::wasm_bindgen_test;
-
-    use super::super::IdentityHandoffCommit;
-    use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
-    use crate::storage;
-    use crate::storage::event_db;
-    use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
