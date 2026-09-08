@@ -620,28 +620,32 @@ mod wasm_tests {
             let values = js_sys::Object::new();
             let first = Uint8Array::new_from_slice(&[first_byte as u8]);
             let second = Uint8Array::new_from_slice(&[second_byte as u8]);
-            Reflect::set(&values, &JsString::from("first"), &first)
+            Reflect::set(&values, &JsString::from("first"), first.as_ref())
                 .map_err(|_| JsError::new("failed to set first PRF value"))?;
-            Reflect::set(&values, &JsString::from("second"), &second)
+            Reflect::set(&values, &JsString::from("second"), second.as_ref())
                 .map_err(|_| JsError::new("failed to set second PRF value"))?;
             Reflect::set(
                 &eval_by_credential,
                 &JsString::from(format!("credential-{name}")),
-                &values,
+                values.as_ref(),
             )
             .map_err(|_| JsError::new("failed to build credential PRF fixture"))?;
         }
         Reflect::set(
             &prf,
             &JsString::from("evalByCredential"),
-            &eval_by_credential,
+            eval_by_credential.as_ref(),
         )
         .map_err(|_| JsError::new("failed to set credential PRF fixture"))?;
-        Reflect::set(&extensions, &JsString::from("prf"), &prf)
+        Reflect::set(&extensions, &JsString::from("prf"), prf.as_ref())
             .map_err(|_| JsError::new("failed to set PRF fixture"))?;
-        Reflect::set(&public_key, &JsString::from("extensions"), &extensions)
-            .map_err(|_| JsError::new("failed to set extensions fixture"))?;
-        Reflect::set(&value, &JsString::from("publicKey"), &public_key)
+        Reflect::set(
+            &public_key,
+            &JsString::from("extensions"),
+            extensions.as_ref(),
+        )
+        .map_err(|_| JsError::new("failed to set extensions fixture"))?;
+        Reflect::set(&value, &JsString::from("publicKey"), public_key.as_ref())
             .map_err(|_| JsError::new("failed to set public key fixture"))?;
 
         normalize_webauthn_binary_fields(&value)?;
