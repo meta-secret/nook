@@ -703,6 +703,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn shared_database_scope_depends_on_account_role() -> anyhow::Result<()> {
         assert!(
             ICloudEventStore::icloud_database_url(&ICloudEventTarget::Private, "records/query")
@@ -726,6 +730,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn shared_event_create_is_scoped_to_the_shared_root_hierarchy() -> anyhow::Result<()> {
         let target = SharedTargetFixture::new(ICloudShareRole::Participant)?.0;
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
@@ -756,6 +764,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn private_event_create_keeps_the_existing_default_zone_shape() -> anyhow::Result<()> {
         let event_id = EventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let body = ICloudEventStore::icloud_event_create_body(
@@ -772,6 +784,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn error_body_redaction_preserves_unicode_and_removes_credentials() {
         let body = format!("é ckAPIToken={ICLOUD_API_TOKEN}&ckWebAuthToken=secret-token next");
         let sanitized = CloudKitErrorBody {
@@ -788,6 +804,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn icloud_helpers_cover_digest_scope_query_and_record_projection() -> anyhow::Result<()> {
         let digest = "ej6ZESIzRFVmd4iZqrvM3e7_ABEiM0RVZneImaq7zN0";
         assert!(ICloudEventStore::is_sha256_base64url_digest(digest));
@@ -851,6 +871,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn icloud_error_and_redaction_helpers_cover_empty_and_repeated_values() {
         let empty = ICloudEventStore::icloud_error(reqwest::StatusCode::NOT_FOUND, "");
         assert!(

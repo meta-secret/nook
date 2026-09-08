@@ -546,6 +546,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn preparation_rejects_persisted_epoch_before_decoding_checkpoint() -> anyhow::Result<()> {
         let mut plan = SecurityEpochRecoveryPlan::fixture()?;
         plan.checkpoint_event_yaml = "invalid checkpoint".to_owned();
@@ -564,6 +568,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn rotation_frontier_requires_the_captured_checkpoint() -> anyhow::Result<()> {
         let epoch = IdentityVaultEventId::parse(&format!("sha256u:{}", "A".repeat(43)))?;
         let other = EventId::parse(&format!("sha256u:{}", "E".repeat(43)))?;
@@ -585,6 +593,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn detects_a_verified_epoch_after_the_prepared_epoch() -> anyhow::Result<()> {
         let committed = CommittedSecurityEpochExecution {
             execution: SecurityEpochRecoveryPlan::fixture()?
@@ -600,6 +612,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn replaces_a_legacy_target_before_epoch_rewrap() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let legacy = serde_json::from_value(serde_json::json!({
@@ -625,6 +641,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn password_removal_drops_only_the_requested_entry_and_rewraps_the_rest() -> anyhow::Result<()>
     {
         let old_keys = nook_core::VaultKeys::generate()?;
@@ -672,6 +692,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn password_rotation_rejects_an_unknown_entry() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let envelope =
@@ -693,6 +717,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn recovery_plan_rejects_malformed_checkpoint_after_valid_trigger() -> anyhow::Result<()> {
         let mut plan = SecurityEpochRecoveryPlan::fixture()?;
         plan.checkpoint_event_yaml = "not an event".to_owned();
@@ -706,6 +734,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn recovery_plan_rejects_an_invalid_store_before_event_replay() -> anyhow::Result<()> {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
 
@@ -719,6 +751,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn recovery_plan_rejects_a_malformed_trigger_before_checkpoint_decode() -> anyhow::Result<()> {
         let mut plan = SecurityEpochRecoveryPlan::fixture()?;
         plan.trigger_event_yaml = "not an event".to_owned();
@@ -735,6 +771,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn recovery_plan_preparation_accepts_a_matching_persisted_epoch() -> anyhow::Result<()> {
         let plan = SecurityEpochRecoveryPlan::fixture()?;
         let trigger_yaml = plan.trigger_event_yaml.clone();
@@ -757,6 +797,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn classified_rotation_failures_preserve_the_original_error() {
         let before = SecurityEpochRotationFailure::before(NookError::Database("before".to_owned()));
         let after = SecurityEpochRotationFailure::after(NookError::Database("after".to_owned()));
@@ -765,6 +809,10 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn committed_epoch_failure_resets_the_live_session() {
         let mut manager = NookVaultManager::new();
         manager.vault.store_id = "store_committed_epoch_failure".to_owned();
