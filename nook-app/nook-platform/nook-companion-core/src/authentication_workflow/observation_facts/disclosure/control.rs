@@ -391,7 +391,7 @@ mod tests {
             |value| {
                 value
                     .current_observation_mut()
-                    .semantic_submit_control_count = 1.into()
+                    .semantic_submit_control_count = 1.into();
             },
             |value| {
                 value.current_observation_mut().source_origin =
