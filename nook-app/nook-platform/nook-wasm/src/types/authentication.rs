@@ -96,6 +96,7 @@ pub enum NookAuthenticationWorkflowMatchState {
     NoMatch,
     Rejected,
     Matched,
+    UnsupportedVersion,
 }
 
 #[wasm_bindgen]
@@ -114,6 +115,9 @@ impl NookAuthenticationWorkflowMatch {
         match self.0 {
             AuthenticationWorkflowMatch::NoMatch => NookAuthenticationWorkflowMatchState::NoMatch,
             AuthenticationWorkflowMatch::Rejected => NookAuthenticationWorkflowMatchState::Rejected,
+            AuthenticationWorkflowMatch::UnsupportedVersion => {
+                NookAuthenticationWorkflowMatchState::UnsupportedVersion
+            }
             AuthenticationWorkflowMatch::Matched(_) => {
                 NookAuthenticationWorkflowMatchState::Matched
             }
@@ -127,6 +131,9 @@ impl NookAuthenticationWorkflowMatch {
             }
             AuthenticationWorkflowMatch::Rejected => Err(JsError::new(
                 "authentication workflow observations were rejected",
+            )),
+            AuthenticationWorkflowMatch::UnsupportedVersion => Err(JsError::new(
+                "authentication workflow observation version is unsupported",
             )),
             AuthenticationWorkflowMatch::Matched(snapshot) => {
                 Ok(NookAuthenticationWorkflowSnapshot::from_core(snapshot))
@@ -414,6 +421,62 @@ mod browser_tests {
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
+
+    struct AuthenticationWorkflowMatchProjectionScenario;
+
+    impl AuthenticationWorkflowMatchProjectionScenario {
+        fn matched() -> AuthenticationWorkflowMatch {
+            AuthenticationWorkflowMatch::Matched(AuthenticationWorkflowSnapshot {
+                kind: AuthenticationWorkflowKind::Login,
+                stage: AuthenticationWorkflowStage::Credentials,
+                action: AuthenticationWorkflowAction::ContinueWithNook,
+                current_step: 1u8.into(),
+                total_steps: 3u8.into(),
+                approval_requirement: AuthenticationApprovalRequirement::ExplicitUserApproval,
+                saved_login_capability: AuthenticationSavedLoginCapability::FillSavedLogin,
+                observation_index: 1u32.into(),
+            })
+        }
+
+        fn assert_state_and_snapshot_projection_are_exhaustive() {
+            for (workflow_match, expected_state) in [
+                (
+                    AuthenticationWorkflowMatch::NoMatch,
+                    NookAuthenticationWorkflowMatchState::NoMatch,
+                ),
+                (
+                    AuthenticationWorkflowMatch::Rejected,
+                    NookAuthenticationWorkflowMatchState::Rejected,
+                ),
+                (
+                    Self::matched(),
+                    NookAuthenticationWorkflowMatchState::Matched,
+                ),
+                (
+                    AuthenticationWorkflowMatch::UnsupportedVersion,
+                    NookAuthenticationWorkflowMatchState::UnsupportedVersion,
+                ),
+            ] {
+                let projected = NookAuthenticationWorkflowMatch::from_core(workflow_match);
+                assert_eq!(projected.state(), expected_state);
+                if expected_state == NookAuthenticationWorkflowMatchState::Matched {
+                    assert!(projected.snapshot().is_ok());
+                } else {
+                    assert!(projected.snapshot().is_err());
+                }
+            }
+            assert_eq!(
+                NookAuthenticationWorkflowMatchState::UnsupportedVersion as u32,
+                3
+            );
+        }
+    }
+
+    #[wasm_bindgen_test]
+    fn workflow_match_projects_every_closed_abi_variant() {
+        AuthenticationWorkflowMatchProjectionScenario::
+            assert_state_and_snapshot_projection_are_exhaustive();
+    }
 
     #[wasm_bindgen_test]
     fn authentication_observation_and_snapshot_wrappers_project_fields() {
