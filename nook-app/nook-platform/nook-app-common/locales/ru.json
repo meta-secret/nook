@@ -1478,6 +1478,7 @@
       "bip39_invalid": "Недействительная BIP39 сид-фраза.",
       "authenticator_issuer_required": "Введите название сервиса для аутентификатора.",
       "authenticator_secret_invalid": "Введите корректный Base32-секрет аутентификатора.",
+      "authenticator_issuer_catalog_invalid": "Недействительный встроенный каталог издателей аутентификаторов.",
       "authenticator_digits_invalid": "Код аутентификатора должен содержать от 6 до 8 цифр.",
       "authenticator_period_invalid": "Период аутентификатора должен быть от 15 до 300 секунд.",
       "authenticator_uri_invalid": "Введите корректный TOTP URI otpauth://.",

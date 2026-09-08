@@ -79,10 +79,17 @@ struct CheckedApplePasswordsCsv<'a> {
 }
 impl CheckedApplePasswordsCsv<'_> {
     fn collect(self) -> Result<ApplePasswordsImportPlan, ApplePasswordsImportError> {
-        let collection = self.reader.collect_fallible(CsvImportConversion {
-            too_many_records: ApplePasswordsImportError::TooManyRecords,
-            convert: |record: &StringRecord| self.columns.convert(record),
-        })?;
+        let collection = self.reader.collect_fallible(
+            CsvImportConversion {
+                too_many_records: ApplePasswordsImportError::TooManyRecords,
+                convert: |record: &StringRecord| self.columns.convert(record),
+            },
+            |items: &mut Vec<SecretValue>| {
+                for item in items {
+                    item.zeroize_plaintext();
+                }
+            },
+        )?;
         Ok(ApplePasswordsImportPlan {
             items: collection.items,
             source_count: collection.source_count.into(),
@@ -197,10 +204,18 @@ impl ApplePasswordColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    authenticator.apply_inferred_website_url_if_empty()?;
+                    if let Err(error) = authenticator.apply_inferred_website_url_if_empty() {
+                        for item in &mut items {
+                            item.zeroize_plaintext();
+                        }
+                        return Err(error.into());
+                    }
                     items.push(SecretValue::Authenticator(authenticator));
                 }
                 Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
+                    for item in &mut items {
+                        item.zeroize_plaintext();
+                    }
                     return Err(ApplePasswordsImportError::InvalidIssuerCatalog(
                         AuthenticatorIssuerHostsError::InvalidBundledCatalog,
                     ));

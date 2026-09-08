@@ -254,11 +254,13 @@ impl SecretListItem {
     /// Returns an empty string when the item is not URL-backed or the stored
     /// value has no usable host.
     #[must_use]
-    pub fn website_host(&self) -> String {
+    pub fn try_website_host(&self) -> Result<String, AuthenticatorIssuerHostsError> {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
-            | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url)
-                .map_or_else(String::new, WebsiteHost::into_string),
+            | SecretListItemData::ApiKey { website_url, .. } => {
+                Ok(WebsiteHost::normalize(website_url)
+                    .map_or_else(String::new, WebsiteHost::into_string))
+            }
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
@@ -268,11 +270,14 @@ impl SecretListItem {
                 issuer,
             }
             .website_host()
-            .ok()
-            .flatten()
-            .unwrap_or_default(),
-            _ => String::new(),
+            .map(|host| host.unwrap_or_default()),
+            _ => Ok(String::new()),
         }
+    }
+
+    #[must_use]
+    pub fn website_host(&self) -> String {
+        self.try_website_host().unwrap_or_default()
     }
 
     #[must_use]
@@ -336,6 +341,22 @@ impl SecretListItem {
                 }
             }
         }
+    }
+
+    pub fn try_group_key(&self) -> Result<String, AuthenticatorIssuerHostsError> {
+        let SecretListItemData::Authenticator {
+            website_url,
+            issuer,
+            ..
+        } = &self.data
+        else {
+            return Ok(self.group_key());
+        };
+        AuthenticatorGroupKeyRequest {
+            website_url,
+            issuer,
+        }
+        .resolve()
     }
 
     #[must_use]
@@ -415,8 +436,12 @@ impl SecretListItem {
 impl SecretPage {
     /// Resolve display group keys so brand authenticators cluster with site hosts.
     #[must_use]
-    pub fn entity_group_keys(&self) -> Vec<SecretGroupKey> {
-        let intrinsic: Vec<String> = self.records.iter().map(SecretListItem::group_key).collect();
+    pub fn entity_group_keys(&self) -> Result<Vec<SecretGroupKey>, AuthenticatorIssuerHostsError> {
+        let intrinsic: Vec<String> = self
+            .records
+            .iter()
+            .map(SecretListItem::try_group_key)
+            .collect::<Result<_, _>>()?;
         let anchors: Vec<(usize, String)> = self
             .records
             .iter()
@@ -426,7 +451,8 @@ impl SecretPage {
             .filter(|(_, key)| key.contains('.') && key != "No Website")
             .collect();
 
-        self.records
+        Ok(self
+            .records
             .iter()
             .enumerate()
             .map(|(index, item)| {
@@ -468,7 +494,7 @@ impl SecretPage {
                 best.map_or_else(|| key.clone(), |(_, _, host)| host)
             })
             .map(SecretGroupKey::from_string)
-            .collect()
+            .collect())
     }
 
     fn brand_matches_host(request: BrandHostMatchRequest<'_>) -> bool {
@@ -514,6 +540,7 @@ mod tests {
             limit: items.len().into(),
         }
         .entity_group_keys()
+        .unwrap_or_else(|error| panic!("{error}"))
         .into_iter()
         .map(SecretGroupKey::into_string)
         .collect()

@@ -311,10 +311,17 @@ struct CheckedKeePassXcCsv<'a> {
 }
 impl CheckedKeePassXcCsv<'_> {
     fn collect(self) -> Result<KeePassXcImportPlan, KeePassXcImportError> {
-        let collection = self.reader.collect_fallible(CsvImportConversion {
-            too_many_records: KeePassXcImportError::TooManyRecords,
-            convert: |record: &StringRecord| self.columns.convert(record),
-        })?;
+        let collection = self.reader.collect_fallible(
+            CsvImportConversion {
+                too_many_records: KeePassXcImportError::TooManyRecords,
+                convert: |record: &StringRecord| self.columns.convert(record),
+            },
+            |items: &mut Vec<SecretValue>| {
+                for item in items {
+                    item.zeroize_plaintext();
+                }
+            },
+        )?;
 
         Ok(KeePassXcImportPlan {
             items: collection.items,

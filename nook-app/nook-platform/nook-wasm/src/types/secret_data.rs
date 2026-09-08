@@ -14,7 +14,9 @@ pub struct NookSecretPage {
 
 impl NookSecretPage {
     pub(crate) fn from_core(page: nook_core::SecretPage) -> Result<Self, NookError> {
-        let group_keys = page.entity_group_keys();
+        let group_keys = page
+            .entity_group_keys()
+            .map_err(|error| NookError::Database(error.to_string()))?;
         Ok(Self {
             items: page
                 .records

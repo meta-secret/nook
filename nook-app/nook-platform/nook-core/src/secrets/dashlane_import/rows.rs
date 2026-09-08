@@ -64,10 +64,17 @@ pub(super) struct CheckedDashlaneCsv<'a> {
 }
 impl CheckedDashlaneCsv<'_> {
     pub(super) fn collect(self) -> Result<DashlaneImportPlan, DashlaneImportError> {
-        let collection = self.reader.collect_fallible(CsvImportConversion {
-            too_many_records: DashlaneImportError::TooManyRecords,
-            convert: |record: &StringRecord| self.columns.convert(record),
-        })?;
+        let collection = self.reader.collect_fallible(
+            CsvImportConversion {
+                too_many_records: DashlaneImportError::TooManyRecords,
+                convert: |record: &StringRecord| self.columns.convert(record),
+            },
+            |items: &mut Vec<SecretValue>| {
+                for item in items {
+                    item.zeroize_plaintext();
+                }
+            },
+        )?;
         Ok(DashlaneImportPlan {
             items: collection.items,
             source_count: collection.source_count.into(),
@@ -275,10 +282,18 @@ impl CredentialColumns {
                     {
                         authenticator.website_url = website_url;
                     }
-                    authenticator.apply_inferred_website_url_if_empty()?;
+                    if let Err(error) = authenticator.apply_inferred_website_url_if_empty() {
+                        for item in &mut items {
+                            item.zeroize_plaintext();
+                        }
+                        return Err(error.into());
+                    }
                     items.push(SecretValue::Authenticator(authenticator));
                 }
                 Err(ValidationError::AuthenticatorIssuerCatalogInvalid) => {
+                    for item in &mut items {
+                        item.zeroize_plaintext();
+                    }
                     return Err(DashlaneImportError::InvalidIssuerCatalog(
                         AuthenticatorIssuerHostsError::InvalidBundledCatalog,
                     ));
