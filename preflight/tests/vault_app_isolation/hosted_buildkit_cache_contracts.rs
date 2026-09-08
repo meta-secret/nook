@@ -917,6 +917,7 @@ fn main_rust_entrypoint_reaches_its_dynamic_host_task() {
     let root = repository_root();
     let entrypoint = Command::new("task")
         .args(["--dry", "ci:main:rust"])
+        .env("REPO_ROOT", &root)
         .current_dir(&root)
         .output()
         .expect("task must render the Main Rust entrypoint");
@@ -932,6 +933,7 @@ fn main_rust_entrypoint_reaches_its_dynamic_host_task() {
 
     let host = Command::new("task")
         .args(["--dry", "_ci:main:rust:host"])
+        .env("REPO_ROOT", &root)
         .current_dir(root)
         .output()
         .expect("task must render the dynamic Main Rust host task");
