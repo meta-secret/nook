@@ -94,7 +94,7 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 2. Read newline-delimited JSON from standard output.
    - Each line is one flat `pr-steward-routing/v1` hint.
    - Emit only directly identified assigned `meta-secret/nook` pull requests.
-     Suppress status, PR-less, foreign, ambiguous, malformed, or mismatched heads.
+     Suppress status, PR-less, foreign, ambiguous, or mismatched heads. Malformed input fails the live stream with a static error.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
 3. Stop when Gizmo directs the child to finish.

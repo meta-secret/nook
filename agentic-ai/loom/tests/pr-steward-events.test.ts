@@ -232,18 +232,6 @@ describe('compact routing hints', () => {
         },
       },
     },
-    {
-      event: 'workflow_job',
-      source: PrStewardSource.WorkflowJob,
-      body: {
-        repository,
-        workflow_job: {
-          ...associated({ id: 47, head: HEAD }),
-          run_id: 147,
-          status: 'completed',
-        },
-      },
-    },
   ])(
     'routes directly attributed $event metadata',
     ({ event, source, body }) => {
@@ -350,7 +338,6 @@ describe('compact routing hints', () => {
 
   test('bounds optional scalar fields and output', async () => {
     const lines = await write([
-      encoder.encode('RAW_MALFORMED_SECRET'),
       cloudEvent({
         event: 'pull_request_review_comment',
         body: {
@@ -379,7 +366,12 @@ describe('compact routing hints', () => {
     });
     expect(lines[0]!.length).toBeLessThan(2_048);
     expect(lines[0]).not.toContain('RAW_PAYLOAD_SECRET');
-    expect(lines[0]).not.toContain('RAW_MALFORMED_SECRET');
+  });
+
+  test('fails the live stream with a static error on malformed input', async () => {
+    await expect(
+      write([encoder.encode('RAW_MALFORMED_SECRET')]),
+    ).rejects.toThrow('event payload is not valid UTF-8 JSON');
   });
 });
 

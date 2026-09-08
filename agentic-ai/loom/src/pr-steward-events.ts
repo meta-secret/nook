@@ -36,7 +36,6 @@ export enum PrStewardSource {
   PullRequest = 'pull-request',
   PullRequestReview = 'pull-request-review',
   PullRequestReviewComment = 'pull-request-review-comment',
-  WorkflowJob = 'workflow-job',
   WorkflowRun = 'workflow-run',
 }
 
@@ -209,8 +208,6 @@ function sourceForEvent(value: string): PrStewardSource | false {
       return PrStewardSource.PullRequestReview;
     case 'pull_request_review_comment':
       return PrStewardSource.PullRequestReviewComment;
-    case 'workflow_job':
-      return PrStewardSource.WorkflowJob;
     case 'workflow_run':
       return PrStewardSource.WorkflowRun;
     default:
@@ -231,11 +228,9 @@ function eventObject(args: {
           ? 'check_run'
           : args.source === PrStewardSource.CheckSuite
             ? 'check_suite'
-            : args.source === PrStewardSource.WorkflowJob
-              ? 'workflow_job'
-              : args.source === PrStewardSource.WorkflowRun
-                ? 'workflow_run'
-                : 'comment';
+            : args.source === PrStewardSource.WorkflowRun
+              ? 'workflow_run'
+              : 'comment';
   const candidate = property({ record: args.body, key });
   return isRecord(candidate) ? candidate : {};
 }
@@ -548,15 +543,10 @@ export async function writeAssignedEvents(args: {
   readonly write: (line: string) => void;
 }): Promise<void> {
   for await (const message of args.messages) {
-    let event: PrStewardRoutingHint | false;
-    try {
-      event = assignedPrEvent({
-        data: message.data,
-        pullRequest: args.pullRequest,
-      });
-    } catch {
-      continue;
-    }
+    const event = assignedPrEvent({
+      data: message.data,
+      pullRequest: args.pullRequest,
+    });
     if (event !== false) args.write(`${JSON.stringify(event)}\n`);
   }
 }
