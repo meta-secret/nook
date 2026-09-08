@@ -480,9 +480,12 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
     let rust_verify = rust
         .find("task ci:main:rust")
         .context("Main Rust job must verify")?;
-    let rust_publish = native_cache_publish
+    let rust_publish_id = rust
+        .find("id: publish_native_cache")
+        .context("Main Rust producer must expose its cache publication outcome")?;
+    let rust_publish = rust
         .find("task ci:main:publish-native-cache")
-        .context("Main native publisher must export its cache")?;
+        .context("Main Rust producer must export its verified cache")?;
     let wasm_verify = wasm
         .find("task ci:pr:wasm")
         .context("Main WASM job must verify")?;
@@ -516,13 +519,25 @@ fn assert_main_producer_owned_cache_publish(root: &Path) -> anyhow::Result<()> {
             && preflight_cache_publish.contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && !preflight_cache_publish.contains("continue-on-error")
             && rust.contains("needs: [product-paths, preflight]")
-            && rust[rust_verify..].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
-            && !rust.contains("publish-native-cache")
+            && rust_verify < rust_publish_id
+            && rust_publish_id < rust_publish
+            && rust[rust_verify..rust_publish].contains("GHA_CACHE_WRITE_ENABLED: \"\"")
+            && rust
+                .contains("cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}")
+            && rust[rust_publish_id..rust_publish].contains("continue-on-error: true")
+            && rust[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && rust.contains("cache-selection: native")
             && rust.contains("monitor-buildkit-storage: \"true\"")
             && native_cache_publish.contains("needs: [rust]")
-            && native_cache_publish[rust_publish..].contains("GHA_CACHE_WRITE_ENABLED: \"1\"")
             && !native_cache_publish.contains("continue-on-error")
+            && native_cache_publish.contains(
+                "CACHE_PUBLICATION_OUTCOME: ${{ needs.rust.outputs.cache_publication_outcome }}"
+            )
+            && native_cache_publish
+                .contains("if [ \"$CACHE_PUBLICATION_OUTCOME\" != \"success\" ]")
+            && !native_cache_publish.contains("task ci:main:publish-native-cache")
+            && !native_cache_publish.contains("nook-docker-setup")
+            && !native_cache_publish.contains("actions/checkout")
             && main.matches("task ci:main:publish-native-cache").count() == 1
             && main.matches("task ci:main:publish-preflight-cache").count() == 1
             && wasm.contains("needs: [rust, preflight]")

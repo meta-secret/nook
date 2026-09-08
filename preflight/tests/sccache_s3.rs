@@ -272,8 +272,8 @@ fn assert_workflows_scope_cache_credentials() -> anyhow::Result<()> {
 
     let main = read(".github/workflows/main.yml");
     assert!(
-        main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 6
-            && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 6
+        main.matches("NOOK_SCCACHE_ACCESS_KEY").count() == 5
+            && main.matches("NOOK_SCCACHE_SECRET_KEY").count() == 5
             && !main.contains("NOOK_CACHE_REDIS_PASSWORD"),
         "trusted Main validators and their cache publishers must populate SeaweedFS compiler objects"
     );

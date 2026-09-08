@@ -183,7 +183,9 @@ jobs:
     name: Native Rust verification
     needs: [product-paths, preflight]
     if: needs.product-paths.outputs.changed == 'true'
-    # Validation remains read-only; its independent publisher refreshes the trusted Main cache.
+    outputs:
+      cache_publication_outcome: ${{ steps.publish_native_cache.outcome }}
+    # Publish only from the verified job's node-local BuildKit shard.
     runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
     permissions:
       contents: read
@@ -231,34 +233,9 @@ jobs:
           retention-days: 90
           if-no-files-found: error
 
-      - name: Preserve cache telemetry
-        if: always()
-        uses: ./.github/actions/nook-cache-telemetry
-
-  native-cache-publish:
-    name: Native cache publication
-    needs: [rust]
-    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
-    permissions:
-      contents: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Docker setup
-        uses: ./.github/actions/nook-docker-setup
-        with:
-          cache-selection: native
-          monitor-buildkit-storage: "true"
-          registry-host: registry.dev.nokey.sh
-          registry-username: ${{ secrets.NOOK_REGISTRY_USERNAME }}
-          registry-password: ${{ secrets.NOOK_REGISTRY_PASSWORD }}
-          sccache-access-key: ${{ secrets.NOOK_SCCACHE_ACCESS_KEY }}
-          sccache-secret-key: ${{ secrets.NOOK_SCCACHE_SECRET_KEY }}
-          sccache-endpoint: ${{ secrets.NOOK_SCCACHE_ENDPOINT }}
-          sccache-bucket: ${{ secrets.NOOK_SCCACHE_BUCKET }}
-
       - name: Publish verified native BuildKit cache
+        id: publish_native_cache
+        continue-on-error: true
         run: task ci:main:publish-native-cache
         env:
           CI: true
@@ -268,6 +245,20 @@ jobs:
       - name: Preserve cache telemetry
         if: always()
         uses: ./.github/actions/nook-cache-telemetry
+
+  native-cache-publish:
+    name: Native cache publication
+    needs: [rust]
+    runs-on: ${{ vars.NOOK_RUNS_ON || 'nook-k0s' }}
+    steps:
+      - name: Require successful native cache publication
+        env:
+          CACHE_PUBLICATION_OUTCOME: ${{ needs.rust.outputs.cache_publication_outcome }}
+        run: |
+          if [ "$CACHE_PUBLICATION_OUTCOME" != "success" ]; then
+            echo "Native cache publication failed in the verified producer: $CACHE_PUBLICATION_OUTCOME" >&2
+            exit 1
+          fi
 
   wasm:
     name: WASM verification and artifact
