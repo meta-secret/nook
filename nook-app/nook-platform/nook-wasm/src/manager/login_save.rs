@@ -66,10 +66,8 @@ impl NookVaultManager {
                 _ => None,
             };
             record.zeroize_plaintext();
-            if matches? {
-                if let Some(login) = login {
-                    owned_logins.push((id.clone(), login));
-                }
+            if matches? && let Some(login) = login {
+                owned_logins.push((id.clone(), login));
             }
         }
         let candidates: Vec<nook_core::WebsiteLoginSaveCandidate<'_>> = owned_logins

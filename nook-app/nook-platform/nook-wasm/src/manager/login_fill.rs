@@ -48,10 +48,8 @@ impl NookVaultManager {
                 _ => None,
             };
             record.zeroize_plaintext();
-            if matches? {
-                if let Some(account) = account {
-                    accounts.push(account);
-                }
+            if matches? && let Some(account) = account {
+                accounts.push(account);
             }
         }
         Ok(accounts)
