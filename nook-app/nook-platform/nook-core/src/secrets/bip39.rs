@@ -8,7 +8,8 @@
 
 use crate::errors::{ValidationError, ValidationResult};
 use bip39::{Language, Mnemonic};
-use zeroize::Zeroize;
+use std::sync::Arc;
+use zeroize::{Zeroize, Zeroizing};
 
 /// A supported BIP-39 mnemonic word count inferred from normalized input.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -78,7 +79,7 @@ impl<'a> Bip39MnemonicInput<'a> {
 
         Mnemonic::parse_in_normalized(Language::English, normalized)
             .map(|_| Bip39Mnemonic {
-                text: normalized.to_owned(),
+                text: Arc::new(Zeroizing::new(normalized.to_owned().into_boxed_str())),
             })
             .map_err(|_| ValidationError::Bip39Invalid)
     }
@@ -109,13 +110,13 @@ impl<'a> Bip39MnemonicInput<'a> {
 /// A validated English BIP-39 mnemonic.
 #[derive(Clone, PartialEq, Eq)]
 pub struct Bip39Mnemonic {
-    text: String,
+    text: Arc<Zeroizing<Box<str>>>,
 }
 
 impl Bip39Mnemonic {
     #[must_use]
     pub fn as_str(&self) -> &str {
-        &self.text
+        self.text.as_ref().as_ref()
     }
 
     #[must_use]
@@ -135,13 +136,7 @@ impl Bip39Mnemonic {
 
 impl Zeroize for Bip39Mnemonic {
     fn zeroize(&mut self) {
-        self.text.zeroize();
-    }
-}
-
-impl Drop for Bip39Mnemonic {
-    fn drop(&mut self) {
-        self.zeroize();
+        self.text = Arc::new(Zeroizing::new(String::new().into_boxed_str()));
     }
 }
 
@@ -221,30 +216,38 @@ impl Bip39WordSequenceRequest<'_> {
         if words.iter().any(|word| !Bip39Word::new(word).is_known()) {
             return Bip39WordSequenceValidation::UnknownWord;
         }
-        Bip39WordSequenceValidation::Valid
+        Bip39WordSequenceValidation::Valid(Bip39Words { words })
     }
 }
 
 /// Typed result of BIP-39 word-sequence membership validation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(PartialEq, Eq)]
 pub enum Bip39WordSequenceValidation {
-    Valid,
+    Valid(Bip39Words),
     WrongWordCount,
     UnknownWord,
 }
 
-/// Normalized BIP-39 words that can be joined for presentation.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub struct Bip39Words<'a> {
-    words: &'a [String],
+/// A validated sequence of normalized BIP-39 words.
+#[derive(PartialEq, Eq)]
+pub struct Bip39Words {
+    words: Vec<String>,
 }
 
-impl<'a> Bip39Words<'a> {
+impl Bip39Words {
     #[must_use]
-    pub const fn new(words: &'a [String]) -> Self {
-        Self { words }
+    pub fn join(self) -> String {
+        self.words.join(" ")
     }
+}
 
+/// Untrusted words to normalize and join for mnemonic input presentation.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Bip39WordJoinRequest<'a> {
+    pub words: &'a [String],
+}
+
+impl Bip39WordJoinRequest<'_> {
     #[must_use]
     pub fn join(self) -> String {
         self.words
@@ -271,6 +274,16 @@ mod tests {
         let mnemonic_24 = Mnemonic::from_entropy(&[0u8; 32])?;
         let mnemonic_24 = mnemonic_24.to_string();
         assert!(Bip39MnemonicInput::new(&mnemonic_24).validate().is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn cloned_validated_mnemonics_share_one_zeroizing_buffer() -> anyhow::Result<()> {
+        let mnemonic = Bip39MnemonicInput::new(VALID_12).validate()?;
+        let clone = mnemonic.clone();
+
+        assert!(Arc::ptr_eq(&mnemonic.text, &clone.text));
+        assert_eq!(clone.as_str(), VALID_12);
         Ok(())
     }
 
@@ -340,30 +353,34 @@ mod tests {
 
     #[test]
     fn validates_word_sequence_membership_without_checksum() {
-        assert_eq!(
-            Bip39WordSequenceRequest {
+        let validation = Bip39WordSequenceRequest {
                 text: "abandon ability able about above absent absorb abstract absurd abuse access accident",
                 expected_word_count: 12.into(),
             }
-            .validate(),
-            Bip39WordSequenceValidation::Valid
-        );
+            .validate();
+        let Bip39WordSequenceValidation::Valid(words) = validation else {
+            panic!("known words with the expected count must produce a validated capability");
+        };
         assert_eq!(
+            words.join(),
+            "abandon ability able about above absent absorb abstract absurd abuse access accident"
+        );
+        assert!(matches!(
             Bip39WordSequenceRequest {
                 text: "abandon notaword",
                 expected_word_count: 2.into(),
             }
             .validate(),
             Bip39WordSequenceValidation::UnknownWord
-        );
-        assert_eq!(
+        ));
+        assert!(matches!(
             Bip39WordSequenceRequest {
                 text: "abandon ability",
                 expected_word_count: 12.into(),
             }
             .validate(),
             Bip39WordSequenceValidation::WrongWordCount
-        );
+        ));
     }
 
     #[test]
@@ -373,12 +390,14 @@ mod tests {
             vec!["abandon", "ability", "able"]
         );
         assert_eq!(
-            Bip39Words::new(&[
-                " abandon ".to_owned(),
-                "ABILITY".to_owned(),
-                String::new(),
-                "able".to_owned(),
-            ])
+            Bip39WordJoinRequest {
+                words: &[
+                    " abandon ".to_owned(),
+                    "ABILITY".to_owned(),
+                    String::new(),
+                    "able".to_owned(),
+                ],
+            }
             .join(),
             "abandon ability able"
         );

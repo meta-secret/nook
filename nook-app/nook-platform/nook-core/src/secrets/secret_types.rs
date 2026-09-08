@@ -69,15 +69,10 @@ impl fmt::Debug for SeedPhraseSecret {
 }
 
 impl SeedPhraseSecret {
-    #[must_use]
-    pub fn from_validated(name: String, validated: Bip39Mnemonic) -> Self {
-        Self { name, validated }
-    }
-
     pub fn try_new(mut request: SeedPhraseSecretRequest) -> SecretPayloadResult<Self> {
         let validated = Bip39MnemonicInput::new(&request.seed).validate()?;
         let name = mem::take(&mut request.name);
-        Ok(Self::from_validated(name, validated))
+        Ok(Self { name, validated })
     }
 
     #[must_use]
@@ -561,6 +556,12 @@ impl SecretValue {
     }
 
     pub fn zeroize_plaintext(&mut self) {
+        self.zeroize();
+    }
+}
+
+impl Zeroize for SecretValue {
+    fn zeroize(&mut self) {
         match self {
             Self::Login(value) => {
                 value.website_url.zeroize();
@@ -607,6 +608,43 @@ impl SecretRecord {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const VALID_SEED_PHRASE: &str = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+    #[test]
+    fn seed_phrase_payload_round_trips_as_validated_yaml() -> anyhow::Result<()> {
+        let value = SecretValue::SeedPhrase(SeedPhraseSecret::try_new(SeedPhraseSecretRequest {
+            name: "Recovery".to_owned(),
+            seed: VALID_SEED_PHRASE.to_owned(),
+        })?);
+        let yaml = value.to_yaml()?;
+        let decoded = SecretValue::from_yaml(SecretType::SeedPhrase, &yaml)?;
+
+        assert_eq!(decoded, value);
+        assert!(yaml.as_str().contains("name: Recovery"));
+        assert!(yaml.as_str().contains(VALID_SEED_PHRASE));
+        Ok(())
+    }
+
+    #[test]
+    fn seed_phrase_payload_rejects_malformed_yaml_and_invalid_mnemonics() {
+        let malformed = SecretValue::from_yaml_str(SecretType::SeedPhrase, "seed: [");
+        assert!(matches!(
+            malformed,
+            Err(SecretPayloadError::InvalidSeedPhrase(_))
+        ));
+
+        let invalid = SecretValue::from_yaml_str(
+            SecretType::SeedPhrase,
+            "name: Recovery\nseed: abandon abandon\n",
+        );
+        assert!(matches!(
+            invalid,
+            Err(SecretPayloadError::Validation(
+                ValidationError::Bip39Invalid
+            ))
+        ));
+    }
 
     #[test]
     fn passkey_version_preserves_scalars_and_rejects_unsupported_values() -> anyhow::Result<()> {

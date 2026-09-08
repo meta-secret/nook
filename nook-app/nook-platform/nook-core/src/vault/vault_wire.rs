@@ -6,6 +6,7 @@ use std::{fmt, mem};
 
 use crate::errors;
 use serde::{Deserialize, Deserializer, de::Error as _};
+use zeroize::Zeroizing;
 
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -94,7 +95,10 @@ impl SecretPayloadYaml {
                 errors::ValidationError::SecretDataRequired,
             ));
         }
-        SecretValue::from_yaml_str(request.secret_type, request.raw)?;
+        let _plaintext = Zeroizing::new(SecretValue::from_yaml_str(
+            request.secret_type,
+            request.raw,
+        )?);
         Ok(ValidatedSecretPayloadYaml {
             raw: request.raw,
             secret_type: request.secret_type,

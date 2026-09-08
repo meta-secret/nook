@@ -64,8 +64,8 @@ pub use authenticator_issuer_hosts::{
 };
 pub use bip39::{
     Bip39EnglishWordList, Bip39Mnemonic, Bip39MnemonicInput, Bip39MnemonicWordCount, Bip39Word,
-    Bip39WordSequenceExpectedCount, Bip39WordSequenceRequest, Bip39WordSequenceValidation,
-    Bip39WordSuggestionLimit, Bip39WordSuggestionRequest, Bip39Words,
+    Bip39WordJoinRequest, Bip39WordSequenceExpectedCount, Bip39WordSequenceRequest,
+    Bip39WordSequenceValidation, Bip39WordSuggestionLimit, Bip39WordSuggestionRequest, Bip39Words,
 };
 pub use bitwarden_import::{BitwardenExport, BitwardenImportError, BitwardenImportPlan};
 pub use chrome_passwords_import::{

@@ -1,7 +1,7 @@
 use super::wasm_bindgen;
 use nook_core::{
     Bip39EnglishWordList, Bip39MnemonicInput, Bip39MnemonicWordCount, Bip39Word,
-    Bip39WordSequenceRequest, Bip39WordSuggestionRequest, Bip39Words,
+    Bip39WordJoinRequest, Bip39WordSequenceRequest, Bip39WordSuggestionRequest,
 };
 
 #[wasm_bindgen]
@@ -68,7 +68,7 @@ pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> boo
             expected_word_count: (expected_word_count as usize).into(),
         }
         .validate(),
-        nook_core::Bip39WordSequenceValidation::Valid
+        nook_core::Bip39WordSequenceValidation::Valid(_)
     )
 }
 
@@ -81,7 +81,7 @@ pub fn parse_bip39_words(text: &str) -> Vec<String> {
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn join_bip39_words(words: Vec<String>) -> String {
-    Bip39Words::new(&words).join()
+    Bip39WordJoinRequest { words: &words }.join()
 }
 
 #[wasm_bindgen]
