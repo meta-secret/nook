@@ -6,23 +6,6 @@ use crate::page_form_policy::NookPageInputFieldObservation;
 use nook_companion_core::credential_fill::{self, field};
 use wasm_bindgen::prelude::wasm_bindgen;
 
-mod authentication_disclosure;
-pub use authentication_disclosure::{
-    AuthenticationCredentialDisclosureCapability,
-    AuthenticationCredentialDisclosureConsumptionOutcome,
-    AuthenticationCredentialDisclosureConsumptionRequest,
-    AuthenticationCredentialDisclosureConsumptionResult,
-    AuthenticationCredentialDisclosurePlanningRequest,
-    AuthenticationCredentialDisclosurePlanningResult,
-    AuthenticationCredentialDisclosurePreflightOutcome,
-    AuthenticationCredentialDisclosurePreflightRequest,
-    AuthenticationCredentialDisclosurePreflightResult,
-    AuthenticationPasswordDisclosureContinuation, AuthorizedAuthenticationUsernameDisclosure,
-    authentication_disclosure_observation_current_schema_version,
-    classify_authentication_disclosure_control,
-    plan_companion_authentication_credential_disclosure,
-};
-
 #[wasm_bindgen]
 #[derive(Clone, Debug)]
 pub struct CredentialFillFieldRole {
