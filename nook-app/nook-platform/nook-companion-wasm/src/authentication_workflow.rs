@@ -101,7 +101,6 @@ pub fn current_companion_authentication_page_observation_facts(
 }
 
 #[wasm_bindgen]
-#[must_use]
 pub fn classify_versioned_companion_authentication_workflow_facts(
     input: wasm_bindgen::JsValue,
 ) -> Result<
@@ -149,6 +148,10 @@ mod tests {
     struct AuthenticationWorkflowMatchKindScenario;
 
     impl AuthenticationWorkflowMatchKindScenario {
+        fn js_error(error: impl std::fmt::Debug) -> wasm_bindgen::JsValue {
+            wasm_bindgen::JsValue::from_str(&format!("{error:?}"))
+        }
+
         fn assert_every_core_variant_has_a_stable_abi_kind() {
             for (workflow_match, expected) in [
                 (
@@ -175,8 +178,8 @@ mod tests {
             }
         }
 
-        fn assert_versioned_transport_preserves_typed_outcome() -> anyhow::Result<()> {
-            let current: nook_companion_core::VersionedAuthenticationPageObservationFacts =
+        fn current() -> nook_companion_core::VersionedAuthenticationPageObservationFacts {
+            let current =
                 super::current_companion_authentication_page_observation_facts(
                     nook_companion_core::CurrentAuthenticationPageObservationFactsRequest {
                         facts: nook_companion_core::AuthenticationPageObservationFacts::default()
@@ -184,15 +187,29 @@ mod tests {
                         credential_disclosure_control:
                             nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
                     },
-                )
-                .into();
-            let result = super::classify_versioned_companion_authentication_workflow_facts(
+                );
+            current.into()
+        }
+
+        fn classify(
+            observation: nook_companion_core::VersionedAuthenticationPageObservationFacts,
+        ) -> Result<
+            nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome,
+            wasm_bindgen::JsValue,
+        > {
+            super::classify_versioned_companion_authentication_workflow_facts(
                 serde_wasm_bindgen::to_value(
                     &nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
-                        observations: vec![current.clone()],
+                        observations: vec![observation],
                     },
-                )?,
-            )?;
+                )
+                .map_err(Self::js_error)?,
+            )
+            .map_err(Self::js_error)
+        }
+
+        fn assert_classified_outcome() -> Result<(), wasm_bindgen::JsValue> {
+            let result = Self::classify(Self::current())?;
             assert_eq!(
                 result,
                 nook_companion_core::AuthenticationPageObservationFactsClassificationOutcome::Classified(
@@ -200,29 +217,28 @@ mod tests {
                 )
             );
             assert_eq!(
-                serde_json::to_value(result)?,
+                serde_json::to_value(result).map_err(Self::js_error)?,
                 serde_json::json!({
                     "kind": "classified",
                     "value": { "kind": "no-match" }
                 })
             );
+            Ok(())
+        }
 
-            let mut future_wire = serde_json::to_value(current)?;
+        fn assert_page_version_outcome() -> Result<(), wasm_bindgen::JsValue> {
+            let mut future_wire = serde_json::to_value(Self::current()).map_err(Self::js_error)?;
             let serde_json::Value::Object(fields) = &mut future_wire else {
-                anyhow::bail!("versioned page observation must encode as an object");
+                return Err(wasm_bindgen::JsValue::from_str(
+                    "versioned page observation must encode as an object",
+                ));
             };
             fields.insert("schemaVersion".to_owned(), serde_json::json!(2));
             fields.remove("credentialDisclosureControl");
-            let future = serde_json::from_value(future_wire)?;
-            let result = super::classify_versioned_companion_authentication_workflow_facts(
-                serde_wasm_bindgen::to_value(
-                    &nook_companion_core::VersionedAuthenticationPageObservationFactsBatch {
-                        observations: vec![future],
-                    },
-                )?,
-            )?;
+            let future = serde_json::from_value(future_wire).map_err(Self::js_error)?;
+            let result = Self::classify(future)?;
             assert_eq!(
-                serde_json::to_value(result)?,
+                serde_json::to_value(result).map_err(Self::js_error)?,
                 serde_json::json!({
                     "kind": "unsupported-version",
                     "value": {
@@ -231,19 +247,16 @@ mod tests {
                     }
                 })
             );
+            Ok(())
+        }
 
-            let mut nested_wire = serde_json::to_value(
-                nook_companion_core::VersionedAuthenticationPageObservationFacts::current(
-                    nook_companion_core::CurrentAuthenticationPageObservationFactsRequest {
-                        facts: nook_companion_core::AuthenticationPageObservationFacts::default()
-                            .into(),
-                        credential_disclosure_control:
-                            nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
-                    },
-                ),
-            )?;
+        fn assert_disclosure_version_outcome() -> Result<(), wasm_bindgen::JsValue> {
+            let mut nested_wire =
+                serde_json::to_value(Self::current()).map_err(Self::js_error)?;
             let serde_json::Value::Object(fields) = &mut nested_wire else {
-                anyhow::bail!("versioned page observation must encode as an object");
+                return Err(wasm_bindgen::JsValue::from_str(
+                    "versioned page observation must encode as an object",
+                ));
             };
             fields.insert(
                 "credentialDisclosureControl".to_owned(),
@@ -252,12 +265,10 @@ mod tests {
                     "observations": [{"schemaVersion": 2}]
                 }),
             );
-            let nested_batch = serde_json::json!({"observations": [nested_wire]});
-            let result = super::classify_versioned_companion_authentication_workflow_facts(
-                serde_wasm_bindgen::to_value(&nested_batch)?,
-            )?;
+            let nested = serde_json::from_value(nested_wire).map_err(Self::js_error)?;
+            let result = Self::classify(nested)?;
             assert_eq!(
-                serde_json::to_value(result)?,
+                serde_json::to_value(result).map_err(Self::js_error)?,
                 serde_json::json!({
                     "kind": "unsupported-version",
                     "value": {
@@ -268,6 +279,13 @@ mod tests {
             );
             Ok(())
         }
+
+        fn assert_versioned_transport_preserves_typed_outcome(
+        ) -> Result<(), wasm_bindgen::JsValue> {
+            Self::assert_classified_outcome()?;
+            Self::assert_page_version_outcome()?;
+            Self::assert_disclosure_version_outcome()
+        }
     }
 
     #[wasm_bindgen_test]
@@ -276,7 +294,7 @@ mod tests {
     }
 
     #[wasm_bindgen_test]
-    fn versioned_transport_preserves_its_typed_outcome() -> anyhow::Result<()> {
+    fn versioned_transport_preserves_its_typed_outcome() -> Result<(), wasm_bindgen::JsValue> {
         AuthenticationWorkflowMatchKindScenario::assert_versioned_transport_preserves_typed_outcome(
         )
     }
