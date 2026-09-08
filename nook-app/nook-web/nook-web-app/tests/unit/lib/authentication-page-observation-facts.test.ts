@@ -1,10 +1,20 @@
 import { describe, expect, test } from 'vitest'
+import type { VersionedAuthenticationDisclosureControlObservation } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationPageObservationFactsAssembler,
   type AuthenticationPageObservationFactsAssemblyRequest,
 } from '../../../../nook-web-shared/src/extension/authentication-page-observation-facts'
 
 describe('authentication page observation facts assembly', () => {
+  test('generated current disclosure wire requires its version-one body', () => {
+    // @ts-expect-error A current-version disclosure wire cannot omit its required body.
+    const bodylessCurrent: VersionedAuthenticationDisclosureControlObservation =
+      {
+        schemaVersion: 1,
+      }
+    expect(bodylessCurrent.schemaVersion).toBe(1)
+  })
+
   test('emits a complete explicit absent disclosure-control state', () => {
     const request: AuthenticationPageObservationFactsAssemblyRequest = {
       summary: {

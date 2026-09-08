@@ -50,12 +50,12 @@ pub struct CurrentAuthenticationDisclosureControlRequest {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(
-    type = "{ schemaVersion: number; observation: AuthenticationAdvanceControlObservation; genericPasswordFieldCount: number }",
+    type = "{ schemaVersion: 1; observation: AuthenticationAdvanceControlObservation; genericPasswordFieldCount: number }",
     into_wasm_abi,
     from_wasm_abi
 )]
 pub struct VersionedAuthenticationDisclosureControlObservation {
-    pub schema_version: AuthenticationDisclosureObservationSchemaVersion,
+    schema_version: AuthenticationDisclosureObservationSchemaVersion,
     #[serde(flatten)]
     body: AuthenticationDisclosureControlObservationBody,
 }
@@ -111,6 +111,37 @@ struct RequiredAuthenticationAdvanceControlObservation {
     submission_destination_source: PageControlSubmissionDestinationSource,
 }
 
+/// Decodes untrusted observation envelopes before the current generated DTO is considered.
+struct AuthenticationDisclosureControlUntrustedWireDecoder;
+
+impl AuthenticationDisclosureControlUntrustedWireDecoder {
+    fn decode(
+        encoded: serde_json::Value,
+    ) -> serde_json::Result<VersionedAuthenticationDisclosureControlObservation> {
+        let envelope = AuthenticationDisclosureObservationEnvelope::deserialize(&encoded)?;
+        if !envelope.schema_version.is_supported() {
+            return Ok(VersionedAuthenticationDisclosureControlObservation {
+                schema_version: envelope.schema_version,
+                body: AuthenticationDisclosureControlObservationBody::Unsupported(
+                    UnsupportedAuthenticationDisclosureControlObservationBody {},
+                ),
+            });
+        }
+        let current = serde_json::from_value::<
+            RequiredVersionOneAuthenticationDisclosureControlObservation,
+        >(encoded)?;
+        Ok(VersionedAuthenticationDisclosureControlObservation {
+            schema_version: current.schema_version,
+            body: AuthenticationDisclosureControlObservationBody::Current(
+                CurrentAuthenticationDisclosureControlObservationBody {
+                    observation: current.observation.into(),
+                    generic_password_field_count: current.generic_password_field_count,
+                },
+            ),
+        })
+    }
+}
+
 impl From<RequiredAuthenticationAdvanceControlObservation>
     for AuthenticationAdvanceControlObservation
 {
@@ -141,29 +172,8 @@ impl<'de> Deserialize<'de> for VersionedAuthenticationDisclosureControlObservati
         D: Deserializer<'de>,
     {
         let encoded = serde_json::Value::deserialize(deserializer)?;
-        let envelope = AuthenticationDisclosureObservationEnvelope::deserialize(&encoded)
-            .map_err(D::Error::custom)?;
-        if !envelope.schema_version.is_supported() {
-            return Ok(Self {
-                schema_version: envelope.schema_version,
-                body: AuthenticationDisclosureControlObservationBody::Unsupported(
-                    UnsupportedAuthenticationDisclosureControlObservationBody {},
-                ),
-            });
-        }
-        let current = serde_json::from_value::<
-            RequiredVersionOneAuthenticationDisclosureControlObservation,
-        >(encoded)
-        .map_err(D::Error::custom)?;
-        Ok(Self {
-            schema_version: current.schema_version,
-            body: AuthenticationDisclosureControlObservationBody::Current(
-                CurrentAuthenticationDisclosureControlObservationBody {
-                    observation: current.observation.into(),
-                    generic_password_field_count: current.generic_password_field_count,
-                },
-            ),
-        })
+        AuthenticationDisclosureControlUntrustedWireDecoder::decode(encoded)
+            .map_err(D::Error::custom)
     }
 }
 
@@ -203,6 +213,11 @@ impl VersionedAuthenticationDisclosureControlObservation {
             return AuthenticationDisclosureControlDecision::AdvancesAuthentication;
         }
         AuthenticationDisclosureControlDecision::DoesNotAdvanceAuthentication
+    }
+
+    #[must_use]
+    pub const fn schema_version(&self) -> AuthenticationDisclosureObservationSchemaVersion {
+        self.schema_version
     }
 
     fn is_bounded(&self) -> bool {
@@ -334,219 +349,252 @@ mod tests {
                 },
             )
         }
-    }
 
-    #[test]
-    fn exact_activation_requires_https_and_rejects_hostile_variants() {
-        let exact = ExactDisclosureControlScenario::control(PageControlActionability::Actionable);
-        assert_eq!(
-            exact.classify(),
-            AuthenticationDisclosureControlDecision::AdvancesAuthentication
-        );
-        let mutations: &[fn(&mut VersionedAuthenticationDisclosureControlObservation)] = &[
-            |value| {
-                value.current_observation_mut().source_origin =
-                    "http://login.example.test".to_owned();
-            },
-            |value| {
-                value.current_observation_mut().destination_identity =
-                    "http://login.example.test/login".to_owned();
-            },
-            |value| {
-                value.current_observation_mut().destination_identity =
-                    "https://attacker.example/login".to_owned();
-            },
-            |value| {
-                value.current_observation_mut().destination_identity =
-                    "https://login.example.test/recover".to_owned();
-            },
-            |value| value.current_observation_mut().label = "Sign in with Google".to_owned(),
-            |value| value.current_observation_mut().form_identity = "signup".to_owned(),
-            |value| value.current_observation_mut().machine_identity = "provider".to_owned(),
-            |value| {
-                value.current_observation_mut().authentication_username =
-                    AuthenticationUsernameEvidence::Strong;
-            },
-            |value| {
-                value.current_observation_mut().semantics = PageControlSemantics::SemanticSubmit;
-            },
-            |value| {
-                value.current_observation_mut().submission_method =
-                    PageControlSubmissionMethod::Get;
-            },
-            |value| {
-                value
-                    .current_observation_mut()
-                    .submission_destination_source =
-                    PageControlSubmissionDestinationSource::Authored;
-            },
-            |value| value.current_observation_mut().ownership = PageControlOwnership::Unowned,
-            |value| {
-                value.current_observation_mut().actionability = PageControlActionability::Inert;
-            },
-            |value| value.current_observation_mut().password_field_count = 2.into(),
-            |value| value.set_generic_password_field_count(1.into()),
-            |value| value.current_observation_mut().new_password_field_count = 1.into(),
-            |value| value.current_observation_mut().one_time_code_field_count = 1.into(),
-            |value| {
-                value
-                    .current_observation_mut()
-                    .semantic_submit_control_count = 1.into();
-            },
-            |value| {
-                value.current_observation_mut().source_origin =
-                    "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
-            },
-        ];
-        for mutation in mutations {
-            let mut rejected = exact.clone();
-            mutation(&mut rejected);
+        fn assert_exact_activation_requires_https_and_rejects_hostile_variants() {
+            let exact = Self::control(PageControlActionability::Actionable);
             assert_eq!(
-                rejected.classify(),
-                AuthenticationDisclosureControlDecision::DoesNotAdvanceAuthentication
+                exact.classify(),
+                AuthenticationDisclosureControlDecision::AdvancesAuthentication
             );
+            let mutations: &[fn(&mut VersionedAuthenticationDisclosureControlObservation)] = &[
+                |value| {
+                    value.current_observation_mut().source_origin =
+                        "http://login.example.test".to_owned();
+                },
+                |value| {
+                    value.current_observation_mut().destination_identity =
+                        "http://login.example.test/login".to_owned();
+                },
+                |value| {
+                    value.current_observation_mut().destination_identity =
+                        "https://attacker.example/login".to_owned();
+                },
+                |value| {
+                    value.current_observation_mut().destination_identity =
+                        "https://login.example.test/recover".to_owned();
+                },
+                |value| value.current_observation_mut().label = "Sign in with Google".to_owned(),
+                |value| value.current_observation_mut().form_identity = "signup".to_owned(),
+                |value| value.current_observation_mut().machine_identity = "provider".to_owned(),
+                |value| {
+                    value.current_observation_mut().authentication_username =
+                        AuthenticationUsernameEvidence::Strong;
+                },
+                |value| {
+                    value.current_observation_mut().semantics =
+                        PageControlSemantics::SemanticSubmit;
+                },
+                |value| {
+                    value.current_observation_mut().submission_method =
+                        PageControlSubmissionMethod::Get;
+                },
+                |value| {
+                    value
+                        .current_observation_mut()
+                        .submission_destination_source =
+                        PageControlSubmissionDestinationSource::Authored;
+                },
+                |value| value.current_observation_mut().ownership = PageControlOwnership::Unowned,
+                |value| {
+                    value.current_observation_mut().actionability = PageControlActionability::Inert;
+                },
+                |value| value.current_observation_mut().password_field_count = 2.into(),
+                |value| value.set_generic_password_field_count(1.into()),
+                |value| value.current_observation_mut().new_password_field_count = 1.into(),
+                |value| value.current_observation_mut().one_time_code_field_count = 1.into(),
+                |value| {
+                    value
+                        .current_observation_mut()
+                        .semantic_submit_control_count = 1.into();
+                },
+                |value| {
+                    value.current_observation_mut().source_origin =
+                        "x".repeat(MAX_AUTHENTICATION_CONTROL_TEXT_BYTES + 1);
+                },
+            ];
+            for mutation in mutations {
+                let mut rejected = exact.clone();
+                mutation(&mut rejected);
+                assert_eq!(
+                    rejected.classify(),
+                    AuthenticationDisclosureControlDecision::DoesNotAdvanceAuthentication
+                );
+            }
         }
-    }
 
-    #[test]
-    fn unsupported_version_is_typed_and_round_trips() -> anyhow::Result<()> {
-        let mut observation =
-            ExactDisclosureControlScenario::control(PageControlActionability::Actionable);
-        observation.schema_version = 2.into();
-        assert_eq!(
-            observation.classify(),
-            AuthenticationDisclosureControlDecision::UnsupportedVersion
-        );
-        let encoded = serde_json::to_string(&observation)?;
-        let decoded =
-            serde_json::from_str::<VersionedAuthenticationDisclosureControlObservation>(&encoded)?;
-        assert_eq!(
-            decoded.classify(),
-            AuthenticationDisclosureControlDecision::UnsupportedVersion
-        );
-        assert_eq!(u32::from(decoded.schema_version), 2);
-        Ok(())
-    }
-
-    #[test]
-    fn future_version_body_is_not_decoded_as_version_one() -> anyhow::Result<()> {
-        for encoded in [
-            serde_json::json!({ "schemaVersion": 2 }),
-            serde_json::json!({
-                "schemaVersion": 2,
-                "futureObservation": { "renamedControl": true }
-            }),
-        ] {
-            let decoded = serde_json::from_value::<
+        fn assert_unsupported_version_is_typed_and_round_trips() -> anyhow::Result<()> {
+            let observation = serde_json::from_value::<
                 VersionedAuthenticationDisclosureControlObservation,
-            >(encoded)?;
+            >(serde_json::json!({ "schemaVersion": 2 }))?;
+            assert_eq!(
+                observation.classify(),
+                AuthenticationDisclosureControlDecision::UnsupportedVersion
+            );
+            let encoded = serde_json::to_string(&observation)?;
+            let decoded = serde_json::from_str::<
+                VersionedAuthenticationDisclosureControlObservation,
+            >(&encoded)?;
             assert_eq!(
                 decoded.classify(),
                 AuthenticationDisclosureControlDecision::UnsupportedVersion
             );
-            assert_eq!(u32::from(decoded.schema_version), 2);
+            assert_eq!(u32::from(decoded.schema_version()), 2);
+            Ok(())
         }
-        Ok(())
+
+        fn assert_future_version_body_is_not_decoded_as_version_one() -> anyhow::Result<()> {
+            for encoded in [
+                serde_json::json!({ "schemaVersion": 2 }),
+                serde_json::json!({
+                    "schemaVersion": 2,
+                    "futureObservation": { "renamedControl": true }
+                }),
+            ] {
+                let decoded = serde_json::from_value::<
+                    VersionedAuthenticationDisclosureControlObservation,
+                >(encoded)?;
+                assert_eq!(
+                    decoded.classify(),
+                    AuthenticationDisclosureControlDecision::UnsupportedVersion
+                );
+                assert_eq!(u32::from(decoded.schema_version()), 2);
+            }
+            Ok(())
+        }
+
+        fn assert_required_current_wire_fields() -> anyhow::Result<()> {
+            let observation = Self::control(PageControlActionability::Inert);
+            for field_name in ["schemaVersion", "genericPasswordFieldCount"] {
+                let mut encoded = serde_json::to_value(&observation)?;
+                let serde_json::Value::Object(fields) = &mut encoded else {
+                    anyhow::bail!("versioned disclosure control must encode as an object");
+                };
+                fields
+                    .remove(field_name)
+                    .ok_or_else(|| anyhow::anyhow!("expected wire field {field_name}"))?;
+                assert!(
+                    serde_json::from_value::<VersionedAuthenticationDisclosureControlObservation>(
+                        encoded
+                    )
+                    .is_err()
+                );
+            }
+            Ok(())
+        }
+
+        fn assert_every_nested_v1_control_field_is_required() -> anyhow::Result<()> {
+            let observation = Self::control(PageControlActionability::Inert);
+            for field_name in [
+                "actionability",
+                "ownership",
+                "semantics",
+                "authenticationUsername",
+                "passwordFieldCount",
+                "newPasswordFieldCount",
+                "oneTimeCodeFieldCount",
+                "semanticSubmitControlCount",
+                "sourceOrigin",
+                "formIdentity",
+                "destinationIdentity",
+                "label",
+                "machineIdentity",
+                "submissionMethod",
+                "submissionDestinationSource",
+            ] {
+                let mut encoded = serde_json::to_value(&observation)?;
+                let Some(fields) = encoded
+                    .get_mut("observation")
+                    .and_then(serde_json::Value::as_object_mut)
+                else {
+                    anyhow::bail!("versioned disclosure control lacks nested observation");
+                };
+                fields
+                    .remove(field_name)
+                    .ok_or_else(|| anyhow::anyhow!("expected nested wire field {field_name}"))?;
+                assert!(
+                    serde_json::from_value::<VersionedAuthenticationDisclosureControlObservation>(
+                        encoded
+                    )
+                    .is_err()
+                );
+            }
+            Ok(())
+        }
+
+        fn assert_disclosure_control_collection_bounds() {
+            let control = Self::control(PageControlActionability::Actionable);
+            assert!(AuthenticationCredentialDisclosureControlObservation::Absent.is_bounded());
+            assert!(
+                AuthenticationCredentialDisclosureControlObservation::Observed(vec![
+                    control.clone()
+                ])
+                .is_bounded()
+            );
+            assert!(
+                !AuthenticationCredentialDisclosureControlObservation::Observed(Vec::new())
+                    .is_bounded()
+            );
+            assert!(
+                !AuthenticationCredentialDisclosureControlObservation::Observed(vec![
+                    control;
+                    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
+                        as usize
+                        + 1
+                ])
+                .is_bounded()
+            );
+        }
+
+        fn assert_page_facts_require_explicit_disclosure_control_state() -> anyhow::Result<()> {
+            let mut encoded = serde_json::to_value(AuthenticationPageObservationFacts::default())?;
+            let serde_json::Value::Object(fields) = &mut encoded else {
+                anyhow::bail!("authentication page facts must encode as an object");
+            };
+            assert_eq!(
+                fields.get("credentialDisclosureControl"),
+                Some(&serde_json::json!({ "kind": "absent" }))
+            );
+            fields
+                .remove("credentialDisclosureControl")
+                .ok_or_else(|| anyhow::anyhow!("current page facts lack disclosure evidence"))?;
+            assert!(serde_json::from_value::<AuthenticationPageObservationFacts>(encoded).is_err());
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn exact_activation_requires_https_and_rejects_hostile_variants() {
+        ExactDisclosureControlScenario::assert_exact_activation_requires_https_and_rejects_hostile_variants();
+    }
+
+    #[test]
+    fn unsupported_version_is_typed_and_round_trips() -> anyhow::Result<()> {
+        ExactDisclosureControlScenario::assert_unsupported_version_is_typed_and_round_trips()
+    }
+
+    #[test]
+    fn future_version_body_is_not_decoded_as_version_one() -> anyhow::Result<()> {
+        ExactDisclosureControlScenario::assert_future_version_body_is_not_decoded_as_version_one()
     }
 
     #[test]
     fn version_and_generic_password_count_are_required_wire_fields() -> anyhow::Result<()> {
-        let observation = ExactDisclosureControlScenario::control(PageControlActionability::Inert);
-        for field_name in ["schemaVersion", "genericPasswordFieldCount"] {
-            let mut encoded = serde_json::to_value(&observation)?;
-            let serde_json::Value::Object(fields) = &mut encoded else {
-                anyhow::bail!("versioned disclosure control must encode as an object");
-            };
-            fields
-                .remove(field_name)
-                .ok_or_else(|| anyhow::anyhow!("expected wire field {field_name}"))?;
-            assert!(
-                serde_json::from_value::<VersionedAuthenticationDisclosureControlObservation>(
-                    encoded
-                )
-                .is_err()
-            );
-        }
-        Ok(())
+        ExactDisclosureControlScenario::assert_required_current_wire_fields()
     }
 
     #[test]
     fn every_nested_v1_control_field_is_required() -> anyhow::Result<()> {
-        let observation = ExactDisclosureControlScenario::control(PageControlActionability::Inert);
-        for field_name in [
-            "actionability",
-            "ownership",
-            "semantics",
-            "authenticationUsername",
-            "passwordFieldCount",
-            "newPasswordFieldCount",
-            "oneTimeCodeFieldCount",
-            "semanticSubmitControlCount",
-            "sourceOrigin",
-            "formIdentity",
-            "destinationIdentity",
-            "label",
-            "machineIdentity",
-            "submissionMethod",
-            "submissionDestinationSource",
-        ] {
-            let mut encoded = serde_json::to_value(&observation)?;
-            let Some(fields) = encoded
-                .get_mut("observation")
-                .and_then(serde_json::Value::as_object_mut)
-            else {
-                anyhow::bail!("versioned disclosure control lacks nested observation");
-            };
-            fields
-                .remove(field_name)
-                .ok_or_else(|| anyhow::anyhow!("expected nested wire field {field_name}"))?;
-            assert!(
-                serde_json::from_value::<VersionedAuthenticationDisclosureControlObservation>(
-                    encoded
-                )
-                .is_err()
-            );
-        }
-        Ok(())
+        ExactDisclosureControlScenario::assert_every_nested_v1_control_field_is_required()
     }
 
     #[test]
     fn disclosure_control_collection_is_bounded_and_nonempty_when_observed() {
-        let control = ExactDisclosureControlScenario::control(PageControlActionability::Actionable);
-        assert!(AuthenticationCredentialDisclosureControlObservation::Absent.is_bounded());
-        assert!(
-            AuthenticationCredentialDisclosureControlObservation::Observed(vec![control.clone()])
-                .is_bounded()
-        );
-        assert!(
-            !AuthenticationCredentialDisclosureControlObservation::Observed(Vec::new())
-                .is_bounded()
-        );
-        assert!(
-            !AuthenticationCredentialDisclosureControlObservation::Observed(vec![
-                control;
-                MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT
-                    as usize
-                    + 1
-            ])
-            .is_bounded()
-        );
+        ExactDisclosureControlScenario::assert_disclosure_control_collection_bounds();
     }
 
     #[test]
     fn page_facts_require_explicit_disclosure_control_state() -> anyhow::Result<()> {
-        let mut encoded = serde_json::to_value(AuthenticationPageObservationFacts::default())?;
-        let serde_json::Value::Object(fields) = &mut encoded else {
-            anyhow::bail!("authentication page facts must encode as an object");
-        };
-        assert_eq!(
-            fields.get("credentialDisclosureControl"),
-            Some(&serde_json::json!({ "kind": "absent" }))
-        );
-        fields
-            .remove("credentialDisclosureControl")
-            .ok_or_else(|| anyhow::anyhow!("current page facts lack disclosure evidence"))?;
-        assert!(serde_json::from_value::<AuthenticationPageObservationFacts>(encoded).is_err());
-        Ok(())
+        ExactDisclosureControlScenario::assert_page_facts_require_explicit_disclosure_control_state(
+        )
     }
 }
