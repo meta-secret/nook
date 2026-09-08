@@ -251,8 +251,7 @@ mod tests {
         }
 
         fn assert_disclosure_version_outcome() -> Result<(), wasm_bindgen::JsValue> {
-            let mut nested_wire =
-                serde_json::to_value(Self::current()).map_err(Self::js_error)?;
+            let mut nested_wire = serde_json::to_value(Self::current()).map_err(Self::js_error)?;
             let serde_json::Value::Object(fields) = &mut nested_wire else {
                 return Err(wasm_bindgen::JsValue::from_str(
                     "versioned page observation must encode as an object",
@@ -280,8 +279,8 @@ mod tests {
             Ok(())
         }
 
-        fn assert_versioned_transport_preserves_typed_outcome(
-        ) -> Result<(), wasm_bindgen::JsValue> {
+        fn assert_versioned_transport_preserves_typed_outcome() -> Result<(), wasm_bindgen::JsValue>
+        {
             Self::assert_classified_outcome()?;
             Self::assert_page_version_outcome()?;
             Self::assert_disclosure_version_outcome()
