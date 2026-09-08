@@ -12,6 +12,7 @@ use canonical::{FingerprintKind, FingerprintRequest};
 use metadata::{ImportMetadataPolicy, ProviderNotes};
 use nook_auth2::ValidationResult;
 pub use nook_event_log::SecretFingerprint;
+use zeroize::Zeroize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SecretEnrichment {
@@ -73,6 +74,7 @@ impl SecretValue {
                 if notes == existing.notes {
                     SecretEnrichment::Unchanged
                 } else {
+                    existing.notes.zeroize();
                     existing.notes = notes;
                     SecretEnrichment::Changed
                 }
@@ -86,6 +88,7 @@ impl SecretValue {
                 if note == existing.note {
                     SecretEnrichment::Unchanged
                 } else {
+                    existing.note.zeroize();
                     existing.note = note;
                     SecretEnrichment::Changed
                 }
