@@ -90,10 +90,11 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
    The default credential path is
    `~/.nook/events/pr-steward-client.yaml`. Use
    `--config <absolute-path>` after the PR number for an explicit override.
+
 2. Read newline-delimited JSON from standard output.
-   - Each line is one `github-pr-event` envelope.
-   - The command suppresses events for every pull request except its assigned
-     number.
+   - Each line is one flat `pr-steward-routing/v1` hint.
+   - Emit only directly identified assigned `meta-secret/nook` pull requests.
+     Suppress status, PR-less, foreign, ambiguous, malformed, or mismatched heads; continue the live stream after expected decode failures.
    - Treat the notification as a prompt to perform only the next operation
      that Gizmo authorizes.
 3. Stop when Gizmo directs the child to finish.
@@ -122,10 +123,7 @@ Gizmo may run PR Steward as a mission-scoped child while delivery is active.
 
 ### Output contract
 
-Standard output contains only one JSON object per received event. The object
-has required `kind`, `id`, `time`, `githubEvent`, and `deliveryId` fields. It
-may include `action`, `repository`, `pullRequest`, and `headSha`. The original
-webhook body and credential material never appear in output.
+Output contains only bounded hints, never bodies, review text, logs, raw payloads, or credentials. Exact reconciliation and summaries are deferred.
 
 ### Live reactive pipeline canary
 

@@ -100,6 +100,7 @@ tasks:
             issue_comment
             check_run
             check_suite
+            workflow_job
             workflow_run
             status
           ]
@@ -817,6 +818,7 @@ tasks:
                 issue_comment
                 check_run
                 check_suite
+                workflow_job
                 workflow_run
                 status
               ],
@@ -847,6 +849,7 @@ tasks:
             issue_comment
             check_run
             check_suite
+            workflow_job
             workflow_run
             status
           ]
@@ -881,6 +884,7 @@ tasks:
             issue_comment
             check_run
             check_suite
+            workflow_job
             workflow_run
             status
           ]

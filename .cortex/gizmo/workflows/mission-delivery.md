@@ -73,6 +73,7 @@ Report the blocker instead of reporting an intermediate state as complete.
    - Launch the subscriber as the documented direct Bun process in a foreground
      PTY. Stop it by sending Ctrl-C to that same PTY and require exit status zero.
    - Never stop or switch another Gizmo's independently active child.
+   - Route compact review/comment hints by path and line; never transfer bodies through the reactive stream.
    - Treat each matching notification as a hint to issue a bounded PR Steward
      operation packet.
    - Authorize PR Steward to trigger the repository-owned exact-head review and
