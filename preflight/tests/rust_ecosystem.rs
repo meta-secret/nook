@@ -31,6 +31,33 @@ fn dependency_policy_allows_main_cache_seed_latency() -> anyhow::Result<()> {
 }
 
 #[test]
+fn dependency_policy_discards_fresh_downloads_before_snapshotting() -> anyhow::Result<()> {
+    let dockerfile = read("nook-app/nook-platform/docker/rust/policy-tools.Dockerfile")?;
+    let (_, policy) = dockerfile
+        .split_once("FROM rust-ecosystem-policy-tools AS rust-ecosystem-dependency-policy")
+        .ok_or_else(|| anyhow::anyhow!("dependency-policy stage is missing"))?;
+    let cleanup = policy
+        .find("trap 'rm -rf /tmp/nook-policy-cargo' EXIT")
+        .ok_or_else(|| anyhow::anyhow!("fresh policy downloads must be cleaned on shell exit"))?;
+    let seed = policy
+        .find("cp -a /usr/local/cargo /tmp/nook-policy-cargo")
+        .ok_or_else(|| anyhow::anyhow!("policy must preserve immutable Cargo inputs"))?;
+    let cargo_home = policy
+        .find("export CARGO_HOME=/tmp/nook-policy-cargo")
+        .ok_or_else(|| anyhow::anyhow!("policy downloads must use the disposable Cargo home"))?;
+    let deny = policy
+        .find("&& cargo-deny --manifest-path")
+        .ok_or_else(|| anyhow::anyhow!("cargo-deny invocation is missing"))?;
+    let audit = policy
+        .find("&& cargo-audit audit --quiet")
+        .ok_or_else(|| anyhow::anyhow!("cargo-audit invocation is missing"))?;
+    assert!(cleanup < seed && seed < cargo_home && cargo_home < deny && deny < audit);
+    assert!(policy.contains("test -n \"$POLICY_RUN_NONCE\""));
+    assert!(!policy.contains("|| true") && !policy.contains("--offline"));
+    Ok(())
+}
+
+#[test]
 fn rust_ecosystem_checks_remain_configured_and_executable() -> anyhow::Result<()> {
     let entry = read(".github/workflows/rust-ecosystem.yml")?;
     let checks = read(".github/workflows/rust-ecosystem-checks.yml")?;

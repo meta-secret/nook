@@ -45,9 +45,16 @@ ARG WORKSPACE
 ARG POLICY_RUN_NONCE
 WORKDIR /meta-secret/nook
 
+# The nonce must refresh policy checks, but their fetched crates and advisory
+# databases are not reusable outputs. Keep them out of each immutable result:
+# otherwise every workspace/run adds gigabytes and evicts warm product layers.
+# Seed from the tools home so any immutable Cargo inputs remain available.
 RUN --mount=type=bind,source=.,target=/meta-secret/nook,readonly \
     test -n "$WORKSPACE" \
     && test -n "$POLICY_RUN_NONCE" \
+    && trap 'rm -rf /tmp/nook-policy-cargo' EXIT \
+    && cp -a /usr/local/cargo /tmp/nook-policy-cargo \
+    && export CARGO_HOME=/tmp/nook-policy-cargo \
     && cargo-deny --manifest-path "$WORKSPACE/Cargo.toml" --log-level error check --hide-inclusion-graph \
     && cd "$WORKSPACE" \
     && cargo-audit audit --quiet
