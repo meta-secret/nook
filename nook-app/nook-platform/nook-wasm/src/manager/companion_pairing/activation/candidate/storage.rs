@@ -760,7 +760,10 @@ mod browser_tests {
         async fn load_reports_missing_gate() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
             let store_id = StoreId::parse("store_testtoken11")?;
-            assert!(PairingActivationStore::load(&store_id).await?.is_none());
+            let candidate = PairingActivationStore::load(&store_id)
+                .await
+                .map_err(|failure| NookError::Database(failure.to_string()))?;
+            assert!(candidate.is_none());
             Ok(())
         }
     }
