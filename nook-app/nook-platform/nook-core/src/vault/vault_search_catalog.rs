@@ -50,11 +50,12 @@ impl SecretSearchCatalogEntry {
         integrity_key: &SymmetricKey,
     ) -> VaultResult<Self> {
         let normalized_search_text = item.normalized_search_text();
-        let integrity_tag = Self::integrity_tag(SecretSearchCatalogIntegrityTagRequest {
+        let integrity_request = SecretSearchCatalogIntegrityTagRequest {
             payload_digest,
             item: &item,
             integrity_key,
-        })?;
+        };
+        let integrity_tag = Self::integrity_tag(&integrity_request)?;
         Ok(Self {
             payload_digest,
             item,
@@ -90,7 +91,7 @@ impl SecretSearchCatalogEntry {
         truncated
     }
 
-    fn integrity_tag(request: SecretSearchCatalogIntegrityTagRequest<'_>) -> VaultResult<String> {
+    fn integrity_tag(request: &SecretSearchCatalogIntegrityTagRequest<'_>) -> VaultResult<String> {
         let item_json = serde_json::to_vec(request.item)
             .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()))?;
         let mut mac = Hmac::<Sha256>::new_from_slice(request.integrity_key.as_str().as_bytes())
