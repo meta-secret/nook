@@ -10,19 +10,39 @@ use nook_core::{
     AuthProvidersSnapshotData, CheckedRemoteEvent, EventGraphVaultArchitecture, EventId,
     EventStorageBytes, LocalEventStore, Sha256Hex, StoreId, VaultApplication,
 };
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
+use serde::{
+    Deserialize, Deserializer, Serialize, Serializer, de::DeserializeOwned, de::Error as _,
+};
 
 type SchemaResult<T> = Result<T, CompanionPairingCandidateFailure>;
 
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(try_from = "PersistedSchemaVersion", into = "u32")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PairingActivationSchemaVersion {
     V1,
 }
 
-impl From<PairingActivationSchemaVersion> for u32 {
-    fn from(_: PairingActivationSchemaVersion) -> Self {
-        1
+impl Serialize for PairingActivationSchemaVersion {
+    fn serialize<SerializerType>(
+        &self,
+        serializer: SerializerType,
+    ) -> Result<SerializerType::Ok, SerializerType::Error>
+    where
+        SerializerType: Serializer,
+    {
+        PersistedSchemaVersion::V1.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for PairingActivationSchemaVersion {
+    fn deserialize<DeserializerType>(
+        deserializer: DeserializerType,
+    ) -> Result<Self, DeserializerType::Error>
+    where
+        DeserializerType: Deserializer<'de>,
+    {
+        PersistedSchemaVersion::deserialize(deserializer)?
+            .into_schema()
+            .map_err(DeserializerType::Error::custom)
     }
 }
 
@@ -63,15 +83,15 @@ struct SchemaVersionProbe {
     schema_version: PersistedSchemaVersion,
 }
 
-#[derive(Deserialize)]
+#[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(transparent)]
 struct PersistedSchemaVersion(u32);
 
-impl TryFrom<PersistedSchemaVersion> for PairingActivationSchemaVersion {
-    type Error = CompanionPairingCandidateFailure;
+impl PersistedSchemaVersion {
+    const V1: Self = Self(1);
 
-    fn try_from(version: PersistedSchemaVersion) -> Result<Self, Self::Error> {
-        match version.0 {
+    fn into_schema(self) -> SchemaResult<PairingActivationSchemaVersion> {
+        match self.0 {
             1 => Ok(PairingActivationSchemaVersion::V1),
             _ => Err(CompanionPairingCandidateFailure::UnsupportedSchema),
         }
@@ -95,7 +115,7 @@ impl CandidateSchema {
 
     pub(super) fn decode_gate(value: &str) -> SchemaResult<ActivationGate> {
         let probe: SchemaVersionProbe = Self::decode(value)?;
-        PairingActivationSchemaVersion::try_from(probe.schema_version)?;
+        probe.schema_version.into_schema()?;
         Self::decode(value)
     }
 

@@ -14,7 +14,7 @@ use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 mod candidate;
 pub use candidate::{
     NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
-    NookStoredCompanionPairingActivationCandidate,
+    NookCompanionPairingCandidateOutcomeState, NookStoredCompanionPairingActivationCandidate,
 };
 
 /// Opaque proof that pairing approval and event graph relationships were prepared.

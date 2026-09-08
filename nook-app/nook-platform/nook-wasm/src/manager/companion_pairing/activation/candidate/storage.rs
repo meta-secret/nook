@@ -1,6 +1,9 @@
 //! Atomic storage for inert candidates; the gate is the only publication point.
 
-use super::{ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate};
+use super::{
+    ActivationClock, CompanionPairingCandidateFailure, PairingActivationCandidate,
+    PairingActivationStorageAdmission,
+};
 use crate::storage::open_nook_database;
 use nook_core::StoreId;
 use rexie::TransactionMode;
@@ -11,7 +14,7 @@ use schema::{CandidateSchema, EncodedCandidate};
 const VAULT_STORE: &str = "vault";
 
 pub(super) struct PairingActivationCommit<'a, Clock> {
-    pub(super) candidate: PairingActivationCandidate,
+    pub(super) admission: PairingActivationStorageAdmission<'a>,
     pub(super) clock: &'a Clock,
 }
 
@@ -112,8 +115,8 @@ impl PairingActivationStore {
     pub(super) async fn commit<Clock: ActivationClock>(
         request: PairingActivationCommit<'_, Clock>,
     ) -> Result<StoredPairingActivationCandidate, CompanionPairingCandidateFailure> {
-        let PairingActivationCommit { candidate, clock } = request;
-        let encoded = EncodedCandidate::new(&candidate)?;
+        let PairingActivationCommit { admission, clock } = request;
+        let encoded = EncodedCandidate::new(&admission.candidate)?;
         encoded.decode()?;
         let gate_json = CandidateSchema::encode(&encoded.gate)?;
         let connection = open_nook_database()
@@ -134,10 +137,7 @@ impl PairingActivationStore {
         {
             return Err(CompanionPairingCandidateFailure::Replay);
         }
-        candidate
-            .approval
-            .revalidate_at(clock.observe()?.epoch)
-            .map_err(|_| CompanionPairingCandidateFailure::Expiry)?;
+        admission.validate_effect(clock.observe()?.epoch)?;
         let mut writable = WritableActivationTransaction {
             transaction,
             store: vault,
@@ -152,7 +152,8 @@ impl PairingActivationStore {
             })
             .await?;
         let freshness = clock.observe().and_then(|observed| {
-            candidate
+            admission
+                .candidate
                 .approval
                 .revalidate_at(observed.epoch)
                 .map_err(|_| CompanionPairingCandidateFailure::Expiry)
@@ -168,7 +169,7 @@ impl PairingActivationStore {
             .await?;
         writable.done().await?;
         Ok(StoredPairingActivationCandidate {
-            _candidate: candidate,
+            _candidate: admission.candidate,
         })
     }
 
@@ -326,17 +327,15 @@ mod tests {
             &mut self,
             request: PairingActivationCommit<'_, DeterministicClock>,
         ) -> Result<(), CompanionPairingCandidateFailure> {
-            let PairingActivationCommit { candidate, clock } = request;
-            candidate
-                .approval
-                .revalidate_at(clock.observe()?.epoch)
-                .map_err(|_| CompanionPairingCandidateFailure::Expiry)?;
-            let encoded = EncodedCandidate::new(&candidate)?;
+            let PairingActivationCommit { admission, clock } = request;
+            admission.validate_effect(clock.observe()?.epoch)?;
+            let encoded = EncodedCandidate::new(&admission.candidate)?;
             let mut transaction = Self {
                 vault: self.vault.clone(),
             };
             transaction.commit(encoded)?;
-            candidate
+            admission
+                .candidate
                 .approval
                 .revalidate_at(clock.observe()?.epoch)
                 .map_err(|_| CompanionPairingCandidateFailure::Expiry)?;
@@ -504,8 +503,9 @@ mod tests {
     }
 
     #[test]
-    fn late_expiry_discards_memory_transaction() -> anyhow::Result<()> {
-        let candidate = CandidateFixture::candidate()?;
+    fn late_expiry_and_manager_mutation_discard_memory_transaction() -> anyhow::Result<()> {
+        let fixture =
+            CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
         let clock = DeterministicClock::new(vec![
             ActivationFixture::epoch("160")?,
             ActivationFixture::epoch("200")?,
@@ -513,10 +513,29 @@ mod tests {
         let mut store = MemoryActivationStore::default();
         assert!(matches!(
             store.commit_with_clock(PairingActivationCommit {
-                candidate,
+                admission: PairingActivationStorageAdmission {
+                    candidate: fixture.candidate,
+                    envelopes: fixture.envelopes,
+                    manager: &fixture.manager,
+                },
                 clock: &clock,
             }),
             Err(CompanionPairingCandidateFailure::Expiry)
+        ));
+        assert!(store.vault.is_empty());
+        let mut fixture =
+            CandidateFixture::new()?.into_commit_fixture(ActivationFixture::epoch("160")?)?;
+        fixture.manager.application = nook_core::VaultApplication::Simple;
+        assert!(matches!(
+            store.commit_with_clock(PairingActivationCommit {
+                admission: PairingActivationStorageAdmission {
+                    candidate: fixture.candidate,
+                    envelopes: fixture.envelopes,
+                    manager: &fixture.manager,
+                },
+                clock: &DeterministicClock::new(vec![ActivationFixture::epoch("160")?]),
+            }),
+            Err(CompanionPairingCandidateFailure::ManagerBinding)
         ));
         assert!(store.vault.is_empty());
         Ok(())
@@ -525,7 +544,7 @@ mod tests {
 
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod browser_tests {
-    use super::super::tests::{CandidateFixture, DeterministicClock};
+    use super::super::tests::{CandidateCommitFixture, CandidateFixture, DeterministicClock};
     use super::*;
     use crate::{
         NookError,
@@ -540,15 +559,18 @@ mod browser_tests {
     struct BrowserStorageFixture;
 
     impl BrowserStorageFixture {
-        fn candidate() -> Result<PairingActivationCandidate, NookError> {
-            let mut candidate = Self::expiring_candidate()?;
-            candidate.approval.request.expires_at = serde_json::from_str("9007199254740991")
-                .map_err(|error| NookError::Database(error.to_string()))?;
-            Ok(candidate)
+        fn candidate() -> Result<CandidateCommitFixture, NookError> {
+            let mut fixture = Self::expiring_candidate()?;
+            fixture.candidate.approval.request.expires_at =
+                serde_json::from_str("9007199254740991")
+                    .map_err(|error| NookError::Database(error.to_string()))?;
+            Ok(fixture)
         }
 
-        fn expiring_candidate() -> Result<PairingActivationCandidate, NookError> {
-            CandidateFixture::candidate()
+        fn expiring_candidate() -> Result<CandidateCommitFixture, NookError> {
+            CandidateFixture::new()
+                .map_err(|error| NookError::Database(error.to_string()))?
+                .into_commit_fixture(Self::epoch("160")?)
                 .map_err(|failure| NookError::Database(failure.to_string()))
         }
 
@@ -559,11 +581,15 @@ mod browser_tests {
         }
 
         async fn commit(
-            candidate: PairingActivationCandidate,
+            fixture: CandidateCommitFixture,
         ) -> Result<StoredPairingActivationCandidate, NookError> {
             let clock = super::super::BrowserActivationClock;
             PairingActivationStore::commit(PairingActivationCommit {
-                candidate,
+                admission: PairingActivationStorageAdmission {
+                    candidate: fixture.candidate,
+                    envelopes: fixture.envelopes,
+                    manager: &fixture.manager,
+                },
                 clock: &clock,
             })
             .await
@@ -629,10 +655,9 @@ mod browser_tests {
         async fn commit_load_and_replay_remain_inert() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
             let authoritative_before = extension_state::load().await?;
-            let candidate = CandidateFixture::candidate()
-                .map_err(|failure| NookError::Database(failure.to_string()))?;
-            let vault_store_id = candidate.vault_store_id.clone();
-            Self::commit(candidate).await?;
+            let fixture = Self::candidate()?;
+            let vault_store_id = fixture.candidate.vault_store_id.clone();
+            Self::commit(fixture).await?;
             Self::load(&vault_store_id).await?;
             assert!(!Self::activation_keys().await?.is_empty());
             assert_eq!(extension_state::load().await?, authoritative_before);
@@ -652,11 +677,15 @@ mod browser_tests {
 
         async fn late_expiry_aborts_payloads_and_gate() -> Result<(), NookError> {
             indexed_db::clear_vault_db().await?;
-            let candidate = Self::expiring_candidate()?;
+            let fixture = Self::expiring_candidate()?;
             let clock = DeterministicClock::new(vec![Self::epoch("160")?, Self::epoch("200")?]);
             assert!(matches!(
                 PairingActivationStore::commit(PairingActivationCommit {
-                    candidate,
+                    admission: PairingActivationStorageAdmission {
+                        candidate: fixture.candidate,
+                        envelopes: fixture.envelopes,
+                        manager: &fixture.manager,
+                    },
                     clock: &clock,
                 })
                 .await,

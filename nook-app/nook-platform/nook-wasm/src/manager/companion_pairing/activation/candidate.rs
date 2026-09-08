@@ -8,8 +8,9 @@ use nook_companion_core::{
     ExtensionConnectScope,
 };
 use nook_core::{
-    AuthProvidersSnapshotData, DeviceIdentity, EventId, EventStorageBytes, SigningIdentity,
-    StoreId, SymmetricKey, VaultApplication, VaultType, serialize_event_storage_yaml,
+    AuthEnvelopes, AuthProvidersSnapshotData, DeviceIdentity, EventId, EventStorageBytes,
+    SigningIdentity, StoreId, SymmetricKey, VaultApplication, VaultType,
+    serialize_event_storage_yaml,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroizing;
@@ -36,6 +37,40 @@ struct PairingActivationCandidate {
     event_heads: Vec<EventId>,
     providers: AuthProvidersSnapshotData,
     stored_at: CompanionPairingEpochMilliseconds,
+}
+
+struct PairingActivationStorageAdmission<'a> {
+    candidate: PairingActivationCandidate,
+    envelopes: AuthEnvelopes,
+    manager: &'a NookVaultManager,
+}
+
+impl PairingActivationStorageAdmission<'_> {
+    fn validate_effect(
+        &self,
+        observed_at: CompanionPairingEpochMilliseconds,
+    ) -> Result<(), CompanionPairingCandidateFailure> {
+        let identity = CurrentActivationBinding {
+            approval: &self.candidate.approval,
+            store_id: &self.candidate.vault_store_id,
+            providers: &self.candidate.providers,
+            manager: self.manager,
+            observed_at,
+        }
+        .validate()?;
+        for envelope in [&self.envelopes.secrets_key, &self.envelopes.members_key] {
+            let plaintext = Zeroizing::new(
+                identity
+                    .open_utf8(envelope)
+                    .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?,
+            );
+            let key = SymmetricKey::parse(&plaintext)
+                .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?;
+            let zeroized_key = Zeroizing::new(key.into_inner());
+            drop(zeroized_key);
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, thiserror::Error)]
@@ -84,26 +119,31 @@ pub enum NookCompanionPairingCandidateFailure {
     Storage,
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum NookCompanionPairingCandidateOutcomeState {
+    Stored,
+    Rejected,
+}
+
+enum CompanionPairingCandidateOutcome {
+    Stored(NookStoredCompanionPairingActivationCandidate),
+    Rejected(NookCompanionPairingCandidateFailure),
+}
+
 /// Generated typed result for storing or loading an inert candidate.
 #[wasm_bindgen]
-pub struct NookCompanionPairingCandidateOutcome {
-    candidate: Option<NookStoredCompanionPairingActivationCandidate>,
-    failure: Option<NookCompanionPairingCandidateFailure>,
-}
+pub struct NookCompanionPairingCandidateOutcome(CompanionPairingCandidateOutcome);
 
 impl NookCompanionPairingCandidateOutcome {
     fn from_result(
         result: Result<storage::StoredPairingActivationCandidate, CompanionPairingCandidateFailure>,
     ) -> Self {
         match result {
-            Ok(inner) => Self {
-                candidate: Some(NookStoredCompanionPairingActivationCandidate { _inner: inner }),
-                failure: None,
-            },
-            Err(failure) => Self {
-                candidate: None,
-                failure: Some(failure.public()),
-            },
+            Ok(inner) => Self(CompanionPairingCandidateOutcome::Stored(
+                NookStoredCompanionPairingActivationCandidate { _inner: inner },
+            )),
+            Err(failure) => Self(CompanionPairingCandidateOutcome::Rejected(failure.public())),
         }
     }
 }
@@ -112,13 +152,31 @@ impl NookCompanionPairingCandidateOutcome {
 impl NookCompanionPairingCandidateOutcome {
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn failure(&self) -> Option<NookCompanionPairingCandidateFailure> {
-        self.failure
+    pub fn state(&self) -> NookCompanionPairingCandidateOutcomeState {
+        match &self.0 {
+            CompanionPairingCandidateOutcome::Stored(_) => {
+                NookCompanionPairingCandidateOutcomeState::Stored
+            }
+            CompanionPairingCandidateOutcome::Rejected(_) => {
+                NookCompanionPairingCandidateOutcomeState::Rejected
+            }
+        }
     }
 
     #[must_use]
-    pub fn take_candidate(&mut self) -> Option<NookStoredCompanionPairingActivationCandidate> {
-        self.candidate.take()
+    pub fn into_stored(self) -> NookStoredCompanionPairingActivationCandidate {
+        let CompanionPairingCandidateOutcome::Stored(candidate) = self.0 else {
+            unreachable!();
+        };
+        candidate
+    }
+
+    #[must_use]
+    pub fn into_failure(self) -> NookCompanionPairingCandidateFailure {
+        let CompanionPairingCandidateOutcome::Rejected(failure) = self.0 else {
+            unreachable!();
+        };
+        failure
     }
 }
 
@@ -226,29 +284,11 @@ struct CandidatePreparation<'a, Clock> {
 }
 
 impl NookPreparedCompanionPairingActivation {
-    fn into_candidate<Clock: ActivationClock>(
+    fn into_candidate<'a, Clock: ActivationClock>(
         self,
-        request: CandidatePreparation<'_, Clock>,
-    ) -> Result<PairingActivationCandidate, CompanionPairingCandidateFailure> {
+        request: &CandidatePreparation<'a, Clock>,
+    ) -> Result<PairingActivationStorageAdmission<'a>, CompanionPairingCandidateFailure> {
         let observed = request.clock.observe()?;
-        let identity = CurrentActivationBinding {
-            approval: &self.approval.binding,
-            store_id: &self.store_id,
-            providers: &self.approval._providers,
-            manager: request.manager,
-            observed_at: observed.epoch,
-        }
-        .validate()?;
-        for envelope in [&self.envelopes.secrets_key, &self.envelopes.members_key] {
-            let plaintext = Zeroizing::new(
-                identity
-                    .open_utf8(envelope)
-                    .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?,
-            );
-            let key = SymmetricKey::parse(&plaintext)
-                .map_err(|_| CompanionPairingCandidateFailure::EventAuthorization)?;
-            let _key = Zeroizing::new(key.into_inner());
-        }
         let events = self
             .records
             .0
@@ -263,16 +303,22 @@ impl NookPreparedCompanionPairingActivation {
             })
             .collect::<Result<Vec<_>, CompanionPairingCandidateFailure>>()?;
         let approval = self.approval.binding;
-        Ok(PairingActivationCandidate {
-            request_id: approval.request.request_id.clone(),
-            vault_store_id: self.store_id,
-            approval,
-            application: request.manager.application,
-            events,
-            event_heads: self.heads,
-            providers: self.approval._providers,
-            stored_at: observed.epoch,
-        })
+        let admission = PairingActivationStorageAdmission {
+            candidate: PairingActivationCandidate {
+                request_id: approval.request.request_id.clone(),
+                vault_store_id: self.store_id,
+                approval,
+                application: request.manager.application,
+                events,
+                event_heads: self.heads,
+                providers: self.approval.providers,
+                stored_at: observed.epoch,
+            },
+            envelopes: self.envelopes,
+            manager: request.manager,
+        };
+        admission.validate_effect(observed.epoch)?;
+        Ok(admission)
     }
 }
 
@@ -280,7 +326,7 @@ impl NookPreparedCompanionPairingActivation {
 impl NookPreparedCompanionPairingActivation {
     pub async fn commit(self, manager: &NookVaultManager) -> NookCompanionPairingCandidateOutcome {
         let clock = BrowserActivationClock;
-        let candidate = match self.into_candidate(CandidatePreparation {
+        let admission = match self.into_candidate(&CandidatePreparation {
             manager,
             clock: &clock,
         }) {
@@ -289,7 +335,7 @@ impl NookPreparedCompanionPairingActivation {
         };
         NookCompanionPairingCandidateOutcome::from_result(
             storage::PairingActivationStore::commit(storage::PairingActivationCommit {
-                candidate,
+                admission,
                 clock: &clock,
             })
             .await,
@@ -302,13 +348,10 @@ impl NookVaultManager {
     pub async fn load_companion_pairing_activation_candidate(
         &self,
     ) -> NookCompanionPairingCandidateOutcome {
-        let store_id = match StoreId::parse(&self.vault.store_id) {
-            Ok(store_id) => store_id,
-            Err(_) => {
-                return NookCompanionPairingCandidateOutcome::from_result(Err(
-                    CompanionPairingCandidateFailure::ManagerBinding,
-                ));
-            }
+        let Ok(store_id) = StoreId::parse(&self.vault.store_id) else {
+            return NookCompanionPairingCandidateOutcome::from_result(Err(
+                CompanionPairingCandidateFailure::ManagerBinding,
+            ));
         };
         let candidate = match storage::PairingActivationStore::load(&store_id).await {
             Ok(candidate) => candidate,
@@ -373,6 +416,12 @@ mod tests {
         manager: NookVaultManager,
     }
 
+    pub(super) struct CandidateCommitFixture {
+        pub(super) candidate: PairingActivationCandidate,
+        pub(super) envelopes: AuthEnvelopes,
+        pub(super) manager: NookVaultManager,
+    }
+
     enum ManagerBindingScenario {
         Application,
         Store,
@@ -398,9 +447,26 @@ mod tests {
             self,
             epoch: CompanionPairingEpochMilliseconds,
         ) -> Result<PairingActivationCandidate, CompanionPairingCandidateFailure> {
-            self.prepared.into_candidate(CandidatePreparation {
+            self.into_commit_fixture(epoch)
+                .map(|fixture| fixture.candidate)
+        }
+
+        pub(super) fn into_commit_fixture(
+            self,
+            epoch: CompanionPairingEpochMilliseconds,
+        ) -> Result<CandidateCommitFixture, CompanionPairingCandidateFailure> {
+            let PairingActivationStorageAdmission {
+                candidate,
+                envelopes,
+                manager: _,
+            } = self.prepared.into_candidate(&CandidatePreparation {
                 manager: &self.manager,
                 clock: &DeterministicClock::new(vec![epoch]),
+            })?;
+            Ok(CandidateCommitFixture {
+                candidate,
+                envelopes,
+                manager: self.manager,
             })
         }
 
@@ -510,7 +576,7 @@ mod tests {
     #[test]
     fn effect_time_provider_scope_is_revalidated() -> anyhow::Result<()> {
         let mut fixture = CandidateFixture::new()?;
-        fixture.prepared.approval._providers.active_vault_store_id =
+        fixture.prepared.approval.providers.active_vault_store_id =
             ActiveVaultScope::StoreId("store_testtoken12".to_owned());
         assert!(matches!(
             fixture.prepare_at(ActivationFixture::epoch("160")?),
@@ -529,7 +595,7 @@ mod tests {
             .public_key()
             .seal_bytes(VaultKeys::generate()?.secrets_key.as_str().as_bytes())?;
         assert!(matches!(
-            prepared.into_candidate(CandidatePreparation {
+            prepared.into_candidate(&CandidatePreparation {
                 manager,
                 clock: &DeterministicClock::new(vec![ActivationFixture::epoch("160")?]),
             }),
@@ -544,7 +610,7 @@ mod tests {
         let manager = &fixture.manager;
         let prepared = fixture.prepared;
         assert!(matches!(
-            prepared.into_candidate(CandidatePreparation {
+            prepared.into_candidate(&CandidatePreparation {
                 manager,
                 clock: &DeterministicClock::new(Vec::new()),
             }),

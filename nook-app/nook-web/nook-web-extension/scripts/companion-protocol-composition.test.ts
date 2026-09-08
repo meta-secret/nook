@@ -32,6 +32,8 @@ import {
   configure_vault_application,
   NookCompanionExtensionEndpoint,
   NookCompanionPairingCandidateFailure,
+  type NookCompanionPairingCandidateOutcome,
+  NookCompanionPairingCandidateOutcomeState,
   NookCompanionPairingExtensionEndpoint,
   NookExternalEventLogRecords,
   NookPreparedCompanionPairingActivation,
@@ -61,6 +63,35 @@ const previousIndexedDBRuntime = {
   IDBTransaction: globalThis.IDBTransaction,
   IDBVersionChangeEvent: globalThis.IDBVersionChangeEvent,
   indexedDB: globalThis.indexedDB,
+}
+
+function storedCandidate(
+  outcome: NookCompanionPairingCandidateOutcome,
+): NookStoredCompanionPairingActivationCandidate {
+  const state = outcome.state
+  switch (state) {
+    case NookCompanionPairingCandidateOutcomeState.Stored:
+      return outcome.into_stored()
+    case NookCompanionPairingCandidateOutcomeState.Rejected:
+      throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
+    default:
+      throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+  }
+}
+
+function candidateFailure(
+  outcome: NookCompanionPairingCandidateOutcome,
+): NookCompanionPairingCandidateFailure {
+  const state = outcome.state
+  switch (state) {
+    case NookCompanionPairingCandidateOutcomeState.Stored:
+      outcome.into_stored().free()
+      throw new Error('candidate storage unexpectedly succeeded')
+    case NookCompanionPairingCandidateOutcomeState.Rejected:
+      return outcome.into_failure()
+    default:
+      throw new Error(`unreachable candidate outcome: ${state satisfies never}`)
+  }
 }
 const compositionIndexedDBRuntime = {
   IDBCursor,
@@ -278,26 +309,22 @@ describe('generated companion protocol composition', () => {
     const prepared = approval.with_event_log(records)
     expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
     const commit = await prepared.commit(extension)
-    expect(commit.failure).toBeUndefined()
-    const stored = commit.take_candidate()
+    const stored = storedCandidate(commit)
     expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
-    stored?.free()
-    commit.free()
+    stored.free()
     const load = await extension.load_companion_pairing_activation_candidate()
-    expect(load.failure).toBeUndefined()
-    const loaded = load.take_candidate()
+    const loaded = storedCandidate(load)
     expect(loaded).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
-    loaded?.free()
-    load.free()
+    loaded.free()
 
     const replayApproval = pairingAttempt('pairing-activation-replay', false)
     const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
     const replay = await replayApproval
       .with_event_log(replayRecords)
       .commit(extension)
-    expect(replay.failure).toBe(NookCompanionPairingCandidateFailure.Replay)
-    expect(replay.take_candidate()).toBeUndefined()
-    replay.free()
+    expect(candidateFailure(replay)).toBe(
+      NookCompanionPairingCandidateFailure.Replay,
+    )
 
     const invalidApproval = pairingAttempt('pairing-activation-empty', false)
     const invalidRecords = NookExternalEventLogRecords.from_array([])
