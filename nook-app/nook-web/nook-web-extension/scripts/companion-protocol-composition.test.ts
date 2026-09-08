@@ -74,6 +74,7 @@ class PairingActivationScenario {
       case NookCompanionPairingCandidateOutcomeState.Stored:
         return outcome.into_stored()
       case NookCompanionPairingCandidateOutcomeState.Absent:
+        outcome.free()
         throw new Error('candidate storage is absent')
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
@@ -93,6 +94,7 @@ class PairingActivationScenario {
         outcome.into_stored().free()
         throw new Error('candidate storage unexpectedly succeeded')
       case NookCompanionPairingCandidateOutcomeState.Absent:
+        outcome.free()
         throw new Error('candidate storage is absent')
       case NookCompanionPairingCandidateOutcomeState.Rejected:
         return outcome.into_failure()
