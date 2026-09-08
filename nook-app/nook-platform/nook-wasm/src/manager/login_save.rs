@@ -29,6 +29,11 @@ impl NookVaultManager {
         &self,
         request: LoginSavePlanRequest<'_>,
     ) -> Result<NookWebsiteLoginSavePlan, NookError> {
+        let LoginSavePlanRequest {
+            origin,
+            username,
+            password,
+        } = request;
         let crypto = self.vault.crypto.get()?;
         let mut owned_logins = Vec::new();
         for (id, (secret_type, _)) in &self.vault.meta.secrets {
@@ -40,7 +45,7 @@ impl NookVaultManager {
             if let SecretValue::Login(login) = &record.data
                 && (nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
-                    origin: request.origin,
+                    origin,
                 })
                 .matches()
             {
@@ -56,9 +61,9 @@ impl NookVaultManager {
             })
             .collect();
         let decision = nook_core::WebsiteLoginSaveRequest {
-            origin: request.origin,
-            username: request.username,
-            password: request.password,
+            origin,
+            username,
+            password,
             candidates: &candidates,
         }
         .decide();

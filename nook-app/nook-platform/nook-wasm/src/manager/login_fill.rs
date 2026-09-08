@@ -50,7 +50,8 @@ impl NookVaultManager {
         &self,
         request: RevealLoginRequest<'_>,
     ) -> Result<NookLoginFillCredential, NookError> {
-        let id = SecretId::parse(request.secret_id)?;
+        let RevealLoginRequest { secret_id, origin } = request;
+        let id = SecretId::parse(secret_id)?;
         let crypto = self.vault.crypto.get()?;
         let mut record =
             nook_core::VaultSecretSession::new(&self.vault.meta.secrets, crypto).decrypt(&id)?;
@@ -58,7 +59,7 @@ impl NookVaultManager {
             SecretValue::Login(login)
                 if nook_core::LoginHostMatchRequest {
                     website_url: &login.website_url,
-                    origin: request.origin,
+                    origin,
                 }
                 .matches() =>
             {
