@@ -50,14 +50,17 @@ export function authenticationWorkflowRequiresLoginMatchAvailability(
   return authentication_workflow_requires_login_match_availability(snapshot)
 }
 
+export enum AuthenticationWorkflowRoutingFailureReason {
+  SnapshotFailed = 'workflow-snapshot-failed',
+  UnsupportedObservationVersion = 'unsupported-authentication-observation-version',
+}
+
 export type AuthenticationWorkflowRoutingResponse = {
   workflow:
     | { ok: true; snapshot?: AuthenticationWorkflowSnapshotView }
     | {
         ok: false
-        reason:
-          | 'workflow-snapshot-failed'
-          | 'unsupported-authentication-observation-version'
+        reason: AuthenticationWorkflowRoutingFailureReason
       }
   loginMatches: WebsiteLoginMatchAvailability
   selectedFacts?: AuthenticationPageObservationView
@@ -140,7 +143,8 @@ export async function authenticationWorkflowMessageResponse({
       return {
         workflow: {
           ok: false,
-          reason: 'unsupported-authentication-observation-version',
+          reason:
+            AuthenticationWorkflowRoutingFailureReason.UnsupportedObservationVersion,
         },
         loginMatches: { kind: 'unavailable' },
       }
@@ -185,7 +189,10 @@ export async function authenticationWorkflowMessageResponse({
     }
   } catch {
     return {
-      workflow: { ok: false, reason: 'workflow-snapshot-failed' },
+      workflow: {
+        ok: false,
+        reason: AuthenticationWorkflowRoutingFailureReason.SnapshotFailed,
+      },
       loginMatches: { kind: 'unavailable' },
     }
   }

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthenticationWorkflowSnapshotMessage } from '../src/lib/auth-workflow-messages'
 import {
+  AuthenticationWorkflowRoutingFailureReason,
   authenticationWorkflowMessageResponse,
   type AuthenticationWorkflowRoutingDependencies,
 } from '../src/background/service-worker/authentication-workflow-routing'
@@ -205,7 +206,10 @@ describe('authentication workflow routing', () => {
     await expect(
       authenticationWorkflowMessageResponse(request),
     ).resolves.toEqual({
-      workflow: { ok: false, reason: 'workflow-snapshot-failed' },
+      workflow: {
+        ok: false,
+        reason: AuthenticationWorkflowRoutingFailureReason.SnapshotFailed,
+      },
       loginMatches: { kind: 'unavailable' },
     })
   })
@@ -233,7 +237,8 @@ describe('authentication workflow routing', () => {
     ).resolves.toEqual({
       workflow: {
         ok: false,
-        reason: 'unsupported-authentication-observation-version',
+        reason:
+          AuthenticationWorkflowRoutingFailureReason.UnsupportedObservationVersion,
       },
       loginMatches: { kind: 'unavailable' },
     })

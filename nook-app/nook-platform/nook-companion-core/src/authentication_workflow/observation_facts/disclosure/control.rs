@@ -393,15 +393,15 @@ mod tests {
         }
 
         fn assert_page_facts_preserve_unsupported_version() -> anyhow::Result<()> {
-            let mut encoded = serde_json::to_value(Self::password_login_facts())?;
-            encoded["credentialDisclosureControl"] = serde_json::json!({
-                "kind": "observed",
-                "observations": [{ "schemaVersion": 2 }]
-            });
-            let decoded = serde_json::from_value::<AuthenticationPageObservationFacts>(encoded)?;
+            let unsupported = serde_json::from_value::<
+                VersionedAuthenticationDisclosureControlObservation,
+            >(serde_json::json!({ "schemaVersion": 2 }))?;
+            let mut facts = Self::password_login_facts();
+            facts.credential_disclosure_control =
+                AuthenticationCredentialDisclosureControlObservation::Observed(vec![unsupported]);
             assert_eq!(
                 (AuthenticationPageObservationFactsBatch {
-                    observations: vec![decoded],
+                    observations: vec![facts],
                 })
                 .classify(),
                 AuthenticationWorkflowMatch::UnsupportedVersion
