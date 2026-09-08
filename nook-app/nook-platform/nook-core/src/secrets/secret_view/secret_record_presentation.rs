@@ -20,7 +20,7 @@ impl SecretRecord {
             },
             SecretValue::SeedPhrase(value) => SecretListItemData::SeedPhrase {
                 name: value.name.clone(),
-                word_count: value.seed.split_whitespace().count().into(),
+                word_count: value.seed().split_whitespace().count().into(),
             },
             SecretValue::SecureNote(value) => SecretListItemData::SecureNote {
                 title: value.title.clone(),
@@ -79,7 +79,7 @@ impl SecretRecord {
         match &self.data {
             SecretValue::Login(value) => value.password.as_str(),
             SecretValue::ApiKey(value) => value.key.as_str(),
-            SecretValue::SeedPhrase(value) => value.seed.as_str(),
+            SecretValue::SeedPhrase(value) => value.seed(),
             SecretValue::SecureNote(value) => value.note.as_str(),
             SecretValue::Passkey(_) | SecretValue::FileAttachment(_) => "",
             SecretValue::Authenticator(value) => value.secret.as_str(),

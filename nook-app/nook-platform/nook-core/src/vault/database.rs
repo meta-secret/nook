@@ -550,7 +550,7 @@ mod tests {
         use crate::{SecretId, SecretPayloadYaml};
 
         assert!(SecretId::parse("   ").is_err());
-        assert!(SecretPayloadYaml::validate("").is_err());
+        assert!(SecretPayloadYaml::validate(SecretType::Login, "").is_err());
         Ok(())
     }
 }

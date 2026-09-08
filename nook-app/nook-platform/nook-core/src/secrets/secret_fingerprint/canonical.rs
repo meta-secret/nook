@@ -160,7 +160,7 @@ impl CanonicalSecretBytes {
             SecretValue::SeedPhrase(seed_phrase) => {
                 let seed = Zeroizing::new(
                     seed_phrase
-                        .seed
+                        .seed()
                         .split_whitespace()
                         .collect::<Vec<_>>()
                         .join(" "),

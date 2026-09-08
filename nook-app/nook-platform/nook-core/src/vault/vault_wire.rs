@@ -62,21 +62,35 @@ impl serde::Serialize for StoredVaultYaml {
 pub struct SecretPayloadYaml(String);
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub struct ValidatedSecretPayloadYaml<'a>(&'a str);
+pub struct ValidatedSecretPayloadYaml<'a> {
+    raw: &'a str,
+    secret_type: crate::SecretType,
+}
 
 impl<'a> ValidatedSecretPayloadYaml<'a> {
     #[must_use]
     pub const fn as_str(self) -> &'a str {
-        self.0
+        self.raw
+    }
+
+    #[must_use]
+    pub const fn secret_type(self) -> crate::SecretType {
+        self.secret_type
     }
 }
 
 impl SecretPayloadYaml {
-    pub fn validate(raw: &str) -> errors::ValidationResult<ValidatedSecretPayloadYaml<'_>> {
+    pub fn validate(
+        secret_type: crate::SecretType,
+        raw: &str,
+    ) -> errors::SecretPayloadResult<ValidatedSecretPayloadYaml<'_>> {
         if raw.is_empty() {
-            return Err(errors::ValidationError::SecretDataRequired);
+            return Err(errors::SecretPayloadError::Validation(
+                errors::ValidationError::SecretDataRequired,
+            ));
         }
-        Ok(ValidatedSecretPayloadYaml(raw))
+        SecretValue::from_yaml_str(secret_type, raw)?;
+        Ok(ValidatedSecretPayloadYaml { raw, secret_type })
     }
 
     #[must_use]
@@ -162,8 +176,7 @@ impl StoredVaultYaml {
 
 impl SecretPayloadYaml {
     pub fn parse(secret_type: crate::SecretType, raw: &str) -> errors::SecretPayloadResult<Self> {
-        let payload = Self::validate(raw)?;
-        SecretValue::from_yaml_str(secret_type, payload.as_str())?;
+        Self::validate(secret_type, raw)?;
         Ok(Self::from_trusted(raw.to_owned()))
     }
 }

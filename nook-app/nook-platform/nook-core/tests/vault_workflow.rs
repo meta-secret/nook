@@ -150,7 +150,7 @@ fn incremental_add_secret_matches_full_reencrypt() -> anyhow::Result<()> {
     let mut armored = armored_cache_from_db(&db, &crypto)?;
 
     let label = SecretId::parse("  secret_SMypl8K0w9Y  ")?;
-    SecretPayloadYaml::validate("generated-secret")?;
+    SecretPayloadYaml::validate(SecretType::ApiKey, &api_key_yaml("generated-secret")?)?;
     armored.insert(
         label.clone(),
         encrypted_api_key(&crypto, "generated-secret")?,

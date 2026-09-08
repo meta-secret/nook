@@ -280,7 +280,7 @@ impl NookVaultManager {
             .into());
         }
         let id = nook_core::SecretId::parse(&id)?;
-        let payload = nook_core::SecretPayloadYaml::validate(&data)?;
+        let payload = nook_core::SecretPayloadYaml::validate(secret_type, &data)?;
         let secrets_key = SymmetricKey::parse(&self.vault.secrets_key)?;
         let mut typed_value = SecretValue::from_yaml_str(secret_type, payload.as_str())?;
         let identity_fingerprint = typed_value.identity_fingerprint(&secrets_key)?;

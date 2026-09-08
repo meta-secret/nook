@@ -73,8 +73,8 @@ mod tests {
             SecretId::parse(" secret_SMypl8K0w9Y ")?.as_str(),
             "secret_SMypl8K0w9Y"
         );
-        assert!(SecretPayloadYaml::validate("").is_err());
-        assert!(SecretPayloadYaml::validate("x").is_ok());
+        assert!(SecretPayloadYaml::validate(SecretType::Login, "").is_err());
+        assert!(SecretPayloadYaml::validate(SecretType::Login, "x").is_err());
         assert!(SecretId::parse("abc123def4567890").is_err());
         assert!(SecretId::parse(&"a".repeat(64)).is_err());
         assert_eq!(
@@ -147,7 +147,7 @@ mod tests {
 
     #[test]
     fn allows_whitespace_secret_data() {
-        assert!(SecretPayloadYaml::validate("   ").is_ok());
+        assert!(SecretPayloadYaml::validate(SecretType::Login, "   ").is_err());
     }
 
     #[test]

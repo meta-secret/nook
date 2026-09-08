@@ -116,7 +116,7 @@ impl NookSecretRecord {
     #[wasm_bindgen(getter)]
     pub fn seed(&self) -> String {
         match &self.record.data {
-            SecretValue::SeedPhrase(value) => value.seed.clone(),
+            SecretValue::SeedPhrase(value) => value.seed().to_owned(),
             _ => String::new(),
         }
     }

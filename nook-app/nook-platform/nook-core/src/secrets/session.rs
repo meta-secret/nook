@@ -51,7 +51,7 @@ impl PlaintextSecretSession<'_> {
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
-        let payload = SecretPayloadYaml::validate(input.data_yaml)?;
+        let payload = SecretPayloadYaml::validate(input.secret_type, input.data_yaml)?;
         if !db.list().iter().any(|record| record.id == old_id) {
             return Err(SessionError::SecretNotFound { id: old_id });
         }
@@ -152,7 +152,7 @@ impl<'a> EncryptedSecretSession<'a> {
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
-        let payload = SecretPayloadYaml::validate(input.data_yaml)?;
+        let payload = SecretPayloadYaml::validate(input.secret_type, input.data_yaml)?;
         if !state.secrets.contains_key(&old_id) {
             return Err(SessionError::SecretNotFound { id: old_id });
         }

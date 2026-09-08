@@ -11,7 +11,7 @@ use crate::bip39::{Bip39Mnemonic, Bip39MnemonicInput};
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de, ser::SerializeStruct};
 use std::fmt;
 use zeroize::Zeroize;
 
@@ -38,12 +38,9 @@ pub struct ApiKeySecret {
     pub expires_at: String,
 }
 
-#[derive(Clone, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
+#[derive(Clone, PartialEq, Eq)]
 pub struct SeedPhraseSecret {
     pub name: String,
-    pub seed: String,
-    #[serde(skip)]
     validated: Bip39Mnemonic,
 }
 
@@ -52,7 +49,6 @@ impl fmt::Debug for SeedPhraseSecret {
         formatter
             .debug_struct("SeedPhraseSecret")
             .field("name", &self.name)
-            .field("seed", &"[REDACTED]")
             .field("validated", &"[REDACTED]")
             .finish()
     }
@@ -61,21 +57,29 @@ impl fmt::Debug for SeedPhraseSecret {
 impl SeedPhraseSecret {
     #[must_use]
     pub fn from_validated(name: String, validated: Bip39Mnemonic) -> Self {
-        let seed = validated.as_str().to_owned();
-        Self {
-            name,
-            seed,
-            validated,
-        }
+        Self { name, validated }
     }
 
     pub fn try_new(name: String, seed: String) -> SecretPayloadResult<Self> {
         let validated = Bip39MnemonicInput::new(&seed).validate()?;
-        Ok(Self {
-            name,
-            seed,
-            validated,
-        })
+        Ok(Self::from_validated(name, validated))
+    }
+
+    #[must_use]
+    pub fn seed(&self) -> &str {
+        self.validated.as_str()
+    }
+}
+
+impl Serialize for SeedPhraseSecret {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("SeedPhraseSecret", 2)?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("seed", self.seed())?;
+        state.end()
     }
 }
 
@@ -95,11 +99,7 @@ impl<'de> Deserialize<'de> for SeedPhraseSecret {
         let validated = Bip39MnemonicInput::new(&wire.seed)
             .validate()
             .map_err(de::Error::custom)?;
-        Ok(Self {
-            name: wire.name,
-            seed: wire.seed,
-            validated,
-        })
+        Ok(Self::from_validated(wire.name, validated))
     }
 }
 
@@ -486,9 +486,12 @@ impl SecretValue {
                 .map(Self::ApiKey)
                 .map_err(SecretPayloadError::InvalidApiKey),
             SecretType::SeedPhrase => {
-                let secret: SeedPhraseSecret =
+                let wire: SeedPhraseSecretWire =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidSeedPhrase)?;
-                Ok(Self::SeedPhrase(secret))
+                let validated = Bip39MnemonicInput::new(&wire.seed).validate()?;
+                Ok(Self::SeedPhrase(SeedPhraseSecret::from_validated(
+                    wire.name, validated,
+                )))
             }
             SecretType::SecureNote => serde_yaml::from_str(yaml)
                 .map(Self::SecureNote)
@@ -570,7 +573,6 @@ impl SecretValue {
             }
             Self::SeedPhrase(value) => {
                 value.name.zeroize();
-                value.seed.zeroize();
                 value.validated.zeroize();
             }
             Self::SecureNote(value) => {

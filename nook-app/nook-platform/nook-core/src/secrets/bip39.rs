@@ -119,8 +119,8 @@ impl Bip39Mnemonic {
     }
 
     #[must_use]
-    pub fn into_string(self) -> String {
-        self.text
+    pub fn into_string(mut self) -> String {
+        std::mem::take(&mut self.text)
     }
 
     #[must_use]
@@ -141,6 +141,12 @@ impl Bip39Mnemonic {
 impl Zeroize for Bip39Mnemonic {
     fn zeroize(&mut self) {
         self.text.zeroize();
+    }
+}
+
+impl Drop for Bip39Mnemonic {
+    fn drop(&mut self) {
+        self.zeroize();
     }
 }
 
