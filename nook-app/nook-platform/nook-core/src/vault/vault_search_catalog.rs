@@ -37,6 +37,12 @@ struct SecretSearchCatalogEntry {
     normalized_search_text: String,
 }
 
+struct SecretSearchCatalogIntegrityTagRequest<'a> {
+    payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
+    item: &'a SecretListItem,
+    integrity_key: &'a SymmetricKey,
+}
+
 impl SecretSearchCatalogEntry {
     fn new(
         payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
@@ -44,7 +50,11 @@ impl SecretSearchCatalogEntry {
         integrity_key: &SymmetricKey,
     ) -> VaultResult<Self> {
         let normalized_search_text = item.normalized_search_text();
-        let integrity_tag = Self::integrity_tag(payload_digest, &item, integrity_key)?;
+        let integrity_tag = Self::integrity_tag(SecretSearchCatalogIntegrityTagRequest {
+            payload_digest,
+            item: &item,
+            integrity_key,
+        })?;
         Ok(Self {
             payload_digest,
             item,
@@ -80,17 +90,13 @@ impl SecretSearchCatalogEntry {
         truncated
     }
 
-    fn integrity_tag(
-        payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
-        item: &SecretListItem,
-        integrity_key: &SymmetricKey,
-    ) -> VaultResult<String> {
-        let item_json = serde_json::to_vec(item)
+    fn integrity_tag(request: SecretSearchCatalogIntegrityTagRequest<'_>) -> VaultResult<String> {
+        let item_json = serde_json::to_vec(request.item)
             .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()))?;
-        let mut mac = Hmac::<Sha256>::new_from_slice(integrity_key.as_str().as_bytes())
+        let mut mac = Hmac::<Sha256>::new_from_slice(request.integrity_key.as_str().as_bytes())
             .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
         mac.update(SEARCH_CATALOG_INTEGRITY_DOMAIN);
-        mac.update(&payload_digest);
+        mac.update(&request.payload_digest);
         mac.update(&item_json);
         Ok(hex::encode(mac.finalize().into_bytes()))
     }
@@ -155,12 +161,12 @@ impl Default for SecretSearchCatalog {
 }
 
 impl SecretSearchCatalog {
-    fn bucket_for(id: &SecretId) -> u8 {
-        Sha256::digest(id.as_str().as_bytes())[0] % SECRET_SEARCH_CATALOG_BUCKET_COUNT
+    fn bucket_for(id: &SecretId) -> crate::SecretSearchCatalogBucket {
+        (Sha256::digest(id.as_str().as_bytes())[0] % SECRET_SEARCH_CATALOG_BUCKET_COUNT).into()
     }
 
     fn bucket_mask_for(id: &SecretId) -> u64 {
-        1_u64 << Self::bucket_for(id)
+        1_u64 << u8::from(Self::bucket_for(id))
     }
 
     /// Restore one authenticated plaintext bucket after the adapter decrypts it.
@@ -169,16 +175,18 @@ impl SecretSearchCatalog {
         expected_bucket: crate::SecretSearchCatalogBucket,
         json: &str,
     ) -> VaultResult<()> {
-        let expected_bucket = u8::from(expected_bucket);
-        if expected_bucket >= SECRET_SEARCH_CATALOG_BUCKET_COUNT {
+        if u8::from(expected_bucket) >= SECRET_SEARCH_CATALOG_BUCKET_COUNT {
             return Err(SessionError::SearchCatalogInvalid(format!(
-                "bucket {expected_bucket} is out of range"
+                "bucket {} is out of range",
+                u8::from(expected_bucket)
             ))
             .into());
         }
         let mut bucket: SecretSearchCatalogBucket = serde_json::from_str(json)
             .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
-        if bucket.version != SEARCH_CATALOG_BUCKET_VERSION || bucket.bucket != expected_bucket {
+        if bucket.version != SEARCH_CATALOG_BUCKET_VERSION
+            || bucket.bucket != u8::from(expected_bucket)
+        {
             return Err(SessionError::SearchCatalogInvalid(
                 "catalog bucket header does not match its storage key".to_owned(),
             )
@@ -208,10 +216,10 @@ impl SecretSearchCatalog {
         &self,
         bucket: crate::SecretSearchCatalogBucket,
     ) -> VaultResult<SearchCatalogBucketPayload> {
-        let bucket = u8::from(bucket);
-        if bucket >= SECRET_SEARCH_CATALOG_BUCKET_COUNT {
+        if u8::from(bucket) >= SECRET_SEARCH_CATALOG_BUCKET_COUNT {
             return Err(SessionError::SearchCatalogInvalid(format!(
-                "bucket {bucket} is out of range"
+                "bucket {} is out of range",
+                u8::from(bucket)
             ))
             .into());
         }
@@ -226,7 +234,7 @@ impl SecretSearchCatalog {
         }
         serde_json::to_string(&SecretSearchCatalogBucket {
             version: SEARCH_CATALOG_BUCKET_VERSION,
-            bucket,
+            bucket: u8::from(bucket),
             entries,
         })
         .map(SearchCatalogBucketPayload::Json)
