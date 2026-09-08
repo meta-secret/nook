@@ -5,6 +5,12 @@
 //! independently encrypted buckets by the WASM adapter, so a 10,000-item search
 //! avoids per-query decryption without exposing searchable metadata at rest.
 
+#![cfg_attr(dylint_lib = "nook_domain_api", deny(unowned_function))]
+#![cfg_attr(
+    dylint_lib = "nook_domain_api",
+    forbid(invalid_unowned_function_suppression)
+)]
+
 use crate::errors::{SessionError, VaultResult};
 use crate::{
     MAX_SECRET_PAGE_SIZE, SecretId, SecretListItem, SecretPage, SecretType, SecretTypeFilter,
@@ -38,7 +44,7 @@ impl SecretSearchCatalogEntry {
         integrity_key: &SymmetricKey,
     ) -> VaultResult<Self> {
         let normalized_search_text = item.normalized_search_text();
-        let integrity_tag = catalog_entry_integrity_tag(payload_digest, &item, integrity_key)?;
+        let integrity_tag = Self::integrity_tag(payload_digest, &item, integrity_key)?;
         Ok(Self {
             payload_digest,
             item,
@@ -65,6 +71,28 @@ impl SecretSearchCatalogEntry {
 
     fn restore_search_text(&mut self) {
         self.normalized_search_text = self.item.normalized_search_text();
+    }
+
+    fn payload_digest(payload: &str) -> [u8; PAYLOAD_DIGEST_BYTES] {
+        let digest = Sha256::digest(payload.as_bytes());
+        let mut truncated = [0_u8; PAYLOAD_DIGEST_BYTES];
+        truncated.copy_from_slice(&digest[..PAYLOAD_DIGEST_BYTES]);
+        truncated
+    }
+
+    fn integrity_tag(
+        payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
+        item: &SecretListItem,
+        integrity_key: &SymmetricKey,
+    ) -> VaultResult<String> {
+        let item_json = serde_json::to_vec(item)
+            .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()))?;
+        let mut mac = Hmac::<Sha256>::new_from_slice(integrity_key.as_str().as_bytes())
+            .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
+        mac.update(SEARCH_CATALOG_INTEGRITY_DOMAIN);
+        mac.update(&payload_digest);
+        mac.update(&item_json);
+        Ok(hex::encode(mac.finalize().into_bytes()))
     }
 }
 
@@ -127,6 +155,14 @@ impl Default for SecretSearchCatalog {
 }
 
 impl SecretSearchCatalog {
+    fn bucket_for(id: &SecretId) -> u8 {
+        Sha256::digest(id.as_str().as_bytes())[0] % SECRET_SEARCH_CATALOG_BUCKET_COUNT
+    }
+
+    fn bucket_mask_for(id: &SecretId) -> u64 {
+        1_u64 << Self::bucket_for(id)
+    }
+
     /// Restore one authenticated plaintext bucket after the adapter decrypts it.
     pub fn restore_bucket_json(
         &mut self,
@@ -149,7 +185,7 @@ impl SecretSearchCatalog {
             .into());
         }
         for (id, entry) in &mut bucket.entries {
-            if &entry.item.id != id || search_catalog_bucket(id) != expected_bucket {
+            if &entry.item.id != id || Self::bucket_for(id) != expected_bucket {
                 return Err(SessionError::SearchCatalogInvalid(
                     "catalog entry does not belong to its encrypted bucket".to_owned(),
                 )
@@ -182,7 +218,7 @@ impl SecretSearchCatalog {
         let entries = self
             .entries
             .iter()
-            .filter(|(id, _)| search_catalog_bucket(id) == bucket)
+            .filter(|(id, _)| Self::bucket_for(id) == bucket)
             .map(|(id, entry)| (id.clone(), entry.clone()))
             .collect::<BTreeMap<_, _>>();
         if entries.is_empty() {
@@ -214,11 +250,11 @@ impl SecretSearchCatalog {
             ..SecretSearchCatalogReconcile::default()
         };
         for id in self.entries.keys().filter(|id| !secrets.contains_key(*id)) {
-            outcome.changed_bucket_mask |= bucket_mask(id);
+            outcome.changed_bucket_mask |= Self::bucket_mask_for(id);
         }
         let mut next = BTreeMap::new();
         for (id, (secret_type, payload)) in secrets {
-            let digest = payload_digest(payload.as_str());
+            let digest = SecretSearchCatalogEntry::payload_digest(payload.as_str());
             if let Some(existing) = self.entries.get(id)
                 && existing.payload_digest == digest
                 && existing.item.secret_type() == *secret_type
@@ -233,7 +269,7 @@ impl SecretSearchCatalog {
             } else {
                 outcome.added.0 += 1;
             }
-            outcome.changed_bucket_mask |= bucket_mask(id);
+            outcome.changed_bucket_mask |= Self::bucket_mask_for(id);
             let mut record = VaultSecretSession::new(secrets, crypto).decrypt(id)?;
             let item = record.list_item();
             record.zeroize_plaintext();
@@ -281,36 +317,6 @@ impl SecretSearchCatalog {
 pub enum SearchCatalogBucketPayload {
     Empty,
     Json(String),
-}
-
-fn search_catalog_bucket(id: &SecretId) -> u8 {
-    Sha256::digest(id.as_str().as_bytes())[0] % SECRET_SEARCH_CATALOG_BUCKET_COUNT
-}
-
-fn bucket_mask(id: &SecretId) -> u64 {
-    1_u64 << search_catalog_bucket(id)
-}
-
-fn payload_digest(payload: &str) -> [u8; PAYLOAD_DIGEST_BYTES] {
-    let digest = Sha256::digest(payload.as_bytes());
-    let mut truncated = [0_u8; PAYLOAD_DIGEST_BYTES];
-    truncated.copy_from_slice(&digest[..PAYLOAD_DIGEST_BYTES]);
-    truncated
-}
-
-fn catalog_entry_integrity_tag(
-    payload_digest: [u8; PAYLOAD_DIGEST_BYTES],
-    item: &SecretListItem,
-    integrity_key: &SymmetricKey,
-) -> VaultResult<String> {
-    let item_json = serde_json::to_vec(item)
-        .map_err(|error| SessionError::SearchCatalogSerialize(error.to_string()))?;
-    let mut mac = Hmac::<Sha256>::new_from_slice(integrity_key.as_str().as_bytes())
-        .map_err(|error| SessionError::SearchCatalogInvalid(error.to_string()))?;
-    mac.update(SEARCH_CATALOG_INTEGRITY_DOMAIN);
-    mac.update(&payload_digest);
-    mac.update(&item_json);
-    Ok(hex::encode(mac.finalize().into_bytes()))
 }
 
 #[cfg(test)]
@@ -368,7 +374,7 @@ mod tests {
         let crypto = VaultCrypto::new(&keys.secrets_key)?;
         let mut catalog = SecretSearchCatalog::default();
         let item = login_item(1, "visible-user");
-        let bucket = search_catalog_bucket(&item.id);
+        let bucket = SecretSearchCatalog::bucket_for(&item.id);
         catalog.entries.insert(
             item.id.clone(),
             SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &keys.secrets_key)?,
@@ -453,7 +459,7 @@ mod tests {
         assert_eq!(usize::from(changed.removed), 0);
         assert_eq!(
             changed.changed_buckets().map(u8::from).collect::<Vec<_>>(),
-            vec![search_catalog_bucket(&changed_id)]
+            vec![SecretSearchCatalog::bucket_for(&changed_id)]
         );
         assert_eq!(
             usize::from(
@@ -507,7 +513,7 @@ mod tests {
         let mut catalog = SecretSearchCatalog::default();
         catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
 
-        let bucket = search_catalog_bucket(&record.id);
+        let bucket = SecretSearchCatalog::bucket_for(&record.id);
         let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket.into())? else {
             panic!("catalog bucket exists");
         };
