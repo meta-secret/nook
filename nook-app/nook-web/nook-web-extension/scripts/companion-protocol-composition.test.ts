@@ -276,6 +276,12 @@ describe('generated companion protocol composition', () => {
     const prepared = approval.with_event_log(records)
     expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
     prepared.free()
+
+    const invalidApproval = pairingAttempt('pairing-activation-empty', false)
+    const invalidRecords = NookExternalEventLogRecords.from_array([])
+    expect(() => invalidApproval.with_event_log(invalidRecords)).toThrow(
+      'pairing event authorization rejected',
+    )
   })
 
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {
