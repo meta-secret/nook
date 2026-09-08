@@ -70,7 +70,7 @@ pub struct LoginHostMatchRequest<'a> {
     pub origin: &'a str,
 }
 
-impl<'a> LoginHostMatchRequest<'a> {
+impl LoginHostMatchRequest<'_> {
     #[must_use]
     pub fn matches(&self) -> bool {
         let secret_host = WebsiteHost::normalize(self.website_url);
@@ -87,10 +87,12 @@ impl<'a> LoginHostMatchRequest<'a> {
             })
     }
 
-    pub(crate) fn legacy_matches(website_url: &'a str, origin: &'a str) -> bool {
+    pub(crate) fn legacy_matches(website_url: &str, origin: &str) -> bool {
+        let website_url = website_url.to_owned();
+        let origin = origin.to_owned();
         Self {
-            website_url,
-            origin,
+            website_url: &website_url,
+            origin: &origin,
         }
         .matches()
     }
@@ -103,7 +105,7 @@ pub struct AuthenticatorGroupKeyRequest<'a> {
     pub issuer: &'a str,
 }
 
-impl<'a> AuthenticatorGroupKeyRequest<'a> {
+impl AuthenticatorGroupKeyRequest<'_> {
     #[must_use]
     pub fn resolve(&self) -> String {
         let request = AuthenticatorWebsiteHostRequest {
@@ -119,10 +121,12 @@ impl<'a> AuthenticatorGroupKeyRequest<'a> {
             .unwrap_or_else(|| self.issuer.trim().to_owned())
     }
 
-    pub(crate) fn legacy_resolve(website_url: &'a str, issuer: &'a str) -> String {
+    pub(crate) fn legacy_resolve(website_url: &str, issuer: &str) -> String {
+        let website_url = website_url.to_owned();
+        let issuer = issuer.to_owned();
         Self {
-            website_url,
-            issuer,
+            website_url: &website_url,
+            issuer: &issuer,
         }
         .resolve()
     }

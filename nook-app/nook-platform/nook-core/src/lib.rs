@@ -242,7 +242,7 @@ pub const decide_website_login_save: for<'a> fn(
     &'a str,
     &'a str,
     &'a [WebsiteLoginSaveCandidate<'a>],
-) -> WebsiteLoginSaveDecision = WebsiteLoginSaveRequest::legacy_decide;
+) -> WebsiteLoginSaveDecision = website_login_save::WebsiteLoginSavePolicy::legacy_decide;
 
 pub use nook_auth2::{
     CheckedSentinelGenesisDelivery, CheckedSentinelGenesisResponse, DeviceKeyDerivationIterations,

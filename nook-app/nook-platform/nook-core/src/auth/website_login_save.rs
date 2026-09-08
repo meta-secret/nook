@@ -29,6 +29,9 @@ pub struct WebsiteLoginSaveRequest<'a> {
     pub candidates: &'a [WebsiteLoginSaveCandidate<'a>],
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct WebsiteLoginSavePolicy;
+
 /// Policy outcome for a consented website-login save offer.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WebsiteLoginSaveDecision {
@@ -61,20 +64,36 @@ impl<'a> WebsiteLoginSaveRequest<'a> {
     /// possible; host matching is still enforced here as a defense in depth.
     #[must_use]
     pub fn decide(&self) -> WebsiteLoginSaveDecision {
-        let username = self.username.trim();
-        let password = self.password.trim();
+        WebsiteLoginSavePolicy::decide_parts(
+            self.origin,
+            self.username,
+            self.password,
+            self.candidates,
+        )
+    }
+}
+
+impl WebsiteLoginSavePolicy {
+    pub(crate) fn decide_parts(
+        origin: &str,
+        username: &str,
+        password: &str,
+        candidates: &[WebsiteLoginSaveCandidate<'_>],
+    ) -> WebsiteLoginSaveDecision {
+        let username = username.trim();
+        let password = password.trim();
         if username.is_empty() || password.is_empty() {
             return WebsiteLoginSaveDecision::Invalid;
         }
-        if WebsiteHost::normalize(self.origin).is_empty() {
+        if WebsiteHost::normalize(origin).is_empty() {
             return WebsiteLoginSaveDecision::Invalid;
         }
 
         let mut matching_username: Option<&WebsiteLoginSaveCandidate<'_>> = None;
-        for candidate in self.candidates {
+        for candidate in candidates {
             if !(LoginHostMatchRequest {
                 website_url: &candidate.login.website_url,
-                origin: self.origin,
+                origin,
             })
             .matches()
             {
@@ -100,18 +119,12 @@ impl<'a> WebsiteLoginSaveRequest<'a> {
     }
 
     pub(crate) fn legacy_decide(
-        origin: &'a str,
-        username: &'a str,
-        password: &'a str,
-        candidates: &'a [WebsiteLoginSaveCandidate<'a>],
+        origin: &str,
+        username: &str,
+        password: &str,
+        candidates: &[WebsiteLoginSaveCandidate<'_>],
     ) -> WebsiteLoginSaveDecision {
-        Self {
-            origin,
-            username,
-            password,
-            candidates,
-        }
-        .decide()
+        Self::decide_parts(origin, username, password, candidates)
     }
 }
 
