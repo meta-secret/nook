@@ -598,7 +598,7 @@ mod wasm_tests {
                 issuer: "Namecheap",
             }
             .resolve()
-            .expect("bundled issuer catalog"),
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "namecheap.com"
         );
     }

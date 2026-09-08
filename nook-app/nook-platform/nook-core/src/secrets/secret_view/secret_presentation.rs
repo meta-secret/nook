@@ -258,8 +258,7 @@ impl SecretListItem {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url)
-                .map(WebsiteHost::into_string)
-                .unwrap_or_default(),
+                .map_or_else(String::new, WebsiteHost::into_string),
             SecretListItemData::Authenticator {
                 website_url,
                 issuer,
@@ -295,8 +294,7 @@ impl SecretListItem {
         match &self.data {
             SecretListItemData::Login { website_url, .. }
             | SecretListItemData::ApiKey { website_url, .. } => WebsiteHost::normalize(website_url)
-                .map(WebsiteHost::into_string)
-                .unwrap_or_else(|| "No Website".to_owned()),
+                .map_or_else(|| "No Website".to_owned(), WebsiteHost::into_string),
             SecretListItemData::SeedPhrase { name, .. } => {
                 let name = name.trim();
                 if name.is_empty() {
@@ -633,7 +631,7 @@ mod tests {
                 issuer: "OpenAI",
             }
             .resolve()
-            .expect("bundled issuer catalog"),
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "custom.example"
         );
         assert_eq!(
@@ -642,7 +640,7 @@ mod tests {
                 issuer: "https://www.namecheap.com",
             }
             .resolve()
-            .expect("bundled issuer catalog"),
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "namecheap.com"
         );
         assert_eq!(
@@ -651,7 +649,7 @@ mod tests {
                 issuer: "namecheap.com",
             }
             .resolve()
-            .expect("bundled issuer catalog"),
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "namecheap.com"
         );
         assert_eq!(
@@ -660,7 +658,7 @@ mod tests {
                 issuer: "OpenAI",
             }
             .resolve()
-            .expect("bundled issuer catalog"),
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "openai.com"
         );
         assert_eq!(
@@ -669,7 +667,7 @@ mod tests {
                 issuer: "Namecheap",
             }
             .resolve()
-            .expect("bundled issuer catalog"),
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "namecheap.com"
         );
         assert_eq!(
@@ -678,7 +676,7 @@ mod tests {
                 issuer: "Totally Unknown Service",
             }
             .resolve()
-            .expect("bundled issuer catalog"),
+            .unwrap_or_else(|error| panic!("bundled issuer catalog: {error}")),
             "Totally Unknown Service"
         );
     }
