@@ -4,8 +4,11 @@ use crate::page_field_classification::{
     PageControlSubmissionDestinationSource, PageControlSubmissionMethod,
     canonicalize_control_destination, expand_identity_text,
 };
-use crate::{AuthenticationFieldCount, MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT};
-use serde::{Deserialize, Serialize};
+use crate::{
+    AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount,
+    MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
+};
+use serde::{Deserialize, Deserializer, Serialize};
 use tsify::Tsify;
 use url::Url;
 
@@ -48,8 +51,59 @@ pub struct CurrentAuthenticationDisclosureControlRequest {
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct VersionedAuthenticationDisclosureControlObservation {
     pub schema_version: AuthenticationDisclosureObservationSchemaVersion,
+    #[serde(
+        deserialize_with = "RequiredAuthenticationAdvanceControlObservation::deserialize_observation"
+    )]
     pub observation: AuthenticationAdvanceControlObservation,
     pub generic_password_field_count: AuthenticationFieldCount,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RequiredAuthenticationAdvanceControlObservation {
+    actionability: PageControlActionability,
+    ownership: PageControlOwnership,
+    semantics: PageControlSemantics,
+    authentication_username: AuthenticationUsernameEvidence,
+    password_field_count: AuthenticationFieldCount,
+    new_password_field_count: AuthenticationFieldCount,
+    one_time_code_field_count: AuthenticationFieldCount,
+    semantic_submit_control_count: AuthenticationSemanticSubmitControlCount,
+    source_origin: String,
+    form_identity: String,
+    destination_identity: String,
+    label: String,
+    machine_identity: String,
+    submission_method: PageControlSubmissionMethod,
+    submission_destination_source: PageControlSubmissionDestinationSource,
+}
+
+impl RequiredAuthenticationAdvanceControlObservation {
+    fn deserialize_observation<'de, D>(
+        deserializer: D,
+    ) -> Result<AuthenticationAdvanceControlObservation, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let required = Self::deserialize(deserializer)?;
+        Ok(AuthenticationAdvanceControlObservation {
+            actionability: required.actionability,
+            ownership: required.ownership,
+            semantics: required.semantics,
+            authentication_username: required.authentication_username,
+            password_field_count: required.password_field_count,
+            new_password_field_count: required.new_password_field_count,
+            one_time_code_field_count: required.one_time_code_field_count,
+            semantic_submit_control_count: required.semantic_submit_control_count,
+            source_origin: required.source_origin,
+            form_identity: required.form_identity,
+            destination_identity: required.destination_identity,
+            label: required.label,
+            machine_identity: required.machine_identity,
+            submission_method: required.submission_method,
+            submission_destination_source: required.submission_destination_source,
+        })
+    }
 }
 
 /// Typed classification of a versioned disclosure-control observation.
@@ -289,6 +343,46 @@ mod tests {
     }
 
     #[test]
+    fn every_nested_v1_control_field_is_required() -> anyhow::Result<()> {
+        let observation = ExactDisclosureControlScenario::control(PageControlActionability::Inert);
+        for field_name in [
+            "actionability",
+            "ownership",
+            "semantics",
+            "authenticationUsername",
+            "passwordFieldCount",
+            "newPasswordFieldCount",
+            "oneTimeCodeFieldCount",
+            "semanticSubmitControlCount",
+            "sourceOrigin",
+            "formIdentity",
+            "destinationIdentity",
+            "label",
+            "machineIdentity",
+            "submissionMethod",
+            "submissionDestinationSource",
+        ] {
+            let mut encoded = serde_json::to_value(&observation)?;
+            let Some(fields) = encoded
+                .get_mut("observation")
+                .and_then(serde_json::Value::as_object_mut)
+            else {
+                anyhow::bail!("versioned disclosure control lacks nested observation");
+            };
+            fields
+                .remove(field_name)
+                .ok_or_else(|| anyhow::anyhow!("expected nested wire field {field_name}"))?;
+            assert!(
+                serde_json::from_value::<VersionedAuthenticationDisclosureControlObservation>(
+                    encoded
+                )
+                .is_err()
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn disclosure_control_collection_is_bounded_and_nonempty_when_observed() {
         let control = ExactDisclosureControlScenario::control(PageControlActionability::Actionable);
         assert!(AuthenticationCredentialDisclosureControlObservation::Absent.is_bounded());
@@ -312,19 +406,19 @@ mod tests {
     }
 
     #[test]
-    fn legacy_page_facts_default_disclosure_control_to_absent() -> anyhow::Result<()> {
+    fn page_facts_require_explicit_disclosure_control_state() -> anyhow::Result<()> {
         let mut encoded = serde_json::to_value(AuthenticationPageObservationFacts::default())?;
         let serde_json::Value::Object(fields) = &mut encoded else {
             anyhow::bail!("authentication page facts must encode as an object");
         };
+        assert_eq!(
+            fields.get("credentialDisclosureControl"),
+            Some(&serde_json::json!({ "kind": "absent" }))
+        );
         fields
             .remove("credentialDisclosureControl")
             .ok_or_else(|| anyhow::anyhow!("current page facts lack disclosure evidence"))?;
-        let decoded = serde_json::from_value::<AuthenticationPageObservationFacts>(encoded)?;
-        assert!(matches!(
-            decoded.credential_disclosure_control,
-            AuthenticationCredentialDisclosureControlObservation::Absent
-        ));
+        assert!(serde_json::from_value::<AuthenticationPageObservationFacts>(encoded).is_err());
         Ok(())
     }
 }

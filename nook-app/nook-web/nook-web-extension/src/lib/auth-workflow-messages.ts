@@ -131,6 +131,15 @@ function isDetailedAdvanceControl(
   )
 }
 
+function isCredentialDisclosureControlAbsent(value: unknown): boolean {
+  return (
+    Boolean(value) &&
+    typeof value === 'object' &&
+    'kind' in value &&
+    value.kind === 'absent'
+  )
+}
+
 function isDetailedPasskeyControl(
   value: unknown,
 ): value is AuthenticationDetailedPasskeyControlObservation {
@@ -199,6 +208,9 @@ export function isAuthenticationPageObservationView(
     typeof authenticator.backupCodesCopy === 'string' &&
     Array.from(authenticator.backupCodesCopy).length <= 128 &&
     ['absent', 'present'].includes(authenticator.passkeyControl) &&
+    isCredentialDisclosureControlAbsent(
+      observation.credentialDisclosureControl,
+    ) &&
     isDetailedAdvanceControl(observation.detailedAdvanceControl) &&
     isDetailedPasskeyControl(authenticator.detailedPasskeyControl)
   )

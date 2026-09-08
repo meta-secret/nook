@@ -53,7 +53,6 @@ pub struct AuthenticationPageObservationFacts {
     #[serde(default)]
     pub detailed_advance_control: AuthenticationDetailedAdvanceControlObservation,
     /// Separately versioned evidence for exceptional disclosure-control classification.
-    #[serde(default)]
     pub credential_disclosure_control: AuthenticationCredentialDisclosureControlObservation,
 }
 
@@ -214,9 +213,12 @@ mod tests {
     }
 
     #[test]
-    fn detailed_control_produces_actionable_login() {
+    fn explicit_absent_disclosure_control_preserves_actionable_login() -> anyhow::Result<()> {
+        let encoded = serde_json::to_string(&password_login())?;
+        assert!(encoded.contains(r#""credentialDisclosureControl":{"kind":"absent"}"#));
+        let decoded = serde_json::from_str::<AuthenticationPageObservationFacts>(&encoded)?;
         let result = AuthenticationPageObservationFactsBatch {
-            observations: vec![password_login()],
+            observations: vec![decoded],
         }
         .classify();
         assert!(matches!(
@@ -224,6 +226,7 @@ mod tests {
             AuthenticationWorkflowMatch::Matched(snapshot)
                 if snapshot.kind == AuthenticationWorkflowKind::Login
         ));
+        Ok(())
     }
 
     #[test]

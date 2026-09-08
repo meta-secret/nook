@@ -47,6 +47,7 @@ describe('website one-time-code fields', () => {
       authenticatorSetupHint: false,
       backupCodesCopy: '',
     })
+    expect(facts.credentialDisclosureControl).toEqual({ kind: 'absent' })
     expect(facts.ceremony.oneTimeCodeHandlerSignals).toEqual([
       'oninput=this.form.requestSubmit()',
     ])

@@ -361,6 +361,8 @@ mod tests {
                 nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
                     login_advance_observation("https://login.example.test/auth/login", "Sign in"),
                 ),
+            credential_disclosure_control:
+                nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
             ..Default::default()
         };
         assert_eq!(
@@ -579,6 +581,8 @@ mod tests {
                 nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
                     initial,
                 ),
+            credential_disclosure_control:
+                nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
             ..Default::default()
         };
         assert!(matches!(
@@ -719,6 +723,8 @@ mod tests {
                 nook_companion_core::AuthenticationDetailedAdvanceControlObservation::observed(
                     netflix.clone(),
                 ),
+            credential_disclosure_control:
+                nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
             ..Default::default()
         };
         assert_eq!(
@@ -803,6 +809,8 @@ mod tests {
                 implicit_submission_method: nook_companion_core::PageControlSubmissionMethod::Get,
                 ..Default::default()
             },
+            credential_disclosure_control:
+                nook_companion_core::AuthenticationCredentialDisclosureControlObservation::Absent,
             ..Default::default()
         };
         let workflow = crate::classify_companion_authentication_workflow_facts(

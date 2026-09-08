@@ -41,6 +41,7 @@ const validMessage = {
           matchingPasskeyAccountCount: 0,
           detailedPasskeyControl: { kind: 'absent' },
         },
+        credentialDisclosureControl: { kind: 'absent' },
         detailedAdvanceControl: { kind: 'absent' },
       },
     ],
@@ -126,6 +127,21 @@ describe('authentication workflow snapshot messages', () => {
 
   test('accepts bounded structural page observations', () => {
     expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
+  })
+
+  test('rejects observations that omit disclosure-control state', () => {
+    const observation = validMessage.payload.observations[0]
+    const { credentialDisclosureControl: _omitted, ...withoutDisclosure } =
+      observation
+    expect(
+      isAuthenticationWorkflowSnapshotMessage({
+        ...validMessage,
+        payload: {
+          ...validMessage.payload,
+          observations: [withoutDisclosure],
+        },
+      }),
+    ).toBe(false)
   })
 
   test('accepts WebAuthn email evidence from the generated WASM contract', () => {
