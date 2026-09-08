@@ -64,8 +64,9 @@ pub fn simple_vault_app_url(configured_url: &str) -> String {
 #[cfg(test)]
 mod application_url_tests {
     use super::simple_vault_app_url;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn simple_vault_application_url_is_defaulted_and_normalized() {
         assert_eq!(
             simple_vault_app_url(""),

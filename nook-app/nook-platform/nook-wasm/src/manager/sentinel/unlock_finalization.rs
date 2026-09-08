@@ -183,6 +183,7 @@ mod tests {
     };
     use std::future::Future;
     use std::task::{Context, Poll, Waker};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     struct Fixture {
         identity: DeviceIdentity,
@@ -315,7 +316,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn partial_key_installation_is_reset() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
         let mut manager = fixture.manager()?;
@@ -337,7 +338,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn dropping_polled_completion_resets_installed_keys() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
         let mut manager = fixture.manager()?;
@@ -359,7 +360,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn failure_after_reconstruction_resets_installed_keys() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
         let mut manager = fixture.manager()?;
@@ -381,7 +382,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn current_context_mismatch_is_terminal_before_key_installation() -> anyhow::Result<()> {
         let fixture = Fixture::new()?;
         for mismatch in 0..4 {

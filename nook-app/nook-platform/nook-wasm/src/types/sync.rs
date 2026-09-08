@@ -581,7 +581,7 @@ mod tests {
         assert!(icloud.shared_joiner_identity().is_err());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn enrollment_inputs_and_sync_targets_keep_typed_values() {
         let provider = NookEnrollmentProvider::github("repo".into(), "pat".into());
         let unnamed = NookEnrollmentIssueInput::unnamed(

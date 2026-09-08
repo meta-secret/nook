@@ -210,8 +210,9 @@ impl NookOAuthAccountIdentity {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn refresh_credentials_and_expiry_project_states_and_values() {
         let missing = NookOAuthRefreshCredential::not_issued();
         assert_eq!(missing.state(), NookOAuthRefreshCredentialState::NotIssued);
@@ -226,7 +227,7 @@ mod tests {
         assert_eq!(known.value().unwrap(), "2030-01-01T00:00:00Z");
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn remote_files_and_account_identities_project_all_variants() {
         let unresolved = NookOAuthRemoteFile::unresolved();
         assert_eq!(unresolved.state(), NookOAuthRemoteFileState::Unresolved);

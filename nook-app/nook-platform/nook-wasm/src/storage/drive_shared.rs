@@ -210,8 +210,9 @@ pub(crate) async fn verify_shared_vault_folder(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn drive_errors_preserve_status_and_optional_body() {
         assert!(matches!(
             drive_error(reqwest::StatusCode::BAD_REQUEST, "bad query"),
@@ -225,7 +226,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn shared_drive_response_shapes_accept_optional_fields() -> anyhow::Result<()> {
         let created: DriveFileCreateResponse =
             serde_json::from_str(r#"{"id":"folder-1","name":"Shared"}"#)?;
@@ -254,13 +255,13 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn shared_folder_name_trims_and_defaults() {
         assert_eq!(shared_folder_name("  Family vault  "), "Family vault");
         assert_eq!(shared_folder_name("\t"), "Nook shared vault");
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn create_folder_projection_requires_id_and_falls_back_to_name() -> anyhow::Result<()> {
         let missing_id = create_folder_projection(
             DriveFileCreateResponse {
@@ -283,7 +284,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn verify_folder_projection_enforces_folder_and_write_capability() -> anyhow::Result<()> {
         let not_folder = verify_folder_projection(
             DriveFolderMetadataResponse {

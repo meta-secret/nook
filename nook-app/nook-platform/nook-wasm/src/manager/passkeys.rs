@@ -50,8 +50,9 @@ mod tests {
     use nook_core::{
         PasskeyAuthenticatorError, SecretType, StoredRecordPayload, VaultArchitecture,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn randomness_failure_has_a_distinct_browser_error_code() {
         assert_eq!(
             passkey_error_code(&PasskeyAuthenticatorError::RandomnessUnavailable),
@@ -59,7 +60,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn every_passkey_failure_maps_to_a_stable_browser_code() {
         let cases = [
             (
@@ -108,7 +109,7 @@ mod tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn passkey_capability_requires_unlock_and_simple_architecture() -> anyhow::Result<()> {
         let locked = NookVaultManager::new();
         assert!(locked.ensure_passkey_extension_capability().is_err());
@@ -133,7 +134,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn passkey_crypto_round_trip_decrypts_only_passkey_records() -> anyhow::Result<()> {
         let keys = nook_core::VaultKeys::generate()?;
         let crypto = nook_core::VaultCrypto::new(&keys.secrets_key)?;

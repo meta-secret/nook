@@ -314,7 +314,11 @@ mod tests {
         identity_record::clear_identity_directory_for_test().await
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn rejects_mismatched_plaintext_legacy_signing_seed() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let (event_signing, _) = SigningIdentity::generate()?;

@@ -647,8 +647,9 @@ mod tests {
         AppKey, CurrentVaultReplaceability, DeviceIdentityProtection, IdentityDirectory,
         IdentityRecord, LocalIdentityKeyring, LocalIdentityKeyringEntry,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn identity_snapshot_enumerates_public_members_and_vault_ids() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let mut record =
@@ -703,7 +704,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn unmatched_live_session_does_not_select_persisted_identity() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let record = IdentityRecord::create_with_app_key("Personal", &app_key, None)?;
@@ -721,7 +722,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn selected_vault_context_resolves_current_browser() -> anyhow::Result<()> {
         let personal_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
@@ -757,7 +758,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn selected_vault_context_keeps_other_browser_identity_without_current() -> anyhow::Result<()> {
         let work_key = AppKey::generate()?;
         let travel_key = AppKey::generate()?;
@@ -796,7 +797,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn selected_vault_context_classifies_empty_projection() {
         assert_eq!(
             selected_vault_context_kind(&[], false),
@@ -804,7 +805,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn selected_vault_context_rejects_current_member_without_vault_grant() -> anyhow::Result<()> {
         let app_key = AppKey::generate()?;
         let store_id = nook_core::StoreId::generate()?;
@@ -887,7 +888,7 @@ mod tests {
         )
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn current_and_other_protected_identities_keep_distinct_eligibility() -> anyhow::Result<()> {
         let current_key = AppKey::generate()?;
         let other_key = AppKey::generate()?;
@@ -916,7 +917,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn linked_identity_without_a_protected_keyring_entry_is_unavailable() -> anyhow::Result<()> {
         let current_key = AppKey::generate()?;
         let linked_key = AppKey::generate()?;
@@ -938,7 +939,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn revoked_or_missing_dek_envelopes_make_a_protected_identity_unavailable() -> anyhow::Result<()>
     {
         let app_key = AppKey::generate()?;

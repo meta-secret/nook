@@ -157,21 +157,20 @@ impl CheckedExistingVaultHandoff<'_> {
 }
 #[cfg(test)]
 mod tests {
+    use super::super::IdentityHandoffCommit;
+    use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
     use crate::manager::PendingExtensionIdentityEnrollment;
+    use crate::storage;
+    use crate::storage::event_db;
     use crate::storage::identity_record;
     use crate::storage::indexed_db;
     use futures_util::future;
+    use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use nook_core::{
         DeviceIdentity, DeviceSigningPublicKey, EventId, IdentityDirectory, IsoTimestamp,
         LocalEventStore, MemberLabel, SigningIdentity, VaultOperation,
     };
     use rexie::TransactionMode;
-
-    use super::super::IdentityHandoffCommit;
-    use super::{ExistingVaultHandoff, ExistingVaultImportCommit, HandoffCheckpoint, NookError};
-    use crate::storage;
-    use crate::storage::event_db;
-    use identity_record::{IDENTITY_DIRECTORY_KEY, PendingSimpleGenesis};
     use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -405,7 +404,11 @@ mod tests {
             })
         }
     }
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn selected_checkpoint_ancestors_exclude_concurrent_siblings() -> Result<(), NookError> {
         let fixture = ImportFixture::new()?;
         let events = SignedAccessEvents::new(&fixture)?;

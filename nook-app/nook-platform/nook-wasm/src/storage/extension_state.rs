@@ -185,8 +185,9 @@ mod tests {
         EXTENSION_GRANT_KEY_PREFIX as GRANT_KEY_PREFIX, ExtensionConnectScope,
         ExtensionPairingVaultType, StoredExtensionPairingGrant,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn rejects_a_grant_stored_under_a_different_vault_key() {
         let mut entries = HashMap::new();
         entries.insert(
@@ -211,7 +212,7 @@ mod tests {
         assert!(validate_entries(&entries).is_err());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn accepts_an_empty_pairing_state() {
         let entries = HashMap::new();
         assert!(validate_entries(&entries).is_ok());

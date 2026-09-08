@@ -26,8 +26,9 @@ pub fn vault_content_hash(content: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn vault_content_hash_is_stable_and_content_sensitive() {
         let first = vault_content_hash("vault: one");
         assert_eq!(first, vault_content_hash("vault: one"));

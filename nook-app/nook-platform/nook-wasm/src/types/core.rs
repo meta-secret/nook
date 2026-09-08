@@ -321,8 +321,9 @@ impl NookProviderReplicationCapability {
 mod tests {
     use super::*;
     use nook_core::{DeviceMode, ReplicationType};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn revision_and_store_scope_wrappers_project_presence_and_values() {
         let unknown = NookProviderSyncRevision::untracked();
         assert_eq!(unknown.state(), NookProviderSyncRevisionState::Untracked);
@@ -352,7 +353,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn vault_architecture_wrappers_project_simple_and_sentinel_policy() {
         let simple = NookVaultArchitecture::simple(DeviceMode::Standard, ReplicationType::Personal)
             .expect("valid simple architecture");

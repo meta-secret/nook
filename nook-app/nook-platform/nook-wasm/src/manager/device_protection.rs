@@ -59,8 +59,9 @@ pub(in crate::manager) struct PendingExtensionIdentityHandoff {
 mod tests {
     use super::*;
     use nook_core::{AppKey, SigningIdentity};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn retry_reset_preserves_the_staged_handoff_signer() -> Result<(), NookError> {
         let staged_store_id = nook_core::StoreId::generate()?;
         let authorizer = AppKey::generate()?;
@@ -86,7 +87,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn lock_clears_session_keys_so_access_can_project_a_locked_identity() -> Result<(), NookError> {
         let identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
@@ -100,7 +101,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn failed_handoff_clears_the_adopted_public_app_id() -> Result<(), NookError> {
         let identity = DeviceIdentity::generate()?;
         let mut manager = NookVaultManager::new();
@@ -114,7 +115,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn paired_vault_handoff_after_lock_adopts_the_extension_without_a_local_app_key()
     -> Result<(), NookError> {
         let context = NookExtensionIdentityHandoffContext {
@@ -132,7 +133,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn handoff_enrollment_variants_preserve_authorization_context() -> Result<(), NookError> {
         let vault_creation = NookExtensionIdentityHandoffContext {
             value: ExtensionIdentityHandoffContextValue::VaultCreation,
@@ -180,7 +181,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn passkey_device_modes_are_mapped_without_numeric_fallbacks() {
         assert_eq!(
             passkey_mode_from_device_mode(DeviceMode::Standard),

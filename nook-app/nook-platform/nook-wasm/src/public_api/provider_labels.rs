@@ -83,8 +83,9 @@ pub fn staged_unconfigured_oauth_provider_label() -> Result<String, wasm_bindgen
 mod tests {
     use super::*;
     use nook_core::OauthFilePreset;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn provider_label_exports_cover_defaults_and_details() {
         assert_eq!(default_github_repo(), "nook");
         assert_eq!(default_drive_backup_name(), "nook-events");
@@ -167,7 +168,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn staged_provider_labels_use_their_provider_specific_defaults() {
         assert_eq!(
             staged_local_provider_label(StorageProviderType::Local).unwrap(),

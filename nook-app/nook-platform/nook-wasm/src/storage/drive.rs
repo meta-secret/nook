@@ -68,7 +68,7 @@ mod tests {
     use super::*;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn headers_trim_access_tokens_and_keep_the_product_user_agent() {
         assert_eq!(
             drive_headers("  token-123  "),
@@ -79,7 +79,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn errors_preserve_status_and_optional_body_without_leaking_empty_delimiters() {
         assert!(matches!(
             drive_error(StatusCode::BAD_REQUEST, "bad query"),
@@ -93,7 +93,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn about_response_accepts_optional_user_payloads() -> anyhow::Result<()> {
         let with_user: DriveAboutResponse =
             serde_json::from_str(r#"{"user":{"emailAddress":"person@example.test"}}"#)?;

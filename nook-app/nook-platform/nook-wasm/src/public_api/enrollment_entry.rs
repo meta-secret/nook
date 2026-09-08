@@ -190,7 +190,7 @@ mod tests {
         assert!(sentinel_genesis_participant_fingerprint("{}").is_err());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn enrollment_payload_round_trip_preserves_label_and_metadata() -> Result<(), JsError> {
         let input = NookEnrollmentIssueInput::named(
             NookEnrollmentProvider::local(),

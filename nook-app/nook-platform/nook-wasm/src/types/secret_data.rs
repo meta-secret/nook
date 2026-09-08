@@ -389,8 +389,9 @@ mod wasm_tests {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn secret_form_builders_preserve_each_typed_variant() {
         assert!(matches!(
             NookSecretFormFields::login("url".into(), "user".into(), "pass".into(), "notes".into())
@@ -438,7 +439,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn secret_page_import_and_totp_wrappers_project_values() {
         let mut page = NookSecretPage::from_core(nook_core::SecretPage {
             records: Vec::new(),

@@ -632,7 +632,7 @@ mod wasm_tests {
 #[cfg(all(test, target_arch = "wasm32", feature = "browser-wasm-tests"))]
 mod projection_tests {
     use super::*;
-    use nook_core::{DeviceIdentity, LoginSecret, SecretType, SecretValue};
+    use nook_core::{AuthenticatorSecret, DeviceIdentity, LoginSecret, SecretType, SecretValue};
     use wasm_bindgen_test::*;
 
     wasm_bindgen_test_configure!(run_in_browser);
@@ -752,6 +752,57 @@ mod projection_tests {
                 "READY".to_owned(),
             ]
         );
+        js(manager.delete_local_browser_data().await)?;
+        Ok(())
+    }
+
+    #[wasm_bindgen_test]
+    async fn authenticator_projection_search_and_totp_paths_round_trip() -> anyhow::Result<()> {
+        let mut manager = NookVaultManager::new();
+        js(manager.delete_local_browser_data().await)?;
+        let identity = DeviceIdentity::generate()?;
+        manager.device.identity_private_key = identity.secret_string().into_inner();
+        manager.initialize_genesis_vault(&identity)?;
+        manager.vault.store_id = nook_core::StoreId::generate()?.to_string();
+        manager.bootstrap_event_log_genesis().await?;
+        manager.drain_status_log();
+
+        let secret_id = js(manager.generate_secret_id())?;
+        let authenticator = AuthenticatorSecret::from_otpauth_uri(
+            "otpauth://totp/Nook:alice@example.com?secret=JBSWY3DPEHPK3PXP&issuer=Nook",
+        )?;
+        let data = SecretValue::Authenticator(authenticator)
+            .to_yaml()?
+            .into_inner();
+        let records = js(manager
+            .add_secret(secret_id.clone(), SecretType::Authenticator, data)
+            .await)?;
+        assert!(records.iter().any(|record| record.id() == secret_id));
+
+        let code = js(manager.current_authenticator_code(&secret_id, 1_750_000_000))?;
+        assert_eq!(code.code().len(), 6);
+        assert_eq!(code.period(), 30);
+        assert!(code.seconds_remaining() <= code.period());
+        assert!(code.expires_at_unix_seconds() > 1_750_000_000.0);
+
+        let mut prepared = js(manager
+            .query_prepared_secret_page_js(
+                "alice@example.com",
+                NookSecretTypeFilter::Authenticator,
+                0,
+                1,
+            )
+            .await)?;
+        assert_eq!(prepared.total(), 1);
+        assert_eq!(prepared.offset(), 0);
+        assert_eq!(prepared.limit(), 1);
+        assert_eq!(prepared.take_items().len(), 1);
+
+        let mut filtered =
+            js(manager.query_secret_page_js("missing", NookSecretTypeFilter::All, 0, 10))?;
+        assert_eq!(filtered.total(), 0);
+        assert!(filtered.take_items().is_empty());
+
         js(manager.delete_local_browser_data().await)?;
         Ok(())
     }

@@ -140,6 +140,7 @@ mod tests {
         SentinelGenesisResponder, SentinelGenesisShareDelivery, SigningIdentity,
         StartSentinelGenesisArgs, StoredSecretRecord,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     pub(crate) fn delivery_fixture() -> anyhow::Result<(
         SentinelGenesisRequest,
@@ -184,7 +185,7 @@ mod tests {
         Ok((request, delivery, record))
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn installation_projects_delivery_store_policy_and_share() -> anyhow::Result<()> {
         let (_, delivery, record) = delivery_fixture()?;
         let mut manager = NookVaultManager::new();

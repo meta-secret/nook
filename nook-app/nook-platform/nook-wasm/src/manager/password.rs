@@ -312,7 +312,7 @@ mod metadata_tests {
     use std::slice;
     use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn password_listing_and_verification_reject_unknown_or_wrong_credentials() -> anyhow::Result<()>
     {
         let keys = nook_core::VaultKeys::generate()?;

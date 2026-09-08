@@ -214,8 +214,9 @@ fn observed_browser(user_agent: &str) -> nook_core::PasskeyObservedBrowser {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn decodes_backup_flags_without_claiming_provider_identity() {
         let mut data = vec![0; 53];
         data[32] = 0x08;
@@ -226,7 +227,7 @@ mod tests {
         assert_eq!(backup_state(&data), PasskeyBackupState::NotEligible);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn formats_only_nonzero_attested_aaguid() {
         let mut data = vec![0; 53];
         data[32] = 0x40;
@@ -238,7 +239,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_ios_browser_tokens_before_safari_fallback() {
         assert_eq!(
             observed_browser("Mozilla/5.0 FxiOS/140.0 Mobile/15E148 Safari/605.1.15"),
@@ -250,7 +251,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_edge_on_android_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser(
@@ -260,7 +261,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn distinguishes_touch_capable_ipad_desktop_mode_from_macos() {
         let desktop_safari =
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15) AppleWebKit/605.1.15 Safari/605.1.15";
@@ -274,7 +275,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_opera_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser("Mozilla/5.0 Chrome/151.0.0.0 Safari/537.36 OPR/117.0.0.0"),
@@ -282,13 +283,91 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn recognizes_samsung_internet_before_the_generic_chrome_token() {
         assert_eq!(
             observed_browser(
                 "Mozilla/5.0 (Linux; Android 15) Chrome/151.0 Mobile Safari/537.36 SamsungBrowser/29.0"
             ),
             PasskeyObservedBrowser::Other
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn transport_projection_deduplicates_sorts_and_ignores_unknown_values() {
+        let values = Array::new();
+        for value in ["usb", "ble", "usb", "internal", "nfc", "hybrid", "unknown"] {
+            values.push(&value.into());
+        }
+        values.push(&42.into());
+        assert_eq!(
+            transports(&values),
+            vec![
+                PasskeyTransport::Ble,
+                PasskeyTransport::Hybrid,
+                PasskeyTransport::Internal,
+                PasskeyTransport::Nfc,
+                PasskeyTransport::Usb,
+            ]
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn authenticator_data_and_aaguid_fail_closed_for_short_or_unattested_data() {
+        assert_eq!(authenticator_data(&ArrayBuffer::new(0)), None);
+        let buffer = ArrayBuffer::new(2);
+        Uint8Array::new(&buffer).copy_from(&[1, 2]);
+        assert_eq!(authenticator_data(&buffer), Some(vec![1, 2]));
+
+        assert_eq!(backup_state(&[]), PasskeyBackupState::Unknown);
+        assert_eq!(aaguid(&[0; 10]), None);
+        let mut not_attested = vec![0; 53];
+        not_attested[32] = 0x08;
+        assert_eq!(aaguid(&not_attested), None);
+    }
+
+    #[wasm_bindgen_test]
+    fn browser_and_platform_projection_covers_all_supported_tokens() {
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Safari/605.1.15"),
+            PasskeyObservedBrowser::Safari
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Firefox/140.0"),
+            PasskeyObservedBrowser::Firefox
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Chrome/140.0"),
+            PasskeyObservedBrowser::Chrome
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 Edg/140.0"),
+            PasskeyObservedBrowser::Edge
+        );
+        assert_eq!(
+            observed_browser("Mozilla/5.0 unknown"),
+            PasskeyObservedBrowser::Other
+        );
+
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (Linux; Android 15)", 0),
+            PasskeyObservedPlatform::Android
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (iPhone; CPU iPhone OS 18_0)", 0),
+            PasskeyObservedPlatform::AppleMobile
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (Windows NT 10.0; Win64; x64)", 0),
+            PasskeyObservedPlatform::Windows
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (X11; Linux x86_64)", 0),
+            PasskeyObservedPlatform::Linux
+        );
+        assert_eq!(
+            observed_platform("Mozilla/5.0 (X11; Plan9)", 0),
+            PasskeyObservedPlatform::Other
         );
     }
 }

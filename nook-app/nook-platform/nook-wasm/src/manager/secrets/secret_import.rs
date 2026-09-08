@@ -571,6 +571,7 @@ mod import_tests {
     use nook_core::{
         SecretFingerprint, SecureNoteSecret, StoredRecordPayload, StoredSecretRecord, VaultCrypto,
     };
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     struct ImportFixture {
         key: SymmetricKey,
@@ -624,7 +625,11 @@ mod import_tests {
         }
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn exact_existing_duplicate_prepares_no_operations() -> anyhow::Result<()> {
         let fixture = ImportFixture::new()?;
         let prepared = fixture.prepare("same note\n\n## LastPass\n- group: Personal")?;
@@ -633,7 +638,11 @@ mod import_tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn metadata_enrichment_prepares_an_encrypted_replacement() -> anyhow::Result<()> {
         let fixture = ImportFixture::new()?;
         let prepared = fixture.prepare("same note\n\n## Proton Pass\n- vault: Personal")?;
@@ -658,7 +667,11 @@ mod import_tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn malformed_existing_record_rejects_preparation() -> anyhow::Result<()> {
         let mut fixture = ImportFixture::new()?;
         fixture.record.secret_type = None;
@@ -677,7 +690,11 @@ mod import_tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn same_batch_provider_notes_are_coalesced_without_losing_metadata() -> anyhow::Result<()> {
         let items = vec![
             SecretValue::SecureNote(nook_core::SecureNoteSecret {
@@ -706,7 +723,11 @@ mod import_tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn import_sources_keep_status_actions_and_labels_aligned() {
         let cases = [
             (

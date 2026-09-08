@@ -161,6 +161,7 @@ mod tests {
     use super::*;
     use crate::manager::device_protection::PendingExtensionIdentityHandoff;
     use nook_core::{AppKey, SigningIdentity};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
     fn staged_handoff(
         enrollment: PendingExtensionIdentityEnrollment,
@@ -176,7 +177,7 @@ mod tests {
         })
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn handoff_state_helpers_cover_each_enrollment_shape() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         assert!(!manager.defers_identity_reconciliation_until_handoff());
@@ -219,7 +220,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn adopts_transactional_handoff_keys_into_live_session() -> Result<(), NookError> {
         let mut manager = NookVaultManager::new();
         manager.vault.secrets_key = "stale-secrets".to_owned();

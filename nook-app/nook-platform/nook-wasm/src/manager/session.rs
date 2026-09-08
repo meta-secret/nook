@@ -354,8 +354,9 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn vault_crypto_state_distinguishes_locked_and_unlocked_sessions() -> Result<(), NookError> {
         let locked = VaultCryptoState::Locked;
         assert!(!locked.is_unlocked());
@@ -372,13 +373,13 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn ceremony_state_returns_active_sessions() {
         let active = CeremonyState::Active(7_u8);
         assert_eq!(active.get("unused").expect("active ceremony"), &7);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn search_catalog_state_reports_readiness_and_mutability() -> Result<(), NookError> {
         let unavailable = SearchCatalogState::Unavailable;
         assert!(!unavailable.is_ready());
@@ -395,7 +396,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn vault_session_reset_clears_sensitive_and_derived_state() {
         let mut state = VaultSessionState::default();
         state.secrets_key = "secrets".to_owned();
@@ -438,7 +439,7 @@ mod tests {
         assert_eq!(state.search_catalog_pending_bucket_mask, 0);
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn session_helpers_trim_public_ids_and_reset_outbox_state() {
         let mut device = DeviceSessionState {
             id: "  app-id  ".to_owned(),
@@ -461,7 +462,7 @@ mod tests {
         assert!(outbox.repo_arg.is_empty());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn status_channel_round_trips_messages() {
         let channel = StatusChannel::new();
         channel
@@ -471,7 +472,7 @@ mod tests {
         assert_eq!(channel.rx.recv().expect("message exists"), "ready");
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn event_log_reset_zeroizes_and_disables_state() {
         let mut state = EventLogSessionState {
             enabled: true,
@@ -486,7 +487,7 @@ mod tests {
         assert!(state.heads.is_empty());
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn sync_issue_result_exposes_clear_state() {
         let result = NookEventLogSyncIssueResult(EventLogSyncIssueState::Clear);
         assert_eq!(result.state(), NookEventLogSyncIssueState::Clear);

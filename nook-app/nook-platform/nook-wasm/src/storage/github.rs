@@ -414,7 +414,7 @@ mod tests {
         assert!(with_query.starts_with("https://api.github.com/repos/example?ref=main&_="));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn request_headers_trim_tokens_and_pin_the_github_api_version() {
         assert_eq!(
             github_get_headers("  pat  "),
@@ -427,7 +427,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn base64_decode_reports_success_and_serialization_failures() {
         assert_eq!(base64_decode("bm9vaw==").unwrap(), b"nook");
         let error = base64_decode("not base64!").expect_err("invalid base64 must fail closed");
@@ -436,7 +436,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_response_shapes_decode_expected_file_and_write_fields() -> anyhow::Result<()> {
         let file: GitHubFileResponse = serde_json::from_str(r#"{"content":"bm9vaw=="}"#)?;
         assert_eq!(file.content, "bm9vaw==");
@@ -447,7 +447,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_directory_entries_and_put_body_preserve_wire_shape() -> anyhow::Result<()> {
         let entries: Vec<GitHubDirEntry> = serde_json::from_str(
             r#"[{"name":"vault.yaml","type":"file"},{"name":"events","type":"dir"}]"#,
@@ -475,7 +475,7 @@ mod tests {
         Ok(())
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_username_response_covers_auth_statuses_and_payloads() {
         let unauthorized = github_username_response(StatusCode::UNAUTHORIZED, "")
             .expect_err("401 must be reported as a GitHub error");
@@ -503,7 +503,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_repo_check_result_distinguishes_existing_missing_and_failure() {
         assert!(github_repo_check_result("owner/repo", StatusCode::OK).unwrap());
         assert!(!github_repo_check_result("owner/repo", StatusCode::NOT_FOUND).unwrap());
@@ -515,7 +515,7 @@ mod tests {
         ));
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_directory_listing_covers_missing_errors_and_file_matching() {
         assert!(
             github_directory_listing(StatusCode::NOT_FOUND, "", "owner/repo", "vault.yaml")
@@ -558,7 +558,7 @@ mod tests {
         );
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_file_response_covers_missing_protocol_decode_and_utf8_errors() {
         assert!(
             github_file_response(StatusCode::NOT_FOUND, "", "owner/repo", "vault.yaml")
@@ -606,7 +606,7 @@ mod tests {
         assert_eq!(file.content, "nook");
     }
 
-    #[test]
+    #[wasm_bindgen_test]
     fn github_put_response_covers_status_and_sha_projection() {
         let missing = github_put_response(StatusCode::NOT_FOUND, "", "owner/repo", "vault.yaml")
             .expect_err("missing write target must fail closed");

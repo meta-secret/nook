@@ -73,8 +73,9 @@ impl NookVaultManager {
 #[cfg(test)]
 mod tests {
     use crate::manager::session::DeviceSessionState;
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn locked_session_keeps_its_public_app_id() {
         let device = DeviceSessionState {
             id: "app_companion_session".to_owned(),

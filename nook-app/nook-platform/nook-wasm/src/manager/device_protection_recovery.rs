@@ -104,8 +104,9 @@ mod tests {
     use super::super::{PendingExtensionIdentityEnrollment, PendingExtensionIdentityHandoff};
     use super::*;
     use nook_core::{SigningIdentity, StorageMode};
+    use wasm_bindgen_test::wasm_bindgen_test;
 
-    #[test]
+    #[wasm_bindgen_test]
     fn handoff_projection_and_quiesce_clear_sensitive_session_state() -> Result<(), NookError> {
         let (signing, signing_seed) = SigningIdentity::generate()?;
         let mut manager = NookVaultManager::new();

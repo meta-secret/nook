@@ -202,7 +202,13 @@ impl TransactionEvents<'_> {
 #[cfg(test)]
 mod tests {
     use super::PersistedEventIds;
-    #[test]
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    #[wasm_bindgen_test]
+    #[expect(
+        unowned_function,
+        reason = "framework boundary: wasm-bindgen-test callback"
+    )]
     fn remote_contraction_identifies_orphan_rows_for_deletion() {
         let persisted = vec!["accepted".to_owned(), "quarantined".to_owned()];
         let accepted = vec!["accepted".to_owned()];
