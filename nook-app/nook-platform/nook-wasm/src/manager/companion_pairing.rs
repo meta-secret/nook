@@ -8,7 +8,11 @@ use nook_core::{AuthProvidersSnapshotData, SigningIdentity, VaultApplication, Va
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
 mod activation;
-pub use activation::NookPreparedCompanionPairingActivation;
+pub use activation::{
+    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
+    NookCompanionPairingCandidateOutcomeState, NookPreparedCompanionPairingActivation,
+    NookStoredCompanionPairingActivationCandidate,
+};
 
 #[wasm_bindgen]
 pub struct NookCompanionPairingExtensionEndpoint {
@@ -119,7 +123,7 @@ impl NookCompanionPairingApprovalAuthority {
         Ok(NookPrevalidatedCompanionPairingApproval {
             binding: approval.clone(),
             _approval: authorized.admit(),
-            _providers: providers,
+            providers,
         })
     }
 }
@@ -133,7 +137,7 @@ fn failure_js_error(failure: CompanionPairingFailure) -> JsError {
 pub struct NookPrevalidatedCompanionPairingApproval {
     binding: CompanionPairingApproval,
     _approval: AdmittedCompanionPairingApproval,
-    _providers: AuthProvidersSnapshotData,
+    providers: AuthProvidersSnapshotData,
 }
 
 #[cfg(test)]
@@ -308,11 +312,11 @@ mod tests {
                 )
                 .map_err(|error| anyhow::anyhow!("unexpected rejection: {error:?}"))?;
             assert_eq!(
-                admitted._providers.active_vault_store_id.as_deref(),
+                admitted.providers.active_vault_store_id.as_deref(),
                 Some("store-1")
             );
             assert_eq!(
-                admitted._providers.providers.len(),
+                admitted.providers.providers.len(),
                 usize::from(with_provider)
             );
         }

@@ -31,9 +31,13 @@ import {
   companion_pairing_provider_manifest_digest,
   configure_vault_application,
   NookCompanionExtensionEndpoint,
+  NookCompanionPairingCandidateFailure,
+  type NookCompanionPairingCandidateOutcome,
+  NookCompanionPairingCandidateOutcomeState,
   NookCompanionPairingExtensionEndpoint,
   NookExternalEventLogRecords,
   NookPreparedCompanionPairingActivation,
+  NookStoredCompanionPairingActivationCandidate,
   NookVaultManager,
   NookPrevalidatedCompanionPairingApproval,
   seal_auth_providers_for_device_public_key,
@@ -59,6 +63,186 @@ const previousIndexedDBRuntime = {
   IDBTransaction: globalThis.IDBTransaction,
   IDBVersionChangeEvent: globalThis.IDBVersionChangeEvent,
   indexedDB: globalThis.indexedDB,
+}
+
+type CompanionPairingApprovalFixtureRequest = {
+  readonly requestId: string
+  readonly substituteProvider: boolean
+}
+
+class CompanionPairingApprovalFixture {
+  static assertManifestPrevalidation(): void {
+    for (const [requestId, substituteProvider] of [
+      ['pairing-success', false],
+      ['pairing-substitution', true],
+    ] as const) {
+      const request: CompanionPairingApprovalFixtureRequest = {
+        requestId,
+        substituteProvider,
+      }
+      if (substituteProvider) {
+        expect(() => this.attempt(request)).toThrow('ProviderManifestMismatch')
+      } else {
+        const admission = this.attempt(request)
+        expect(admission).toBeInstanceOf(
+          NookPrevalidatedCompanionPairingApproval,
+        )
+        admission.free()
+      }
+    }
+  }
+
+  static attempt(request: CompanionPairingApprovalFixtureRequest) {
+    const { requestId, substituteProvider } = request
+    const pairingRequest = {
+      requestId,
+      nonce: `nonce-${requestId}`,
+      issuedAt: 100,
+      expiresAt: Number.MAX_SAFE_INTEGER,
+      vaultType: 'simple',
+      installation: {
+        extensionRuntimeId: 'composition-runtime',
+        appId: extension.device_id,
+        encryptionPublicKey: extension.device_public_key,
+        signingPublicKey: unlockedAppKey.appKey.signingPublicKey,
+        installationLabel: 'Composition Extension',
+      },
+      scopes: ['vault-access', 'sync-provider-credentials'],
+    } satisfies CompanionPairingRequest
+    const extensionProtocol = new NookCompanionPairingExtensionEndpoint(
+      pairingRequest,
+    )
+    const authority = extensionProtocol.take_authority()
+    extensionProtocol.free()
+    const websiteProtocol = new NookCompanionPairingWebsiteProtocol({
+      request: structuredClone(pairingRequest),
+      observedAt: 120,
+    })
+    const providers = seal_auth_providers_for_device_public_key(
+      extension.device_public_key,
+      {
+        providers: [
+          {
+            id: `github-${requestId}`,
+            type: 'github',
+            label: 'Composition GitHub',
+            githubPat: { state: 'token', value: 'github_pat_pairing_secret' },
+            githubRepo: { state: 'defaultRepository' },
+            oauthFile: { state: 'notApplicable' },
+            localFolder: { state: 'notApplicable' },
+            storeId: { state: 'storeId', value: extension.vaultStoreId },
+            syncCheckpoint: { state: 'neverSynced' },
+            createdAt: '2026-09-07T00:00:00Z',
+          },
+        ],
+        activeVaultStoreId: {
+          state: 'storeId',
+          value: extension.vaultStoreId,
+        },
+      },
+    )
+    const authorization = {
+      request: structuredClone(pairingRequest),
+      observedAt: 130,
+      vaultStoreId: extension.vaultStoreId,
+      vaultName: extension.vaultName,
+      approvedAt: '2026-09-07T00:00:00Z',
+    } satisfies CompanionPairingWebsiteAuthorization
+    const approval = websiteProtocol.authorize(
+      authorization,
+      companion_pairing_provider_manifest_digest(providers),
+    )
+    if (approval.kind !== 'approved') {
+      throw new Error('expected generated website pairing approval')
+    }
+    if (substituteProvider) {
+      const provider = providers.providers[0]
+      if (!provider) throw new Error('expected pairing provider')
+      provider.label = 'Substituted Provider'
+    }
+    return authority.prevalidate(
+      extension,
+      { approval: approval.approval, observedAt: 150 },
+      providers,
+    )
+  }
+}
+
+class PairingActivationScenario {
+  private static storedCandidate(
+    outcome: NookCompanionPairingCandidateOutcome,
+  ): NookStoredCompanionPairingActivationCandidate {
+    const state = outcome.state
+    switch (state) {
+      case NookCompanionPairingCandidateOutcomeState.Stored:
+        return outcome.into_stored()
+      case NookCompanionPairingCandidateOutcomeState.Rejected:
+        throw new Error(`candidate storage rejected: ${outcome.into_failure()}`)
+      default:
+        throw new Error(
+          `unreachable candidate outcome: ${state satisfies never}`,
+        )
+    }
+  }
+
+  private static candidateFailure(
+    outcome: NookCompanionPairingCandidateOutcome,
+  ): NookCompanionPairingCandidateFailure {
+    const state = outcome.state
+    switch (state) {
+      case NookCompanionPairingCandidateOutcomeState.Stored:
+        outcome.into_stored().free()
+        throw new Error('candidate storage unexpectedly succeeded')
+      case NookCompanionPairingCandidateOutcomeState.Rejected:
+        return outcome.into_failure()
+      default:
+        throw new Error(
+          `unreachable candidate outcome: ${state satisfies never}`,
+        )
+    }
+  }
+
+  static async run(): Promise<void> {
+    const exported = await extension.export_event_log_records_js()
+    const eventRecords = exported.to_array()
+    exported.free()
+
+    const approvalRequest: CompanionPairingApprovalFixtureRequest = {
+      requestId: 'pairing-activation',
+      substituteProvider: false,
+    }
+    const approval = CompanionPairingApprovalFixture.attempt(approvalRequest)
+    const records = NookExternalEventLogRecords.from_array(eventRecords)
+    const prepared = approval.with_event_log(records)
+    expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
+    const stored = this.storedCandidate(await prepared.commit(extension))
+    expect(stored).toBeInstanceOf(NookStoredCompanionPairingActivationCandidate)
+    stored.free()
+    const replayApprovalRequest: CompanionPairingApprovalFixtureRequest = {
+      requestId: 'pairing-activation-replay',
+      substituteProvider: false,
+    }
+    const replayApproval = CompanionPairingApprovalFixture.attempt(
+      replayApprovalRequest,
+    )
+    const replayRecords = NookExternalEventLogRecords.from_array(eventRecords)
+    const replay = await replayApproval
+      .with_event_log(replayRecords)
+      .commit(extension)
+    expect(this.candidateFailure(replay)).toBe(
+      NookCompanionPairingCandidateFailure.Replay,
+    )
+
+    const invalidApprovalRequest: CompanionPairingApprovalFixtureRequest = {
+      requestId: 'pairing-activation-empty',
+      substituteProvider: false,
+    }
+    const invalidApproval = CompanionPairingApprovalFixture.attempt(
+      invalidApprovalRequest,
+    )
+    const invalidRecords = NookExternalEventLogRecords.from_array([])
+    expect(() => invalidApproval.with_event_log(invalidRecords)).toThrow()
+  }
 }
 const compositionIndexedDBRuntime = {
   IDBCursor,
@@ -120,78 +304,6 @@ function beginHandoff(requestId: string) {
   return { authorization, endpoint, request, website }
 }
 
-function pairingAttempt(requestId: string, substituteProvider: boolean) {
-  const request = {
-    requestId,
-    nonce: `nonce-${requestId}`,
-    issuedAt: 100,
-    expiresAt: 200,
-    vaultType: 'simple',
-    installation: {
-      extensionRuntimeId: 'composition-runtime',
-      appId: extension.device_id,
-      encryptionPublicKey: extension.device_public_key,
-      signingPublicKey: unlockedAppKey.appKey.signingPublicKey,
-      installationLabel: 'Composition Extension',
-    },
-    scopes: ['vault-access', 'sync-provider-credentials'],
-  } satisfies CompanionPairingRequest
-  const extensionProtocol = new NookCompanionPairingExtensionEndpoint(request)
-  const authority = extensionProtocol.take_authority()
-  extensionProtocol.free()
-  const websiteProtocol = new NookCompanionPairingWebsiteProtocol({
-    request: structuredClone(request),
-    observedAt: 120,
-  })
-  const providers = seal_auth_providers_for_device_public_key(
-    extension.device_public_key,
-    {
-      providers: [
-        {
-          id: `github-${requestId}`,
-          type: 'github',
-          label: 'Composition GitHub',
-          githubPat: { state: 'token', value: 'github_pat_pairing_secret' },
-          githubRepo: { state: 'defaultRepository' },
-          oauthFile: { state: 'notApplicable' },
-          localFolder: { state: 'notApplicable' },
-          storeId: { state: 'storeId', value: extension.vaultStoreId },
-          syncCheckpoint: { state: 'neverSynced' },
-          createdAt: '2026-09-07T00:00:00Z',
-        },
-      ],
-      activeVaultStoreId: {
-        state: 'storeId',
-        value: extension.vaultStoreId,
-      },
-    },
-  )
-  const authorization = {
-    request: structuredClone(request),
-    observedAt: 130,
-    vaultStoreId: extension.vaultStoreId,
-    vaultName: extension.vaultName,
-    approvedAt: '2026-09-07T00:00:00Z',
-  } satisfies CompanionPairingWebsiteAuthorization
-  const approval = websiteProtocol.authorize(
-    authorization,
-    companion_pairing_provider_manifest_digest(providers),
-  )
-  if (approval.kind !== 'approved') {
-    throw new Error('expected generated website pairing approval')
-  }
-  if (substituteProvider) {
-    const provider = providers.providers[0]
-    if (!provider) throw new Error('expected pairing provider')
-    provider.label = 'Substituted Provider'
-  }
-  return authority.prevalidate(
-    extension,
-    { approval: approval.approval, observedAt: 150 },
-    providers,
-  )
-}
-
 beforeAll(async () => {
   Object.assign(globalThis, compositionIndexedDBRuntime)
   const nookWasmBytes = await Bun.file(
@@ -248,40 +360,11 @@ afterAll(() => {
 
 describe('generated companion protocol composition', () => {
   test('prevalidates sealed providers and rejects manifest substitution', () => {
-    for (const [requestId, substituteProvider] of [
-      ['pairing-success', false],
-      ['pairing-substitution', true],
-    ] as const) {
-      if (substituteProvider) {
-        expect(() => pairingAttempt(requestId, true)).toThrow(
-          'ProviderManifestMismatch',
-        )
-      } else {
-        const admission = pairingAttempt(requestId, false)
-        expect(admission).toBeInstanceOf(
-          NookPrevalidatedCompanionPairingApproval,
-        )
-        admission.free()
-      }
-    }
+    CompanionPairingApprovalFixture.assertManifestPrevalidation()
   })
 
-  test('prepares pairing activation through generated owned wrappers', async () => {
-    const exported = await extension.export_event_log_records_js()
-    const eventRecords = exported.to_array()
-    exported.free()
-
-    const approval = pairingAttempt('pairing-activation', false)
-    const records = NookExternalEventLogRecords.from_array(eventRecords)
-    const prepared = approval.with_event_log(records)
-    expect(prepared).toBeInstanceOf(NookPreparedCompanionPairingActivation)
-    prepared.free()
-
-    const invalidApproval = pairingAttempt('pairing-activation-empty', false)
-    const invalidRecords = NookExternalEventLogRecords.from_array([])
-    expect(() => invalidApproval.with_event_log(invalidRecords)).toThrow(
-      'pairing event authorization rejected',
-    )
+  test('stores pairing activation through generated owned wrappers', async () => {
+    await PairingActivationScenario.run()
   })
 
   test('completes discovery, atomic authorization and sealing, and website finish', async () => {

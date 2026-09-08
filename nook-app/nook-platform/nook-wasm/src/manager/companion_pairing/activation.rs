@@ -11,17 +11,25 @@ use nook_core::{
 use std::collections::BTreeSet;
 use wasm_bindgen::{JsError, prelude::wasm_bindgen};
 
+mod candidate;
+pub use candidate::{
+    NookCompanionPairingCandidateFailure, NookCompanionPairingCandidateOutcome,
+    NookCompanionPairingCandidateOutcomeState, NookStoredCompanionPairingActivationCandidate,
+};
+
 /// Opaque proof that pairing approval and event graph relationships were prepared.
 /// It performs no storage or activation effect and conveys no live vault authority.
 #[wasm_bindgen]
 pub struct NookPreparedCompanionPairingActivation {
-    _approval: NookPrevalidatedCompanionPairingApproval,
-    _records: NookExternalEventLogRecords,
-    _heads: Vec<EventId>,
-    _envelopes: AuthEnvelopes,
+    approval: NookPrevalidatedCompanionPairingApproval,
+    store_id: StoreId,
+    records: NookExternalEventLogRecords,
+    heads: Vec<EventId>,
+    envelopes: AuthEnvelopes,
 }
 
 struct PreparedEventGraph {
+    store_id: StoreId,
     heads: Vec<EventId>,
     envelopes: AuthEnvelopes,
 }
@@ -153,6 +161,7 @@ impl NookPrevalidatedCompanionPairingApproval {
             return Err(CompanionPairingPreparationFailure::RecipientAuthorizationMismatch);
         }
         Ok(PreparedEventGraph {
+            store_id,
             heads: graph.heads(),
             envelopes,
         })
@@ -164,10 +173,11 @@ impl NookPrevalidatedCompanionPairingApproval {
     ) -> Result<NookPreparedCompanionPairingActivation, CompanionPairingPreparationFailure> {
         let prepared = self.prepare_event_graph(&records)?;
         Ok(NookPreparedCompanionPairingActivation {
-            _approval: self,
-            _records: records,
-            _heads: prepared.heads,
-            _envelopes: prepared.envelopes,
+            approval: self,
+            store_id: prepared.store_id,
+            records,
+            heads: prepared.heads,
+            envelopes: prepared.envelopes,
         })
     }
 }
@@ -202,11 +212,11 @@ mod tests {
         VaultApplication, VaultKeys, VaultOperation, create_sentinel_share_records,
     };
 
-    struct ActivationFixture {
-        capability: NookPrevalidatedCompanionPairingApproval,
-        records: NookExternalEventLogRecords,
-        manager: NookVaultManager,
-        identity: DeviceIdentity,
+    pub(super) struct ActivationFixture {
+        pub(super) capability: NookPrevalidatedCompanionPairingApproval,
+        pub(super) records: NookExternalEventLogRecords,
+        pub(super) manager: NookVaultManager,
+        pub(super) identity: DeviceIdentity,
     }
 
     struct AccessRecordsRequest<'a> {
@@ -223,11 +233,11 @@ mod tests {
     }
 
     impl ActivationFixture {
-        fn epoch(value: &str) -> anyhow::Result<CompanionPairingEpochMilliseconds> {
+        pub(super) fn epoch(value: &str) -> anyhow::Result<CompanionPairingEpochMilliseconds> {
             Ok(serde_json::from_str(value)?)
         }
 
-        fn new() -> anyhow::Result<Self> {
+        pub(super) fn new() -> anyhow::Result<Self> {
             let identity = DeviceIdentity::generate()?;
             let (extension_signing, signing_seed) = SigningIdentity::generate()?;
             let mut manager = NookVaultManager::new();
@@ -422,7 +432,7 @@ mod tests {
             })
         }
 
-        fn prepare(
+        pub(super) fn prepare(
             self,
         ) -> Result<NookPreparedCompanionPairingActivation, CompanionPairingPreparationFailure>
         {
@@ -437,7 +447,7 @@ mod tests {
         assert_eq!(
             prepared
                 .map_err(|error| anyhow::anyhow!("{error:?}"))?
-                ._heads
+                .heads
                 .len(),
             1
         );
