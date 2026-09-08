@@ -7,7 +7,7 @@
 use crate::AuthenticatorSecret;
 use crate::CreditCardSecret;
 use crate::SecretId;
-use crate::bip39::Bip39Mnemonic;
+use crate::bip39::Bip39MnemonicInput;
 use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
@@ -430,7 +430,7 @@ impl SecretValue {
             SecretType::SeedPhrase => {
                 let secret: SeedPhraseSecret =
                     serde_yaml::from_str(yaml).map_err(SecretPayloadError::InvalidSeedPhrase)?;
-                Bip39Mnemonic::new(&secret.seed).validate()?;
+                Bip39MnemonicInput::new(&secret.seed).validate()?;
                 Ok(Self::SeedPhrase(secret))
             }
             SecretType::SecureNote => serde_yaml::from_str(yaml)

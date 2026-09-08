@@ -51,7 +51,7 @@ impl PlaintextSecretSession<'_> {
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
-        SecretPayloadYaml::validate(input.data_yaml)?;
+        let payload = SecretPayloadYaml::validate(input.data_yaml)?;
         if !db.list().iter().any(|record| record.id == old_id) {
             return Err(SessionError::SecretNotFound { id: old_id });
         }
@@ -59,13 +59,13 @@ impl PlaintextSecretSession<'_> {
             return Err(SessionError::SecretAlreadyExists { id: new_id });
         }
 
-        let typed_value = SecretValue::from_yaml_str(input.secret_type, input.data_yaml)?;
+        let typed_value = SecretValue::from_yaml(input.secret_type, &payload)?;
         db.remove_and_zeroize(&old_id);
         db.insert(new_id.clone(), typed_value);
 
         state.secrets.remove(&old_id);
 
-        let encrypted = crypto.encrypt_value(input.data_yaml)?;
+        let encrypted = crypto.encrypt_value(payload.as_str())?;
         state.secrets.insert(
             new_id,
             (
@@ -152,7 +152,7 @@ impl<'a> EncryptedSecretSession<'a> {
         if old_id == new_id {
             return Err(SessionError::ReplacementIdUnchanged);
         }
-        SecretPayloadYaml::validate(input.data_yaml)?;
+        let payload = SecretPayloadYaml::validate(input.data_yaml)?;
         if !state.secrets.contains_key(&old_id) {
             return Err(SessionError::SecretNotFound { id: old_id });
         }
@@ -160,9 +160,9 @@ impl<'a> EncryptedSecretSession<'a> {
             return Err(SessionError::SecretAlreadyExists { id: new_id });
         }
 
-        let mut typed_value = SecretValue::from_yaml_str(input.secret_type, input.data_yaml)?;
+        let mut typed_value = SecretValue::from_yaml(input.secret_type, &payload)?;
         typed_value.zeroize_plaintext();
-        let encrypted = crypto.encrypt_value(input.data_yaml)?;
+        let encrypted = crypto.encrypt_value(payload.as_str())?;
         Ok(PreparedEncryptedSecretReplacement {
             session: self,
             old_id,

@@ -1,6 +1,6 @@
 use super::wasm_bindgen;
 use nook_core::{
-    Bip39EnglishWordList, Bip39Mnemonic, Bip39MnemonicWordCount, Bip39Word,
+    Bip39EnglishWordList, Bip39MnemonicInput, Bip39MnemonicWordCount, Bip39Word,
     Bip39WordSequenceRequest, Bip39WordSuggestionRequest, Bip39Words,
 };
 
@@ -15,7 +15,7 @@ pub enum NookBip39MnemonicLength {
 #[wasm_bindgen]
 #[must_use]
 pub fn validate_bip39_mnemonic(mnemonic: &str) -> bool {
-    Bip39Mnemonic::new(mnemonic).validate().is_ok()
+    Bip39MnemonicInput::new(mnemonic).validate().is_ok()
 }
 
 #[wasm_bindgen]
@@ -66,12 +66,13 @@ pub fn is_bip39_word_sequence_valid(text: &str, expected_word_count: u32) -> boo
         text,
         expected_word_count: (expected_word_count as usize).into(),
     }
+    .validate()
     .is_valid()
 }
 
 #[wasm_bindgen]
 pub fn parse_bip39_words(text: &str) -> Vec<String> {
-    Bip39Mnemonic::new(text).parse_words()
+    Bip39MnemonicInput::new(text).parse_words()
 }
 
 #[wasm_bindgen]
@@ -84,7 +85,7 @@ pub fn join_bip39_words(words: Vec<String>) -> String {
 #[wasm_bindgen]
 #[must_use]
 pub fn infer_bip39_mnemonic_length(text: &str) -> NookBip39MnemonicLength {
-    match Bip39Mnemonic::new(text).infer_length() {
+    match Bip39MnemonicInput::new(text).infer_length() {
         Some(Bip39MnemonicWordCount::WORDS_12) => NookBip39MnemonicLength::Words12,
         Some(Bip39MnemonicWordCount::WORDS_24) => NookBip39MnemonicLength::Words24,
         Some(_) | None => NookBip39MnemonicLength::Unsupported,

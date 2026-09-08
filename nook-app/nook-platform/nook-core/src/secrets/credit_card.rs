@@ -20,12 +20,20 @@ struct CreditCardExpirationRequest<'a> {
     year: &'a str,
 }
 
+struct NormalizedCreditCardExpiration {
+    month: String,
+    year: String,
+}
+
 impl CreditCardExpirationRequest<'_> {
-    fn normalize(self) -> Result<(String, String), ValidationError> {
+    fn normalize(self) -> Result<NormalizedCreditCardExpiration, ValidationError> {
         let month_raw = self.month.trim();
         let year_raw = self.year.trim();
         if month_raw.is_empty() && year_raw.is_empty() {
-            return Ok((String::new(), String::new()));
+            return Ok(NormalizedCreditCardExpiration {
+                month: String::new(),
+                year: String::new(),
+            });
         }
         if month_raw.is_empty() || year_raw.is_empty() {
             return Err(ValidationError::CreditCardExpirationInvalid);
@@ -33,7 +41,10 @@ impl CreditCardExpirationRequest<'_> {
 
         let month = Self::parse_month(month_raw)?;
         let year = Self::parse_year(year_raw)?;
-        Ok((format!("{month:02}"), format!("{year:04}")))
+        Ok(NormalizedCreditCardExpiration {
+            month: format!("{month:02}"),
+            year: format!("{year:04}"),
+        })
     }
 
     fn parse_month(raw: &str) -> Result<u32, ValidationError> {
@@ -117,7 +128,7 @@ impl CreditCardSecret {
         }
 
         let number = Self::normalize_card_number(number)?;
-        let (expiration_month, expiration_year) = CreditCardExpirationRequest {
+        let expiration = CreditCardExpirationRequest {
             month: expiration_month,
             year: expiration_year,
         }
@@ -128,8 +139,8 @@ impl CreditCardSecret {
             title,
             cardholder_name: cardholder_name.trim().to_owned(),
             number,
-            expiration_month,
-            expiration_year,
+            expiration_month: expiration.month,
+            expiration_year: expiration.year,
             cvv,
             notes: notes.replace("\r\n", "\n"),
         })
