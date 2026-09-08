@@ -60,14 +60,9 @@ impl ProviderReplicationCapability {
         oauth_preset: ProviderOauthPreset,
     ) -> Self {
         match provider_type {
-            StorageProviderType::Local | StorageProviderType::LocalFolder => Self {
-                provider_type: provider_type.as_str().to_owned(),
-                oauth_preset: ProviderOauthPreset::NotApplicable,
-                supports_personal: true,
-                supports_shared: false,
-                shared_joiner_identity: ProviderJoinerIdentity::NotRequired,
-            },
-            StorageProviderType::Github => Self {
+            StorageProviderType::Local
+            | StorageProviderType::LocalFolder
+            | StorageProviderType::Github => Self {
                 provider_type: provider_type.as_str().to_owned(),
                 oauth_preset: ProviderOauthPreset::NotApplicable,
                 supports_personal: true,
