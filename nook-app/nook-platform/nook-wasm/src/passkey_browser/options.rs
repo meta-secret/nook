@@ -622,9 +622,10 @@ mod wasm_tests {
         let eval_by_credential = get(&prf, "evalByCredential")?;
         let keys = Reflect::own_keys(&eval_by_credential)
             .map_err(|_| JsError::new("failed to inspect serialized PRF entries"))?;
-        let source_key = keys
-            .get(0)
-            .ok_or_else(|| JsError::new("serialized PRF entry is missing"))?;
+        let source_key = keys.get(0);
+        if source_key.is_undefined() {
+            return Err(JsError::new("serialized PRF entry is missing"));
+        }
         let source = Reflect::get(&eval_by_credential, &source_key)
             .map_err(|_| JsError::new("failed to read serialized PRF entry"))?;
         Reflect::set(
