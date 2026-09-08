@@ -389,7 +389,7 @@ mod tests {
             SecretSearchCatalogEntry::new([1_u8; PAYLOAD_DIGEST_BYTES], item, &keys.secrets_key)?,
         );
 
-        let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket.into())? else {
+        let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {
             panic!("bucket is non-empty");
         };
         assert!(json.contains("visible-user"));
@@ -400,7 +400,7 @@ mod tests {
 
         let plaintext = crypto.decrypt_value(&ciphertext)?;
         let mut restored = SecretSearchCatalog::default();
-        restored.restore_bucket_json(bucket.into(), plaintext.as_str())?;
+        restored.restore_bucket_json(bucket, plaintext.as_str())?;
         assert_eq!(
             usize::from(
                 restored
@@ -523,12 +523,12 @@ mod tests {
         catalog.reconcile(&secrets, &crypto, &keys.secrets_key)?;
 
         let bucket = SecretSearchCatalog::bucket_for(&record.id);
-        let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket.into())? else {
+        let SearchCatalogBucketPayload::Json(json) = catalog.bucket_json(bucket)? else {
             panic!("catalog bucket exists");
         };
         let tampered_json = json.replace("trusted-user", "forged-user");
         let mut tampered = SecretSearchCatalog::default();
-        tampered.restore_bucket_json(bucket.into(), &tampered_json)?;
+        tampered.restore_bucket_json(bucket, &tampered_json)?;
         let outcome = tampered.reconcile(&secrets, &crypto, &keys.secrets_key)?;
         assert_eq!(usize::from(outcome.added), 0);
         assert_eq!(usize::from(outcome.updated), 1);
