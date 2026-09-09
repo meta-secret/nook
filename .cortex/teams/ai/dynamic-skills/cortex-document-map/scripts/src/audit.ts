@@ -18,8 +18,8 @@ export class CortexDocumentMapAudit {
 
   public execute(): CortexStructureFinding[] {
     const request = this.request;
-    const rawDocuments = request.documents.map(
-      CortexDocumentMapAudit.toDocumentSource,
+    const rawDocuments = request.documents.map((value) =>
+      this.toDocumentSource(value),
     );
     const syntaxFindings = CortexDocumentStructure.auditCortexMarkdownSyntax({
       documents: rawDocuments,
@@ -50,7 +50,7 @@ export class CortexDocumentMapAudit {
     return [...syntaxFindings, ...structureFindings];
   }
 
-  private static toDocumentSource(
+  private toDocumentSource(
     document: AuditCortexDocumentMapRequest['documents'][number],
   ): CortexDocumentSource {
     return {

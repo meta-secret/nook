@@ -31,7 +31,7 @@ export class CortexConsistencyContract {
     const findings: CortexContractFinding[] = [];
     const documents = new Map(
       args.documents.map((document) => [
-        CortexConsistencyContract.normalizePath(document.relativePath),
+        this.normalizePath(document.relativePath),
         document,
       ]),
     );
@@ -39,17 +39,15 @@ export class CortexConsistencyContract {
       contexts: args.registry.contexts,
       findings,
     };
-    const contexts = CortexConsistencyContract.uniqueContexts(contextArgs);
+    const contexts = this.uniqueContexts(contextArgs);
     const policyArgs: UniqueCortexPoliciesArgs = {
       policies: args.registry.policies,
       findings,
     };
-    const policies = CortexConsistencyContract.uniquePolicies(policyArgs);
+    const policies = this.uniquePolicies(policyArgs);
 
     for (const policy of policies.values()) {
-      const policyPath = CortexConsistencyContract.normalizePath(
-        policy.document,
-      );
+      const policyPath = this.normalizePath(policy.document);
       if (!documents.has(policyPath)) {
         findings.push({
           code: CortexContractFindingCode.MissingPolicyDocument,
@@ -57,8 +55,7 @@ export class CortexConsistencyContract {
           message: `Cortex policy references a missing document: ${policyPath}`,
         });
       }
-      const documentOwner =
-        CortexConsistencyContract.cortexDocumentOwner(policyPath);
+      const documentOwner = this.cortexDocumentOwner(policyPath);
       if (
         documentOwner.kind === CortexDocumentOwnerResolutionKind.Unrecognized
       ) {
@@ -74,7 +71,7 @@ export class CortexConsistencyContract {
         documents,
         findings,
       };
-      CortexConsistencyContract.validatePolicySafeguards(safeguardArgs);
+      this.validatePolicySafeguards(safeguardArgs);
     }
 
     for (const [authorityPath, context] of contexts) {
@@ -87,8 +84,7 @@ export class CortexConsistencyContract {
         });
         continue;
       }
-      const contextOwner =
-        CortexConsistencyContract.cortexDocumentOwner(authorityPath);
+      const contextOwner = this.cortexDocumentOwner(authorityPath);
       const contextArgs: ValidateContextArgs = {
         context,
         contextOwner,
@@ -96,12 +92,12 @@ export class CortexConsistencyContract {
         policies,
         findings,
       };
-      CortexConsistencyContract.validateContextImports(contextArgs);
-      CortexConsistencyContract.validatePolicyReachability(contextArgs);
+      this.validateContextImports(contextArgs);
+      this.validatePolicyReachability(contextArgs);
     }
 
     for (const runtime of args.registry.runtimes) {
-      CortexConsistencyContract.validateRuntimeContract({
+      this.validateRuntimeContract({
         runtime,
         documents,
         findings,
@@ -111,12 +107,10 @@ export class CortexConsistencyContract {
     return findings;
   }
 
-  private static validateRuntimeContract(
+  private validateRuntimeContract(
     request: ValidateRuntimeContractRequest,
   ): void {
-    const documentPath = CortexConsistencyContract.normalizePath(
-      request.runtime.document,
-    );
+    const documentPath = this.normalizePath(request.runtime.document);
     const document = request.documents.get(documentPath);
     if (!document) {
       request.findings.push({
@@ -174,7 +168,7 @@ export class CortexConsistencyContract {
     }
   }
 
-  private static uniqueContexts(
+  private uniqueContexts(
     args: UniqueCortexContextsArgs,
   ): ReadonlyMap<CortexContextAuthorityDocument, CortexContextContract> {
     const entries = new Map<
@@ -182,11 +176,8 @@ export class CortexConsistencyContract {
       CortexContextContract
     >();
     for (const context of args.contexts) {
-      const authorityPath = CortexConsistencyContract.normalizePath(
-        context.authorityDocument,
-      );
-      const authority =
-        CortexConsistencyContract.resolveContextAuthority(authorityPath);
+      const authorityPath = this.normalizePath(context.authorityDocument);
+      const authority = this.resolveContextAuthority(authorityPath);
       if (authority.kind === CortexDocumentOwnerResolutionKind.Unrecognized) {
         args.findings.push({
           code: CortexContractFindingCode.InvalidContextOwner,
@@ -208,14 +199,12 @@ export class CortexConsistencyContract {
     return entries;
   }
 
-  private static uniquePolicies(
+  private uniquePolicies(
     args: UniqueCortexPoliciesArgs,
   ): ReadonlyMap<string, CortexPolicyContract> {
     const entries = new Map<string, CortexPolicyContract>();
     for (const policy of args.policies) {
-      const policyPath = CortexConsistencyContract.normalizePath(
-        policy.document,
-      );
+      const policyPath = this.normalizePath(policy.document);
       if (entries.has(policyPath)) {
         args.findings.push({
           code: CortexContractFindingCode.DuplicatePolicy,
@@ -229,7 +218,7 @@ export class CortexConsistencyContract {
     return entries;
   }
 
-  private static cortexDocumentOwner(
+  private cortexDocumentOwner(
     documentPath: string,
   ): CortexDocumentOwnerResolution {
     if (documentPath === '.cortex/AGENTS.md') {
@@ -255,7 +244,7 @@ export class CortexConsistencyContract {
     return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
   }
 
-  private static resolveContextAuthority(
+  private resolveContextAuthority(
     authorityPath: string,
   ): CortexContextAuthorityResolution {
     for (const authority of Object.values(CortexContextAuthorityDocument)) {
@@ -269,13 +258,11 @@ export class CortexConsistencyContract {
     return { kind: CortexDocumentOwnerResolutionKind.Unrecognized };
   }
 
-  private static validatePolicySafeguards(
-    args: ValidatePolicySafeguardsArgs,
-  ): void {
+  private validatePolicySafeguards(args: ValidatePolicySafeguardsArgs): void {
     if (args.policy.kind !== CortexPolicyContractKind.PersistedRepresentation)
       return;
     const authority = args.policies.get(
-      CortexConsistencyContract.normalizePath(args.policy.schemaAuthority),
+      this.normalizePath(args.policy.schemaAuthority),
     );
     if (
       !authority ||
@@ -288,14 +275,14 @@ export class CortexConsistencyContract {
       });
     } else {
       const policyDocument = args.documents.get(
-        CortexConsistencyContract.normalizePath(args.policy.document),
+        this.normalizePath(args.policy.document),
       );
       if (policyDocument) {
         const referenceArgs: CortexDocumentReferenceArgs = {
           authority: policyDocument,
           targetPath: authority.document,
         };
-        if (!CortexConsistencyContract.referencesDocument(referenceArgs)) {
+        if (!this.referencesDocument(referenceArgs)) {
           args.findings.push({
             code: CortexContractFindingCode.MissingSchemaAuthorityReference,
             file: args.policy.document,
@@ -313,9 +300,9 @@ export class CortexConsistencyContract {
     }
   }
 
-  private static validateContextImports(args: ValidateContextArgs): void {
+  private validateContextImports(args: ValidateContextArgs): void {
     for (const importedPath of args.context.imports) {
-      const policyPath = CortexConsistencyContract.normalizePath(importedPath);
+      const policyPath = this.normalizePath(importedPath);
       const policy = args.policies.get(policyPath);
       if (!policy) {
         args.findings.push({
@@ -329,22 +316,20 @@ export class CortexConsistencyContract {
         authority: args.authority,
         targetPath: policy.document,
       };
-      if (!CortexConsistencyContract.referencesDocument(referenceArgs)) {
+      if (!this.referencesDocument(referenceArgs)) {
         const findingArgs: MissingPolicyReferenceArgs = {
           context: args.context,
           policy,
         };
-        args.findings.push(
-          CortexConsistencyContract.missingPolicyReference(findingArgs),
-        );
+        args.findings.push(this.missingPolicyReference(findingArgs));
       }
     }
   }
 
-  private static validatePolicyReachability(args: ValidateContextArgs): void {
+  private validatePolicyReachability(args: ValidateContextArgs): void {
     for (const policy of args.policies.values()) {
       if (
-        CortexConsistencyContract.contextOwnsPolicy({
+        this.contextOwnsPolicy({
           contextOwner: args.contextOwner,
           policy,
         })
@@ -354,11 +339,11 @@ export class CortexConsistencyContract {
         contextAreas: args.context.ownsAreas,
         policyAreas: policy.areas,
       };
-      if (!CortexConsistencyContract.sharesArea(coverageArgs)) continue;
+      if (!this.sharesArea(coverageArgs)) continue;
       const importsPolicy = args.context.imports.some(
         (policyPath) =>
-          CortexConsistencyContract.normalizePath(policyPath) ===
-          CortexConsistencyContract.normalizePath(policy.document),
+          this.normalizePath(policyPath) ===
+          this.normalizePath(policy.document),
       );
       if (!importsPolicy) {
         args.findings.push({
@@ -372,7 +357,7 @@ export class CortexConsistencyContract {
         authority: args.authority,
         targetPath: policy.document,
       };
-      if (!CortexConsistencyContract.referencesDocument(referenceArgs)) {
+      if (!this.referencesDocument(referenceArgs)) {
         const alreadyReported = args.findings.some(
           (finding) =>
             finding.code === CortexContractFindingCode.MissingPolicyReference &&
@@ -384,19 +369,17 @@ export class CortexConsistencyContract {
             context: args.context,
             policy,
           };
-          args.findings.push(
-            CortexConsistencyContract.missingPolicyReference(findingArgs),
-          );
+          args.findings.push(this.missingPolicyReference(findingArgs));
         }
       }
     }
   }
 
-  private static contextOwnsPolicy(args: ContextOwnsPolicyArgs): boolean {
+  private contextOwnsPolicy(args: ContextOwnsPolicyArgs): boolean {
     if (args.contextOwner.kind !== CortexDocumentOwnerResolutionKind.Known)
       return false;
-    const policyOwner = CortexConsistencyContract.cortexDocumentOwner(
-      CortexConsistencyContract.normalizePath(args.policy.document),
+    const policyOwner = this.cortexDocumentOwner(
+      this.normalizePath(args.policy.document),
     );
     return (
       policyOwner.kind === CortexDocumentOwnerResolutionKind.Known &&
@@ -404,7 +387,7 @@ export class CortexConsistencyContract {
     );
   }
 
-  private static missingPolicyReference(
+  private missingPolicyReference(
     args: MissingPolicyReferenceArgs,
   ): CortexContractFinding {
     return {
@@ -414,26 +397,21 @@ export class CortexConsistencyContract {
     };
   }
 
-  private static referencesDocument(
-    args: CortexDocumentReferenceArgs,
-  ): boolean {
-    const authorityPath = CortexConsistencyContract.normalizePath(
-      args.authority.relativePath,
-    );
-    const target = CortexConsistencyContract.normalizePath(args.targetPath);
+  private referencesDocument(args: CortexDocumentReferenceArgs): boolean {
+    const authorityPath = this.normalizePath(args.authority.relativePath);
+    const target = this.normalizePath(args.targetPath);
     return args.authority.references.some((reference) => {
-      const documentReference =
-        CortexConsistencyContract.stripDocumentFragment(reference);
+      const documentReference = this.stripDocumentFragment(reference);
       const resolved = documentReference.startsWith('.cortex/')
-        ? CortexConsistencyContract.normalizePath(documentReference)
-        : CortexConsistencyContract.normalizePath(
-            `${CortexConsistencyContract.directoryName(authorityPath)}/${documentReference}`,
+        ? this.normalizePath(documentReference)
+        : this.normalizePath(
+            `${this.directoryName(authorityPath)}/${documentReference}`,
           );
       return resolved === target;
     });
   }
 
-  private static stripDocumentFragment(reference: string): string {
+  private stripDocumentFragment(reference: string): string {
     const suffixIndexes = [
       reference.indexOf('?'),
       reference.indexOf('#'),
@@ -442,11 +420,11 @@ export class CortexConsistencyContract {
     return reference.slice(0, suffixIndex);
   }
 
-  private static sharesArea(args: SharedPolicyAreaArgs): boolean {
+  private sharesArea(args: SharedPolicyAreaArgs): boolean {
     return args.contextAreas.some((area) => args.policyAreas.includes(area));
   }
 
-  private static normalizePath(filePath: string): string {
+  private normalizePath(filePath: string): string {
     const normalized: string[] = [];
     for (const segment of filePath.replaceAll('\\', '/').split('/')) {
       if (segment === '' || segment === '.') continue;
@@ -461,7 +439,7 @@ export class CortexConsistencyContract {
     return normalized.join('/');
   }
 
-  private static directoryName(filePath: string): string {
+  private directoryName(filePath: string): string {
     return filePath.split('/').slice(0, -1).join('/');
   }
 }

@@ -24,17 +24,6 @@ export class CortexArticleAudit {
     private readonly request: AuditCortexArticleStructureRequest,
   ) {}
 
-  static formatMarkdownTableFindingMessage(relativePath: string): string {
-    const messagePathLimit = Math.min(
-      CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
-      CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT -
-        TABLE_MESSAGE_PREFIX.length -
-        TABLE_MESSAGE_SUFFIX.length,
-    );
-    const boundedPath = relativePath.slice(0, messagePathLimit);
-    return `${TABLE_MESSAGE_PREFIX}${boundedPath}${TABLE_MESSAGE_SUFFIX}`;
-  }
-
   static from(request: AuditCortexArticleStructureRequest): CortexArticleAudit {
     return new CortexArticleAudit(request);
   }
@@ -44,12 +33,12 @@ export class CortexArticleAudit {
     const findings: CortexArticleFinding[] = [];
     for (const document of request.documents) {
       const documentRequest: AuditDocumentRequest = { document, findings };
-      CortexArticleAudit.auditDocument(documentRequest);
+      this.auditDocument(documentRequest);
     }
     return findings;
   }
 
-  private static auditDocument(request: AuditDocumentRequest): void {
+  private auditDocument(request: AuditDocumentRequest): void {
     const { blocks } = request.document;
     for (const block of blocks) {
       if (block.kind !== CortexArticleSemanticKind.Table) continue;
@@ -58,11 +47,11 @@ export class CortexArticleAudit {
         code: CortexArticleFindingCode.MarkdownTable,
         file: request.document.relativePath,
         line: block.line,
-        message: CortexArticleAudit.formatMarkdownTableFindingMessage(
+        message: new CortexMarkdownTableDiagnostic(
           request.document.relativePath,
-        ),
+        ).message(),
       };
-      CortexArticleAudit.addFinding(findingRequest);
+      this.addFinding(findingRequest);
     }
     for (const [index, block] of blocks.entries()) {
       const selection = new CortexArticleBlock(block).articleHeading();
@@ -76,11 +65,11 @@ export class CortexArticleAudit {
           startIndex: index + 1,
         }),
       };
-      CortexArticleAudit.auditArticle(articleRequest);
+      this.auditArticle(articleRequest);
     }
   }
 
-  private static auditArticle(request: AuditArticleRequest): void {
+  private auditArticle(request: AuditArticleRequest): void {
     if (
       !request.sectionBlocks.some(
         (block) =>
@@ -95,16 +84,14 @@ export class CortexArticleAudit {
         line: request.heading.line,
         message: `Article #${request.heading.text} has no body content.`,
       };
-      CortexArticleAudit.addFinding(findingRequest);
+      this.addFinding(findingRequest);
       return;
     }
-    CortexArticleAudit.auditConsecutiveParagraphs(request);
-    CortexArticleAudit.auditProcedure(request);
+    this.auditConsecutiveParagraphs(request);
+    this.auditProcedure(request);
   }
 
-  private static auditConsecutiveParagraphs(
-    request: AuditArticleRequest,
-  ): void {
+  private auditConsecutiveParagraphs(request: AuditArticleRequest): void {
     let consecutive = 0;
     for (const block of request.sectionBlocks) {
       const contribution = new CortexArticleBlock(block).densityContribution();
@@ -123,11 +110,11 @@ export class CortexArticleAudit {
         line: block.line,
         message: `Article #${request.heading.text} has more than ${MAX_CONSECUTIVE_PARAGRAPHS} consecutive prose blocks without visible structure.`,
       };
-      CortexArticleAudit.addFinding(findingRequest);
+      this.addFinding(findingRequest);
     }
   }
 
-  private static auditProcedure(request: AuditArticleRequest): void {
+  private auditProcedure(request: AuditArticleRequest): void {
     if (
       new CortexArticleSection(request.heading).procedureRequirement(
         request.sectionBlocks,
@@ -141,10 +128,10 @@ export class CortexArticleAudit {
       line: request.heading.line,
       message: `Procedure-like article #${request.heading.text} must expose its action sequence as an ordered list.`,
     };
-    CortexArticleAudit.addFinding(findingRequest);
+    this.addFinding(findingRequest);
   }
 
-  private static addFinding(request: AddFindingRequest): void {
+  private addFinding(request: AddFindingRequest): void {
     const finding: CortexArticleFinding = {
       code: request.code,
       file: request.file,
@@ -178,3 +165,18 @@ const MAX_CONSECUTIVE_PARAGRAPHS = 3;
 const TABLE_MESSAGE_PREFIX = 'Rendered Markdown table in ';
 
 const TABLE_MESSAGE_SUFFIX = ' is prohibited; use an enclosed structured list.';
+
+export class CortexMarkdownTableDiagnostic {
+  constructor(private readonly relativePath: string) {}
+  message(): string {
+    const relativePath = this.relativePath;
+    const messagePathLimit = Math.min(
+      CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
+      CORTEX_ARTICLE_FINDING_MESSAGE_LIMIT -
+        TABLE_MESSAGE_PREFIX.length -
+        TABLE_MESSAGE_SUFFIX.length,
+    );
+    const boundedPath = relativePath.slice(0, messagePathLimit);
+    return `${TABLE_MESSAGE_PREFIX}${boundedPath}${TABLE_MESSAGE_SUFFIX}`;
+  }
+}

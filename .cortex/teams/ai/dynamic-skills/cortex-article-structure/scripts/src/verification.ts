@@ -26,7 +26,7 @@ import {
   type CortexArticleStructureResult,
 } from './domain.ts';
 
-import { CortexArticleAudit } from './audit.ts';
+import { CortexMarkdownTableDiagnostic } from './audit.ts';
 
 export class CortexArticleResultVerifier {
   private constructor(
@@ -86,9 +86,9 @@ export class CortexArticleResultVerifier {
         code: CortexArticleFindingCode.MarkdownTable,
         file: request.document.relativePath,
         line: block.line,
-        message: CortexArticleAudit.formatMarkdownTableFindingMessage(
+        message: new CortexMarkdownTableDiagnostic(
           request.document.relativePath,
-        ),
+        ).message(),
       };
       request.expected.push(finding);
     }
