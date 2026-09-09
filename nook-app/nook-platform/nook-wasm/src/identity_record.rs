@@ -85,7 +85,7 @@ pub(crate) struct BrowserProviderVaultIdentityObservationsFromProjection<'a> {
 /// Named values required by NookIdentityDirectorySnapshot::identity_directory_snapshot_for_session.
 pub(crate) struct BrowserIdentityDirectorySnapshotForSession<'a> {
     pub(crate) session_app_id: &'a str,
-    pub(crate) session_unlocked: bool,
+    pub(crate) session_unlocked: nook_core::DeviceSessionLockState,
     pub(crate) selected_store_id: Option<&'a nook_core::StoreId>,
 }
 
@@ -389,12 +389,15 @@ pub struct NookIdentityDirectorySnapshot {
 #[wasm_bindgen]
 pub struct NookIdentityDirectorySnapshotRequest {
     session_app_id: String,
-    session_unlocked: bool,
+    session_unlocked: nook_core::DeviceSessionLockState,
     selected_store_id: Option<nook_core::StoreId>,
 }
 
 impl NookIdentityDirectorySnapshotRequest {
-    pub(crate) fn new(session_app_id: String, session_unlocked: bool) -> Self {
+    pub(crate) fn new(
+        session_app_id: String,
+        session_unlocked: nook_core::DeviceSessionLockState,
+    ) -> Self {
         Self {
             session_app_id,
             session_unlocked,
@@ -404,7 +407,7 @@ impl NookIdentityDirectorySnapshotRequest {
 
     pub(crate) fn for_selected_vault(
         session_app_id: String,
-        session_unlocked: bool,
+        session_unlocked: nook_core::DeviceSessionLockState,
         selected_store_id: nook_core::StoreId,
     ) -> Self {
         Self {
@@ -595,7 +598,7 @@ pub async fn load_identity_directory_snapshot()
     NookIdentityDirectorySnapshot::identity_directory_snapshot_for_session(
         BrowserIdentityDirectorySnapshotForSession {
             session_app_id: "",
-            session_unlocked: false,
+            session_unlocked: false.into(),
             selected_store_id: None,
         },
     )

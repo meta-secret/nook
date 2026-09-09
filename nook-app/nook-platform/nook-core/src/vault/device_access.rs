@@ -602,7 +602,7 @@ mod tests {
     fn distinguishes_missing_locked_and_unlocked_identity_sessions() {
         assert_eq!(
             DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
-                session_unlocked: false,
+                session_unlocked: false.into(),
                 session_device_id: "",
                 persisted_device_id: None,
             }),
@@ -610,7 +610,7 @@ mod tests {
         );
         assert_eq!(
             DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
-                session_unlocked: false,
+                session_unlocked: false.into(),
                 session_device_id: "",
                 persisted_device_id: Some("device-persisted"),
             }),
@@ -618,7 +618,7 @@ mod tests {
         );
         assert_eq!(
             DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
-                session_unlocked: false,
+                session_unlocked: false.into(),
                 session_device_id: "device-persisted",
                 persisted_device_id: Some("device-persisted"),
             }),
@@ -626,7 +626,7 @@ mod tests {
         );
         assert_eq!(
             DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
-                session_unlocked: true,
+                session_unlocked: true.into(),
                 session_device_id: "device-session",
                 persisted_device_id: Some("device-persisted"),
             }),
@@ -634,7 +634,7 @@ mod tests {
         );
         assert_eq!(
             DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
-                session_unlocked: true,
+                session_unlocked: true.into(),
                 session_device_id: "device-companion",
                 persisted_device_id: None,
             }),
@@ -642,7 +642,7 @@ mod tests {
         );
         assert_eq!(
             DeviceAccessIdentityState::classify(&DeviceAccessIdentityObservation {
-                session_unlocked: false,
+                session_unlocked: false.into(),
                 session_device_id: "device-companion",
                 persisted_device_id: None,
             }),

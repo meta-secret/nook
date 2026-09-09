@@ -40,7 +40,7 @@ pub struct YamlSyncSession<'a> {
     members_key: &'a str,
     identity: &'a DeviceIdentity,
     state: &'a mut VaultMetaState,
-    event_log_mode: bool,
+    event_log_mode: YamlSyncBacking,
 }
 
 impl<'a> YamlSyncSession<'a> {
@@ -51,7 +51,7 @@ impl<'a> YamlSyncSession<'a> {
         members_key: &'a str,
         identity: &'a DeviceIdentity,
         state: &'a mut VaultMetaState,
-        event_log_mode: bool,
+        event_log_mode: YamlSyncBacking,
     ) -> Self {
         Self {
             content,
@@ -66,7 +66,9 @@ impl<'a> YamlSyncSession<'a> {
     /// Consume the session into the correct unchanged, access, new-vault, or reload outcome.
     pub fn reconcile(self) -> VaultResult<YamlSyncOutcome> {
         if self.content.trim() == self.last_synced_content.trim() {
-            if self.members_key.is_empty() && self.event_log_mode && !self.content.trim().is_empty()
+            if self.members_key.is_empty()
+                && matches!(self.event_log_mode, YamlSyncBacking::EventLog)
+                && !self.content.trim().is_empty()
             {
                 return Ok(YamlSyncOutcome::Reloaded(Box::new(self.reload()?)));
             }
@@ -172,7 +174,7 @@ mod tests {
             keys.members_key.as_str(),
             &identity,
             &mut state,
-            false,
+            YamlSyncBacking::LegacyYaml,
         )
         .reconcile()?;
         assert_eq!(outcome, YamlSyncOutcome::Unchanged);
@@ -210,7 +212,7 @@ mod tests {
             "",
             &identity,
             &mut state,
-            true,
+            YamlSyncBacking::EventLog,
         )
         .reconcile()?;
         match outcome {
@@ -232,4 +234,10 @@ mod tests {
         }
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum YamlSyncBacking {
+    LegacyYaml,
+    EventLog,
 }

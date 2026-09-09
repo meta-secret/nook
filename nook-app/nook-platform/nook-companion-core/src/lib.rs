@@ -236,3 +236,8 @@ pub use passkey_session_material::*;
 
 mod recovery_code_language;
 pub use recovery_code_language::BackupCodeCandidatePresence;
+
+pub use page_field_classification::{
+    AuthenticationRouteControlPresence, AuthenticationRoutePasswordPresence,
+    AuthenticationRouteScope, AuthenticationRouteUsernamePresence, PageLoginContext,
+};

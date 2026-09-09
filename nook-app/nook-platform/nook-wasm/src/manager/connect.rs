@@ -541,8 +541,13 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        self.connect_internal(storage_mode, github_pat, github_repo, false)
-            .await
+        self.connect_internal(
+            storage_mode,
+            github_pat,
+            github_repo,
+            nook_core::VaultGenesisIntent::DetectExisting,
+        )
+        .await
     }
 
     /// Replace storage with a fresh genesis vault for this device.
@@ -552,8 +557,13 @@ impl NookVaultManager {
         github_pat: String,
         github_repo: String,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
-        self.connect_internal(storage_mode, github_pat, github_repo, true)
-            .await
+        self.connect_internal(
+            storage_mode,
+            github_pat,
+            github_repo,
+            nook_core::VaultGenesisIntent::ForceFresh,
+        )
+        .await
     }
 
     /// Next `connect` loads the browser-local vault cache and recreates the
@@ -573,13 +583,13 @@ impl NookVaultManager {
         storage_mode: String,
         github_pat: String,
         github_repo: String,
-        force_genesis: bool,
+        genesis_intent: nook_core::VaultGenesisIntent,
     ) -> Result<Vec<NookSecretRecord>, JsError> {
         let _ = self.status.tx.send("CONNECT_START".to_owned());
         tracing::info!(
             scope = "wasm-connect",
             storage = %storage_mode,
-            force_genesis = force_genesis,
+            force_genesis = matches!(genesis_intent, nook_core::VaultGenesisIntent::ForceFresh),
             "connect started"
         );
         self.prepare_storage(&storage_mode, &github_pat, &github_repo)
@@ -595,13 +605,13 @@ impl NookVaultManager {
         }
 
         let event_log_only_remote = self
-            .discover_event_log_only_remote(force_genesis, &content)
+            .discover_event_log_only_remote(genesis_intent, &content)
             .await?;
 
         let use_genesis = if event_log_only_remote {
             false
         } else {
-            nook_core::VaultContent::new(&content).requires_genesis(force_genesis)?
+            nook_core::VaultContent::new(&content).requires_genesis(genesis_intent)?
         };
 
         let completed_genesis = if use_genesis {
@@ -882,10 +892,13 @@ impl NookVaultManager {
 
     async fn discover_event_log_only_remote(
         &mut self,
-        force_genesis: bool,
+        genesis_intent: nook_core::VaultGenesisIntent,
         content: &str,
     ) -> Result<bool, NookError> {
-        if force_genesis || !content.trim().is_empty() || self.storage.mode == StorageMode::Local {
+        if matches!(genesis_intent, nook_core::VaultGenesisIntent::ForceFresh)
+            || !content.trim().is_empty()
+            || self.storage.mode == StorageMode::Local
+        {
             return Ok(false);
         }
         self.sync_events_from_current_provider().await?;

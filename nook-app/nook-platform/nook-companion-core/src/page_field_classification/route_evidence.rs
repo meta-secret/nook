@@ -1,0 +1,71 @@
+//! Semantic route evidence admitted from browser boolean observations.
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationRouteControlPresence {
+    Absent,
+    Present,
+}
+impl From<bool> for AuthenticationRouteControlPresence {
+    fn from(present: bool) -> Self {
+        if present { Self::Present } else { Self::Absent }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationRouteUsernamePresence {
+    Absent,
+    Present,
+}
+impl From<bool> for AuthenticationRouteUsernamePresence {
+    fn from(present: bool) -> Self {
+        if present { Self::Present } else { Self::Absent }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationRouteScope {
+    Unrelated,
+    LocalAuthentication,
+}
+impl From<bool> for AuthenticationRouteScope {
+    fn from(present: bool) -> Self {
+        if present {
+            Self::LocalAuthentication
+        } else {
+            Self::Unrelated
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthenticationRoutePasswordPresence {
+    Absent,
+    Present,
+}
+impl From<bool> for AuthenticationRoutePasswordPresence {
+    fn from(present: bool) -> Self {
+        if present { Self::Present } else { Self::Absent }
+    }
+}
+
+/// Boolean serialization preserves the HTML-observation transport contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum PageLoginContext {
+    Unrelated,
+    Authentication,
+}
+impl From<bool> for PageLoginContext {
+    fn from(authentication: bool) -> Self {
+        if authentication {
+            Self::Authentication
+        } else {
+            Self::Unrelated
+        }
+    }
+}
+impl From<PageLoginContext> for bool {
+    fn from(context: PageLoginContext) -> Self {
+        matches!(context, PageLoginContext::Authentication)
+    }
+}

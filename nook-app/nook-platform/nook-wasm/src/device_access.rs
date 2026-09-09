@@ -237,11 +237,14 @@ impl NookDeviceVaultAccess {
 #[wasm_bindgen]
 pub struct NookDeviceAccessSnapshotRequest {
     session_device_id: String,
-    session_unlocked: bool,
+    session_unlocked: nook_core::DeviceSessionLockState,
 }
 
 impl NookDeviceAccessSnapshotRequest {
-    pub(crate) fn new(session_device_id: String, session_unlocked: bool) -> Self {
+    pub(crate) fn new(
+        session_device_id: String,
+        session_unlocked: nook_core::DeviceSessionLockState,
+    ) -> Self {
         Self {
             session_device_id,
             session_unlocked,
@@ -304,13 +307,13 @@ impl NookDeviceVaultAccess {
 /// Named values required by NookDeviceAccessSnapshot::device_access_snapshot_for_session.
 pub(crate) struct BrowserDeviceAccessSnapshotForSession<'a> {
     pub(crate) session_device_id: &'a str,
-    pub(crate) session_unlocked: bool,
+    pub(crate) session_unlocked: nook_core::DeviceSessionLockState,
 }
 
 /// Named values required by NookDeviceAccessSnapshot::device_access_snapshot_for_session_with_protected.
 pub(crate) struct BrowserDeviceAccessSnapshotForSessionWithProtected<'a> {
     pub(crate) session_device_id: &'a str,
-    pub(crate) session_unlocked: bool,
+    pub(crate) session_unlocked: nook_core::DeviceSessionLockState,
     pub(crate) protected: Option<(String, nook_core::WrappedDeviceIdentity)>,
 }
 
@@ -804,7 +807,7 @@ mod browser_tests {
         let snapshot = NookDeviceAccessSnapshot::device_access_snapshot_for_session(
             BrowserDeviceAccessSnapshotForSession {
                 session_device_id: first_key.app_id().as_str(),
-                session_unlocked: false,
+                session_unlocked: false.into(),
             },
         )
         .await
@@ -857,7 +860,7 @@ mod browser_tests {
         let snapshot = NookDeviceAccessSnapshot::device_access_snapshot_for_session_with_protected(
             BrowserDeviceAccessSnapshotForSessionWithProtected {
                 session_device_id: companion_id.as_str(),
-                session_unlocked: true,
+                session_unlocked: true.into(),
                 protected: None,
             },
         )

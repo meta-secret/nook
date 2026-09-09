@@ -153,7 +153,7 @@ mod browser_tests {
     fn conversion_helpers_cover_content_and_empty_projection_paths() {
         assert!(
             nook_core::VaultContent::new("not yaml")
-                .requires_genesis(false)
+                .requires_genesis(nook_core::VaultGenesisIntent::DetectExisting)
                 .is_err()
         );
         assert!(NookVaultSyncResult::sync_result_unchanged().is_ok());

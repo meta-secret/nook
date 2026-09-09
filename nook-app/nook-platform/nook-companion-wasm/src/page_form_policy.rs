@@ -43,7 +43,7 @@ impl NookPageInputFieldObservation {
                 read_only,
                 autocomplete_tokens,
                 identity_text,
-                login_context,
+                login_context: login_context.into(),
             },
         }
     }
@@ -179,10 +179,10 @@ pub fn can_activate_authentication_route_control(
             destination_identity: destination_identity,
             control_label: control_label,
             control_machine_identity: control_machine_identity,
-            has_concrete_control: has_concrete_control,
-            has_authentication_username: has_authentication_username,
-            has_local_authentication_scope: has_local_authentication_scope,
-            has_authentication_password: has_authentication_password,
+            has_concrete_control: (has_concrete_control).into(),
+            has_authentication_username: (has_authentication_username).into(),
+            has_local_authentication_scope: (has_local_authentication_scope).into(),
+            has_authentication_password: (has_authentication_password).into(),
         },
     )
 }

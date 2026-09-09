@@ -50,7 +50,7 @@ impl NookPageInputFieldObservation {
                 read_only,
                 autocomplete_tokens,
                 identity_text,
-                login_context,
+                login_context: login_context.into(),
             },
         }
     }

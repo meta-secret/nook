@@ -5,7 +5,8 @@
 //! `WebAuthn` create/assert; the existing page ceremony owns consent and crypto.
 
 use crate::{
-    AuthenticationPasskeyAccountCount, authentication_workflow::AuthenticationWorkflowKind,
+    AuthenticationManualCheckpoint, AuthenticationPasskeyAccountCount,
+    AuthenticationPasskeyControlObservation, authentication_workflow::AuthenticationWorkflowKind,
 };
 
 /// Eligibility outcome for a Pilot passkey CTA.
@@ -24,8 +25,8 @@ pub enum WebsitePasskeyProposal {
 /// Named values required by WebsitePasskeyProposal::propose_website_passkey.
 pub struct WebsitePasskeyEvidence {
     pub workflow_kind: AuthenticationWorkflowKind,
-    pub manual_checkpoint_present: bool,
-    pub passkey_control_present: bool,
+    pub manual_checkpoint_present: AuthenticationManualCheckpoint,
+    pub passkey_control_present: AuthenticationPasskeyControlObservation,
     pub matching_passkey_account_count: AuthenticationPasskeyAccountCount,
 }
 
@@ -55,7 +56,10 @@ impl WebsitePasskeyProposal {
             passkey_control_present,
             matching_passkey_account_count,
         } = request;
-        if manual_checkpoint_present {
+        if matches!(
+            manual_checkpoint_present,
+            AuthenticationManualCheckpoint::Present
+        ) {
             return WebsitePasskeyProposal::None;
         }
         match workflow_kind {
@@ -72,7 +76,10 @@ impl WebsitePasskeyProposal {
                 account_count: matching_passkey_account_count,
             };
         }
-        if passkey_control_present {
+        if matches!(
+            passkey_control_present,
+            AuthenticationPasskeyControlObservation::Present
+        ) {
             return WebsitePasskeyProposal::CreatePasskey;
         }
         WebsitePasskeyProposal::None
@@ -105,8 +112,8 @@ mod tests {
         for (workflow, manual, control, count, expected) in cases {
             let actual = WebsitePasskeyProposal::propose_website_passkey(WebsitePasskeyEvidence {
                 workflow_kind: workflow,
-                manual_checkpoint_present: manual,
-                passkey_control_present: control,
+                manual_checkpoint_present: manual.into(),
+                passkey_control_present: control.into(),
                 matching_passkey_account_count: count.into(),
             });
             assert_eq!(actual, expected);

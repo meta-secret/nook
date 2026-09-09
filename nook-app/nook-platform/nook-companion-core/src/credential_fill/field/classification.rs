@@ -135,7 +135,7 @@ mod tests {
                     .map(ToString::to_string)
                     .collect(),
                 identity_text: identity_text.to_owned(),
-                login_context: true,
+                login_context: (true).into(),
             }
         }
     }

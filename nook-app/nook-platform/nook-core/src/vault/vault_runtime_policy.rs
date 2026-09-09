@@ -22,8 +22,9 @@ pub enum ClientRunMode {
     Prod,
 }
 
-impl ClientRunMode {
-    pub fn parse(value: &str) -> Result<Self, String> {
+impl TryFrom<&str> for ClientRunMode {
+    type Error = String;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value {
             "localDev" | "local" | "development" | "test" => Ok(Self::Local),
             "dev" => Ok(Self::Dev),
@@ -48,12 +49,15 @@ struct RuntimeMillisRequest<'a> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VaultRuntimePolicy {
     run_mode: ClientRunMode,
-    expose_test_capabilities: bool,
+    expose_test_capabilities: RuntimeTestCapabilityExposure,
 }
 
 impl VaultRuntimePolicy {
     #[must_use]
-    pub const fn new(run_mode: ClientRunMode, expose_test_capabilities: bool) -> Self {
+    pub const fn new(
+        run_mode: ClientRunMode,
+        expose_test_capabilities: RuntimeTestCapabilityExposure,
+    ) -> Self {
         Self {
             run_mode,
             expose_test_capabilities,
@@ -67,22 +71,37 @@ impl VaultRuntimePolicy {
 
     #[must_use]
     pub const fn expose_test_capabilities(self) -> bool {
-        self.expose_test_capabilities
+        matches!(
+            self.expose_test_capabilities,
+            RuntimeTestCapabilityExposure::Exposed
+        )
     }
 
     #[must_use]
     pub const fn allow_fast_idle(self) -> bool {
-        !matches!(self.run_mode, ClientRunMode::Prod) || self.expose_test_capabilities
+        !matches!(self.run_mode, ClientRunMode::Prod)
+            || matches!(
+                self.expose_test_capabilities,
+                RuntimeTestCapabilityExposure::Exposed
+            )
     }
 
     #[must_use]
     pub const fn allow_fast_sync(self) -> bool {
-        !matches!(self.run_mode, ClientRunMode::Prod) || self.expose_test_capabilities
+        !matches!(self.run_mode, ClientRunMode::Prod)
+            || matches!(
+                self.expose_test_capabilities,
+                RuntimeTestCapabilityExposure::Exposed
+            )
     }
 
     #[must_use]
     pub const fn expose_debug_hooks(self) -> bool {
-        !matches!(self.run_mode, ClientRunMode::Prod) || self.expose_test_capabilities
+        !matches!(self.run_mode, ClientRunMode::Prod)
+            || matches!(
+                self.expose_test_capabilities,
+                RuntimeTestCapabilityExposure::Exposed
+            )
     }
 
     #[must_use]
@@ -150,17 +169,20 @@ mod tests {
     #[test]
     fn run_mode_aliases_are_classified_in_core() {
         for alias in ["localDev", "local", "development", "test"] {
-            assert_eq!(ClientRunMode::parse(alias), Ok(ClientRunMode::Local));
+            assert_eq!(ClientRunMode::try_from(alias), Ok(ClientRunMode::Local));
         }
-        assert_eq!(ClientRunMode::parse("dev"), Ok(ClientRunMode::Dev));
-        assert_eq!(ClientRunMode::parse("prod"), Ok(ClientRunMode::Prod));
-        assert_eq!(ClientRunMode::parse("production"), Ok(ClientRunMode::Prod));
-        assert!(ClientRunMode::parse("preview").is_err());
+        assert_eq!(ClientRunMode::try_from("dev"), Ok(ClientRunMode::Dev));
+        assert_eq!(ClientRunMode::try_from("prod"), Ok(ClientRunMode::Prod));
+        assert_eq!(
+            ClientRunMode::try_from("production"),
+            Ok(ClientRunMode::Prod)
+        );
+        assert!(ClientRunMode::try_from("preview").is_err());
     }
 
     #[test]
     fn production_ignores_unsafe_fast_overrides() {
-        let policy = VaultRuntimePolicy::new(ClientRunMode::Prod, false);
+        let policy = VaultRuntimePolicy::new(ClientRunMode::Prod, (false).into());
         assert_eq!(
             u32::from(policy.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000"))),
             DEFAULT_VAULT_IDLE_TIMEOUT_MS
@@ -178,7 +200,7 @@ mod tests {
 
     #[test]
     fn local_and_explicit_test_modes_honor_valid_overrides() {
-        let local = VaultRuntimePolicy::new(ClientRunMode::Local, false);
+        let local = VaultRuntimePolicy::new(ClientRunMode::Local, (false).into());
         assert_eq!(
             u32::from(local.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1200"))),
             1200
@@ -200,7 +222,7 @@ mod tests {
             DEFAULT_VAULT_SYNC_INTERVAL_MS
         );
 
-        let production_test = VaultRuntimePolicy::new(ClientRunMode::Prod, true);
+        let production_test = VaultRuntimePolicy::new(ClientRunMode::Prod, (true).into());
         assert_eq!(
             u32::from(
                 production_test.resolve_vault_idle_timeout_ms(RuntimeConfigValue::Set("1000"))
@@ -208,5 +230,17 @@ mod tests {
             1000
         );
         assert!(production_test.expose_debug_hooks());
+    }
+}
+
+/// Explicit host configuration, distinct from production run mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RuntimeTestCapabilityExposure {
+    Hidden,
+    Exposed,
+}
+impl From<bool> for RuntimeTestCapabilityExposure {
+    fn from(exposed: bool) -> Self {
+        if exposed { Self::Exposed } else { Self::Hidden }
     }
 }

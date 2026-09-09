@@ -112,8 +112,8 @@ impl<'a> VaultContent<'a> {
     }
 
     /// Whether connect should bootstrap a genesis vault for this content.
-    pub fn requires_genesis(&self, force_genesis: bool) -> VaultResult<bool> {
-        if force_genesis || self.content.trim().is_empty() {
+    pub fn requires_genesis(&self, intent: VaultGenesisIntent) -> VaultResult<bool> {
+        if matches!(intent, VaultGenesisIntent::ForceFresh) || self.content.trim().is_empty() {
             return Ok(true);
         }
         let format = VaultFormatDocument::new(self.content).detect()?;
@@ -333,8 +333,10 @@ mod tests {
 
     #[test]
     fn empty_content_requires_genesis() -> VaultResult<()> {
-        assert!(VaultContent::new("").requires_genesis(false)?);
-        assert!(VaultContent::new("  ").requires_genesis(false)?);
+        assert!(VaultContent::new("").requires_genesis(crate::VaultGenesisIntent::DetectExisting)?);
+        assert!(
+            VaultContent::new("  ").requires_genesis(crate::VaultGenesisIntent::DetectExisting)?
+        );
         Ok(())
     }
 
@@ -356,7 +358,10 @@ mod tests {
     #[test]
     fn genesis_yaml_reports_ready_for_enrolled_device() -> VaultResult<()> {
         let (keys, identity, yaml) = test_support::simple_genesis_projection()?;
-        assert!(!VaultContent::new(yaml.as_str()).requires_genesis(false)?);
+        assert!(
+            !VaultContent::new(yaml.as_str())
+                .requires_genesis(crate::VaultGenesisIntent::DetectExisting)?
+        );
         assert_eq!(
             VaultContent::new(yaml.as_str()).access_status(&identity)?,
             VaultAccessStatus::Ready
@@ -450,4 +455,10 @@ mod tests {
         assert_eq!(loaded.meta.sentinel_shares.len(), 3);
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VaultGenesisIntent {
+    DetectExisting,
+    ForceFresh,
 }

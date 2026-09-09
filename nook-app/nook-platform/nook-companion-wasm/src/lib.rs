@@ -588,9 +588,9 @@ mod tests {
         let nook_companion_core::AuthenticationWorkflowMatch::Matched(snapshot) =
             AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
                 AuthenticationEnrollmentObservation {
-                    authenticator_setup_hint: true,
+                    authenticator_setup_hint: true.into(),
                     backup_codes_copy: "Save these recovery codes",
-                    manual_checkpoint_present: false,
+                    manual_checkpoint_present: false.into(),
                 },
             )
         else {

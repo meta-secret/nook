@@ -477,3 +477,25 @@ pub use sync_provider_store::{
 pub use sync_provider_store::{SharedGrantProviderOutcome, SharedGrantProviderRequest};
 
 pub use nook_companion_core::BackupCodeCandidatePresence;
+
+pub use vault_client_policy::{
+    AddProviderPromptState, DeviceProtectionReadiness, EditBlockMessageRequest,
+    EditBlockReasonRequest, EditsBlockedRequest, ExistingVaultIdentityRecoveryRequiredRequest,
+    LocalVaultPresence, ManualSyncHasTargetRequest, ProviderSetupState,
+    RemoteVaultAssessDecisionRequest, RemoteVaultCredentialPresence,
+    ShouldAutoConnectAfterApprovalRequest, ShouldAutoUnlockRequest,
+    ShouldShowLoginVaultPickerRequest, ShouldSyncFromProvidersRequest,
+    ShouldUseJoinProviderForConnectRequest, SyncActivityVisibleRequest,
+    UnauthenticatedSyncDecisionRequest, VaultAuthenticationState, VaultConnectProbeDecisionRequest,
+    VaultExistenceRequirement, VaultFanOutSyncState, VaultIdleExpiration, VaultJoinApprovalWait,
+    VaultPasswordActivity, VaultPasswordPromptState, VaultProviderSyncState, VaultSaveActivity,
+    VaultSecretCreationPermission, VaultSelectionState, VaultSessionLockIntent,
+    VaultStorageSyncDecisionRequest, VaultSwitchTargetRequest, VaultSyncActivity, VaultSyncChange,
+    VaultSyncConflict, VaultSyncIntent, VaultSyncPermission, VaultSyncTimerStartDecisionRequest,
+    VaultSyncTimerTickDecisionRequest, VaultVerificationState,
+};
+
+pub use device_access::DeviceSessionLockState;
+pub use vault_connect::VaultGenesisIntent;
+pub use vault_runtime_policy::RuntimeTestCapabilityExposure;
+pub use vault_sync_session::YamlSyncBacking;

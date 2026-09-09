@@ -61,38 +61,15 @@ impl AuthenticationPageObservationFacts {
     }
 
     #[must_use]
-    pub(crate) fn into_observation(self) -> AuthenticationPageObservation {
-        AuthenticationPageObservation {
-            username_field_count: self.fields.username_field_count,
-            current_password_field_count: self.fields.current_password_field_count,
-            new_password_field_count: self.fields.new_password_field_count,
-            generic_password_field_count: self.fields.generic_password_field_count,
-            one_time_code_field_count: self.fields.one_time_code_field_count,
-            manual_checkpoint_present: matches!(
-                self.ceremony.manual_checkpoint,
-                AuthenticationManualCheckpoint::Present
-            ),
-            authenticator_setup_hint: self.authenticator.authenticator_setup_hint(),
-            backup_codes_hint: self.authenticator.backup_codes_hint(),
-            passkey_control_present: self.authenticator.passkey_control_present(self.fields),
-            matching_passkey_account_count: self.authenticator.matching_passkey_account_count(),
-        }
-    }
-
-    #[must_use]
     pub fn form_priority(self) -> AuthenticationFormObservationPriority {
         if self.is_bounded() && self.has_progression() {
-            self.into_observation().form_priority()
+            AuthenticationPageObservation::from(self).form_priority()
         } else {
             AuthenticationPageObservation::default().form_priority()
         }
     }
 
     fn has_progression(&self) -> bool {
-        let trusted_context = self
-            .ceremony
-            .authentication_context
-            .is_authenticated(self.fields);
         matches!(
             self.detailed_advance_control.evidence(self.fields),
             AuthenticationAdvanceControlEvidence::Present
@@ -105,8 +82,7 @@ impl AuthenticationPageObservationFacts {
             || self.authenticator.authenticator_setup_hint()
             || self.authenticator.backup_codes_hint()
             || matches!(
-                self.ceremony
-                    .derived_one_time_code_progression(trusted_context),
+                self.ceremony.derived_one_time_code_progression(self.fields),
                 super::AuthenticationOneTimeCodeProgressionEvidence::AutoSubmitObserved
             )
     }
@@ -157,7 +133,7 @@ impl AuthenticationPageObservationFactsBatch {
                 .cloned()
                 .map(|observation| {
                     if observation.has_progression() {
-                        observation.into_observation()
+                        AuthenticationPageObservation::from(observation)
                     } else {
                         AuthenticationPageObservation::default()
                     }
@@ -506,7 +482,7 @@ mod tests {
             (&facts.authenticator.detailed_passkey_control)
                 .authentication_passkey_control_evidence_is_safe()
         );
-        assert!(facts.into_observation().passkey_control_present);
+        assert!(AuthenticationPageObservation::from(facts).passkey_control_present);
     }
 
     #[test]
@@ -545,7 +521,7 @@ mod tests {
             ..Default::default()
         };
 
-        assert!(facts.into_observation().passkey_control_present);
+        assert!(AuthenticationPageObservation::from(facts).passkey_control_present);
     }
 
     #[test]
@@ -979,3 +955,23 @@ mod tests {
 }
 
 pub use authenticator::AuthenticationBackupCodesEvidence;
+
+impl From<AuthenticationPageObservationFacts> for AuthenticationPageObservation {
+    fn from(facts: AuthenticationPageObservationFacts) -> Self {
+        AuthenticationPageObservation {
+            username_field_count: facts.fields.username_field_count,
+            current_password_field_count: facts.fields.current_password_field_count,
+            new_password_field_count: facts.fields.new_password_field_count,
+            generic_password_field_count: facts.fields.generic_password_field_count,
+            one_time_code_field_count: facts.fields.one_time_code_field_count,
+            manual_checkpoint_present: matches!(
+                facts.ceremony.manual_checkpoint,
+                AuthenticationManualCheckpoint::Present
+            ),
+            authenticator_setup_hint: facts.authenticator.authenticator_setup_hint(),
+            backup_codes_hint: facts.authenticator.backup_codes_hint(),
+            passkey_control_present: facts.authenticator.passkey_control_present(facts.fields),
+            matching_passkey_account_count: facts.authenticator.matching_passkey_account_count(),
+        }
+    }
+}

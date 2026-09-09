@@ -254,12 +254,15 @@ impl AuthenticationWorkflowSnapshot {
     }
 
     /// Apply an eligible passkey proposal without displacing an available password login.
-    const fn with_passkey_proposal(mut self, observation: AuthenticationPageObservation) -> Self {
-        let passkey_control_present = observation.passkey_control_present
-            && !matches!(
-                self.saved_login_capability,
-                AuthenticationSavedLoginCapability::FillSavedLogin
-            );
+    const fn with_passkey_proposal(mut self, observation: AuthenticationWorkflowEvidence) -> Self {
+        let passkey_control_present = if !matches!(
+            self.saved_login_capability,
+            AuthenticationSavedLoginCapability::FillSavedLogin
+        ) {
+            observation.passkey_control_present
+        } else {
+            AuthenticationPasskeyControlObservation::Absent
+        };
         let action = match WebsitePasskeyProposal::propose_website_passkey(WebsitePasskeyEvidence {
             workflow_kind: self.kind,
             manual_checkpoint_present: observation.manual_checkpoint_present,
@@ -860,3 +863,6 @@ mod tests {
 pub use enrollment::AuthenticationEnrollmentObservation;
 
 pub use observation_facts::AuthenticationBackupCodesEvidence;
+
+mod evidence;
+use evidence::AuthenticationWorkflowEvidence;

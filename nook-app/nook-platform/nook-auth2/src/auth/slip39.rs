@@ -103,7 +103,7 @@ impl<'a> SentinelSecretSplitRequest<'a> {
 pub(crate) struct SentinelSecretRecoveryRequest<'a> {
     mnemonics: &'a [String],
     passphrase: &'a [u8],
-    reject_threshold_one: bool,
+    threshold_policy: RecoveryThresholdPolicy,
 }
 
 impl<'a> SentinelSecretRecoveryRequest<'a> {
@@ -112,7 +112,7 @@ impl<'a> SentinelSecretRecoveryRequest<'a> {
         Self {
             mnemonics,
             passphrase: b"",
-            reject_threshold_one: true,
+            threshold_policy: RecoveryThresholdPolicy::SentinelQuorum,
         }
     }
 
@@ -122,15 +122,17 @@ impl<'a> SentinelSecretRecoveryRequest<'a> {
         Self {
             mnemonics,
             passphrase,
-            reject_threshold_one: false,
+            threshold_policy: RecoveryThresholdPolicy::InteroperabilityVector,
         }
     }
 
     /// Validate the passphrase, admit a private quorum, and consume it to recover the root.
     pub(crate) fn recover(self) -> MultiDeviceResult<[u8; SECRET_BYTES]> {
         Self::validate_passphrase(self.passphrase)?;
-        if self.reject_threshold_one
-            && let Some(first) = self.mnemonics.first()
+        if matches!(
+            self.threshold_policy,
+            RecoveryThresholdPolicy::SentinelQuorum
+        ) && let Some(first) = self.mnemonics.first()
             && Share::decode(first)?.member_threshold < 2
         {
             return Err(MultiDeviceError::InvalidSentinelThreshold);
@@ -386,4 +388,12 @@ mod tests {
             Err(MultiDeviceError::InvalidSentinelShareEncoding)
         ));
     }
+}
+
+/// The relaxed policy is constructible only by existing test-vector admission.
+#[derive(Clone, Copy)]
+enum RecoveryThresholdPolicy {
+    SentinelQuorum,
+    #[cfg(test)]
+    InteroperabilityVector,
 }

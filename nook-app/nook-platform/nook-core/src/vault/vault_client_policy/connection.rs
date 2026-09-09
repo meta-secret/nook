@@ -95,27 +95,42 @@ impl VaultClientPolicy {
 
     #[must_use]
     pub const fn existing_vault_identity_recovery_required(
-        existing_vault_required: bool,
-        provider_setup_active: bool,
-        device_protection_ready: bool,
+        request: crate::ExistingVaultIdentityRecoveryRequiredRequest,
     ) -> bool {
-        existing_vault_required && provider_setup_active && !device_protection_ready
+        matches!(
+            request.existing_vault_required,
+            crate::VaultExistenceRequirement::ExistingRequired
+        ) && matches!(
+            request.provider_setup_active,
+            crate::ProviderSetupState::Active
+        ) && !matches!(
+            request.device_protection_ready,
+            crate::DeviceProtectionReadiness::Ready
+        )
     }
 
     #[must_use]
     pub const fn remote_vault_assess_decision(
-        access_status: VaultAccessStatus,
-        existing_vault_required: bool,
-        provider_setup_active: bool,
+        request: crate::RemoteVaultAssessDecisionRequest,
     ) -> RemoteVaultAssessDecision {
-        match access_status {
+        match request.access_status {
             VaultAccessStatus::RemoteMissingLocalCache => {
                 RemoteVaultAssessDecision::PromptRecoveryFromCache
             }
-            VaultAccessStatus::RemoteMissing if existing_vault_required => {
+            VaultAccessStatus::RemoteMissing
+                if matches!(
+                    request.existing_vault_required,
+                    crate::VaultExistenceRequirement::ExistingRequired
+                ) =>
+            {
                 RemoteVaultAssessDecision::RejectMissingExistingVault
             }
-            VaultAccessStatus::RemoteMissing if provider_setup_active => {
+            VaultAccessStatus::RemoteMissing
+                if matches!(
+                    request.provider_setup_active,
+                    crate::ProviderSetupState::Active
+                ) =>
+            {
                 RemoteVaultAssessDecision::Continue
             }
             VaultAccessStatus::RemoteMissing => RemoteVaultAssessDecision::PromptMissingRemote,
@@ -128,14 +143,14 @@ impl VaultClientPolicy {
 
     #[must_use]
     pub const fn vault_connect_probe_decision(
-        access_status: VaultAccessStatus,
-        authenticated: bool,
-        sync_provider_count: crate::VaultSyncProviderCount,
+        request: crate::VaultConnectProbeDecisionRequest,
     ) -> VaultConnectProbeDecision {
-        if !authenticated
-            && sync_provider_count.is_nonzero()
+        if !matches!(
+            request.authenticated,
+            crate::VaultAuthenticationState::Authenticated
+        ) && request.sync_provider_count.is_nonzero()
             && matches!(
-                access_status,
+                request.access_status,
                 VaultAccessStatus::NeedsEnrollment | VaultAccessStatus::JoinPending
             )
         {
@@ -172,15 +187,13 @@ impl VaultClientPolicy {
 
     #[must_use]
     pub fn vault_switch_target(
-        requested_store_id: &str,
-        active_store_id: ActiveVaultStore<'_>,
-        verifying: bool,
+        request: crate::VaultSwitchTargetRequest<'_>,
     ) -> VaultSwitchDecision {
-        let requested_store_id = requested_store_id.trim();
-        if verifying
+        let requested_store_id = request.requested_store_id.trim();
+        if matches!(request.verifying, crate::VaultVerificationState::Verifying)
             || requested_store_id.is_empty()
             || matches!(
-                active_store_id,
+                request.active_store_id,
                 ActiveVaultStore::Selected(active) if active.trim() == requested_store_id
             )
         {
@@ -196,43 +209,83 @@ mod tests {
 
     #[test]
     fn existing_vault_import_recovers_identity_before_provider_connect() {
-        assert!(VaultClientPolicy::existing_vault_identity_recovery_required(true, true, false));
-        assert!(!VaultClientPolicy::existing_vault_identity_recovery_required(false, true, false));
-        assert!(!VaultClientPolicy::existing_vault_identity_recovery_required(true, false, false));
-        assert!(!VaultClientPolicy::existing_vault_identity_recovery_required(true, true, true));
+        assert!(
+            VaultClientPolicy::existing_vault_identity_recovery_required(
+                crate::ExistingVaultIdentityRecoveryRequiredRequest {
+                    existing_vault_required: (true).into(),
+                    provider_setup_active: (true).into(),
+                    device_protection_ready: (false).into()
+                }
+            )
+        );
+        assert!(
+            !VaultClientPolicy::existing_vault_identity_recovery_required(
+                crate::ExistingVaultIdentityRecoveryRequiredRequest {
+                    existing_vault_required: (false).into(),
+                    provider_setup_active: (true).into(),
+                    device_protection_ready: (false).into()
+                }
+            )
+        );
+        assert!(
+            !VaultClientPolicy::existing_vault_identity_recovery_required(
+                crate::ExistingVaultIdentityRecoveryRequiredRequest {
+                    existing_vault_required: (true).into(),
+                    provider_setup_active: (false).into(),
+                    device_protection_ready: (false).into()
+                }
+            )
+        );
+        assert!(
+            !VaultClientPolicy::existing_vault_identity_recovery_required(
+                crate::ExistingVaultIdentityRecoveryRequiredRequest {
+                    existing_vault_required: (true).into(),
+                    provider_setup_active: (true).into(),
+                    device_protection_ready: (true).into()
+                }
+            )
+        );
     }
 
     #[test]
     fn remote_missing_policy_distinguishes_recovery_creation_and_open() {
         assert_eq!(
             VaultClientPolicy::remote_vault_assess_decision(
-                VaultAccessStatus::RemoteMissingLocalCache,
-                false,
-                false,
+                crate::RemoteVaultAssessDecisionRequest {
+                    access_status: VaultAccessStatus::RemoteMissingLocalCache,
+                    existing_vault_required: (false).into(),
+                    provider_setup_active: (false).into()
+                }
             ),
             RemoteVaultAssessDecision::PromptRecoveryFromCache
         );
         assert_eq!(
             VaultClientPolicy::remote_vault_assess_decision(
-                VaultAccessStatus::RemoteMissing,
-                true,
-                false,
+                crate::RemoteVaultAssessDecisionRequest {
+                    access_status: VaultAccessStatus::RemoteMissing,
+                    existing_vault_required: (true).into(),
+                    provider_setup_active: (false).into()
+                }
             ),
             RemoteVaultAssessDecision::RejectMissingExistingVault
         );
         assert_eq!(
             VaultClientPolicy::remote_vault_assess_decision(
-                VaultAccessStatus::RemoteMissing,
-                false,
-                true,
+                crate::RemoteVaultAssessDecisionRequest {
+                    access_status: VaultAccessStatus::RemoteMissing,
+                    existing_vault_required: (false).into(),
+                    provider_setup_active: (true).into()
+                }
             ),
             RemoteVaultAssessDecision::Continue
         );
         assert_eq!(
             VaultClientPolicy::remote_vault_assess_decision(
-                VaultAccessStatus::RemoteMissing,
-                false,
-                false,
+                crate::RemoteVaultAssessDecisionRequest {
+                    access_status: VaultAccessStatus::RemoteMissing,
+                    existing_vault_required: (false).into(),
+                    provider_setup_active: (false).into()
+                }
             ),
             RemoteVaultAssessDecision::PromptMissingRemote
         );
@@ -245,23 +298,43 @@ mod tests {
             VaultAccessStatus::JoinPending,
         ] {
             assert_eq!(
-                VaultClientPolicy::vault_connect_probe_decision(status, false, 1.into()),
+                VaultClientPolicy::vault_connect_probe_decision(
+                    crate::VaultConnectProbeDecisionRequest {
+                        access_status: status,
+                        authenticated: (false).into(),
+                        sync_provider_count: 1.into()
+                    }
+                ),
                 VaultConnectProbeDecision::ReassessFirstSyncProvider
             );
             assert_eq!(
-                VaultClientPolicy::vault_connect_probe_decision(status, true, 1.into()),
+                VaultClientPolicy::vault_connect_probe_decision(
+                    crate::VaultConnectProbeDecisionRequest {
+                        access_status: status,
+                        authenticated: (true).into(),
+                        sync_provider_count: 1.into()
+                    }
+                ),
                 VaultConnectProbeDecision::UseConfiguredStorage
             );
             assert_eq!(
-                VaultClientPolicy::vault_connect_probe_decision(status, false, 0.into()),
+                VaultClientPolicy::vault_connect_probe_decision(
+                    crate::VaultConnectProbeDecisionRequest {
+                        access_status: status,
+                        authenticated: (false).into(),
+                        sync_provider_count: 0.into()
+                    }
+                ),
                 VaultConnectProbeDecision::UseConfiguredStorage
             );
         }
         assert_eq!(
             VaultClientPolicy::vault_connect_probe_decision(
-                VaultAccessStatus::Ready,
-                false,
-                1.into(),
+                crate::VaultConnectProbeDecisionRequest {
+                    access_status: VaultAccessStatus::Ready,
+                    authenticated: (false).into(),
+                    sync_provider_count: 1.into()
+                }
             ),
             VaultConnectProbeDecision::UseConfiguredStorage
         );
@@ -346,27 +419,27 @@ mod tests {
     #[test]
     fn vault_switch_target_is_trimmed_and_rejects_noops() {
         assert_eq!(
-            VaultClientPolicy::vault_switch_target(
-                " store-b ",
-                ActiveVaultStore::Selected("store-a"),
-                false,
-            ),
+            VaultClientPolicy::vault_switch_target(crate::VaultSwitchTargetRequest {
+                requested_store_id: " store-b ",
+                active_store_id: ActiveVaultStore::Selected("store-a"),
+                verifying: (false).into()
+            }),
             VaultSwitchDecision::SwitchTo("store-b".to_owned())
         );
         assert_eq!(
-            VaultClientPolicy::vault_switch_target(
-                "store-a",
-                ActiveVaultStore::Selected(" store-a "),
-                false,
-            ),
+            VaultClientPolicy::vault_switch_target(crate::VaultSwitchTargetRequest {
+                requested_store_id: "store-a",
+                active_store_id: ActiveVaultStore::Selected(" store-a "),
+                verifying: (false).into()
+            }),
             VaultSwitchDecision::NoChange
         );
         assert_eq!(
-            VaultClientPolicy::vault_switch_target(
-                "store-b",
-                ActiveVaultStore::Selected("store-a"),
-                true,
-            ),
+            VaultClientPolicy::vault_switch_target(crate::VaultSwitchTargetRequest {
+                requested_store_id: "store-b",
+                active_store_id: ActiveVaultStore::Selected("store-a"),
+                verifying: (true).into()
+            }),
             VaultSwitchDecision::NoChange
         );
     }

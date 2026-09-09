@@ -220,9 +220,9 @@ impl AuthenticationCeremonyObservationFacts {
 
     pub(super) fn derived_one_time_code_progression(
         &self,
-        has_trusted_authentication_context: bool,
+        fields: AuthenticationFieldObservationFacts,
     ) -> AuthenticationOneTimeCodeProgressionEvidence {
-        if !self.is_bounded() || !has_trusted_authentication_context {
+        if !self.is_bounded() || !self.authentication_context.is_authenticated(fields) {
             return AuthenticationOneTimeCodeProgressionEvidence::AdvanceControlRequired;
         }
         if AuthenticationControlText::new(&self.one_time_code_handler_signal)

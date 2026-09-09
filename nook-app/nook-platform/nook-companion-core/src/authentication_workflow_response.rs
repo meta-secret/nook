@@ -26,22 +26,23 @@ pub struct AuthenticationWorkflowSnapshotWire {
     observation_index: u32,
 }
 
-impl AuthenticationWorkflowSnapshotWire {
-    const fn into_snapshot(self) -> Option<AuthenticationWorkflowSnapshot> {
+impl TryFrom<AuthenticationWorkflowSnapshotWire> for AuthenticationWorkflowSnapshot {
+    type Error = AuthenticationWorkflowSnapshotResponseDecodeError;
+    fn try_from(wire: AuthenticationWorkflowSnapshotWire) -> Result<Self, Self::Error> {
         let snapshot = AuthenticationWorkflowSnapshot {
-            kind: self.kind,
-            stage: self.stage,
-            action: self.action,
-            current_step: AuthenticationWorkflowCurrentStep(self.current_step),
-            total_steps: AuthenticationWorkflowTotalSteps(self.total_steps),
-            approval_requirement: self.approval_requirement,
-            saved_login_capability: self.saved_login_capability,
-            observation_index: AuthenticationWorkflowObservationIndex(self.observation_index),
+            kind: wire.kind,
+            stage: wire.stage,
+            action: wire.action,
+            current_step: AuthenticationWorkflowCurrentStep(wire.current_step),
+            total_steps: AuthenticationWorkflowTotalSteps(wire.total_steps),
+            approval_requirement: wire.approval_requirement,
+            saved_login_capability: wire.saved_login_capability,
+            observation_index: AuthenticationWorkflowObservationIndex(wire.observation_index),
         };
         if snapshot.matches_classifier_contract() {
-            Some(snapshot)
+            Ok(snapshot)
         } else {
-            None
+            Err(AuthenticationWorkflowSnapshotResponseDecodeError)
         }
     }
 }
@@ -185,9 +186,7 @@ impl AuthenticationWorkflowSnapshotResponse {
             AuthenticationWorkflowSnapshotResponseWire::Matched(
                 AuthenticationWorkflowMatchedResponseWire { ok: true, snapshot },
             ) => {
-                let Some(snapshot) = snapshot.into_snapshot() else {
-                    return Err(AuthenticationWorkflowSnapshotResponseDecodeError);
-                };
+                let snapshot = AuthenticationWorkflowSnapshot::try_from(snapshot)?;
                 Ok(AuthenticationWorkflowSnapshotResponse::Matched {
                     kind: AuthenticationWorkflowSnapshotResponseKind::Matched,
                     snapshot,

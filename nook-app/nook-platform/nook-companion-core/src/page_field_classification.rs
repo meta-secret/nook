@@ -65,10 +65,10 @@ pub struct AuthenticationRouteActuation<'a> {
     pub destination_identity: &'a str,
     pub control_label: &'a str,
     pub control_machine_identity: &'a str,
-    pub has_concrete_control: bool,
-    pub has_authentication_username: bool,
-    pub has_local_authentication_scope: bool,
-    pub has_authentication_password: bool,
+    pub has_concrete_control: AuthenticationRouteControlPresence,
+    pub has_authentication_username: AuthenticationRouteUsernamePresence,
+    pub has_local_authentication_scope: AuthenticationRouteScope,
+    pub has_authentication_password: AuthenticationRoutePasswordPresence,
 }
 
 impl AuthenticationAdvanceControlObservation {
@@ -122,7 +122,7 @@ pub struct PageInputFieldObservation {
     pub read_only: bool,
     pub autocomplete_tokens: Vec<String>,
     pub identity_text: String,
-    pub login_context: bool,
+    pub login_context: PageLoginContext,
 }
 
 /// Expand camelCase / separators into lowercase identity tokens for matching.
@@ -510,7 +510,7 @@ impl PageInputFieldObservation {
         }
         let identity = AuthenticationControlText::new(&field.identity_text).expand_identity_text();
         if field.input_type == PageInputType::Text
-            && field.login_context
+            && matches!(field.login_context, PageLoginContext::Authentication)
             && field.identity_text.len() <= MAX_AUTHENTICATION_CONTROL_TEXT_BYTES
             && field.autocomplete_tokens.len() == 1
             && PageInputFieldObservation::has_autocomplete_token(AutocompleteTokenQuery {
@@ -532,7 +532,7 @@ impl PageInputFieldObservation {
                 expected: "webauthn",
             }) {
                 AuthenticationUsernameEvidence::WebAuthnEmail
-            } else if field.login_context {
+            } else if matches!(field.login_context, PageLoginContext::Authentication) {
                 AuthenticationUsernameEvidence::Strong
             } else {
                 AuthenticationUsernameEvidence::StandardsBasedEmail
@@ -622,12 +622,30 @@ impl AuthenticationAdvanceControlObservation {
         if AuthenticationAdvanceControlObservation::looks_like_login_advance_control_label(
             control_label,
         ) {
-            return has_authentication_username && has_local_authentication_scope;
+            return matches!(
+                has_authentication_username,
+                AuthenticationRouteUsernamePresence::Present
+            ) && matches!(
+                has_local_authentication_scope,
+                AuthenticationRouteScope::LocalAuthentication
+            );
         }
         control_label.is_empty()
-            && !has_concrete_control
-            && (has_authentication_username || has_authentication_password)
-            && has_local_authentication_scope
+            && !matches!(
+                has_concrete_control,
+                AuthenticationRouteControlPresence::Present
+            )
+            && (matches!(
+                has_authentication_username,
+                AuthenticationRouteUsernamePresence::Present
+            ) || matches!(
+                has_authentication_password,
+                AuthenticationRoutePasswordPresence::Present
+            ))
+            && matches!(
+                has_local_authentication_scope,
+                AuthenticationRouteScope::LocalAuthentication
+            )
     }
 }
 
@@ -740,7 +758,7 @@ mod tests {
                 .map(|token| (*token).to_owned())
                 .collect(),
             identity_text: identity.to_owned(),
-            login_context,
+            login_context: login_context.into(),
         }
     }
 
@@ -897,10 +915,10 @@ mod tests {
                     destination_identity: "https://login.microsoftonline.com/common/login",
                     control_label: visible_label,
                     control_machine_identity: machine,
-                    has_concrete_control: concrete,
-                    has_authentication_username: username,
-                    has_local_authentication_scope: local,
-                    has_authentication_password: password,
+                    has_concrete_control: concrete.into(),
+                    has_authentication_username: username.into(),
+                    has_local_authentication_scope: local.into(),
+                    has_authentication_password: password.into(),
                 },
             )
         };
@@ -949,3 +967,6 @@ pub enum PasskeyControlMarking {
     Explicit,
     Implicit,
 }
+
+mod route_evidence;
+pub use route_evidence::*;

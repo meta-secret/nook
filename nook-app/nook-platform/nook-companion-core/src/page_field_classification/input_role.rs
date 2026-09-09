@@ -71,7 +71,8 @@ impl PageInputFieldObservation {
             PageInputType::Text | PageInputType::Email | PageInputType::Tel
         ) && !identity.is_empty()
             && (PageInputFieldObservation::username_positive(&identity)
-                || (field.input_type == PageInputType::Email && field.login_context))
+                || (field.input_type == PageInputType::Email
+                    && matches!(field.login_context, super::PageLoginContext::Authentication)))
         {
             return AuthenticationInputRole::Username(Username);
         }
@@ -95,7 +96,7 @@ mod tests {
                 read_only: false,
                 autocomplete_tokens: vec!["tel-national".to_owned()],
                 identity_text: "tel-national Phone number or email".to_owned(),
-                login_context: true,
+                login_context: true.into(),
             }
         }
     }
@@ -112,7 +113,7 @@ mod tests {
     #[test]
     fn mixed_phone_or_email_evidence_requires_the_complete_bounded_shape() {
         let mut missing_context = PageInputFieldObservation::airbnb_mixed_identity();
-        missing_context.login_context = false;
+        missing_context.login_context = false.into();
         let mut missing_autocomplete = PageInputFieldObservation::airbnb_mixed_identity();
         missing_autocomplete.autocomplete_tokens.clear();
         let mut other_autocomplete = PageInputFieldObservation::airbnb_mixed_identity();

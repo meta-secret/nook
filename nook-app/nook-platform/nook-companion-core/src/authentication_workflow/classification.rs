@@ -1,13 +1,20 @@
 //! Exhaustive authentication workflow classification policy.
 
 use super::{
-    AuthenticationPageObservation, AuthenticationWorkflowAction, AuthenticationWorkflowKind,
-    AuthenticationWorkflowMatch, AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
+    AuthenticationManualCheckpoint, AuthenticationPageObservation,
+    AuthenticationPasskeyControlObservation, AuthenticationWorkflowAction,
+    AuthenticationWorkflowEvidence, AuthenticationWorkflowKind, AuthenticationWorkflowMatch,
+    AuthenticationWorkflowSnapshot, AuthenticationWorkflowStage,
 };
 
 impl AuthenticationWorkflowAction {
-    const fn generate_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
-        if manual_checkpoint_present {
+    const fn generate_or_takeover(
+        manual_checkpoint_present: AuthenticationManualCheckpoint,
+    ) -> AuthenticationWorkflowAction {
+        if matches!(
+            manual_checkpoint_present,
+            AuthenticationManualCheckpoint::Present
+        ) {
             AuthenticationWorkflowAction::TakeOver
         } else {
             AuthenticationWorkflowAction::GeneratePassword
@@ -16,8 +23,13 @@ impl AuthenticationWorkflowAction {
 }
 
 impl AuthenticationWorkflowStage {
-    const fn credentials_or_manual(manual_checkpoint_present: bool) -> AuthenticationWorkflowStage {
-        if manual_checkpoint_present {
+    const fn credentials_or_manual(
+        manual_checkpoint_present: AuthenticationManualCheckpoint,
+    ) -> AuthenticationWorkflowStage {
+        if matches!(
+            manual_checkpoint_present,
+            AuthenticationManualCheckpoint::Present
+        ) {
             AuthenticationWorkflowStage::Manual
         } else {
             AuthenticationWorkflowStage::Credentials
@@ -26,8 +38,13 @@ impl AuthenticationWorkflowStage {
 }
 
 impl AuthenticationWorkflowAction {
-    const fn continue_or_takeover(manual_checkpoint_present: bool) -> AuthenticationWorkflowAction {
-        if manual_checkpoint_present {
+    const fn continue_or_takeover(
+        manual_checkpoint_present: AuthenticationManualCheckpoint,
+    ) -> AuthenticationWorkflowAction {
+        if matches!(
+            manual_checkpoint_present,
+            AuthenticationManualCheckpoint::Present
+        ) {
             AuthenticationWorkflowAction::TakeOver
         } else {
             AuthenticationWorkflowAction::ContinueWithNook
@@ -35,10 +52,10 @@ impl AuthenticationWorkflowAction {
     }
 }
 
-impl AuthenticationPageObservation {
+impl AuthenticationWorkflowEvidence {
     #[must_use]
     #[allow(clippy::too_many_lines)] // One exhaustive decision table keeps workflow precedence visible.
-    pub const fn classify_authentication_workflow(self) -> AuthenticationWorkflowMatch {
+    pub(super) const fn classify_authentication_workflow(self) -> AuthenticationWorkflowMatch {
         let observation = self;
         if !observation.has_authentication_fields() {
             return AuthenticationWorkflowMatch::NoMatch;
@@ -86,7 +103,10 @@ impl AuthenticationPageObservation {
         }
 
         if observation.one_time_code_field_count.raw() > 0 {
-            let (stage, action) = if observation.manual_checkpoint_present {
+            let (stage, action) = if matches!(
+                observation.manual_checkpoint_present,
+                AuthenticationManualCheckpoint::Present
+            ) {
                 (
                     AuthenticationWorkflowStage::Manual,
                     AuthenticationWorkflowAction::TakeOver,
@@ -160,8 +180,10 @@ impl AuthenticationPageObservation {
             );
         }
 
-        if observation.passkey_control_present
-            || observation.matching_passkey_account_count.raw() > 0
+        if matches!(
+            observation.passkey_control_present,
+            AuthenticationPasskeyControlObservation::Present
+        ) || observation.matching_passkey_account_count.raw() > 0
         {
             return AuthenticationWorkflowMatch::Matched(
                 AuthenticationWorkflowSnapshot::new(
@@ -169,7 +191,10 @@ impl AuthenticationPageObservation {
                     AuthenticationWorkflowStage::credentials_or_manual(
                         observation.manual_checkpoint_present,
                     ),
-                    if observation.manual_checkpoint_present {
+                    if matches!(
+                        observation.manual_checkpoint_present,
+                        AuthenticationManualCheckpoint::Present
+                    ) {
                         AuthenticationWorkflowAction::TakeOver
                     } else {
                         AuthenticationWorkflowAction::ContinueWithNook
@@ -188,5 +213,11 @@ impl AuthenticationPageObservation {
             1,
             1,
         ))
+    }
+}
+
+impl AuthenticationPageObservation {
+    pub fn classify_authentication_workflow(self) -> AuthenticationWorkflowMatch {
+        AuthenticationWorkflowEvidence::from(self).classify_authentication_workflow()
     }
 }

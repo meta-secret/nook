@@ -402,7 +402,10 @@ impl StoredExtensionPairingGrant {
         if imported.vault_store_id != grant.vault_store_id {
             return Err(ExtensionPairingStateError::ImportedVaultMismatch);
         }
-        if !imported.access_granted {
+        if matches!(
+            ImportedExtensionAccess::from(imported.access_granted),
+            ImportedExtensionAccess::Denied
+        ) {
             return Err(ExtensionPairingStateError::ImportedAccessDenied);
         }
         Ok(StoredExtensionPairingGrant {
@@ -462,11 +465,7 @@ impl ExtensionPairingState {
         };
         let grant =
             StoredExtensionPairingGrant::from_import(approval, input.imported, input.observed_at)?;
-        let selection = if input.select {
-            PairingSelection::Select
-        } else {
-            PairingSelection::KeepCurrent
-        };
+        let selection = PairingSelection::from(input.select);
         Ok(ExtensionPairingState::for_grant(&grant, selection))
     }
 
@@ -826,5 +825,25 @@ mod tests {
                 select: matches!(selection, PairingSelection::Select),
             }
         }
+    }
+}
+
+// Fixed browser booleans are admitted into distinct selection/access evidence.
+impl From<bool> for PairingSelection {
+    fn from(select: bool) -> Self {
+        if select {
+            Self::Select
+        } else {
+            Self::KeepCurrent
+        }
+    }
+}
+enum ImportedExtensionAccess {
+    Denied,
+    Granted,
+}
+impl From<bool> for ImportedExtensionAccess {
+    fn from(granted: bool) -> Self {
+        if granted { Self::Granted } else { Self::Denied }
     }
 }

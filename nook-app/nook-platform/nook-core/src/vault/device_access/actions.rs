@@ -124,7 +124,7 @@ impl DeviceAccessProtectionKind {
 
 /// Captures the browser/session observations used to classify device identity state.
 pub struct DeviceAccessIdentityObservation<'a> {
-    pub session_unlocked: bool,
+    pub session_unlocked: DeviceSessionLockState,
     pub session_device_id: &'a str,
     pub persisted_device_id: Option<&'a str>,
 }
@@ -132,7 +132,10 @@ pub struct DeviceAccessIdentityObservation<'a> {
 impl DeviceAccessIdentityState {
     #[must_use]
     pub fn classify(observation: &DeviceAccessIdentityObservation<'_>) -> Self {
-        if observation.session_unlocked {
+        if matches!(
+            observation.session_unlocked,
+            DeviceSessionLockState::Unlocked
+        ) {
             Self::Unlocked
         } else if !observation.session_device_id.trim().is_empty()
             || observation.persisted_device_id.is_some()
@@ -189,5 +192,21 @@ impl PasskeyAccessProfile {
     fn short_identifier(prefix: &str, bytes: &[u8]) -> String {
         let digest = Sha256::digest(bytes);
         format!("{prefix}_{}", hex::encode(&digest[..8]))
+    }
+}
+
+/// Non-secret session evidence; this value does not authorize identity access.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DeviceSessionLockState {
+    Locked,
+    Unlocked,
+}
+impl From<bool> for DeviceSessionLockState {
+    fn from(unlocked: bool) -> Self {
+        if unlocked {
+            Self::Unlocked
+        } else {
+            Self::Locked
+        }
     }
 }

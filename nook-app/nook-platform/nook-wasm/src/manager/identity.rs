@@ -55,7 +55,7 @@ impl NookVaultManager {
         let session_unlocked = !self.device.identity_private_key.is_empty();
         Ok(NookIdentityDirectorySnapshotRequest::new(
             session_app_id,
-            session_unlocked,
+            (session_unlocked).into(),
         ))
     }
 
@@ -69,7 +69,7 @@ impl NookVaultManager {
         let session_unlocked = !self.device.identity_private_key.is_empty();
         Ok(NookIdentityDirectorySnapshotRequest::for_selected_vault(
             session_app_id,
-            session_unlocked,
+            (session_unlocked).into(),
             store_id,
         ))
     }

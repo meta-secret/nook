@@ -89,9 +89,9 @@ pub fn authentication_enrollment_workflow_match(
 ) -> nook_companion_core::AuthenticationWorkflowMatch {
     AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
         AuthenticationEnrollmentObservation {
-            authenticator_setup_hint: authenticator_setup_hint,
+            authenticator_setup_hint: authenticator_setup_hint.into(),
             backup_codes_copy: backup_codes_copy,
-            manual_checkpoint_present: manual_checkpoint_present,
+            manual_checkpoint_present: manual_checkpoint_present.into(),
         },
     )
 }
@@ -159,9 +159,9 @@ mod tests {
             (
                 AuthenticationWorkflowMatch::authentication_enrollment_workflow_match(
                     AuthenticationEnrollmentObservation {
-                        authenticator_setup_hint: true,
+                        authenticator_setup_hint: true.into(),
                         backup_codes_copy: "Save these recovery codes",
-                        manual_checkpoint_present: false,
+                        manual_checkpoint_present: false.into(),
                     },
                 ),
                 super::CompanionAuthenticationWorkflowMatchKind::Matched,

@@ -22,10 +22,10 @@ impl NookVaultClientPolicy {
         local_vault_present: bool,
         sync_provider_count: u32,
     ) -> bool {
-        VaultClientPolicy::manual_sync_has_target(
-            local_vault_present,
-            (sync_provider_count as usize).into(),
-        )
+        VaultClientPolicy::manual_sync_has_target(nook_core::ManualSyncHasTargetRequest {
+            local_vault_present: (local_vault_present).into(),
+            sync_provider_count: (sync_provider_count as usize).into(),
+        })
     }
 
     #[wasm_bindgen]
@@ -76,11 +76,11 @@ impl NookVaultClientPolicy {
         has_sync_conflict: bool,
         architecture_allows_secret_creation: bool,
     ) -> nook_core::VaultEditDecision {
-        VaultClientPolicy::edit_block_reason(
-            (security_conflict_count as usize).into(),
-            has_sync_conflict,
-            architecture_allows_secret_creation,
-        )
+        VaultClientPolicy::edit_block_reason(nook_core::EditBlockReasonRequest {
+            security_conflict_count: (security_conflict_count as usize).into(),
+            has_sync_conflict: (has_sync_conflict).into(),
+            architecture_allows_secret_creation: (architecture_allows_secret_creation).into(),
+        })
     }
 
     #[wasm_bindgen]
@@ -98,11 +98,11 @@ impl NookVaultClientPolicy {
         has_sync_conflict: bool,
         architecture_allows_secret_creation: bool,
     ) -> bool {
-        VaultClientPolicy::edits_blocked(
-            (security_conflict_count as usize).into(),
-            has_sync_conflict,
-            architecture_allows_secret_creation,
-        )
+        VaultClientPolicy::edits_blocked(nook_core::EditsBlockedRequest {
+            security_conflict_count: (security_conflict_count as usize).into(),
+            has_sync_conflict: (has_sync_conflict).into(),
+            architecture_allows_secret_creation: (architecture_allows_secret_creation).into(),
+        })
     }
 
     #[wasm_bindgen]
@@ -121,13 +121,13 @@ impl NookVaultClientPolicy {
         catalog_json: &str,
         locale: &str,
     ) -> Result<String, wasm_bindgen::JsError> {
-        VaultClientPolicy::edit_block_message(
-            (security_conflict_count as usize).into(),
-            has_sync_conflict,
-            architecture_allows_secret_creation,
-            catalog_json,
-            locale,
-        )
+        VaultClientPolicy::edit_block_message(nook_core::EditBlockMessageRequest {
+            security_conflict_count: (security_conflict_count as usize).into(),
+            has_sync_conflict: (has_sync_conflict).into(),
+            architecture_allows_secret_creation: (architecture_allows_secret_creation).into(),
+            catalog_json: catalog_json,
+            locale: locale,
+        })
         .ok_or_else(|| JsError::new("blocked vault edit decision requires a message"))
     }
 
@@ -140,7 +140,12 @@ impl NookVaultClientPolicy {
         syncing: bool,
         saving: bool,
     ) -> bool {
-        VaultClientPolicy::sync_activity_visible(fan_out_syncing, provider_syncing, syncing, saving)
+        VaultClientPolicy::sync_activity_visible(nook_core::SyncActivityVisibleRequest {
+            fan_out_syncing: (fan_out_syncing).into(),
+            provider_syncing: (provider_syncing).into(),
+            syncing: (syncing).into(),
+            saving: (saving).into(),
+        })
     }
 
     #[wasm_bindgen]
@@ -159,9 +164,11 @@ impl NookVaultClientPolicy {
         join_state: nook_core::JoinEnrollmentState,
     ) -> bool {
         VaultClientPolicy::should_use_join_provider_for_connect(
-            authenticated,
-            (sync_provider_count as usize).into(),
-            join_state,
+            nook_core::ShouldUseJoinProviderForConnectRequest {
+                authenticated: (authenticated).into(),
+                sync_provider_count: (sync_provider_count as usize).into(),
+                join_state: join_state,
+            },
         )
     }
 
@@ -185,15 +192,15 @@ impl NookVaultClientPolicy {
         syncing: bool,
         sync_provider_count: u32,
     ) -> bool {
-        VaultClientPolicy::should_sync_from_providers(
-            sync_blocked,
-            force,
-            verifying,
-            saving,
-            password_busy,
-            syncing,
-            (sync_provider_count as usize).into(),
-        )
+        VaultClientPolicy::should_sync_from_providers(nook_core::ShouldSyncFromProvidersRequest {
+            sync_blocked: (sync_blocked).into(),
+            force: (force).into(),
+            verifying: (verifying).into(),
+            saving: (saving).into(),
+            password_busy: (password_busy).into(),
+            syncing: (syncing).into(),
+            sync_provider_count: (sync_provider_count as usize).into(),
+        })
     }
 
     #[wasm_bindgen]
@@ -206,10 +213,12 @@ impl NookVaultClientPolicy {
         awaiting_join_approval: bool,
     ) -> nook_core::VaultSyncTimerStartDecision {
         VaultClientPolicy::vault_sync_timer_start_decision(
-            authenticated,
-            device_protection_ready,
-            join_state,
-            awaiting_join_approval,
+            nook_core::VaultSyncTimerStartDecisionRequest {
+                authenticated: (authenticated).into(),
+                device_protection_ready: (device_protection_ready).into(),
+                join_state: join_state,
+                awaiting_join_approval: (awaiting_join_approval).into(),
+            },
         )
     }
 
@@ -235,14 +244,16 @@ impl NookVaultClientPolicy {
         sync_provider_count: u32,
     ) -> nook_core::VaultSyncTimerTickDecision {
         VaultClientPolicy::vault_sync_timer_tick_decision(
-            verifying,
-            saving,
-            syncing,
-            password_busy,
-            authenticated,
-            join_state,
-            awaiting_join_approval,
-            (sync_provider_count as usize).into(),
+            nook_core::VaultSyncTimerTickDecisionRequest {
+                verifying: (verifying).into(),
+                saving: (saving).into(),
+                syncing: (syncing).into(),
+                password_busy: (password_busy).into(),
+                authenticated: (authenticated).into(),
+                join_state: join_state,
+                awaiting_join_approval: (awaiting_join_approval).into(),
+                sync_provider_count: (sync_provider_count as usize).into(),
+            },
         )
     }
 
@@ -269,18 +280,18 @@ impl NookVaultClientPolicy {
         has_remote_credentials: bool,
         local_vault_present: bool,
     ) -> nook_core::VaultStorageSyncDecision {
-        VaultClientPolicy::vault_storage_sync_decision(
-            sync_blocked,
-            freshness,
-            verifying,
-            saving,
-            password_busy,
-            syncing,
-            authenticated,
-            (sync_provider_count as usize).into(),
-            has_remote_credentials,
-            local_vault_present,
-        )
+        VaultClientPolicy::vault_storage_sync_decision(nook_core::VaultStorageSyncDecisionRequest {
+            sync_blocked: (sync_blocked).into(),
+            freshness: freshness,
+            verifying: (verifying).into(),
+            saving: (saving).into(),
+            password_busy: (password_busy).into(),
+            syncing: (syncing).into(),
+            authenticated: (authenticated).into(),
+            sync_provider_count: (sync_provider_count as usize).into(),
+            has_remote_credentials: (has_remote_credentials).into(),
+            local_vault_present: (local_vault_present).into(),
+        })
     }
 
     #[wasm_bindgen]
@@ -302,14 +313,14 @@ impl NookVaultClientPolicy {
         provider_setup_active: bool,
         add_provider_open: bool,
     ) -> bool {
-        VaultClientPolicy::should_auto_unlock(
-            session_explicitly_locked,
-            local_vault_present,
-            (password_entry_count as usize).into(),
-            (sync_provider_count as usize).into(),
-            provider_setup_active,
-            add_provider_open,
-        )
+        VaultClientPolicy::should_auto_unlock(nook_core::ShouldAutoUnlockRequest {
+            session_explicitly_locked: (session_explicitly_locked).into(),
+            local_vault_present: (local_vault_present).into(),
+            password_entry_count: (password_entry_count as usize).into(),
+            sync_provider_count: (sync_provider_count as usize).into(),
+            provider_setup_active: (provider_setup_active).into(),
+            add_provider_open: (add_provider_open).into(),
+        })
     }
 
     #[wasm_bindgen]
@@ -321,9 +332,11 @@ impl NookVaultClientPolicy {
         device_protection_ready: bool,
     ) -> bool {
         VaultClientPolicy::existing_vault_identity_recovery_required(
-            existing_vault_required,
-            provider_setup_active,
-            device_protection_ready,
+            nook_core::ExistingVaultIdentityRecoveryRequiredRequest {
+                existing_vault_required: (existing_vault_required).into(),
+                provider_setup_active: (provider_setup_active).into(),
+                device_protection_ready: (device_protection_ready).into(),
+            },
         )
     }
 
@@ -347,12 +360,14 @@ impl NookVaultClientPolicy {
         session_explicitly_locked: bool,
     ) -> bool {
         VaultClientPolicy::should_show_login_vault_picker(
-            authenticated,
-            (local_vault_count as usize).into(),
-            vault_selected,
-            provider_setup_active,
-            add_provider_open,
-            session_explicitly_locked,
+            nook_core::ShouldShowLoginVaultPickerRequest {
+                authenticated: (authenticated).into(),
+                local_vault_count: (local_vault_count as usize).into(),
+                vault_selected: (vault_selected).into(),
+                provider_setup_active: (provider_setup_active).into(),
+                add_provider_open: (add_provider_open).into(),
+                session_explicitly_locked: (session_explicitly_locked).into(),
+            },
         )
     }
 
@@ -365,9 +380,11 @@ impl NookVaultClientPolicy {
         provider_setup_active: bool,
     ) -> nook_core::RemoteVaultAssessDecision {
         VaultClientPolicy::remote_vault_assess_decision(
-            access_status,
-            existing_vault_required,
-            provider_setup_active,
+            nook_core::RemoteVaultAssessDecisionRequest {
+                access_status: access_status,
+                existing_vault_required: (existing_vault_required).into(),
+                provider_setup_active: (provider_setup_active).into(),
+            },
         )
     }
 
@@ -387,9 +404,11 @@ impl NookVaultClientPolicy {
         sync_provider_count: u32,
     ) -> nook_core::VaultConnectProbeDecision {
         VaultClientPolicy::vault_connect_probe_decision(
-            access_status,
-            authenticated,
-            (sync_provider_count as usize).into(),
+            nook_core::VaultConnectProbeDecisionRequest {
+                access_status: access_status,
+                authenticated: (authenticated).into(),
+                sync_provider_count: (sync_provider_count as usize).into(),
+            },
         )
     }
 
@@ -433,14 +452,16 @@ impl NookVaultClientPolicy {
         awaiting_join_approval: bool,
     ) -> nook_core::UnauthenticatedSyncDecision {
         VaultClientPolicy::unauthenticated_sync_decision(
-            changed,
-            if access_status_available {
-                VaultAccessObservation::Available(access_status)
-            } else {
-                VaultAccessObservation::Unavailable
+            nook_core::UnauthenticatedSyncDecisionRequest {
+                changed: (changed).into(),
+                access_status: if access_status_available {
+                    VaultAccessObservation::Available(access_status)
+                } else {
+                    VaultAccessObservation::Unavailable
+                },
+                join_state: join_state,
+                awaiting_join_approval: (awaiting_join_approval).into(),
             },
-            join_state,
-            awaiting_join_approval,
         )
     }
 
@@ -456,11 +477,13 @@ impl NookVaultClientPolicy {
         session_explicitly_locked: bool,
     ) -> bool {
         VaultClientPolicy::should_auto_connect_after_approval(
-            authenticated,
-            verifying,
-            password_prompt_open,
-            session_expired_by_idle,
-            session_explicitly_locked,
+            nook_core::ShouldAutoConnectAfterApprovalRequest {
+                authenticated: (authenticated).into(),
+                verifying: (verifying).into(),
+                password_prompt_open: (password_prompt_open).into(),
+                session_expired_by_idle: (session_expired_by_idle).into(),
+                session_explicitly_locked: (session_explicitly_locked).into(),
+            },
         )
     }
 
@@ -500,13 +523,15 @@ impl NookVaultClientPolicy {
         verifying: bool,
     ) -> NookVaultSwitchDecision {
         NookVaultSwitchDecision(VaultClientPolicy::vault_switch_target(
-            requested_store_id,
-            if active_store_selected {
-                ActiveVaultStore::Selected(active_store_id)
-            } else {
-                ActiveVaultStore::Unselected
+            nook_core::VaultSwitchTargetRequest {
+                requested_store_id: requested_store_id,
+                active_store_id: if active_store_selected {
+                    ActiveVaultStore::Selected(active_store_id)
+                } else {
+                    ActiveVaultStore::Unselected
+                },
+                verifying: (verifying).into(),
             },
-            verifying,
         ))
     }
 }

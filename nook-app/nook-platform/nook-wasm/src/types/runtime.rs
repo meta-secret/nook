@@ -104,7 +104,7 @@ pub struct NookClientRunModeUtil;
 #[wasm_bindgen]
 impl NookClientRunModeUtil {
     pub fn parse(mode: &str) -> Result<NookClientRunMode, wasm_bindgen::JsError> {
-        ClientRunMode::parse(mode)
+        ClientRunMode::try_from(mode)
             .map(Into::into)
             .map_err(|error| JsError::new(&error))
     }
@@ -191,7 +191,7 @@ impl NookRuntimeConfig {
     #[wasm_bindgen(constructor)]
     pub fn new(run_mode: NookClientRunMode, e2e_expose_vault: bool) -> Self {
         Self {
-            policy: VaultRuntimePolicy::new(run_mode.into(), e2e_expose_vault),
+            policy: VaultRuntimePolicy::new(run_mode.into(), (e2e_expose_vault).into()),
         }
     }
 
