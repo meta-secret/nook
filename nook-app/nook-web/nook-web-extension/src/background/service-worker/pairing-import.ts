@@ -6,11 +6,7 @@ import {
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import type { ExtensionPairingGrantApproval } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import type { StorageProvider } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import {
-  type ProviderCredentialCleanupArgs,
-  ProviderCredentialStagingKind,
-  ProviderCredentialBuffer,
-} from '../../lib/provider-credential-staging'
+import { ProviderCredentialBuffer } from '../../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from '../../lib/extension-session-message-type'
 import {
   type ExtensionSessionQueue,
@@ -60,9 +56,7 @@ async function restorePairingStorage(
   const { previous, written } = args
   const touchedKeys = Object.keys(written)
   const restore: ExtensionPairingItems = Object.fromEntries(
-    touchedKeys
-      .filter((key) => key in previous)
-      .map((key) => [key, previous[key]]),
+    touchedKeys.filter((key) => key in previous).map((key) => [key, previous[key]]),
   )
   const addedKeys = touchedKeys.filter((key) => !(key in previous))
   const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
@@ -78,7 +72,8 @@ type ImportDecodedApprovedPairingArgs = {
 }
 
 export type PairingImportResult =
-  { ok: true; eventCount: number } | { ok: false; reason: string }
+  | { ok: true; eventCount: number }
+  | { ok: false; reason: string }
 
 async function importDecodedApprovedPairing(
   args: ImportDecodedApprovedPairingArgs,
@@ -115,8 +110,7 @@ async function importDecodedApprovedPairing(
     >[0] = { grant: grantApproval, imported }
     const pairingItems =
       pairingPolicy.extensionPairingGrantStorageItems(pairingItemsArgs)
-    const previousPairingState =
-      await extensionPairingIdentity.getPairingStorage()
+    const previousPairingState = await extensionPairingIdentity.getPairingStorage()
     await extensionPairingIdentity.setPairingStorage(pairingItems)
     try {
       const nookTypedArgs0_1: Parameters<
@@ -159,17 +153,11 @@ async function importDecodedApprovedPairing(
         },
       }
       new ProviderCredentialBuffer(providers).clear()
-      type SessionImportResponse = Awaited<
-        ReturnType<typeof extensionPairingIdentity.sendSessionMessage>
-      >
-      const handoffArgs: ProviderCredentialCleanupArgs<SessionImportResponse> =
-        {
-          providers: importMessage.payload.providers,
-          operation: () =>
-            extensionPairingIdentity.sendSessionMessage(importMessage),
-        }
-      const sessionImport =
-        await ProviderCredentialBuffer.runWithCleanup(handoffArgs)
+      const sessionImport = await new ProviderCredentialBuffer(
+        importMessage.payload.providers,
+      ).runWithCleanup(() =>
+        extensionPairingIdentity.sendSessionMessage(importMessage),
+      )
       if (
         !sessionImport ||
         typeof sessionImport !== 'object' ||
@@ -210,20 +198,21 @@ export async function importApprovedPairing(
 ): Promise<PairingImportResult> {
   try {
     const sourceProviders = message.payload.providers
-    const stagingArgs: Parameters<typeof ProviderCredentialBuffer.stage>[0] = {
-      providers: sourceProviders,
+    const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
       decode: backgroundVaultRuntime.decodeExtensionStorageProviders.bind(
         backgroundVaultRuntime,
       ),
     }
-    const stagingOperation = ProviderCredentialBuffer.stage(stagingArgs)
+    const stagingOperation = new ProviderCredentialBuffer(sourceProviders).stage(
+      stagingArgs,
+    )
     new ProviderCredentialBuffer(sourceProviders).clear()
     message.payload.providers = []
     const staging = await stagingOperation
-    if (staging.kind !== ProviderCredentialStagingKind.Staged) {
+    if (staging.isErr()) {
       return { ok: false, reason: 'invalid-provider-payload' }
     }
-    const stagedProviders = staging.providers
+    const stagedProviders = staging.value
     try {
       const args: ImportDecodedApprovedPairingArgs = {
         message,
@@ -267,28 +256,26 @@ type LocalEventLogUpdateDependencies = {
 export function importLocalEventLogUpdate(
   request: ImportLocalEventLogUpdateArgs,
 ): Promise<LocalEventLogUpdateResult> {
-  const delegated: Parameters<
-    typeof importLocalEventLogUpdateWithDependencies
-  >[0] = {
-    ...request,
-    ensureSession:
-      extensionSessionLifecycle.ensureExtensionSessionDocument.bind(
+  const delegated: Parameters<typeof importLocalEventLogUpdateWithDependencies>[0] =
+    {
+      ...request,
+      ensureSession: extensionSessionLifecycle.ensureExtensionSessionDocument.bind(
         extensionSessionLifecycle,
       ),
-    persistPairingStorage: extensionPairingIdentity.setPairingStorage.bind(
-      extensionPairingIdentity,
-    ),
-    loadPairingStorage: extensionPairingIdentity.getPairingStorage.bind(
-      extensionPairingIdentity,
-    ),
-    pairingPolicyReady: extensionPairingGrantPolicyReady,
-    importEventLog: backgroundVaultRuntime.importExtensionEventLog.bind(
-      backgroundVaultRuntime,
-    ),
-    sendSession: extensionPairingIdentity.sendSessionMessage.bind(
-      extensionPairingIdentity,
-    ),
-  }
+      persistPairingStorage: extensionPairingIdentity.setPairingStorage.bind(
+        extensionPairingIdentity,
+      ),
+      loadPairingStorage: extensionPairingIdentity.getPairingStorage.bind(
+        extensionPairingIdentity,
+      ),
+      pairingPolicyReady: extensionPairingGrantPolicyReady,
+      importEventLog: backgroundVaultRuntime.importExtensionEventLog.bind(
+        backgroundVaultRuntime,
+      ),
+      sendSession: extensionPairingIdentity.sendSessionMessage.bind(
+        extensionPairingIdentity,
+      ),
+    }
   return importLocalEventLogUpdateWithDependencies(delegated)
 }
 
@@ -352,10 +339,7 @@ export async function importLocalEventLogUpdateWithDependencies({
         setup.kind === 'ready' ? { [setupStorageKey]: setup.setup } : {}
       const reconcileArgs: Parameters<typeof reconcilePairingStorage>[0] = {
         items,
-        removedKeys: [
-          key,
-          ...(setup.kind === 'ready' ? [] : [setupStorageKey]),
-        ],
+        removedKeys: [key, ...(setup.kind === 'ready' ? [] : [setupStorageKey])],
       }
       await reconcilePairingStorage(reconcileArgs)
       return {

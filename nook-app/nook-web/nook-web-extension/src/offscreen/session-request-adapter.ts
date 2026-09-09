@@ -84,10 +84,9 @@ type GeneratedExtensionSessionNonImportRequest = Exclude<
 >
 type ExtensionSessionImportTransportRequest = {
   type: GeneratedExtensionSessionImportRequest['type']
-  payload: Omit<
-    GeneratedExtensionSessionImportRequest['payload'],
-    'providers'
-  > & { providers: SerializedStorageProvider[] }
+  payload: Omit<GeneratedExtensionSessionImportRequest['payload'], 'providers'> & {
+    providers: SerializedStorageProvider[]
+  }
 }
 export type ExtensionSessionTransportRequest =
   | GeneratedExtensionSessionNonImportRequest
@@ -151,15 +150,13 @@ export type ExtensionSessionNonImportRequest = Exclude<
 >
 type ExtensionSessionImportRequest = {
   type: TypedExtensionSessionImportRequest['type']
-  payload: Omit<
-    GeneratedExtensionSessionImportRequest['payload'],
-    'providers'
-  > & {
+  payload: Omit<GeneratedExtensionSessionImportRequest['payload'], 'providers'> & {
     providers: StorageProvider[]
   }
 }
 export type ExtensionSessionRequest =
-  ExtensionSessionNonImportRequest | ExtensionSessionImportRequest
+  | ExtensionSessionNonImportRequest
+  | ExtensionSessionImportRequest
 
 export enum ExtensionSessionRequestParseKind {
   Invalid = 'invalid',
@@ -351,12 +348,11 @@ export function stageExtensionSessionSensitiveRequest(
     }
     setExtensionSessionSensitiveValue(clearedValueArgs)
   }
-  const replacementArgs: ReplaceExtensionSessionRequestPayloadArgs<
-    typeof request
-  > = {
-    request,
-    payload: stagedPayload,
-  }
+  const replacementArgs: ReplaceExtensionSessionRequestPayloadArgs<typeof request> =
+    {
+      request,
+      payload: stagedPayload,
+    }
   return {
     kind: ExtensionSessionSensitiveStageKind.Staged,
     request: replaceExtensionSessionRequestPayload(replacementArgs),
@@ -496,18 +492,22 @@ export async function parseExtensionSessionRequest(
     if (readiness === CompanionWasmReadinessKind.Expired) {
       return { kind: ExtensionSessionRequestParseKind.Invalid }
     }
-    const validationRequest =
-      request.type === ExtensionSessionMessageType.ImportVault
-        ? {
-            ...request,
-            payload: {
-              ...request.payload,
-              providers: new ProviderCredentialBuffer(
-                request.payload.providers,
-              ).identities(),
-            },
-          }
-        : request
+    let validationRequest: ExtensionSessionRequestWire
+    if (request.type === ExtensionSessionMessageType.ImportVault) {
+      const identities = new ProviderCredentialBuffer(
+        request.payload.providers,
+      ).identities()
+      if (identities.isErr()) {
+        clearExtensionSessionIngressRequest(request)
+        return { kind: ExtensionSessionRequestParseKind.Invalid }
+      }
+      validationRequest = {
+        ...request,
+        payload: { ...request.payload, providers: identities.value },
+      }
+    } else {
+      validationRequest = request
+    }
     const requestWire: ExtensionSessionRequestWire =
       validationRequest as ExtensionSessionRequestWire
     if (

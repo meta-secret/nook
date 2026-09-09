@@ -1,6 +1,5 @@
 import { err, type Result } from 'neverthrow'
 import {
-  ProviderCredentialStagingKind,
   type SerializedExtensionStorageProviders,
   ProviderCredentialBuffer,
 } from '../lib/provider-credential-staging'
@@ -255,18 +254,19 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
       )
     }
     const providerCandidate: SerializedExtensionStorageProviders = payload.providers
-    const stagingArgs: Parameters<typeof ProviderCredentialBuffer.stage>[0] = {
-      providers: providerCandidate,
+    const stagingArgs: Parameters<ProviderCredentialBuffer['stage']>[0] = {
       decode: this.context.decodeProviders,
     }
-    const stagingOperation = ProviderCredentialBuffer.stage(stagingArgs)
+    const stagingOperation = new ProviderCredentialBuffer(providerCandidate).stage(
+      stagingArgs,
+    )
     let stagingOwnership = StagingOwnership.Queue
     const clearQueuedStaging = () => {
       if (stagingOwnership !== StagingOwnership.Queue) return
       stagingOwnership = StagingOwnership.Cleared
       void stagingOperation.then((staging) => {
-        if (staging.kind === ProviderCredentialStagingKind.Staged) {
-          new ProviderCredentialBuffer(staging.providers).clear()
+        if (staging.isOk()) {
+          new ProviderCredentialBuffer(staging.value).clear()
         }
       })
     }
@@ -279,31 +279,31 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         stagingOwnership = StagingOwnership.Operation
         const staging = await stagingOperation
         if (operationGeneration !== this.operationGeneration) {
-          if (staging.kind === ProviderCredentialStagingKind.Staged) {
-            new ProviderCredentialBuffer(staging.providers).clear()
+          if (staging.isOk()) {
+            new ProviderCredentialBuffer(staging.value).clear()
           }
           stagingOwnership = StagingOwnership.Cleared
           return err(
             new SessionOperationFailure(SessionOperationFailureKind.Expired),
           )
         }
-        if (staging.kind === ProviderCredentialStagingKind.InvalidInput) {
+        if (staging.isErr()) {
           stagingOwnership = StagingOwnership.Cleared
           return err(
             new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
           )
         }
-        if (staging.providers.length === 0) {
+        if (staging.value.length === 0) {
           stagingOwnership = StagingOwnership.Cleared
           const emptyProviderRequest: Parameters<
             typeof this.context.handleMessage
           >[0] = {
             ...message,
-            payload: { ...payload, providers: staging.providers },
+            payload: { ...payload, providers: staging.value },
           }
           return this.context.handleMessage(emptyProviderRequest)
         }
-        const stagedProviders = staging.providers
+        const stagedProviders = staging.value
         try {
           const stagedProviderRequest: Parameters<
             typeof this.context.handleMessage
