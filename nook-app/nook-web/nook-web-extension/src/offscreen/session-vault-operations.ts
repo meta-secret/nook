@@ -4,6 +4,7 @@ import {
   NookExternalEventLogRecords,
   NookVaultManager,
   provider_wasm_args,
+  select_remote_event_flush_providers,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
   AuthProvidersSnapshot,
@@ -266,13 +267,10 @@ export async function flushPasskeyEventToProviders({
   vaultStoreId,
 }: PasskeyEventProviderFlushRequest): Promise<void> {
   const snapshot = await activeManager.load_auth_providers_snapshot()
-  const providers = snapshot.providers.filter(
-    (provider) =>
-      provider.storeId.state === 'storeId' &&
-      provider.storeId.value === vaultStoreId &&
-      provider.type !== 'local' &&
-      provider.type !== 'local-folder',
-  )
+  const providers = select_remote_event_flush_providers({
+    snapshot,
+    vaultStoreId,
+  })
   await Promise.allSettled(
     providers.map(async (provider) => {
       const args = provider_wasm_args(provider)

@@ -11,6 +11,7 @@ import {
 import {
   AuthenticationWorkflowClassification,
   LiveApprovedAuthenticationWorkflow,
+  LiveAuthenticationWorkflowDisposition,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   FormSubmissionResult,
@@ -301,7 +302,10 @@ export function simulateDomAuthentication({
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    return new LiveApprovedAuthenticationWorkflow(approvalRequest).observation
+    return (
+      new LiveApprovedAuthenticationWorkflow(approvalRequest).disposition ===
+      LiveAuthenticationWorkflowDisposition.Current
+    )
   }
   const approvedFill = filled && approvalIsActive()
   if (filled && !approvedFill)

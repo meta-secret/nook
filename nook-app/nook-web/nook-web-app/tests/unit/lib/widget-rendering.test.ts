@@ -20,6 +20,8 @@ const renderState = vi.hoisted(() => ({
       request?: { approval: Record<string, never> }
     },
     authenticator: { kind: 'closed' },
+    loginApprovalDisposition: () => 'current',
+    authenticatorApprovalDisposition: () => 'closed',
   },
   widgetState: {
     dismissed: false,
@@ -27,6 +29,8 @@ const renderState = vi.hoisted(() => ({
     workflowKey: { kind: 'unassigned' },
     renderedWorkflowRoot: { kind: 'unassigned' },
     setRenderedWorkflowRoot: vi.fn(),
+    enrollmentRenderDisposition: () => 'replace',
+    workflowRenderDisposition: () => 'replace',
   },
 }))
 
@@ -47,7 +51,7 @@ vi.mock(
   '../../../../nook-web-extension/src/lib/auth-workflow-messages',
   () => ({
     AuthenticationWorkflowApproval: {
-      authenticationWorkflowApprovalsMatch: () => true,
+      compare: () => 'current',
     },
   }),
 )
@@ -109,6 +113,12 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
   AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
   LoginPickerKind: { Closed: 'closed', Open: 'open' },
   WidgetHostKind: { Detached: 'detached', Attached: 'attached' },
+  WidgetRenderDisposition: { Reuse: 'reuse', Replace: 'replace' },
+  PendingPickerApprovalDisposition: {
+    Closed: 'closed',
+    Current: 'current',
+    Changed: 'changed',
+  },
   WidgetWorkflowKeyKind: {
     Unassigned: 'unassigned',
     Assigned: 'assigned',

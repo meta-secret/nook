@@ -1,7 +1,13 @@
 import type { AuthenticationPageObservationFacts } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
+import {
+  PasswordFormScopeKind,
+  type PasswordFormObservation,
+} from '../../../../nook-web-shared/src/extension/password-forms'
 import type { WebsiteLoginSaveOfferView } from '../../lib/login-save-messages'
-import type { AuthenticationWorkflowApproval } from '../../lib/auth-workflow-messages'
+import {
+  AuthenticationWorkflowApproval,
+  AuthenticationWorkflowApprovalDisposition,
+} from '../../lib/auth-workflow-messages'
 
 export type WidgetPosition = { left: number; top: number }
 
@@ -143,6 +149,35 @@ class ScanState {
   }
 }
 
+export enum WidgetRenderDisposition {
+  Reuse = 'reuse',
+  Replace = 'replace',
+}
+
+export enum WidgetControlDisposition {
+  Active = 'active',
+  Dismissed = 'dismissed',
+  Detached = 'detached',
+}
+
+export enum WidgetWorkflowAdmissionKind {
+  Unassigned = 'unassigned',
+  Assigned = 'assigned',
+}
+
+export type WidgetWorkflowAdmission =
+  | { kind: WidgetWorkflowAdmissionKind.Unassigned }
+  | {
+      kind: WidgetWorkflowAdmissionKind.Assigned
+      observation: PasswordFormObservation
+      facts: AuthenticationPageObservationFacts
+    }
+
+type WidgetWorkflowRenderRequest = {
+  key: string
+  observation: PasswordFormObservation
+}
+
 class WidgetState {
   private hostState: WidgetHost = { kind: WidgetHostKind.Detached }
   private workflowKeyState: WidgetWorkflowKey = {
@@ -158,6 +193,56 @@ class WidgetState {
   busy = false
   collapsed = false
   credentialActuationInFlight = false
+  controlDisposition(control: HTMLButtonElement): WidgetControlDisposition {
+    if (this.dismissed) return WidgetControlDisposition.Dismissed
+    return control.isConnected
+      ? WidgetControlDisposition.Active
+      : WidgetControlDisposition.Detached
+  }
+  enrollmentRenderDisposition(key: string): WidgetRenderDisposition {
+    if (this.hostState.kind !== WidgetHostKind.Attached)
+      return WidgetRenderDisposition.Replace
+    if (this.workflowKeyState.kind !== WidgetWorkflowKeyKind.Assigned)
+      return WidgetRenderDisposition.Replace
+    return this.workflowKeyState.key === key
+      ? WidgetRenderDisposition.Reuse
+      : WidgetRenderDisposition.Replace
+  }
+  workflowAdmission(): WidgetWorkflowAdmission {
+    if (this.workflowKeyState.kind !== WidgetWorkflowKeyKind.Assigned)
+      return { kind: WidgetWorkflowAdmissionKind.Unassigned }
+    if (this.workflowRootState.kind !== WidgetWorkflowRootKind.Assigned)
+      return { kind: WidgetWorkflowAdmissionKind.Unassigned }
+    return {
+      kind: WidgetWorkflowAdmissionKind.Assigned,
+      observation: this.workflowRootState.observation,
+      facts: this.workflowRootState.facts,
+    }
+  }
+  workflowRenderDisposition(
+    request: WidgetWorkflowRenderRequest,
+  ): WidgetRenderDisposition {
+    if (
+      this.enrollmentRenderDisposition(request.key) !==
+      WidgetRenderDisposition.Reuse
+    )
+      return WidgetRenderDisposition.Replace
+    const rendered = this.workflowAdmission()
+    if (rendered.kind !== WidgetWorkflowAdmissionKind.Assigned)
+      return WidgetRenderDisposition.Replace
+    const previous = rendered.observation
+    const current = request.observation
+    if (previous.root !== current.root) return WidgetRenderDisposition.Replace
+    if (previous.formScope.kind !== current.formScope.kind)
+      return WidgetRenderDisposition.Replace
+    if (previous.formScope.kind === PasswordFormScopeKind.Owned) {
+      if (current.formScope.kind !== PasswordFormScopeKind.Owned)
+        return WidgetRenderDisposition.Replace
+      if (previous.formScope.owner !== current.formScope.owner)
+        return WidgetRenderDisposition.Replace
+    }
+    return WidgetRenderDisposition.Reuse
+  }
   get host(): WidgetHost {
     return this.hostState
   }
@@ -222,11 +307,70 @@ class SaveOfferState {
   }
 }
 
+export enum PendingPickerApprovalDisposition {
+  Closed = 'closed',
+  Current = 'current',
+  Changed = 'changed',
+}
+
+export enum PendingPickerTakeKind {
+  Closed = 'closed',
+  DifferentRequest = 'different-request',
+  Taken = 'taken',
+}
+
+export type PendingPickerTake =
+  | { kind: PendingPickerTakeKind.Closed }
+  | { kind: PendingPickerTakeKind.DifferentRequest }
+  | { kind: PendingPickerTakeKind.Taken; request: PendingAuthenticatorPicker }
+
 class PickerState {
   private authenticatorState: AuthenticatorPicker = {
     kind: AuthenticatorPickerKind.Closed,
   }
   private loginState: LoginPicker = { kind: LoginPickerKind.Closed }
+  authenticatorApprovalDisposition(
+    current: AuthenticationWorkflowApproval,
+  ): PendingPickerApprovalDisposition {
+    if (this.authenticatorState.kind === AuthenticatorPickerKind.Closed)
+      return PendingPickerApprovalDisposition.Closed
+    return AuthenticationWorkflowApproval.compare({
+      approved: this.authenticatorState.request.approval,
+      current,
+    }) === AuthenticationWorkflowApprovalDisposition.Current
+      ? PendingPickerApprovalDisposition.Current
+      : PendingPickerApprovalDisposition.Changed
+  }
+  loginApprovalDisposition(
+    current: AuthenticationWorkflowApproval,
+  ): PendingPickerApprovalDisposition {
+    if (this.loginState.kind === LoginPickerKind.Closed)
+      return PendingPickerApprovalDisposition.Closed
+    return AuthenticationWorkflowApproval.compare({
+      approved: this.loginState.request.approval,
+      current,
+    }) === AuthenticationWorkflowApprovalDisposition.Current
+      ? PendingPickerApprovalDisposition.Current
+      : PendingPickerApprovalDisposition.Changed
+  }
+  takeAuthenticator(requestId: string): PendingPickerTake {
+    const current = this.authenticatorState
+    if (current.kind === AuthenticatorPickerKind.Closed)
+      return { kind: PendingPickerTakeKind.Closed }
+    if (current.request.requestId !== requestId)
+      return { kind: PendingPickerTakeKind.DifferentRequest }
+    this.clearPendingAuthenticator()
+    return { kind: PendingPickerTakeKind.Taken, request: current.request }
+  }
+  takeLogin(requestId: string): PendingPickerTake {
+    const current = this.loginState
+    if (current.kind === LoginPickerKind.Closed)
+      return { kind: PendingPickerTakeKind.Closed }
+    if (current.request.requestId !== requestId)
+      return { kind: PendingPickerTakeKind.DifferentRequest }
+    this.clearPendingLogin()
+    return { kind: PendingPickerTakeKind.Taken, request: current.request }
+  }
   get authenticator(): AuthenticatorPicker {
     return this.authenticatorState
   }

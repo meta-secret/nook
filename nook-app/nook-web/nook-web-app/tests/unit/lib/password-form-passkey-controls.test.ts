@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   AuthenticationWorkflowClassification,
   LiveApprovedAuthenticationWorkflow,
+  LiveAuthenticationWorkflowDisposition,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   PasskeyControlLookupKind,
@@ -82,8 +83,8 @@ describe('passkey control detection', () => {
         approved,
         authenticatorSetupHint: false,
         backupCodesHint: false,
-      }).observation,
-    ).toBe(false)
+      }).disposition,
+    ).toBe(LiveAuthenticationWorkflowDisposition.Changed)
   })
 
   test('reranks an inserted safe passkey scope with origin match facts', () => {
@@ -120,8 +121,8 @@ describe('passkey control detection', () => {
         approved,
         authenticatorSetupHint: false,
         backupCodesHint: false,
-      }).observation,
-    ).toBe(false)
+      }).disposition,
+    ).toBe(LiveAuthenticationWorkflowDisposition.Changed)
   })
 
   test('does not treat password inputs with webauthn autocomplete as passkey controls', () => {

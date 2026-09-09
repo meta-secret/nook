@@ -1,3 +1,4 @@
+import { LiveAuthenticationWorkflowDisposition } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
@@ -26,8 +27,8 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   LoginPickerKind,
-  WidgetWorkflowKeyKind,
-  WidgetWorkflowRootKind,
+  WidgetControlDisposition,
+  PendingPickerTakeKind,
   pickerState,
   widgetState,
 } from './state'
@@ -97,7 +98,8 @@ class LoginPasskeyInteraction {
     continueButton,
   }: FillAndSubmitAccountArgs): Promise<boolean> {
     const approvalIsActive = () =>
-      !widgetState.dismissed && continueButton.isConnected
+      widgetState.controlDisposition(continueButton) ===
+      WidgetControlDisposition.Active
     const showFillFailure = () => {
       workflowUi.setFlightProgress({
         step,
@@ -436,28 +438,25 @@ class LoginPasskeyInteraction {
       return
     }
     const requestId = response.requestId
-    if (widgetState.dismissed || !continueButton.isConnected) {
+    if (
+      widgetState.controlDisposition(continueButton) !==
+      WidgetControlDisposition.Active
+    ) {
       this.cancelLoginPickerRequest(requestId)
       return
     }
     if (
-      !authenticationWorkflowUi.approvedWorkflowIsStillCurrent(workflow) ||
-      widgetState.workflowKey.kind !== WidgetWorkflowKeyKind.Assigned ||
-      widgetState.renderedWorkflowRoot.kind !== WidgetWorkflowRootKind.Assigned
+      authenticationWorkflowUi.approvedWorkflowDisposition(workflow) !==
+      LiveAuthenticationWorkflowDisposition.Current
     ) {
       this.cancelLoginPickerRequest(requestId)
       return
     }
     const timeoutId = window.setTimeout(
       () => {
-        if (
-          pickerState.login.kind !== LoginPickerKind.Open ||
-          pickerState.login.request.requestId !== requestId
-        ) {
-          return
-        }
-        const pending = pickerState.login.request
-        pickerState.clearPendingLogin()
+        const taken = pickerState.takeLogin(requestId)
+        if (taken.kind !== PendingPickerTakeKind.Taken) return
+        const pending = taken.request
 
         authenticationWorkflowUi.setStatus({
           description: pending.description,
@@ -557,7 +556,8 @@ class LoginPasskeyInteraction {
       enableContinue: false,
     })
     const approvalIsActive = () =>
-      !widgetState.dismissed && continueButton.isConnected
+      widgetState.controlDisposition(continueButton) ===
+      WidgetControlDisposition.Active
     try {
       let releasedObservationBinding: AuthenticationObservationBinding =
         RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
@@ -745,7 +745,8 @@ class LoginPasskeyInteraction {
       enableContinue: false,
     })
     const approvalIsActive = () =>
-      !widgetState.dismissed && continueButton.isConnected
+      widgetState.controlDisposition(continueButton) ===
+      WidgetControlDisposition.Active
     try {
       const observationBinding =
         RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(

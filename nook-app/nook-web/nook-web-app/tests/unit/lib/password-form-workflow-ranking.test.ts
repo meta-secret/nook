@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   AuthenticationWorkflowClassification,
   LiveApprovedAuthenticationWorkflow,
+  LiveAuthenticationWorkflowDisposition,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
@@ -47,14 +48,14 @@ function classifiedObservedAuthenticationWorkflow(): AuthenticationWorkflowClass
   return classified
 }
 
-function approvedWorkflowIsStillCurrent(
+function approvedWorkflowDisposition(
   approved: AuthenticationWorkflowClassification['observations'][number],
-): boolean {
+): LiveAuthenticationWorkflowDisposition {
   return new LiveApprovedAuthenticationWorkflow({
     approved,
     authenticatorSetupHint: false,
     backupCodesHint: false,
-  }).observation
+  }).disposition
 }
 
 afterEach(() => {
@@ -461,11 +462,15 @@ describe('authentication workflow ranking', () => {
       </form>
     `
     const approved = classifiedObservedAuthenticationWorkflow()
-    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
+    expect(approvedWorkflowDisposition(approved)).toBe(
+      LiveAuthenticationWorkflowDisposition.Current,
+    )
     document
       .querySelector('form')
       ?.setAttribute('action', '/settings/delete-account')
-    expect(approvedWorkflowIsStillCurrent(approved)).toBe(false)
+    expect(approvedWorkflowDisposition(approved)).toBe(
+      LiveAuthenticationWorkflowDisposition.Changed,
+    )
   })
 
   test('rejects a previously approved workflow after password field semantics change', () => {
@@ -477,11 +482,15 @@ describe('authentication workflow ranking', () => {
       </form>
     `
     const approved = classifiedObservedAuthenticationWorkflow()
-    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
+    expect(approvedWorkflowDisposition(approved)).toBe(
+      LiveAuthenticationWorkflowDisposition.Current,
+    )
     document
       .querySelector('input[type="password"]')
       ?.setAttribute('autocomplete', 'new-password')
-    expect(approvedWorkflowIsStillCurrent(approved)).toBe(false)
+    expect(approvedWorkflowDisposition(approved)).toBe(
+      LiveAuthenticationWorkflowDisposition.Changed,
+    )
   })
 
   test('preserves enriched passkey matches during live approval checks', () => {
@@ -502,7 +511,9 @@ describe('authentication workflow ranking', () => {
         },
       },
     } satisfies typeof classified
-    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
+    expect(approvedWorkflowDisposition(approved)).toBe(
+      LiveAuthenticationWorkflowDisposition.Current,
+    )
   })
 
   test('preserves ready availability during a password workflow live check', () => {
@@ -524,7 +535,9 @@ describe('authentication workflow ranking', () => {
         },
       },
     } satisfies typeof classified
-    expect(approvedWorkflowIsStillCurrent(approved)).toBe(true)
+    expect(approvedWorkflowDisposition(approved)).toBe(
+      LiveAuthenticationWorkflowDisposition.Current,
+    )
   })
 
   test('keeps a password login when OTP forms with vetoed submitters fill the bound', () => {

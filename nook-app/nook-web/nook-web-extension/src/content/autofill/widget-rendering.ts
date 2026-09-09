@@ -7,7 +7,6 @@ import { AuthenticationGesture } from '../../lib/auth-widget-policy'
 import {
   type AuthenticationWorkflowApproval,
   type AuthenticationWorkflowSnapshotView,
-  AuthenticationWorkflowApproval as AuthenticationWorkflowApprovalSchema,
 } from '../../lib/auth-workflow-messages'
 
 import {
@@ -37,7 +36,8 @@ import {
   AuthenticatorPickerKind,
   LoginPickerKind,
   WidgetHostKind,
-  WidgetWorkflowKeyKind,
+  WidgetRenderDisposition,
+  PendingPickerApprovalDisposition,
   WidgetWorkflowRootKind,
   pickerState,
   widgetState,
@@ -99,9 +99,8 @@ class AuthenticationWidgetRenderer {
       authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
     }
     if (
-      this.ui.widgetState.host.kind === WidgetHostKind.Attached &&
-      this.ui.widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
-      this.ui.widgetState.workflowKey.key === workflowKey
+      this.ui.widgetState.enrollmentRenderDisposition(workflowKey) ===
+      WidgetRenderDisposition.Reuse
     ) {
       return
     }
@@ -181,53 +180,23 @@ class AuthenticationWidgetRenderer {
       workflowKey,
       facts,
     }
-    if (this.ui.pickerState.login.kind === LoginPickerKind.Open) {
-      const approvalPair: Parameters<
-        typeof AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch
-      >[0] = {
-        approved: this.ui.pickerState.login.request.approval,
-        current: currentApproval,
-      }
-      if (
-        !AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
-          approvalPair,
-        )
-      ) {
-        loginPasskeyInteraction.cancelPendingLoginPickerRequest()
-      }
-    }
     if (
-      this.ui.pickerState.authenticator.kind === AuthenticatorPickerKind.Open
+      this.ui.pickerState.loginApprovalDisposition(currentApproval) ===
+      PendingPickerApprovalDisposition.Changed
     ) {
-      const approvalPair: Parameters<
-        typeof AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch
-      >[0] = {
-        approved: this.ui.pickerState.authenticator.request.approval,
-        current: currentApproval,
-      }
-      if (
-        !AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
-          approvalPair,
-        )
-      ) {
-        authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
-      }
+      loginPasskeyInteraction.cancelPendingLoginPickerRequest()
     }
     if (
-      this.ui.widgetState.host.kind === WidgetHostKind.Attached &&
-      this.ui.widgetState.workflowKey.kind === WidgetWorkflowKeyKind.Assigned &&
-      this.ui.widgetState.workflowKey.key === workflowKey &&
-      this.ui.widgetState.renderedWorkflowRoot.kind ===
-        WidgetWorkflowRootKind.Assigned &&
-      this.ui.widgetState.renderedWorkflowRoot.observation.root ===
-        workflow.root &&
-      this.ui.widgetState.renderedWorkflowRoot.observation.formScope.kind ===
-        workflow.formScope.kind &&
-      (this.ui.widgetState.renderedWorkflowRoot.observation.formScope.kind !==
-        'owned' ||
-        (workflow.formScope.kind === 'owned' &&
-          this.ui.widgetState.renderedWorkflowRoot.observation.formScope
-            .owner === workflow.formScope.owner))
+      this.ui.pickerState.authenticatorApprovalDisposition(currentApproval) ===
+      PendingPickerApprovalDisposition.Changed
+    ) {
+      authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
+    }
+    if (
+      this.ui.widgetState.workflowRenderDisposition({
+        key: workflowKey,
+        observation: workflow,
+      }) === WidgetRenderDisposition.Reuse
     ) {
       const renderedWorkflowRoot: Parameters<
         typeof this.ui.widgetState.setRenderedWorkflowRoot

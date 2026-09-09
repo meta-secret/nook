@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import {
   AuthenticationWorkflowClassification,
   LiveApprovedAuthenticationWorkflow,
+  LiveAuthenticationWorkflowDisposition,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
@@ -443,12 +444,12 @@ describe('authentication observation bounds', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    expect(new LiveApprovedAuthenticationWorkflow(staleCheck).observation).toBe(
-      false,
+    expect(new LiveApprovedAuthenticationWorkflow(staleCheck).disposition).toBe(
+      LiveAuthenticationWorkflowDisposition.Changed,
     )
     expect(
-      new LiveApprovedAuthenticationWorkflow(refreshedCheck).observation,
-    ).toBe(true)
+      new LiveApprovedAuthenticationWorkflow(refreshedCheck).disposition,
+    ).toBe(LiveAuthenticationWorkflowDisposition.Current)
     let submitted = false
     document.querySelector('form')?.addEventListener('submit', (event) => {
       event.preventDefault()
@@ -496,8 +497,8 @@ describe('authentication observation bounds', () => {
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    expect(new LiveApprovedAuthenticationWorkflow(liveCheck).observation).toBe(
-      false,
+    expect(new LiveApprovedAuthenticationWorkflow(liveCheck).disposition).toBe(
+      LiveAuthenticationWorkflowDisposition.Changed,
     )
   })
 })

@@ -4,7 +4,10 @@ import {
   passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { RefreshedAuthenticationObservation } from '../../../../nook-web-shared/src/extension/authentication-workflow-observation-refresh'
-import { AuthenticationWorkflowScopeComparison } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+import {
+  AuthenticationWorkflowScopeComparison,
+  AuthenticationWorkflowScopeDisposition,
+} from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { recoveryCopyObservation } from '../../lib/backup-code-candidates'
 import { pageQrCapture } from '../../lib/page-qr-capture'
 import {
@@ -132,7 +135,10 @@ export class RevalidatedAuthenticationAction {
           left: workflow,
           right: candidate,
         }
-        return new AuthenticationWorkflowScopeComparison(scopePair).matches
+        return (
+          new AuthenticationWorkflowScopeComparison(scopePair).disposition ===
+          AuthenticationWorkflowScopeDisposition.Same
+        )
       })
       if (selectedIndex < 0) {
         candidates = [new RefreshedAuthenticationObservation(workflow).value]

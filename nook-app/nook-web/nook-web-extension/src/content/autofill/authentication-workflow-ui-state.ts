@@ -1,5 +1,7 @@
 import {
   AuthenticationWorkflowScopeComparison,
+  AuthenticationWorkflowScopeDisposition,
+  LiveAuthenticationWorkflowDisposition,
   LiveApprovedAuthenticationWorkflow,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 
@@ -7,7 +9,7 @@ import type { PasswordFormObservation } from '../../../../nook-web-shared/src/ex
 
 import { authenticatorEnrollmentInteraction } from '../enrollment-flow'
 
-import { WidgetWorkflowRootKind, widgetState } from './state'
+import { WidgetWorkflowAdmissionKind, widgetState } from './state'
 
 type PasskeyWidgetStatusUpdate = {
   description: HTMLParagraphElement
@@ -33,17 +35,23 @@ class AuthenticationWorkflowUi {
     continueButton.disabled = !enableContinue || this.ui.widgetState.busy
   }
 
-  approvedWorkflowIsStillCurrent(workflow: PasswordFormObservation): boolean {
-    const rendered = this.ui.widgetState.renderedWorkflowRoot
-    if (rendered.kind !== WidgetWorkflowRootKind.Assigned) return false
+  approvedWorkflowDisposition(
+    workflow: PasswordFormObservation,
+  ): LiveAuthenticationWorkflowDisposition {
+    const rendered = this.ui.widgetState.workflowAdmission()
+    if (rendered.kind !== WidgetWorkflowAdmissionKind.Assigned)
+      return LiveAuthenticationWorkflowDisposition.Changed
     const scopePair: ConstructorParameters<
       typeof AuthenticationWorkflowScopeComparison
     >[0] = {
       left: rendered.observation,
       right: workflow,
     }
-    if (!new AuthenticationWorkflowScopeComparison(scopePair).matches) {
-      return false
+    if (
+      new AuthenticationWorkflowScopeComparison(scopePair).disposition !==
+      AuthenticationWorkflowScopeDisposition.Same
+    ) {
+      return LiveAuthenticationWorkflowDisposition.Changed
     }
     const hints = authenticatorEnrollmentInteraction.detectEnrollmentHints()
     const liveRequest: ConstructorParameters<
@@ -56,7 +64,7 @@ class AuthenticationWorkflowUi {
       authenticatorSetupHint: hints.qr,
       backupCodesHint: hints.backupCodes,
     }
-    return new LiveApprovedAuthenticationWorkflow(liveRequest).observation
+    return new LiveApprovedAuthenticationWorkflow(liveRequest).disposition
   }
 }
 

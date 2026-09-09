@@ -15,21 +15,27 @@ export type AuthenticationPageObservationView =
 
 export type AuthenticationWorkflowSnapshotView = AuthenticationWorkflowSnapshot
 
+export enum AuthenticationWorkflowApprovalDisposition {
+  Current = 'current',
+  Changed = 'changed',
+}
+
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
 export class AuthenticationWorkflowApproval {
   private constructor() {}
   declare readonly workflowKey: string
   declare readonly facts: AuthenticationPageObservationFacts
-  static authenticationWorkflowApprovalsMatch({
+  static compare({
     approved,
     current,
     matcherDependencies,
-  }: AuthenticationWorkflowApprovalPair): boolean {
+  }: AuthenticationWorkflowApprovalPair): AuthenticationWorkflowApprovalDisposition {
     const dependencies = ((v) =>
       v ? v : authenticationWorkflowApprovalMatcherDependencies)(
       matcherDependencies,
     )
-    if (approved.workflowKey !== current.workflowKey) return false
+    if (approved.workflowKey !== current.workflowKey)
+      return AuthenticationWorkflowApprovalDisposition.Changed
     const approvedBatch: AuthenticationPageObservationFactsBatch = {
       observations: [approved.facts],
     }
@@ -43,8 +49,10 @@ export class AuthenticationWorkflowApproval {
         binding,
         currentBatch,
       )
+        ? AuthenticationWorkflowApprovalDisposition.Current
+        : AuthenticationWorkflowApprovalDisposition.Changed
     } catch {
-      return false
+      return AuthenticationWorkflowApprovalDisposition.Changed
     }
   }
 }

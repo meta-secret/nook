@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, test } from 'bun:test'
 import type { AuthenticationPasskeyControlObservation } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
   AuthenticationWorkflowApproval as AuthenticationWorkflowApprovalSchema,
+  AuthenticationWorkflowApprovalDisposition,
   AuthenticationWorkflowSnapshotIngress as AuthenticationWorkflowSnapshotMessageSchema,
 } from '../src/lib/auth-workflow-messages'
 
@@ -54,7 +55,7 @@ const validMessage = {
 }
 
 function approvalMatcherDependencies(): Parameters<
-  typeof AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch
+  typeof AuthenticationWorkflowApprovalSchema.compare
 >[0]['matcherDependencies'] {
   let approvedFactsJson = ''
   return {
@@ -63,7 +64,7 @@ function approvalMatcherDependencies(): Parameters<
       return {} as ReturnType<
         NonNullable<
           Parameters<
-            typeof AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch
+            typeof AuthenticationWorkflowApprovalSchema.compare
           >[0]['matcherDependencies']
         >['bind_authentication_page_observation_facts']
       >
@@ -81,61 +82,53 @@ describe('authentication workflow snapshot messages', () => {
     const approved = { workflowKey: 'login:continue', facts }
     const dependencies = approvalMatcherDependencies()
     expect(
-      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
-        {
-          approved,
-          current: { workflowKey: 'login:continue', facts },
-          matcherDependencies: dependencies,
-        },
-      ),
-    ).toBe(true)
+      AuthenticationWorkflowApprovalSchema.compare({
+        approved,
+        current: { workflowKey: 'login:continue', facts },
+        matcherDependencies: dependencies,
+      }),
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
     expect(
-      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
-        {
-          approved,
-          current: { workflowKey: 'otp:fill', facts },
-          matcherDependencies: dependencies,
-        },
-      ),
-    ).toBe(false)
+      AuthenticationWorkflowApprovalSchema.compare({
+        approved,
+        current: { workflowKey: 'otp:fill', facts },
+        matcherDependencies: dependencies,
+      }),
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
     expect(
-      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
-        {
-          approved,
-          current: {
-            workflowKey: 'login:continue',
-            facts: {
-              ...facts,
-              fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
-            },
+      AuthenticationWorkflowApprovalSchema.compare({
+        approved,
+        current: {
+          workflowKey: 'login:continue',
+          facts: {
+            ...facts,
+            fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
           },
-          matcherDependencies: dependencies,
         },
-      ),
-    ).toBe(false)
+        matcherDependencies: dependencies,
+      }),
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
   })
 
   test('invalidates an authenticator picker across OTP challenge facts', () => {
     const approvedFacts = validMessage.payload.observations[0]
     const dependencies = approvalMatcherDependencies()
     expect(
-      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
-        {
-          approved: { workflowKey: 'login:otp', facts: approvedFacts },
-          current: {
-            workflowKey: 'login:otp',
-            facts: {
-              ...approvedFacts,
-              ceremony: {
-                ...approvedFacts.ceremony,
-                oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
-              },
+      AuthenticationWorkflowApprovalSchema.compare({
+        approved: { workflowKey: 'login:otp', facts: approvedFacts },
+        current: {
+          workflowKey: 'login:otp',
+          facts: {
+            ...approvedFacts,
+            ceremony: {
+              ...approvedFacts.ceremony,
+              oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
             },
           },
-          matcherDependencies: dependencies,
         },
-      ),
-    ).toBe(false)
+        matcherDependencies: dependencies,
+      }),
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
   })
 
   test('accepts bounded structural page observations', () => {
@@ -187,7 +180,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
   })
 
   test('accepts mixed phone-or-email evidence without admitting unknown evidence', () => {
@@ -235,12 +228,12 @@ describe('authentication workflow snapshot messages', () => {
       AuthenticationWorkflowSnapshotMessageSchema.is(
         messageWithEvidence('mixed-phone-or-email'),
       ),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is(
         messageWithEvidence('mixed-contact-channel'),
       ),
-    ).toBe(false)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
   })
 
   test('rejects invalid or oversized recovery copy', () => {
@@ -262,7 +255,7 @@ describe('authentication workflow snapshot messages', () => {
             ],
           },
         }),
-      ).toBe(false)
+      ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
     }
   })
 
@@ -283,7 +276,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
   })
 
   test('accepts bounded passkey and OTP candidate facts', () => {
@@ -333,7 +326,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
   })
 
   test('rejects missing, negative, and fractional counts structurally', () => {
@@ -346,7 +339,7 @@ describe('authentication workflow snapshot messages', () => {
         observationWithoutOneTimeCodeCount.fields,
         'oneTimeCodeFieldCount',
       ),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
@@ -355,7 +348,7 @@ describe('authentication workflow snapshot messages', () => {
           observations: [observationWithoutOneTimeCodeCount],
         },
       }),
-    ).toBe(false)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
 
     for (const invalidCount of [-1, 0.5]) {
       expect(
@@ -374,7 +367,7 @@ describe('authentication workflow snapshot messages', () => {
             ],
           },
         }),
-      ).toBe(false)
+      ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
     }
   })
 
@@ -395,7 +388,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
@@ -413,7 +406,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
@@ -425,7 +418,7 @@ describe('authentication workflow snapshot messages', () => {
           ),
         },
       }),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
   })
 
   test('rejects empty observation batches structurally', () => {
@@ -434,7 +427,7 @@ describe('authentication workflow snapshot messages', () => {
         ...validMessage,
         payload: { ...validMessage.payload, observations: [] },
       }),
-    ).toBe(false)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
   })
 
   test('accepts a typed control batch and rejects the obsolete singular shape', () => {
@@ -469,7 +462,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(true)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Current)
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
@@ -488,7 +481,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(false)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
     const missingDestinationSource = { ...control }
     Reflect.deleteProperty(
       missingDestinationSource,
@@ -510,7 +503,7 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(false)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
     expect(
       AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
@@ -527,6 +520,6 @@ describe('authentication workflow snapshot messages', () => {
           ],
         },
       }),
-    ).toBe(false)
+    ).toBe(AuthenticationWorkflowApprovalDisposition.Changed)
   })
 })

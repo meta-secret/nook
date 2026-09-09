@@ -131,8 +131,28 @@ vi.mock(
 vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
   AuthenticatorPickerKind: { Closed: 'closed', Open: 'open' },
   LoginPickerKind: { Closed: 'closed', Open: 'open' },
+  WidgetControlDisposition: {
+    Active: 'active',
+    Dismissed: 'dismissed',
+    Detached: 'detached',
+  },
+  WidgetWorkflowAdmissionKind: {
+    Unassigned: 'unassigned',
+    Assigned: 'assigned',
+  },
+  PendingPickerTakeKind: {
+    Closed: 'closed',
+    DifferentRequest: 'different-request',
+    Taken: 'taken',
+  },
   pickerState: {},
-  widgetState: { busy: false, credentialActuationInFlight: false },
+  widgetState: {
+    busy: false,
+    credentialActuationInFlight: false,
+    workflowAdmission: () => ({ kind: 'unassigned' }),
+    controlDisposition: (control: HTMLButtonElement) =>
+      control.isConnected ? 'active' : 'detached',
+  },
 }))
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
 import { authenticatorInteraction } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'

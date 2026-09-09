@@ -249,20 +249,13 @@ export async function handleSessionMessage({
       if (status !== DeviceProtectionStatus.Unlocked) {
         throw new Error(SESSION_LOCKED_ERROR)
       }
-      const device = await deviceResult(activeManager)
-      if (
-        payload.expectedDeviceId !== device.deviceId ||
-        payload.expectedDevicePublicKey !== device.devicePublicKey ||
-        payload.expectedDeviceSigningPublicKey !== device.deviceSigningPublicKey
-      ) {
-        throw new Error(
-          'Extension identity request does not match this device.',
-        )
-      }
-      const envelope = await activeManager.seal_extension_identity_handoff(
+      const envelope = await activeManager.seal_extension_identity_handoff({
         recipientPublicKey,
         nonce,
-      )
+        expectedDeviceId: payload.expectedDeviceId,
+        expectedDevicePublicKey: payload.expectedDevicePublicKey,
+        expectedDeviceSigningPublicKey: payload.expectedDeviceSigningPublicKey,
+      })
       renewSessionExpiry(generation)
       return { ok: true, envelope }
     }

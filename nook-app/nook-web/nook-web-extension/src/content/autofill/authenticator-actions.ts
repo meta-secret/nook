@@ -1,3 +1,4 @@
+import { LiveAuthenticationWorkflowDisposition } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
 
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
@@ -34,8 +35,8 @@ import {
 
 import {
   AuthenticatorPickerKind,
-  WidgetWorkflowKeyKind,
-  WidgetWorkflowRootKind,
+  WidgetControlDisposition,
+  PendingPickerTakeKind,
   pickerState,
   widgetState,
 } from './state'
@@ -130,7 +131,8 @@ class AuthenticatorInteraction {
       continueButton,
     }
     const approvalIsActive = () =>
-      !this.ui.widgetState.dismissed && continueButton.isConnected
+      this.ui.widgetState.controlDisposition(continueButton) ===
+      WidgetControlDisposition.Active
     let releasedObservationBinding: AuthenticationObservationBinding =
       RevalidatedAuthenticationAction.requiredAuthenticationObservationBinding(
         approval.facts,
@@ -419,31 +421,26 @@ class AuthenticatorInteraction {
         return
       }
       const requestId = response.requestId
-      if (this.ui.widgetState.dismissed || !continueButton.isConnected) {
+      if (
+        this.ui.widgetState.controlDisposition(continueButton) !==
+        WidgetControlDisposition.Active
+      ) {
         this.cancelAuthenticatorPickerRequest(requestId)
         return
       }
       if (
-        !authenticationWorkflowUi.approvedWorkflowIsStillCurrent(workflow) ||
-        this.ui.widgetState.workflowKey.kind !==
-          WidgetWorkflowKeyKind.Assigned ||
-        this.ui.widgetState.renderedWorkflowRoot.kind !==
-          WidgetWorkflowRootKind.Assigned
+        authenticationWorkflowUi.approvedWorkflowDisposition(workflow) !==
+        LiveAuthenticationWorkflowDisposition.Current
       ) {
         this.cancelAuthenticatorPickerRequest(requestId)
         return
       }
       const timeoutId = window.setTimeout(
         () => {
-          if (
-            this.ui.pickerState.authenticator.kind !==
-              AuthenticatorPickerKind.Open ||
-            this.ui.pickerState.authenticator.request.requestId !== requestId
-          ) {
-            return
-          }
-          const pending = this.ui.pickerState.authenticator.request
-          this.ui.pickerState.clearPendingAuthenticator()
+          const taken = this.ui.pickerState.takeAuthenticator(requestId)
+          if (taken.kind !== PendingPickerTakeKind.Taken) return
+          const pending = taken.request
+
           const nookTypedArgs0_18: Parameters<
             typeof authenticationWorkflowUi.setStatus
           >[0] = {
