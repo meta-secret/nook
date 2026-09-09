@@ -1,3 +1,5 @@
+import type { NookVaultManager } from '$app-wasm'
+import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { SentinelActionResult } from '$lib/vault/sentinel-genesis'
 import { ok, err } from 'neverthrow'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
@@ -73,10 +75,7 @@ class SentinelFinalizationFixture {
     oauthSetupSelection: { kind: OAuthSetupPresetKind.NotSelected },
     prepareLocalLogin: vi.fn(),
     refreshSentinelUnlockStatus: vi.fn(),
-    admitManager: () =>
-      ok(this.manager as unknown as ReturnType<VaultState['requireManager']>),
-    requireManager: () =>
-      this.manager as unknown as ReturnType<VaultState['requireManager']>,
+    admitManager: () => ok(this.manager as unknown as NookVaultManager),
     enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
       operation(),
     dismissSuccess: vi.fn(),
@@ -98,9 +97,9 @@ class SentinelFinalizationFixture {
     startIdleSessionTracking: vi.fn(),
     startVaultSync: vi.fn(),
     initDeviceIdentity: vi.fn(async () => ok(undefined)),
-    syncFromStorage: vi.fn(),
+    syncFromStorage: vi.fn(async () => ok(ProviderSyncOutcome.Synced)),
     connectStorageArgs: vi.fn(),
-    refreshVaultArchitectureFromManager: vi.fn(),
+    refreshVaultArchitectureFromManager: vi.fn(() => ok(undefined)),
     resolveErrorMessage: (message: string) => message,
     t: (key: string) => key,
   }

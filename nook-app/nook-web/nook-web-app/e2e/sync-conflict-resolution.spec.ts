@@ -1,3 +1,4 @@
+import type { VaultState } from '$lib/vault.svelte'
 import { expect, test, type Page } from './fixtures'
 import {
   addVaultPassword,
@@ -243,9 +244,9 @@ test.describe('sync conflict resolution', () => {
       page.getByTestId('sync-conflict-import-new-vault-btn'),
     ).toBeVisible()
     await expect(page.getByTestId('sync-conflict-cancel-btn')).toBeVisible()
-    await expect(
-      page.getByTestId('provider-vault-preserve-both'),
-    ).toContainText('Nook does not merge them automatically')
+    await expect(page.getByTestId('provider-vault-preserve-both')).toContainText(
+      'Nook does not merge them automatically',
+    )
     await expect(page.getByText(storeA, { exact: true })).not.toBeVisible()
     await expect(page.getByText(storeB, { exact: true })).not.toBeVisible()
     await page.getByText('Technical details', { exact: true }).click()
@@ -258,16 +259,15 @@ test.describe('sync conflict resolution', () => {
     await expect(page.getByTestId('vault-error')).toHaveCount(0)
     await expect
       .poll(() =>
-        page.evaluate(
-          () =>
-            (
-              window as Window & {
-                __nookVault: {
-                  requireManager(): { storage_mode: string }
-                }
-              }
-            ).__nookVault.requireManager().storage_mode,
-        ),
+        page.evaluate(() => {
+          const vault = (
+            window as Window & { __nookVault: Pick<VaultState, 'admitManager'> }
+          ).__nookVault
+          const manager = vault.admitManager()
+          return manager.isOk()
+            ? manager.value.storage_mode
+            : manager.error.translationKey
+        }),
       )
       .toBe('local')
     expect(parseStoreId(stub.getVaultYaml())).toEqual(storeA)
@@ -275,9 +275,7 @@ test.describe('sync conflict resolution', () => {
     expect(parseStoreId(await readLocalVaultYamlFromIdb(page))).toEqual(storeB)
 
     await page.getByTestId('sync-conflict-cancel-btn').click()
-    await expect(
-      page.getByTestId('vault-sync-conflict-dialog'),
-    ).not.toBeVisible()
+    await expect(page.getByTestId('vault-sync-conflict-dialog')).not.toBeVisible()
     expect(stub.getEventFileContents()).toEqual(remoteEventsBeforeConflict)
   })
 
@@ -383,21 +381,15 @@ test.describe('sync conflict resolution', () => {
       timeout: UI_TIMEOUT_MS,
     })
     await expect(
-      page.locator(
-        `[data-testid="login-vault-card"][data-store-id="${storeA}"]`,
-      ),
+      page.locator(`[data-testid="login-vault-card"][data-store-id="${storeA}"]`),
     ).toBeVisible()
     await page.getByTestId('login-switch-vault-btn').click()
     await expect(page.getByTestId('login-vault-option')).toHaveCount(2)
     await expect(
-      page.locator(
-        `[data-testid="login-vault-option"][data-store-id="${storeA}"]`,
-      ),
+      page.locator(`[data-testid="login-vault-option"][data-store-id="${storeA}"]`),
     ).toBeVisible()
     await expect(
-      page.locator(
-        `[data-testid="login-vault-option"][data-store-id="${storeB}"]`,
-      ),
+      page.locator(`[data-testid="login-vault-option"][data-store-id="${storeB}"]`),
     ).toBeVisible()
   })
 })

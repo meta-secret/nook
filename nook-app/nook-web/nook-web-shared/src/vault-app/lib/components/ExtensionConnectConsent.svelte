@@ -1,70 +1,47 @@
 <script lang="ts">
   type IdentityTextTruncation = {
-    readonly value: string;
-    readonly head: number;
-    readonly tail: number;
-  };
+    readonly value: string
+    readonly head: number
+    readonly tail: number
+  }
 
-  type ExtensionVaultGrant = {
-    readonly providers: StorageProvider[];
-    readonly vaultStoreId: string;
-    readonly vaultName: string;
-    readonly eventLogRecords: ExtensionEventLogRecord[];
-  };
-
-  import { I18N_KEYS, type I18nKey } from "../../../generated/i18n-keys";
-  import { Check, KeyRound, ShieldCheck } from "@lucide/svelte";
-  import {
-    ExtensionPairingApprovedMessageType,
-    type ExtensionEventLogRecord,
-    type ExtensionPairingApprovedMessage,
-  } from "$web-shared/extension/runtime-messages";
-  import {
-    activeVaultScope,
-    providerBelongsToVault,
-    seal_auth_providers_for_device_public_key,
-    type StorageProvider,
-  } from "$lib/auth/providers";
-  import { Button } from "$lib/components/ui/button";
+  import { I18N_KEYS, type I18nKey } from '../../../generated/i18n-keys'
+  import { Check, KeyRound, ShieldCheck } from '@lucide/svelte'
+  import { Button } from '$lib/components/ui/button'
   import {
     ExtensionConnectScope,
     ExtensionPairingDeliveryKind,
     type ExtensionConnectRequest,
-    extensionConnectionBrowser,
-  } from "$lib/extension/connect";
-  import type { VaultState } from "$lib/vault.svelte";
-  import { approve_extension_device } from "$app-wasm";
-  import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+  } from '$lib/extension/connect'
+  import type { VaultState } from '$lib/vault.svelte'
+  import { ExtensionVaultApproval } from '$lib/extension/vault-approval'
 
   let {
     vault,
     request,
     onClose,
   }: {
-    vault: VaultState;
-    request: ExtensionConnectRequest;
-    onClose: (approved: boolean) => void;
-  } = $props();
+    vault: VaultState
+    request: ExtensionConnectRequest
+    onClose: (approved: boolean) => void
+  } = $props()
 
-  let isApproving = $state(false);
-  let approved = $state(false);
-  let error = $state("");
-  let handoffError = $state("");
+  let isApproving = $state(false)
+  let approved = $state(false)
+  let error = $state('')
+  let handoffError = $state('')
 
   function scopeTranslationKey(scope: ExtensionConnectScope): I18nKey {
-    if (scope === ExtensionConnectScope.VaultAccess) {
-      return I18N_KEYS.ExtensionConsentScopeVaultAccess;
+    switch (scope) {
+      case ExtensionConnectScope.VaultAccess:
+        return I18N_KEYS.ExtensionConsentScopeVaultAccess
+      case ExtensionConnectScope.PasswordFilling:
+        return I18N_KEYS.ExtensionConsentScopePasswordFilling
+      case ExtensionConnectScope.PasskeyManagement:
+        return I18N_KEYS.ExtensionConsentScopePasskeyManagement
+      case ExtensionConnectScope.SyncProviderCredentials:
+        return I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials
     }
-    if (scope === ExtensionConnectScope.PasswordFilling) {
-      return I18N_KEYS.ExtensionConsentScopePasswordFilling;
-    }
-    if (scope === ExtensionConnectScope.PasskeyManagement) {
-      return I18N_KEYS.ExtensionConsentScopePasskeyManagement;
-    }
-    if (scope === ExtensionConnectScope.SyncProviderCredentials) {
-      return I18N_KEYS.ExtensionConsentScopeSyncProviderCredentials;
-    }
-    throw new Error("Unsupported extension connection scope.");
   }
 
   const canApprove = $derived(
@@ -73,168 +50,71 @@
       !isApproving &&
       !vault.isSaving &&
       !approved,
-  );
+  )
 
   function truncate({ value, head, tail }: IdentityTextTruncation) {
-    if (value.length <= head + tail + 3) return value;
-    return `${value.slice(0, head)}...${value.slice(-tail)}`;
-  }
-
-  function activeVaultName(): string {
-    if (vault.activeVault.kind === ActiveVaultKind.Open) {
-      for (const entry of vault.localVaults) {
-        if (entry.storeId === vault.activeVault.storeId) {
-          return entry.display_label(
-            vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
-          );
-        }
-      }
-    }
-    return vault.t(I18N_KEYS.LoginVaultPickerUnnamed);
-  }
-
-  function sendGrantToExtension({
-    providers,
-    vaultStoreId,
-    vaultName,
-    eventLogRecords,
-  }: ExtensionVaultGrant): Promise<void> {
-    const message: ExtensionPairingApprovedMessage = {
-      type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
-      payload: {
-        vaultType: "simple",
-        deviceId: request.deviceId,
-        devicePublicKey: request.devicePublicKey,
-        deviceSigningPublicKey: request.deviceSigningPublicKey,
-        deviceLabel: request.deviceLabel,
-        vaultStoreId,
-        vaultName,
-        approvedAt: new Date().toISOString(),
-        scopes: request.scopes,
-        providers,
-      },
-      eventLogRecords,
-    };
-    return (async () => {
-      const deliveryArgs: Parameters<
-        typeof extensionConnectionBrowser.deliverExtensionPairingApproval
-      >[0] = { request, message };
-      const delivery =
-        await extensionConnectionBrowser.deliverExtensionPairingApproval(
-          deliveryArgs,
-        );
-      if (delivery.kind === ExtensionPairingDeliveryKind.Delivered) return;
-      if (delivery.kind === ExtensionPairingDeliveryKind.MessagingUnavailable) {
-        throw new Error(
-          vault.t(I18N_KEYS.ExtensionConsentMessagingUnavailable),
-        );
-      }
-      const detail =
-        delivery.kind ===
-        ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired
-          ? ` (${vault.t(I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired)})`
-          : "";
-      throw new Error(
-        `${vault.t(I18N_KEYS.ExtensionConsentGrantRejected)}${detail}`,
-      );
-    })();
+    if (value.length <= head + tail + 3) return value
+    return `${value.slice(0, head)}...${value.slice(-tail)}`
   }
 
   async function approveExtension() {
-    if (!vault.hasManager || !canApprove) return;
+    if (!vault.hasManager || !canApprove) return
 
-    isApproving = true;
-    vault.isSaving = true;
-    error = "";
-    handoffError = "";
-    vault.errorMsg = "";
+    isApproving = true
+    vault.isSaving = true
+    error = ''
+    handoffError = ''
+    vault.errorMsg = ''
     try {
-      await vault.enqueueStorage(() =>
-        approve_extension_device(
-          vault.requireManager(),
-          request.deviceId,
-          request.devicePublicKey,
-          request.deviceSigningPublicKey,
-          request.deviceLabel,
-        ),
-      );
-      const vaultStoreId =
-        vault.activeVault.kind === ActiveVaultKind.Open
-          ? vault.activeVault.storeId
-          : await vault.enqueueStorage(
-              () => vault.requireManager().vaultStoreId,
-            );
-      let grantedProviders: StorageProvider[] = [];
-      if (
-        request.scopes.includes(ExtensionConnectScope.SyncProviderCredentials)
-      ) {
-        const authProviders = await vault.enqueueStorage(() =>
-          vault.requireManager().load_auth_providers_snapshot(),
-        );
-        const matchingProviders = authProviders.providers.filter((provider) =>
-          (() => {
-            const providerBelongsToVaultArgs: Parameters<
-              typeof providerBelongsToVault
-            >[0] = { provider, storeId: vaultStoreId };
-            return providerBelongsToVault(providerBelongsToVaultArgs);
-          })(),
-        );
-        const sealAuthProvidersForDevicePublicKeyArgs: Parameters<
-          typeof seal_auth_providers_for_device_public_key
-        >[1] = {
-          providers: matchingProviders,
-          activeVaultStoreId: activeVaultScope(vaultStoreId),
-        };
-        grantedProviders = seal_auth_providers_for_device_public_key(
-          request.devicePublicKey,
-          sealAuthProvidersForDevicePublicKeyArgs,
-        ).providers;
+      const approval = new ExtensionVaultApproval(vault, request)
+      const prepared = await approval.prepare()
+      if (prepared.isErr()) {
+        error = vault.t(prepared.error.translationKey)
+        vault.errorMsg = error
+        return
       }
-      const eventLogRecordValues = await vault.enqueueStorage(() =>
-        vault.requireManager().export_event_log_records_js(),
-      );
-      try {
-        const sendGrantToExtensionArgs: Parameters<
-          typeof sendGrantToExtension
-        >[0] = {
-          providers: grantedProviders,
-          vaultStoreId,
-          vaultName: activeVaultName(),
-          eventLogRecords: eventLogRecordValues.to_array(),
-        };
-        await sendGrantToExtension(sendGrantToExtensionArgs);
-      } catch (caught) {
-        handoffError =
-          caught instanceof Error
-            ? (() => {
-                const tArgs: Parameters<typeof vault.t>[0] = {
-                  key: I18N_KEYS.ExtensionConsentHandoffFailedDetail,
-                  replacements: {
-                    error: caught.message,
-                  },
-                };
-                return vault.t(tArgs);
-              })()
-            : vault.t(I18N_KEYS.ExtensionConsentHandoffFailed);
-      } finally {
-        eventLogRecordValues.free();
+      const delivery = await approval.deliver(prepared.value)
+      if (delivery.isErr()) {
+        handoffError = vault.t(delivery.error.translationKey)
+        return
       }
-      await vault.refreshDeviceState();
+      switch (delivery.value.kind) {
+        case ExtensionPairingDeliveryKind.Delivered:
+          break
+        case ExtensionPairingDeliveryKind.MessagingUnavailable:
+          handoffError = vault.t(I18N_KEYS.ExtensionConsentMessagingUnavailable)
+          break
+        case ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired:
+          handoffError = vault.t(
+            I18N_KEYS.ExtensionConsentPlaintextProviderMigrationRequired,
+          )
+          break
+        case ExtensionPairingDeliveryKind.Rejected:
+          handoffError = vault.t(I18N_KEYS.ExtensionConsentGrantRejected)
+          break
+      }
+      const devices = await vault.refreshDeviceState()
+      if (devices.isErr()) {
+        error = vault.t(devices.error.translationKey)
+        vault.errorMsg = error
+        return
+      }
+      const completion = approval.admitCompletion()
+      if (completion.isErr()) {
+        handoffError = vault.t(completion.error.translationKey)
+        return
+      }
       vault.showSuccess(
-        handoffError
-          ? vault.t(I18N_KEYS.ExtensionConsentApprovedReopen)
-          : vault.t(I18N_KEYS.ExtensionConsentApproved),
-      );
-      approved = true;
-    } catch (caught) {
-      error =
-        caught instanceof Error
-          ? vault.resolveErrorMessage(caught.message)
-          : vault.t(I18N_KEYS.ExtensionConsentApprovalFailed);
-      vault.errorMsg = error;
+        vault.t(
+          handoffError
+            ? I18N_KEYS.ExtensionConsentApprovedReopen
+            : I18N_KEYS.ExtensionConsentApproved,
+        ),
+      )
+      approved = true
     } finally {
-      vault.isSaving = false;
-      isApproving = false;
+      vault.isSaving = false
+      isApproving = false
     }
   }
 </script>
@@ -263,9 +143,7 @@
     class="mt-4 grid gap-3 rounded-lg border border-border/50 bg-background/60 p-3"
   >
     <div>
-      <p
-        class="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-      >
+      <p class="text-xs font-medium uppercase tracking-wide text-muted-foreground">
         {vault.t(I18N_KEYS.ExtensionConsentDevice)}
       </p>
       <p class="mt-1 text-sm font-semibold text-foreground">
@@ -289,8 +167,8 @@
             value: request.devicePublicKey,
             head: 14,
             tail: 10,
-          };
-          return truncate(truncateArgs);
+          }
+          return truncate(truncateArgs)
         })()}
       </p>
     </div>
@@ -308,8 +186,8 @@
             value: request.deviceSigningPublicKey,
             head: 14,
             tail: 10,
-          };
-          return truncate(truncateArgs2);
+          }
+          return truncate(truncateArgs2)
         })()}
       </p>
     </div>
@@ -369,9 +247,7 @@
 
   <div class="mt-4 flex flex-wrap justify-end gap-2">
     <Button type="button" variant="outline" onclick={() => onClose(approved)}>
-      {approved
-        ? vault.t(I18N_KEYS.CommonDone)
-        : vault.t(I18N_KEYS.CommonCancel)}
+      {approved ? vault.t(I18N_KEYS.CommonDone) : vault.t(I18N_KEYS.CommonCancel)}
     </Button>
     <Button
       type="button"

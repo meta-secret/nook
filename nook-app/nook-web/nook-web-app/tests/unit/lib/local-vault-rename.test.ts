@@ -57,7 +57,6 @@ describe('renameLocalVaultLabel', () => {
         storeId: 'store-1',
       },
       localVaults: [{ storeId: 'store-1', label: 'Old name' }],
-      requireManager: () => ({ set_vault_name: setVaultName }),
       admitManager: () => ok({ set_vault_name: setVaultName }),
       enqueueStorage: <T>(operation: () => T | Promise<T>) =>
         Promise.resolve(operation()),

@@ -1,3 +1,5 @@
+import type { Result } from 'neverthrow'
+import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
 import { I18N_KEYS } from '../../nook-web-shared/src/generated/i18n-keys'
 import { expect, test } from './fixtures'
 import { createLocalVaultOnLogin, UI_TIMEOUT_MS } from './helpers'
@@ -8,32 +10,35 @@ const SIMPLE_APP_URL = (
 ).replace(/\/+$/, '')
 
 type DebugVault = {
-  requireManager(): {
-    vaultArchitecture: {
-      constructor: {
-        simple(
-          deviceMode: number,
-          replicationType: number,
-        ): {
-          free(): void
+  admitManager(): Result<
+    {
+      vaultArchitecture: {
+        constructor: {
+          simple(
+            deviceMode: number,
+            replicationType: number,
+          ): {
+            free(): void
+          }
+          sentinel(
+            deviceMode: number,
+            replicationType: number,
+            threshold: number,
+            requiredParticipants: number,
+            readyParticipants: number,
+          ): { free(): void }
         }
-        sentinel(
-          deviceMode: number,
-          replicationType: number,
-          threshold: number,
-          requiredParticipants: number,
-          readyParticipants: number,
-        ): { free(): void }
+        device_mode: number
+        replication_type: number
+        free(): void
       }
-      device_mode: number
-      replication_type: number
-      free(): void
-    }
-    set_vault_architecture(value: { free(): void }): void
-    device_id: string
-    device_public_key: string
-    device_signing_public_key_js(): Promise<string>
-  }
+      set_vault_architecture(value: { free(): void }): void
+      device_id: string
+      device_public_key: string
+      device_signing_public_key_js(): Promise<string>
+    },
+    VaultStorageFailure
+  >
 }
 
 test.beforeEach(async ({ page }) => {
@@ -91,19 +96,15 @@ test('exposes only the project capability and rejects the opposite vault type', 
   }
 
   const error = await page.evaluate((simpleApp) => {
-    const manager = (
+    const admission = (
       window as Window & { __nookVault: DebugVault }
-    ).__nookVault.requireManager()
+    ).__nookVault.admitManager()
+    if (admission.isErr()) return admission.error.translationKey
+    const manager = admission.value
     const current = manager.vaultArchitecture
     const Architecture = current.constructor
     const oppositeArchitecture = simpleApp
-      ? Architecture.sentinel(
-          current.device_mode,
-          current.replication_type,
-          2,
-          3,
-          0,
-        )
+      ? Architecture.sentinel(current.device_mode, current.replication_type, 2, 3, 0)
       : Architecture.simple(current.device_mode, current.replication_type)
     try {
       manager.set_vault_architecture(oppositeArchitecture)
@@ -115,9 +116,7 @@ test('exposes only the project capability and rejects the opposite vault type', 
       current.free()
     }
   }, isSimple)
-  expect(error).toContain(
-    I18N_KEYS.ErrorsValidationVaultApplicationTypeMismatch,
-  )
+  expect(error).toContain(I18N_KEYS.ErrorsValidationVaultApplicationTypeMismatch)
 })
 
 test('keeps extension routing and local session behavior app-specific', async ({
@@ -129,9 +128,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   expect(extensionResponse.status()).toBe(isSimple ? 200 : 404)
 
   if (!isSimple) {
-    await expect(page.getByTestId('approve-extension-device-btn')).toHaveCount(
-      0,
-    )
+    await expect(page.getByTestId('approve-extension-device-btn')).toHaveCount(0)
     return
   }
 
@@ -142,21 +139,25 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await extensionContext.addInitScript(installMockPasskeyRuntime)
   const extensionPage = await extensionContext.newPage()
   await extensionPage.goto(new URL(page.url()).origin)
-  await expect(
-    extensionPage.getByTestId('login-create-vault-chooser'),
-  ).toBeVisible({ timeout: UI_TIMEOUT_MS * 2 })
+  await expect(extensionPage.getByTestId('login-create-vault-chooser')).toBeVisible({
+    timeout: UI_TIMEOUT_MS * 2,
+  })
   await createLocalVaultOnLogin(extensionPage, 'Isolated extension device')
   await expect(extensionPage.getByTestId('vault-panel')).toBeVisible()
   const extensionDevice = await extensionPage.evaluate(async () => {
-    const manager = (
+    const admission = (
       window as Window & { __nookVault: DebugVault }
-    ).__nookVault.requireManager()
+    ).__nookVault.admitManager()
+    if (admission.isErr())
+      return { ok: false as const, error: admission.error.translationKey }
+    const manager = admission.value
     const deviceId = manager.device_id
     const devicePublicKey = manager.device_public_key
     const deviceSigningPublicKey = await manager.device_signing_public_key_js()
-    return { deviceId, devicePublicKey, deviceSigningPublicKey }
+    return { ok: true as const, deviceId, devicePublicKey, deviceSigningPublicKey }
   })
   await extensionContext.close()
+  if (!extensionDevice.ok) expect.fail(extensionDevice.error)
   await page.getByTestId('header-lock-vault-btn').click()
   await expect(page.getByTestId('login-local-unlock-step')).toBeVisible({
     timeout: UI_TIMEOUT_MS,
@@ -191,9 +192,7 @@ test('keeps extension routing and local session behavior app-specific', async ({
   await page.getByTestId('approve-extension-device-btn').click()
   await expect(
     page.getByTestId('extension-connect-consent').getByRole('alert'),
-  ).toContainText(
-    'The extension did not accept the Simple Vault pairing grant.',
-  )
+  ).toContainText('The extension did not accept the Simple Vault pairing grant.')
   await expect(page.getByTestId('extension-connect-approved')).toHaveCount(0)
 
   await page.getByTestId('header-lock-vault-btn').click()

@@ -1,3 +1,4 @@
+import type { VaultState } from '$lib/vault.svelte'
 import { expect, test, type Page } from '../fixtures'
 import { createIsolatedContext, ENROLLMENT_UNLOCK_TIMEOUT_MS } from '../helpers'
 
@@ -49,9 +50,7 @@ test('a reset Sentinel ceremony replaces stale readiness after a rejected unlock
       await device.goto(invitationUrl)
       await device.getByTestId('sentinel-genesis-connect-device').click()
       await createDeviceProtection(device)
-      const announcement = device.getByTestId(
-        'sentinel-genesis-generated-response',
-      )
+      const announcement = device.getByTestId('sentinel-genesis-generated-response')
       await expect(announcement).not.toHaveValue('', {
         timeout: ENROLLMENT_UNLOCK_TIMEOUT_MS,
       })
@@ -74,9 +73,9 @@ test('a reset Sentinel ceremony replaces stale readiness after a rejected unlock
       await expect(deliveryInput).toHaveValue('')
     }
     const participant = participants[0]
-    const { storeId } = JSON.parse(
-      await deliveryOutput.first().inputValue(),
-    ) as { storeId: string }
+    const { storeId } = JSON.parse(await deliveryOutput.first().inputValue()) as {
+      storeId: string
+    }
     await page.getByTestId('sentinel-genesis-delivery-acknowledgement').check()
     await page.getByTestId('sentinel-genesis-delivery-complete').click()
 
@@ -97,26 +96,28 @@ test('a reset Sentinel ceremony replaces stale readiness after a rejected unlock
       .getByTestId('sentinel-unlock-response-input')
       .fill(await response.inputValue())
     await page.getByTestId('sentinel-unlock-add-response-btn').click()
-    await expect(page.getByTestId('sentinel-unlock-progress')).toContainText(
-      '2/2',
-    )
+    await expect(page.getByTestId('sentinel-unlock-progress')).toContainText('2/2')
     const finalize = page.getByTestId('sentinel-unlock-finalize-btn')
     await expect(finalize).toBeEnabled()
     await page.waitForTimeout(DEMO_BEAT_MS)
 
     // The public reset models an external session change after this UI snapshot.
     // This is a stale-readiness race, not an injected mid-finalization failure.
-    await page.evaluate(() => {
+    const resetFailure = await page.evaluate(() => {
       const vault = (
-        window as Window & {
-          __nookVault?: {
-            requireManager(): { reset_vault_session(): void }
-          }
-        }
+        window as Window & { __nookVault?: Pick<VaultState, 'admitManager'> }
       ).__nookVault
-      if (!vault) throw new Error('Vault harness is unavailable')
-      vault.requireManager().reset_vault_session()
+      if (!vault) return 'Vault harness is unavailable'
+      const manager = vault.admitManager()
+      if (manager.isErr()) return manager.error.translationKey
+      try {
+        manager.value.reset_vault_session()
+      } catch {
+        return 'Native session reset failed'
+      }
+      return ''
     })
+    expect(resetFailure).toBe('')
     await expect(finalize).toBeEnabled()
     await finalize.click()
 
@@ -136,9 +137,7 @@ test('a reset Sentinel ceremony replaces stale readiness after a rejected unlock
     await expect(request).toHaveCount(0)
     await start.click()
     await expect(request).not.toHaveValue('')
-    await expect(page.getByTestId('sentinel-unlock-progress')).toContainText(
-      '1/2',
-    )
+    await expect(page.getByTestId('sentinel-unlock-progress')).toContainText('1/2')
   } finally {
     await participantContext.close()
     await otherContext.close()

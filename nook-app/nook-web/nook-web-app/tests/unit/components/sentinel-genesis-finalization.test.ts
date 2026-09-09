@@ -1,3 +1,4 @@
+import type { NookVaultManager } from '$app-wasm'
 import { ok, err } from 'neverthrow'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { describe, expect, test, vi } from 'vitest'
@@ -63,10 +64,7 @@ class GenesisFinalizationFixture {
     sentinelGenesisPhase: SentinelGenesisPhase.ReadyToFinalize,
     sentinelGenesisParticipantCount: 1,
     sentinelGenesisParticipants: [this.previousParticipant],
-    admitManager: () =>
-      ok(this.manager as unknown as ReturnType<VaultState['requireManager']>),
-    requireManager: () =>
-      this.manager as unknown as ReturnType<VaultState['requireManager']>,
+    admitManager: () => ok(this.manager as unknown as NookVaultManager),
     enqueueStorage: async <Value>(operation: () => Value | Promise<Value>) =>
       operation(),
     t: (request: Parameters<VaultState['t']>[0]) =>

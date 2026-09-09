@@ -86,7 +86,6 @@ type ProviderSessionFields = Pick<
   | 'joinEnrollmentPrompt'
   | 'hasManager'
   | 'admitManager'
-  | 'requireManager'
   | 'remoteVaultRecoveryState'
 >
 
@@ -185,7 +184,6 @@ export type ProviderSaveContext = Pick<
   | 'persistProviders'
   | 'providers'
   | 'admitManager'
-  | 'requireManager'
   | 'selectedLoginVault'
   | 'storageMode'
   | 't'
@@ -226,7 +224,6 @@ type SyncSessionFields = Pick<
   | 'loginDeviceKeysCapable'
   | 'hasManager'
   | 'admitManager'
-  | 'requireManager'
   | 'passwordEntries'
   | 'pendingJoins'
   | 'remoteVaultRecoveryState'
@@ -362,7 +359,9 @@ export type ArchitectureActionsContext = Pick<
   VaultProviderState,
   'draftDeviceMode' | 'draftReplicationType' | 'draftVaultType' | 'vaultArchitecture'
 > &
-  Pick<VaultSessionState, 'hasManager' | 'admitManager' | 'requireManager'> & {
+  Pick<VaultSessionState, 'hasManager' | 'admitManager'> & {
+    errorMsg: string
+    t(request: TranslationRequest): string
     architectureSecretCreationAllowed: boolean
     enqueueStorage<T, E = VaultStorageFailure>(
       operation: () => Result<T, E> | Promise<Result<T, E>>,
@@ -387,7 +386,6 @@ export type SessionActionsContext = Pick<VaultRuntimeState, 'errorMsg'> &
     | 'loginDeviceKeysCapable'
     | 'hasManager'
     | 'admitManager'
-    | 'requireManager'
     | 'passwordEntries'
     | 'pendingJoins'
     | 'selectedPasswordEntry'
@@ -429,14 +427,14 @@ export type SessionActionsContext = Pick<VaultRuntimeState, 'errorMsg'> &
       operation: () => Result<T, E> | Promise<Result<T, E>>,
     ): Promise<Result<T, E | VaultStorageFailure>>
     publishExtensionEventLogUpdate(): Promise<Result<void, VaultStorageFailure>>
-    refreshVaultArchitectureFromManager(): void
+    refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure>
     resetVaultSessionState(resetManager?: boolean): void
     stopIdleSessionTracking(): void
     stopVaultSync(): void
   }
 
 export type UiActionsContext = Pick<VaultRuntimeState, 'errorMsg' | 'isSaving'> &
-  Pick<VaultSessionState, 'hasManager' | 'admitManager' | 'requireManager'> &
+  Pick<VaultSessionState, 'hasManager' | 'admitManager'> &
   Pick<
     VaultUiState,
     | 'adminAccordionSection'
@@ -453,7 +451,7 @@ export type UiActionsContext = Pick<VaultRuntimeState, 'errorMsg' | 'isSaving'> 
     enqueueStorage<T, E = VaultStorageFailure>(
       operation: () => Result<T, E> | Promise<Result<T, E>>,
     ): Promise<Result<T, E | VaultStorageFailure>>
-    refreshDeviceState(): Promise<void>
+    refreshDeviceState(): Promise<VaultSynchronizationResult>
     refreshLocalVaultCatalog(): Promise<Result<void, VaultStorageFailure>>
     stopIdleSessionTracking(): void
     stopVaultSync(): void

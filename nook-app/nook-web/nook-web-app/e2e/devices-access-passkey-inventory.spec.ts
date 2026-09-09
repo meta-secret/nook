@@ -1,15 +1,10 @@
+import type { VaultState } from '$lib/vault.svelte'
 import { expect, test } from './fixtures'
-import { type NookVaultManager } from '$app-wasm'
 import {
   connectLocalVault,
   ENROLLMENT_UNLOCK_TIMEOUT_MS,
   installPasskeyMock,
 } from './helpers'
-
-type IdentityDirectorySnapshotRequestOwner = Pick<
-  NookVaultManager,
-  'identity_directory_snapshot_request'
->
 
 test.describe('devices and access passkey inventory', () => {
   test.beforeEach(async ({ page }) => {
@@ -57,12 +52,10 @@ test.describe('devices and access passkey inventory', () => {
     const nameInput = page.getByTestId('devices-access-passkey-name-input')
     await nameInput.fill('Family passkey')
     await page.getByRole('button', { name: 'Save', exact: true }).click()
-    await expect(
-      page.getByTestId('devices-access-key-inventory'),
-    ).toContainText('Family passkey')
-    await expect(
-      page.getByText('Where did you save this passkey?'),
-    ).toHaveCount(0)
+    await expect(page.getByTestId('devices-access-key-inventory')).toContainText(
+      'Family passkey',
+    )
+    await expect(page.getByText('Where did you save this passkey?')).toHaveCount(0)
 
     await page.getByTestId('devices-access-rename-passkey').click()
     await page
@@ -70,25 +63,26 @@ test.describe('devices and access passkey inventory', () => {
       .fill('Travel passkey')
     // The name is written before the dashboard re-reads its snapshot, so
     // failing the next snapshot read exercises "saved, but reload failed".
-    await page.evaluate(() => {
-      const manager = (
-        window as Window & {
-          __nookVault?: {
-            requireManager(): IdentityDirectorySnapshotRequestOwner
-          }
-        }
-      ).__nookVault?.requireManager()
-      if (!manager) throw new Error('Vault manager is not exposed')
+    const preparationFailure = await page.evaluate(() => {
+      const vault = (
+        window as Window & { __nookVault?: Pick<VaultState, 'admitManager'> }
+      ).__nookVault
+      if (!vault) return 'Vault runtime is not exposed'
+      const admission = vault.admitManager()
+      if (admission.isErr()) return admission.error.translationKey
+      const manager = admission.value
       manager.identity_directory_snapshot_request = () => {
         Reflect.deleteProperty(manager, 'identity_directory_snapshot_request')
         throw new Error('Forced dashboard reload failure')
       }
+      return ''
     })
+    expect(preparationFailure).toBe('')
     await page.getByRole('button', { name: 'Save', exact: true }).click()
     await expect(page.getByTestId('devices-access-retry')).toBeVisible()
     await page.getByTestId('devices-access-retry').click()
-    await expect(
-      page.getByTestId('devices-access-key-inventory'),
-    ).toContainText('Travel passkey')
+    await expect(page.getByTestId('devices-access-key-inventory')).toContainText(
+      'Travel passkey',
+    )
   })
 })

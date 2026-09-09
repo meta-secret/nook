@@ -51,10 +51,7 @@ function panelVault(
   } as unknown as NookVaultManager
   return {
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
-    admitManager() {
-      return ok(this.requireManager())
-    },
-    requireManager: () => manager,
+    admitManager: () => ok(manager),
     t: (request: string | { readonly key: string }) =>
       typeof request === 'string' ? request : request.key,
   } as unknown as VaultState
@@ -161,15 +158,13 @@ test('selected local target survives loading the selected identity providers', a
     providersLoaded: false,
     openActiveVault,
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
-    admitManager() {
-      return ok(this.requireManager())
-    },
-    requireManager: () => ({
-      load_auth_providers_snapshot: async () => ({
-        providers: [identityProvider],
-        activeVaultStoreId: { state: 'storeId', value: 'store-b' },
+    admitManager: () =>
+      ok({
+        load_auth_providers_snapshot: async () => ({
+          providers: [identityProvider],
+          activeVaultStoreId: { state: 'storeId', value: 'store-b' },
+        }),
       }),
-    }),
   } as unknown as ProviderActionsContext
   const request: Parameters<VaultProviderActions['loadProviders']>[0] = {
     options: { ensureLocalRow: false },
@@ -191,18 +186,16 @@ test('completed import transitions to the selected locked identity', async () =>
     devicePublicKey: 'outgoing-key',
     errorMsg: '',
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
-    admitManager() {
-      return ok(this.requireManager())
-    },
-    requireManager: () => ({
-      activate_local_identity: async () => {
-        calls.push('activate')
-      },
-      device_protection_status: async () => {
-        calls.push('status')
-        return DeviceProtectionStatus.Pin
-      },
-    }),
+    admitManager: () =>
+      ok({
+        activate_local_identity: async () => {
+          calls.push('activate')
+        },
+        device_protection_status: async () => {
+          calls.push('status')
+          return DeviceProtectionStatus.Pin
+        },
+      }),
     clearIdentityProviderSession: () => calls.push('clear-session'),
     selectLoginVault: (storeId: string) => calls.push(`select:${storeId}`),
     t: () => 'vault imported; identity selection failed',
@@ -229,14 +222,12 @@ test('activation failure preserves the completed import session', async () => {
   const state = {
     errorMsg: '',
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
-    admitManager() {
-      return ok(this.requireManager())
-    },
-    requireManager: () => ({
-      activate_local_identity: async () => {
-        throw new Error('identity activation failed')
-      },
-    }),
+    admitManager: () =>
+      ok({
+        activate_local_identity: async () => {
+          throw new Error('identity activation failed')
+        },
+      }),
     clearIdentityProviderSession,
     selectLoginVault,
     t: () => 'vault imported; identity selection failed',
@@ -264,15 +255,13 @@ test('status failure keeps the activated identity transition fail closed', async
     devicePublicKey: 'outgoing-key',
     errorMsg: '',
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),
-    admitManager() {
-      return ok(this.requireManager())
-    },
-    requireManager: () => ({
-      activate_local_identity: async () => {},
-      device_protection_status: async () => {
-        throw new Error('status unavailable')
-      },
-    }),
+    admitManager: () =>
+      ok({
+        activate_local_identity: async () => {},
+        device_protection_status: async () => {
+          throw new Error('status unavailable')
+        },
+      }),
     clearIdentityProviderSession,
     selectLoginVault,
     t: () => 'vault imported; identity selection failed',

@@ -59,7 +59,6 @@ function providerState(providerType: StorageProviderType): AdapterState {
     hasActiveVaultStore: true,
     selectedLoginVault: { kind: LoginVaultSelectionKind.NotSelected },
     hasManager: false,
-    requireManager: vi.fn(),
     admitManager: () =>
       err(new VaultStorageFailure(VaultStorageFailureKind.ManagerUnavailable)),
     enqueueStorage: async <T>(operation: () => T | Promise<T>) => operation(),

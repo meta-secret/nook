@@ -1,3 +1,4 @@
+import type { VaultState } from '$lib/vault.svelte'
 import { DeviceProtectionStatus } from '$app-wasm'
 import type { Page } from '@playwright/test'
 import { expect, test } from './fixtures'
@@ -12,26 +13,23 @@ test.describe('devices and access identity cancellation', () => {
     await connectLocalVault(page)
     await page.getByTestId('header-devices-access-btn').click()
     await page.getByTestId('devices-access-add-identity').click()
-    await expect(
-      page.getByTestId('devices-access-add-identity-flow'),
-    ).toBeVisible()
+    await expect(page.getByTestId('devices-access-add-identity-flow')).toBeVisible()
   })
 
   async function identityCreationPending(page: Page): Promise<boolean> {
-    return page.evaluate(() => {
-      if (!('__nookVault' in window)) {
-        throw new Error('Vault runtime is not exposed')
-      }
-      return (
-        window as Window & {
-          __nookVault: {
-            requireManager(): {
-              readonly local_identity_creation_pending: boolean
-            }
-          }
-        }
-      ).__nookVault.requireManager().local_identity_creation_pending
+    const pending = await page.evaluate(() => {
+      const vault = (
+        window as Window & { __nookVault?: Pick<VaultState, 'admitManager'> }
+      ).__nookVault
+      if (!vault)
+        return { ok: false as const, error: 'Vault runtime is not exposed' }
+      const manager = vault.admitManager()
+      return manager.isErr()
+        ? { ok: false as const, error: manager.error.translationKey }
+        : { ok: true as const, value: manager.value.local_identity_creation_pending }
     })
+    if (!pending.ok) expect.fail(pending.error)
+    return pending.value
   }
 
   async function deviceProtectionVerifying(page: Page): Promise<boolean> {
@@ -89,8 +87,6 @@ test.describe('devices and access identity cancellation', () => {
     await expect.poll(() => deviceProtectionVerifying(page)).toBe(false)
     await expect.poll(() => identityCreationPending(page)).toBe(false)
     await page.getByTestId('header-devices-access-btn').click()
-    await expect(
-      page.getByTestId('devices-access-identity-option'),
-    ).toHaveCount(1)
+    await expect(page.getByTestId('devices-access-identity-option')).toHaveCount(1)
   })
 })

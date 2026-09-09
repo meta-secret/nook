@@ -272,7 +272,9 @@ export class VaultInitializationActions {
         state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
         deviceIdentityUnlocked
       ) {
-        void state.lockDeviceProtection()
+        void state.lockDeviceProtection().then((locked) => {
+          if (locked.isErr()) state.errorMsg = state.t(locked.error.translationKey)
+        })
       }
       state.deviceProtectionStatus =
         state.deviceProtectionStatus === DeviceProtectionStatus.Loading
@@ -685,7 +687,8 @@ class DeviceInitializationContinuation {
         })
       }
     } else {
-      await state.refreshDeviceState()
+      const devices = await state.refreshDeviceState()
+      if (devices.isErr()) return storageErr(devices.error)
     }
 
     const enrollment = state.enrollmentLinkState

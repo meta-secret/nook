@@ -115,39 +115,49 @@ type PersistedProtectionStatusRequest = {
 export class DeviceProtectionActions {
   constructor(private readonly state: VaultState) {}
 
-  lockDeviceProtection(): Promise<void> {
+  async lockDeviceProtection(): Promise<Result<void, StorageOperationFailure>> {
     const state = this.state
     state.deviceProtectionStatus = state.deviceProtectionLockedStatus
     state.deviceAuthorizationInProgress = false
     state.deviceId = ''
     state.devicePublicKey = ''
-    const snapshotArgs: Parameters<typeof $state.snapshot>[0] = {
+    state.githubPat = ''
+    state.clearOauthFile()
+    state.clearLocalFolder()
+    if (state.localVaultPresent) state.storageMode = LOCAL_PROVIDER_TYPE
+
+    // Dispose native authority synchronously, before any queued or asynchronous work.
+    let locked: Result<void, StorageOperationFailure> = storageOk(undefined)
+    if (state.hasManager) {
+      const manager = state.admitManager()
+      if (manager.isErr()) locked = storageErr(manager.error)
+      else {
+        try {
+          manager.value.lock_device_identity()
+        } catch (failure) {
+          locked = storageErr(new NativeVaultStorageFailure(failure))
+        }
+      }
+    }
+    const snapshot = $state.snapshot({
       providers: state.providers,
       activeVaultStoreId:
         state.activeVault.kind === ActiveVaultKind.Open
           ? activeVaultScope(state.activeVault.storeId)
           : unselectedVaultScope(),
-    }
-    state.providers = providers_visible_while_device_locked(
-      $state.snapshot(snapshotArgs),
-    ).providers
-    state.providersLoaded = state.providers.length > 0
-    state.githubPat = ''
-    state.clearOauthFile()
-    state.clearLocalFolder()
-    if (state.localVaultPresent) {
-      state.storageMode = LOCAL_PROVIDER_TYPE
-    }
-    if (!state.hasManager) return Promise.resolve()
-    // Zeroize in-memory app-key material immediately. Queuing through storage
-    // would leave Devices & access reporting Identity unlocked until the queue
-    // drained, including when lock keeps the /devices-access route open.
+    })
+    // Publication stays denied even if the native visibility projection fails.
+    state.providers = []
+    state.providersLoaded = false
     try {
-      state.requireManager().lock_device_identity()
-    } catch {
-      // Persisted identity remains wrapped even if the manager is tearing down.
+      state.providers = providers_visible_while_device_locked(snapshot).providers
+      state.providersLoaded = state.providers.length > 0
+    } catch (failure) {
+      return locked.isErr()
+        ? locked
+        : storageErr(new NativeVaultStorageFailure(failure))
     }
-    return Promise.resolve()
+    return locked
   }
 
   private async finishAuthorizedInitialization({
@@ -184,7 +194,9 @@ export class DeviceProtectionActions {
       state.deviceProtectionStatus === DeviceProtectionStatus.Unlocked ||
       deviceIdentityUnlocked
     ) {
-      void state.lockDeviceProtection()
+      void state.lockDeviceProtection().then((locked) => {
+        if (locked.isErr()) state.errorMsg = state.t(locked.error.translationKey)
+      })
     }
   }
 

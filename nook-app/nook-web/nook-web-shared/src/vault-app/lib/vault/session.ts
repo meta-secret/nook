@@ -93,7 +93,8 @@ export class VaultSessionActions {
     state.isAuthenticated = true
     state.awaitingJoinApproval = false
     state.sessionExpiredByIdle = false
-    state.refreshVaultArchitectureFromManager()
+    const architecture = state.refreshVaultArchitectureFromManager()
+    if (architecture.isErr()) return storageErr(architecture.error)
     log.info('vault session unlocked')
     void state.publishExtensionEventLogUpdate().then((publication) => {
       if (publication.isErr())

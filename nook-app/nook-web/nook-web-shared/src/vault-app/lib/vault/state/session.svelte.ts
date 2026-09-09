@@ -58,12 +58,6 @@ export class VaultSessionState {
       ? ok(this.managerState.manager)
       : err(new VaultStorageFailure(VaultStorageFailureKind.ManagerUnavailable))
   }
-  requireManager(): NookVaultManager {
-    if (this.managerState.kind === ManagerSessionKind.Available) {
-      return this.managerState.manager
-    }
-    throw new Error('Vault manager is required')
-  }
   openManager(value: NookVaultManager): void {
     this.managerState = { kind: ManagerSessionKind.Available, manager: value }
   }

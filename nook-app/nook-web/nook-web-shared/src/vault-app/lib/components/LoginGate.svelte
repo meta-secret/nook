@@ -67,7 +67,10 @@
   import LoginEnrollmentPanel from '$lib/components/login/LoginEnrollmentPanel.svelte'
   import EnrollmentQrOnboardCard from '$lib/components/login/EnrollmentQrOnboardCard.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
-  import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+  import {
+    SentinelUnlockActions,
+    SentinelCeremonyVisibility,
+  } from '$lib/vault/sentinel-unlock'
   import RemoteVaultRecoveryPanel from '$lib/components/login/RemoteVaultRecoveryPanel.svelte'
   import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
   import {
@@ -323,9 +326,17 @@
   const showVaultPicker = $derived(
     vault.showLoginVaultPicker && !showProviderSetupLink,
   )
-  const showSentinelCeremony = $derived(
-    new SentinelUnlockActions(vault).sentinelCeremonyIsVisible(),
+  const sentinelVisibility = $derived(
+    new SentinelUnlockActions(vault).ceremonyVisibility(),
   )
+  const showSentinelCeremony = $derived(
+    sentinelVisibility.isOk() &&
+      sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
+  )
+  $effect(() => {
+    if (sentinelVisibility.isErr())
+      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+  })
   const hasKnownLocalVault = $derived(
     vault.localVaultPresent || vault.localVaults.length > 0,
   )

@@ -1,7 +1,7 @@
 import type { OAuthFailure } from '$lib/auth/oauth-failure'
 import type { SentinelActionResult } from './sentinel-genesis'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
-import { err as storageErr, ok as storageOk } from 'neverthrow'
+import { err as storageErr, ok as storageOk, type Result } from 'neverthrow'
 import {
   VaultStorageFailure as StorageOperationFailure,
   VaultStorageFailureKind as StorageOperationFailureKind,
@@ -18,6 +18,11 @@ import {
   VaultRecoveryErrorKind,
   type NookSentinelStoredDeliverySummary as SentinelStoredDeliverySummary,
 } from '$app-wasm'
+
+export enum SentinelCeremonyVisibility {
+  Hidden = 'hidden',
+  Visible = 'visible',
+}
 
 const log = browserLogRuntime.createLogger('vault-sentinel')
 
@@ -58,39 +63,59 @@ export class SentinelUnlockActions {
     if (previous !== status) previous.free()
   }
 
-  isSentinelVault(): boolean {
+  vaultType(): Result<VaultType, StorageOperationFailure> {
     const state = this.state
-    if (state.vaultArchitecture.vault_type === VaultType.Sentinel) return true
-    if (!state.hasManager) return false
+    let kind: VaultType
     try {
-      return (
-        state.requireManager().sentinel_unlock_status() !==
-        SentinelVaultUnlockState.NotSentinel
+      kind = state.vaultArchitecture.vault_type
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
+    }
+    if (kind === VaultType.Sentinel || !state.hasManager) return storageOk(kind)
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
+    try {
+      return storageOk(
+        manager.value.sentinel_unlock_status() ===
+          SentinelVaultUnlockState.NotSentinel
+          ? kind
+          : VaultType.Sentinel,
       )
-    } catch {
-      return false
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
     }
   }
 
-  sentinelCeremonyIsVisible(): boolean {
+  ceremonyVisibility(): Result<SentinelCeremonyVisibility, StorageOperationFailure> {
     const state = this.state
     if (
       state.isAuthenticated ||
       state.sentinelUnlockStatus === SentinelVaultUnlockState.Unlocked
     )
-      return false
+      return storageOk(SentinelCeremonyVisibility.Hidden)
     if (
       state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares &&
-      !state.sentinelUnlockSession.active &&
-      state.hasManager &&
-      state.requireManager().vaultStoreId === ''
-    )
-      return false
-    return (
+      state.hasManager
+    ) {
+      const manager = state.admitManager()
+      if (manager.isErr()) return storageErr(manager.error)
+      try {
+        if (!state.sentinelUnlockSession.active && manager.value.vaultStoreId === '')
+          return storageOk(SentinelCeremonyVisibility.Hidden)
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure))
+      }
+    }
+    if (
       state.sentinelCeremonyPrompt ||
       state.sentinelUnlockStatus === SentinelVaultUnlockState.CeremonyRequired ||
-      state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares ||
-      this.isSentinelVault()
+      state.sentinelUnlockStatus === SentinelVaultUnlockState.AwaitingShares
+    )
+      return storageOk(SentinelCeremonyVisibility.Visible)
+    return this.vaultType().map((kind) =>
+      kind === VaultType.Sentinel
+        ? SentinelCeremonyVisibility.Visible
+        : SentinelCeremonyVisibility.Hidden,
     )
   }
 
@@ -161,7 +186,8 @@ export class SentinelUnlockActions {
       read.value === SentinelVaultUnlockState.CeremonyRequired ||
       read.value === SentinelVaultUnlockState.AwaitingShares
     ) {
-      state.refreshVaultArchitectureFromManager()
+      const architecture = state.refreshVaultArchitectureFromManager()
+      if (architecture.isErr()) return storageErr(architecture.error)
       state.sentinelCeremonyPrompt = true
       state.loginPasswordPrompt = false
       return storageOk(undefined)
@@ -182,7 +208,8 @@ export class SentinelUnlockActions {
         VaultRecoveryErrorKind.SentinelCeremonyRequired
       )
         return storageErr(connected.error)
-      state.refreshVaultArchitectureFromManager()
+      const architecture = state.refreshVaultArchitectureFromManager()
+      if (architecture.isErr()) return storageErr(architecture.error)
       state.sentinelCeremonyPrompt = true
       state.loginPasswordPrompt = false
       return storageOk(undefined)
@@ -300,7 +327,8 @@ export class SentinelUnlockActions {
       }
     })
     if (response.isErr()) return storageErr(response.error)
-    state.refreshVaultArchitectureFromManager()
+    const architecture = state.refreshVaultArchitectureFromManager()
+    if (architecture.isErr()) return storageErr(architecture.error)
     return response
   }
 
@@ -418,13 +446,22 @@ export class SentinelUnlockActions {
     recoveryKind,
   }: SentinelCeremonyPresentation): Promise<boolean> {
     const state = this.state
+    const vaultType = this.vaultType()
+    if (vaultType.isErr()) {
+      state.errorMsg = state.t(vaultType.error.translationKey)
+      return false
+    }
     if (
       recoveryKind !== VaultRecoveryErrorKind.SentinelCeremonyRequired &&
-      !this.isSentinelVault()
+      vaultType.value !== VaultType.Sentinel
     ) {
       return false
     }
-    state.refreshVaultArchitectureFromManager()
+    const architecture = state.refreshVaultArchitectureFromManager()
+    if (architecture.isErr()) {
+      state.errorMsg = state.t(architecture.error.translationKey)
+      return false
+    }
     const refreshed = await this.refreshSentinelUnlockStatus()
     if (refreshed.isErr()) {
       state.errorMsg = state.t(refreshed.error.translationKey)

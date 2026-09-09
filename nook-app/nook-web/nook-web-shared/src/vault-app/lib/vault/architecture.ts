@@ -1,100 +1,143 @@
-import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
-import { err as storageErr, ok as storageOk } from 'neverthrow'
-
+import {
+  NativeVaultStorageFailure,
+  VaultStorageFailure,
+  VaultStorageFailureKind,
+} from '$lib/runtime/storage-failure'
+import { err, ok, type Result } from 'neverthrow'
 import type { ArchitectureActionsContext } from '$lib/vault/action-contexts'
 import {
   vault_architecture_can_create_secret,
   type VaultArchitecture,
 } from '$lib/vault/architecture-model'
 import { NookVaultArchitecture } from '$app-wasm'
-import { browserLogRuntime } from '$lib/runtime/log'
-
-const log = browserLogRuntime.createLogger('vault-architecture')
 
 type VaultArchitectureReplacement = {
   readonly architecture: VaultArchitecture
 }
 
-/** Owns browser orchestration for one architecture context. */
+/** Owns architecture presentation and admission of native metadata. */
 export class VaultArchitectureActions {
   constructor(private readonly state: ArchitectureActionsContext) {}
 
-  draftVaultArchitecture(): VaultArchitecture {
-    const state = this.state
-    return NookVaultArchitecture.draft(
-      state.draftDeviceMode,
-      state.draftVaultType,
-      state.draftReplicationType,
-    )
-  }
-
   replaceVaultArchitecture({ architecture }: VaultArchitectureReplacement): void {
-    const state = this.state
-    const previous = state.vaultArchitecture
-    state.vaultArchitecture = architecture
+    const previous = this.state.vaultArchitecture
+    this.state.vaultArchitecture = architecture
     if (previous !== architecture) previous.free()
   }
 
-  applyDraftVaultArchitecture(): void {
+  applyDraftVaultArchitecture(): Result<void, VaultStorageFailure> {
     const state = this.state
-    const replaceVaultArchitectureArgs: Parameters<
-      VaultArchitectureActions['replaceVaultArchitecture']
-    >[0] = { architecture: this.draftVaultArchitecture() }
-    this.replaceVaultArchitecture(replaceVaultArchitectureArgs)
-    state.architectureSecretCreationAllowed = vault_architecture_can_create_secret(
-      state.vaultArchitecture,
-    )
-    if (state.hasManager) {
-      state.requireManager().set_vault_architecture(state.vaultArchitecture)
-    }
-  }
-
-  refreshVaultArchitectureFromManager(): void {
-    const state = this.state
-    if (!state.hasManager) return
     let architecture: VaultArchitecture
     try {
-      architecture = state.requireManager().vaultArchitecture as VaultArchitecture
-    } catch {
-      log.warn('vault architecture metadata could not be loaded')
-      return
+      architecture = NookVaultArchitecture.draft(
+        state.draftDeviceMode,
+        state.draftVaultType,
+        state.draftReplicationType,
+      )
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure))
     }
-    const replaceVaultArchitectureArgs2: Parameters<
-      VaultArchitectureActions['replaceVaultArchitecture']
-    >[0] = { architecture }
-    this.replaceVaultArchitecture(replaceVaultArchitectureArgs2)
-    state.architectureSecretCreationAllowed = vault_architecture_can_create_secret(
-      state.vaultArchitecture,
-    )
-    state.draftDeviceMode = state.vaultArchitecture.device_mode
-    state.draftVaultType = state.vaultArchitecture.vault_type
-    state.draftReplicationType = state.vaultArchitecture.replication_type
-    void this.refreshArchitectureSecretCreationAllowed()
+    let allowed: boolean
+    try {
+      allowed = vault_architecture_can_create_secret(architecture)
+    } catch (failure) {
+      architecture.free()
+      return err(new NativeVaultStorageFailure(failure))
+    }
+    if (state.hasManager) {
+      const manager = state.admitManager()
+      if (manager.isErr()) {
+        architecture.free()
+        return err(manager.error)
+      }
+      try {
+        manager.value.set_vault_architecture(architecture)
+      } catch (failure) {
+        architecture.free()
+        return err(new NativeVaultStorageFailure(failure))
+      }
+    }
+    this.replaceVaultArchitecture({ architecture })
+    state.architectureSecretCreationAllowed = allowed
+    return ok(undefined)
   }
 
-  async refreshArchitectureSecretCreationAllowed(): Promise<void> {
+  refreshVaultArchitectureFromManager(): Result<void, VaultStorageFailure> {
     const state = this.state
-    const fallback = vault_architecture_can_create_secret(state.vaultArchitecture)
-    if (!state.hasManager) {
-      state.architectureSecretCreationAllowed = fallback
-      return
+    const manager = state.admitManager()
+    if (manager.isErr()) return err(manager.error)
+    let architecture: VaultArchitecture
+    try {
+      architecture = manager.value.vaultArchitecture
+    } catch (failure) {
+      return err(new NativeVaultStorageFailure(failure))
     }
-    const permission = await state.enqueueStorage(async () => {
-      const admittedManager = state.admitManager()
-      if (admittedManager.isErr()) return storageErr(admittedManager.error)
-      try {
-        return storageOk(
-          await admittedManager.value.can_create_secret_for_vault_architecture(),
-        )
-      } catch (nativeFailure) {
-        return storageErr(new NativeVaultStorageFailure(nativeFailure))
+    let deviceMode: VaultArchitecture['device_mode']
+    let vaultType: VaultArchitecture['vault_type']
+    let replicationType: VaultArchitecture['replication_type']
+    try {
+      deviceMode = architecture.device_mode
+      vaultType = architecture.vault_type
+      replicationType = architecture.replication_type
+    } catch (failure) {
+      architecture.free()
+      return err(new NativeVaultStorageFailure(failure))
+    }
+    this.replaceVaultArchitecture({ architecture })
+    state.architectureSecretCreationAllowed = false
+    state.draftDeviceMode = deviceMode
+    state.draftVaultType = vaultType
+    state.draftReplicationType = replicationType
+    void this.refreshArchitectureSecretCreationAllowed().then((permission) => {
+      if (permission.isErr()) {
+        const current = state.admitManager()
+        if (
+          current.isOk() &&
+          current.value === manager.value &&
+          state.vaultArchitecture === architecture
+        ) {
+          state.errorMsg = state.t(permission.error.translationKey)
+        }
       }
     })
-    if (permission.isErr()) {
-      log.warn('vault architecture permission could not be loaded')
-      state.architectureSecretCreationAllowed = fallback
-      return
+    return ok(undefined)
+  }
+
+  async refreshArchitectureSecretCreationAllowed(): Promise<
+    Result<void, VaultStorageFailure>
+  > {
+    const state = this.state
+    const architecture = state.vaultArchitecture
+    const manager = state.admitManager()
+    if (manager.isErr()) return err(manager.error)
+    state.architectureSecretCreationAllowed = false
+    const permission = await state.enqueueStorage(async () => {
+      const current = state.admitManager()
+      if (current.isErr()) return err(current.error)
+      if (
+        current.value !== manager.value ||
+        state.vaultArchitecture !== architecture
+      ) {
+        return err(
+          new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged),
+        )
+      }
+      try {
+        return ok(await current.value.can_create_secret_for_vault_architecture())
+      } catch (failure) {
+        return err(new NativeVaultStorageFailure(failure))
+      }
+    })
+    if (permission.isErr()) return err(permission.error)
+    const current = state.admitManager()
+    if (current.isErr()) return err(current.error)
+    if (
+      current.value !== manager.value ||
+      state.vaultArchitecture !== architecture
+    ) {
+      return err(new VaultStorageFailure(VaultStorageFailureKind.GenerationChanged))
     }
     state.architectureSecretCreationAllowed = permission.value
+    return ok(undefined)
   }
 }

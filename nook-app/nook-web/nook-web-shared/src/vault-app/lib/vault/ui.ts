@@ -77,7 +77,10 @@ export class VaultWorkspaceActions {
       (section === SettingsSection.Storage &&
         accordion === SettingsAccordionSection.Devices)
     if (!skipDeviceRefresh) {
-      void state.refreshDeviceState()
+      void state.refreshDeviceState().then((refreshed) => {
+        if (refreshed.isErr())
+          state.errorMsg = state.t(refreshed.error.translationKey)
+      })
     }
   }
 
@@ -92,7 +95,9 @@ export class VaultWorkspaceActions {
     void state.refreshLocalVaultCatalog().then((result) => {
       if (result.isErr()) state.errorMsg = state.t(result.error.translationKey)
     })
-    void state.refreshDeviceState()
+    void state.refreshDeviceState().then((refreshed) => {
+      if (refreshed.isErr()) state.errorMsg = state.t(refreshed.error.translationKey)
+    })
   }
 
   private applyVault(): void {

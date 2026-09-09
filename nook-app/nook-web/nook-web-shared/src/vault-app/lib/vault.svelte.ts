@@ -1,6 +1,6 @@
 import type { PasswordOperationResult } from '$lib/vault/password-unlock'
 import type { SecretOperationResult } from '$lib/vault/secret-operation-failure'
-import type { Result } from 'neverthrow'
+import { err, type Result } from 'neverthrow'
 import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
 import { ExtensionSyncPublication } from '$lib/vault/sync-extension-bridge'
 import type { NookAdoptedExtensionIdentityHandoff } from '$app-wasm'
@@ -203,10 +203,6 @@ export class VaultState extends VaultRuntimeState {
     })
   }
 
-  get draftVaultArchitecture(): VaultArchitecture {
-    return this.architectureActions.draftVaultArchitecture()
-  }
-
   replaceVaultArchitecture(architecture: VaultArchitecture): void {
     return this.architectureActions.replaceVaultArchitecture({ architecture })
   }
@@ -219,7 +215,7 @@ export class VaultState extends VaultRuntimeState {
     return this.architectureActions.refreshVaultArchitectureFromManager()
   }
 
-  async refreshArchitectureSecretCreationAllowed(): Promise<void> {
+  async refreshArchitectureSecretCreationAllowed() {
     return this.architectureActions.refreshArchitectureSecretCreationAllowed()
   }
 
@@ -298,7 +294,7 @@ export class VaultState extends VaultRuntimeState {
     return this.localLoginActions.switchToVault({ storeId })
   }
 
-  lockDeviceProtection(): Promise<void> {
+  lockDeviceProtection() {
     return new deviceProtectionActions.DeviceProtectionActions(
       this,
     ).lockDeviceProtection()
@@ -796,7 +792,11 @@ export class VaultState extends VaultRuntimeState {
       this.errorMsg = this.t(status.error.translationKey)
       return status
     }
-    await this.refreshArchitectureSecretCreationAllowed()
+    const permission = await this.refreshArchitectureSecretCreationAllowed()
+    if (permission.isErr()) {
+      this.errorMsg = this.t(permission.error.translationKey)
+      return err(permission.error)
+    }
     return status
   }
 

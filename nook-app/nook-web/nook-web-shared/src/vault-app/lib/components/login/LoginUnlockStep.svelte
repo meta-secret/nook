@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { VaultType } from '$lib/vault/architecture-model'
   type VaultPasswordUnlock = {
     readonly entryId: string
     readonly password: string
@@ -18,7 +19,10 @@
   import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
   import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
   import type { VaultState } from '$lib/vault.svelte'
-  import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
+  import {
+    SentinelUnlockActions,
+    SentinelCeremonyVisibility,
+  } from '$lib/vault/sentinel-unlock'
   import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
   import {
     DeviceKeysUnlockCapabilityKind,
@@ -76,12 +80,27 @@
 
   const isBusy = $derived(isVerifying || isInitializing)
   let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
+  const sentinelVisibility = $derived(
+    new SentinelUnlockActions(vault).ceremonyVisibility(),
+  )
   const showSentinelCeremony = $derived(
-    new SentinelUnlockActions(vault).sentinelCeremonyIsVisible(),
+    sentinelVisibility.isOk() &&
+      sentinelVisibility.value === SentinelCeremonyVisibility.Visible,
   )
+  $effect(() => {
+    if (sentinelVisibility.isErr())
+      vault.errorMsg = vault.t(sentinelVisibility.error.translationKey)
+  })
+  const presentedVaultType = $derived(new SentinelUnlockActions(vault).vaultType())
   const hidePasswordUnlock = $derived(
-    showSentinelCeremony || new SentinelUnlockActions(vault).isSentinelVault(),
+    showSentinelCeremony ||
+      presentedVaultType.isErr() ||
+      presentedVaultType.value === VaultType.Sentinel,
   )
+  $effect(() => {
+    if (presentedVaultType.isErr())
+      vault.errorMsg = vault.t(presentedVaultType.error.translationKey)
+  })
   const passwordUnlock = $derived<PasswordUnlockCapability>(
     hidePasswordUnlock
       ? { kind: PasswordUnlockCapabilityKind.Unavailable }

@@ -41,7 +41,6 @@ describe('loadSecretPage', () => {
     }
     const state = {
       hasManager: true,
-      requireManager: () => manager,
       admitManager: () => ok(manager),
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,
@@ -86,7 +85,6 @@ describe('loadSecretPage', () => {
     }
     const state = {
       hasManager: true,
-      requireManager: () => manager,
       admitManager: () => ok(manager),
       enqueueStorage: <T>(operation: () => Promise<T>) => operation(),
       secretPageGeneration: 0,

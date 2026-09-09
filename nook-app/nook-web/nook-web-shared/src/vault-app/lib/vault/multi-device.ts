@@ -51,9 +51,7 @@ export class VaultDeviceActions {
 
   async refreshDeviceState() {
     const state = this.state
-    const synchronized = await state.manualSync()
-    if (synchronized.isErr())
-      state.errorMsg = state.t(synchronized.error.translationKey)
+    return state.manualSync()
   }
 
   async refreshPendingJoinsFromProviders() {

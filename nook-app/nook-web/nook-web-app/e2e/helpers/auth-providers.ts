@@ -1,3 +1,4 @@
+import type { VaultState } from '$lib/vault.svelte'
 import { err, ok, type Result } from 'neverthrow'
 import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
 import { expect, type Page } from '@playwright/test'
@@ -386,23 +387,34 @@ export type RawAuthProvidersSnapshot = {
 }
 
 async function activeAuthProviderStateKey(page: Page): Promise<string> {
-  return page.evaluate(() => {
+  const key = await page.evaluate(() => {
     const vault = (
       window as Window & {
-        __nookVault?: {
-          readonly hasManager: boolean
-          requireManager(): { readonly device_id: string }
-          enqueueStorage<T>(operation: () => T): Promise<T>
-        }
+        __nookVault?: Pick<
+          VaultState,
+          'admitManager' | 'waitForStorageChain' | 'hasManager'
+        >
       }
     ).__nookVault
-    if (!vault) return 'providers'
-    return vault.enqueueStorage(() => {
-      if (!vault.hasManager) return 'providers'
-      const appId = vault.requireManager().device_id
-      return appId ? `providers:${appId}` : 'providers'
+    if (!vault) return { ok: true as const, value: 'providers' }
+    return vault.waitForStorageChain().then(() => {
+      if (!vault.hasManager) return { ok: true as const, value: 'providers' }
+      const manager = vault.admitManager()
+      if (manager.isErr())
+        return { ok: false as const, error: manager.error.translationKey }
+      try {
+        const appId = manager.value.device_id
+        return {
+          ok: true as const,
+          value: appId ? `providers:${appId}` : 'providers',
+        }
+      } catch {
+        return { ok: false as const, error: 'Native device identity read failed' }
+      }
     })
   })
+  if (!key.ok) expect.fail(key.error)
+  return key.value
 }
 
 /** Read the raw `nook_auth` snapshot as persisted (sealed credential fields). */

@@ -94,7 +94,6 @@ const providerKeys = [
 const sessionKeys = [
   'managerSession',
   'hasManager',
-  'requireManager',
   'openManager',
   'deviceProtectionStatus',
   'deviceProtectionLockedStatus',

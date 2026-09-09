@@ -1,3 +1,4 @@
+import type { VaultState } from '$lib/vault.svelte'
 import {
   expect,
   type Browser,
@@ -17,27 +18,35 @@ export async function clearBrowserVault(page: Page) {
     })
     .toBe(true)
 
-  const clearedThroughManager = await page.evaluate(async () => {
+  const cleared = await page.evaluate(async () => {
     const vault = (
       window as Window & {
-        __nookVault: {
-          init(): Promise<void>
-          stopVaultSync(): void
-          waitForStorageChain(): Promise<void>
-          enqueueStorage<T>(operation: () => Promise<T>): Promise<T>
-          hasManager: boolean
-          requireManager(): { delete_local_browser_data(): Promise<void> }
-        }
+        __nookVault: Pick<
+          VaultState,
+          | 'init'
+          | 'stopVaultSync'
+          | 'waitForStorageChain'
+          | 'hasManager'
+          | 'admitManager'
+        >
       }
     ).__nookVault
     await vault.init()
     vault.stopVaultSync()
     await vault.waitForStorageChain()
-    if (!vault.hasManager) return false
-    const manager = vault.requireManager()
-    await vault.enqueueStorage(() => manager.delete_local_browser_data())
-    return true
+    if (!vault.hasManager) return { ok: true as const, value: false }
+    const manager = vault.admitManager()
+    if (manager.isErr())
+      return { ok: false as const, error: manager.error.translationKey }
+    try {
+      await manager.value.delete_local_browser_data()
+    } catch {
+      return { ok: false as const, error: 'Native local data deletion failed' }
+    }
+    return { ok: true as const, value: true }
   })
+  if (!cleared.ok) expect.fail(cleared.error)
+  const clearedThroughManager = cleared.value
   await page.evaluate(
     (vaultAlreadyCleared) =>
       new Promise<void>((resolve, reject) => {
@@ -350,10 +359,7 @@ export function installGoogleTokenClient(token: string) {
     accounts: {
       oauth2: {
         initTokenClient: (config: {
-          callback: (response: {
-            access_token: string
-            expires_in: number
-          }) => void
+          callback: (response: { access_token: string; expires_in: number }) => void
         }) => ({
           requestAccessToken: () => {
             config.callback({ access_token: token, expires_in: 3600 })
@@ -379,25 +385,19 @@ export async function installGoogleOAuthMock(
       body: gisMockBody,
     })
   })
-  await page.route(
-    'https://www.googleapis.com/drive/v3/about**',
-    async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          user: { emailAddress: 'e2e-user@example.com' },
-        }),
-      })
-    },
-  )
+  await page.route('https://www.googleapis.com/drive/v3/about**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        user: { emailAddress: 'e2e-user@example.com' },
+      }),
+    })
+  })
   await page.evaluate(installGoogleTokenClient, accessToken)
 }
 
-export async function waitForVaultUnlocked(
-  page: Page,
-  timeout = UI_TIMEOUT_MS,
-) {
+export async function waitForVaultUnlocked(page: Page, timeout = UI_TIMEOUT_MS) {
   try {
     await expect(page.getByTestId('vault-panel')).toBeVisible({ timeout })
   } catch (error) {

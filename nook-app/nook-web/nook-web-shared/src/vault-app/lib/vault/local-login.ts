@@ -131,7 +131,11 @@ export class VaultLoginActions {
       }
       await this.chooseLoginVault(chooseLoginVaultArgs)
       state.isVerifying = true
-      await state.lockDeviceProtection()
+      const locked = await state.lockDeviceProtection()
+      if (locked.isErr()) {
+        state.errorMsg = state.t(locked.error.translationKey)
+        return
+      }
       log.info('vault switch completed')
     } catch (error) {
       state.errorMsg =
@@ -360,7 +364,11 @@ export class VaultLoginActions {
           return
         }
       }
-      state.applyDraftVaultArchitecture()
+      const architecture = state.applyDraftVaultArchitecture()
+      if (architecture.isErr()) {
+        state.errorMsg = state.t(architecture.error.translationKey)
+        return
+      }
       const rawRecords = await state.enqueueStorage(async () => {
         const manager = state.admitManager()
         if (manager.isErr()) return storageErr(manager.error)

@@ -1,3 +1,4 @@
+import { VaultType } from '$lib/vault/architecture-model'
 import type { Result } from 'neverthrow'
 import type { OAuthFailure } from '$lib/auth/oauth-failure'
 export type PasswordOperationResult = Result<
@@ -240,7 +241,12 @@ export class VaultPasswordActions {
       return
     }
     if (state.isVerifying) return
-    if (new SentinelUnlockActions(state).isSentinelVault()) {
+    const vaultType = new SentinelUnlockActions(state).vaultType()
+    if (vaultType.isErr()) {
+      state.errorMsg = state.t(vaultType.error.translationKey)
+      return
+    }
+    if (vaultType.value === VaultType.Sentinel) {
       state.errorMsg = state.t(I18N_KEYS.ArchitectureModesSentinelPasswordForbidden)
       state.sentinelCeremonyPrompt = true
       return

@@ -322,7 +322,11 @@ export class VaultConnectionActions {
           )
         })()
       ) {
-        state.refreshVaultArchitectureFromManager()
+        const architecture = state.refreshVaultArchitectureFromManager()
+        if (architecture.isErr()) {
+          state.errorMsg = state.t(architecture.error.translationKey)
+          return
+        }
         await new SentinelUnlockActions(state).refreshSentinelUnlockStatus()
         return
       }

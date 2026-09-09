@@ -128,7 +128,9 @@ class VaultBrowserLifecycle {
     return () => {
       vault.stopVaultSync()
       vault.stopIdleSessionTracking()
-      void vault.lockDeviceProtection()
+      void vault.lockDeviceProtection().then((locked) => {
+        if (locked.isErr()) vault.errorMsg = vault.t(locked.error.translationKey)
+      })
       this.browser.window.removeEventListener('popstate', syncRoute)
       this.browser.window.removeEventListener('hashchange', syncRoute)
       colorScheme.removeEventListener('change', handleColorSchemeChange)
