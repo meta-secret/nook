@@ -67,10 +67,17 @@ impl TaskStore for Neo4jTaskStore {
 
     async fn active_delivery(
         &self,
-        source_commit: &str,
-        kind: &str,
+        request: crate::model::ActiveDeliveryQuery<'_>,
     ) -> crate::HiveResult<Option<TaskId>> {
-        self.active_delivery_task(source_commit, kind).await
+        let crate::model::ActiveDeliveryQuery {
+            source_commit: source_commit,
+            kind: kind,
+        } = request;
+        self.active_delivery_task(crate::model::ActiveDeliveryQuery {
+            source_commit,
+            kind,
+        })
+        .await
     }
 
     async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool> {
@@ -733,7 +740,7 @@ impl TaskStore for Neo4jTaskStore {
         reason: &str,
     ) -> crate::HiveResult<bool> {
         blocker.validate()?;
-        if task.kind == "blocker" {
+        if task.kind.is_blocker() {
             return Err(crate::HiveError::message(
                 "a blocker task cannot create another blocking dependency",
             ));

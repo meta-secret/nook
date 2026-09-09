@@ -8,7 +8,7 @@ use tokio::time::{Duration, sleep, timeout};
 fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
     Ok(EnqueueTask {
         id: TaskId::try_from(id)?,
-        kind: "integration".to_owned(),
+        kind: "integration".into(),
         trigger: TaskTrigger::ManualCli,
         prompt: "Exercise obsolete dependency rearming".to_owned(),
         source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -123,7 +123,7 @@ pub async fn verify_block_serializes_with_retirement(
         format!("concurrent-retirement-blocker-{suffix}"),
         Vec::new(),
     )?;
-    blocker.kind = "blocker".to_owned();
+    blocker.kind = "blocker".into();
     let owner = task(format!("concurrent-retirement-owner-{suffix}"), Vec::new())?;
     store.enqueue(&blocker).await?;
     store.enqueue(&owner).await?;
@@ -204,12 +204,12 @@ pub async fn verify_release_retry(
     suffix: &str,
 ) -> anyhow::Result<()> {
     let mut blocker = task(format!("retry-obsolete-blocker-{suffix}"), Vec::new())?;
-    blocker.kind = "blocker".to_owned();
+    blocker.kind = "blocker".into();
     let mut owner = task(
         format!("main-failure-retry-obsolete-{suffix}"),
         vec![blocker.id.clone()],
     )?;
-    owner.kind = "main-repair".to_owned();
+    owner.kind = "main-repair".into();
     owner.max_attempts = 1;
     store.enqueue(&blocker).await?;
     store.enqueue(&owner).await?;
@@ -316,7 +316,7 @@ pub async fn verify_blocked_release_retry(
         format!("stalled-main-failure-{suffix}"),
         vec![parent.id.clone(), ready.id.clone()],
     )?;
-    repair.kind = "main-repair".to_owned();
+    repair.kind = "main-repair".into();
     repair.max_attempts = 1;
     store.enqueue(&leaf).await?;
     store.enqueue(&ready).await?;
@@ -476,7 +476,7 @@ pub async fn verify_enqueue_serializes_with_retirement(
     suffix: &str,
 ) -> anyhow::Result<()> {
     let mut blocker = task(format!("enqueue-retirement-blocker-{suffix}"), Vec::new())?;
-    blocker.kind = "blocker".to_owned();
+    blocker.kind = "blocker".into();
     store.enqueue(&blocker).await?;
     let blocker_claim = hive::model::ClaimedTask::try_from(store.claim(agent, 300).await?)?;
     assert_eq!(blocker_claim.id, blocker.id);

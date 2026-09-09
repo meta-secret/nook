@@ -1,3 +1,5 @@
+use super::classification::{ObservedTaskState, ObservedTaskTrigger};
+use crate::model::TaskKind;
 use serde::{Deserialize, Serialize};
 
 use super::{AGENT_PRESENCE_WINDOW_MS, ALERT_LIMIT, STALE_ACTIVITY_MS, STUCK_CANCELLATION_MS};
@@ -72,12 +74,12 @@ impl ObservedAgent {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ObservedTask {
     pub id: String,
-    pub kind: String,
+    pub kind: TaskKind,
     pub kind_label: String,
     #[serde(skip)]
-    pub trigger_kind: String,
+    pub trigger_kind: ObservedTaskTrigger,
     pub trigger: String,
-    pub status: String,
+    pub status: ObservedTaskState,
     pub source_commit: String,
     pub priority: i64,
     pub attempt_count: i64,
@@ -126,20 +128,20 @@ impl ObservedAlert {
         let mut alerts = tasks
             .iter()
             .filter_map(|task| {
-                let (kind, severity, first_observed_at, reason) = match task.status.as_str() {
-                    "FAILED" if task.dependency_failure => (
+                let (kind, severity, first_observed_at, reason) = match &task.status {
+                    ObservedTaskState::Failed if task.dependency_failure => (
                         AlertKind::DependencyFailed,
                         AlertSeverity::Critical,
                         task.updated_at,
                         copy.alert_dependency_failed.as_str(),
                     ),
-                    "FAILED" => (
+                    ObservedTaskState::Failed => (
                         AlertKind::TaskFailed,
                         AlertSeverity::Critical,
                         task.latest_attempt_completed_at.max(task.updated_at),
                         copy.alert_task_failed.as_str(),
                     ),
-                    "BLOCKED" => (
+                    ObservedTaskState::Blocked => (
                         AlertKind::DependencyBlocked,
                         AlertSeverity::Warning,
                         task.updated_at,
@@ -163,12 +165,16 @@ impl ObservedAlert {
                             copy.alert_activity_stale.as_str(),
                         )
                     }
-                    "CANCELLING" if now - task.updated_at > STUCK_CANCELLATION_MS => (
-                        AlertKind::CancellationStuck,
-                        AlertSeverity::Warning,
-                        task.updated_at + STUCK_CANCELLATION_MS,
-                        copy.alert_cancellation_stuck.as_str(),
-                    ),
+                    ObservedTaskState::Cancelling
+                        if now - task.updated_at > STUCK_CANCELLATION_MS =>
+                    {
+                        (
+                            AlertKind::CancellationStuck,
+                            AlertSeverity::Warning,
+                            task.updated_at + STUCK_CANCELLATION_MS,
+                            copy.alert_cancellation_stuck.as_str(),
+                        )
+                    }
                     _ => return None,
                 };
                 Some(ObservedAlert {
@@ -193,15 +199,16 @@ impl ObservedAlert {
 }
 
 impl ObservedTask {
-    pub(super) fn localized_task_kind(kind: &str, locale: &str) -> String {
+    pub(super) fn localized_task_kind(label: TaskKindLabel<'_>) -> String {
+        let TaskKindLabel { kind, locale } = label;
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         match (kind, russian) {
-            ("main-repair", true) => "Восстановление main".to_owned(),
-            ("blocker", true) => "Блокирующая задача".to_owned(),
-            ("main-repair", false) => "Main repair".to_owned(),
-            ("blocker", false) => "Blocking task".to_owned(),
-            (_, _) => kind.replace('-', " "),
+            (TaskKind::MainRepair, true) => "Восстановление main".to_owned(),
+            (TaskKind::Blocker, true) => "Блокирующая задача".to_owned(),
+            (TaskKind::MainRepair, false) => "Main repair".to_owned(),
+            (TaskKind::Blocker, false) => "Blocking task".to_owned(),
+            (_, _) => kind.as_str().replace('-', " "),
         }
     }
 }
@@ -241,7 +248,8 @@ impl ObservedTask {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlertKind, AlertSeverity, ObservedAgent, ObservedAlert, ObservedTask, STALE_ACTIVITY_MS,
+        AlertKind, AlertSeverity, ObservedAgent, ObservedAlert, ObservedTask, ObservedTaskState,
+        STALE_ACTIVITY_MS, TaskKind, TaskKindLabel,
     };
 
     #[test]
@@ -270,11 +278,17 @@ mod tests {
             "Команда репозитория завершилась с ошибкой"
         );
         assert_eq!(
-            ObservedTask::localized_task_kind("main-repair", "en"),
+            ObservedTask::localized_task_kind(TaskKindLabel {
+                kind: &TaskKind::MainRepair,
+                locale: "en"
+            }),
             "Main repair"
         );
         assert_eq!(
-            ObservedTask::localized_task_kind("main-repair", "ru"),
+            ObservedTask::localized_task_kind(TaskKindLabel {
+                kind: &TaskKind::MainRepair,
+                locale: "ru"
+            }),
             "Восстановление main"
         );
     }
@@ -309,7 +323,7 @@ mod tests {
         );
         assert_eq!(alerts[3].task_id, "blocked");
 
-        failed.status = "COMPLETED".to_owned();
+        failed.status = ObservedTaskState::Completed;
         assert!(ObservedAlert::derive_alerts(&[failed], now, "en").is_empty());
     }
 
@@ -346,11 +360,11 @@ mod tests {
     fn observed_task(id: &str, status: &str, updated_at: i64) -> ObservedTask {
         ObservedTask {
             id: id.to_owned(),
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             kind_label: "Main repair".to_owned(),
-            trigger_kind: "manual-cli".to_owned(),
+            trigger_kind: "manual-cli".into(),
             trigger: "Manual dispatch".to_owned(),
-            status: status.to_owned(),
+            status: status.into(),
             source_commit: String::new(),
             priority: 0,
             attempt_count: 1,
@@ -360,7 +374,7 @@ mod tests {
             lease_until: 0,
             agent_id: String::new(),
             pod_name: String::new(),
-            latest_attempt_status: status.to_owned(),
+            latest_attempt_status: status.into(),
             latest_attempt_started_at: 0,
             latest_attempt_completed_at: 0,
             latest_activity_at: 0,
@@ -380,11 +394,11 @@ impl ObservedTask {
         let updated_at = 1000;
         ObservedTask {
             id: id.to_owned(),
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             kind_label: "Main repair".to_owned(),
-            trigger_kind: "manual-cli".to_owned(),
+            trigger_kind: "manual-cli".into(),
             trigger: "Manual dispatch".to_owned(),
-            status: status.to_owned(),
+            status: status.into(),
             source_commit: String::new(),
             priority: 0,
             attempt_count: 1,
@@ -394,7 +408,7 @@ impl ObservedTask {
             lease_until: 0,
             agent_id: String::new(),
             pod_name: String::new(),
-            latest_attempt_status: status.to_owned(),
+            latest_attempt_status: status.into(),
             latest_attempt_started_at: 0,
             latest_attempt_completed_at: 0,
             latest_activity_at: 0,
@@ -419,4 +433,9 @@ impl ObserverSnapshot {
             alerts_truncated: false,
         }
     }
+}
+
+pub(super) struct TaskKindLabel<'a> {
+    pub(super) kind: &'a TaskKind,
+    pub(super) locale: &'a str,
 }

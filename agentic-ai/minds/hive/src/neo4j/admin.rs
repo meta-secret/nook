@@ -253,7 +253,7 @@ impl Neo4jTaskStore {
 
         Ok(ClaimedTask {
             id: TaskId::try_from(row.get::<String>("id")?)?,
-            kind: row.get("kind")?,
+            kind: row.get::<String>("kind")?.into(),
             prompt: row.get("prompt")?,
             source_commit: row.get("source_commit")?,
             attempt_number: row.get("attempt_number")?,

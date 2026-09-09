@@ -179,9 +179,12 @@ impl TaskStore for CoordinatorTaskStore {
 
     async fn active_delivery(
         &self,
-        _source_commit: &str,
-        _kind: &str,
+        request: crate::model::ActiveDeliveryQuery<'_>,
     ) -> crate::HiveResult<Option<TaskId>> {
+        let crate::model::ActiveDeliveryQuery {
+            source_commit: _source_commit,
+            kind: _kind,
+        } = request;
         return Err(crate::HiveError::message(
             "workers are not authorized to inspect delivery tasks",
         ));
@@ -593,7 +596,10 @@ mod tests {
         for denied in [
             client.enqueue(&task("denied", Vec::new())?).await,
             client
-                .active_delivery("head", "main-repair")
+                .active_delivery(crate::model::ActiveDeliveryQuery {
+                    source_commit: "head",
+                    kind: &crate::model::TaskKind::from("main-repair"),
+                })
                 .await
                 .map(drop),
             client.cancel(&blocked.id, "denied").await.map(drop),

@@ -107,7 +107,7 @@ pub enum CompletionArtifact {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClaimedTask {
     pub id: TaskId,
-    pub kind: String,
+    pub kind: TaskKind,
     pub prompt: String,
     pub source_commit: String,
     pub attempt_id: AttemptId,
@@ -187,7 +187,7 @@ impl TaskTrigger {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct EnqueueTask {
     pub id: TaskId,
-    pub kind: String,
+    pub kind: TaskKind,
     pub trigger: TaskTrigger,
     pub prompt: String,
     pub source_commit: String,
@@ -198,7 +198,7 @@ pub struct EnqueueTask {
 
 impl EnqueueTask {
     pub fn validate(&self) -> Result<(), ModelError> {
-        if self.kind.trim().is_empty() {
+        if self.kind.is_empty() {
             return Err(ModelError::EmptyTaskKind);
         }
         if self.prompt.trim().is_empty() {
@@ -222,7 +222,7 @@ impl EnqueueTask {
         {
             return Err(ModelError::SelfDependency);
         }
-        if self.kind == "blocker" && !self.dependencies.is_empty() {
+        if self.kind.is_blocker() && !self.dependencies.is_empty() {
             return Err(ModelError::BlockerWithDependencies);
         }
         Ok(())
@@ -424,7 +424,7 @@ mod tests {
         let task_id = TaskId::try_from("task-1")?;
         let task = EnqueueTask {
             id: task_id.clone(),
-            kind: "code".to_owned(),
+            kind: "code".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -441,7 +441,7 @@ mod tests {
     fn enqueue_rejects_blocker_dependency() -> crate::HiveResult<()> {
         let task = EnqueueTask {
             id: TaskId::try_from("blocker-2")?,
-            kind: "blocker".to_owned(),
+            kind: "blocker".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Resolve the prerequisite".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -786,4 +786,13 @@ pub struct Completion<'a> {
     pub relevance: CompletionRelevance,
     pub summary: &'a str,
     pub artifact: &'a CompletionArtifact,
+}
+
+mod task_kind;
+pub use task_kind::TaskKind;
+
+/// Select an active delivery by revision and typed task classification.
+pub struct ActiveDeliveryQuery<'a> {
+    pub source_commit: &'a str,
+    pub kind: &'a TaskKind,
 }

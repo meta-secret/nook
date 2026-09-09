@@ -20,7 +20,7 @@ mod schema;
 fn task(id: String, dependencies: Vec<TaskId>) -> anyhow::Result<EnqueueTask> {
     Ok(EnqueueTask {
         id: TaskId::try_from(id)?,
-        kind: "integration".to_owned(),
+        kind: "integration".into(),
         trigger: TaskTrigger::ManualCli,
         prompt: "Exercise the production task store".to_owned(),
         source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -590,7 +590,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     assert_eq!(late_dependency_alert.kind, AlertKind::DependencyFailed);
 
     let mut repair = task(format!("main-failure-{suffix}"), Vec::new())?;
-    repair.kind = "main-repair".to_owned();
+    repair.kind = "main-repair".into();
     repair.max_attempts = 1;
     store.enqueue(&repair).await?;
     let ClaimOutcome::Claimed(repair_claim) = store.claim(&agent_a, 300).await? else {
@@ -697,7 +697,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
 
     let mut retired_repair = task(format!("retired-main-failure-{suffix}"), Vec::new())?;
-    retired_repair.kind = "main-repair".to_owned();
+    retired_repair.kind = "main-repair".into();
     retired_repair.max_attempts = 1;
     store.enqueue(&retired_repair).await?;
     let retired_claim = hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;
@@ -722,7 +722,7 @@ async fn production_store_enforces_claims_dependencies_and_stale_leases() -> any
     );
 
     let mut reused_failed_parent = task(format!("reused-failed-parent-{suffix}"), Vec::new())?;
-    reused_failed_parent.kind = "main-repair".to_owned();
+    reused_failed_parent.kind = "main-repair".into();
     store.enqueue(&reused_failed_parent).await?;
     let reused_failed_claim =
         hive::model::ClaimedTask::try_from(store.claim(&agent_a, 300).await?)?;

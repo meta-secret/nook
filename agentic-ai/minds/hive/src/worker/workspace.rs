@@ -585,7 +585,7 @@ mod tests {
 
         let task = ClaimedTask {
             id: TaskId::try_from("task-1")?,
-            kind: "code".to_owned(),
+            kind: "code".into(),
             prompt: "change files".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("attempt-1")?,
@@ -737,7 +737,7 @@ mod tests {
         fs::write(repository.join("task.txt"), "task result\n")?;
         let task = ClaimedTask {
             id: TaskId::try_from("task-2")?,
-            kind: "code".to_owned(),
+            kind: "code".into(),
             prompt: "build on dependency".to_owned(),
             source_commit,
             attempt_id: AttemptId::try_from("attempt-2")?,
@@ -794,7 +794,7 @@ mod tests {
         let baseline = String::from_utf8(baseline.stdout)?;
         let task = ClaimedTask {
             id: TaskId::try_from("resumed-task")?,
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             prompt: "finish delivery".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("resumed-attempt")?,

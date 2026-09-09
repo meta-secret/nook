@@ -1,3 +1,6 @@
+use main_run::MainRunSelection;
+mod check_state;
+use check_state::{CheckConclusion, CheckExecution, RunConclusion, RunExecution};
 pub(crate) struct MainRepairDelivery<'a> {
     pub(crate) repository: &'a std::path::Path,
     pub(crate) branch: &'a str,
@@ -51,9 +54,9 @@ struct DeliveryCheck {
     #[serde(default, alias = "context")]
     name: String,
     #[serde(default)]
-    status: String,
+    status: CheckExecution,
     #[serde(default, alias = "state")]
-    conclusion: String,
+    conclusion: CheckConclusion,
     #[serde(default)]
     started_at: String,
     #[serde(default)]
@@ -72,8 +75,8 @@ where
 #[serde(rename_all = "camelCase")]
 struct DeliveryRun {
     head_sha: String,
-    status: String,
-    conclusion: String,
+    status: RunExecution,
+    conclusion: RunConclusion,
     created_at: String,
 }
 
@@ -205,9 +208,11 @@ impl MainRepairDelivery<'_> {
             }
             applicable_runs.push(run);
         }
-        let successful_main_sha =
-            DeliveryRun::select_successful_main_run(&applicable_runs, &merge_commit.oid)?
-                .to_owned();
+        let successful_main_sha = DeliveryRun::select_successful_main_run(MainRunSelection {
+            runs: &applicable_runs,
+            merge_commit: &merge_commit.oid,
+        })?
+        .to_owned();
         Ok((pull_request, successful_main_sha))
     }
 }
@@ -403,15 +408,20 @@ impl DeliveryPullRequest {
             {
                 continue;
             }
-            if checks.iter().any(|check| check.status != "COMPLETED") {
+            if checks
+                .iter()
+                .any(|check| check.status != CheckExecution::Completed)
+            {
                 return Err(crate::HiveError::message(format!(
                     "Hive repair delivery is incomplete: repository check `{name}` is still running"
                 )));
             }
-            if let Some(check) = checks
-                .iter()
-                .find(|check| !matches!(check.conclusion.as_str(), "SKIPPED" | "NEUTRAL"))
-            {
+            if let Some(check) = checks.iter().find(|check| {
+                !matches!(
+                    &check.conclusion,
+                    CheckConclusion::Skipped | CheckConclusion::Neutral
+                )
+            }) {
                 return Err(crate::HiveError::message(format!(
                     "Hive repair delivery is incomplete: repository check `{name}` concluded {}",
                     check.conclusion
@@ -424,7 +434,7 @@ impl DeliveryPullRequest {
 
 impl DeliveryCheck {
     fn successful_check(check: &DeliveryCheck) -> bool {
-        check.status == "COMPLETED" && check.conclusion == "SUCCESS"
+        check.status == CheckExecution::Completed && check.conclusion == CheckConclusion::Success
     }
 }
 
@@ -441,14 +451,17 @@ impl DeliveryCheck {
             return true;
         }
         matches!(main_evidence, MainMergeEvidence::SuccessfulDescendant)
-            && checks
-                .iter()
-                .any(|check| check.status == "COMPLETED" && check.conclusion == "CANCELLED")
+            && checks.iter().any(|check| {
+                check.status == CheckExecution::Completed
+                    && check.conclusion == CheckConclusion::Cancelled
+            })
             && checks.iter().all(|check| {
-                check.status == "COMPLETED"
+                check.status == CheckExecution::Completed
                     && matches!(
-                        check.conclusion.as_str(),
-                        "CANCELLED" | "SKIPPED" | "NEUTRAL"
+                        &check.conclusion,
+                        CheckConclusion::Cancelled
+                            | CheckConclusion::Skipped
+                            | CheckConclusion::Neutral
                     )
             })
     }
@@ -456,7 +469,7 @@ impl DeliveryCheck {
 
 #[cfg(test)]
 mod tests {
-    use super::MainMergeEvidence;
+    use super::{CheckConclusion, MainMergeEvidence};
     use crate::HiveContext;
     use std::fs;
     use std::path;
@@ -491,22 +504,22 @@ mod tests {
             status_check_rollup: vec![
                 DeliveryCheck {
                     name: "Full browser e2e (main fix)".to_owned(),
-                    status: "COMPLETED".to_owned(),
-                    conclusion: "SUCCESS".to_owned(),
+                    status: "COMPLETED".into(),
+                    conclusion: "SUCCESS".into(),
                     started_at: "2026-07-28T01:00:00Z".to_owned(),
                     workflow_name: "PR".to_owned(),
                 },
                 DeliveryCheck {
                     name: "Full extension e2e (main fix)".to_owned(),
-                    status: "COMPLETED".to_owned(),
-                    conclusion: "SUCCESS".to_owned(),
+                    status: "COMPLETED".into(),
+                    conclusion: "SUCCESS".into(),
                     started_at: "2026-07-28T01:00:00Z".to_owned(),
                     workflow_name: "PR".to_owned(),
                 },
                 DeliveryCheck {
                     name: "Verify and preview".to_owned(),
-                    status: "COMPLETED".to_owned(),
-                    conclusion: "SUCCESS".to_owned(),
+                    status: "COMPLETED".into(),
+                    conclusion: "SUCCESS".into(),
                     started_at: "2026-07-28T01:00:00Z".to_owned(),
                     workflow_name: "PR".to_owned(),
                 },
@@ -606,8 +619,8 @@ mod tests {
         let mut checks = pull_request(42, "repair", "MERGED", Some(&valid_commit));
         checks.status_check_rollup.push(DeliveryCheck {
             name: "Security audit".to_owned(),
-            status: "IN_PROGRESS".to_owned(),
-            conclusion: String::new(),
+            status: "IN_PROGRESS".into(),
+            conclusion: CheckConclusion::default(),
             started_at: "2026-09-04T01:00:00Z".to_owned(),
             workflow_name: "Security".to_owned(),
         });
@@ -645,8 +658,8 @@ mod tests {
         for conclusion in ["SKIPPED", "NEUTRAL"] {
             checks.status_check_rollup.push(DeliveryCheck {
                 name: "Advisory".to_owned(),
-                status: "COMPLETED".to_owned(),
-                conclusion: conclusion.to_owned(),
+                status: "COMPLETED".into(),
+                conclusion: conclusion.into(),
                 started_at: "2026-09-04T01:00:00Z".to_owned(),
                 workflow_name: "Advisory".to_owned(),
             });
@@ -814,8 +827,8 @@ mod tests {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Full extension e2e (main fix)".to_owned(),
-            status: "COMPLETED".to_owned(),
-            conclusion: "SKIPPED".to_owned(),
+            status: "COMPLETED".into(),
+            conclusion: "SKIPPED".into(),
             started_at: "2026-07-28T02:00:00Z".to_owned(),
             workflow_name: "PR".to_owned(),
         });
@@ -829,8 +842,8 @@ mod tests {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Hive Rust and infrastructure verification".to_owned(),
-            status: "COMPLETED".to_owned(),
-            conclusion: "FAILURE".to_owned(),
+            status: "COMPLETED".into(),
+            conclusion: "FAILURE".into(),
             started_at: "2026-07-28T02:00:00Z".to_owned(),
             workflow_name: "Hive".to_owned(),
         });
@@ -851,7 +864,7 @@ mod tests {
     fn successful_main_accepts_checks_cancelled_by_the_squash_merge() -> crate::HiveResult<()> {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         for check in &mut pull_request.status_check_rollup {
-            check.conclusion = "CANCELLED".to_owned();
+            check.conclusion = "CANCELLED".into();
         }
 
         pull_request.validate_repository_checks(MainMergeEvidence::SuccessfulDescendant)?;
@@ -862,8 +875,8 @@ mod tests {
     #[test]
     fn successful_main_does_not_hide_a_failed_pr_check() -> crate::HiveResult<()> {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
-        pull_request.status_check_rollup[0].conclusion = "FAILURE".to_owned();
-        pull_request.status_check_rollup[1].conclusion = "CANCELLED".to_owned();
+        pull_request.status_check_rollup[0].conclusion = "FAILURE".into();
+        pull_request.status_check_rollup[1].conclusion = "CANCELLED".into();
 
         let error = pull_request
             .validate_full_e2e_checks(MainMergeEvidence::SuccessfulDescendant)
@@ -880,8 +893,8 @@ mod tests {
         let mut pull_request = pull_request(42, "repair", "MERGED", Some("abc123"));
         pull_request.status_check_rollup.push(DeliveryCheck {
             name: "Hive Rust and infrastructure verification".to_owned(),
-            status: "COMPLETED".to_owned(),
-            conclusion: "CANCELLED".to_owned(),
+            status: "COMPLETED".into(),
+            conclusion: "CANCELLED".into(),
             started_at: "2026-07-28T02:00:00Z".to_owned(),
             workflow_name: "Hive".to_owned(),
         });

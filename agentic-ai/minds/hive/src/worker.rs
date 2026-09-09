@@ -209,7 +209,7 @@ impl<S: TaskStore> Worker<S> {
                     .persist_activity(),
                 );
                 let task_result = async {
-                    let repair_branch = (task.kind == "main-repair")
+                    let repair_branch = (task.kind.is_main_repair())
                         .then(|| ClaimedTask::repair_branch_name(task.id.as_str()));
                     let preparation = (TaskWorkspace {
                         workspace: &self.config.workspace,
@@ -272,10 +272,14 @@ impl<S: TaskStore> Worker<S> {
                         summary, blocker, ..
                     } = &result
                     {
-                        return Ok(TaskDisposition::blocked_disposition(task, summary, blocker));
+                        return Ok(TaskDisposition::blocked_disposition(BlockerDisposition {
+                            task: task,
+                            summary: summary,
+                            blocker: blocker,
+                        }));
                     }
                     if let TerminalResult::Failed { summary, .. } = &result {
-                        if task.kind != "blocker" {
+                        if task.kind.allows_prerequisite() {
                             return Err(crate::HiveError::message(
                                 "only a blocker dependency leaf may return failed",
                             ));
@@ -302,7 +306,7 @@ impl<S: TaskStore> Worker<S> {
                         )
                         .await?;
                     }
-                    if task.kind == "main-repair" {
+                    if task.kind.is_main_repair() {
                         (MainRepairDelivery {
                             repository: &repository,
                             branch: &ClaimedTask::repair_branch_name(task.id.as_str()),
@@ -501,12 +505,13 @@ enum TaskDisposition {
 }
 
 impl TaskDisposition {
-    fn blocked_disposition(
-        task: &ClaimedTask,
-        summary: &str,
-        blocker: &BlockerRequest,
-    ) -> TaskDisposition {
-        if task.kind == "blocker" {
+    fn blocked_disposition(request: BlockerDisposition<'_>) -> TaskDisposition {
+        let BlockerDisposition {
+            task,
+            summary,
+            blocker,
+        } = request;
+        if task.kind.is_blocker() {
             return TaskDisposition::Failed {
                 reason: TaskDisposition::bounded(&format!(
                     "prerequisite task could not complete without another dependency: {summary}"
@@ -521,11 +526,11 @@ impl TaskDisposition {
         TaskDisposition::Blocked {
             blocker: EnqueueTask {
                 id: blocker.id.clone(),
-                kind: "blocker".to_owned(),
+                kind: "blocker".into(),
                 trigger: TaskTrigger::AgentDependency,
                 prompt: format!("{}\n\n{}", blocker.title, blocker.prompt),
                 source_commit: task.source_commit.clone(),
-                priority: if task.kind == "main-repair" { 200 } else { 10 },
+                priority: task.kind.prerequisite_priority(),
                 max_attempts: 3,
                 dependencies: Vec::new(),
             },
@@ -584,7 +589,10 @@ impl TaskDisposition {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_PERSISTED_RESULT_BYTES, TaskActivityStream, TaskDisposition, TaskWorkspace};
+    use super::{
+        BlockerDisposition, MAX_PERSISTED_RESULT_BYTES, TaskActivityStream, TaskDisposition,
+        TaskWorkspace,
+    };
     use crate::model::{
         ActivityKind, AgentId, AttemptId, BlockerRequest, ClaimedTask, CompletionArtifact,
         LeaseToken, TaskActivity, TaskId, TerminalResult,
@@ -610,7 +618,7 @@ mod tests {
     fn obsolete_completion_is_normalized_for_non_blocker_tasks() -> anyhow::Result<()> {
         let mut task = ClaimedTask {
             id: TaskId::try_from("main-failure-recovery")?,
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             prompt: "verify the delivered repair".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("attempt-1")?,
@@ -628,7 +636,7 @@ mod tests {
         };
 
         assert!(!ClaimedTask::completion_is_obsolete(&task, &result));
-        task.kind = "blocker".to_owned();
+        task.kind = "blocker".into();
         assert!(ClaimedTask::completion_is_obsolete(&task, &result));
         Ok(())
     }
@@ -637,7 +645,7 @@ mod tests {
     fn self_named_external_blocker_defers_without_creating_a_dependency() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::try_from("github-actions-pr-42")?,
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             prompt: "Wait for the exact-head workflow".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("attempt-1")?,
@@ -654,7 +662,7 @@ mod tests {
         };
 
         assert!(matches!(
-            TaskDisposition::blocked_disposition(&task, "workflow pending", &blocker),
+            TaskDisposition::blocked_disposition(BlockerDisposition { task: &task, summary: "workflow pending", blocker: &blocker }),
             TaskDisposition::Deferred { reason } if reason == "workflow pending"
         ));
         Ok(())
@@ -664,7 +672,7 @@ mod tests {
     fn prerequisite_task_cannot_create_a_child_dependency() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::try_from("github-actions-pr-42")?,
-            kind: "blocker".to_owned(),
+            kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("attempt-1")?,
@@ -681,7 +689,7 @@ mod tests {
         };
 
         assert!(matches!(
-            TaskDisposition::blocked_disposition(&task, "the available token lacks workflow scope", &blocker),
+            TaskDisposition::blocked_disposition(BlockerDisposition { task: &task, summary: "the available token lacks workflow scope", blocker: &blocker }),
             TaskDisposition::Failed { reason }
                 if reason.contains("prerequisite task could not complete")
                     && reason.contains("lacks workflow scope")
@@ -693,7 +701,7 @@ mod tests {
     fn main_repair_can_create_one_prerequisite_task() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::try_from("main-failure-recovery")?,
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("attempt-1")?,
@@ -710,9 +718,9 @@ mod tests {
         };
 
         assert!(matches!(
-            TaskDisposition::blocked_disposition(&task, "cache repair required", &blocker),
+            TaskDisposition::blocked_disposition(BlockerDisposition { task: &task, summary: "cache repair required", blocker: &blocker }),
             TaskDisposition::Blocked { blocker, reason }
-                if blocker.kind == "blocker"
+                if blocker.kind.is_blocker()
                     && blocker.priority == 200
                     && reason == "cache repair required"
         ));
@@ -723,7 +731,7 @@ mod tests {
     fn blocker_prompt_requires_active_pr_ownership() -> anyhow::Result<()> {
         let task = ClaimedTask {
             id: TaskId::try_from("github-actions-pr-42")?,
-            kind: "blocker".to_owned(),
+            kind: "blocker".into(),
             prompt: "Resolve failed workflow 42".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("attempt-1")?,
@@ -759,7 +767,7 @@ mod tests {
     fn replacement_worker_inspects_direct_github_delivery_state() -> crate::HiveResult<()> {
         let task = ClaimedTask {
             id: TaskId::try_from("main-failure-recovery")?,
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             prompt: "restore Main".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
             attempt_id: AttemptId::try_from("attempt-recovery")?,
@@ -866,4 +874,10 @@ mod tests {
         ));
         Ok(())
     }
+}
+
+struct BlockerDisposition<'a> {
+    task: &'a ClaimedTask,
+    summary: &'a str,
+    blocker: &'a BlockerRequest,
 }

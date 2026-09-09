@@ -1,18 +1,21 @@
-use super::DeliveryRun;
+use super::{DeliveryRun, RunConclusion, RunExecution};
 
 impl DeliveryRun {
     pub(super) fn select_successful_main_run<'a>(
-        runs: &'a [DeliveryRun],
-        merge_commit: &str,
+        selection: MainRunSelection<'a>,
     ) -> crate::HiveResult<&'a str> {
+        let MainRunSelection { runs, merge_commit } = selection;
         for run in runs {
-            if run.status != "completed" {
+            if run.status != RunExecution::Completed {
                 continue;
             }
-            if run.conclusion == "success" {
+            if run.conclusion == RunConclusion::Success {
                 return Ok(run.head_sha.as_str());
             }
-            if matches!(run.conclusion.as_str(), "cancelled" | "skipped" | "neutral") {
+            if matches!(
+                &run.conclusion,
+                RunConclusion::Cancelled | RunConclusion::Skipped | RunConclusion::Neutral
+            ) {
                 continue;
             }
             return Err(crate::HiveError::message(format!(
@@ -29,13 +32,13 @@ impl DeliveryRun {
 
 #[cfg(test)]
 mod tests {
-    use super::DeliveryRun;
+    use super::{DeliveryRun, MainRunSelection};
 
     fn run(sha: &str, conclusion: &str, created_at: &str) -> DeliveryRun {
         DeliveryRun {
             head_sha: sha.to_owned(),
-            status: "completed".to_owned(),
-            conclusion: conclusion.to_owned(),
+            status: "completed".into(),
+            conclusion: conclusion.into(),
             created_at: created_at.to_owned(),
         }
     }
@@ -46,9 +49,12 @@ mod tests {
             run("repair", "failure", "2026-07-28T01:00:00Z"),
             run("descendant", "success", "2026-07-28T02:00:00Z"),
         ];
-        let error = DeliveryRun::select_successful_main_run(&runs, "merge")
-            .err()
-            .ok_or_else(|| crate::HiveError::message("an explicit failure must remain terminal"))?;
+        let error = DeliveryRun::select_successful_main_run(MainRunSelection {
+            runs: &runs,
+            merge_commit: "merge",
+        })
+        .err()
+        .ok_or_else(|| crate::HiveError::message("an explicit failure must remain terminal"))?;
         assert!(error.to_string().contains("repair"));
         Ok(())
     }
@@ -60,7 +66,10 @@ mod tests {
             run("descendant", "success", "2026-07-28T02:00:00Z"),
         ];
         assert_eq!(
-            DeliveryRun::select_successful_main_run(&runs, "merge")?,
+            DeliveryRun::select_successful_main_run(MainRunSelection {
+                runs: &runs,
+                merge_commit: "merge"
+            })?,
             "descendant"
         );
         Ok(())
@@ -74,9 +83,17 @@ mod tests {
             run("second", "success", "2026-07-28T02:00:00Z"),
         ];
         assert_eq!(
-            DeliveryRun::select_successful_main_run(&runs, "merge")?,
+            DeliveryRun::select_successful_main_run(MainRunSelection {
+                runs: &runs,
+                merge_commit: "merge"
+            })?,
             "first"
         );
         Ok(())
     }
+}
+
+pub(super) struct MainRunSelection<'a> {
+    pub(super) runs: &'a [DeliveryRun],
+    pub(super) merge_commit: &'a str,
 }

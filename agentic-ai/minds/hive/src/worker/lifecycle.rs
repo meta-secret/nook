@@ -300,7 +300,7 @@ mod tests {
             Ok(Self {
                 task: ClaimedTask {
                     id: TaskId::try_from("task-a")?,
-                    kind: "main-repair".to_owned(),
+                    kind: "main-repair".into(),
                     prompt: "repair Main".to_owned(),
                     source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
                     attempt_id: AttemptId::try_from("attempt-a")?,
@@ -339,9 +339,12 @@ mod tests {
 
         async fn active_delivery(
             &self,
-            _source_commit: &str,
-            _kind: &str,
+            request: crate::model::ActiveDeliveryQuery<'_>,
         ) -> crate::HiveResult<Option<TaskId>> {
+            let crate::model::ActiveDeliveryQuery {
+                source_commit: _source_commit,
+                kind: _kind,
+            } = request;
             unreachable!("not used by claim lifecycle test")
         }
 

@@ -1,6 +1,8 @@
+mod classification;
 use crate::observer::presentation::ObservedAlert;
 use crate::observer::presentation::ObservedTask;
 use axum::response;
+pub use classification::{ObservedTaskState, ObservedTaskTrigger};
 use std::collections::BTreeMap;
 use std::io;
 use std::net::SocketAddr;
@@ -34,6 +36,7 @@ const STALE_ACTIVITY_MS: i64 = 5 * 60_000;
 const STUCK_CANCELLATION_MS: i64 = 5 * 60_000;
 
 mod presentation;
+use presentation::TaskKindLabel;
 mod protocol;
 pub use presentation::*;
 
@@ -309,7 +312,7 @@ impl Neo4jTaskStore {
             agents.push(ObservedAgent {
                 id: row.get("id")?,
                 pod_name: row.get("pod_name")?,
-                status: row.get("status")?,
+                status: row.get::<String>("status")?.into(),
                 last_seen_at,
                 presence_expires_at: ObservedAgent::presence_expires_at(last_seen_at),
             });
@@ -466,9 +469,12 @@ impl Neo4jTaskStore {
         while let Some(row) = rows.next().await? {
             tasks.push(ObservedTask {
                 id: row.get("id")?,
-                kind: row.get("kind")?,
-                kind_label: ObservedTask::localized_task_kind(&row.get::<String>("kind")?, locale),
-                trigger_kind: row.get("trigger_kind")?,
+                kind: row.get::<String>("kind")?.into(),
+                kind_label: ObservedTask::localized_task_kind(TaskKindLabel {
+                    kind: &row.get::<String>("kind")?.into(),
+                    locale: locale,
+                }),
+                trigger_kind: row.get::<String>("trigger_kind")?.into(),
                 trigger: String::new(),
                 status: row.get("status")?,
                 source_commit: row.get("source_commit")?,
@@ -539,17 +545,21 @@ impl Neo4jTaskStore {
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         for task in tasks {
-            task.trigger = match (task.trigger_kind.as_str(), russian) {
-                ("github-main-failure", true) => {
+            task.trigger = match (&task.trigger_kind, russian) {
+                (ObservedTaskTrigger::GitHubMainFailure, true) => {
                     "GitHub Actions · ошибка workflow в main".to_owned()
                 }
-                ("github-main-failure", false) => {
+                (ObservedTaskTrigger::GitHubMainFailure, false) => {
                     "GitHub Actions · failed main workflow".to_owned()
                 }
-                ("agent-dependency", true) => "Задача агента · зависимость".to_owned(),
-                ("agent-dependency", false) => "Agent task · dependency".to_owned(),
-                ("manual-cli", true) => "Ручной запуск · Hive CLI".to_owned(),
-                ("manual-cli", false) => "Manual dispatch · Hive CLI".to_owned(),
+                (ObservedTaskTrigger::AgentDependency, true) => {
+                    "Задача агента · зависимость".to_owned()
+                }
+                (ObservedTaskTrigger::AgentDependency, false) => {
+                    "Agent task · dependency".to_owned()
+                }
+                (ObservedTaskTrigger::ManualCli, true) => "Ручной запуск · Hive CLI".to_owned(),
+                (ObservedTaskTrigger::ManualCli, false) => "Manual dispatch · Hive CLI".to_owned(),
                 (_, true) => "Источник не записан".to_owned(),
                 (_, false) => "Source not recorded".to_owned(),
             };

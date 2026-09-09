@@ -453,7 +453,7 @@ impl Cli {
                 store
                     .enqueue(&EnqueueTask {
                         id: TaskId::try_from(id)?,
-                        kind,
+                        kind: kind.into(),
                         trigger: TaskTrigger::ManualCli,
                         prompt,
                         source_commit,

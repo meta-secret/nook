@@ -31,7 +31,7 @@ impl ClaimedTask {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        let delivery = if task.kind == "main-repair" {
+        let delivery = if task.kind.is_main_repair() {
             let branch = ClaimedTask::repair_branch_name(task.id.as_str());
             format!(
                 "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
@@ -55,7 +55,7 @@ impl ClaimedTask {
          before the squash merge and green Main verification. If blocked by another change, report \
          structured blocked status and identify the blocker precisely."
             )
-        } else if task.kind == "blocker" {
+        } else if task.kind.is_blocker() {
             "\n\nThis is a prerequisite-ownership task, not a passive wait instruction. Resolve the \
          prerequisite yourself using the available repository and GitHub access. When the task \
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
@@ -77,7 +77,7 @@ impl ClaimedTask {
         } else {
             String::new()
         };
-        let terminal_contract = if task.kind == "blocker" {
+        let terminal_contract = if task.kind.is_blocker() {
             ""
         } else {
             "\n\nThis task is not a dependency leaf. Never return the failed status. If it \
@@ -124,7 +124,7 @@ impl ClaimedTask {
         task: &ClaimedTask,
         result: &model::TerminalResult,
     ) -> bool {
-        task.kind == "blocker" && result.is_obsolete()
+        task.kind.is_blocker() && result.is_obsolete()
     }
 }
 

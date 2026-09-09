@@ -105,9 +105,12 @@ impl Neo4jTaskStore {
 
     pub(super) async fn active_delivery_task(
         &self,
-        source_commit: &str,
-        kind: &str,
+        request: crate::model::ActiveDeliveryQuery<'_>,
     ) -> crate::HiveResult<Option<TaskId>> {
+        let crate::model::ActiveDeliveryQuery {
+            source_commit,
+            kind,
+        } = request;
         let mut rows = self
             .graph
             .execute(
@@ -123,7 +126,7 @@ impl Neo4jTaskStore {
                      LIMIT 1",
                 )
                 .param("source_commit", source_commit)
-                .param("kind", kind),
+                .param("kind", kind.as_str()),
             )
             .await?;
         rows.next()

@@ -143,7 +143,13 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
             }
             let task_base = name.trim_end_matches(MAIN_FAILURE_SUFFIX);
             if body.contains(SUCCESSFUL_RERUN_RETIREMENT_MARKER) {
-                if let Some(task_id) = store.active_delivery(&source_commit, "main-repair").await? {
+                if let Some(task_id) = store
+                    .active_delivery(crate::model::ActiveDeliveryQuery {
+                        source_commit: &source_commit,
+                        kind: &crate::model::TaskKind::from("main-repair"),
+                    })
+                    .await?
+                {
                     let cancelled = store
                         .cancel(&task_id, "Main rerun succeeded")
                         .await
@@ -211,7 +217,13 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         run_attempt: u64,
     ) -> crate::HiveResult<()> {
         let task_id = TaskId::main_failure_task_id(task_base, run_id, run_attempt)?;
-        if let Some(active_id) = store.active_delivery(source_commit, "main-repair").await? {
+        if let Some(active_id) = store
+            .active_delivery(crate::model::ActiveDeliveryQuery {
+                source_commit: source_commit,
+                kind: &crate::model::TaskKind::from("main-repair"),
+            })
+            .await?
+        {
             if active_id == task_id {
                 eprintln!(
                     "Hive Workbench delivery already current task={} source_commit={source_commit}",
@@ -230,7 +242,7 @@ impl<S: TaskStore> WorkbenchDispatcher<'_, S> {
         }
         let task = EnqueueTask {
             id: task_id,
-            kind: "main-repair".to_owned(),
+            kind: "main-repair".into(),
             trigger: TaskTrigger::GitHubMainFailure,
             prompt: body.to_owned(),
             source_commit: source_commit.to_owned(),
@@ -458,7 +470,14 @@ mod tests {
                 .push(task.id.clone());
             Ok(())
         }
-        async fn active_delivery(&self, _: &str, _: &str) -> crate::HiveResult<Option<TaskId>> {
+        async fn active_delivery(
+            &self,
+            request: crate::model::ActiveDeliveryQuery<'_>,
+        ) -> crate::HiveResult<Option<TaskId>> {
+            let crate::model::ActiveDeliveryQuery {
+                source_commit: _,
+                kind: _,
+            } = request;
             Ok(self
                 .active
                 .lock()

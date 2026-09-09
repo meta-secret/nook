@@ -1,81 +1,5 @@
-use async_trait::async_trait;
-
-use crate::model::{
-    ActivityLease, AgentId, CancellationTarget, ClaimOutcome, ClaimedTask, CompletionArtifact,
-    EnqueueTask, LeaseToken, TaskActivity, TaskId,
-};
-
-#[async_trait]
-pub trait TaskStore: Clone + Send + Sync + 'static {
-    async fn migrate(&self) -> crate::HiveResult<()>;
-
-    async fn register_agent(&self, agent_id: &AgentId, pod_name: &str) -> crate::HiveResult<()>;
-
-    async fn enqueue(&self, task: &EnqueueTask) -> crate::HiveResult<()>;
-
-    async fn active_delivery(
-        &self,
-        source_commit: &str,
-        kind: &str,
-    ) -> crate::HiveResult<Option<TaskId>>;
-
-    async fn cancel(&self, task_id: &TaskId, reason: &str) -> crate::HiveResult<bool>;
-
-    async fn cancellation_targets(
-        &self,
-        task_id: &TaskId,
-    ) -> crate::HiveResult<Vec<CancellationTarget>>;
-
-    async fn finalize_cancellation(&self, task_id: &TaskId) -> crate::HiveResult<bool>;
-
-    async fn acknowledge_cancellation(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-    ) -> crate::HiveResult<bool>;
-
-    async fn claim(
-        &self,
-        agent_id: &AgentId,
-        lease_seconds: i64,
-    ) -> crate::HiveResult<ClaimOutcome>;
-
-    async fn heartbeat(
-        &self,
-        task_id: &TaskId,
-        agent_id: &AgentId,
-        lease_token: &LeaseToken,
-        lease_seconds: i64,
-    ) -> crate::HiveResult<bool>;
-
-    async fn record_activity(
-        &self,
-        _lease: &ActivityLease,
-        _agent_id: &AgentId,
-        _activity: &TaskActivity,
-    ) -> crate::HiveResult<bool> {
-        Ok(false)
-    }
-
-    async fn release(&self, task: &ClaimedTask, agent_id: &AgentId) -> crate::HiveResult<bool>;
-
-    async fn complete(&self, completion: crate::model::Completion<'_>) -> crate::HiveResult<bool>;
-
-    async fn fail(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        error: &str,
-    ) -> crate::HiveResult<bool>;
-
-    async fn block(
-        &self,
-        task: &ClaimedTask,
-        agent_id: &AgentId,
-        blocker: &EnqueueTask,
-        reason: &str,
-    ) -> crate::HiveResult<bool>;
-}
+mod contract;
+pub use contract::TaskStore;
 
 #[cfg(test)]
 pub(crate) mod tests {
@@ -233,9 +157,12 @@ pub(crate) mod tests {
 
         async fn active_delivery(
             &self,
-            source_commit: &str,
-            kind: &str,
+            request: crate::model::ActiveDeliveryQuery<'_>,
         ) -> crate::HiveResult<Option<TaskId>> {
+            let crate::model::ActiveDeliveryQuery {
+                source_commit: source_commit,
+                kind: kind,
+            } = request;
             Ok(self
                 .tasks
                 .lock()
@@ -243,7 +170,7 @@ pub(crate) mod tests {
                 .values()
                 .find(|task| {
                     task.definition.source_commit == source_commit
-                        && task.definition.kind == kind
+                        && &task.definition.kind == kind
                         && matches!(task.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                 })
                 .map(|task| task.definition.id.clone()))
@@ -387,7 +314,7 @@ pub(crate) mod tests {
             let active_owners = tasks
                 .iter()
                 .filter(|(id, owner)| {
-                    owner.definition.kind != "blocker"
+                    owner.definition.kind.allows_prerequisite()
                         && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                         && Self::reaches(&tasks, id, &task_id)
                 })
@@ -395,7 +322,7 @@ pub(crate) mod tests {
                 .collect::<Vec<_>>();
             let owning_repairs = if active_owners
                 .iter()
-                .all(|owner| owner.definition.kind == "main-repair")
+                .all(|owner| owner.definition.kind.is_main_repair())
             {
                 active_owners
                     .iter()
@@ -486,7 +413,7 @@ pub(crate) mod tests {
             let active_owners = tasks
                 .iter()
                 .filter(|(id, owner)| {
-                    owner.definition.kind != "blocker"
+                    owner.definition.kind.allows_prerequisite()
                         && matches!(owner.status, "READY" | "RUNNING" | "CANCELLING" | "BLOCKED")
                         && Self::reaches(&tasks, id, claimed.id.as_str())
                 })
@@ -496,7 +423,7 @@ pub(crate) mod tests {
                 || (!claimed.owning_repairs.is_empty()
                     && active_owners.len() == claimed.owning_repairs.len()
                     && active_owners.iter().all(|owner| {
-                        owner.definition.kind == "main-repair"
+                        owner.definition.kind.is_main_repair()
                             && claimed.owning_repairs.contains(&owner.definition.id)
                     }));
             let task = tasks
@@ -588,7 +515,7 @@ pub(crate) mod tests {
             _reason: &str,
         ) -> crate::HiveResult<bool> {
             blocker.validate()?;
-            if claimed.kind == "blocker" {
+            if claimed.kind.is_blocker() {
                 return Err(crate::HiveError::message(
                     "a blocker task cannot create another blocking dependency",
                 ));
@@ -648,7 +575,7 @@ pub(crate) mod tests {
     pub(crate) fn task(id: &str, dependencies: Vec<TaskId>) -> crate::HiveResult<EnqueueTask> {
         Ok(EnqueueTask {
             id: TaskId::try_from(id)?,
-            kind: "code".to_owned(),
+            kind: "code".into(),
             trigger: TaskTrigger::ManualCli,
             prompt: "Implement it".to_owned(),
             source_commit: "0123456789abcdef0123456789abcdef01234567".to_owned(),
@@ -850,14 +777,20 @@ pub(crate) mod tests {
         );
         assert_eq!(
             store
-                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .active_delivery(crate::model::ActiveDeliveryQuery {
+                    source_commit: "0123456789abcdef0123456789abcdef01234567",
+                    kind: &crate::model::TaskKind::from("code")
+                })
                 .await?,
             Some(definition.id.clone())
         );
         assert!(store.acknowledge_cancellation(&stale, &agent).await?);
         assert_eq!(
             store
-                .active_delivery("0123456789abcdef0123456789abcdef01234567", "code")
+                .active_delivery(crate::model::ActiveDeliveryQuery {
+                    source_commit: "0123456789abcdef0123456789abcdef01234567",
+                    kind: &crate::model::TaskKind::from("code")
+                })
                 .await?,
             None
         );
@@ -962,7 +895,10 @@ pub(crate) mod tests {
 
         assert_eq!(
             store
-                .active_delivery(&active.source_commit, &active.kind)
+                .active_delivery(crate::model::ActiveDeliveryQuery {
+                    source_commit: &active.source_commit,
+                    kind: &active.kind
+                })
                 .await?,
             Some(active.id)
         );
