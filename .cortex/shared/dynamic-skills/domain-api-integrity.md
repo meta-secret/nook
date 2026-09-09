@@ -34,6 +34,10 @@ placing domain decisions on these types.
 - Keep advanced capability construction private to the legal transition.
 - Expose an operation only on the state or capability where it is legal.
 - Return a named next state or exhaustive outcome from a state transition.
+- Return semantic outcomes for eligibility, classification, and selection decisions.
+- Put each decision on the owner of the data it interprets.
+- Carry the selected data on its outcome instead of requiring another lookup.
+- Apply [decision locality](function-ownership.md#decision-locality) recursively.
 - Recheck runtime authorization or freshness at the effect boundary when
   external state can change.
 
@@ -100,8 +104,9 @@ representation storage or at required serialization, database, FFI, generated
 ABI, browser, and host edges. Validate and convert them immediately.
 
 An externally fixed boolean field retains its transport shape. Convert it to
-the semantic enum before domain policy reads it. An actual predicate may return
-a boolean for immediate control flow. Do not pass that result onward as a
+the semantic enum before domain policy reads it. A mechanical predicate may return
+a boolean for immediate control flow. Named domain decisions return semantic
+enums or discriminated outcomes, even when they have two alternatives. Do not pass a mechanical boolean onward as a
 domain-state, policy, mode, or command parameter.
 
 Compiler-required signatures, traits, generated bindings, and externally fixed

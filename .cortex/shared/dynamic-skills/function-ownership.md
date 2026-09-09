@@ -26,6 +26,30 @@ For example, `AuthenticationWorkflowMatch::select_candidate` owns candidate
 selection. Its caller must not interpret match variants or compare priorities
 to reconstruct that decision.
 
+### Decision locality
+
+- Treat repeated predicates on one value as evidence of hidden domain behavior.
+- Name the decision before changing its implementation.
+- Put the decision on the object that owns the interpreted data.
+- Return a semantic enum or discriminated outcome for domain classifications.
+- Carry admitted data on the outcome when callers need the selected variant.
+- Let callers act on the outcome without reconstructing its prerequisites.
+- Apply the same placement rule recursively inside the extracted behavior.
+- Keep each nested decision with the value whose knowledge determines it.
+- Preserve short-circuit behavior when it protects admission or effects.
+- Keep transport records structural at their external boundary.
+- Admit those records into meaningful owners when authored behavior needs them.
+- Reuse generated Rust contracts rather than copying their fields into TypeScript.
+
+For example, article traversal must not combine absence, heading kind, and
+heading depth checks to decide whether a block starts an article.
+`CortexArticleBlock.articleHeading()` returns `Article` with its heading or
+`Other`. Traversal selects the result. The block owns heading interpretation.
+
+A compound condition is evidence, not a mechanical extraction rule. Conditions
+that relate independent owners belong to the operation that owns that relation.
+An empty wrapper around the original expression does not establish ownership.
+
 ### Operation placement
 
 - Put every authored public, private, and nested function on a meaningful
@@ -47,6 +71,8 @@ to reconstruct that decision.
 - Do not reconstruct an owner's domain decision from its getters or variants
   in a caller.
 - Do not replace that decision with a chain of mechanical getters.
+- Do not return a boolean that erases a named domain decision.
+- Do not move a compound predicate into a generic helper and call it locality.
 - Do not combine independent responsibilities in a god object.
 - Do not add a wrapper whose only purpose is to conceal misplaced behavior.
 - Do not introduce an unowned free function.

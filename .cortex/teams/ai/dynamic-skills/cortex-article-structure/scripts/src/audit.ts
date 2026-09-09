@@ -1,4 +1,13 @@
 import {
+  ArticleHeadingSelectionKind,
+  ArticleBodyContribution,
+  ArticleDensityContribution,
+  ArticleProcedureRequirement,
+  CortexArticleBlock,
+  CortexArticleSection,
+} from './semantic.ts';
+
+import {
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
   CORTEX_ARTICLE_DETAIL_TEXT_LIMIT,
@@ -57,59 +66,30 @@ export class CortexArticleAudit {
       };
       CortexArticleAudit.addFinding(findingRequest);
     }
-    for (let index = 0; index < blocks.length; index += 1) {
-      const [block = false] = [blocks.at(index)];
-      if (
-        block === false ||
-        block.kind !== CortexArticleSemanticKind.Heading ||
-        (block.depth !== 2 && block.depth !== 3)
-      ) {
-        continue;
-      }
-      const sectionRequest: OwnedSectionBlocksRequest = {
-        blocks,
-        headingIndex: index,
-      };
+    for (const [index, block] of blocks.entries()) {
+      const selection = new CortexArticleBlock(block).articleHeading();
+      if (selection.kind === ArticleHeadingSelectionKind.Other) continue;
       const articleRequest: AuditArticleRequest = {
         document: request.document,
         findings: request.findings,
-        heading: block,
-        sectionBlocks: CortexArticleAudit.ownedSectionBlocks(sectionRequest),
+        heading: selection.heading,
+        sectionBlocks: new CortexArticleSection(selection.heading).ownedBlocks({
+          blocks: blocks,
+          startIndex: index + 1,
+        }),
       };
       CortexArticleAudit.auditArticle(articleRequest);
     }
   }
 
-  private static ownedSectionBlocks(
-    request: OwnedSectionBlocksRequest,
-  ): readonly CortexArticleSemanticBlock[] {
-    const [heading = false] = [request.blocks.at(request.headingIndex)];
-    if (
-      heading === false ||
-      heading.kind !== CortexArticleSemanticKind.Heading
-    ) {
-      return [];
-    }
-    let end = request.blocks.length;
-    for (
-      let index = request.headingIndex + 1;
-      index < request.blocks.length;
-      index += 1
-    ) {
-      const block = request.blocks.at(index);
-      if (
-        block?.kind === CortexArticleSemanticKind.Heading &&
-        block.depth <= heading.depth
-      ) {
-        end = index;
-        break;
-      }
-    }
-    return request.blocks.slice(request.headingIndex + 1, end);
-  }
-
   private static auditArticle(request: AuditArticleRequest): void {
-    if (!request.sectionBlocks.some(CortexArticleAudit.isVisibleArticleBlock)) {
+    if (
+      !request.sectionBlocks.some(
+        (block) =>
+          new CortexArticleBlock(block).bodyContribution() ===
+          ArticleBodyContribution.Visible,
+      )
+    ) {
       const findingRequest: AddFindingRequest = {
         findings: request.findings,
         code: CortexArticleFindingCode.EmptyArticle,
@@ -124,32 +104,15 @@ export class CortexArticleAudit {
     CortexArticleAudit.auditProcedure(request);
   }
 
-  private static isVisibleArticleBlock(
-    block: CortexArticleSemanticBlock,
-  ): boolean {
-    return (
-      block.kind === CortexArticleSemanticKind.Paragraph ||
-      block.kind === CortexArticleSemanticKind.VisibleOrderedList ||
-      block.kind === CortexArticleSemanticKind.Structure
-    );
-  }
-
   private static auditConsecutiveParagraphs(
     request: AuditArticleRequest,
   ): void {
     let consecutive = 0;
     for (const block of request.sectionBlocks) {
-      if (block.kind === CortexArticleSemanticKind.Heading) {
-        if (block.depth <= 3) break;
-        consecutive = 0;
-        continue;
-      }
-      if (block.kind === CortexArticleSemanticKind.Transparent) continue;
-      if (block.kind === CortexArticleSemanticKind.DensitySeparator) {
-        consecutive = 0;
-        continue;
-      }
-      if (block.kind !== CortexArticleSemanticKind.Paragraph) {
+      const contribution = new CortexArticleBlock(block).densityContribution();
+      if (contribution === ArticleDensityContribution.EndArticle) break;
+      if (contribution === ArticleDensityContribution.Preserve) continue;
+      if (contribution === ArticleDensityContribution.Reset) {
         consecutive = 0;
         continue;
       }
@@ -167,11 +130,12 @@ export class CortexArticleAudit {
   }
 
   private static auditProcedure(request: AuditArticleRequest): void {
-    if (!PROCEDURE_HEADING.test(request.heading.text)) return;
-    const hasVisibleOrderedList = request.sectionBlocks.some(
-      (block) => block.kind === CortexArticleSemanticKind.VisibleOrderedList,
-    );
-    if (hasVisibleOrderedList) return;
+    if (
+      new CortexArticleSection(request.heading).procedureRequirement(
+        request.sectionBlocks,
+      ) !== ArticleProcedureRequirement.OrderedActions
+    )
+      return;
     const findingRequest: AddFindingRequest = {
       findings: request.findings,
       code: CortexArticleFindingCode.UnorderedProcedure,
@@ -211,15 +175,7 @@ type AuditArticleRequest = AuditDocumentRequest & {
   readonly sectionBlocks: readonly CortexArticleSemanticBlock[];
 };
 
-type OwnedSectionBlocksRequest = {
-  readonly blocks: readonly CortexArticleSemanticBlock[];
-  readonly headingIndex: number;
-};
-
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
-
-const PROCEDURE_HEADING =
-  /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
 
 const TABLE_MESSAGE_PREFIX = 'Rendered Markdown table in ';
 

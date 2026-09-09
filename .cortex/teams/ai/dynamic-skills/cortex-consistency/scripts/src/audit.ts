@@ -1,4 +1,11 @@
 import {
+  CortexRuntimeCommand,
+  CortexRuntimeEntrypoints,
+  CortexRuntimeRegistration,
+  CortexRuntimePrefixRelationship,
+} from './runtime-command.ts';
+
+import {
   CortexContractFindingCode,
   CortexContextAuthorityDocument,
   CortexPolicyArea,
@@ -122,30 +129,27 @@ export class CortexConsistencyContract {
       return;
     }
     const commands = document.commands.map(
-      CortexConsistencyContract.normalizeCommand,
+      (command) => new CortexRuntimeCommand(command),
     );
+    const entrypoints = new CortexRuntimeEntrypoints(request.runtime);
     for (const command of commands) {
-      if (!CortexConsistencyContract.runtimeCommand(command)) continue;
-      const recognized = [
-        ...request.runtime.allowedCommandPrefixes,
-        ...request.runtime.retiredCommandPrefixes,
-      ].some((prefix) =>
-        CortexConsistencyContract.commandMatchesPrefix({ command, prefix }),
-      );
-      if (recognized) continue;
+      if (
+        entrypoints.registrationOf(command) !==
+        CortexRuntimeRegistration.Unregistered
+      )
+        continue;
       request.findings.push({
         code: CortexContractFindingCode.MissingRuntimeEntrypoint,
         file: documentPath,
-        message: `Cortex workflow names an unregistered runtime entrypoint: ${command}`,
+        message: `Cortex workflow names an unregistered runtime entrypoint: ${command.text}`,
       });
     }
     for (const required of request.runtime.requiredCommandPrefixes) {
       if (
-        commands.some((command) =>
-          CortexConsistencyContract.commandMatchesPrefix({
-            command,
-            prefix: required,
-          }),
+        commands.some(
+          (command) =>
+            command.relationshipTo(required) ===
+            CortexRuntimePrefixRelationship.Matches,
         )
       )
         continue;
@@ -157,11 +161,10 @@ export class CortexConsistencyContract {
     }
     for (const retired of request.runtime.retiredCommandPrefixes) {
       if (
-        !commands.some((command) =>
-          CortexConsistencyContract.commandMatchesPrefix({
-            command,
-            prefix: retired,
-          }),
+        !commands.some(
+          (command) =>
+            command.relationshipTo(retired) ===
+            CortexRuntimePrefixRelationship.Matches,
         )
       )
         continue;
@@ -171,25 +174,6 @@ export class CortexConsistencyContract {
         message: `Cortex workflow names a retired runtime entrypoint: ${retired}`,
       });
     }
-  }
-
-  private static commandMatchesPrefix(
-    request: CommandPrefixMatchRequest,
-  ): boolean {
-    return (
-      request.command === request.prefix ||
-      request.command.startsWith(`${request.prefix} `)
-    );
-  }
-
-  private static normalizeCommand(command: string): string {
-    return command.replaceAll(/\s+/gu, ' ').trim();
-  }
-
-  private static runtimeCommand(command: string): boolean {
-    return (
-      command.startsWith('task ') || /^loom-[A-Za-z0-9:_-]+/u.test(command)
-    );
   }
 
   private static uniqueContexts(
@@ -498,11 +482,6 @@ type ValidateRuntimeContractRequest = {
   readonly runtime: CortexRuntimeContract;
   readonly documents: ReadonlyMap<string, CortexContractDocument>;
   readonly findings: CortexContractFinding[];
-};
-
-type CommandPrefixMatchRequest = {
-  readonly command: string;
-  readonly prefix: string;
 };
 
 type UniqueCortexContextsArgs = {

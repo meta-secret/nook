@@ -1,4 +1,15 @@
 import {
+  ArticleHeadingSelectionKind,
+  ArticleBodyContribution,
+  ArticleDensityContribution,
+  ArticleProcedureRequirement,
+  ArticleFindingAgreement,
+  CortexArticleBlock,
+  CortexArticleSection,
+  CortexArticleFindingSequence,
+} from './semantic.ts';
+
+import {
   CortexArticleContractKind,
   CortexArticleFindingCode,
   CortexArticleSemanticKind,
@@ -34,22 +45,12 @@ export class CortexArticleResultVerifier {
     const expected = CortexArticleResultVerifier.independentlyDeriveFindings(
       request.auditRequest,
     );
-    if (request.result.findings.length !== expected.length) {
+    if (
+      new CortexArticleFindingSequence(request.result.findings).agreementWith(
+        expected,
+      ) === ArticleFindingAgreement.Different
+    ) {
       throw new Error(VERIFICATION_FAILURE);
-    }
-    for (let index = 0; index < expected.length; index += 1) {
-      const [actual = false] = [request.result.findings.at(index)];
-      const [wanted = false] = [expected.at(index)];
-      if (
-        actual === false ||
-        wanted === false ||
-        actual.code !== wanted.code ||
-        actual.file !== wanted.file ||
-        actual.line !== wanted.line ||
-        actual.message !== wanted.message
-      ) {
-        throw new Error(VERIFICATION_FAILURE);
-      }
     }
   }
 
@@ -77,61 +78,27 @@ export class CortexArticleResultVerifier {
       };
       request.expected.push(finding);
     }
-    for (let index = 0; index < request.document.blocks.length; index += 1) {
-      const [block = false] = [request.document.blocks.at(index)];
-      if (
-        block === false ||
-        block.kind !== CortexArticleSemanticKind.Heading ||
-        (block.depth !== 2 && block.depth !== 3)
-      ) {
-        continue;
-      }
-      const sectionRequest: OwnedSectionRequest = {
-        blocks: request.document.blocks,
-        headingIndex: index,
-      };
+    for (const [index, block] of request.document.blocks.entries()) {
+      const selection = new CortexArticleBlock(block).articleHeading();
+      if (selection.kind === ArticleHeadingSelectionKind.Other) continue;
       const articleRequest: VerifyArticleRequest = {
         ...request,
-        heading: block,
-        sectionBlocks: CortexArticleResultVerifier.ownedSection(sectionRequest),
+        heading: selection.heading,
+        sectionBlocks: new CortexArticleSection(selection.heading).ownedBlocks({
+          blocks: request.document.blocks,
+          startIndex: index + 1,
+        }),
       };
       CortexArticleResultVerifier.verifyArticle(articleRequest);
     }
   }
 
-  private static ownedSection(
-    request: OwnedSectionRequest,
-  ): readonly CortexArticleSemanticBlock[] {
-    const [heading = false] = [request.blocks.at(request.headingIndex)];
-    if (
-      heading === false ||
-      heading.kind !== CortexArticleSemanticKind.Heading
-    ) {
-      return [];
-    }
-    let end = request.blocks.length;
-    for (
-      let index = request.headingIndex + 1;
-      index < request.blocks.length;
-      index += 1
-    ) {
-      const [candidate = false] = [request.blocks.at(index)];
-      if (
-        candidate !== false &&
-        candidate.kind === CortexArticleSemanticKind.Heading &&
-        candidate.depth <= heading.depth
-      ) {
-        end = index;
-        break;
-      }
-    }
-    return request.blocks.slice(request.headingIndex + 1, end);
-  }
-
   private static verifyArticle(request: VerifyArticleRequest): void {
     if (
       !request.sectionBlocks.some(
-        CortexArticleResultVerifier.isVisibleArticleBlock,
+        (block) =>
+          new CortexArticleBlock(block).bodyContribution() ===
+          ArticleBodyContribution.Visible,
       )
     ) {
       const finding: CortexArticleFinding = {
@@ -145,10 +112,9 @@ export class CortexArticleResultVerifier {
     }
     CortexArticleResultVerifier.verifyParagraphDensity(request);
     if (
-      PROCEDURE_HEADING.test(request.heading.text) &&
-      !request.sectionBlocks.some(
-        (block) => block.kind === CortexArticleSemanticKind.VisibleOrderedList,
-      )
+      new CortexArticleSection(request.heading).procedureRequirement(
+        request.sectionBlocks,
+      ) === ArticleProcedureRequirement.OrderedActions
     ) {
       const finding: CortexArticleFinding = {
         code: CortexArticleFindingCode.UnorderedProcedure,
@@ -163,20 +129,14 @@ export class CortexArticleResultVerifier {
   private static verifyParagraphDensity(request: VerifyArticleRequest): void {
     let consecutive = 0;
     for (const block of request.sectionBlocks) {
-      if (block.kind === CortexArticleSemanticKind.Heading) {
-        if (block.depth <= 3) break;
+      const contribution = new CortexArticleBlock(block).densityContribution();
+      if (contribution === ArticleDensityContribution.EndArticle) break;
+      if (contribution === ArticleDensityContribution.Preserve) continue;
+      if (contribution === ArticleDensityContribution.Reset) {
         consecutive = 0;
         continue;
       }
-      if (block.kind === CortexArticleSemanticKind.Transparent) continue;
-      if (block.kind === CortexArticleSemanticKind.DensitySeparator) {
-        consecutive = 0;
-        continue;
-      }
-      consecutive =
-        block.kind === CortexArticleSemanticKind.Paragraph
-          ? consecutive + 1
-          : 0;
+      consecutive += 1;
       if (consecutive !== MAX_CONSECUTIVE_PARAGRAPHS + 1) continue;
       const finding: CortexArticleFinding = {
         code: CortexArticleFindingCode.DenseArticle,
@@ -186,16 +146,6 @@ export class CortexArticleResultVerifier {
       };
       request.expected.push(finding);
     }
-  }
-
-  private static isVisibleArticleBlock(
-    block: CortexArticleSemanticBlock,
-  ): boolean {
-    return (
-      block.kind === CortexArticleSemanticKind.Paragraph ||
-      block.kind === CortexArticleSemanticKind.VisibleOrderedList ||
-      block.kind === CortexArticleSemanticKind.Structure
-    );
   }
 }
 
@@ -214,15 +164,7 @@ type VerifyArticleRequest = VerifyDocumentRequest & {
   readonly sectionBlocks: readonly CortexArticleSemanticBlock[];
 };
 
-type OwnedSectionRequest = {
-  readonly blocks: readonly CortexArticleSemanticBlock[];
-  readonly headingIndex: number;
-};
-
 const MAX_CONSECUTIVE_PARAGRAPHS = 3;
-
-const PROCEDURE_HEADING =
-  /\b(procedures?|runbooks?|steps|ordered deliver(?:y|ies)|delivery sequences?)\b/i;
 
 const VERIFICATION_FAILURE =
   'Cortex article-structure semantic verification failed.';
