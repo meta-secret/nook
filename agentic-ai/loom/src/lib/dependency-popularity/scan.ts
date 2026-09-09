@@ -2,7 +2,7 @@ import { err, ok, type Result } from 'neverthrow';
 import type { ExecutableRepositoryFailure } from '../../executable-skills/repository.ts';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { ExecutableSkillRepository } from '../../executable-skills/repository.ts';
+import { ExecutableSkillCheckout } from '../../executable-skills/repository.ts';
 import { LoomFailureCode } from '../../loom-failure.ts';
 import {
   UntrustedYamlPropertyPresence,
@@ -37,7 +37,9 @@ export class RepositoryDependencyInventory {
   scanRepositoryNpmPackages(): Result<readonly string[], ManifestFailure> {
     const repoRoot = this.repoRoot;
     const names = new Set<string>();
-    const inspection = ExecutableSkillRepository.inspectDependencies(repoRoot);
+    const inspection = new ExecutableSkillCheckout(
+      repoRoot,
+    ).inspectDependencies();
     if (inspection.isErr()) return err(inspection.error);
     if (inspection.value.findings.length > 0) {
       const failureArgs: LoomFailureDetailArgs = {

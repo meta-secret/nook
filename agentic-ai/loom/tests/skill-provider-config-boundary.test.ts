@@ -23,7 +23,7 @@ import { SkillProviderConfigRuntimeScenario } from './skill-provider-config-runt
 
 import * as configTestHelpers from './skill-provider-config-test-helpers.ts';
 
-import { ExecutableSkillRepository } from '../src/executable-skills/repository.ts';
+import { ExecutableSkillCheckout } from '../src/executable-skills/repository.ts';
 
 import type {
   ActionLoaderFixture,
@@ -33,7 +33,9 @@ import type {
 const REPOSITORY_ROOT = join(import.meta.dir, '../../..');
 
 test('only the Loom semantic adapter reaches the provider', async () => {
-  const tracked = ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
+  const tracked = new ExecutableSkillCheckout(
+    REPOSITORY_ROOT,
+  ).readTrackedFiles();
   assert(tracked.isOk());
   const allPaths = tracked.value.map((file) => file.path);
   const productionPaths = allPaths
@@ -120,7 +122,9 @@ test('only the Loom semantic adapter reaches the provider', async () => {
 
 test('runnable configuration inventory includes Taskfiles and actions', () => {
   const taskfilePattern = /(^|\/)Taskfile(?:\.[^/]*)?\.ya?ml$/u;
-  const tracked = ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
+  const tracked = new ExecutableSkillCheckout(
+    REPOSITORY_ROOT,
+  ).readTrackedFiles();
   assert(tracked.isOk());
   const allPaths = tracked.value.map((file) => file.path);
   const runnablePaths = allPaths.filter(

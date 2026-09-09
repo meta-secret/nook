@@ -19,6 +19,8 @@ import {
   EXECUTABLE_SKILL_FINDING_LIMIT,
   type TrackedRepositoryFile,
   ExecutableSkillRepository,
+  ExecutableSkillPath,
+  ExecutableSkillCheckout,
 } from '../../src/executable-skills/repository.ts';
 
 import type { UntrustedYamlMap } from '../../src/lib/guards.ts';
@@ -115,7 +117,7 @@ export class ExecutableSkillsRepositoryScenario {
   static audit(repoRoot: string) {
     return (tracked: readonly TrackedRepositoryFile[]) => {
       const request = { repoRoot, tracked };
-      return ExecutableSkillRepository.auditFiles(request);
+      return new ExecutableSkillRepository(request).findings();
     };
   }
 }
@@ -328,9 +330,9 @@ test('derives the package root from the canonical outer skill boundary', () => {
     `${SCRIPTS}/tests/scripts/helper.test.ts`,
     `${SCRIPTS}/src/dynamic-skills/parser/scripts/helper.ts`,
   ]) {
-    expect(
-      ExecutableSkillRepository.packageFromPath(trackedPath),
-    ).toMatchObject(expected);
+    expect(new ExecutableSkillPath(trackedPath).package()).toMatchObject(
+      expected,
+    );
   }
 });
 
@@ -479,8 +481,7 @@ test('rejects executable packages under undeclared team owners', async () => {
     }));
     expect(
       candidates.every(
-        (candidate) =>
-          ExecutableSkillRepository.packageFromPath(candidate) !== false,
+        (candidate) => new ExecutableSkillPath(candidate).package() !== false,
       ),
     ).toBe(true);
     const findings = ExecutableSkillsRepositoryScenario.audit(repoRoot)([
@@ -513,7 +514,7 @@ test('parses NUL-separated tracked paths without newline ambiguity', async () =>
       mode: '100644',
       path: trackedPath,
     };
-    const tracked = ExecutableSkillRepository.readTrackedFiles(repoRoot);
+    const tracked = new ExecutableSkillCheckout(repoRoot).readTrackedFiles();
     assert(tracked.isOk());
     expect(tracked.value).toContainEqual(expectedFile);
   } finally {
@@ -530,7 +531,7 @@ test('accepts pinned declared runtime dependencies with matching lock entries', 
       repoRoot,
       tracked: ExecutableSkillsRepositoryScenario.trackedFiles(),
     };
-    expect(ExecutableSkillRepository.auditFiles(request)).toEqual([]);
+    expect(new ExecutableSkillRepository(request).findings()).toEqual([]);
   } finally {
     await rm(repoRoot, REMOVE_OPTIONS);
   }

@@ -37,7 +37,7 @@ import {
 } from '../lib/cortex-article-structure.ts';
 import {
   type ExecutableSkillPackageFinding,
-  ExecutableSkillRepository,
+  ExecutableSkillCheckout,
 } from '../executable-skills/repository.ts';
 import {
   CORTEX_IDENTIFIER_REGISTRY_PATH,
@@ -231,8 +231,9 @@ export class CortexAuditCommand {
       path.join(cortexRoot, 'teams', 'sre', 'dynamic-skills'),
       path.join(cortexRoot, 'teams', 'web-dev', 'dynamic-skills'),
     ];
-    const executableSkillPackageFindings =
-      ExecutableSkillRepository.auditTracked(repoRoot);
+    const executableSkillPackageFindings = new ExecutableSkillCheckout(
+      repoRoot,
+    ).auditTracked();
     if (executableSkillPackageFindings.isErr())
       return err(executableSkillPackageFindings.error);
     const skillFiles = skillDirectories

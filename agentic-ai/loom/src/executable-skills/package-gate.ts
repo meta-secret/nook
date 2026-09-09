@@ -5,6 +5,8 @@ import path from 'node:path';
 import {
   EXECUTABLE_SKILL_WORKSPACE_ROOT,
   ExecutableSkillRepository,
+  ExecutableSkillCheckout,
+  ExecutableTrackedPackages,
 } from './repository.ts';
 
 export class ExecutableSkillPackageGate {
@@ -56,12 +58,12 @@ export class ExecutableSkillPackageGate {
 
   execute(): Result<void, PackageGateFailure> {
     const request = this.request;
-    const tracked = ExecutableSkillRepository.readTrackedFiles(
+    const tracked = new ExecutableSkillCheckout(
       request.repoRoot,
-    );
+    ).readTrackedFiles();
     if (tracked.isErr()) return err(tracked.error);
     const auditRequest = { repoRoot: request.repoRoot, tracked: tracked.value };
-    const findings = ExecutableSkillRepository.auditFiles(auditRequest);
+    const findings = new ExecutableSkillRepository(auditRequest).findings();
     if (findings.length > 0) {
       const diagnostic = { findings };
       return err({ message: JSON.stringify(diagnostic) });
@@ -82,9 +84,9 @@ export class ExecutableSkillPackageGate {
       }
       return ok(undefined);
     }
-    for (const skillPackage of ExecutableSkillRepository.packages(
+    for (const skillPackage of new ExecutableTrackedPackages(
       tracked.value,
-    )) {
+    ).packages()) {
       const cwd = path.join(request.repoRoot, skillPackage.scriptsRoot);
       const commandRequest: ExecutableSkillCommandRequest = {
         arguments: arguments_,

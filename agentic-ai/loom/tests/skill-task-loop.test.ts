@@ -21,7 +21,7 @@ import {
   ExecutableSkillPackageGate,
 } from '../src/executable-skills/package-gate.ts';
 
-import { ExecutableSkillRepository } from '../src/executable-skills/repository.ts';
+import { ExecutableSkillCheckout } from '../src/executable-skills/repository.ts';
 
 import { SkillProviderConfigRuntimeScenario } from './skill-provider-config-runtime.ts';
 
@@ -203,7 +203,9 @@ test('skills tasks delegate discovery and execution to the canonical gate', asyn
   expect(taskfile).toContain('NOOK_SKILL_REQUEST_YAML:');
   expect(taskfile).toContain('--tools-list');
   const consumers: string[] = [];
-  const tracked = ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
+  const tracked = new ExecutableSkillCheckout(
+    REPOSITORY_ROOT,
+  ).readTrackedFiles();
   assert(tracked.isOk());
   for (const file of tracked.value) {
     if (!SkillProviderConfigRuntimeScenario.isRunnableConfiguration(file.path))

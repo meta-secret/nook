@@ -10,7 +10,11 @@ import {
   ExecutableSkillSource,
 } from '../src/executable-skills/source-policy.ts';
 
-import { ExecutableSkillRepository } from '../src/executable-skills/repository.ts';
+import {
+  ExecutableSkillPath,
+  ExecutableSkillCheckout,
+  ExecutableTrackedPackages,
+} from '../src/executable-skills/repository.ts';
 
 export class SkillApplicationSourceBoundaryScenario {
   private constructor(
@@ -231,7 +235,7 @@ export class SkillApplicationSourceBoundaryScenario {
   }
 
   static executableSkillRootFromTrackedPath(path: string): string | false {
-    const skillPackage = ExecutableSkillRepository.packageFromPath(path);
+    const skillPackage = new ExecutableSkillPath(path).package();
     return skillPackage !== false &&
       ExecutableSkillSource.isApplicationSourcePath(
         `${skillPackage.scriptsRoot}/src/index.ts`,
@@ -279,11 +283,13 @@ const FORBIDDEN_HOST_GLOBALS = new Set(
 type ExecutableSkillSourceProfile = typeof ExecutableSkillSource.analyze;
 
 test('all tracked executable application sources pass the AST capability gate', async () => {
-  const trackedFiles =
-    ExecutableSkillRepository.readTrackedFiles(REPOSITORY_ROOT);
+  const trackedFiles = new ExecutableSkillCheckout(
+    REPOSITORY_ROOT,
+  ).readTrackedFiles();
   assert(trackedFiles.isOk());
   const tracked = trackedFiles.value.map((file) => file.path);
-  const packageRoots = ExecutableSkillRepository.packages(trackedFiles.value)
+  const packageRoots = new ExecutableTrackedPackages(trackedFiles.value)
+    .packages()
     .map((skillPackage) => skillPackage.scriptsRoot)
     .filter((root) =>
       ExecutableSkillSource.isApplicationSourcePath(`${root}/src/index.ts`),

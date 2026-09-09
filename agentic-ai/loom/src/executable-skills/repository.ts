@@ -153,110 +153,22 @@ export type ExecutableRepositoryFailure = {
 
 export class ExecutableSkillRepository {
   private readonly collector = new ExecutableSkillFindingCollector();
-  private constructor(
+  constructor(
     private readonly request: AuditExecutableSkillPackageFilesRequest,
   ) {}
-  static readTrackedFiles(
-    repoRoot: string,
-  ): Result<readonly TrackedRepositoryFile[], ExecutableRepositoryFailure> {
-    const options: ExecFileSyncOptionsWithStringEncoding = {
-      cwd: repoRoot,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    };
-    let output: string;
-    try {
-      output = execFileSync('git', ['ls-files', '--stage', '-z'], options);
-    } catch {
-      return err({
-        kind: ExecutableRepositoryFailureKind.Git,
-        message:
-          'git ls-files failed while reading executable-skill repository',
-      });
-    }
-    const files: TrackedRepositoryFile[] = [];
-    for (const record of output
-      .split('\0')
-      .filter((record) => record.length > 0)) {
-      const parsed = new ExecutableTrackedRecord(record).decode();
-      if (parsed.isErr()) return err(parsed.error);
-      files.push(parsed.value);
-    }
-    return ok(files);
+
+  findings(): readonly ExecutableSkillPackageFinding[] {
+    return this.inspect().findings;
   }
 
-  static packageFromPath(trackedPath: string): ExecutableSkillPackage | false {
-    const match = EXECUTABLE_PACKAGE_PATH.exec(trackedPath);
-    const packageRoot = match?.at(1);
-    const slug = match?.at(2);
-    if (typeof packageRoot !== 'string' || typeof slug !== 'string')
-      return false;
-    return {
-      packageRoot,
-      scriptsRoot: `${packageRoot}/scripts`,
-      skillPath: `${packageRoot}/SKILL.md`,
-      slug,
-    };
-  }
-
-  static packages(
-    tracked: readonly TrackedRepositoryFile[],
-  ): readonly ExecutableSkillPackage[] {
-    const packages = new Map<string, ExecutableSkillPackage>();
-    for (const file of tracked) {
-      const skillPackage = ExecutableSkillRepository.packageFromPath(file.path);
-      if (skillPackage !== false) {
-        packages.set(skillPackage.packageRoot, skillPackage);
-      }
-    }
-    return [...packages.keys()].sort().flatMap((packageRoot) => {
-      const skillPackage = packages.get(packageRoot);
-      return skillPackage ? [skillPackage] : [];
-    });
-  }
-
-  static auditTracked(
-    repoRoot: string,
-  ): Result<
-    readonly ExecutableSkillPackageFinding[],
-    ExecutableRepositoryFailure
-  > {
-    if (!existsSync(path.join(repoRoot, '.git'))) return ok([]);
-    const tracked = ExecutableSkillRepository.readTrackedFiles(repoRoot);
-    if (tracked.isErr()) return err(tracked.error);
-    const request: AuditExecutableSkillPackageFilesRequest = {
-      repoRoot,
-      tracked: tracked.value,
-    };
-    return ok(ExecutableSkillRepository.auditFiles(request));
-  }
-
-  static inspectDependencies(
-    repoRoot: string,
-  ): Result<ExecutableSkillDependencyInspection, ExecutableRepositoryFailure> {
-    const tracked = ExecutableSkillRepository.readTrackedFiles(repoRoot);
-    if (tracked.isErr()) return err(tracked.error);
-    const request: AuditExecutableSkillPackageFilesRequest = {
-      repoRoot,
-      tracked: tracked.value,
-    };
-    return ok(new ExecutableSkillRepository(request).inspect());
-  }
-
-  static auditFiles(
-    request: AuditExecutableSkillPackageFilesRequest,
-  ): readonly ExecutableSkillPackageFinding[] {
-    return new ExecutableSkillRepository(request).inspect().findings;
-  }
-
-  private inspect(): ExecutableSkillDependencyInspection {
+  inspect(): ExecutableSkillDependencyInspection {
     const request = this.request;
     const { repoRoot, tracked } = request;
     const collector = this.collector;
     const npmPackages = new Set<string>();
-    const skillPackages = ExecutableSkillRepository.packages(tracked);
+    const skillPackages = new ExecutableTrackedPackages(tracked).packages();
     for (const file of tracked) {
-      const skillPackage = ExecutableSkillRepository.packageFromPath(file.path);
+      const skillPackage = new ExecutableSkillPath(file.path).package();
       if (
         file.path.startsWith(`${EXECUTABLE_SKILL_WORKSPACE_ROOT}/node_modules/`)
       ) {
@@ -962,5 +874,100 @@ class ExecutableTrackedRecord {
       });
     }
     return ok({ mode, path: trackedPath });
+  }
+}
+
+export class ExecutableSkillCheckout {
+  constructor(private readonly repoRoot: string) {}
+  readTrackedFiles(): Result<
+    readonly TrackedRepositoryFile[],
+    ExecutableRepositoryFailure
+  > {
+    const repoRoot = this.repoRoot;
+    const options: ExecFileSyncOptionsWithStringEncoding = {
+      cwd: repoRoot,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    };
+    let output: string;
+    try {
+      output = execFileSync('git', ['ls-files', '--stage', '-z'], options);
+    } catch {
+      return err({
+        kind: ExecutableRepositoryFailureKind.Git,
+        message:
+          'git ls-files failed while reading executable-skill repository',
+      });
+    }
+    const files: TrackedRepositoryFile[] = [];
+    for (const record of output
+      .split('\0')
+      .filter((record) => record.length > 0)) {
+      const parsed = new ExecutableTrackedRecord(record).decode();
+      if (parsed.isErr()) return err(parsed.error);
+      files.push(parsed.value);
+    }
+    return ok(files);
+  }
+  auditTracked(): Result<
+    readonly ExecutableSkillPackageFinding[],
+    ExecutableRepositoryFailure
+  > {
+    const repoRoot = this.repoRoot;
+    if (!existsSync(path.join(repoRoot, '.git'))) return ok([]);
+    const tracked = this.readTrackedFiles();
+    if (tracked.isErr()) return err(tracked.error);
+    const request: AuditExecutableSkillPackageFilesRequest = {
+      repoRoot,
+      tracked: tracked.value,
+    };
+    return ok(new ExecutableSkillRepository(request).findings());
+  }
+  inspectDependencies(): Result<
+    ExecutableSkillDependencyInspection,
+    ExecutableRepositoryFailure
+  > {
+    const repoRoot = this.repoRoot;
+    const tracked = this.readTrackedFiles();
+    if (tracked.isErr()) return err(tracked.error);
+    const request: AuditExecutableSkillPackageFilesRequest = {
+      repoRoot,
+      tracked: tracked.value,
+    };
+    return ok(new ExecutableSkillRepository(request).inspect());
+  }
+}
+export class ExecutableSkillPath {
+  constructor(private readonly trackedPath: string) {}
+  package(): ExecutableSkillPackage | false {
+    const trackedPath = this.trackedPath;
+    const match = EXECUTABLE_PACKAGE_PATH.exec(trackedPath);
+    const packageRoot = match?.at(1);
+    const slug = match?.at(2);
+    if (typeof packageRoot !== 'string' || typeof slug !== 'string')
+      return false;
+    return {
+      packageRoot,
+      scriptsRoot: `${packageRoot}/scripts`,
+      skillPath: `${packageRoot}/SKILL.md`,
+      slug,
+    };
+  }
+}
+export class ExecutableTrackedPackages {
+  constructor(private readonly tracked: readonly TrackedRepositoryFile[]) {}
+  packages(): readonly ExecutableSkillPackage[] {
+    const tracked = this.tracked;
+    const packages = new Map<string, ExecutableSkillPackage>();
+    for (const file of tracked) {
+      const skillPackage = new ExecutableSkillPath(file.path).package();
+      if (skillPackage !== false) {
+        packages.set(skillPackage.packageRoot, skillPackage);
+      }
+    }
+    return [...packages.keys()].sort().flatMap((packageRoot) => {
+      const skillPackage = packages.get(packageRoot);
+      return skillPackage ? [skillPackage] : [];
+    });
   }
 }
