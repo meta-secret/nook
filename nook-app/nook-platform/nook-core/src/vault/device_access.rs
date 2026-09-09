@@ -12,7 +12,7 @@
 
 #[cfg(test)]
 use crate::{DeviceIdentityProtection, PasskeyProtectionInput, PasskeyRecordMetadata};
-use serde::{Deserialize, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 use std::{error, fmt};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -82,6 +82,7 @@ pub enum DeviceAccessIdentityState {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(from = "PasskeyAccessProfileWire")]
 #[serde(rename_all = "camelCase")]
 pub struct PasskeyAccessProfile {
     #[serde(default)]
@@ -90,45 +91,67 @@ pub struct PasskeyAccessProfile {
     pub nook_name: String,
     #[serde(default)]
     pub provider_label: String,
-    #[serde(
-        default,
-        deserialize_with = "passkey_observation::PasskeyCreatedAtEvidence::deserialize_legacy"
-    )]
+    #[serde(default)]
     pub created_at: PasskeyCreatedAtEvidence,
-    #[serde(
-        default,
-        deserialize_with = "passkey_observation::PasskeyLastUsedAtEvidence::deserialize_legacy"
-    )]
+    #[serde(default)]
     pub last_used_at: PasskeyLastUsedAtEvidence,
     #[serde(default)]
     pub observation: PasskeyBrowserObservation,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PasskeyAccessProfileWire {
+    #[serde(default)]
+    credential_fingerprint: String,
+    #[serde(default)]
+    nook_name: String,
+    #[serde(default)]
+    provider_label: String,
+    #[serde(default)]
+    created_at: passkey_observation::PasskeyCreatedAtEvidenceWire,
+    #[serde(default)]
+    last_used_at: passkey_observation::PasskeyLastUsedAtEvidenceWire,
+    #[serde(default)]
+    observation: PasskeyBrowserObservation,
+}
+impl From<PasskeyAccessProfileWire> for PasskeyAccessProfile {
+    fn from(wire: PasskeyAccessProfileWire) -> Self {
+        Self {
+            credential_fingerprint: wire.credential_fingerprint,
+            nook_name: wire.nook_name,
+            provider_label: wire.provider_label,
+            created_at: wire.created_at.into(),
+            last_used_at: wire.last_used_at.into(),
+            observation: wire.observation,
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(try_from = "VerifiedVaultAccessWire")]
 #[serde(rename_all = "camelCase")]
 pub struct VerifiedVaultAccess {
-    #[serde(deserialize_with = "VerifiedVaultAccess::deserialize_device_id")]
     pub device_id: DeviceId,
-    #[serde(deserialize_with = "VerifiedVaultAccess::deserialize_store_id")]
     pub store_id: StoreId,
     pub verified_at: IsoTimestamp,
 }
 
-impl VerifiedVaultAccess {
-    fn deserialize_device_id<'de, D>(deserializer: D) -> Result<DeviceId, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let raw = String::deserialize(deserializer)?;
-        DeviceId::parse(&raw).map_err(D::Error::custom)
-    }
-
-    fn deserialize_store_id<'de, D>(deserializer: D) -> Result<StoreId, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let raw = String::deserialize(deserializer)?;
-        StoreId::parse(&raw).map_err(D::Error::custom)
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct VerifiedVaultAccessWire {
+    device_id: String,
+    store_id: String,
+    verified_at: IsoTimestamp,
+}
+impl TryFrom<VerifiedVaultAccessWire> for VerifiedVaultAccess {
+    type Error = crate::errors::ValidationError;
+    fn try_from(wire: VerifiedVaultAccessWire) -> Result<Self, Self::Error> {
+        Ok(Self {
+            device_id: DeviceId::parse(&wire.device_id)?,
+            store_id: StoreId::parse(&wire.store_id)?,
+            verified_at: wire.verified_at,
+        })
     }
 }
 

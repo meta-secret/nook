@@ -6,28 +6,34 @@ use super::queue::{
     MessageDefaultQueueDisposition, PasskeyCeremonyQueueDisposition, QueueDisposition,
 };
 use crate::ExtensionVaultEventPayload;
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::Deserialize;
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 use zeroize::Zeroize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Tsify, Deserialize)]
+#[serde(try_from = "u32")]
 #[tsify(type = "0 | 1")]
 pub struct PasskeyDeviceModeWire(nook_authenticator_domain::PasskeyDeviceProtectionMode);
 
-impl<'de> Deserialize<'de> for PasskeyDeviceModeWire {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for PasskeyDeviceModeWire {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self(
                 nook_authenticator_domain::PasskeyDeviceProtectionMode::Standard,
             )),
             1 => Ok(Self(
                 nook_authenticator_domain::PasskeyDeviceProtectionMode::AntiHacker,
             )),
-            _ => Err(D::Error::custom("device mode is not supported")),
+            _ => Err("device mode is not supported".to_owned()),
         }
     }
 }

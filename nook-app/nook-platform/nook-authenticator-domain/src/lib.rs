@@ -5,7 +5,7 @@
 )]
 #![cfg_attr(dylint_lib = "nook_domain_api", deny(raw_numeric_public_api))]
 
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 use std::{fmt, time::Duration};
 
 const DEFAULT_PERIOD: u64 = 30;
@@ -96,7 +96,8 @@ impl TotpAlgorithm {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum TotpDigits {
     #[default]
     Six,
@@ -114,15 +115,6 @@ impl Serialize for TotpDigits {
             Self::Seven => 7,
             Self::Eight => 8,
         })
-    }
-}
-
-impl<'de> Deserialize<'de> for TotpDigits {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::try_from(u32::deserialize(deserializer)?).map_err(D::Error::custom)
     }
 }
 
@@ -156,18 +148,9 @@ impl TryFrom<u32> for TotpDigits {
     }
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u64")]
 pub struct TotpPeriod(u64);
-
-impl<'de> Deserialize<'de> for TotpPeriod {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::try_from(u64::deserialize(deserializer)?).map_err(D::Error::custom)
-    }
-}
 
 impl Default for TotpPeriod {
     fn default() -> Self {

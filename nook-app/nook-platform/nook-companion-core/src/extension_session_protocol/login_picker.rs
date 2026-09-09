@@ -1,5 +1,6 @@
 //! Login-picker response decoding at the content-script boundary.
 
+use super::queue::QueueExpiryMilliseconds;
 use serde::{Deserialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -15,15 +16,7 @@ pub enum LoginPickerOpenAvailableWire {
     Ready {
         ok: bool,
         request_id: String,
-        #[serde(deserialize_with = "super::queue::QueueDisposition::deserialize_finite_f64")]
-        #[cfg_attr(
-            dylint_lib = "nook_domain_api",
-            expect(
-                raw_numeric_public_api,
-                reason = "serialization boundary: decodes the finite JavaScript login-picker deadline timestamp"
-            )
-        )]
-        expires_at: f64,
+        expires_at: QueueExpiryMilliseconds,
     },
     Locked {
         ok: bool,
@@ -59,14 +52,7 @@ pub enum LoginPickerOpenResponse {
     Ready {
         kind: LoginPickerOpenResponseKind,
         request_id: String,
-        #[cfg_attr(
-            dylint_lib = "nook_domain_api",
-            expect(
-                raw_numeric_public_api,
-                reason = "FFI boundary: returns the login-picker deadline timestamp as a JavaScript number"
-            )
-        )]
-        expires_at: f64,
+        expires_at: QueueExpiryMilliseconds,
     },
     Locked {
         kind: LoginPickerOpenResponseKind,
@@ -152,7 +138,7 @@ mod tests {
             LoginPickerOpenResponse::Ready {
                 kind: LoginPickerOpenResponseKind::Ready,
                 request_id: "request".to_owned(),
-                expires_at: 42.0,
+                expires_at: QueueExpiryMilliseconds::try_from(42.0).map_err(anyhow::Error::msg)?,
             }
         );
 

@@ -13,7 +13,7 @@
 use crate::{CanonicalEventBodyBytes, EventError, EventResult};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use sha2::{Digest, Sha256};
 use std::fmt;
 
@@ -22,7 +22,8 @@ const SHA256_BASE64URL_LEN: usize = 43;
 const SHA256_BYTES_LEN: usize = 32;
 
 /// Content-addressed event identifier (`sha256u:{base64url_no_pad}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct EventId(String);
 
 impl EventId {
@@ -122,15 +123,16 @@ impl Serialize for EventId {
     }
 }
 
-impl<'de> Deserialize<'de> for EventId {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for EventId {
+    type Error = EventError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
 /// Ed25519 signature string (`ed25519:{hex}`).
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct Ed25519Signature(String);
 
 impl Ed25519Signature {
@@ -212,10 +214,10 @@ impl Serialize for Ed25519Signature {
     }
 }
 
-impl<'de> Deserialize<'de> for Ed25519Signature {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for Ed25519Signature {
+    type Error = EventError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 

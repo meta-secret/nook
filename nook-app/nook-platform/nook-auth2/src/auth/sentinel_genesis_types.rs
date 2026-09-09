@@ -4,21 +4,14 @@ use crate::{
     MultiDeviceResult, StoreId, StoredSecretRecord,
 };
 use crate::{SentinelParticipantCount, SentinelThreshold};
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct SentinelGenesisVersion(u32);
 
 impl SentinelGenesisVersion {
     pub const CURRENT: Self = Self(1);
-
-    fn parse(value: u32) -> Result<Self, &'static str> {
-        match value {
-            1 => Ok(Self::CURRENT),
-            _ => Err("unsupported Sentinel genesis version"),
-        }
-    }
 }
 
 impl From<SentinelGenesisVersion> for u32 {
@@ -27,12 +20,20 @@ impl From<SentinelGenesisVersion> for u32 {
     }
 }
 
-impl<'de> Deserialize<'de> for SentinelGenesisVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+impl TryFrom<u32> for SentinelGenesisVersion {
+    type Error = &'static str;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::CURRENT),
+            _ => Err("unsupported Sentinel genesis version"),
+        }
     }
 }
 

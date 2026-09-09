@@ -4,7 +4,7 @@
 //! This module owns whether those signals are sufficient to treat a workflow
 //! as complete before durably creating or replacing credentials.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -47,7 +47,8 @@ pub struct AuthenticationOutcomeClassification {
     pub timeout_ms: AuthenticationOutcomeTimeoutMilliseconds,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify, Deserialize)]
+#[serde(try_from = "DecisionWire")]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationOutcomeDecision {
@@ -55,23 +56,18 @@ pub struct AuthenticationOutcomeDecision {
     pub allows_credential_commit: bool,
 }
 
-impl<'de> Deserialize<'de> for AuthenticationOutcomeDecision {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(rename_all = "camelCase", deny_unknown_fields)]
-        struct DecisionWire {
-            verdict: AuthenticationOutcomeVerdict,
-            allows_credential_commit: bool,
-        }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DecisionWire {
+    verdict: AuthenticationOutcomeVerdict,
+    allows_credential_commit: bool,
+}
 
-        let wire = DecisionWire::deserialize(deserializer)?;
+impl TryFrom<DecisionWire> for AuthenticationOutcomeDecision {
+    type Error = &'static str;
+    fn try_from(wire: DecisionWire) -> Result<Self, Self::Error> {
         if wire.allows_credential_commit != wire.verdict.allows_credential_commit() {
-            return Err(D::Error::custom(
-                "authentication outcome decision contradicts its verdict",
-            ));
+            return Err("authentication outcome decision contradicts its verdict");
         }
         Ok(Self {
             verdict: wire.verdict,
@@ -96,7 +92,8 @@ impl AuthenticationOutcomeDecision {
 
 /// Classification of collected outcome evidence.
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum AuthenticationOutcomeVerdict {
     Sufficient,
     Insufficient,
@@ -131,19 +128,22 @@ impl Serialize for AuthenticationOutcomeVerdict {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthenticationOutcomeVerdict {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for AuthenticationOutcomeVerdict {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::Sufficient),
             1 => Ok(Self::Insufficient),
             2 => Ok(Self::Conflicting),
             3 => Ok(Self::Timeout),
-            value => Err(D::Error::custom(format!(
-                "invalid authentication outcome verdict: {value}"
-            ))),
+            value => Err(format!("invalid authentication outcome verdict: {value}")),
         }
     }
 }

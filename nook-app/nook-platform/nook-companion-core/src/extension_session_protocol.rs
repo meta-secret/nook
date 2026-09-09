@@ -5,4 +5,5 @@ mod queue;
 mod request;
 
 pub use login_picker::*;
+pub use queue::QueueExpiryMilliseconds;
 pub use request::*;

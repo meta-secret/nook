@@ -1,11 +1,12 @@
 //! Stable browser-companion vocabulary for authentication workflows.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum AuthenticationWorkflowKind {
     Login,
     Signup,
@@ -38,27 +39,31 @@ impl Serialize for AuthenticationWorkflowKind {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthenticationWorkflowKind {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for AuthenticationWorkflowKind {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::Login),
             1 => Ok(Self::Signup),
             2 => Ok(Self::PasswordChange),
             3 => Ok(Self::TotpChallenge),
             4 => Ok(Self::TotpEnrollment),
             5 => Ok(Self::Manual),
-            value => Err(D::Error::custom(format!(
-                "invalid authentication workflow kind: {value}"
-            ))),
+            value => Err(format!("invalid authentication workflow kind: {value}")),
         }
     }
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum AuthenticationWorkflowStage {
     Credentials,
     SecondFactor,
@@ -91,27 +96,31 @@ impl Serialize for AuthenticationWorkflowStage {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthenticationWorkflowStage {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for AuthenticationWorkflowStage {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::Credentials),
             1 => Ok(Self::SecondFactor),
             2 => Ok(Self::Verification),
             3 => Ok(Self::Setup),
             4 => Ok(Self::Recovery),
             5 => Ok(Self::Manual),
-            value => Err(D::Error::custom(format!(
-                "invalid authentication workflow stage: {value}"
-            ))),
+            value => Err(format!("invalid authentication workflow stage: {value}")),
         }
     }
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum AuthenticationWorkflowAction {
     ContinueWithNook,
     GeneratePassword,
@@ -164,12 +173,17 @@ impl Serialize for AuthenticationWorkflowAction {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthenticationWorkflowAction {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for AuthenticationWorkflowAction {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::ContinueWithNook),
             1 => Ok(Self::GeneratePassword),
             2 => Ok(Self::FillTotp),
@@ -178,9 +192,7 @@ impl<'de> Deserialize<'de> for AuthenticationWorkflowAction {
             5 => Ok(Self::CreatePasskey),
             6 => Ok(Self::TakeOver),
             7 => Ok(Self::SaveBackupCodes),
-            value => Err(D::Error::custom(format!(
-                "invalid authentication workflow action: {value}"
-            ))),
+            value => Err(format!("invalid authentication workflow action: {value}")),
         }
     }
 }

@@ -5,7 +5,7 @@
 )]
 
 use crate::{ExtensionConnectScope, ExtensionPairingVaultType};
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
@@ -61,7 +61,7 @@ impl From<CompanionPairingError> for CompanionPairingFailure {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Tsify)]
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Serialize, Tsify, Deserialize)]
 #[serde(transparent)]
 #[tsify(type = "number", into_wasm_abi, from_wasm_abi)]
 pub struct CompanionPairingEpochMilliseconds(f64);
@@ -76,17 +76,6 @@ impl CompanionPairingEpochMilliseconds {
             return Err(CompanionPairingError::InvalidValue);
         }
         Ok(())
-    }
-}
-
-impl<'de> Deserialize<'de> for CompanionPairingEpochMilliseconds {
-    fn deserialize<DeserializerType>(
-        deserializer: DeserializerType,
-    ) -> Result<Self, DeserializerType::Error>
-    where
-        DeserializerType: Deserializer<'de>,
-    {
-        Ok(Self(f64::deserialize(deserializer)?))
     }
 }
 

@@ -14,7 +14,7 @@
 use crate::errors::{ValidationError, ValidationResult};
 use crate::{StoredSecretRecord, VaultMetaRecord};
 use nook_auth2::{CreateSentinelShareRecordsRequest, SentinelShareEnvelope};
-use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -35,7 +35,8 @@ pub use shared_storage_grant::{
 };
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Deserialize)]
+#[serde(try_from = "String")]
 #[serde(rename_all = "kebab-case")]
 pub enum VaultType {
     /// Existing per-device full vault-key envelope model.
@@ -65,18 +66,16 @@ impl VaultType {
     }
 }
 
-impl<'de> Deserialize<'de> for VaultType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
+impl TryFrom<String> for VaultType {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Deserialize)]
+#[serde(try_from = "String")]
 #[serde(rename_all = "kebab-case")]
 pub enum ReplicationType {
     /// Same owner / highly trusted devices may reuse sync-provider credentials.
@@ -86,13 +85,10 @@ pub enum ReplicationType {
     Shared,
 }
 
-impl<'de> Deserialize<'de> for ReplicationType {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
+impl TryFrom<String> for ReplicationType {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 

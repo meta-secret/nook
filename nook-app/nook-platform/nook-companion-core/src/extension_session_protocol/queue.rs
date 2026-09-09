@@ -1,6 +1,6 @@
 //! Queue policy carried by extension-session requests.
 
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::Deserialize;
 use tsify::Tsify;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Tsify)]
@@ -26,8 +26,7 @@ pub enum PasskeyCeremonyPriority {
 pub enum QueueDisposition {
     MessageDefault {},
     Deadline {
-        #[serde(deserialize_with = "QueueDisposition::deserialize_finite_f64")]
-        expires_at: f64,
+        expires_at: QueueExpiryMilliseconds,
         priority: QueuePriority,
     },
 }
@@ -47,22 +46,31 @@ pub enum MessageDefaultQueueDisposition {
 )]
 pub enum PasskeyCeremonyQueueDisposition {
     Deadline {
-        #[serde(deserialize_with = "QueueDisposition::deserialize_finite_f64")]
-        expires_at: f64,
+        expires_at: QueueExpiryMilliseconds,
         priority: PasskeyCeremonyPriority,
     },
 }
 
-impl QueueDisposition {
-    pub(super) fn deserialize_finite_f64<'de, D>(deserializer: D) -> Result<f64, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = f64::deserialize(deserializer)?;
+/// Finite browser deadline; fractional and negative timestamps remain wire-valid.
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, serde::Serialize, Tsify)]
+#[serde(try_from = "f64")]
+#[tsify(type = "number")]
+pub struct QueueExpiryMilliseconds(f64);
+
+impl TryFrom<f64> for QueueExpiryMilliseconds {
+    type Error = &'static str;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits a finite JavaScript queue deadline without changing its numeric value"
+        )
+    )]
+    fn try_from(value: f64) -> Result<Self, Self::Error> {
         if value.is_finite() {
-            Ok(value)
+            Ok(Self(value))
         } else {
-            Err(D::Error::custom("queue expiry must be finite"))
+            Err("queue expiry must be finite")
         }
     }
 }
@@ -70,6 +78,23 @@ impl QueueDisposition {
 #[cfg(test)]
 mod tests {
     use super::{MessageDefaultQueueDisposition, QueueDisposition};
+
+    #[test]
+    fn deadline_admission_preserves_finite_values_without_rounding() -> anyhow::Result<()> {
+        for value in [-42.5, 0.0, 42.5] {
+            let deadline =
+                super::QueueExpiryMilliseconds::try_from(value).map_err(anyhow::Error::msg)?;
+            assert_eq!(serde_json::to_value(deadline)?, serde_json::json!(value));
+            assert_eq!(
+                serde_json::from_value::<super::QueueExpiryMilliseconds>(serde_json::json!(value))?,
+                deadline
+            );
+        }
+        for value in [f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            assert!(super::QueueExpiryMilliseconds::try_from(value).is_err());
+        }
+        Ok(())
+    }
 
     #[test]
     fn queue_variants_reject_foreign_fields() {

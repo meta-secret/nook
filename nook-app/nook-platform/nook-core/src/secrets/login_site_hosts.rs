@@ -42,6 +42,9 @@ pub(crate) struct LoginFamilyMatchRequest<'a> {
     pub(crate) right: &'a str,
 }
 
+// Keep streaming map admission: every duplicate occurrence must be validated,
+// and collisions after key normalization must preserve input-order last-wins.
+// Collecting an ordinary map first would discard evidence or reorder collisions.
 impl<'de> Deserialize<'de> for LoginSiteHosts {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         struct HostsVisitor;

@@ -3,7 +3,7 @@
 use crate::CompactToken;
 use crate::errors::{ValidationError, ValidationResult};
 use age::x25519::{Identity, Recipient};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use std::{fmt, mem};
 use zeroize::Zeroize;
 
@@ -13,7 +13,8 @@ pub use metadata::{DeviceSigningPublicKey, IdentityVaultEventId, IsoTimestamp, S
 const AGE_ARMOR_MARKER: &str = "BEGIN AGE ENCRYPTED FILE";
 const HEX_32_BYTE_LEN: usize = 64;
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct SymmetricKey(String);
 
 impl SymmetricKey {
@@ -51,7 +52,8 @@ impl serde::Serialize for SymmetricKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct AgeArmoredCiphertext(String);
 
 impl AgeArmoredCiphertext {
@@ -89,7 +91,8 @@ impl serde::Serialize for AgeArmoredCiphertext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct DevicePublicKey(String);
 
 impl DevicePublicKey {
@@ -127,7 +130,8 @@ impl serde::Serialize for DevicePublicKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(from = "String")]
 pub struct MemberLabel(String);
 
 impl MemberLabel {
@@ -165,7 +169,8 @@ impl serde::Serialize for MemberLabel {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct PasswordEntryId(String);
 
 impl PasswordEntryId {
@@ -203,7 +208,8 @@ impl serde::Serialize for PasswordEntryId {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(from = "String")]
 pub struct OpaqueCiphertext(String);
 
 impl OpaqueCiphertext {
@@ -279,7 +285,8 @@ impl serde::Serialize for DecryptedPlaintext {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct SigningSeedHex(String);
 
 impl SigningSeedHex {
@@ -329,7 +336,8 @@ impl Drop for DecryptedPlaintext {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct DeviceIdentitySecret(String);
 
 impl DeviceIdentitySecret {
@@ -395,10 +403,11 @@ impl SymmetricKey {
     }
 }
 
-impl<'de> Deserialize<'de> for SymmetricKey {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for SymmetricKey {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let value = zeroize::Zeroizing::new(value);
+        Self::parse(&value)
     }
 }
 
@@ -416,10 +425,10 @@ impl AgeArmoredCiphertext {
     }
 }
 
-impl<'de> Deserialize<'de> for AgeArmoredCiphertext {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for AgeArmoredCiphertext {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
@@ -432,10 +441,10 @@ impl DevicePublicKey {
     }
 }
 
-impl<'de> Deserialize<'de> for DevicePublicKey {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for DevicePublicKey {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
@@ -449,10 +458,11 @@ impl DeviceIdentitySecret {
     }
 }
 
-impl<'de> Deserialize<'de> for DeviceIdentitySecret {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for DeviceIdentitySecret {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let value = zeroize::Zeroizing::new(value);
+        Self::parse(&value)
     }
 }
 
@@ -466,10 +476,11 @@ impl SigningSeedHex {
     }
 }
 
-impl<'de> Deserialize<'de> for SigningSeedHex {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for SigningSeedHex {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        let value = zeroize::Zeroizing::new(value);
+        Self::parse(&value)
     }
 }
 
@@ -484,24 +495,22 @@ impl PasswordEntryId {
     }
 }
 
-impl<'de> Deserialize<'de> for PasswordEntryId {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for PasswordEntryId {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
-impl<'de> Deserialize<'de> for MemberLabel {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Ok(Self(raw))
+impl From<String> for MemberLabel {
+    fn from(value: String) -> Self {
+        Self(value)
     }
 }
 
-impl<'de> Deserialize<'de> for OpaqueCiphertext {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Ok(Self(raw))
+impl From<String> for OpaqueCiphertext {
+    fn from(value: String) -> Self {
+        Self(value)
     }
 }
 

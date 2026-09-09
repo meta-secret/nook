@@ -5,7 +5,7 @@ use crate::{SecretValue, VaultFormat};
 use std::{fmt, mem};
 
 use crate::errors;
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::Deserialize;
 
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
@@ -20,7 +20,8 @@ pub use nook_auth2::{
     Sha256Hex, SigningSeedHex, SymmetricKey, Url64EncodedString,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(try_from = "String")]
 pub struct StoredVaultYaml(String);
 
 impl StoredVaultYaml {
@@ -58,7 +59,8 @@ impl serde::Serialize for StoredVaultYaml {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize)]
+#[serde(from = "String")]
 pub struct SecretPayloadYaml(String);
 
 impl SecretPayloadYaml {
@@ -150,16 +152,15 @@ impl SecretPayloadYaml {
     }
 }
 
-impl<'de> Deserialize<'de> for StoredVaultYaml {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for StoredVaultYaml {
+    type Error = errors::ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 
-impl<'de> Deserialize<'de> for SecretPayloadYaml {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Ok(Self(raw))
+impl From<String> for SecretPayloadYaml {
+    fn from(value: String) -> Self {
+        Self(value)
     }
 }

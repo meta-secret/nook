@@ -5,11 +5,11 @@ use super::{
     AuthenticationWorkflowMatch, AuthenticationWorkflowObservationIndex,
     AuthenticationWorkflowSnapshot,
 };
-use serde::{Deserialize, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Tsify, Deserialize)]
+#[serde(try_from = "u8")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct AuthenticationFormObservationPriority(u8);
 
@@ -38,20 +38,25 @@ impl Default for AuthenticationFormObservationPriority {
     }
 }
 
-impl<'de> Deserialize<'de> for AuthenticationFormObservationPriority {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        match u8::deserialize(deserializer)? {
+impl TryFrom<u8> for AuthenticationFormObservationPriority {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
             1 => Ok(Self::USERNAME_OR_PASSKEY_ONLY),
             2 => Ok(Self::PASSWORD_FORM),
             3 => Ok(Self::GENERIC_PASSWORD),
             4 => Ok(Self::CURRENT_PASSWORD),
             5 => Ok(Self::ONE_TIME_CODE),
-            value => Err(D::Error::custom(format!(
+            value => Err(format!(
                 "invalid authentication form observation priority: {value}"
-            ))),
+            )),
         }
     }
 }

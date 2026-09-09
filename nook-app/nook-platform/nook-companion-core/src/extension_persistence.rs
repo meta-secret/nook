@@ -6,14 +6,15 @@
 
 //! Portable classification of browser-collected extension persistence state.
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+use serde::{Deserialize, Serialize, Serializer};
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Extension persistence area inspected by smoke and migration checks.
 #[wasm_bindgen]
 #[repr(u32)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum ExtensionPersistenceArea {
     Pairing = 0,
     EventLog = 1,
@@ -29,21 +30,21 @@ impl Serialize for ExtensionPersistenceArea {
     }
 }
 
-impl<'de> Deserialize<'de> for ExtensionPersistenceArea {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // `wasm_bindgen` exposes fieldless enums to JavaScript as their numeric
-        // discriminants. Keep that transport representation at this adapter;
-        // application logic receives only the domain enum.
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for ExtensionPersistenceArea {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::Pairing),
             1 => Ok(Self::EventLog),
             2 => Ok(Self::Provider),
-            value => Err(D::Error::custom(format!(
-                "invalid extension persistence area: {value}"
-            ))),
+            value => Err(format!("invalid extension persistence area: {value}")),
         }
     }
 }

@@ -8,7 +8,7 @@ use crate::errors::{SecretPayloadError, SecretPayloadResult};
 use crate::vault_wire::SecretPayloadYaml;
 use crate::{AuthenticatorSecret, CreditCardSecret, SecretId};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use zeroize::Zeroize;
 
@@ -50,8 +50,8 @@ pub struct SecureNoteSecret {
 }
 
 /// Version of the persisted website-passkey secret payload.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct PasskeySecretVersion(u32);
 
 impl PasskeySecretVersion {
@@ -64,14 +64,19 @@ impl From<PasskeySecretVersion> for u32 {
     }
 }
 
-impl<'de> Deserialize<'de> for PasskeySecretVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for PasskeySecretVersion {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             1 => Ok(Self::CURRENT),
-            _ => Err(de::Error::custom("unsupported passkey payload version")),
+            _ => Err("unsupported passkey payload version".to_owned()),
         }
     }
 }

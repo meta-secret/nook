@@ -31,7 +31,7 @@ use age::{
     secrecy::{self, ExposeSecret},
     x25519,
 };
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use std::{
     io::{Read, Write},
     iter, mem,
@@ -101,21 +101,13 @@ pub struct PasswordEnvelope {
 }
 
 /// Supported persisted password-envelope wire versions.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct PasswordEnvelopeVersion(u32);
 
 impl PasswordEnvelopeVersion {
     pub const LEGACY: Self = Self(1);
     pub const CURRENT: Self = Self(2);
-
-    fn parse(value: u32) -> Result<Self, RejectedPasswordEnvelopeVersion> {
-        match value {
-            1 => Ok(Self::LEGACY),
-            2 => Ok(Self::CURRENT),
-            _ => Err(RejectedPasswordEnvelopeVersion::from_raw(value)),
-        }
-    }
 }
 
 impl From<PasswordEnvelopeVersion> for u32 {
@@ -124,12 +116,21 @@ impl From<PasswordEnvelopeVersion> for u32 {
     }
 }
 
-impl<'de> Deserialize<'de> for PasswordEnvelopeVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+impl TryFrom<u32> for PasswordEnvelopeVersion {
+    type Error = RejectedPasswordEnvelopeVersion;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::LEGACY),
+            2 => Ok(Self::CURRENT),
+            _ => Err(RejectedPasswordEnvelopeVersion::from_raw(value)),
+        }
     }
 }
 
@@ -150,7 +151,8 @@ impl<'de> Deserialize<'de> for PasswordEnvelopeVersion {
 ///       created_at: ...
 ///       envelope: { version, kdf, work_factor, ciphertext }
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize)]
+#[serde(from = "VaultUnlockTagged")]
 pub enum VaultUnlock {
     #[default]
     Keys,
@@ -181,13 +183,12 @@ impl Serialize for VaultUnlock {
     }
 }
 
-impl<'de> Deserialize<'de> for VaultUnlock {
-    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let tagged = VaultUnlockTagged::deserialize(deserializer)?;
-        Ok(match tagged {
+impl From<VaultUnlockTagged> for VaultUnlock {
+    fn from(tagged: VaultUnlockTagged) -> Self {
+        match tagged {
             VaultUnlockTagged::Keys => Self::Keys,
             VaultUnlockTagged::Password { entries } => Self::Passwords { entries },
-        })
+        }
     }
 }
 

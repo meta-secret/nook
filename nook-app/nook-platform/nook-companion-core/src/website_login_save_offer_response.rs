@@ -6,24 +6,27 @@
 
 //! Typed service-worker response boundary for website login-save offers.
 
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Tsify, Deserialize)]
+#[serde(try_from = "u32")]
 #[tsify(type = "0 | 1")]
 pub struct WebsiteLoginSaveOfferDecision(u32);
 
-impl<'de> Deserialize<'de> for WebsiteLoginSaveOfferDecision {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for WebsiteLoginSaveOfferDecision {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             decision @ (0 | 1) => Ok(Self(decision)),
-            _ => Err(D::Error::custom(
-                "login-save offer decision is not supported",
-            )),
+            _ => Err("login-save offer decision is not supported".to_owned()),
         }
     }
 }

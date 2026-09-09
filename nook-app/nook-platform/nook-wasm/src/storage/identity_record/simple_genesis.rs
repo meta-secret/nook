@@ -15,7 +15,7 @@ pub(crate) use event::SimpleGenesisEventInput;
 
 use std::{cell::RefCell, rc::Rc};
 
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 
 use super::{genesis_flow::PendingSimpleGenesisFlow, staged_genesis::StagedSimpleGenesisIdentity};
 use crate::storage::indexed_db;
@@ -24,7 +24,8 @@ use crate::{NookError, conversion};
 
 pub(crate) const PENDING_SIMPLE_GENESIS_KEY: &str = "pending_simple_genesis_v1";
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Deserialize)]
+#[serde(try_from = "PendingSimpleGenesisWire")]
 pub(crate) struct PendingSimpleGenesis {
     pub(crate) store_id: nook_core::StoreId,
     pub(crate) identity_id: nook_core::IdentityId,
@@ -99,12 +100,9 @@ struct PendingSimpleGenesisWire {
     staged_identity: Option<StagedSimpleGenesisIdentity>,
 }
 
-impl<'de> Deserialize<'de> for PendingSimpleGenesis {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let wire = PendingSimpleGenesisWire::deserialize(deserializer)?;
+impl TryFrom<PendingSimpleGenesisWire> for PendingSimpleGenesis {
+    type Error = &'static str;
+    fn try_from(wire: PendingSimpleGenesisWire) -> Result<Self, Self::Error> {
         let event_state = match (wire.event_state, wire.event_yaml) {
             (Some(PendingSimpleGenesisEventWire::AwaitingEvent), None) => {
                 PendingSimpleGenesisEvent::AwaitingEvent
@@ -157,15 +155,11 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
                 }),
                 None,
             ) => {
-                return Err(D::Error::custom(
-                    "pending Simple genesis has both sealed and unsealed signing seeds",
-                ));
+                return Err("pending Simple genesis has both sealed and unsealed signing seeds");
             }
             (None, None) => PendingSimpleGenesisEvent::AwaitingEvent,
             (Some(_), Some(_)) => {
-                return Err(D::Error::custom(
-                    "pending Simple genesis has both current and legacy event state",
-                ));
+                return Err("pending Simple genesis has both current and legacy event state");
             }
         };
         let flow = match (wire.flow, wire.staged_identity) {
@@ -178,9 +172,7 @@ impl<'de> Deserialize<'de> for PendingSimpleGenesis {
                 PendingSimpleGenesisFlow::Staged(current)
             }
             (Some(_), Some(_)) => {
-                return Err(D::Error::custom(
-                    "pending Simple genesis has both current and legacy flow state",
-                ));
+                return Err("pending Simple genesis has both current and legacy flow state");
             }
         };
         Ok(Self {

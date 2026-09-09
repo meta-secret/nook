@@ -118,23 +118,24 @@ pub enum PasskeyCreatedAtEvidence {
     },
 }
 
-impl PasskeyCreatedAtEvidence {
-    pub(super) fn deserialize_legacy<'de, D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum WireEvidence {
-            Explicit(PasskeyCreatedAtEvidence),
-            Legacy(Option<IsoTimestamp>),
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(super) enum PasskeyCreatedAtEvidenceWire {
+    Explicit(PasskeyCreatedAtEvidence),
+    Legacy(Option<IsoTimestamp>),
+}
+impl Default for PasskeyCreatedAtEvidenceWire {
+    fn default() -> Self {
+        Self::Legacy(None)
+    }
+}
+impl From<PasskeyCreatedAtEvidenceWire> for PasskeyCreatedAtEvidence {
+    fn from(wire: PasskeyCreatedAtEvidenceWire) -> Self {
+        match wire {
+            PasskeyCreatedAtEvidenceWire::Explicit(evidence) => evidence,
+            PasskeyCreatedAtEvidenceWire::Legacy(Some(timestamp)) => Self::Known { timestamp },
+            PasskeyCreatedAtEvidenceWire::Legacy(None) => Self::Unavailable,
         }
-
-        Ok(match WireEvidence::deserialize(deserializer)? {
-            WireEvidence::Explicit(evidence) => evidence,
-            WireEvidence::Legacy(Some(timestamp)) => Self::Known { timestamp },
-            WireEvidence::Legacy(None) => Self::Unavailable,
-        })
     }
 }
 
@@ -149,23 +150,24 @@ pub enum PasskeyLastUsedAtEvidence {
     },
 }
 
-impl PasskeyLastUsedAtEvidence {
-    pub(super) fn deserialize_legacy<'de, D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        #[derive(Deserialize)]
-        #[serde(untagged)]
-        enum WireEvidence {
-            Explicit(PasskeyLastUsedAtEvidence),
-            Legacy(Option<IsoTimestamp>),
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub(super) enum PasskeyLastUsedAtEvidenceWire {
+    Explicit(PasskeyLastUsedAtEvidence),
+    Legacy(Option<IsoTimestamp>),
+}
+impl Default for PasskeyLastUsedAtEvidenceWire {
+    fn default() -> Self {
+        Self::Legacy(None)
+    }
+}
+impl From<PasskeyLastUsedAtEvidenceWire> for PasskeyLastUsedAtEvidence {
+    fn from(wire: PasskeyLastUsedAtEvidenceWire) -> Self {
+        match wire {
+            PasskeyLastUsedAtEvidenceWire::Explicit(evidence) => evidence,
+            PasskeyLastUsedAtEvidenceWire::Legacy(Some(timestamp)) => Self::Known { timestamp },
+            PasskeyLastUsedAtEvidenceWire::Legacy(None) => Self::Unavailable,
         }
-
-        Ok(match WireEvidence::deserialize(deserializer)? {
-            WireEvidence::Explicit(evidence) => evidence,
-            WireEvidence::Legacy(Some(timestamp)) => Self::Known { timestamp },
-            WireEvidence::Legacy(None) => Self::Unavailable,
-        })
     }
 }
 

@@ -10,8 +10,7 @@ use crate::{
     AuthenticationFieldCount, AuthenticationSemanticSubmitControlCount,
     MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
 };
-use serde::de::Error as _;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 use url::Url;
 
@@ -49,7 +48,8 @@ pub struct CurrentAuthenticationDisclosureControlRequest {
 }
 
 /// Versioned control facts used only by exceptional credential disclosure.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Tsify, Deserialize)]
+#[serde(try_from = "serde_json::Value")]
 #[serde(rename_all = "camelCase")]
 #[tsify(
     type = "{ schemaVersion: 1; observation: AuthenticationAdvanceControlObservation; genericPasswordFieldCount: number }",
@@ -168,14 +168,10 @@ impl From<RequiredAuthenticationAdvanceControlObservation>
     }
 }
 
-impl<'de> Deserialize<'de> for VersionedAuthenticationDisclosureControlObservation {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let encoded = serde_json::Value::deserialize(deserializer)?;
+impl TryFrom<serde_json::Value> for VersionedAuthenticationDisclosureControlObservation {
+    type Error = serde_json::Error;
+    fn try_from(encoded: serde_json::Value) -> Result<Self, Self::Error> {
         AuthenticationDisclosureControlUntrustedWireDecoder::decode(encoded)
-            .map_err(D::Error::custom)
     }
 }
 

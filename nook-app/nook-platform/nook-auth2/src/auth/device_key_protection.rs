@@ -20,7 +20,7 @@ use getrandom::fill;
 use hkdf::Hkdf;
 use nook_authenticator_domain::PasskeyDeviceProtectionMode;
 use pbkdf2::sha2::Sha256 as Pbkdf2Sha256;
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::fmt;
 use zeroize::{Zeroize, Zeroizing};
@@ -43,8 +43,8 @@ pub use protected_identity::*;
 mod webauthn_bytes;
 pub use webauthn_bytes::*;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct DeviceKeyProtectionVersion(u32);
 
 impl DeviceKeyProtectionVersion {
@@ -54,15 +54,6 @@ impl DeviceKeyProtectionVersion {
 
     pub(crate) const fn to_be_bytes(self) -> [u8; size_of::<u32>()] {
         self.0.to_be_bytes()
-    }
-
-    fn parse(value: u32) -> Result<Self, &'static str> {
-        match value {
-            2 => Ok(Self::PIN),
-            3 => Ok(Self::PASSKEY_DERIVED),
-            4 => Ok(Self::PASSKEY_WRAPPED_LOCAL),
-            _ => Err("unsupported device-key protection version"),
-        }
     }
 }
 
@@ -78,12 +69,22 @@ impl fmt::Display for DeviceKeyProtectionVersion {
     }
 }
 
-impl<'de> Deserialize<'de> for DeviceKeyProtectionVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+impl TryFrom<u32> for DeviceKeyProtectionVersion {
+    type Error = &'static str;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            2 => Ok(Self::PIN),
+            3 => Ok(Self::PASSKEY_DERIVED),
+            4 => Ok(Self::PASSKEY_WRAPPED_LOCAL),
+            _ => Err("unsupported device-key protection version"),
+        }
     }
 }
 

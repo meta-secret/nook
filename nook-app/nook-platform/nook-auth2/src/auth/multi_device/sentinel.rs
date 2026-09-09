@@ -1,7 +1,7 @@
 use super::secret_sharing::{IndexedShare, SentinelSecretSplit, SentinelShareThreshold};
 use crate::{AssessConnectAccessRequest, DeviceIsEnrolledRequest, VaultMetaState};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{Deserialize, Serialize};
 use zeroize::Zeroize;
 
 use super::{DeviceIdentity, VaultKeys, VaultMetaRecord};
@@ -59,21 +59,13 @@ pub struct OpenedSentinelShare {
     pub device_id: String,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "u32")]
 pub struct SentinelShareVersion(u32);
 
 impl SentinelShareVersion {
     pub const LEGACY: Self = Self(1);
     pub const CURRENT: Self = Self(2);
-
-    fn parse(value: u32) -> Result<Self, &'static str> {
-        match value {
-            1 => Ok(Self::LEGACY),
-            2 => Ok(Self::CURRENT),
-            _ => Err("unsupported Sentinel share version"),
-        }
-    }
 }
 
 impl From<SentinelShareVersion> for u32 {
@@ -82,12 +74,21 @@ impl From<SentinelShareVersion> for u32 {
     }
 }
 
-impl<'de> Deserialize<'de> for SentinelShareVersion {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Self::parse(u32::deserialize(deserializer)?).map_err(de::Error::custom)
+impl TryFrom<u32> for SentinelShareVersion {
+    type Error = &'static str;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::LEGACY),
+            2 => Ok(Self::CURRENT),
+            _ => Err("unsupported Sentinel share version"),
+        }
     }
 }
 

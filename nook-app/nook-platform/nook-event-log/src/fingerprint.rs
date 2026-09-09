@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize, de::Error as _};
+use serde::{Deserialize, Serialize};
 
 const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
 
@@ -7,8 +7,8 @@ const SECRET_VERSION_FINGERPRINT_SCHEME: &str = "hmac-sha256:v2:";
 /// The HMAC computation remains in `nook-core`, where plaintext secret domain
 /// values live. The event log owns the serialized opaque value because it is
 /// part of the immutable event schema.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-#[serde(transparent)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String")]
 pub struct SecretFingerprint(String);
 
 impl SecretFingerprint {
@@ -40,10 +40,10 @@ impl SecretFingerprint {
     }
 }
 
-impl<'de> Deserialize<'de> for SecretFingerprint {
-    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-        let raw = String::deserialize(deserializer)?;
-        Self::parse(&raw).map_err(D::Error::custom)
+impl TryFrom<String> for SecretFingerprint {
+    type Error = &'static str;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }
 

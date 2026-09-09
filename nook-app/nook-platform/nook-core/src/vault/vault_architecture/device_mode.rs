@@ -1,8 +1,9 @@
 use super::{ValidationError, ValidationResult, wasm_bindgen};
-use serde::{Deserialize, Deserializer, Serialize, de::Error as DeError};
+use serde::{Deserialize, Serialize};
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Default, Deserialize)]
+#[serde(try_from = "String")]
 #[serde(rename_all = "kebab-case")]
 pub enum DeviceMode {
     /// Passkey PRF deterministically derives the local age/device identity.
@@ -32,12 +33,9 @@ impl DeviceMode {
     }
 }
 
-impl<'de> Deserialize<'de> for DeviceMode {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = String::deserialize(deserializer)?;
-        Self::parse(&value).map_err(D::Error::custom)
+impl TryFrom<String> for DeviceMode {
+    type Error = ValidationError;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::parse(&value)
     }
 }

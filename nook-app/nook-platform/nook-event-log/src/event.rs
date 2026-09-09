@@ -97,7 +97,8 @@ pub struct SentinelShareIssuedPayload {
     pub ciphertext: AgeArmoredCiphertext,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(from = "Vec<PasswordUnlockEntry>")]
 pub enum EpochPasswordState {
     #[default]
     LegacyRetain,
@@ -106,7 +107,8 @@ pub enum EpochPasswordState {
 
 /// Checkpoint metadata replacement. Omitted legacy fields retain the previous
 /// metadata, while an explicit empty array clears every metadata record.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(from = "Vec<StoredSecretRecord>")]
 pub enum EpochMetadataState {
     #[default]
     LegacyRetain,
@@ -119,14 +121,9 @@ impl EpochMetadataState {
     }
 }
 
-impl EpochMetadataState {
-    fn deserialize_epoch_metadata_state<'de, D>(
-        deserializer: D,
-    ) -> Result<EpochMetadataState, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Vec::<StoredSecretRecord>::deserialize(deserializer).map(EpochMetadataState::Replace)
+impl From<Vec<StoredSecretRecord>> for EpochMetadataState {
+    fn from(values: Vec<StoredSecretRecord>) -> Self {
+        Self::Replace(values)
     }
 }
 
@@ -153,14 +150,9 @@ impl EpochPasswordState {
     }
 }
 
-impl EpochPasswordState {
-    fn deserialize_epoch_password_state<'de, D>(
-        deserializer: D,
-    ) -> Result<EpochPasswordState, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        Vec::<PasswordUnlockEntry>::deserialize(deserializer).map(EpochPasswordState::Replace)
+impl From<Vec<PasswordUnlockEntry>> for EpochPasswordState {
+    fn from(values: Vec<PasswordUnlockEntry>) -> Self {
+        Self::Replace(values)
     }
 }
 
@@ -268,14 +260,12 @@ pub enum VaultOperation {
         #[serde(
             default,
             skip_serializing_if = "EpochMetadataState::is_legacy_retain",
-            deserialize_with = "EpochMetadataState::deserialize_epoch_metadata_state",
             serialize_with = "EpochMetadataState::serialize_epoch_metadata_state"
         )]
         rotated_meta_records: EpochMetadataState,
         #[serde(
             default,
             skip_serializing_if = "EpochPasswordState::is_legacy_retain",
-            deserialize_with = "EpochPasswordState::deserialize_epoch_password_state",
             serialize_with = "EpochPasswordState::serialize_epoch_password_state"
         )]
         password_entries: EpochPasswordState,

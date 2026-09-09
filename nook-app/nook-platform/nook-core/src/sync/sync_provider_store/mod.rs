@@ -48,7 +48,8 @@ pub use storage_args::{
 ///
 /// Field names are `camelCase` on the wire to match the structured-clone object
 /// the web layer and e2e seeders read/write directly in `IndexedDB`.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Tsify, Deserialize)]
+#[serde(from = "OAuthFileConfigWire")]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct OAuthFileConfig {
@@ -92,13 +93,9 @@ struct OAuthFileConfigWire {
     icloud_share_target: StoredICloudShareTarget,
 }
 
-impl<'de> Deserialize<'de> for OAuthFileConfig {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let wire = OAuthFileConfigWire::deserialize(deserializer)?;
-        Ok(Self {
+impl From<OAuthFileConfigWire> for OAuthFileConfig {
+    fn from(wire: OAuthFileConfigWire) -> Self {
+        Self {
             preset: wire.preset,
             access_token: wire.access_token,
             refresh_token: wire.refresh_token,
@@ -110,7 +107,7 @@ impl<'de> Deserialize<'de> for OAuthFileConfig {
             folder_id: wire.folder_id,
             icloud_mode: wire.icloud_mode,
             icloud_share_target: wire.icloud_share_target,
-        })
+        }
     }
 }
 

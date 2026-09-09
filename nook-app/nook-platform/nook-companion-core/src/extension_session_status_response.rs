@@ -1,11 +1,12 @@
 //! Closed decoder for extension-session status responses.
 
-use serde::{Deserialize, Deserializer, de::Error as _};
+use serde::Deserialize;
 use tsify::Tsify;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 #[wasm_bindgen]
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize)]
+#[serde(try_from = "u32")]
 pub enum ExtensionSessionDeviceProtectionStatusWire {
     Loading,
     Missing,
@@ -19,12 +20,17 @@ pub enum ExtensionSessionDeviceProtectionStatusWire {
     Unknown,
 }
 
-impl<'de> Deserialize<'de> for ExtensionSessionDeviceProtectionStatusWire {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        match u32::deserialize(deserializer)? {
+impl TryFrom<u32> for ExtensionSessionDeviceProtectionStatusWire {
+    type Error = String;
+    #[cfg_attr(
+        dylint_lib = "nook_domain_api",
+        expect(
+            raw_numeric_public_api,
+            reason = "serialization boundary: admits the existing numeric wire representation"
+        )
+    )]
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
             0 => Ok(Self::Loading),
             1 => Ok(Self::Missing),
             2 => Ok(Self::Plaintext),
@@ -33,9 +39,9 @@ impl<'de> Deserialize<'de> for ExtensionSessionDeviceProtectionStatusWire {
             5 => Ok(Self::PinSetup),
             6 => Ok(Self::Unlocked),
             7 => Ok(Self::Error),
-            value => Err(D::Error::custom(format!(
+            value => Err(format!(
                 "invalid extension session device protection status: {value}"
-            ))),
+            )),
         }
     }
 }
