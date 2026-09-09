@@ -9,6 +9,9 @@ semantics.
 Domain types carry meaning and metadata. API shapes preserve that meaning from
 external decoding through state, behavior, persistence, and results.
 
+Apply the [single-responsibility ownership rule](function-ownership.md) when
+placing domain decisions on these types.
+
 ## Required actions
 
 ### Types and states

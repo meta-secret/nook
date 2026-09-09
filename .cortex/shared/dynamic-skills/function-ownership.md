@@ -2,14 +2,31 @@
 
 ## Priority
 
-This is the primary code-structure rule for every implementation language.
-Every authored function belongs to a meaningful owner.
+This is the repository-wide P1 code-structure rule for every implementation
+language. Every authored function belongs to a meaningful owner.
+Each owner must satisfy the single-responsibility principle.
 
 An owner represents the knowledge, capability, state, lifecycle, or external
 contract required by the operation. A file, module, namespace, or generic
 utility container is not an owner by itself.
 
 ## Required actions
+
+### Single responsibility
+
+- Give each owner one coherent responsibility with one reason to change.
+- Put domain decisions on the type that owns the required knowledge.
+- Keep invariants, selection rules, priority comparisons, and state
+  interpretation with that owner.
+- Keep exhaustive matching that implements a domain rule inside its owner.
+- Let callers orchestrate through methods named for the requested intent.
+- Separate responsibilities that change for independent domain reasons.
+
+For example, `AuthenticationWorkflowMatch::select_candidate` owns candidate
+selection. Its caller must not interpret match variants or compare priorities
+to reconstruct that decision.
+
+### Operation placement
 
 - Put every authored public, private, and nested function on a meaningful
   domain, application, infrastructure, fixture, or framework owner.
@@ -27,6 +44,11 @@ utility container is not an owner by itself.
 
 ## Prohibited actions
 
+- Do not reconstruct an owner's domain decision from its getters or variants
+  in a caller.
+- Do not replace that decision with a chain of mechanical getters.
+- Do not combine independent responsibilities in a god object.
+- Do not add a wrapper whose only purpose is to conceal misplaced behavior.
 - Do not introduce an unowned free function.
 - Do not treat a file, module, namespace, or directory name as function
   ownership.
@@ -54,6 +76,11 @@ Svelte component handlers and lifecycle callbacks belong to the component only
 when they use that component's state or interaction contract. Shared behavior
 moves to its meaningful domain or application owner.
 
+Boundary code may discriminate transport variants for decoding or encoding.
+Presentation code may discriminate public outcomes to choose their display.
+These branches must not introduce selection, eligibility, authorization, or
+other domain rules owned elsewhere.
+
 ## Language applications
 
 - Rust follows
@@ -67,6 +94,8 @@ moves to its meaningful domain or application owner.
 ## Validation
 
 - Treat every new or changed unowned function as a P1 review finding.
+- Treat misplaced domain decisions or mixed owner responsibilities in new or
+  changed code as P1 findings.
 - Inspect public, private, nested, test, callback, and adapter functions.
 - Verify that the selected owner has semantic knowledge or capability required
   by the operation.
