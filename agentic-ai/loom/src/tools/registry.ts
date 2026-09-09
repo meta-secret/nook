@@ -1,3 +1,4 @@
+import type { CortexSessionFailure } from '../commands/cortex-session-clean.ts';
 import { ok, type Result } from 'neverthrow';
 import type { CortexAuditFailure } from '../commands/cortex-audit.ts';
 import {
@@ -235,18 +236,18 @@ export class LoomRequestCatalog {
 
   static async executeRequest(
     request: LoomRequest,
-  ): Promise<Result<LoomCommandResult, CortexAuditFailure>> {
+  ): Promise<
+    Result<LoomCommandResult, CortexAuditFailure | CortexSessionFailure>
+  > {
     switch (request.family) {
       case RequestFamily.PrePush:
         return ok(await PrePushCommand.run(request.prePush));
       case RequestFamily.CortexAudit:
         return CortexAuditCommand.runCortexAudit(request.cortexAudit);
       case RequestFamily.CortexSessionClean:
-        return ok(
-          await CortexSessionDirectory.runCortexSessionClean(
-            request.cortexSessionClean,
-          ),
-        );
+        return new CortexSessionDirectory({
+          repoRoot: RepositoryRoot.find(),
+        }).clean();
       case RequestFamily.SkillScaffold:
         return ok(
           await SkillScaffoldCommand.runSkillScaffold(request.skillScaffold),

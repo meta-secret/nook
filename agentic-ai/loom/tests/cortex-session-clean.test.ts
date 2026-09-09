@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow';
 import {
   mkdirSync,
   mkdtempSync,
@@ -50,8 +51,8 @@ describe('inspectCortexSession', () => {
     CortexSessionCleanScenario.withRepositoryRoot((repoRoot) => {
       const request: InspectCortexSessionRequest = { repoRoot };
       const expected: CortexSessionInspection = { sessionClean: true };
-      expect(CortexSessionDirectory.inspectCortexSession(request)).toEqual(
-        expected,
+      expect(new CortexSessionDirectory(request).inspect()).toEqual(
+        ok(expected),
       );
     });
   });
@@ -62,8 +63,8 @@ describe('inspectCortexSession', () => {
       mkdirSync(nested, recursiveDirectoryOptions);
       const request: InspectCortexSessionRequest = { repoRoot };
       const expected: CortexSessionInspection = { sessionClean: true };
-      expect(CortexSessionDirectory.inspectCortexSession(request)).toEqual(
-        expected,
+      expect(new CortexSessionDirectory(request).inspect()).toEqual(
+        ok(expected),
       );
     });
   });
@@ -78,8 +79,8 @@ describe('inspectCortexSession', () => {
         sessionClean: false,
         activeEntry: path.join('.cortex', '.session', 'nested', 'active.md'),
       };
-      expect(CortexSessionDirectory.inspectCortexSession(request)).toEqual(
-        expected,
+      expect(new CortexSessionDirectory(request).inspect()).toEqual(
+        ok(expected),
       );
     });
   });
@@ -94,8 +95,8 @@ describe('inspectCortexSession', () => {
         sessionClean: false,
         activeEntry: path.join('.cortex', '.session', 'linked'),
       };
-      expect(CortexSessionDirectory.inspectCortexSession(request)).toEqual(
-        expected,
+      expect(new CortexSessionDirectory(request).inspect()).toEqual(
+        ok(expected),
       );
     });
   });
@@ -110,8 +111,8 @@ describe('inspectCortexSession', () => {
         sessionClean: false,
         activeEntry: path.join('.cortex', '.session'),
       };
-      expect(CortexSessionDirectory.inspectCortexSession(request)).toEqual(
-        expected,
+      expect(new CortexSessionDirectory(request).inspect()).toEqual(
+        ok(expected),
       );
     });
   });
@@ -129,8 +130,8 @@ describe('inspectCortexSession', () => {
         sessionClean: false,
         activeEntry: path.join('.cortex', '.session'),
       };
-      expect(CortexSessionDirectory.inspectCortexSession(request)).toEqual(
-        expected,
+      expect(new CortexSessionDirectory(request).inspect()).toEqual(
+        ok(expected),
       );
     });
   });
