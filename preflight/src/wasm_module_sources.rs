@@ -299,7 +299,7 @@ fn find_factory_return_type(node: tree_sitter::Node<'_>, source: &str, source_pa
         && let Some(local) = node
             .named_child(0)
             .filter(|child| child.kind() == "identifier")
-            .and_then(|child| JavaScriptLiteral::semantic_javascript_name(child, source))
+            .and_then(|child| (JavaScriptLiteral { node: child, source: source }).semantic_javascript_name())
     {
         let mut root = node;
         while let Some(parent) = root.parent() {
@@ -341,7 +341,7 @@ let FactoryReturnTraversal { node, value_context, source, source_path, wasm_type
 
     if matches!(value_context, FactoryValueContext::Returned)
         && node.kind() == "new_expression"
-        && let Some(local) = node.child_by_field_name("constructor").and_then(|constructor| JavaScriptLiteral::semantic_javascript_name(constructor, source))
+        && let Some(local) = node.child_by_field_name("constructor").and_then(|constructor| (JavaScriptLiteral { node: constructor, source: source }).semantic_javascript_name())
         && let Some((module, imported)) = imports.get(&local)
         && wasm_type_names.contains(imported)
         && WasmModuleSources::is_wasm_export(module, imported, source_path)
@@ -366,13 +366,13 @@ let FactoryReturnTraversal { node, value_context, source, source_path, wasm_type
 impl WasmModuleSources<'_> {
     fn callable_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
         node.child_by_field_name("name")
-            .and_then(|name| JavaScriptLiteral::semantic_javascript_name(name, source))
+            .and_then(|name| (JavaScriptLiteral { node: name, source: source }).semantic_javascript_name())
             .or_else(|| {
                 let declarator = node.parent()?;
                 (declarator.kind() == "variable_declarator")
                     .then(|| declarator.child_by_field_name("name"))
                     .flatten()
-                    .and_then(|name| JavaScriptLiteral::semantic_javascript_name(name, source))
+                    .and_then(|name| (JavaScriptLiteral { node: name, source: source }).semantic_javascript_name())
             })
     }
 }
@@ -529,7 +529,7 @@ fn collect_imported_bindings(node: tree_sitter::Node<'_>, source: &str, bindings
         return;
     }
     if node.kind() == "variable_declarator"
-        && let Some(local) = node.child_by_field_name("name").and_then(|binding| JavaScriptLiteral::semantic_javascript_name(binding, source))
+        && let Some(local) = node.child_by_field_name("name").and_then(|binding| (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name())
         && node.child_by_field_name("name").is_some_and(ScopedBinding::declaration_is_in_program_scope)
         && let Some(module) = node.child_by_field_name("value").and_then(|value| WasmModuleSources::required_module(value, source))
     {
@@ -537,7 +537,7 @@ fn collect_imported_bindings(node: tree_sitter::Node<'_>, source: &str, bindings
         return;
     }
     if node.kind() == "variable_declarator"
-        && let (Some(local), Some(value)) = (node.child_by_field_name("name").and_then(|binding| JavaScriptLiteral::semantic_javascript_name(binding, source)), node.child_by_field_name("value"))
+        && let (Some(local), Some(value)) = (node.child_by_field_name("name").and_then(|binding| (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()), node.child_by_field_name("value"))
         && let Some(ForwardedExport::Named { imported, module, .. }) = WasmModuleSources::forwarded_namespace_member(local.clone(), value, source, bindings)
     {
         bindings.insert(local, (module, imported));
@@ -561,7 +561,7 @@ impl WasmModuleSources<'_> {
             let mut cursor = node.walk();
             if let Some(local) = node
                 .named_children(&mut cursor)
-                .find_map(|child| JavaScriptLiteral::semantic_javascript_name(child, source))
+                .find_map(|child| (JavaScriptLiteral { node: child, source: source }).semantic_javascript_name())
             {
                 bindings.insert(local, (module.to_owned(), "*".to_owned()));
             }
@@ -570,10 +570,10 @@ impl WasmModuleSources<'_> {
         if node.kind() == "import_specifier"
             && let Some(imported_node) = node.child_by_field_name("name")
             && let Some(imported) =
-                JavaScriptLiteral::semantic_javascript_name(imported_node, source)
+                (JavaScriptLiteral { node: imported_node, source: source }).semantic_javascript_name()
         {
             let local_node = node.child_by_field_name("alias").unwrap_or(imported_node);
-            if let Some(local) = JavaScriptLiteral::semantic_javascript_name(local_node, source) {
+            if let Some(local) = (JavaScriptLiteral { node: local_node, source: source }).semantic_javascript_name() {
                 bindings.insert(local, (module.to_owned(), imported));
             }
             return;
@@ -626,7 +626,7 @@ fn collect_export_statement(node: tree_sitter::Node<'_>, source: &str, imported_
         return;
     }
     if direct_module.is_none() {
-        if let Some(exported) = node.named_child(0).filter(|declaration| matches!(declaration.kind(), "function_declaration" | "generator_function_declaration" | "class_declaration")).and_then(|declaration| declaration.child_by_field_name("name")).and_then(|name| JavaScriptLiteral::semantic_javascript_name(name, source))
+        if let Some(exported) = node.named_child(0).filter(|declaration| matches!(declaration.kind(), "function_declaration" | "generator_function_declaration" | "class_declaration")).and_then(|declaration| declaration.child_by_field_name("name")).and_then(|name| (JavaScriptLiteral { node: name, source: source }).semantic_javascript_name())
         {
             exports.push(ForwardedExport::Named { exported: exported.clone(), imported: exported, module: String::new() });
             return;
@@ -647,10 +647,10 @@ fn collect_export_statement(node: tree_sitter::Node<'_>, source: &str, imported_
             let Some(local_node) = specifier.child_by_field_name("name") else {
                 continue;
             };
-            let Some(local) = JavaScriptLiteral::semantic_javascript_name(local_node, source) else {
+            let Some(local) = (JavaScriptLiteral { node: local_node, source: source }).semantic_javascript_name() else {
                 continue;
             };
-            let exported = specifier.child_by_field_name("alias").and_then(|alias| JavaScriptLiteral::semantic_javascript_name(alias, source)).unwrap_or_else(|| local.clone());
+            let exported = specifier.child_by_field_name("alias").and_then(|alias| (JavaScriptLiteral { node: alias, source: source }).semantic_javascript_name()).unwrap_or_else(|| local.clone());
             if let Some(module) = &direct_module {
                 exports.push(ForwardedExport::Named { exported, imported: local, module: module.clone() });
             } else if let Some((module, imported)) = imported_bindings.get(&local) {
@@ -679,7 +679,7 @@ impl WasmModuleSources<'_> {
             if let Some(local) = children
                 .iter()
                 .find(|child| child.kind() == "identifier")
-                .and_then(|child| JavaScriptLiteral::semantic_javascript_name(*child, source))
+                .and_then(|child| (JavaScriptLiteral { node: *child, source: source }).semantic_javascript_name())
                 && let Some((module, imported)) = imports.get(&local)
             {
                 return vec![ForwardedExport::Named {
@@ -715,10 +715,7 @@ impl WasmModuleSources<'_> {
             .filter(|child| child.kind() == "variable_declarator")
             .filter_map(|declarator| {
                 WasmModuleSources::forwarded_namespace_member(
-                    JavaScriptLiteral::semantic_javascript_name(
-                        declarator.child_by_field_name("name")?,
-                        source,
-                    )?,
+                    (JavaScriptLiteral { node: declarator.child_by_field_name("name")?, source: source }).semantic_javascript_name()?,
                     declarator.child_by_field_name("value")?,
                     source,
                     imports,
@@ -736,7 +733,7 @@ impl WasmModuleSources<'_> {
         imports: &HashMap<String, (String, String)>,
     ) -> Option<ForwardedExport> {
         let namespace = value.child_by_field_name("object")?;
-        let namespace_name = JavaScriptLiteral::semantic_javascript_name(namespace, source)?;
+        let namespace_name = (JavaScriptLiteral { node: namespace, source: source }).semantic_javascript_name()?;
         if !ScopedBinding::root_binding_is_visible(namespace, &namespace_name, source) {
             return None;
         }
@@ -747,7 +744,7 @@ impl WasmModuleSources<'_> {
         let imported = value
             .child_by_field_name("property")
             .or_else(|| value.child_by_field_name("index"))
-            .and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))?;
+            .and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name())?;
         Some(ForwardedExport::Named {
             exported,
             imported,
@@ -809,7 +806,7 @@ fn collect_commonjs_export(node: tree_sitter::Node<'_>, source: &str, imported_b
 #[rustfmt::skip]
 impl WasmModuleSources<'_> {
 fn forwarded_namespace_identifier(node: tree_sitter::Node<'_>, source: &str, imports: &HashMap<String, (String, String)>) -> Option<String> {
-    let name = JavaScriptLiteral::semantic_javascript_name(node, source)?;
+    let name = (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name()?;
     let (module, imported) = imports.get(&name)?;
     (imported == "*" && ScopedBinding::root_binding_is_visible(node, &name, source)).then(|| module.clone())
 }
@@ -825,7 +822,7 @@ impl WasmModuleSources<'_> {
             property.kind(),
             "shorthand_property_identifier" | "shorthand_property_identifier_pattern"
         ) {
-            let exported = JavaScriptLiteral::semantic_javascript_name(property, source)?;
+            let exported = (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()?;
             let (module, imported) = imports.get(&exported)?;
             return Some(ForwardedExport::Named {
                 exported,
@@ -834,10 +831,7 @@ impl WasmModuleSources<'_> {
             });
         }
         WasmModuleSources::forwarded_namespace_member(
-            JavaScriptLiteral::semantic_javascript_name(
-                property.child_by_field_name("key")?,
-                source,
-            )?,
+            (JavaScriptLiteral { node: property.child_by_field_name("key")?, source: source }).semantic_javascript_name()?,
             property.child_by_field_name("value")?,
             source,
             imports,
@@ -853,7 +847,7 @@ impl WasmModuleSources<'_> {
     ) -> Option<(String, String)> {
         WasmModuleSources::required_member(node, source).or_else(|| {
             let object = node.child_by_field_name("object")?;
-            let name = JavaScriptLiteral::semantic_javascript_name(object, source)?;
+            let name = (JavaScriptLiteral { node: object, source: source }).semantic_javascript_name()?;
             if !ScopedBinding::root_binding_is_visible(object, &name, source) {
                 return None;
             }
@@ -863,7 +857,7 @@ impl WasmModuleSources<'_> {
                     .child_by_field_name("property")
                     .or_else(|| node.child_by_field_name("index"))
                     .and_then(|property| {
-                        JavaScriptLiteral::semantic_javascript_name(property, source)
+                        (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()
                     })?;
                 Some((module.clone(), imported))
             })?
@@ -883,7 +877,7 @@ impl WasmModuleSources<'_> {
         }
         node.child_by_field_name("property")
             .or_else(|| node.child_by_field_name("index"))
-            .and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))
+            .and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name())
     }
 }
 
@@ -897,7 +891,7 @@ impl WasmModuleSources<'_> {
         let imported = node
             .child_by_field_name("property")
             .or_else(|| node.child_by_field_name("index"))
-            .and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))?;
+            .and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name())?;
         Some((module, imported))
     }
 }

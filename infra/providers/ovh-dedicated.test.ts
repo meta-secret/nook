@@ -7,9 +7,10 @@ import { describe, expect, test } from "bun:test";
 
 import {
   OvhDedicatedCreateOvhSignature,
-  OvhDedicatedIsTerminalTaskFailure,
+  OvhTaskOutcome,
   OvhTaskStatus,
-  OvhDedicatedRequiresReinstall,
+  OvhReinstallIntent,
+  ReinstallDecision,
 } from "./ovh-dedicated";
 
 describe("OVH dedicated provider", () => {
@@ -37,10 +38,12 @@ describe("OVH dedicated provider", () => {
       ...blankInput,
       currentOperatingSystem: "debian13_64",
     };
-    expect(new OvhDedicatedRequiresReinstall(blankInput).execute()).toBeTrue();
-    expect(
-      new OvhDedicatedRequiresReinstall(convergedInput).execute(),
-    ).toBeFalse();
+    expect(new OvhReinstallIntent(blankInput).decision()).toBe(
+      ReinstallDecision.Required,
+    );
+    expect(new OvhReinstallIntent(convergedInput).decision()).toBe(
+      ReinstallDecision.Converged,
+    );
   });
 
   test("refuses to replace an installed OS without disaster recovery", () => {
@@ -49,7 +52,7 @@ describe("OVH dedicated provider", () => {
       currentOperatingSystem: "debian12_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(() => new OvhDedicatedRequiresReinstall(input).execute()).toThrow(
+    expect(() => new OvhReinstallIntent(input).decision()).toThrow(
       "refusing to replace",
     );
   });
@@ -60,24 +63,24 @@ describe("OVH dedicated provider", () => {
       currentOperatingSystem: "debian13_64",
       desiredOperatingSystem: "debian13_64",
     };
-    expect(new OvhDedicatedRequiresReinstall(input).execute()).toBeTrue();
+    expect(new OvhReinstallIntent(input).decision()).toBe(
+      ReinstallDecision.Required,
+    );
   });
 
   test("recognizes every OVH terminal reinstall failure", () => {
-    expect(
-      new OvhDedicatedIsTerminalTaskFailure(OvhTaskStatus.Cancelled).execute(),
-    ).toBeTrue();
-    expect(
-      new OvhDedicatedIsTerminalTaskFailure(
-        OvhTaskStatus.CustomerError,
-      ).execute(),
-    ).toBeTrue();
-    expect(
-      new OvhDedicatedIsTerminalTaskFailure(OvhTaskStatus.OvhError).execute(),
-    ).toBeTrue();
-    expect(
-      new OvhDedicatedIsTerminalTaskFailure(OvhTaskStatus.Doing).execute(),
-    ).toBeFalse();
+    expect(OvhTaskStatus.outcome(OvhTaskStatus.Cancelled)).toBe(
+      OvhTaskOutcome.Failed,
+    );
+    expect(OvhTaskStatus.outcome(OvhTaskStatus.CustomerError)).toBe(
+      OvhTaskOutcome.Failed,
+    );
+    expect(OvhTaskStatus.outcome(OvhTaskStatus.OvhError)).toBe(
+      OvhTaskOutcome.Failed,
+    );
+    expect(OvhTaskStatus.outcome(OvhTaskStatus.Doing)).toBe(
+      OvhTaskOutcome.Pending,
+    );
   });
 
   test("accepts only the exact durable recovery operation", () => {

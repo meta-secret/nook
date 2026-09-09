@@ -54,9 +54,9 @@ impl LocalWasmReexports<'_> {
             && let Some(local_name) = node.child_by_field_name("name")
             && let Some(alias) = node.child_by_field_name("alias")
             && let Some(local_name_text) =
-                JavaScriptLiteral::semantic_javascript_name(local_name, source)
+                (JavaScriptLiteral { node: local_name, source: source }).semantic_javascript_name()
             && imported_callable_bindings.contains(&local_name_text)
-            && JavaScriptLiteral::semantic_javascript_name(alias, source)
+            && (JavaScriptLiteral { node: alias, source: source }).semantic_javascript_name()
                 .is_some_and(|alias_text| alias_text != local_name_text)
         {
             lines.push(first_line + local_name.start_position().row);

@@ -218,7 +218,7 @@ impl DynamicWasmCallables<'_> {
                 continue;
             };
             let Some(authored_name) =
-                JavaScriptLiteral::semantic_javascript_name(authored, context.source)
+                (JavaScriptLiteral { node: authored, source: context.source }).semantic_javascript_name()
             else {
                 continue;
             };
@@ -231,7 +231,7 @@ impl DynamicWasmCallables<'_> {
             {
                 continue;
             }
-            if JavaScriptLiteral::semantic_javascript_name(binding, context.source)
+            if (JavaScriptLiteral { node: binding, source: context.source }).semantic_javascript_name()
                 .is_some_and(|binding_name| binding_name != authored_name)
             {
                 lines.push(context.first_line + authored.start_position().row);
@@ -303,7 +303,7 @@ impl DynamicWasmCallables<'_> {
     fn member_name(node: tree_sitter::Node<'_>, source: &str) -> Option<String> {
         node.child_by_field_name("property")
             .or_else(|| node.child_by_field_name("index"))
-            .and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))
+            .and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name())
     }
 }
 

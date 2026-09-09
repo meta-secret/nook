@@ -14,6 +14,7 @@ import {
   ProvisionResult,
   RecoveryMarkerStatus,
   OvhTaskStatus,
+  OvhTaskOutcome,
   DedicatedServerField,
   type DedicatedServerDefinition,
   type DedicatedServerInventory,
@@ -30,6 +31,7 @@ import {
 } from "./ovh-dedicated-contracts";
 export {
   OvhTaskStatus,
+  OvhTaskOutcome,
   type OvhRecoveryMarker,
 } from "./ovh-dedicated-contracts";
 import { OvhDocument } from "./ovh-dedicated-document";
@@ -283,7 +285,12 @@ systemctl restart ssh.service
   }
 }
 
-export class OvhDedicatedRequiresReinstall {
+export enum ReinstallDecision {
+  Required = "required",
+  Converged = "converged",
+}
+
+export class OvhReinstallIntent {
   constructor(
     private readonly request: {
       allowReinstall: boolean;
@@ -291,29 +298,17 @@ export class OvhDedicatedRequiresReinstall {
       desiredOperatingSystem: string;
     },
   ) {}
-  execute(): boolean {
+  decision(): ReinstallDecision {
     const input = this.request;
 
-    if (input.allowReinstall) return true;
+    if (input.allowReinstall) return ReinstallDecision.Required;
     if (input.currentOperatingSystem === input.desiredOperatingSystem)
-      return false;
-    if (input.currentOperatingSystem === "none_64") return true;
+      return ReinstallDecision.Converged;
+    if (input.currentOperatingSystem === "none_64")
+      return ReinstallDecision.Required;
     throw new Error(
       `refusing to replace ${input.currentOperatingSystem}; declare disaster recovery explicitly`,
     );
-  }
-}
-
-export class OvhDedicatedIsTerminalTaskFailure {
-  constructor(private readonly request: OvhTaskStatus) {}
-  execute(): boolean {
-    const status = this.request;
-
-    return [
-      OvhTaskStatus.Cancelled,
-      OvhTaskStatus.CustomerError,
-      OvhTaskStatus.OvhError,
-    ].includes(status);
   }
 }
 
@@ -522,11 +517,11 @@ class PreparedOvhReinstall {
     };
     const current = await new OvhDedicatedGetServer(context).execute();
     if (
-      !new OvhDedicatedRequiresReinstall({
+      new OvhReinstallIntent({
         allowReinstall: context.allowReinstall,
         currentOperatingSystem: current.os,
         desiredOperatingSystem: context.definition.operatingSystem,
-      }).execute()
+      }).decision() === ReinstallDecision.Converged
     ) {
       return { kind: ReinstallDispatchKind.Unchanged };
     }
@@ -596,8 +591,9 @@ class SubmittedOvhReinstall {
         credentials: context.credentials,
         request,
       }).execute();
-      if (task.status === OvhTaskStatus.Done) break;
-      if (new OvhDedicatedIsTerminalTaskFailure(task.status).execute())
+      const outcome = OvhTaskStatus.outcome(task.status);
+      if (outcome === OvhTaskOutcome.Completed) break;
+      if (outcome === OvhTaskOutcome.Failed)
         throw new Error("OVH reinstall task ended in " + task.status);
       process.stderr.write("OVH reinstall " + task.status + "\n");
       await Bun.sleep(15_000);
@@ -622,11 +618,11 @@ class OvhDedicatedProvision {
     if (recoveryMarker.status === RecoveryMarkerStatus.Pending)
       return ProvisionResult.Reinstalled;
     if (
-      !new OvhDedicatedRequiresReinstall({
+      new OvhReinstallIntent({
         allowReinstall: input.allowReinstall,
         currentOperatingSystem: current.os,
         desiredOperatingSystem: input.definition.operatingSystem,
-      }).execute()
+      }).decision() === ReinstallDecision.Converged
     )
       return ProvisionResult.Unchanged;
     const submission = await SubmittedOvhReinstall.submit(
@@ -706,11 +702,11 @@ async function main(): Promise<void> {
     const required =
       recoveryMarker.status === RecoveryMarkerStatus.Pending
         ? true
-        : new OvhDedicatedRequiresReinstall({
+        : new OvhReinstallIntent({
             allowReinstall: args.allowReinstall,
             currentOperatingSystem: server.os,
             desiredOperatingSystem: definition.operatingSystem,
-          }).execute();
+          }).decision() === ReinstallDecision.Required;
     if (required) {
       await PreparedOvhReinstall.prepare({
         allowReinstall: args.allowReinstall,

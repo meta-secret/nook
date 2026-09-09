@@ -100,7 +100,7 @@ fn constructed_wasm_class(node: tree_sitter::Node<'_>, source: &str, classes: &H
     if node.kind() == "new_expression" {
         return node
             .child_by_field_name("constructor")
-            .and_then(|constructor| JavaScriptLiteral::semantic_javascript_name(constructor, source))
+            .and_then(|constructor| (JavaScriptLiteral { node: constructor, source: source }).semantic_javascript_name())
             .and_then(|name| classes.get(&name).cloned());
     }
     let mut cursor = node.walk();
@@ -124,7 +124,7 @@ pub(super) fn collect_typed_wasm_instances(node: tree_sitter::Node<'_>, source: 
         && let Some(mut scoped) = ScopedBinding::scoped_binding(binding, source, Some(wasm_type.clone()), None)
     {
         if node.kind() == "public_field_definition"
-            && let Some(name) = JavaScriptLiteral::semantic_javascript_name(binding, source)
+            && let Some(name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
         {
             scoped.name = format!("this.{name}");
             if let Some(body) = node.parent() {
@@ -221,7 +221,7 @@ impl WasmInstanceFactories<'_> {
         if node.kind() == "namespace_import"
             && let Some(local) = node
                 .named_child(0)
-                .and_then(|child| JavaScriptLiteral::semantic_javascript_name(child, source))
+                .and_then(|child| (JavaScriptLiteral { node: child, source: source }).semantic_javascript_name())
         {
             for called in called_bindings
                 .iter()
@@ -243,11 +243,11 @@ impl WasmInstanceFactories<'_> {
             && !WasmInstanceFactories::node_is_type_only_import(node, source)
             && let Some(imported_node) = node.child_by_field_name("name")
             && let Some(imported_name) =
-                JavaScriptLiteral::semantic_javascript_name(imported_node, source)
+                (JavaScriptLiteral { node: imported_node, source: source }).semantic_javascript_name()
         {
             let local_node = node.child_by_field_name("alias").unwrap_or(imported_node);
             if let Some(local_name) =
-                JavaScriptLiteral::semantic_javascript_name(local_node, source)
+                (JavaScriptLiteral { node: local_node, source: source }).semantic_javascript_name()
                 && called_bindings.contains(&local_name)
                 && let Some(wasm_type) = WasmModuleSources::wasm_factory_return_type(
                     module,
@@ -294,9 +294,9 @@ impl WasmInstanceFactories<'_> {
                 .child_by_field_name("property")
                 .or_else(|| value.child_by_field_name("index"))
             && let Some(callable_name) =
-                JavaScriptLiteral::semantic_javascript_name(property, source)
+                (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()
             && callable_names.contains(&callable_name)
-            && let Some(receiver_name) = JavaScriptLiteral::semantic_javascript_name(object, source)
+            && let Some(receiver_name) = (JavaScriptLiteral { node: object, source: source }).semantic_javascript_name()
         {
             receivers.insert(receiver_name);
         }
@@ -329,7 +329,7 @@ impl WasmInstanceFactories<'_> {
             && let Some(binding) = node
                 .child_by_field_name("name")
                 .or_else(|| node.child_by_field_name("left"))
-            && let Some(binding_name) = JavaScriptLiteral::semantic_javascript_name(binding, source)
+            && let Some(binding_name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
             && receivers.contains(&binding_name)
             && let Some(value) = node
                 .child_by_field_name("value")

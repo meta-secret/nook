@@ -45,7 +45,7 @@ impl DynamicWasmAliases<'_> {
             && !DynamicWasmAliases::node_is_type_only_import(node, source)
             && let Some(imported) = node.child_by_field_name("name")
             && let Some(imported_name) =
-                JavaScriptLiteral::semantic_javascript_name(imported, source)
+                (JavaScriptLiteral { node: imported, source: source }).semantic_javascript_name()
             && let Some(namespace_source) =
                 WasmModuleSources::wasm_namespace_export_source(module, &imported_name, source_path)
         {
@@ -83,7 +83,7 @@ impl DynamicWasmAliases<'_> {
             let mut cursor = node.walk();
             if let Some(namespace) = node
                 .named_children(&mut cursor)
-                .find_map(|child| JavaScriptLiteral::semantic_javascript_name(child, source))
+                .find_map(|child| (JavaScriptLiteral { node: child, source: source }).semantic_javascript_name())
             {
                 for wasm_type in wasm_type_names {
                     if WasmModuleSources::is_wasm_export(module, wasm_type, source_path) {
@@ -97,7 +97,7 @@ impl DynamicWasmAliases<'_> {
         if node.kind() == "import_specifier"
             && let Some(imported) = node.child_by_field_name("name")
             && let Some(imported_name) =
-                JavaScriptLiteral::semantic_javascript_name(imported, source)
+                (JavaScriptLiteral { node: imported, source: source }).semantic_javascript_name()
             && wasm_type_names.contains(&imported_name)
             && WasmModuleSources::is_wasm_export(module, &imported_name, source_path)
         {
@@ -185,7 +185,7 @@ impl DynamicWasmAliases<'_> {
                 .is_ok_and(|owner| matches!(owner, "window" | "globalThis"))
                 && property
                     .and_then(|property| {
-                        JavaScriptLiteral::semantic_javascript_name(property, source)
+                        (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()
                     })
                     .is_some_and(|property| property == WASM_RUNTIME_RECEIVER_PROPERTY);
         }
@@ -328,7 +328,7 @@ impl DynamicWasmAliases<'_> {
         if binding.kind() == "identifier"
             && let Some(module) = DynamicWasmAliases::loaded_module_specifier(value, source)
             && WasmModuleSources::is_wasm_callable_export(&module, "default", source_path)
-            && let Some(name) = JavaScriptLiteral::semantic_javascript_name(binding, source)
+            && let Some(name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
         {
             lines.push(first_line + binding.start_position().row);
             if let Some(scoped) = ScopedBinding::scoped_binding(binding, source, None, None) {
@@ -450,20 +450,20 @@ fn collect_factory_result_member_alias(binding: tree_sitter::Node<'_>, value: tr
     let Some(function) = receiver.child_by_field_name("function") else {
         return false;
     };
-    let Some(factory_name) = JavaScriptLiteral::callable_expression_name(function, source) else {
+    let Some(factory_name) = (JavaScriptLiteral { node: function, source: source }).callable_expression_name() else {
         return false;
     };
     let wasm_type = function.utf8_text(source.as_bytes()).ok().filter(|_| DynamicWasmAliases::callable_binding_is_visible(function, source)).and_then(|name| factories.get(name).cloned()).or_else(|| DynamicWasmAliases::scoped_wasm_type_visible(function, &factory_name, source, scoped_factories));
     let Some(callable) = wasm_type
         .and_then(|owner| wasm_types.methods.get(&owner))
         .and_then(|methods| {
-            value.child_by_field_name("property").or_else(|| value.child_by_field_name("index")).and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source)).filter(|name| methods.contains(name))
+            value.child_by_field_name("property").or_else(|| value.child_by_field_name("index")).and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()).filter(|name| methods.contains(name))
         })
     else {
         return false;
     };
     let binding_node = binding.child_by_field_name("property").or_else(|| binding.child_by_field_name("index")).unwrap_or(binding);
-    let Some(binding_name) = JavaScriptLiteral::semantic_javascript_name(binding_node, source) else {
+    let Some(binding_name) = (JavaScriptLiteral { node: binding_node, source: source }).semantic_javascript_name() else {
         return false;
     };
     if binding_name != callable {
@@ -541,7 +541,7 @@ impl DynamicWasmAliases<'_> {
         if reference.kind() != "identifier" {
             return None;
         }
-        let name = JavaScriptLiteral::semantic_javascript_name(reference, source)?;
+        let name = (JavaScriptLiteral { node: reference, source: source }).semantic_javascript_name()?;
         let mut root = reference;
         while let Some(parent) = root.parent() {
             root = parent;
@@ -559,7 +559,7 @@ impl DynamicWasmAliases<'_> {
     ) -> Option<tree_sitter::Node<'a>> {
         if node.kind() == "variable_declarator"
             && let Some(binding) = node.child_by_field_name("name")
-            && JavaScriptLiteral::semantic_javascript_name(binding, source).as_deref() == Some(name)
+            && (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name().as_deref() == Some(name)
             && let Some(scoped) = ScopedBinding::scoped_binding(binding, source, None, None)
             && ScopedBinding::deferred_assignment_executes(reference, &scoped, source)
             && ScopedBinding::scoped_binding_is_visible(reference, name, source, &[scoped])
@@ -607,7 +607,7 @@ fn value_is_wasm_instance(value: tree_sitter::Node<'_>, source: &str, source_pat
     }
     if value.kind() == "call_expression"
         && let Some(function) = value.child_by_field_name("function")
-        && let Some(name) = JavaScriptLiteral::callable_expression_name(function, source)
+        && let Some(name) = (JavaScriptLiteral { node: function, source: source }).callable_expression_name()
     {
         if matches!(
             function.kind(),
@@ -689,7 +689,7 @@ impl DynamicWasmAliases<'_> {
         let namespace = constructor.child_by_field_name("object")?;
         let class_name = constructor
             .child_by_field_name("property")
-            .and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))?;
+            .and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name())?;
         let namespace_name = namespace.utf8_text(source.as_bytes()).ok()?;
         let namespace_is_wasm = (wasm_namespace_bindings.contains_key(namespace_name)
             && ScopedBinding::root_binding_is_visible(namespace, namespace_name, source))
@@ -711,13 +711,13 @@ fn copied_wasm_class(node: tree_sitter::Node<'_>, reference: tree_sitter::Node<'
     if node.kind() == "variable_declarator"
         && let (Some(pattern), Some(namespace)) = (node.child_by_field_name("name"), node.child_by_field_name("value"))
         && pattern.kind() == "object_pattern"
-        && let Some(namespace_name) = JavaScriptLiteral::semantic_javascript_name(namespace, source)
+        && let Some(namespace_name) = (JavaScriptLiteral { node: namespace, source: source }).semantic_javascript_name()
         && ((namespaces.contains_key(&namespace_name) && ScopedBinding::root_binding_is_visible(namespace, &namespace_name, source)) || DynamicWasmAliases::scoped_wasm_module_visible(namespace, &namespace_name, source, scoped_namespaces).is_some())
     {
         let mut cursor = pattern.walk();
         if let Some(wasm_type) = pattern.named_children(&mut cursor).find_map(|pair| {
-            let key = pair.child_by_field_name("key").and_then(|key| JavaScriptLiteral::semantic_javascript_name(key, source))?;
-            let alias = pair.child_by_field_name("value").and_then(|value| JavaScriptLiteral::semantic_javascript_name(value, source))?;
+            let key = pair.child_by_field_name("key").and_then(|key| (JavaScriptLiteral { node: key, source: source }).semantic_javascript_name())?;
+            let alias = pair.child_by_field_name("value").and_then(|value| (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name())?;
             (alias == name && wasm_type_names.contains(&key)).then_some(key)
         }) {
             return Some(wasm_type);
@@ -730,8 +730,8 @@ fn copied_wasm_class(node: tree_sitter::Node<'_>, reference: tree_sitter::Node<'
             node.child_by_field_name("value")
                 .or_else(|| node.child_by_field_name("right")),
         )
-        && JavaScriptLiteral::semantic_javascript_name(binding, source).as_deref() == Some(name)
-        && let Some(source_name) = JavaScriptLiteral::semantic_javascript_name(value, source)
+        && (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name().as_deref() == Some(name)
+        && let Some(source_name) = (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name()
         && ScopedBinding::root_binding_is_visible(value, &source_name, source)
         && let Some(wasm_type) = classes.get(&source_name)
         && let Some(mut scoped) = ScopedBinding::scoped_binding(binding, source, Some(wasm_type.clone()), None)

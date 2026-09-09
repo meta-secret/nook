@@ -109,7 +109,8 @@ export class OvhDocument {
     )
       throw new OvhDocumentError("task");
     const status = Object.values(OvhTaskStatus).find(
-      (status) => status === value.status,
+      (status): status is OvhTaskStatus =>
+        typeof status === "string" && status === value.status,
     );
     if (!status) throw new OvhDocumentError("task status");
     return { taskId: value.taskId, status };

@@ -1,10 +1,8 @@
 use super::{DeliveryRun, RunConclusion, RunExecution};
 
-impl DeliveryRun {
-    pub(super) fn select_successful_main_run<'a>(
-        selection: MainRunSelection<'a>,
-    ) -> crate::HiveResult<&'a str> {
-        let MainRunSelection { runs, merge_commit } = selection;
+impl<'a> MainRunSelection<'a> {
+    pub(super) fn select_successful_main_run(self) -> crate::HiveResult<&'a str> {
+        let MainRunSelection { runs, merge_commit } = self;
         for run in runs {
             match run.outcome() {
                 RunOutcome::Pending | RunOutcome::Superseded => continue,
@@ -46,10 +44,11 @@ mod tests {
             run("repair", "failure", "2026-07-28T01:00:00Z"),
             run("descendant", "success", "2026-07-28T02:00:00Z"),
         ];
-        let error = DeliveryRun::select_successful_main_run(MainRunSelection {
+        let error = (MainRunSelection {
             runs: &runs,
             merge_commit: "merge",
         })
+        .select_successful_main_run()
         .err()
         .ok_or_else(|| crate::HiveError::message("an explicit failure must remain terminal"))?;
         assert!(error.to_string().contains("repair"));
@@ -63,10 +62,11 @@ mod tests {
             run("descendant", "success", "2026-07-28T02:00:00Z"),
         ];
         assert_eq!(
-            DeliveryRun::select_successful_main_run(MainRunSelection {
+            (MainRunSelection {
                 runs: &runs,
                 merge_commit: "merge"
-            })?,
+            })
+            .select_successful_main_run()?,
             "descendant"
         );
         Ok(())
@@ -80,10 +80,11 @@ mod tests {
             run("second", "success", "2026-07-28T02:00:00Z"),
         ];
         assert_eq!(
-            DeliveryRun::select_successful_main_run(MainRunSelection {
+            (MainRunSelection {
                 runs: &runs,
                 merge_commit: "merge"
-            })?,
+            })
+            .select_successful_main_run()?,
             "first"
         );
         Ok(())
@@ -111,16 +112,19 @@ impl DeliveryRun {
         if self.status != RunExecution::Completed {
             return RunOutcome::Pending;
         }
-        match &self.conclusion {
-            RunConclusion::Success => RunOutcome::Successful {
-                head_sha: &self.head_sha,
-            },
+        self.conclusion.completed_outcome(&self.head_sha)
+    }
+}
+impl RunConclusion {
+    fn completed_outcome<'a>(&'a self, head_sha: &'a str) -> RunOutcome<'a> {
+        match self {
+            RunConclusion::Success => RunOutcome::Successful { head_sha },
             RunConclusion::Cancelled | RunConclusion::Skipped | RunConclusion::Neutral => {
                 RunOutcome::Superseded
             }
             RunConclusion::Other(_) => RunOutcome::Failed {
-                head_sha: &self.head_sha,
-                conclusion: &self.conclusion,
+                head_sha,
+                conclusion: self,
             },
         }
     }

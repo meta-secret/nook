@@ -65,7 +65,7 @@ impl WasmMemberAliases<'_> {
                     scoped_wasm_namespaces,
                     scoped_wasm_instances,
                 ) && let Some(name) =
-                    JavaScriptLiteral::semantic_javascript_name(binding, source)
+                    (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
                 {
                     if name != callable {
                         lines.push(first_line + binding.start_position().row);
@@ -147,7 +147,7 @@ impl WasmMemberAliases<'_> {
         callables: &mut Vec<ScopedBinding>,
         lines: &mut Vec<usize>,
     ) -> bool {
-        let Some(owner) = JavaScriptLiteral::semantic_javascript_name(value, source) else {
+        let Some(owner) = (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name() else {
             return false;
         };
         let mut found = false;
@@ -156,7 +156,7 @@ impl WasmMemberAliases<'_> {
             let Some(property) = pair.child_by_field_name("key") else {
                 continue;
             };
-            let Some(property_name) = JavaScriptLiteral::semantic_javascript_name(property, source)
+            let Some(property_name) = (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()
             else {
                 continue;
             };
@@ -165,7 +165,7 @@ impl WasmMemberAliases<'_> {
                 continue;
             }
             let binding = pair.child_by_field_name("value").unwrap_or(property);
-            if JavaScriptLiteral::semantic_javascript_name(binding, source)
+            if (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
                 .is_some_and(|name| name != property_name)
             {
                 lines.push(first_line + property.start_position().row);
@@ -210,11 +210,11 @@ impl WasmMemberAliases<'_> {
             if child.kind() == "pair_pattern"
                 && let Some(authored_name) = child.child_by_field_name("key")
                 && let Some(name) =
-                    JavaScriptLiteral::semantic_javascript_name(authored_name, source)
+                    (JavaScriptLiteral { node: authored_name, source: source }).semantic_javascript_name()
                 && callable_names.contains(&name)
                 && WasmModuleSources::is_wasm_callable_export(module, &name, source_path)
                 && let Some(binding) = child.child_by_field_name("value")
-                && JavaScriptLiteral::semantic_javascript_name(binding, source)
+                && (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name()
                     .is_some_and(|binding_name| binding_name != name)
             {
                 lines.push(first_line + authored_name.start_position().row);
@@ -269,7 +269,7 @@ impl WasmMemberAliases<'_> {
             return;
         };
         let Some(binding_name) =
-            JavaScriptLiteral::semantic_javascript_name(binding_name_node, source)
+            (JavaScriptLiteral { node: binding_name_node, source: source }).semantic_javascript_name()
         else {
             return;
         };
@@ -302,12 +302,12 @@ pub(super) fn collect_type_pattern_aliases(pattern: tree_sitter::Node<'_>, sourc
         let Some((method_node, binding)) = pair.or(defaulted).or(shorthand) else {
             continue;
         };
-        let Some(method_name) = JavaScriptLiteral::semantic_javascript_name(method_node, source).filter(|name| methods.contains(name))
+        let Some(method_name) = (JavaScriptLiteral { node: method_node, source: source }).semantic_javascript_name().filter(|name| methods.contains(name))
         else {
             continue;
         };
         let binding = binding.child_by_field_name("left").unwrap_or(binding);
-        let Some(binding_name) = JavaScriptLiteral::semantic_javascript_name(binding, source) else {
+        let Some(binding_name) = (JavaScriptLiteral { node: binding, source: source }).semantic_javascript_name() else {
             continue;
         };
         if binding_name != method_name { lines.push(first_line + method_node.start_position().row); }
@@ -336,7 +336,7 @@ pub(super) fn collect_object_literal_aliases(object: tree_sitter::Node<'_>, sour
         let Some((Some(key), Some(value))) = pair.flatten().or(shorthand) else {
             continue;
         };
-        let Some(property_name) = JavaScriptLiteral::semantic_javascript_name(key, source) else {
+        let Some(property_name) = (JavaScriptLiteral { node: key, source: source }).semantic_javascript_name() else {
             continue;
         };
         let callable_name = WasmMemberAliases::wasm_callable_member_name(
@@ -353,7 +353,7 @@ pub(super) fn collect_object_literal_aliases(object: tree_sitter::Node<'_>, sour
             scoped_wasm_instances,
         )
         .or_else(|| {
-            let name = JavaScriptLiteral::semantic_javascript_name(value, source)?;
+            let name = (JavaScriptLiteral { node: value, source: source }).semantic_javascript_name()?;
             ((imported_callable_bindings.contains(&name)
                 && ScopedBinding::root_binding_is_visible(value, &name, source))
                 || ScopedBinding::scoped_binding_is_visible(value, &name, source, scoped_wasm_callables))
@@ -367,7 +367,7 @@ pub(super) fn collect_object_literal_aliases(object: tree_sitter::Node<'_>, sour
                 .parent()
                 .filter(|parent| parent.kind() == "variable_declarator")
                 .and_then(|parent| parent.child_by_field_name("name"))
-                && let Some(owner_name) = JavaScriptLiteral::semantic_javascript_name(owner, source)
+                && let Some(owner_name) = (JavaScriptLiteral { node: owner, source: source }).semantic_javascript_name()
                 && let Some(mut scoped) = ScopedBinding::scoped_binding(owner, source, None, None)
             {
                 scoped.name = format!("{owner_name}.{property_name}");
@@ -482,7 +482,7 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
         && function
             .child_by_field_name("property")
             .or_else(|| function.child_by_field_name("index"))
-            .and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))
+            .and_then(|property| (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name())
             .is_some_and(|name| name == "bind")
         && let Some(bound) = function.child_by_field_name("object")
     {
@@ -495,7 +495,7 @@ fn wasm_callable_member_name(value: tree_sitter::Node<'_>, source: &str, source_
     let property = value
         .child_by_field_name("property")
         .or_else(|| value.child_by_field_name("index"))?;
-    let callable_name = JavaScriptLiteral::semantic_javascript_name(property, source)?;
+    let callable_name = (JavaScriptLiteral { node: property, source: source }).semantic_javascript_name()?;
     let direct_module = DynamicWasmAliases::loaded_module_specifier(namespace, source);
     let namespace_name = namespace.utf8_text(source.as_bytes()).ok();
     let receiver_type = WasmMemberAliases::wasm_receiver_type(
@@ -572,7 +572,7 @@ impl WasmMemberAliases<'_> {
             && let Some(name) = function
                 .child_by_field_name("property")
                 .or_else(|| function.child_by_field_name("index"))
-                .and_then(|node| JavaScriptLiteral::semantic_javascript_name(node, source))
+                .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())
             && DynamicWasmAliases::wasm_module_specifier(
                 object,
                 source,
@@ -610,7 +610,7 @@ impl WasmMemberAliases<'_> {
             && let Some(method) = function
                 .child_by_field_name("property")
                 .or_else(|| function.child_by_field_name("index"))
-                .and_then(|node| JavaScriptLiteral::semantic_javascript_name(node, source))
+                .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())
             && let Some(returned) = wasm_types.returns.get(&(owner, method))
             && wasm_type_names.contains(returned)
         {
@@ -668,7 +668,7 @@ impl WasmMemberAliases<'_> {
         let type_node = expression
             .child_by_field_name("property")
             .or_else(|| expression.child_by_field_name("index"))?;
-        let wasm_type = JavaScriptLiteral::semantic_javascript_name(type_node, source)?;
+        let wasm_type = (JavaScriptLiteral { node: type_node, source: source }).semantic_javascript_name()?;
         if !wasm_type_names.contains(&wasm_type) {
             return None;
         }

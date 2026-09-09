@@ -508,7 +508,7 @@ impl ScopedBinding {
             ) && binding.scope_start < function.start_byte()
                 && function
                     .child_by_field_name("name")
-                    .and_then(|node| JavaScriptLiteral::semantic_javascript_name(node, source))
+                    .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())
                     .is_some()
             {
                 return Some(function);
@@ -523,7 +523,7 @@ impl ScopedBinding {
     fn deferred_function_call_end(function: tree_sitter::Node<'_>, source: &str) -> Option<usize> {
         let name = function
             .child_by_field_name("name")
-            .and_then(|node| JavaScriptLiteral::semantic_javascript_name(node, source))?;
+            .and_then(|node| (JavaScriptLiteral { node: node, source: source }).semantic_javascript_name())?;
         let mut root = function;
         while let Some(parent) = root.parent() {
             root = parent;
@@ -542,7 +542,7 @@ impl ScopedBinding {
         if node.kind() == "call_expression"
             && node.start_byte() >= after
             && let Some(callee) = node.child_by_field_name("function")
-            && JavaScriptLiteral::semantic_javascript_name(callee, source).as_deref() == Some(name)
+            && (JavaScriptLiteral { node: callee, source: source }).semantic_javascript_name().as_deref() == Some(name)
             && ScopedBinding::root_binding_is_visible(callee, name, source)
         {
             return Some(node.end_byte());

@@ -1,12 +1,10 @@
 use crate::model;
-use std::path::Path;
 
-use crate::HiveContext;
-use crate::delivery::MainRepairDelivery;
 use crate::model::{ClaimedTask, TaskId};
 
 impl ClaimedTask {
-    pub(super) fn task_prompt(task: &ClaimedTask) -> String {
+    pub(super) fn task_prompt(&self) -> String {
+        let task = self;
         let owning_repairs = if task.owning_repairs.is_empty() {
             "No active owning Main repairs.".to_owned()
         } else {
@@ -16,7 +14,7 @@ impl ClaimedTask {
                     format!(
                         "- {} (delivery branch `{}`)",
                         owner,
-                        ClaimedTask::repair_branch_name(owner.as_str())
+                        (owner).repair_branch_name()
                     )
                 })
                 .collect::<Vec<_>>()
@@ -31,8 +29,49 @@ impl ClaimedTask {
                 .collect::<Vec<_>>()
                 .join("\n")
         };
-        let delivery = if task.kind.is_main_repair() {
-            let branch = ClaimedTask::repair_branch_name(task.id.as_str());
+        let delivery = task.kind.delivery_instructions(&task.id);
+        let terminal_contract = task.kind.terminal_contract();
+        format!(
+            "You are Hive worker attempt {} for task {}.\n\
+         Work only inside the supplied repository workspace.\n\
+         Complete the task and return the required structured terminal result.\n\n\
+         Task kind: {}\n\
+         Task:\n{}\n\n\
+         Active owning Main repairs:\n{}\n\n\
+         Completed dependency context:\n{}{}{}",
+            task.attempt_number,
+            task.id,
+            task.kind,
+            task.prompt,
+            owning_repairs,
+            dependencies,
+            delivery,
+            terminal_contract
+        )
+    }
+}
+
+impl TaskId {
+    pub(crate) fn repair_branch_name(&self) -> String {
+        let task_id = self.as_str();
+        let slug = task_id
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() || character == '-' {
+                    character.to_ascii_lowercase()
+                } else {
+                    '-'
+                }
+            })
+            .collect::<String>();
+        format!("codex/hive-{}", slug.trim_matches('-'))
+    }
+}
+
+impl model::TaskKind {
+    fn delivery_instructions(&self, task_id: &TaskId) -> String {
+        if self.is_main_repair() {
+            let branch = task_id.repair_branch_name();
             format!(
                 "\n\nThis is an end-to-end Main repair. You own it until delivery is complete. \
          You are a trusted operator with direct GitHub access through `GH_TOKEN`. Use standard \
@@ -55,7 +94,7 @@ impl ClaimedTask {
          before the squash merge and green Main verification. If blocked by another change, report \
          structured blocked status and identify the blocker precisely."
             )
-        } else if task.kind.is_blocker() {
+        } else if self.is_blocker() {
             "\n\nThis is a prerequisite-ownership task, not a passive wait instruction. Resolve the \
          prerequisite yourself using the available repository and GitHub access. When the task \
          names a GitHub Actions run, inspect its current terminal state and failed logs; if it \
@@ -76,82 +115,14 @@ impl ClaimedTask {
             .to_owned()
         } else {
             String::new()
-        };
-        let terminal_contract = if task.kind.is_blocker() {
+        }
+    }
+    fn terminal_contract(&self) -> &'static str {
+        if self.is_blocker() {
             ""
         } else {
             "\n\nThis task is not a dependency leaf. Never return the failed status. If it \
          cannot complete, return blocked with exactly one prerequisite request."
-        };
-        format!(
-            "You are Hive worker attempt {} for task {}.\n\
-         Work only inside the supplied repository workspace.\n\
-         Complete the task and return the required structured terminal result.\n\n\
-         Task kind: {}\n\
-         Task:\n{}\n\n\
-         Active owning Main repairs:\n{}\n\n\
-         Completed dependency context:\n{}{}{}",
-            task.attempt_number,
-            task.id,
-            task.kind,
-            task.prompt,
-            owning_repairs,
-            dependencies,
-            delivery,
-            terminal_contract
-        )
-    }
-}
-
-impl ClaimedTask {
-    pub(super) fn repair_branch_name(task_id: &str) -> String {
-        let slug = task_id
-            .chars()
-            .map(|character| {
-                if character.is_ascii_alphanumeric() || character == '-' {
-                    character.to_ascii_lowercase()
-                } else {
-                    '-'
-                }
-            })
-            .collect::<String>();
-        format!("codex/hive-{}", slug.trim_matches('-'))
-    }
-}
-
-impl ClaimedTask {
-    pub(super) async fn verify_obsolete_owner_deliveries(
-        repository: &Path,
-        owning_repairs: &[TaskId],
-    ) -> crate::HiveResult<()> {
-        for (owner, branch) in ClaimedTask::obsolete_owner_delivery_targets(owning_repairs) {
-            (MainRepairDelivery {
-                repository: repository,
-                branch: &branch,
-            })
-            .verify_main_repair_merge_and_main()
-            .await
-            .hive_context(format!(
-                "obsolete blocker retirement requires a merged repair and green Main for owner \
-                 {owner}"
-            ))?;
         }
-        Ok(())
-    }
-}
-
-impl ClaimedTask {
-    pub(super) fn obsolete_owner_delivery_targets(
-        owning_repairs: &[TaskId],
-    ) -> Vec<(TaskId, String)> {
-        owning_repairs
-            .iter()
-            .map(|owner| {
-                (
-                    owner.clone(),
-                    ClaimedTask::repair_branch_name(owner.as_str()),
-                )
-            })
-            .collect()
     }
 }

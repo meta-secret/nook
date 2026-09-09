@@ -171,3 +171,25 @@ export interface PendingRecoveryMarker {
 }
 
 export type RecoveryMarkerState = AbsentRecoveryMarker | PendingRecoveryMarker;
+
+export enum OvhTaskOutcome {
+  Pending = "pending",
+  Completed = "completed",
+  Failed = "failed",
+}
+export namespace OvhTaskStatus {
+  export function outcome(status: OvhTaskStatus): OvhTaskOutcome {
+    switch (status) {
+      case OvhTaskStatus.Done:
+        return OvhTaskOutcome.Completed;
+      case OvhTaskStatus.Cancelled:
+      case OvhTaskStatus.CustomerError:
+      case OvhTaskStatus.OvhError:
+        return OvhTaskOutcome.Failed;
+      case OvhTaskStatus.Doing:
+      case OvhTaskStatus.Init:
+      case OvhTaskStatus.Todo:
+        return OvhTaskOutcome.Pending;
+    }
+  }
+}

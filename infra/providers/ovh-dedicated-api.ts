@@ -30,17 +30,15 @@ export class OvhDedicatedCreateOvhSignature {
   }
 }
 
-export class OvhDedicatedApiRoot {
-  constructor(private readonly request: OvhCredentials) {}
-  execute(): string {
-    const credentials = this.request;
-
+export class OvhEndpoint {
+  constructor(private readonly value: string) {}
+  apiRoot(): string {
     const roots: Record<string, string> = {
       "https://api.us.ovhcloud.com": "https://api.us.ovhcloud.com/1.0",
       "https://api.us.ovhcloud.com/1.0": "https://api.us.ovhcloud.com/1.0",
       "ovh-us": "https://api.us.ovhcloud.com/1.0",
     };
-    const root = roots[credentials.endpoint];
+    const root = roots[this.value];
     if (!root)
       throw new Error(
         "OVH credential endpoint is not an approved US API endpoint",
@@ -60,7 +58,7 @@ export class OvhDedicatedOvhApi<T> {
   async execute(): Promise<T> {
     const input = this.request;
 
-    const root = new OvhDedicatedApiRoot(input.credentials).execute();
+    const root = new OvhEndpoint(input.credentials.endpoint).apiRoot();
     const { body = "" } = input.request;
     const url = `${root}${input.request.path}`;
     const timeResponse = await fetch(`${root}/auth/time`);

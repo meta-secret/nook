@@ -199,13 +199,13 @@ impl DirectWasmAliases<'_> {
         if matches!(node.kind(), "import_specifier" | "export_specifier")
             && let Some(authored_name_node) = node.child_by_field_name("name")
             && let Some(authored_name) =
-                JavaScriptLiteral::semantic_javascript_name(authored_name_node, source)
+                (JavaScriptLiteral { node: authored_name_node, source: source }).semantic_javascript_name()
             && callable_names.contains(&authored_name)
             && WasmModuleSources::is_wasm_callable_export(module, &authored_name, source_path)
         {
             let alias = node.child_by_field_name("alias");
             if alias
-                .and_then(|alias| JavaScriptLiteral::semantic_javascript_name(alias, source))
+                .and_then(|alias| (JavaScriptLiteral { node: alias, source: source }).semantic_javascript_name())
                 .is_some_and(|alias| alias != authored_name)
             {
                 lines.push(first_line + authored_name_node.start_position().row);

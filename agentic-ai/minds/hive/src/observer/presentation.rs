@@ -188,7 +188,7 @@ impl ObservedAlert {
                     return None;
                 };
                 let severity = kind.severity();
-                let reason = copy.alert_reason(kind);
+                let reason = kind.reason(&copy);
                 Some(ObservedAlert {
                     id: format!("{}:{}", kind.as_str(), task.id),
                     kind,
@@ -210,9 +210,9 @@ impl ObservedAlert {
     }
 }
 
-impl ObservedTask {
-    pub(super) fn localized_task_kind(label: TaskKindLabel<'_>) -> String {
-        let TaskKindLabel { kind, locale } = label;
+impl TaskKind {
+    pub(super) fn localized_label(&self, locale: &str) -> String {
+        let kind = self;
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         match (kind, russian) {
@@ -225,8 +225,13 @@ impl ObservedTask {
     }
 }
 
-impl ObservedTask {
-    pub(super) fn localized_activity<'a>(key: &'a str, locale: &str) -> &'a str {
+pub(super) struct ActivityLocalization<'a> {
+    pub(super) key: &'a str,
+    pub(super) locale: &'a str,
+}
+impl<'a> ActivityLocalization<'a> {
+    pub(super) fn text(self) -> &'a str {
+        let Self { key, locale } = self;
         let russian =
             locale.eq_ignore_ascii_case("ru") || locale.to_ascii_lowercase().starts_with("ru-");
         match (key, russian) {
@@ -260,8 +265,8 @@ impl ObservedTask {
 #[cfg(test)]
 mod tests {
     use super::{
-        AlertKind, AlertSeverity, ObservedAgent, ObservedAlert, ObservedTask, ObservedTaskState,
-        STALE_ACTIVITY_MS, TaskKind, TaskKindLabel,
+        ActivityLocalization, AlertKind, AlertSeverity, ObservedAgent, ObservedAlert, ObservedTask,
+        ObservedTaskState, ObserverCopy, STALE_ACTIVITY_MS, TaskKind,
     };
 
     #[test]
@@ -282,25 +287,24 @@ mod tests {
         assert_eq!(english.product_name, "Hive Control Center");
         assert_eq!(russian.product_name, "Центр управления Hive");
         assert_eq!(
-            ObservedTask::localized_activity("activity.command_failed", "en"),
+            (ActivityLocalization {
+                key: "activity.command_failed",
+                locale: "en"
+            })
+            .text(),
             "Repository command failed"
         );
         assert_eq!(
-            ObservedTask::localized_activity("activity.command_failed", "ru"),
+            (ActivityLocalization {
+                key: "activity.command_failed",
+                locale: "ru"
+            })
+            .text(),
             "Команда репозитория завершилась с ошибкой"
         );
+        assert_eq!(TaskKind::MainRepair.localized_label("en"), "Main repair");
         assert_eq!(
-            ObservedTask::localized_task_kind(TaskKindLabel {
-                kind: &TaskKind::MainRepair,
-                locale: "en"
-            }),
-            "Main repair"
-        );
-        assert_eq!(
-            ObservedTask::localized_task_kind(TaskKindLabel {
-                kind: &TaskKind::MainRepair,
-                locale: "ru"
-            }),
+            TaskKind::MainRepair.localized_label("ru"),
             "Восстановление main"
         );
     }
@@ -447,11 +451,6 @@ impl ObserverSnapshot {
     }
 }
 
-pub(super) struct TaskKindLabel<'a> {
-    pub(super) kind: &'a TaskKind,
-    pub(super) locale: &'a str,
-}
-
 enum TaskAttention {
     None,
     Required {
@@ -512,14 +511,14 @@ impl AlertKind {
         }
     }
 }
-impl ObserverCopy {
-    fn alert_reason(&self, kind: AlertKind) -> &str {
-        match kind {
-            AlertKind::TaskFailed => &self.alert_task_failed,
-            AlertKind::DependencyFailed => &self.alert_dependency_failed,
-            AlertKind::DependencyBlocked => &self.alert_dependency_blocked,
-            AlertKind::ActivityStale => &self.alert_activity_stale,
-            AlertKind::CancellationStuck => &self.alert_cancellation_stuck,
+impl AlertKind {
+    fn reason(self, copy: &ObserverCopy) -> &str {
+        match self {
+            AlertKind::TaskFailed => &copy.alert_task_failed,
+            AlertKind::DependencyFailed => &copy.alert_dependency_failed,
+            AlertKind::DependencyBlocked => &copy.alert_dependency_blocked,
+            AlertKind::ActivityStale => &copy.alert_activity_stale,
+            AlertKind::CancellationStuck => &copy.alert_cancellation_stuck,
         }
     }
 }

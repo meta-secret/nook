@@ -7,9 +7,7 @@ use std::str::Chars;
 impl JavaScriptLiteral<'_> {
     pub fn static_javascript_string(self) -> Option<String> {
         let Self { node, source } = self;
-        if node.kind() == "template_string"
-            && JavaScriptLiteral::contains_template_substitution(node)
-        {
+        if node.kind() == "template_string" && self.contains_template_substitution() {
             return None;
         }
         let literal = node.utf8_text(source.as_bytes()).ok()?;
@@ -25,10 +23,8 @@ impl JavaScriptLiteral<'_> {
 }
 
 impl JavaScriptLiteral<'_> {
-    pub(super) fn semantic_javascript_name(
-        node: tree_sitter::Node<'_>,
-        source: &str,
-    ) -> Option<String> {
+    pub(super) fn semantic_javascript_name(self) -> Option<String> {
+        let Self { node, source } = self;
         let text = node.utf8_text(source.as_bytes()).ok()?;
         if matches!(node.kind(), "string" | "template_string") {
             (JavaScriptLiteral {
@@ -43,22 +39,27 @@ impl JavaScriptLiteral<'_> {
 }
 
 impl JavaScriptLiteral<'_> {
-    pub(super) fn callable_expression_name(
-        node: tree_sitter::Node<'_>,
-        source: &str,
-    ) -> Option<String> {
+    pub(super) fn callable_expression_name(self) -> Option<String> {
+        let Self { node, source } = self;
         let property = match node.kind() {
             "identifier" => Some(node),
             "member_expression" => node.child_by_field_name("property"),
             "subscript_expression" => node.child_by_field_name("index"),
             _ => None,
         };
-        property.and_then(|property| JavaScriptLiteral::semantic_javascript_name(property, source))
+        property.and_then(|property| {
+            (JavaScriptLiteral {
+                node: property,
+                source: source,
+            })
+            .semantic_javascript_name()
+        })
     }
 }
 
 impl JavaScriptLiteral<'_> {
-    fn contains_template_substitution(node: tree_sitter::Node<'_>) -> bool {
+    fn contains_template_substitution(&self) -> bool {
+        let node = self.node;
         let mut cursor = node.walk();
         node.named_children(&mut cursor)
             .any(|child| child.kind() == "template_substitution")

@@ -1,5 +1,5 @@
 mod completion;
-use completion::{CompletionPlan, TaskCompletionProposal};
+use completion::TaskCompletionProposal;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
@@ -211,8 +211,8 @@ impl<S: TaskStore> Worker<S> {
                     .persist_activity(),
                 );
                 let task_result = async {
-                    let repair_branch = (task.kind.is_main_repair())
-                        .then(|| ClaimedTask::repair_branch_name(task.id.as_str()));
+                    let repair_branch =
+                        (task.kind.is_main_repair()).then(|| (task.id).repair_branch_name());
                     let preparation = (TaskWorkspace {
                         workspace: &self.config.workspace,
                         repository_url: &self.config.repository_url,
@@ -256,7 +256,7 @@ impl<S: TaskStore> Worker<S> {
                         WorkspacePreparation::Prepared(prepared) => prepared,
                     };
                     let repository = prepared.repository().to_owned();
-                    let prompt = ClaimedTask::task_prompt(task);
+                    let prompt = (task).task_prompt();
                     let mut codex_options = CodexOptions::new(repository.clone())
                         .with_workspace_write()
                         .with_activity_sender(activity_tx.clone());
@@ -295,14 +295,11 @@ impl<S: TaskStore> Worker<S> {
                         result: &result,
                     }
                     .admit()?;
-                    if let CompletionPlan::ObsoleteRetirement { owning_repairs } = &plan {
-                        ClaimedTask::verify_obsolete_owner_deliveries(&repository, owning_repairs)
-                            .await?;
-                    }
+                    plan.verify_owner_deliveries(&repository).await?;
                     if task.kind.is_main_repair() {
                         (MainRepairDelivery {
                             repository: &repository,
-                            branch: &ClaimedTask::repair_branch_name(task.id.as_str()),
+                            branch: &(task.id).repair_branch_name(),
                         })
                         .verify_main_repair_delivery(task.id.as_str())
                         .await?;
@@ -735,7 +732,7 @@ mod tests {
             dependency_artifacts: Vec::new(),
         };
 
-        let prompt = ClaimedTask::task_prompt(&task);
+        let prompt = (&task).task_prompt();
         assert!(prompt.contains("prerequisite-ownership task"));
         assert!(prompt.contains("check out that existing PR branch"));
         assert!(prompt.contains("This task is a dependency leaf"));
@@ -747,10 +744,14 @@ mod tests {
         assert!(prompt.contains("bounded failed attempt"));
         assert!(prompt.contains("main-failure-abc-run-42-attempt-1"));
         assert!(prompt.contains("codex/hive-main-failure-abc-run-42-attempt-1"));
-        let targets = ClaimedTask::obsolete_owner_delivery_targets(&[
+        let targets = [
             task.owning_repairs[0].clone(),
             TaskId::try_from("main-failure-def-run-43-attempt-1")?,
-        ]);
+        ]
+        .map(|owner| {
+            let branch = owner.repair_branch_name();
+            (owner, branch)
+        });
         assert_eq!(targets.len(), 2);
         assert_eq!(targets[1].1, "codex/hive-main-failure-def-run-43-attempt-1");
         Ok(())
@@ -770,7 +771,7 @@ mod tests {
             dependency_context: Vec::new(),
             dependency_artifacts: Vec::new(),
         };
-        let prompt = ClaimedTask::task_prompt(&task);
+        let prompt = (&task).task_prompt();
 
         assert!(prompt.contains("GH_TOKEN"));
         assert!(prompt.contains("codex/hive-main-failure-recovery"));

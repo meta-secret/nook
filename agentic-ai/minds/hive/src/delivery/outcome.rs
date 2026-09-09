@@ -13,12 +13,17 @@ impl DeliveryCheck {
         if self.status != CheckExecution::Completed {
             return CheckOutcome::Pending;
         }
-        match &self.conclusion {
+        self.conclusion.completed_outcome()
+    }
+}
+impl CheckConclusion {
+    fn completed_outcome(&self) -> CheckOutcome<'_> {
+        match self {
             CheckConclusion::Success => CheckOutcome::Successful,
-            CheckConclusion::Cancelled => CheckOutcome::Cancelled(&self.conclusion),
+            CheckConclusion::Cancelled => CheckOutcome::Cancelled(self),
             CheckConclusion::Skipped => CheckOutcome::Skipped,
             CheckConclusion::Neutral => CheckOutcome::Neutral,
-            CheckConclusion::Other(_) => CheckOutcome::Failed(&self.conclusion),
+            CheckConclusion::Other(_) => CheckOutcome::Failed(self),
         }
     }
 }

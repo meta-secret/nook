@@ -36,7 +36,7 @@ const STALE_ACTIVITY_MS: i64 = 5 * 60_000;
 const STUCK_CANCELLATION_MS: i64 = 5 * 60_000;
 
 mod presentation;
-use presentation::TaskKindLabel;
+
 mod protocol;
 pub use presentation::*;
 
@@ -470,10 +470,8 @@ impl Neo4jTaskStore {
             tasks.push(ObservedTask {
                 id: row.get("id")?,
                 kind: row.get::<String>("kind")?.into(),
-                kind_label: ObservedTask::localized_task_kind(TaskKindLabel {
-                    kind: &row.get::<String>("kind")?.into(),
-                    locale: locale,
-                }),
+                kind_label: (crate::model::TaskKind::from(row.get::<String>("kind")?))
+                    .localized_label(locale),
                 trigger_kind: row.get::<String>("trigger_kind")?.into(),
                 trigger: String::new(),
                 status: row.get("status")?,
@@ -617,7 +615,12 @@ impl Neo4jTaskStore {
             tasks[index].activity.push(ObservedActivity {
                 id: row.get("id")?,
                 kind: row.get("kind")?,
-                message: ObservedTask::localized_activity(&message, locale).to_owned(),
+                message: (presentation::ActivityLocalization {
+                    key: &message,
+                    locale,
+                })
+                .text()
+                .to_owned(),
                 detail: row.get("detail")?,
                 created_at: row.get("created_at")?,
                 attempt_id: row.get("attempt_id")?,
