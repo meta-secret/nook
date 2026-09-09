@@ -1,3 +1,6 @@
+import { err, ok, type Result } from 'neverthrow';
+import { GitHubEvidenceField } from './agent-stats-github-field.ts';
+import type { GitHubEvidenceFailure } from './agent-stats-github-api.ts';
 import { type UntrustedYamlMap, UntrustedYamlBoundary } from './guards.ts';
 
 import {
@@ -6,11 +9,8 @@ import {
 } from './agent-stats-github-api.ts';
 
 export class ActionRunObservation {
-  private constructor(private readonly request: ActionObservationRequest) {}
-  static create(request: ActionObservationRequest): ActionObservation {
-    return new ActionRunObservation(request).execute();
-  }
-  private execute(): ActionObservation {
+  constructor(private readonly request: ActionObservationRequest) {}
+  execute(): Result<ActionObservation, GitHubEvidenceFailure> {
     const request = this.request;
     const updatedRequest: PropertyRequest = {
       record: request.record,
@@ -45,99 +45,107 @@ export class ActionRunObservation {
       record: request.record,
       key: 'status',
     };
-    const status =
-      GithubActionEvidenceApi.requiredStringProperty(statusRequest);
-    const runAttempt =
-      GithubActionEvidenceApi.requiredNumberProperty(attemptRequest);
-    const recordedFinishedAt =
-      GithubActionEvidenceApi.requiredStringProperty(updatedRequest);
+    const fieldAdmission1 = new GitHubEvidenceField(statusRequest).string();
+    if (fieldAdmission1.isErr()) return err(fieldAdmission1.error);
+    const status = fieldAdmission1.value;
+    const fieldAdmission2 = new GitHubEvidenceField(attemptRequest).number();
+    if (fieldAdmission2.isErr()) return err(fieldAdmission2.error);
+    const runAttempt = fieldAdmission2.value;
+    const fieldAdmission3 = new GitHubEvidenceField(updatedRequest).string();
+    if (fieldAdmission3.isErr()) return err(fieldAdmission3.error);
+    const recordedFinishedAt = fieldAdmission3.value;
     const crossesObservationBoundary =
       recordedFinishedAt > request.observedThrough;
-    const startedAt = ActionAttemptStart.read(request.record);
+    const fieldAdmission4 = new ActionAttemptStart(request.record).execute();
+    if (fieldAdmission4.isErr()) return err(fieldAdmission4.error);
+    const startedAt = fieldAdmission4.value;
     const headSha = GithubActionEvidenceApi.stringProperty(headRequest);
     const finishedAt =
       status !== 'completed' || crossesObservationBoundary
         ? request.observedThrough
         : recordedFinishedAt;
     const durationRequest: DurationSecondsRequest = { startedAt, finishedAt };
-    return {
-      workflow: GithubActionEvidenceApi.requiredStringProperty(workflowRequest),
-      runId: GithubActionEvidenceApi.requiredNumberProperty(runIdRequest),
+    const conclusionResult =
+      status !== 'completed' || crossesObservationBoundary
+        ? ok('nonterminal_at_merge')
+        : new GitHubEvidenceField(conclusionRequest).string();
+    if (conclusionResult.isErr()) return err(conclusionResult.error);
+    const fieldAdmission5 = new GitHubEvidenceField(workflowRequest).string();
+    if (fieldAdmission5.isErr()) return err(fieldAdmission5.error);
+    const fieldAdmission6 = new GitHubEvidenceField(runIdRequest).number();
+    if (fieldAdmission6.isErr()) return err(fieldAdmission6.error);
+    const fieldAdmission7 = new GitHubEvidenceField(triggerRequest).string();
+    if (fieldAdmission7.isErr()) return err(fieldAdmission7.error);
+    const fieldAdmission8 = new GitHubEvidenceField(validationRequest).string();
+    if (fieldAdmission8.isErr()) return err(fieldAdmission8.error);
+    return ok({
+      workflow: fieldAdmission5.value,
+      runId: fieldAdmission6.value,
       runAttempt,
       headSha,
-      trigger: GithubActionEvidenceApi.requiredStringProperty(triggerRequest),
+      trigger: fieldAdmission7.value,
       startedAt,
       finishedAt,
       durationSeconds: ActionDuration.seconds(durationRequest),
-      conclusion:
-        status !== 'completed' || crossesObservationBoundary
-          ? 'nonterminal_at_merge'
-          : GithubActionEvidenceApi.requiredStringProperty(conclusionRequest),
+      conclusion: conclusionResult.value,
       sourcePr: request.prNumber,
       sourceAttributed: headSha.length > 0,
-      validationRequested:
-        GithubActionEvidenceApi.requiredStringProperty(validationRequest) ===
-        'true',
-    };
+      validationRequested: fieldAdmission8.value === 'true',
+    });
   }
 }
 
 export class ActionAttemptStart {
-  private constructor(private readonly request: UntrustedYamlMap) {}
-  static read(record: UntrustedYamlMap): string {
-    return new ActionAttemptStart(record).execute();
-  }
-  private execute(): string {
+  constructor(private readonly request: UntrustedYamlMap) {}
+  execute(): Result<string, GitHubEvidenceFailure> {
     const record = this.request;
     const attemptRequest: PropertyRequest = { record, key: 'run_attempt' };
-    const key =
-      GithubActionEvidenceApi.requiredNumberProperty(attemptRequest) === 1
-        ? 'created_at'
-        : 'run_started_at';
+    const fieldAdmission9 = new GitHubEvidenceField(attemptRequest).number();
+    if (fieldAdmission9.isErr()) return err(fieldAdmission9.error);
+    const key = fieldAdmission9.value === 1 ? 'created_at' : 'run_started_at';
     const startedRequest: PropertyRequest = { record, key };
-    return GithubActionEvidenceApi.requiredStringProperty(startedRequest);
+    return new GitHubEvidenceField(startedRequest).string();
   }
 }
 
 export class ActionRunIdentity {
-  private constructor(private readonly request: UntrustedYamlMap) {}
-  static read(run: UntrustedYamlMap): number {
-    return new ActionRunIdentity(run).execute();
-  }
-  private execute(): number {
+  constructor(private readonly request: UntrustedYamlMap) {}
+  execute(): Result<number, GitHubEvidenceFailure> {
     const run = this.request;
     const request: PropertyRequest = { record: run, key: 'id' };
-    return GithubActionEvidenceApi.requiredNumberProperty(request);
+    return new GitHubEvidenceField(request).number();
   }
 }
 
 export class PullRequestActionRun {
-  private constructor(private readonly request: SourcePrRunRequest) {}
-  static matches(request: SourcePrRunRequest): boolean {
-    return new PullRequestActionRun(request).execute();
-  }
-  private execute(): boolean {
+  constructor(private readonly request: SourcePrRunRequest) {}
+  execute(): Result<boolean, GitHubEvidenceFailure> {
     const request = this.request;
     const pullRequestsRequest: PropertyRequest = {
       record: request.run,
       key: 'pull_requests',
     };
-    const pullRequests =
-      GithubActionEvidenceApi.requiredArrayProperty(pullRequestsRequest);
+    const fieldAdmission10 = new GitHubEvidenceField(
+      pullRequestsRequest,
+    ).array();
+    if (fieldAdmission10.isErr()) return err(fieldAdmission10.error);
+    const pullRequests = fieldAdmission10.value;
     // The branch-and-merge-window Actions query is the outer source boundary.
     // GitHub clears this association for some old attempts after squash merge.
-    if (pullRequests.length === 0) return true;
-    return pullRequests.some((candidate) => {
-      if (!UntrustedYamlBoundary.isRecord(candidate)) return false;
-      const numberRequest: PropertyRequest = {
-        record: candidate,
-        key: 'number',
-      };
-      return (
-        GithubActionEvidenceApi.numberProperty(numberRequest) ===
-        request.prNumber
-      );
-    });
+    if (pullRequests.length === 0) return ok(true);
+    return ok(
+      pullRequests.some((candidate) => {
+        if (!UntrustedYamlBoundary.isRecord(candidate)) return false;
+        const numberRequest: PropertyRequest = {
+          record: candidate,
+          key: 'number',
+        };
+        return (
+          GithubActionEvidenceApi.numberProperty(numberRequest) ===
+          request.prNumber
+        );
+      }),
+    );
   }
 }
 

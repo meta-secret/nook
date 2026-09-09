@@ -1,3 +1,4 @@
+import { GitHubEvidenceField } from './agent-stats-github-field.ts';
 import type {
   AgentStatsGitHubEvidenceRequest,
   AgentStatsGitHubEvidence,
@@ -250,18 +251,29 @@ export class GithubAgentEvidence {
         record: page,
         key: 'total_count',
       };
-      const totalCount =
-        GithubActionEvidenceApi.requiredNumberProperty(totalCountRequest);
+      const fieldAdmission1 = new GitHubEvidenceField(
+        totalCountRequest,
+      ).number();
+      if (fieldAdmission1.isErr()) return err(fieldAdmission1.error);
+      const totalCount = fieldAdmission1.value;
       expectedRunCount = Math.max(expectedRunCount, totalCount);
       const workflowRunsRequest: PropertyRequest = {
         record: page,
         key: 'workflow_runs',
       };
-      const workflowRuns =
-        GithubActionEvidenceApi.requiredArrayProperty(workflowRunsRequest);
+      const fieldAdmission2 = new GitHubEvidenceField(
+        workflowRunsRequest,
+      ).array();
+      if (fieldAdmission2.isErr()) return err(fieldAdmission2.error);
+      const workflowRuns = fieldAdmission2.value;
       rawRuns.push(...workflowRuns.filter(UntrustedYamlBoundary.isRecord));
     }
-    const collectedRunIds = new Set(rawRuns.map(ActionRunIdentity.read));
+    const collectedRunIds = new Set<number>();
+    for (const run of rawRuns) {
+      const identity = new ActionRunIdentity(run).execute();
+      if (identity.isErr()) return err(identity.error);
+      collectedRunIds.add(identity.value);
+    }
     if (collectedRunIds.size < expectedRunCount) {
       return err({
         code: LoomFailureCode.CommandFailed,
@@ -274,14 +286,24 @@ export class GithubAgentEvidence {
         run: rawRun,
         prNumber: request.prNumber,
       };
-      if (!PullRequestActionRun.matches(associationRequest)) continue;
-      if (ActionAttemptStart.read(rawRun) > request.mergedAt) continue;
+      const association = new PullRequestActionRun(
+        associationRequest,
+      ).execute();
+      if (association.isErr()) return err(association.error);
+      if (!association.value) continue;
+      const attemptStart = new ActionAttemptStart(rawRun).execute();
+      if (attemptStart.isErr()) return err(attemptStart.error);
+      if (attemptStart.value > request.mergedAt) continue;
       const observationRequest: ActionObservationRequest = {
         record: rawRun,
         prNumber: request.prNumber,
         observedThrough: request.mergedAt,
       };
-      const observation = ActionRunObservation.create(observationRequest);
+      const observationResult = new ActionRunObservation(
+        observationRequest,
+      ).execute();
+      if (observationResult.isErr()) return err(observationResult.error);
+      const observation = observationResult.value;
       const observationKey = `${observation.runId}:${observation.runAttempt}`;
       deduplicatedRuns.set(observationKey, observation);
     }
