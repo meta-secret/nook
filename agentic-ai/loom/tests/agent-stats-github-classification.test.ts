@@ -1,7 +1,11 @@
+import { ok } from 'neverthrow';
+import {
+  GitHubActionJobs,
+  GitHubValidationRequest,
+} from '../src/lib/agent-stats-github-jobs.ts';
 import { describe, expect, test } from 'bun:test';
 import {
   type ActionJobsRequestedValidationRequest,
-  GithubActionEvidenceApi,
 } from '../src/lib/agent-stats-github-api.ts';
 import { ReviewFindingBody } from '../src/lib/agent-stats-github-review.ts';
 
@@ -75,24 +79,30 @@ describe('agent stats GitHub classification', () => {
     };
 
     expect(
-      GithubActionEvidenceApi.actionJobsRequestedValidation(skippedRequest),
-    ).toBe(false);
-    expect(
-      GithubActionEvidenceApi.actionJobsRequestedValidation(requestedRequest),
-    ).toBe(true);
-    expect(
-      GithubActionEvidenceApi.actionJobsRequestedValidation(cancelledRequest),
-    ).toBe(true);
-    expect(
-      GithubActionEvidenceApi.actionJobsRequestedValidation(
-        unsupportedCancelledRequest,
+      new GitHubActionJobs(skippedRequest.jobs).validationRequest(
+        skippedRequest.gateJobName,
       ),
-    ).toBe(false);
+    ).toEqual(ok(GitHubValidationRequest.NotRequested));
     expect(
-      GithubActionEvidenceApi.actionJobsRequestedValidation(
-        supportedThenFailedRequest,
+      new GitHubActionJobs(requestedRequest.jobs).validationRequest(
+        requestedRequest.gateJobName,
       ),
-    ).toBe(true);
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+    expect(
+      new GitHubActionJobs(cancelledRequest.jobs).validationRequest(
+        cancelledRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
+    expect(
+      new GitHubActionJobs(unsupportedCancelledRequest.jobs).validationRequest(
+        unsupportedCancelledRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.NotRequested));
+    expect(
+      new GitHubActionJobs(supportedThenFailedRequest.jobs).validationRequest(
+        supportedThenFailedRequest.gateJobName,
+      ),
+    ).toEqual(ok(GitHubValidationRequest.Requested));
   });
 
   test('counts findings in noncanonical details blocks', () => {

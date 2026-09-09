@@ -13,6 +13,14 @@ import type {
 export class GitHubEvidenceField {
   constructor(private readonly request: GitHubPropertyRequest) {}
 
+  optionalString(): string {
+    const property = UntrustedYamlBoundary.property(this.request);
+    return property.presence === UntrustedYamlPropertyPresence.Present &&
+      typeof property.value === 'string'
+      ? property.value
+      : '';
+  }
+
   string(): Result<string, GitHubEvidenceFailure> {
     const property = UntrustedYamlBoundary.property(this.request);
     if (

@@ -1,3 +1,8 @@
+import { ok } from 'neverthrow';
+import {
+  GitHubActionJobs,
+  GitHubSourceVerification,
+} from '../src/lib/agent-stats-github-jobs.ts';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
@@ -153,17 +158,15 @@ describe('agent stats manual E2E evidence', () => {
       ],
     };
 
-    expect(GithubActionEvidenceApi.actionJobsVerifiedSource(successful)).toBe(
-      true,
+    expect(new GitHubActionJobs(successful.jobs).sourceVerification()).toEqual(
+      ok(GitHubSourceVerification.Verified),
     );
-    expect(GithubActionEvidenceApi.actionJobsVerifiedSource(rejected)).toBe(
-      false,
+    expect(new GitHubActionJobs(rejected.jobs).sourceVerification()).toEqual(
+      ok(GitHubSourceVerification.Unverified),
     );
     expect(
-      GithubActionEvidenceApi.actionJobsVerifiedSource(
-        cancelledBeforeResolution,
-      ),
-    ).toBe(false);
+      new GitHubActionJobs(cancelledBeforeResolution.jobs).sourceVerification(),
+    ).toEqual(ok(GitHubSourceVerification.Unverified));
   });
 
   test('snapshots nonterminal action attempts at merge', () => {

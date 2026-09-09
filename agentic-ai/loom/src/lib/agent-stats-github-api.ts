@@ -1,3 +1,8 @@
+import {
+  GitHubActionJobs,
+  GitHubSourceVerification,
+  GitHubValidationRequest,
+} from './agent-stats-github-jobs.ts';
 import { err, ok, type Result } from 'neverthrow';
 import {
   UntrustedYamlPropertyPresence,
@@ -224,8 +229,14 @@ export class GithubActionEvidenceApi {
           const sourceVerified = githubResult4.value;
           const expandedRecord = {
             ...attemptRecord,
-            validation_requested: validationRequested ? 'true' : 'false',
-            source_verified: sourceVerified ? 'true' : 'false',
+            validation_requested:
+              validationRequested === GitHubValidationRequest.Requested
+                ? 'true'
+                : 'false',
+            source_verified:
+              sourceVerified === GitHubSourceVerification.Verified
+                ? 'true'
+                : 'false',
           };
           expandedRuns.push(UntrustedYamlBoundary.seal(expandedRecord));
         }
@@ -241,7 +252,7 @@ export class GithubActionEvidenceApi {
 
   private static actionAttemptSourceVerified(
     request: ActionAttemptSourceVerificationRequest,
-  ): Result<boolean, GitHubEvidenceFailure> {
+  ): Result<GitHubSourceVerification, GitHubEvidenceFailure> {
     const workflowRequest: GitHubPropertyRequest = {
       record: request.attemptRecord,
       key: 'name',
@@ -250,7 +261,7 @@ export class GithubActionEvidenceApi {
       GithubActionEvidenceApi.requiredStringProperty(workflowRequest) !==
       'E2E (PR)'
     )
-      return ok(true);
+      return ok(GitHubSourceVerification.Verified);
     const jobsRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
       endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
@@ -273,58 +284,19 @@ export class GithubActionEvidenceApi {
       const verificationRequest: ActionJobsVerifiedSourceRequest = {
         jobs: GithubActionEvidenceApi.requiredArrayProperty(jobsProperty),
       };
-      if (GithubActionEvidenceApi.actionJobsVerifiedSource(verificationRequest))
-        return ok(true);
+      const verification = new GitHubActionJobs(
+        verificationRequest.jobs,
+      ).sourceVerification();
+      if (verification.isErr()) return err(verification.error);
+      if (verification.value === GitHubSourceVerification.Verified)
+        return verification;
     }
-    return ok(false);
-  }
-
-  static actionJobsVerifiedSource(
-    request: ActionJobsVerifiedSourceRequest,
-  ): boolean {
-    return request.jobs.some((job) => {
-      if (!UntrustedYamlBoundary.isRecord(job)) return false;
-      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-      if (
-        GithubActionEvidenceApi.requiredStringProperty(nameRequest) !==
-        'Build PR browser image'
-      ) {
-        return false;
-      }
-      const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
-      const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
-      const stepsProperty = UntrustedYamlBoundary.property(stepsArgs);
-      if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
-        return false;
-      }
-      if (!Array.isArray(stepsProperty.value)) {
-        GithubActionEvidenceApi.failGitHubCollection(
-          'GitHub field steps must be a list',
-        );
-      }
-      return stepsProperty.value.some((step) => {
-        if (!UntrustedYamlBoundary.isRecord(step)) return false;
-        const stepNameRequest: GitHubPropertyRequest = {
-          record: step,
-          key: 'name',
-        };
-        const conclusionRequest: GitHubPropertyRequest = {
-          record: step,
-          key: 'conclusion',
-        };
-        return (
-          GithubActionEvidenceApi.requiredStringProperty(stepNameRequest) ===
-            'Resolve PR head SHA' &&
-          GithubActionEvidenceApi.stringProperty(conclusionRequest) ===
-            'success'
-        );
-      });
-    });
+    return ok(GitHubSourceVerification.Unverified);
   }
 
   private static actionAttemptRequestedValidation(
     request: ActionAttemptRequestedValidationRequest,
-  ): Result<boolean, GitHubEvidenceFailure> {
+  ): Result<GitHubValidationRequest, GitHubEvidenceFailure> {
     const workflowRequest: GitHubPropertyRequest = {
       record: request.attemptRecord,
       key: 'name',
@@ -337,7 +309,7 @@ export class GithubActionEvidenceApi {
         : workflow === 'Rust ecosystem checks'
           ? 'Validate explicit ecosystem request'
           : '';
-    if (gateJobName.length === 0) return ok(true);
+    if (gateJobName.length === 0) return ok(GitHubValidationRequest.Requested);
     const jobsRequest: GitHubApiRequest = {
       repoRoot: request.repoRoot,
       endpoint: `repos/{owner}/{repo}/actions/runs/${request.runId}/attempts/${request.attempt}/jobs`,
@@ -361,69 +333,14 @@ export class GithubActionEvidenceApi {
         jobs: GithubActionEvidenceApi.requiredArrayProperty(jobsProperty),
         gateJobName,
       };
-      if (
-        GithubActionEvidenceApi.actionJobsRequestedValidation(validationRequest)
-      )
-        return ok(true);
+      const validation = new GitHubActionJobs(
+        validationRequest.jobs,
+      ).validationRequest(validationRequest.gateJobName);
+      if (validation.isErr()) return err(validation.error);
+      if (validation.value === GitHubValidationRequest.Requested)
+        return validation;
     }
-    return ok(false);
-  }
-
-  static actionJobsRequestedValidation(
-    request: ActionJobsRequestedValidationRequest,
-  ): boolean {
-    const supportedGateRequest = request.jobs.some((job) => {
-      if (!UntrustedYamlBoundary.isRecord(job)) return false;
-      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-      if (
-        GithubActionEvidenceApi.requiredStringProperty(nameRequest) !==
-        request.gateJobName
-      ) {
-        return false;
-      }
-      const stepsRequest: GitHubPropertyRequest = { record: job, key: 'steps' };
-      const stepsArgs: UntrustedYamlPropertyArgs = stepsRequest;
-      const stepsProperty = UntrustedYamlBoundary.property(stepsArgs);
-      if (stepsProperty.presence === UntrustedYamlPropertyPresence.Absent) {
-        return false;
-      }
-      if (!Array.isArray(stepsProperty.value)) {
-        GithubActionEvidenceApi.failGitHubCollection(
-          'GitHub field steps must be a list',
-        );
-      }
-      return stepsProperty.value.some((step) => {
-        if (!UntrustedYamlBoundary.isRecord(step)) return false;
-        const stepNameRequest: GitHubPropertyRequest = {
-          record: step,
-          key: 'name',
-        };
-        const stepConclusionRequest: GitHubPropertyRequest = {
-          record: step,
-          key: 'conclusion',
-        };
-        return (
-          GithubActionEvidenceApi.requiredStringProperty(stepNameRequest) ===
-            'Reject unsupported label events' &&
-          GithubActionEvidenceApi.stringProperty(stepConclusionRequest) ===
-            'success'
-        );
-      });
-    });
-    if (supportedGateRequest) return true;
-    return request.jobs.some((job) => {
-      if (!UntrustedYamlBoundary.isRecord(job)) return false;
-      const nameRequest: GitHubPropertyRequest = { record: job, key: 'name' };
-      const conclusionRequest: GitHubPropertyRequest = {
-        record: job,
-        key: 'conclusion',
-      };
-      return (
-        GithubActionEvidenceApi.requiredStringProperty(nameRequest) !==
-          request.gateJobName &&
-        GithubActionEvidenceApi.stringProperty(conclusionRequest) !== 'skipped'
-      );
-    });
+    return ok(GitHubValidationRequest.NotRequested);
   }
 
   static runGitHubApi(
