@@ -1,3 +1,4 @@
+import { err, ok, type Result } from 'neverthrow';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 
 import path from 'node:path';
@@ -19,7 +20,7 @@ import { RepositoryRoot } from '../lib/repo.ts';
 
 import { HostCommand } from '../lib/run.ts';
 
-import { LoomFailureCode, LoomFailure } from '../loom-failure.ts';
+import { LoomFailureCode } from '../loom-failure.ts';
 
 import type { RunCommandArgs } from '../lib/run.ts';
 
@@ -30,15 +31,9 @@ import type { ValidateAgentStatsYamlArgs } from '../lib/agent-stats-schema.ts';
 import type { LoomFailureDetailArgs } from '../loom-failure.ts';
 
 export class AgentStatisticsCommand {
-  private constructor(private readonly request: AgentStatsAssembleRequest) {}
+  constructor(private readonly request: AgentStatsAssembleRequest) {}
 
-  static runAgentStatsAssemble(
-    request: AgentStatsAssembleRequest,
-  ): Promise<AgentStatsReport> {
-    return new AgentStatisticsCommand(request).execute();
-  }
-
-  private async execute(): Promise<AgentStatsReport> {
+  async execute(): Promise<Result<AgentStatsReport, AgentStatisticsFailure>> {
     const request = this.request;
     const repoRoot = RepositoryRoot.find();
     const scratchPathRequest: ResolveAgentTempPathRequest = {
@@ -62,9 +57,8 @@ export class AgentStatisticsCommand {
     const assembled =
       await AgentStatisticsAssembly.assembleAgentStats(assembledArgs);
 
-    const directoryOptions: { readonly recursive: true } = { recursive: true };
-    mkdirSync(path.dirname(outPath), directoryOptions);
-    writeFileSync(outPath, assembled.yaml, 'utf8');
+    const written = new AgentStatisticsDocument(outPath).write(assembled.yaml);
+    if (written.isErr()) return err(written.error);
 
     const validationArgs3: ValidateAgentStatsYamlArgs = {
       content: assembled.yaml,
@@ -76,10 +70,13 @@ export class AgentStatisticsCommand {
         code: LoomFailureCode.ValidationFailed,
         text: `Assembled YAML failed validation:\n${validation.errors.join('\n')}`,
       };
-      LoomFailure.detail(loomFailureDetailArgs4);
+      return err({
+        code: loomFailureDetailArgs4.code,
+        message: loomFailureDetailArgs4.text,
+      });
     }
 
-    return {
+    return ok({
       family: RequestFamily.AgentStats,
       operation: AgentStatsOperation.Assemble,
       outputPath: outPath,
@@ -88,12 +85,15 @@ export class AgentStatisticsCommand {
         'schema validation passed',
         'fill comparison and waste_assessment in the scratch log before publish when placeholders remain',
       ],
-    };
+    });
   }
+}
 
-  static async runAgentStatsValidate(
-    request: AgentStatsFileRequest,
-  ): Promise<AgentStatsReport> {
+export class AgentStatisticsFileCommand {
+  constructor(private readonly request: AgentStatsFileRequest) {}
+
+  async validate(): Promise<Result<AgentStatsReport, AgentStatisticsFailure>> {
+    const request = this.request;
     const repoRoot = RepositoryRoot.find();
     const statsPathRequest: ResolveAgentTempPathRequest = {
       repoRoot,
@@ -103,12 +103,11 @@ export class AgentStatisticsCommand {
       operation: AgentStatsOperation.Validate,
       file: AgentTemporaryDirectory.resolveAgentTempPath(statsPathRequest),
     };
-    return AgentStatisticsCommand.validateFile(validateFileArgs);
+    return this.validateFile(validateFileArgs);
   }
 
-  static async runAgentStatsPublish(
-    request: AgentStatsFileRequest,
-  ): Promise<AgentStatsReport> {
+  async publish(): Promise<Result<AgentStatsReport, AgentStatisticsFailure>> {
+    const request = this.request;
     const repoRoot = RepositoryRoot.find();
     const statsPathRequest: ResolveAgentTempPathRequest = {
       repoRoot,
@@ -119,10 +118,15 @@ export class AgentStatisticsCommand {
     const prFromName = path.basename(absolute).replace(/\.ya?ml$/, '');
     const prNumber = Number.parseInt(prFromName, 10);
     if (!Number.isInteger(prNumber) || prNumber <= 0) {
-      LoomFailure.raise(LoomFailureCode.StatsFilenameInvalid);
+      return err({
+        code: LoomFailureCode.StatsFilenameInvalid,
+        message: 'Stats filename must be <pr-number>.yaml',
+      });
     }
 
-    const content = readFileSync(absolute, 'utf8');
+    const read = new AgentStatisticsDocument(absolute).read();
+    if (read.isErr()) return err(read.error);
+    const content = read.value;
     const validationArgs2: ValidateAgentStatsYamlArgs = {
       content,
       expectedPrNumber: prNumber,
@@ -133,7 +137,10 @@ export class AgentStatisticsCommand {
         code: LoomFailureCode.ValidationFailed,
         text: validation.errors.join('\n'),
       };
-      LoomFailure.detail(loomFailureDetailArgs3);
+      return err({
+        code: loomFailureDetailArgs3.code,
+        message: loomFailureDetailArgs3.text,
+      });
     }
 
     const remotePath = `stats/ai-agent/${prNumber}.yaml`;
@@ -153,26 +160,36 @@ export class AgentStatisticsCommand {
         code: LoomFailureCode.CommandFailed,
         text: `workbench-publish failed: ${published.stderr || published.stdout}`,
       };
-      LoomFailure.detail(loomFailureDetailArgs2);
+      return err({
+        code: loomFailureDetailArgs2.code,
+        message: loomFailureDetailArgs2.text,
+      });
     }
 
-    return {
+    return ok({
       family: RequestFamily.AgentStats,
       operation: AgentStatsOperation.Publish,
       outputPath: absolute,
       messages: [`published ${remotePath}`, (published.stdout || 'ok').trim()],
-    };
+    });
   }
 
-  private static validateFile(args: ValidateFileArgs): AgentStatsReport {
+  private validateFile(
+    args: ValidateFileArgs,
+  ): Result<AgentStatsReport, AgentStatisticsFailure> {
     const { operation, file } = args;
 
     const prFromName = path.basename(file).replace(/\.ya?ml$/, '');
     const prNumber = Number.parseInt(prFromName, 10);
     if (!Number.isInteger(prNumber) || prNumber <= 0) {
-      LoomFailure.raise(LoomFailureCode.StatsFilenameInvalid);
+      return err({
+        code: LoomFailureCode.StatsFilenameInvalid,
+        message: 'Stats filename must be <pr-number>.yaml',
+      });
     }
-    const content = readFileSync(file, 'utf8');
+    const read = new AgentStatisticsDocument(file).read();
+    if (read.isErr()) return err(read.error);
+    const content = read.value;
     const validationArgs: ValidateAgentStatsYamlArgs = {
       content,
       expectedPrNumber: prNumber,
@@ -183,14 +200,17 @@ export class AgentStatisticsCommand {
         code: LoomFailureCode.ValidationFailed,
         text: validation.errors.join('\n'),
       };
-      LoomFailure.detail(loomFailureDetailArgs);
+      return err({
+        code: loomFailureDetailArgs.code,
+        message: loomFailureDetailArgs.text,
+      });
     }
-    return {
+    return ok({
       family: RequestFamily.AgentStats,
       operation,
       outputPath: path.resolve(file),
       messages: ['schema validation passed'],
-    };
+    });
   }
 }
 
@@ -205,3 +225,33 @@ type ValidateFileArgs = {
   readonly operation: AgentStatsOperation.Validate;
   readonly file: string;
 };
+
+export type AgentStatisticsFailure = {
+  readonly code: LoomFailureCode;
+  readonly message: string;
+};
+class AgentStatisticsDocument {
+  constructor(private readonly file: string) {}
+  read(): Result<string, AgentStatisticsFailure> {
+    try {
+      return ok(readFileSync(this.file, 'utf8'));
+    } catch {
+      return err({
+        code: LoomFailureCode.FileReadFailed,
+        message: `Could not read statistics file: ${this.file}`,
+      });
+    }
+  }
+  write(content: string): Result<void, AgentStatisticsFailure> {
+    try {
+      mkdirSync(path.dirname(this.file), { recursive: true });
+      writeFileSync(this.file, content, 'utf8');
+      return ok(undefined);
+    } catch {
+      return err({
+        code: LoomFailureCode.CommandFailed,
+        message: `Could not write statistics file: ${this.file}`,
+      });
+    }
+  }
+}

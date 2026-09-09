@@ -1,3 +1,7 @@
+import {
+  AgentStatisticsFileCommand,
+  type AgentStatisticsFailure,
+} from '../commands/agent-stats.ts';
 import type { ManifestFailure } from '../lib/dependency-popularity/scan.ts';
 import type { RegistryFailure } from '../lib/dependency-popularity/registry-response.ts';
 import type { PrePushFailure } from '../commands/pre-push.ts';
@@ -254,6 +258,7 @@ export class LoomRequestCatalog {
       | PrePushFailure
       | RegistryFailure
       | ManifestFailure
+      | AgentStatisticsFailure
     >
   > {
     switch (request.family) {
@@ -278,23 +283,11 @@ export class LoomRequestCatalog {
       case RequestFamily.AgentStats: {
         switch (request.operation) {
           case AgentStatsOperation.Assemble:
-            return ok(
-              await AgentStatisticsCommand.runAgentStatsAssemble(
-                request.assemble,
-              ),
-            );
+            return new AgentStatisticsCommand(request.assemble).execute();
           case AgentStatsOperation.Validate:
-            return ok(
-              await AgentStatisticsCommand.runAgentStatsValidate(
-                request.validate,
-              ),
-            );
+            return new AgentStatisticsFileCommand(request.validate).validate();
           case AgentStatsOperation.Publish:
-            return ok(
-              await AgentStatisticsCommand.runAgentStatsPublish(
-                request.publish,
-              ),
-            );
+            return new AgentStatisticsFileCommand(request.publish).publish();
         }
         break;
       }
