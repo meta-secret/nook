@@ -76,13 +76,13 @@
   }
 
   function generatePassword() {
-    // Browser checkbox values project directly into the Rust-owned enum.
+    // Preserve the public boolean wire contract; Rust owns character-set policy.
     const onGeneratePasswordArgs: Parameters<typeof onGeneratePassword>[0] = {
       length: state.generationLength,
-      lowercase: state.generationLowercase ? "Included" : "Excluded",
-      uppercase: state.generationUppercase ? "Included" : "Excluded",
-      numbers: state.generationNumbers ? "Included" : "Excluded",
-      symbols: state.generationSymbols ? "Included" : "Excluded",
+      lowercase: state.generationLowercase,
+      uppercase: state.generationUppercase,
+      numbers: state.generationNumbers,
+      symbols: state.generationSymbols,
     };
     state.password = onGeneratePassword(onGeneratePasswordArgs);
   }

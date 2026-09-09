@@ -59,13 +59,13 @@ export class SecretFormState {
 
   generationLength = $state(passwordGenerationDefaults.length);
   generationUppercase = $state(
-    passwordGenerationDefaults.uppercase === "Included",
+    passwordGenerationDefaults.uppercase,
   );
   generationLowercase = $state(
-    passwordGenerationDefaults.lowercase === "Included",
+    passwordGenerationDefaults.lowercase,
   );
-  generationNumbers = $state(passwordGenerationDefaults.numbers === "Included");
-  generationSymbols = $state(passwordGenerationDefaults.symbols === "Included");
+  generationNumbers = $state(passwordGenerationDefaults.numbers);
+  generationSymbols = $state(passwordGenerationDefaults.symbols);
 
   load(item: NookSecretRecord): void {
     if (item.type === SecretType.Login) {

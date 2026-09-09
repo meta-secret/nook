@@ -160,7 +160,7 @@ class ExtensionSessionLifecycle {
     const nookTypedArgs0_1: Parameters<typeof chrome.tabs.create>[0] = {
       url: await simpleVaultRuntime.runtimeSimpleVaultUrl(path),
     }
-    void chrome.tabs.create(nookTypedArgs0_1)
+    await chrome.tabs.create(nookTypedArgs0_1)
   }
 
   private authenticationSurfaceRefreshSucceeded(

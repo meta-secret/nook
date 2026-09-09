@@ -394,9 +394,10 @@ export function routeExtensionLifecycleMessage({
       sendResponse(forbiddenSenderResponse)
       return false
     }
-    openSimpleVault()
-    sendResponse(successResponse)
-    return false
+    void openSimpleVault()
+      .then(() => sendResponse(successResponse))
+      .catch(() => sendResponse(launcherFailureResponse))
+    return true
   }
 
   const launcherMessage =

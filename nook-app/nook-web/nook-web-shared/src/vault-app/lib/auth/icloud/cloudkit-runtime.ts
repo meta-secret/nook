@@ -279,7 +279,7 @@ class CloudKitRuntime {
     const external = window.CloudKit!.getDefaultContainer();
     const handler: ProxyHandler<ExternalCloudKitContainer> = {
       // eslint-disable-next-line max-params -- Proxy owns this positional boundary callback.
-      get(target, property, receiver) {
+      get: (target, property, receiver) => {
         if (property === "setUpAuth") {
           return async (options: CloudKitAuthSetupOptions) =>
             this.cloudKitIdentityFromTransport(await target.setUpAuth(options));
