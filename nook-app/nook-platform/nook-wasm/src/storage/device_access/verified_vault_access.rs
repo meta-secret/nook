@@ -24,9 +24,9 @@ impl VerifiedVaultAccessUpdate<'_> {
             .update(DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::BestEffort,
                 guard: StringUpdateGuard::Unconditional,
-                update: move |profile: &mut DeviceAccessProfile| {
-                    profile.record_verified_vault_access(device_id, store_id, now);
-                    Ok(())
+                update: move |mut profile: DeviceAccessProfile| {
+                    profile = profile.record_verified_vault_access(device_id, store_id, now);
+                    Ok(profile)
                 },
             })
             .await

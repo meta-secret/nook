@@ -522,7 +522,7 @@ impl NookVaultManager {
                             prf_input: request.prf_input().as_ref(),
                         })?;
                     let credential = BrowserPasskeyClient::get_credential(&request_options).await?;
-                    observation.merge_usage(
+                    observation = observation.merge_usage(
                         BrowserPasskeyObservation::new(&credential).observe_assertion(),
                     );
                     let prf_output =

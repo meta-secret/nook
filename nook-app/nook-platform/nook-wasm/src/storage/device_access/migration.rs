@@ -60,7 +60,7 @@ mod tests {
         );
         let store_id = nook_core::StoreId::generate()?;
         let mut selected_profile = DeviceAccessProfile::default();
-        selected_profile.record_verified_vault_access(
+        selected_profile = selected_profile.record_verified_vault_access(
             &DeviceId::parse(selected.app_id().as_str())?,
             &store_id,
             IsoTimestamp::from_trusted("2026-08-24T01:00:00.000Z".to_owned()),
@@ -74,7 +74,7 @@ mod tests {
         );
 
         let mut companion_profile = DeviceAccessProfile::default();
-        companion_profile.record_verified_vault_access(
+        companion_profile = companion_profile.record_verified_vault_access(
             &DeviceId::parse(companion.app_id().as_str())?,
             &store_id,
             IsoTimestamp::from_trusted("2026-08-24T02:00:00.000Z".to_owned()),

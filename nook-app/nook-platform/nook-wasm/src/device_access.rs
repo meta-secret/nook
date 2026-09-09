@@ -705,13 +705,13 @@ mod tests {
         personal.generate_vault_dek(personal_store.clone())?;
         work.generate_vault_dek(work_store.clone())?;
         let mut personal_profile = DeviceAccessProfile::default();
-        personal_profile.record_verified_vault_access(
+        personal_profile = personal_profile.record_verified_vault_access(
             &DeviceId::parse(personal_key.app_id().as_str())?,
             &personal_store,
             IsoTimestamp::from_trusted("2026-08-23T01:00:00.000Z".to_owned()),
         );
         let mut work_profile = DeviceAccessProfile::default();
-        work_profile.record_verified_vault_access(
+        work_profile = work_profile.record_verified_vault_access(
             &DeviceId::parse(work_key.app_id().as_str())?,
             &work_store,
             IsoTimestamp::from_trusted("2026-08-23T02:00:00.000Z".to_owned()),

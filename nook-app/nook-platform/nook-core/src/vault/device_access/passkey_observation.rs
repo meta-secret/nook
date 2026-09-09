@@ -80,7 +80,8 @@ pub struct PasskeyBrowserObservation {
 }
 
 impl PasskeyBrowserObservation {
-    pub fn merge_usage(&mut self, usage: Self) {
+    #[must_use]
+    pub fn merge_usage(mut self, usage: Self) -> Self {
         if self.attachment == PasskeyAuthenticatorAttachment::Unknown {
             self.attachment = usage.attachment;
         }
@@ -99,6 +100,7 @@ impl PasskeyBrowserObservation {
         if usage.platform != PasskeyObservedPlatform::Unknown {
             self.platform = usage.platform;
         }
+        self
     }
 }
 
@@ -187,7 +189,7 @@ mod tests {
             legacy_client_environment: None,
         };
 
-        creation.merge_usage(PasskeyBrowserObservation {
+        creation = creation.merge_usage(PasskeyBrowserObservation {
             backup_state: PasskeyBackupState::BackedUp,
             browser: PasskeyObservedBrowser::Firefox,
             platform: PasskeyObservedPlatform::Linux,

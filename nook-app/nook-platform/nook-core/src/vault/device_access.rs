@@ -225,63 +225,81 @@ impl fmt::Display for DeviceAccessProfileTransitionError {
 
 impl error::Error for DeviceAccessProfileTransitionError {}
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct DeviceAccessProfileRejection {
+    pub profile: DeviceAccessProfile,
+    pub cause: DeviceAccessProfileTransitionError,
+}
+impl fmt::Display for DeviceAccessProfileRejection {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.cause.fmt(formatter)
+    }
+}
+impl error::Error for DeviceAccessProfileRejection {}
+
 impl DeviceAccessProfile {
     pub fn set_passkey_name(
-        &mut self,
+        mut self,
         credential_fingerprint: &str,
         name: String,
-    ) -> Result<(), DeviceAccessProfileTransitionError> {
+    ) -> Result<Self, DeviceAccessProfileRejection> {
         if self
             .passkey
             .as_ref()
             .is_some_and(|passkey| passkey.credential_fingerprint != credential_fingerprint)
         {
-            return Err(DeviceAccessProfileTransitionError::CredentialChanged);
+            return Err(DeviceAccessProfileRejection {
+                profile: self,
+                cause: DeviceAccessProfileTransitionError::CredentialChanged,
+            });
         }
         if let Some(passkey) = self.passkey.as_mut() {
             passkey.nook_name = name;
-            return Ok(());
+            return Ok(self);
         }
         self.passkey = Some(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
             nook_name: name,
             ..PasskeyAccessProfile::default()
         });
-        Ok(())
+        Ok(self)
     }
 
     pub fn set_passkey_provider_label(
-        &mut self,
+        mut self,
         credential_fingerprint: &str,
         provider_label: String,
-    ) -> Result<(), DeviceAccessProfileTransitionError> {
+    ) -> Result<Self, DeviceAccessProfileRejection> {
         if self
             .passkey
             .as_ref()
             .is_some_and(|passkey| passkey.credential_fingerprint != credential_fingerprint)
         {
-            return Err(DeviceAccessProfileTransitionError::CredentialChanged);
+            return Err(DeviceAccessProfileRejection {
+                profile: self,
+                cause: DeviceAccessProfileTransitionError::CredentialChanged,
+            });
         }
         if let Some(passkey) = self.passkey.as_mut() {
             passkey.provider_label = provider_label;
-            return Ok(());
+            return Ok(self);
         }
         self.passkey = Some(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
             provider_label,
             ..PasskeyAccessProfile::default()
         });
-        Ok(())
+        Ok(self)
     }
 
     pub fn record_passkey_created(
-        &mut self,
+        mut self,
         credential_fingerprint: &str,
         nook_name: &str,
         observation: PasskeyBrowserObservation,
         now: IsoTimestamp,
         ceremony: PasskeyCreationCeremony,
-    ) {
+    ) -> Self {
         self.passkey = Some(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
             nook_name: nook_name.trim().to_owned(),
@@ -299,22 +317,23 @@ impl DeviceAccessProfile {
             },
             observation,
         });
+        self
     }
 
     pub fn record_passkey_used(
-        &mut self,
+        mut self,
         credential_fingerprint: &str,
         observation: PasskeyBrowserObservation,
         now: IsoTimestamp,
-    ) {
-        if let Some(passkey) = self
+    ) -> Self {
+        if let Some(mut passkey) = self
             .passkey
-            .as_mut()
             .filter(|passkey| passkey.credential_fingerprint == credential_fingerprint)
         {
             passkey.last_used_at = PasskeyLastUsedAtEvidence::Known { timestamp: now };
-            passkey.observation.merge_usage(observation);
-            return;
+            passkey.observation = passkey.observation.merge_usage(observation);
+            self.passkey = Some(passkey);
+            return self;
         }
         self.passkey = Some(PasskeyAccessProfile {
             credential_fingerprint: credential_fingerprint.to_owned(),
@@ -322,14 +341,15 @@ impl DeviceAccessProfile {
             observation,
             ..PasskeyAccessProfile::default()
         });
+        self
     }
 
     pub fn record_verified_vault_access(
-        &mut self,
+        mut self,
         device_id: &DeviceId,
         store_id: &StoreId,
         now: IsoTimestamp,
-    ) {
+    ) -> Self {
         self.verified_vaults
             .retain(|entry| &entry.device_id != device_id || &entry.store_id != store_id);
         self.verified_vaults.push(VerifiedVaultAccess {
@@ -337,6 +357,7 @@ impl DeviceAccessProfile {
             store_id: store_id.clone(),
             verified_at: now,
         });
+        self
     }
 }
 
@@ -579,7 +600,7 @@ mod tests {
     fn passkey_name_transition_creates_metadata_for_an_empty_profile() -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
 
-        profile.set_passkey_name("passkey:first", "MacBook passkey".to_owned())?;
+        profile = profile.set_passkey_name("passkey:first", "MacBook passkey".to_owned())?;
 
         let passkey = profile
             .passkey
@@ -593,21 +614,21 @@ mod tests {
     #[test]
     fn passkey_name_transition_preserves_matching_credential_evidence() -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
-        profile.record_passkey_created(
+        profile = profile.record_passkey_created(
             "passkey:first",
             "Old name",
             observation(),
             timestamp("2026-01-01T00:00:00.000Z"),
             PasskeyCreationCeremony::RegistrationAndAssertion,
         );
-        profile.set_passkey_provider_label("passkey:first", "Proton Pass".to_owned())?;
+        profile = profile.set_passkey_provider_label("passkey:first", "Proton Pass".to_owned())?;
         let evidence = profile
             .passkey
             .as_ref()
             .ok_or_else(|| anyhow::anyhow!("passkey metadata is missing"))?
             .clone();
 
-        profile.set_passkey_name("passkey:first", "New name".to_owned())?;
+        profile = profile.set_passkey_name("passkey:first", "New name".to_owned())?;
 
         let renamed = profile
             .passkey
@@ -624,7 +645,7 @@ mod tests {
     #[test]
     fn passkey_name_transition_rejects_a_changed_credential_without_mutation() {
         let mut profile = DeviceAccessProfile::default();
-        profile.record_passkey_created(
+        profile = profile.record_passkey_created(
             "passkey:first",
             "Original name",
             observation(),
@@ -635,11 +656,12 @@ mod tests {
 
         let result = profile.set_passkey_name("passkey:other", "Wrong key".to_owned());
 
+        let rejection = result.expect_err("changed credential rejects");
         assert_eq!(
-            result,
-            Err(DeviceAccessProfileTransitionError::CredentialChanged)
+            rejection.cause,
+            DeviceAccessProfileTransitionError::CredentialChanged
         );
-        assert_eq!(profile, original);
+        assert_eq!(rejection.profile, original);
     }
 
     #[test]
@@ -740,16 +762,16 @@ mod tests {
     fn credential_replacement_resets_provider_and_records_creation_evidence() -> anyhow::Result<()>
     {
         let mut profile = DeviceAccessProfile::default();
-        profile.record_passkey_created(
+        profile = profile.record_passkey_created(
             "passkey:first",
             "First credential",
             observation(),
             timestamp("2026-01-01T00:00:00.000Z"),
             PasskeyCreationCeremony::RegistrationOnly,
         );
-        profile.set_passkey_provider_label("passkey:first", "Bitwarden".to_owned())?;
+        profile = profile.set_passkey_provider_label("passkey:first", "Bitwarden".to_owned())?;
 
-        profile.record_passkey_created(
+        profile = profile.record_passkey_created(
             "passkey:replacement",
             " Replacement credential ",
             observation(),
@@ -776,14 +798,14 @@ mod tests {
     fn matching_usage_merges_new_observations_without_erasing_creation_evidence()
     -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
-        profile.record_passkey_created(
+        profile = profile.record_passkey_created(
             "passkey:current",
             "Current credential",
             observation(),
             timestamp("2026-01-01T00:00:00.000Z"),
             PasskeyCreationCeremony::RegistrationOnly,
         );
-        profile.record_passkey_used(
+        profile = profile.record_passkey_used(
             "passkey:current",
             PasskeyBrowserObservation {
                 backup_state: PasskeyBackupState::BackedUp,
@@ -816,7 +838,7 @@ mod tests {
     #[test]
     fn provider_label_transition_rejects_a_replaced_credential() -> anyhow::Result<()> {
         let mut profile = DeviceAccessProfile::default();
-        profile.record_passkey_created(
+        profile = profile.record_passkey_created(
             "passkey:current",
             "Current credential",
             observation(),
@@ -824,10 +846,14 @@ mod tests {
             PasskeyCreationCeremony::RegistrationOnly,
         );
 
+        let rejection = profile
+            .set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned())
+            .expect_err("stale credential rejects");
         assert_eq!(
-            profile.set_passkey_provider_label("passkey:stale", "Bitwarden".to_owned()),
-            Err(DeviceAccessProfileTransitionError::CredentialChanged)
+            rejection.cause,
+            DeviceAccessProfileTransitionError::CredentialChanged
         );
+        let profile = rejection.profile;
         assert!(
             profile
                 .passkey
@@ -845,17 +871,17 @@ mod tests {
         let device_a = DeviceId::parse("0123456789abcdef")?;
         let device_b = DeviceId::parse("fedcba9876543210")?;
         let store_id = StoreId::parse("store_testtoken11")?;
-        profile.record_verified_vault_access(
+        profile = profile.record_verified_vault_access(
             &device_a,
             &store_id,
             timestamp("2026-01-01T00:00:00.000Z"),
         );
-        profile.record_verified_vault_access(
+        profile = profile.record_verified_vault_access(
             &device_b,
             &store_id,
             timestamp("2026-02-01T00:00:00.000Z"),
         );
-        profile.record_verified_vault_access(
+        profile = profile.record_verified_vault_access(
             &device_a,
             &store_id,
             timestamp("2026-03-01T00:00:00.000Z"),

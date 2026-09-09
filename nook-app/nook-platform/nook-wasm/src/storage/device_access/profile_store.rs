@@ -159,7 +159,7 @@ impl DeviceAccessProfileKey {
         mutation: DeviceAccessProfileMutation<'_, F>,
     ) -> Result<StringUpdateResult, NookError>
     where
-        F: FnOnce(&mut DeviceAccessProfile) -> Result<(), NookError>,
+        F: FnOnce(DeviceAccessProfile) -> Result<DeviceAccessProfile, NookError>,
     {
         let fallback_key = self
             .legacy_owner
@@ -211,13 +211,13 @@ pub(super) struct DeviceAccessProfileMutation<'a, F> {
 }
 impl<F> DeviceAccessProfileMutation<'_, F>
 where
-    F: FnOnce(&mut DeviceAccessProfile) -> Result<(), NookError>,
+    F: FnOnce(DeviceAccessProfile) -> Result<DeviceAccessProfile, NookError>,
 {
     fn apply(self, raw: Option<String>) -> Result<String, NookError> {
         let Self { intent, update, .. } = self;
 
         let disposition = DeviceAccessProfileUpdate::observe(raw.as_deref());
-        let mut profile = match intent {
+        let profile = match intent {
             DeviceAccessProfileUpdateIntent::Interactive => {
                 disposition.into_interactive_profile()?
             }
@@ -232,7 +232,7 @@ where
                 }
             },
         };
-        update(&mut profile)?;
+        let profile = update(profile)?;
         serde_json::to_string(&profile).map_err(|error| {
             NookError::IndexedDb(format!("Device access profile serialize error: {error}"))
         })
@@ -319,7 +319,7 @@ mod browser_tests {
             wrapped,
         );
         let mut companion_profile = DeviceAccessProfile::default();
-        companion_profile.record_verified_vault_access(
+        companion_profile = companion_profile.record_verified_vault_access(
             &DeviceId::parse(companion.app_id().as_str())?,
             &nook_core::StoreId::generate()?,
             IsoTimestamp::from_trusted("2026-08-25T01:00:00.000Z".to_owned()),
@@ -441,9 +441,9 @@ mod browser_tests {
             .update(DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::Interactive,
                 guard: StringUpdateGuard::Unconditional,
-                update: |profile: &mut DeviceAccessProfile| {
+                update: |mut profile: DeviceAccessProfile| {
                     called.set(true);
-                    profile.record_verified_vault_access(
+                    profile = profile.record_verified_vault_access(
                         &device_id,
                         &store_id,
                         IsoTimestamp::from_trusted("2026-09-06T13:33:41.000Z".to_owned()),
@@ -562,10 +562,10 @@ mod browser_tests {
             let stored = DeviceAccessProfileMutation {
                 intent: DeviceAccessProfileUpdateIntent::Interactive,
                 guard: StringUpdateGuard::Unconditional,
-                update: |profile: &mut DeviceAccessProfile| {
+                update: |mut profile: DeviceAccessProfile| {
                     called.set(true);
-                    assert_eq!(profile, &DeviceAccessProfile::default());
-                    Ok(())
+                    assert_eq!(profile, DeviceAccessProfile::default());
+                    Ok(profile)
                 },
             }
             .apply(raw)?;
