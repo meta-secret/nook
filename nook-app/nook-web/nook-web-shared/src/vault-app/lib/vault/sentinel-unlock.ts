@@ -153,7 +153,8 @@ export class SentinelUnlockActions {
     if (state.isAuthenticated || state.isVerifying) return storageOk(undefined)
     const initialized = await state.initDeviceIdentity()
     if (initialized.isErr()) return storageErr(initialized.error)
-    await state.syncFromStorage(ProviderSyncFreshness.Forced)
+    const synchronized = await state.syncFromStorage(ProviderSyncFreshness.Forced)
+    if (synchronized.isErr()) return storageErr(synchronized.error)
     const read = await this.getSentinelUnlockStatus()
     if (read.isErr()) return storageErr(read.error)
     if (

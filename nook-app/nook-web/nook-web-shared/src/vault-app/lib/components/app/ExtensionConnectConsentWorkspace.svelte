@@ -28,7 +28,11 @@
     successMsg={vault.successMsg}
     errorMsg={vault.errorMsg}
     {appVersion}
-    onRefresh={() => vault.manualSync()}
+    onRefresh={async () => {
+      const synchronized = await vault.manualSync()
+      if (synchronized.isErr())
+        vault.errorMsg = vault.t(synchronized.error.translationKey)
+    }}
     onDismissSuccess={() => vault.dismissSuccess()}
     onDismissError={() => vault.dismissError()}
   />

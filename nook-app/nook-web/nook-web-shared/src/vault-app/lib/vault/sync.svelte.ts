@@ -9,7 +9,6 @@ import {
 
 /** Sync actions that snapshot reactive Svelte state at WASM boundaries. */
 import type {
-  ProviderSyncRequest,
   SyncActionsContext,
   SyncFromProvidersRequest,
   VaultStorageArguments,
@@ -59,6 +58,11 @@ export * from '$lib/vault/sync-resolution'
 
 export { SyncConflictPresentation } from '$lib/vault/sync-conflict-label'
 
+export type VaultSynchronizationResult = Result<
+  ProviderSyncOutcome,
+  StorageOperationFailure | OAuthFailure
+>
+
 const log = browserLogRuntime.createLogger('vault-sync')
 
 interface EventOutboxTargetSelection {
@@ -81,6 +85,12 @@ interface StagedProviderConflictCompletion {
 
 interface ProviderConflictPersistence {
   readonly conflict: NookSyncConflictReview
+}
+
+/** Whether the browser staged a conflict dialog for the attempted provider. */
+export enum StagedProviderConflictOutcome {
+  NotStaged = 'not-staged',
+  Staged = 'staged',
 }
 
 interface StagedProviderSyncIssueAssessment {
@@ -191,11 +201,13 @@ export class VaultSyncActions {
   async syncFromSyncProviders({
     visibility,
     freshness,
-  }: SyncFromProvidersExecution): Promise<void> {
+  }: SyncFromProvidersExecution): Promise<VaultSynchronizationResult> {
     const state = this.state
-    if (!state.hasManager) return
-    if (
-      !state.clientPolicy.should_sync_from_providers(
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
+    let shouldSync: boolean
+    try {
+      shouldSync = state.clientPolicy.should_sync_from_providers(
         state.syncBlocked,
         freshness === ProviderSyncFreshness.Forced,
         state.isVerifying,
@@ -204,93 +216,84 @@ export class VaultSyncActions {
         state.isSyncing,
         state.syncProviders.length,
       )
-    ) {
-      return
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
     }
-
+    if (!shouldSync) return storageOk(ProviderSyncOutcome.Skipped)
     state.isSyncing = true
-    let syncOutcome = ProviderSyncOutcome.Synced
     try {
-      for (const provider of state.syncProviders) {
-        if (state.syncBlocked) {
-          syncOutcome = ProviderSyncOutcome.Skipped
-          break
-        }
-        const syncProviderByIdArgs: ProviderSyncRequest = {
-          providerId: provider.id,
-          visibility,
-          failureHandling: ProviderSyncFailureHandling.Capture,
-        }
-        const providerSync = await state.syncProviderById(syncProviderByIdArgs)
-        if (providerSync.isErr()) {
-          syncOutcome = ProviderSyncOutcome.FailureCaptured
-          log.warn('provider sync admission failed')
-        } else if (providerSync.value !== ProviderSyncOutcome.Synced) {
-          syncOutcome = providerSync.value
-        }
-      }
+      const synchronized = await this.synchronizeProviders(visibility)
+      if (synchronized.isErr()) return synchronized
       if (state.isAuthenticated) {
-        const rosterRefresh1 = await this.hydrateMultiDeviceState()
-        if (rosterRefresh1.isErr()) {
-          state.errorMsg = state.t(rosterRefresh1.error.translationKey)
-          return
-        }
+        const roster = await this.hydrateMultiDeviceState()
+        if (roster.isErr()) return storageErr(roster.error)
       }
-      await new ExtensionSyncPublication(
+      const publication = await new ExtensionSyncPublication(
         state,
       ).publishExtensionEventLogUpdateForVault()
-      if (syncOutcome === ProviderSyncOutcome.Synced) state.markSynced(Date.now())
-    } catch {
-      // Background sync should not interrupt the UI.
+      if (publication.isErr()) return storageErr(publication.error)
+      if (synchronized.value === ProviderSyncOutcome.Synced)
+        state.markSynced(Date.now())
+      return synchronized
     } finally {
       state.isSyncing = false
     }
   }
 
+  private async synchronizeProviders(
+    visibility: ProviderSyncVisibility,
+  ): Promise<VaultSynchronizationResult> {
+    const state = this.state
+    let outcome = ProviderSyncOutcome.Synced
+    for (const provider of state.syncProviders) {
+      if (state.syncBlocked) return storageOk(ProviderSyncOutcome.Skipped)
+      const synchronized = await state.syncProviderById({
+        providerId: provider.id,
+        visibility,
+        failureHandling: ProviderSyncFailureHandling.Capture,
+      })
+      if (synchronized.isErr()) return synchronized
+      if (synchronized.value !== ProviderSyncOutcome.Synced)
+        outcome = synchronized.value
+    }
+    return storageOk(outcome)
+  }
+
   async runFanOutSyncToProviders({
     visibility,
-  }: FanOutSyncExecution): Promise<void> {
+  }: FanOutSyncExecution): Promise<VaultSynchronizationResult> {
     const state = this.state
-    if (state.isFanOutSyncing) return
+    if (state.isFanOutSyncing) return storageOk(ProviderSyncOutcome.Skipped)
     state.isFanOutSyncing = true
     try {
-      for (const provider of state.syncProviders) {
-        if (state.syncBlocked) break
-        const syncProviderByIdArgs2: ProviderSyncRequest = {
-          providerId: provider.id,
-          visibility,
-          failureHandling: ProviderSyncFailureHandling.Capture,
-        }
-        const providerSync = await state.syncProviderById(syncProviderByIdArgs2)
-        if (
-          providerSync.isErr() ||
-          providerSync.value === ProviderSyncOutcome.FailureCaptured
-        )
-          log.warn('provider sync did not complete')
-      }
+      return await this.synchronizeProviders(visibility)
     } finally {
       state.isFanOutSyncing = false
     }
   }
 
-  async runFanOutSyncAfterLocalSave(): Promise<void> {
+  async runFanOutSyncAfterLocalSave(): Promise<
+    Result<void, StorageOperationFailure>
+  > {
     const state = this.state
-    await new ExtensionSyncPublication(
+    const publication = await new ExtensionSyncPublication(
       state,
     ).publishExtensionEventLogUpdateForVault()
-    if (!state.deviceProtectionReady) return
+    if (publication.isErr()) return storageErr(publication.error)
+    if (!state.deviceProtectionReady) return storageOk(undefined)
     if (state.syncProviders.length === 0) {
-      const request: EventOutboxRequest = {
+      return state.flushRemoteEventOutboxNow({
         kind: EventOutboxRequestKind.Default,
-      }
-      await state.flushRemoteEventOutboxNow(request)
-      return
+      })
     }
     for (const provider of state.syncProviders) {
       if (state.syncBlocked) break
-      const request = new ProviderEventOutbox(provider).request()
-      await state.flushRemoteEventOutboxNow(request)
+      const flushed = await state.flushRemoteEventOutboxNow(
+        new ProviderEventOutbox(provider).request(),
+      )
+      if (flushed.isErr()) return storageErr(flushed.error)
     }
+    return storageOk(undefined)
   }
 
   eventOutboxTarget({ request }: EventOutboxTargetSelection): EventOutboxTarget {
@@ -329,18 +332,19 @@ export class VaultSyncActions {
 
   async flushRemoteEventOutboxNow({
     request,
-  }: RemoteEventOutboxFlush): Promise<void> {
+  }: RemoteEventOutboxFlush): Promise<Result<void, StorageOperationFailure>> {
     const state = this.state
-    if (!state.hasManager) return
+    const admitted = state.admitManager()
+    if (admitted.isErr()) return storageErr(admitted.error)
     const target = this.eventOutboxTarget({ request })
     if (target.kind === EventOutboxTargetKind.LocalFolder) {
       const synced = await new ProviderSyncActions(state).syncLocalFolderProvider({
         provider: target.provider,
       })
-      if (synced.isErr()) log.warn('local backup sync skipped')
-      return
+      return synced
     }
-    if (target.kind === EventOutboxTargetKind.Unavailable) return
+    if (target.kind === EventOutboxTargetKind.Unavailable)
+      return storageOk(undefined)
     const flushed = await state.enqueueStorage(async () => {
       const admitted = state.admitManager()
       if (admitted.isErr()) return storageErr(admitted.error)
@@ -355,7 +359,7 @@ export class VaultSyncActions {
         return storageErr(new NativeVaultStorageFailure(failure))
       }
     })
-    if (flushed.isErr()) log.warn('event outbox flush skipped')
+    return flushed
   }
 
   async updateProviderSyncMetadata({
@@ -481,63 +485,96 @@ export class VaultSyncActions {
 
   async stageStagedProviderSyncIssue({
     args,
-  }: StagedProviderSyncIssueAssessment): Promise<boolean> {
+  }: StagedProviderSyncIssueAssessment): Promise<
+    Result<StagedProviderConflictOutcome, StorageOperationFailure>
+  > {
     const state = this.state
-    if (!state.hasManager) return false
-    const manager = state.requireManager()
-    const issueResult = manager.take_event_log_sync_issue()
-    if (issueResult.state === NookEventLogSyncIssueState.Clear) {
-      issueResult.free()
-      return false
-    }
-    const issue = issueResult.issue()
-    issueResult.free()
+    const activeVault = state.activeVault
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
+    let issueResult: ReturnType<typeof manager.value.take_event_log_sync_issue>
     try {
-      if (!issue.isStoreMismatch) return false
-      const localStoreId = issue.localStoreId
-      const remoteStoreId = issue.remoteStoreId
-
+      issueResult = manager.value.take_event_log_sync_issue()
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
+    }
+    let issue: ReturnType<typeof issueResult.issue>
+    try {
+      if (issueResult.state === NookEventLogSyncIssueState.Clear)
+        return storageOk(StagedProviderConflictOutcome.NotStaged)
+      issue = issueResult.issue()
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
+    } finally {
+      issueResult.free()
+    }
+    try {
+      let localStoreId: string
+      let remoteStoreId: string
+      try {
+        if (!issue.isStoreMismatch)
+          return storageOk(StagedProviderConflictOutcome.NotStaged)
+        localStoreId = issue.localStoreId
+        remoteStoreId = issue.remoteStoreId
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure))
+      }
       let localYaml: string
       try {
         localYaml = await read_local_vault_yaml()
       } catch (failure) {
-        state.errorMsg = state.t(
-          new NativeVaultStorageFailure(failure).translationKey,
-        )
-        return false
+        return storageErr(new NativeVaultStorageFailure(failure))
       }
       const restored = await state.enqueueStorage(async () => {
+        const current = state.admitManager()
+        if (current.isErr()) return storageErr(current.error)
+        if (current.value !== manager.value || state.activeVault !== activeVault)
+          return storageErr(
+            new StorageOperationFailure(
+              StorageOperationFailureKind.GenerationChanged,
+            ),
+          )
         try {
-          await manager.restore_local_after_provider_assessment()
+          await current.value.restore_local_after_provider_assessment()
           return storageOk(undefined)
         } catch (failure) {
           return storageErr(new NativeVaultStorageFailure(failure))
         }
       })
-      if (restored.isErr()) {
-        state.errorMsg = state.t(restored.error.translationKey)
-        return false
-      }
-      const revision = NookProviderSyncRevision.untracked()
-      try {
-        state.stageSyncConflict(
-          NookPendingSyncConflict.pending_store_id(
-            state.stagedProviderLabel(),
-            localYaml,
-            '',
-            args.mode,
-            args.pat,
-            args.repo,
-            revision,
-            localStoreId,
-            remoteStoreId,
-          ),
+      if (restored.isErr()) return storageErr(restored.error)
+      const current = state.admitManager()
+      if (current.isErr()) return storageErr(current.error)
+      if (current.value !== manager.value || state.activeVault !== activeVault)
+        return storageErr(
+          new StorageOperationFailure(StorageOperationFailureKind.GenerationChanged),
         )
+      let revision: NookProviderSyncRevision
+      try {
+        revision = NookProviderSyncRevision.untracked()
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure))
+      }
+      let conflict: NookPendingSyncConflict
+      try {
+        conflict = NookPendingSyncConflict.pending_store_id(
+          state.stagedProviderLabel(),
+          localYaml,
+          '',
+          args.mode,
+          args.pat,
+          args.repo,
+          revision,
+          localStoreId,
+          remoteStoreId,
+        )
+      } catch (failure) {
+        return storageErr(new NativeVaultStorageFailure(failure))
       } finally {
         revision.free()
       }
+      state.stageSyncConflict(conflict)
       log.warn('staged provider store mismatch staged')
-      return true
+      return storageOk(StagedProviderConflictOutcome.Staged)
     } finally {
       issue.free()
     }
@@ -569,7 +606,12 @@ export class VaultSyncActions {
         : state.runtimeConfig.resolve_default_vault_sync_interval_ms()
     log.info('vault sync timer started')
     if (state.isAuthenticated) {
-      void state.syncFromStorage(ProviderSyncFreshness.Scheduled)
+      void state
+        .syncFromStorage(ProviderSyncFreshness.Scheduled)
+        .then((synchronized) => {
+          if (synchronized.isErr())
+            state.errorMsg = state.t(synchronized.error.translationKey)
+        })
     }
     const scheduleSyncArgs: Parameters<typeof state.scheduleSync>[0] = {
       callback: () => {
@@ -586,7 +628,12 @@ export class VaultSyncActions {
         if (tickDecision !== VaultSyncTimerTickDecision.Sync) {
           return
         }
-        void state.syncFromStorage(ProviderSyncFreshness.Scheduled)
+        void state
+          .syncFromStorage(ProviderSyncFreshness.Scheduled)
+          .then((synchronized) => {
+            if (synchronized.isErr())
+              state.errorMsg = state.t(synchronized.error.translationKey)
+          })
       },
       intervalMs,
     }
@@ -600,197 +647,164 @@ export class VaultSyncActions {
     }
   }
 
-  async syncFromStorage({ freshness }: StorageSyncExecution) {
+  async syncFromStorage({
+    freshness,
+  }: StorageSyncExecution): Promise<VaultSynchronizationResult> {
     const state = this.state
-    if (!state.hasManager) return
-    const syncDecision = state.clientPolicy.vault_storage_sync_decision(
-      state.syncBlocked,
-      freshness,
-      state.isVerifying,
-      state.isSaving,
-      state.isPasswordBusy,
-      state.isSyncing,
-      state.isAuthenticated,
-      state.syncProviders.length,
-      state.hasRemoteCredentials(),
-      state.localVaultPresent,
-    )
-    if (syncDecision === VaultStorageSyncDecision.Skip) return
-
-    if (syncDecision === VaultStorageSyncDecision.SyncFirstProviderUnauthenticated) {
-      state.isSyncing = true
-      try {
-        const provider = state.syncProviders[0]!
-        if (provider.type === 'local-folder') {
-          const syncLocalFolderProviderArgs3: Parameters<
-            ProviderSyncActions['syncLocalFolderProvider']
-          >[0] = { provider }
-          const synced = await new ProviderSyncActions(
-            state,
-          ).syncLocalFolderProvider(syncLocalFolderProviderArgs3)
-          if (synced.isErr()) {
-            log.warn('local backup sync failed')
-            return
-          }
-        } else {
-          const { mode, pat, repo } = state.providerWasmArgs(provider)
-          const raw = await state.enqueueStorage(async () => {
-            const admitted = state.admitManager()
-            if (admitted.isErr()) return storageErr(admitted.error)
-            return syncVaultFromStorage({ manager: admitted.value, mode, pat, repo })
-          })
-          if (raw.isErr()) {
-            log.warn('provider sync failed')
-            return
-          }
-          state.applyVaultSyncResult(raw.value)
-        }
-        const secretRefresh1 = await state.refreshSecretsFromSession()
-        if (secretRefresh1.isErr()) {
-          state.errorMsg = state.t(secretRefresh1.error.translationKey)
-          return
-        }
-        state.markSynced(Date.now())
-      } catch (error) {
-        const syncErrorArgs: Parameters<VaultSyncRuntimeActions['syncError']>[0] = {
-          context: 'background sync (unauthenticated)',
-          failure: browserLogRuntime.runtimeFailure(error),
-        }
-        new VaultSyncRuntimeActions(state).syncError(syncErrorArgs)
-      } finally {
-        state.isSyncing = false
-      }
-      return
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
+    let decision: VaultStorageSyncDecision
+    const remoteCredentials = state.hasRemoteCredentials()
+    try {
+      decision = state.clientPolicy.vault_storage_sync_decision(
+        state.syncBlocked,
+        freshness,
+        state.isVerifying,
+        state.isSaving,
+        state.isPasswordBusy,
+        state.isSyncing,
+        state.isAuthenticated,
+        state.syncProviders.length,
+        remoteCredentials,
+        state.localVaultPresent,
+      )
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
     }
-
-    if (syncDecision === VaultStorageSyncDecision.SyncProviders) {
-      const syncFromSyncProvidersArgs: SyncFromProvidersRequest = {
+    if (decision === VaultStorageSyncDecision.Skip)
+      return storageOk(ProviderSyncOutcome.Skipped)
+    if (decision === VaultStorageSyncDecision.SyncProviders) {
+      return state.syncFromSyncProviders({
         visibility: ProviderSyncVisibility.Quiet,
         freshness,
-      }
-      await state.syncFromSyncProviders(syncFromSyncProvidersArgs)
-      return
+      })
     }
-
-    const refreshedTokens = await state.ensureOAuthTokensFresh()
-    if (refreshedTokens.isErr()) {
-      state.errorMsg = state.t(refreshedTokens.error.translationKey)
-      return
+    if (decision !== VaultStorageSyncDecision.SyncFirstProviderUnauthenticated) {
+      const tokens = await state.ensureOAuthTokensFresh()
+      if (tokens.isErr()) return storageErr(tokens.error)
     }
-
     state.isSyncing = true
     try {
-      const { mode, pat, repo } = state.wasmStorageArgs()
-      const raw = await state.enqueueStorage(async () => {
-        const admitted = state.admitManager()
-        if (admitted.isErr()) return storageErr(admitted.error)
-        return syncVaultFromStorage({ manager: admitted.value, mode, pat, repo })
-      })
-      if (raw.isErr()) {
-        log.warn('storage sync failed')
-        return
+      if (decision === VaultStorageSyncDecision.SyncFirstProviderUnauthenticated) {
+        const provider = state.syncProviders[0]
+        if (!provider)
+          return storageErr(
+            new StorageOperationFailure(
+              StorageOperationFailureKind.GenerationChanged,
+            ),
+          )
+        if (provider.type === 'local-folder') {
+          const synchronized = await new ProviderSyncActions(
+            state,
+          ).syncLocalFolderProvider({ provider })
+          if (synchronized.isErr()) return storageErr(synchronized.error)
+        } else {
+          const applied = await this.synchronizeStorage(
+            state.providerWasmArgs(provider),
+          )
+          if (applied.isErr()) return storageErr(applied.error)
+        }
+      } else {
+        const applied = await this.synchronizeStorage(state.wasmStorageArgs())
+        if (applied.isErr()) return storageErr(applied.error)
       }
-      state.applyVaultSyncResult(raw.value)
-      const secretRefresh2 = await state.refreshSecretsFromSession()
-      if (secretRefresh2.isErr()) {
-        state.errorMsg = state.t(secretRefresh2.error.translationKey)
-        return
-      }
+      const refreshed = await state.refreshSecretsFromSession()
+      if (refreshed.isErr()) return storageErr(refreshed.error)
       state.markSynced(Date.now())
-    } catch (error) {
-      const syncErrorArgs2: Parameters<VaultSyncRuntimeActions['syncError']>[0] = {
-        context: 'background sync',
-        failure: browserLogRuntime.runtimeFailure(error),
-      }
-      new VaultSyncRuntimeActions(state).syncError(syncErrorArgs2)
+      return storageOk(ProviderSyncOutcome.Synced)
     } finally {
       state.isSyncing = false
     }
   }
 
-  async manualSync() {
+  private async synchronizeStorage({
+    mode,
+    pat,
+    repo,
+  }: VaultStorageArguments): Promise<Result<void, StorageOperationFailure>> {
     const state = this.state
-    if (!state.hasManager) return
-    if (state.syncBlocked) return
-    if (state.isSyncing) return
+    const synchronized = await state.enqueueStorage(async () => {
+      const manager = state.admitManager()
+      if (manager.isErr()) return storageErr(manager.error)
+      return syncVaultFromStorage({ manager: manager.value, mode, pat, repo })
+    })
+    if (synchronized.isErr()) return storageErr(synchronized.error)
+    return state.applyVaultSyncResult(synchronized.value)
+  }
 
-    // A fresh browser may retain provider credentials before it has a vault, but
-    // credentials alone do not establish a sync target. Initializing
-    // device-dependent sync in that state asks the WASM manager to encrypt before
-    // vault crypto exists. Keep the device roster projection empty until a vault
-    // or a connected sync provider exists.
-    if (
-      !state.clientPolicy.manual_sync_has_target(
+  private clearDeviceRoster(): void {
+    const state = this.state
+    for (const join of state.pendingJoins) join.free()
+    for (const member of state.vaultMembers) member.free()
+    state.pendingJoins = []
+    state.vaultMembers = []
+  }
+
+  async manualSync(): Promise<VaultSynchronizationResult> {
+    const state = this.state
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
+    if (state.syncBlocked || state.isSyncing)
+      return storageOk(ProviderSyncOutcome.Skipped)
+    let hasTarget: boolean
+    try {
+      hasTarget = state.clientPolicy.manual_sync_has_target(
         state.localVaultPresent,
         state.syncProviders.length,
       )
-    ) {
-      state.pendingJoins = []
-      state.vaultMembers = []
-      return
+    } catch (failure) {
+      return storageErr(new NativeVaultStorageFailure(failure))
     }
-    log.info('manual sync started')
+    if (!hasTarget) {
+      this.clearDeviceRoster()
+      return storageOk(ProviderSyncOutcome.Skipped)
+    }
     state.isSyncing = true
     try {
-      const identityInitialization = await state.initDeviceIdentity()
-      if (identityInitialization.isErr()) {
-        state.errorMsg = state.t(identityInitialization.error.translationKey)
-        return
-      }
+      const initialized = await state.initDeviceIdentity()
+      if (initialized.isErr()) return storageErr(initialized.error)
       if (state.syncProviders.length === 0) {
         if (state.hasRemoteCredentials()) {
-          await state.syncFromStorage(ProviderSyncFreshness.Forced)
-        } else {
-          state.pendingJoins = []
-          state.vaultMembers = []
+          // Hand the synchronization lease to the storage operation before awaiting it.
+          state.isSyncing = false
+          return await state.syncFromStorage(ProviderSyncFreshness.Forced)
         }
-        return
+        this.clearDeviceRoster()
+        return storageOk(ProviderSyncOutcome.Skipped)
       }
-      for (const provider of state.syncProviders) {
-        const syncRequest: ProviderSyncRequest = {
-          providerId: provider.id,
-          visibility: ProviderSyncVisibility.Visible,
-          failureHandling: ProviderSyncFailureHandling.Capture,
-        }
-        const providerSync = await state.syncProviderById(syncRequest)
-        if (
-          providerSync.isErr() ||
-          providerSync.value === ProviderSyncOutcome.FailureCaptured
-        )
-          log.warn('provider sync did not complete')
-      }
+      const synchronized = await this.synchronizeProviders(
+        ProviderSyncVisibility.Visible,
+      )
+      if (synchronized.isErr()) return synchronized
       if (state.isAuthenticated) {
-        const rosterRefresh2 = await state.hydrateMultiDeviceState()
-        if (rosterRefresh2.isErr()) {
-          state.errorMsg = state.t(rosterRefresh2.error.translationKey)
-          return
-        }
+        const roster = await state.hydrateMultiDeviceState()
+        if (roster.isErr()) return storageErr(roster.error)
       } else {
-        state.pendingJoins = []
-        state.vaultMembers = []
+        this.clearDeviceRoster()
       }
-    } catch (error) {
-      const syncErrorArgs3: Parameters<VaultSyncRuntimeActions['syncError']>[0] = {
-        context: 'manual sync',
-        failure: browserLogRuntime.runtimeFailure(error),
-      }
-      new VaultSyncRuntimeActions(state).syncError(syncErrorArgs3)
+      return synchronized
     } finally {
       state.isSyncing = false
-      log.debug('manual sync finished')
     }
   }
 
-  async fanOutSyncToProviders({ visibility }: FanOutSyncExecution): Promise<void> {
+  async fanOutSyncToProviders({
+    visibility,
+  }: FanOutSyncExecution): Promise<VaultSynchronizationResult> {
     const state = this.state
-    if (!state.hasManager || !state.isAuthenticated) return
-    if (state.syncBlocked) return
-    if (state.syncProviders.length === 0) return
-    log.debug('fan-out sync queued')
+    const manager = state.admitManager()
+    if (manager.isErr()) return storageErr(manager.error)
+    if (
+      !state.isAuthenticated ||
+      state.syncBlocked ||
+      state.syncProviders.length === 0
+    )
+      return storageOk(ProviderSyncOutcome.Skipped)
     const run = state.fanOutSyncChain.then(() =>
       state.runFanOutSyncToProviders(visibility),
     )
-    state.fanOutSyncChain = run.catch(() => {})
+    // The shared promise is only a completion barrier; each caller receives its own outcome.
+    state.fanOutSyncChain = run.then(() => {})
     return run
   }
 

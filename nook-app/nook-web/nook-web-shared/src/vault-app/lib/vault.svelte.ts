@@ -466,7 +466,7 @@ export class VaultState extends VaultRuntimeState {
   }
 
   /** Pull local vault from every sync provider (background / manual refresh). */
-  async syncFromSyncProviders(request: SyncFromProvidersRequest): Promise<void> {
+  async syncFromSyncProviders(request: SyncFromProvidersRequest) {
     return new syncActions.VaultSyncActions(this).syncFromSyncProviders({
       ...request,
     })
@@ -486,30 +486,33 @@ export class VaultState extends VaultRuntimeState {
   fanOutSyncChain: Promise<void> = Promise.resolve()
 
   /** Push the local vault to every connected sync provider (after CRUD or manual sync). */
-  async fanOutSyncToProviders(visibility: ProviderSyncVisibility): Promise<void> {
+  async fanOutSyncToProviders(visibility: ProviderSyncVisibility) {
     return new syncActions.VaultSyncActions(this).fanOutSyncToProviders({
       visibility,
     })
   }
 
-  async runFanOutSyncToProviders(visibility: ProviderSyncVisibility): Promise<void> {
+  async runFanOutSyncToProviders(visibility: ProviderSyncVisibility) {
     return new syncActions.VaultSyncActions(this).runFanOutSyncToProviders({
       visibility,
     })
   }
 
-  async runFanOutSyncAfterLocalSave(): Promise<void> {
+  async runFanOutSyncAfterLocalSave() {
     return new syncActions.VaultSyncActions(this).runFanOutSyncAfterLocalSave()
   }
 
-  async publishExtensionEventLogUpdate(): Promise<void> {
+  async publishExtensionEventLogUpdate() {
     return new ExtensionSyncPublication(
       this,
     ).publishExtensionEventLogUpdateForVault()
   }
 
   scheduleFanOutSyncAfterLocalSave(): void {
-    void this.runFanOutSyncAfterLocalSave()
+    void this.runFanOutSyncAfterLocalSave().then((synchronized) => {
+      if (synchronized.isErr())
+        this.errorMsg = this.t(synchronized.error.translationKey)
+    })
   }
 
   eventOutboxTarget(request: EventOutboxRequest): EventOutboxTarget {
@@ -569,7 +572,7 @@ export class VaultState extends VaultRuntimeState {
     })
   }
 
-  async stageStagedProviderSyncIssue(args: VaultStorageArguments): Promise<boolean> {
+  async stageStagedProviderSyncIssue(args: VaultStorageArguments) {
     return new syncActions.VaultSyncActions(this).stageStagedProviderSyncIssue({
       args,
     })
@@ -881,7 +884,7 @@ export class VaultState extends VaultRuntimeState {
     return this.secretsActions.handleProtonPassImport({ exportBytes })
   }
 
-  async flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void> {
+  async flushRemoteEventOutboxNow(request: EventOutboxRequest) {
     return new syncActions.VaultSyncActions(this).flushRemoteEventOutboxNow({
       request,
     })

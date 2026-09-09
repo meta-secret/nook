@@ -317,7 +317,11 @@
             pendingJoins={vault.pendingJoins}
             isBusy={vault.isSaving || vault.isVerifying}
             onApproveJoin={(id) => vault.approveJoin(id)}
-            onRefresh={() => vault.manualSync()}
+            onRefresh={async () => {
+              const synchronized = await vault.manualSync()
+              if (synchronized.isErr())
+                vault.errorMsg = vault.t(synchronized.error.translationKey)
+            }}
             onOpenDevicesSettings={() => {
               const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
                 section: SettingsSection.Storage,
@@ -357,7 +361,11 @@
       errorMsg={vault.errorMsg}
       syncConflictLabel={vault.syncConflictLabel}
       {appVersion}
-      onRefresh={() => vault.manualSync()}
+      onRefresh={async () => {
+        const synchronized = await vault.manualSync()
+        if (synchronized.isErr())
+          vault.errorMsg = vault.t(synchronized.error.translationKey)
+      }}
       onDismissSuccess={() => vault.dismissSuccess()}
       onDismissError={() => vault.dismissError()}
     />

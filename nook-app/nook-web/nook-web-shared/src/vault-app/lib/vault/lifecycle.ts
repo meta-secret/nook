@@ -695,7 +695,8 @@ class DeviceInitializationContinuation {
       state.enrollmentFromUrlPending = true
     }
     if (state.isAuthenticated) {
-      await state.runFanOutSyncAfterLocalSave()
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error)
       state.startVaultSync()
     }
     log.info('app init finished')

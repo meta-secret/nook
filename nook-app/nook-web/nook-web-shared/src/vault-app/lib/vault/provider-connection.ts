@@ -1,3 +1,4 @@
+import { StagedProviderConflictOutcome } from '$lib/vault/sync.svelte'
 import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { err as storageErr, ok as storageOk, type Result } from 'neverthrow'
@@ -144,11 +145,17 @@ export class ProviderConnectionActions {
           stagedRemoteArgs.args,
         )
         if (accessStatus.isErr()) {
-          const stagedConflict =
-            accessStatus.error.kind !== StorageOperationFailureKind.TimedOut &&
-            (await state.stageStagedProviderSyncIssue(stagedRemoteArgs.args))
-          if (!stagedConflict)
-            state.errorMsg = state.t(accessStatus.error.translationKey)
+          if (accessStatus.error.kind !== StorageOperationFailureKind.TimedOut) {
+            const stagedConflict = await state.stageStagedProviderSyncIssue(
+              stagedRemoteArgs.args,
+            )
+            if (stagedConflict.isErr()) {
+              state.errorMsg = state.t(stagedConflict.error.translationKey)
+              return
+            }
+            if (stagedConflict.value === StagedProviderConflictOutcome.Staged) return
+          }
+          state.errorMsg = state.t(accessStatus.error.translationKey)
           return
         }
         if (await state.handleRemoteVaultAssessStatus(accessStatus.value)) return
@@ -167,7 +174,11 @@ export class ProviderConnectionActions {
         return
       }
       const request = new ProviderEventOutbox(provider).request()
-      await state.flushRemoteEventOutboxNow(request)
+      const flushed = await state.flushRemoteEventOutboxNow(request)
+      if (flushed.isErr()) {
+        state.errorMsg = state.t(flushed.error.translationKey)
+        return
+      }
       const syncProviderByIdArgs: Parameters<typeof state.syncProviderById>[0] = {
         providerId: provider.id,
         visibility: ProviderSyncVisibility.Quiet,
@@ -182,11 +193,17 @@ export class ProviderConnectionActions {
       state.clearLoginSetup()
       state.addProviderOpen = false
     } catch (error) {
-      const stagedConflict =
-        stagedRemoteArgs.kind === StagedRemoteStorageKind.Available
-          ? await state.stageStagedProviderSyncIssue(stagedRemoteArgs.args)
-          : false
-      if (!stagedConflict) {
+      if (stagedRemoteArgs.kind === StagedRemoteStorageKind.Available) {
+        const stagedConflict = await state.stageStagedProviderSyncIssue(
+          stagedRemoteArgs.args,
+        )
+        if (stagedConflict.isErr()) {
+          state.errorMsg = state.t(stagedConflict.error.translationKey)
+          return
+        }
+        if (stagedConflict.value === StagedProviderConflictOutcome.Staged) return
+      }
+      {
         state.errorMsg =
           state.localFolderHealth.state === NookLocalFolderHealthState.MultipleVaults
             ? state.t(I18N_KEYS.AuthStorageLocalFolderMultipleVaultsShort)

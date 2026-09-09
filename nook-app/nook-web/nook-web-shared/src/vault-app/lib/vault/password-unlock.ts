@@ -112,16 +112,17 @@ export class VaultPasswordActions {
       const passwordRefresh1 = await state.refreshPasswordEntriesList()
       if (passwordRefresh1.isErr()) return storageErr(passwordRefresh1.error)
       log.info('vault password added')
+      const rosterRefresh1 = await state.hydrateMultiDeviceState()
+      if (rosterRefresh1.isErr()) {
+        return storageErr(rosterRefresh1.error)
+      }
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error)
       state.showSuccess(
         hadPasswords
           ? state.t(I18N_KEYS.ToastsPasswordAddedRotate)
           : state.t(I18N_KEYS.ToastsPasswordSet),
       )
-      const rosterRefresh1 = await state.hydrateMultiDeviceState()
-      if (rosterRefresh1.isErr()) {
-        return storageErr(rosterRefresh1.error)
-      }
-      await state.runFanOutSyncAfterLocalSave()
       return storageOk(undefined)
     } finally {
       state.isPasswordBusy = false
@@ -170,8 +171,9 @@ export class VaultPasswordActions {
       if (changed.isErr()) return storageErr(changed.error)
       const passwordRefresh2 = await state.refreshPasswordEntriesList()
       if (passwordRefresh2.isErr()) return storageErr(passwordRefresh2.error)
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error)
       state.showSuccess(state.t(I18N_KEYS.ToastsPasswordUpdated))
-      await state.runFanOutSyncAfterLocalSave()
       return storageOk(undefined)
     } finally {
       state.isPasswordBusy = false
@@ -219,8 +221,9 @@ export class VaultPasswordActions {
         state.enrollmentCode = ''
         state.clearActiveEnrollmentEntry()
       }
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error)
       state.showSuccess(state.t(I18N_KEYS.ToastsPasswordRemoved))
-      await state.runFanOutSyncAfterLocalSave()
       return storageOk(undefined)
     } finally {
       state.isPasswordBusy = false

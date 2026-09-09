@@ -453,7 +453,9 @@
       await vault.connectAndSyncStagedProvider()
       return
     }
-    await vault.manualSync()
+    const synchronized = await vault.manualSync()
+    if (synchronized.isErr())
+      vault.errorMsg = vault.t(synchronized.error.translationKey)
   }
   function toggleColorMode() {
     followsSystemColorMode = false

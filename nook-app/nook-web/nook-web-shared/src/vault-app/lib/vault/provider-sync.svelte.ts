@@ -275,7 +275,14 @@ export class ProviderSyncActions {
             failureHandling,
             failure: synced.error,
           })
-        state.applyVaultSyncResult(synced.value)
+        const applied = state.applyVaultSyncResult(synced.value)
+        if (applied.isErr())
+          return this.presentFailure({
+            provider,
+            visibility,
+            failureHandling,
+            failure: applied.error,
+          })
         let yaml: string
         try {
           yaml = await read_local_vault_yaml()

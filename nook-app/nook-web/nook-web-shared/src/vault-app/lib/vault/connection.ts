@@ -337,11 +337,11 @@ export class VaultConnectionActions {
       state.errorMsg = state.resolveErrorMessage(message)
     } finally {
       if (state.isAuthenticated) {
-        try {
-          await state.syncFromStorage(ProviderSyncFreshness.Forced)
-        } catch {
-          // Post-unlock sync should not block the login gate.
-        }
+        const synchronized = await state.syncFromStorage(
+          ProviderSyncFreshness.Forced,
+        )
+        if (synchronized.isErr())
+          state.errorMsg = state.t(synchronized.error.translationKey)
         state.startIdleSessionTracking()
         state.startVaultSync()
       }

@@ -1,3 +1,4 @@
+import { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { OAuthFailure } from '$lib/auth/oauth-failure'
 import { NativeVaultStorageFailure } from '$lib/runtime/storage-failure'
 import { err as storageErr, ok as storageOk, type Result } from 'neverthrow'
@@ -50,7 +51,9 @@ export class VaultDeviceActions {
 
   async refreshDeviceState() {
     const state = this.state
-    await state.manualSync()
+    const synchronized = await state.manualSync()
+    if (synchronized.isErr())
+      state.errorMsg = state.t(synchronized.error.translationKey)
   }
 
   async refreshPendingJoinsFromProviders() {
@@ -93,7 +96,11 @@ export class VaultDeviceActions {
       const request: EventOutboxRequest = {
         kind: EventOutboxRequestKind.Default,
       }
-      await state.flushRemoteEventOutboxNow(request)
+      const flushed = await state.flushRemoteEventOutboxNow(request)
+      if (flushed.isErr()) {
+        state.errorMsg = state.t(flushed.error.translationKey)
+        return
+      }
       const rosterRefresh2 = await state.hydrateMultiDeviceState()
       if (rosterRefresh2.isErr()) {
         state.errorMsg = state.t(rosterRefresh2.error.translationKey)
@@ -102,7 +109,14 @@ export class VaultDeviceActions {
       state.pendingJoins = state.pendingJoins.filter(
         (entry) => entry.deviceId !== joinDeviceId,
       )
-      await state.fanOutSyncToProviders(ProviderSyncVisibility.Quiet)
+      const synchronized = await state.fanOutSyncToProviders(
+        ProviderSyncVisibility.Quiet,
+      )
+      if (synchronized.isErr()) {
+        state.errorMsg = state.t(synchronized.error.translationKey)
+        return
+      }
+      if (synchronized.value !== ProviderSyncOutcome.Synced) return
       state.pendingJoins = state.pendingJoins.filter(
         (entry) => entry.deviceId !== joinDeviceId,
       )
@@ -367,7 +381,14 @@ export class VaultDeviceActions {
         state.errorMsg = state.t(rosterRefresh6.error.translationKey)
         return
       }
-      await state.syncFromStorage(ProviderSyncFreshness.Scheduled)
+      const synchronized = await state.syncFromStorage(
+        ProviderSyncFreshness.Scheduled,
+      )
+      if (synchronized.isErr()) {
+        state.errorMsg = state.t(synchronized.error.translationKey)
+        return
+      }
+      if (synchronized.value !== ProviderSyncOutcome.Synced) return
       state.showSuccess(state.t(I18N_KEYS.ToastsEnrolledConnected))
       log.info('enrolled and connected')
       state.joinEnrollmentPrompt = JoinEnrollmentState.None

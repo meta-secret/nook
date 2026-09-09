@@ -143,7 +143,11 @@ export class VaultSecretActions {
         return importFromManager(manager.value)
       })
       if (imported.isErr()) return storageErr(imported.error)
-      await state.runFanOutSyncAfterLocalSave()
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) {
+        imported.value.free()
+        return storageErr(localSaveSync.error)
+      }
       const refreshed = await state.refreshSecretsFromSession()
       if (refreshed.isErr()) {
         imported.value.free()
@@ -209,7 +213,8 @@ export class VaultSecretActions {
       const refreshed = await state.refreshSecretsFromSession()
       if (refreshed.isErr()) return storageErr(refreshed.error)
       log.info('secret added')
-      await state.runFanOutSyncAfterLocalSave()
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error)
       const synchronized = await state.refreshSecretsFromSession()
       if (synchronized.isErr()) return storageErr(synchronized.error)
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretSaved))
@@ -461,7 +466,8 @@ export class VaultSecretActions {
       deletedRecord?.free()
       const refreshed = await state.refreshSecretsFromSession()
       if (refreshed.isErr()) return storageErr(refreshed.error)
-      await state.runFanOutSyncAfterLocalSave()
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error)
       const synchronized = await state.refreshSecretsFromSession()
       if (synchronized.isErr()) return storageErr(synchronized.error)
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretDeleted))
@@ -502,7 +508,8 @@ export class VaultSecretActions {
       this.freeSecretRecords(replaced.value)
       const refreshed = await state.refreshSecretsFromSession()
       if (refreshed.isErr()) return storageErr(refreshed.error)
-      await state.runFanOutSyncAfterLocalSave()
+      const localSaveSync = await state.runFanOutSyncAfterLocalSave()
+      if (localSaveSync.isErr()) return storageErr(localSaveSync.error)
       state.showSuccess(state.t(I18N_KEYS.ToastsItemUpdated))
       return storageOk(undefined)
     } finally {

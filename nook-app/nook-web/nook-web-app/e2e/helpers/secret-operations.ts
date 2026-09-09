@@ -1,3 +1,4 @@
+import type { VaultState } from '../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 import { expect, type Page } from '@playwright/test'
 import { assertEnrolledVaultYaml, assertGenesisVaultYaml } from '../vault-yaml'
 import { keepVaultIdleLockDisabled } from './device-enrollment'
@@ -17,10 +18,7 @@ import {
   syncSecretCount,
 } from './local-sync'
 import { assertVaultReady, revealSecretInRow } from './settings-auth'
-import {
-  waitForStorageChainIdle,
-  waitForVaultOperationsIdle,
-} from './vault-runtime'
+import { waitForStorageChainIdle, waitForVaultOperationsIdle } from './vault-runtime'
 
 export async function addSecret(
   page: Page,
@@ -87,9 +85,7 @@ export async function addSecret(
           const activeReq = store.get('active_vault_id')
           activeReq.onerror = () => resolve(`idb-read-error:${activeReq.error}`)
           activeReq.onsuccess = () => {
-            const activeId = String(
-              ((v) => (v ? v : ''))(activeReq.result),
-            ).trim()
+            const activeId = String(((v) => (v ? v : ''))(activeReq.result)).trim()
             if (!activeId) {
               resolve('')
               return
@@ -176,37 +172,10 @@ export async function waitForSecretOnDevice(
           try {
             await triggerVaultSyncRefresh(page)
           } catch {
-            await page.evaluate(async () => {
-              const vault = (
-                window as Window & {
-                  __nookVault?: {
-                    manualSync?: () => Promise<void>
-                    syncFromStorage?: (opts?: {
-                      force?: boolean
-                    }) => Promise<void>
-                  }
-                }
-              ).__nookVault
-              if (vault?.manualSync) {
-                await vault.manualSync()
-              } else {
-                await vault?.syncFromStorage?.({ force: true })
-              }
-            })
+            await synchronizeBrowserVault(page)
           }
         } else {
-          await page.evaluate(async () => {
-            const vault = (
-              window as Window & {
-                __nookVault?: {
-                  syncFromStorage?: (opts?: {
-                    force?: boolean
-                  }) => Promise<void>
-                }
-              }
-            ).__nookVault
-            await vault?.syncFromStorage?.({ force: true })
-          })
+          await synchronizeBrowserVault(page)
         }
         await waitForVaultOperationsIdle(page)
         return row.isVisible()
@@ -270,5 +239,19 @@ export async function assertEnrolledVaultOnGithub(
 }
 
 /** @deprecated Use {@link seedOauthFileSyncProvidersWhileUnlocked}. */
-export const seedSyncProvidersWhileUnlocked =
-  seedOauthFileSyncProvidersWhileUnlocked
+export const seedSyncProvidersWhileUnlocked = seedOauthFileSyncProvidersWhileUnlocked
+
+async function synchronizeBrowserVault(page: Page): Promise<void> {
+  const failure = await page.evaluate(async () => {
+    const vault = (
+      window as Window & { __nookVault?: Pick<VaultState, 'manualSync'> }
+    ).__nookVault
+    if (!vault) return 'vault-unavailable'
+    const synchronized = await vault.manualSync()
+    return synchronized.isErr() ? synchronized.error.translationKey : ''
+  })
+  expect(
+    failure,
+    'Browser synchronization should complete without a typed failure',
+  ).toBe('')
+}

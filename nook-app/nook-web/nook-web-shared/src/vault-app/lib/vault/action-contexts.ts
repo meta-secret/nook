@@ -1,3 +1,5 @@
+import type { VaultSynchronizationResult } from '$lib/vault/sync.svelte'
+import type { StagedProviderConflictOutcome } from '$lib/vault/sync.svelte'
 import type { ProviderSyncOutcome } from '$lib/vault/provider-sync.svelte'
 import type { Result } from 'neverthrow'
 import type { VaultStorageFailure } from '$lib/runtime/storage-failure'
@@ -116,7 +118,9 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   connectAndSyncStagedProvider(): Promise<void>
   dismissSuccess(): void
   ensureProviderSaved(): Promise<Result<void, VaultStorageFailure>>
-  flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void>
+  flushRemoteEventOutboxNow(
+    request: EventOutboxRequest,
+  ): Promise<Result<void, VaultStorageFailure>>
   handleRemoteVaultAssessStatus(accessStatus: VaultAccessStatus): Promise<boolean>
   loadDb(): Promise<void>
   persistProviders(
@@ -127,7 +131,9 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
     Result<void, OAuthFailure | VaultStorageFailure>
   >
   showSuccess(message: string): void
-  stageStagedProviderSyncIssue(args: VaultStorageArguments): Promise<boolean>
+  stageStagedProviderSyncIssue(
+    args: VaultStorageArguments,
+  ): Promise<Result<StagedProviderConflictOutcome, VaultStorageFailure>>
   stagedRemoteStorageArgs(): StagedRemoteStorage
   syncProviderById(
     request: ProviderSyncRequest,
@@ -278,7 +284,9 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   readonly runtimeConfig: NookRuntimeConfig
   readonly syncBlocked: boolean
   readonly syncProviders: StorageProvider[]
-  applyVaultSyncResult(result: NookVaultSyncResult): void
+  applyVaultSyncResult(
+    result: NookVaultSyncResult,
+  ): Result<void, VaultStorageFailure>
   clearPendingSyncConflict(): void
   clearLocalFolderMultipleVaultsIssue(): void
   clearSyncingProvider(): void
@@ -314,9 +322,13 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   >
   refreshReplacementConflicts(): Promise<Result<void, VaultStorageFailure>>
   refreshSecretsFromSession(): Promise<Result<void, VaultStorageFailure>>
-  runFanOutSyncAfterLocalSave(): Promise<void>
-  runFanOutSyncToProviders(visibility: ProviderSyncVisibility): Promise<void>
-  flushRemoteEventOutboxNow(request: EventOutboxRequest): Promise<void>
+  runFanOutSyncAfterLocalSave(): Promise<Result<void, VaultStorageFailure>>
+  runFanOutSyncToProviders(
+    visibility: ProviderSyncVisibility,
+  ): Promise<VaultSynchronizationResult>
+  flushRemoteEventOutboxNow(
+    request: EventOutboxRequest,
+  ): Promise<Result<void, VaultStorageFailure>>
   removeProvider(providerId: string): Promise<void>
   ensureProviderSaved(): Promise<Result<void, VaultStorageFailure>>
   showSuccess(message: string): void
@@ -325,8 +337,12 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   stageSyncConflict(conflict: NookPendingSyncConflict): void
   stopVaultSync(): void
   syncActiveVaultStoreIdToAuth(): Promise<Result<void, VaultStorageFailure>>
-  syncFromStorage(freshness: ProviderSyncFreshness): Promise<void>
-  syncFromSyncProviders(request: SyncFromProvidersRequest): Promise<void>
+  syncFromStorage(
+    freshness: ProviderSyncFreshness,
+  ): Promise<VaultSynchronizationResult>
+  syncFromSyncProviders(
+    request: SyncFromProvidersRequest,
+  ): Promise<VaultSynchronizationResult>
   syncProviderById(
     request: ProviderSyncRequest,
   ): Promise<Result<ProviderSyncOutcome, VaultStorageFailure | OAuthFailure>>
@@ -412,7 +428,7 @@ export type SessionActionsContext = Pick<VaultRuntimeState, 'errorMsg'> &
     enqueueStorage<T, E = VaultStorageFailure>(
       operation: () => Result<T, E> | Promise<Result<T, E>>,
     ): Promise<Result<T, E | VaultStorageFailure>>
-    publishExtensionEventLogUpdate(): Promise<void>
+    publishExtensionEventLogUpdate(): Promise<Result<void, VaultStorageFailure>>
     refreshVaultArchitectureFromManager(): void
     resetVaultSessionState(resetManager?: boolean): void
     stopIdleSessionTracking(): void

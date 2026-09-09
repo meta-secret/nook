@@ -174,7 +174,11 @@ export class SyncConflictActions {
         state.errorMsg = state.t(conflicts.error.translationKey)
         return
       }
-      void state.runFanOutSyncAfterLocalSave()
+      const synchronized = await state.runFanOutSyncAfterLocalSave()
+      if (synchronized.isErr()) {
+        state.errorMsg = state.t(synchronized.error.translationKey)
+        return
+      }
       state.showSuccess(state.t(I18N_KEYS.ToastsSecretConflictResolved))
     } catch (error) {
       state.errorMsg =

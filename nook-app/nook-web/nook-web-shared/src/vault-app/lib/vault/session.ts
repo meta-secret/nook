@@ -95,7 +95,12 @@ export class VaultSessionActions {
     state.sessionExpiredByIdle = false
     state.refreshVaultArchitectureFromManager()
     log.info('vault session unlocked')
-    void state.publishExtensionEventLogUpdate()
+    void state.publishExtensionEventLogUpdate().then((publication) => {
+      if (publication.isErr())
+        log.warn('extension event-log notification failed', {
+          kind: publication.error.kind,
+        })
+    })
     return storageOk(undefined)
   }
 
