@@ -75,3 +75,10 @@ includes:
   infra:
     taskfile: infra/Taskfile.yml
     dir: .
+
+tasks:
+  tooling:install:
+    desc: Install pinned repository script runtime dependencies.
+    dir: "{{.ROOT_DIR}}"
+    cmds:
+      - bun install --frozen-lockfile --ignore-scripts

@@ -2,6 +2,7 @@ version: '3'
 
 tasks:
   kubernetes-cache:prove:
+    deps: [tooling:install]
     desc: Prove production-shaped Zot and rootless BuildKit behavior on ephemeral k3d.
     preconditions:
       - sh: command -v bun >/dev/null 2>&1

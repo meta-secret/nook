@@ -6,6 +6,7 @@ vars:
 
 tasks:
   ovh:server:inspect:
+    deps: [tooling:install]
     desc: Verify one declared OVH dedicated server without changing it.
     preconditions:
       - sh: test -n "{{.INFRA_OVH_SERVER}}"
@@ -16,6 +17,7 @@ tasks:
       - bun infra/providers/ovh-dedicated.ts inspect --node "{{.INFRA_OVH_SERVER}}"
 
   ovh:server:deploy:
+    deps: [tooling:install]
     desc: Install, bootstrap, and join one declared OVH worker from scratch.
     preconditions:
       - sh: test -n "{{.INFRA_OVH_SERVER}}"
@@ -246,6 +248,7 @@ tasks:
         BASH
 
   ovh:server:test:
+    deps: [tooling:install]
     desc: Validate the provider client and server inventory contract.
     cmds:
       - bun test infra/providers/ovh-dedicated.test.ts

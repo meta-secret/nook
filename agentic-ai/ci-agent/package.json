@@ -14,7 +14,8 @@
   },
   "dependencies": {
     "@cursor/sdk": "^1.0.28",
-    "@octokit/rest": "^22.0.1"
+    "@octokit/rest": "^22.0.1",
+    "neverthrow": "8.2.0"
   },
   "overrides": {
     "undici": "6.28.0"

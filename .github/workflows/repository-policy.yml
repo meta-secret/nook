@@ -233,6 +233,10 @@ jobs:
         with:
           ruby-version: '3.4'
 
+      - name: Install repository script dependencies
+        if: steps.policy-paths.outputs.runner_placement == 'true'
+        run: bun install --frozen-lockfile --ignore-scripts
+
       - name: Enforce Actions runner placement inventory
         if: steps.policy-paths.outputs.runner_placement == 'true'
         run: bun .github/scripts/arc-manifest-contract.ts

@@ -476,6 +476,9 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Install repository script dependencies
+        run: bun install --frozen-lockfile --ignore-scripts
+
       - name: Test PR authored-line budget
         run: bun test ./.github/scripts/pr-authored-budget.test.ts
 
