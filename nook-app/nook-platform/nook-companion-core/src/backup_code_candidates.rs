@@ -3,7 +3,7 @@
 //! Browser adapters supply page text; this module owns which lines look like
 //! recovery codes versus prose, URLs, or hint copy.
 
-use crate::AuthenticationControlText;
+use crate::recovery_code_language::{AuthenticationCodeHint, AuthenticationCodeSubject};
 use std::collections::BTreeSet;
 
 /// Borrowed page copy used for recovery-code discovery and extraction.
@@ -189,29 +189,10 @@ impl BackupCodePageText<'_> {
 
 impl BackupCodePageText<'_> {
     fn contains_recovery_hint(&self) -> bool {
-        let text = self.as_str();
-        let lower = text.to_ascii_lowercase();
-        let needles = [
-            "backup code",
-            "backup codes",
-            "recovery code",
-            "recovery codes",
-            "one-time code",
-            "one-time codes",
-            "one time code",
-            "one time codes",
-            "emergency code",
-            "emergency codes",
-            "2fa code",
-            "2fa codes",
-            "mfa code",
-            "mfa codes",
-            "authenticator code",
-            "authenticator codes",
-        ];
-        needles
-            .iter()
-            .any(|needle| AuthenticationControlText::new(&lower).contains_word_phrase(needle))
+        matches!(
+            AuthenticationCodeSubject::recognize_hint(self.as_str()),
+            AuthenticationCodeHint::Observed(_)
+        )
     }
 }
 

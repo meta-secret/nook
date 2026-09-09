@@ -3,6 +3,8 @@ use super::{
     AuthenticationPasskeyControlObservation,
 };
 use crate::AuthenticationPasskeyAccountCount;
+use crate::BackupCodeCandidatePresence;
+use crate::recovery_code_language::RecoveryCopyRecognition;
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -39,7 +41,7 @@ pub enum AuthenticationPasskeyAccountAvailability {
 /// Named values required by AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation.
 pub struct AuthenticationBackupCodesEvidence<'a> {
     pub text: &'a str,
-    pub candidate_present: bool,
+    pub candidate_presence: BackupCodeCandidatePresence,
 }
 
 impl AuthenticationBackupCodesObservation {
@@ -47,34 +49,7 @@ impl AuthenticationBackupCodesObservation {
     pub fn classify_authentication_backup_codes_observation(
         request: AuthenticationBackupCodesEvidence<'_>,
     ) -> AuthenticationBackupCodesObservation {
-        let AuthenticationBackupCodesEvidence {
-            text,
-            candidate_present,
-        } = request;
-        let normalized = text.to_ascii_lowercase();
-        let recovery_subject = ["backup codes", "recovery codes", "emergency codes"]
-            .iter()
-            .any(|phrase| normalized.contains(phrase));
-        let preservation_instruction = [
-            "save",
-            "store",
-            "keep",
-            "download",
-            "print",
-            "copy",
-            "generated",
-        ]
-        .iter()
-        .any(|word| {
-            normalized
-                .split(|c: char| !c.is_ascii_alphanumeric())
-                .any(|token| token == *word)
-        });
-        if recovery_subject && (preservation_instruction || candidate_present) {
-            AuthenticationBackupCodesObservation::Present
-        } else {
-            AuthenticationBackupCodesObservation::Absent
-        }
+        RecoveryCopyRecognition::from_text(request.text).classify(request.candidate_presence)
     }
 }
 
@@ -107,7 +82,7 @@ impl AuthenticationAuthenticatorObservationFacts {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
                 AuthenticationBackupCodesEvidence {
                     text: &self.backup_codes_copy,
-                    candidate_present: false
+                    candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
             AuthenticationBackupCodesObservation::Present
@@ -155,7 +130,7 @@ mod tests {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
                 AuthenticationBackupCodesEvidence {
                     text: "Use a backup code instead",
-                    candidate_present: false
+                    candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
             AuthenticationBackupCodesObservation::Absent
@@ -164,7 +139,7 @@ mod tests {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
                 AuthenticationBackupCodesEvidence {
                     text: "Save your backup codes in a secure place",
-                    candidate_present: false
+                    candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
             AuthenticationBackupCodesObservation::Present
@@ -173,14 +148,14 @@ mod tests {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
                 AuthenticationBackupCodesEvidence {
                     text: "Backup codes",
-                    candidate_present: true
+                    candidate_presence: BackupCodeCandidatePresence::Present
                 }
             ),
             AuthenticationBackupCodesObservation::Present
         );
         for ordinary_otp in ["Authenticator code\n123456", "One-time code\n123456"] {
             assert_eq!(
-                AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: ordinary_otp, candidate_present: false }),
+                AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: ordinary_otp, candidate_presence: BackupCodeCandidatePresence::Absent }),
                 AuthenticationBackupCodesObservation::Absent
             );
         }

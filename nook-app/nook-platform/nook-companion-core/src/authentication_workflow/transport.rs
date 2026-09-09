@@ -1,6 +1,6 @@
 //! Canonical browser transport admission and non-secret recovery copy projection.
 use super::{AuthenticationBackupCodesObservation, AuthenticationPageObservationFacts};
-use crate::{AuthenticationBackupCodesEvidence, BackupCodePageText};
+use crate::{AuthenticationBackupCodesEvidence, BackupCodeCandidatePresence, BackupCodePageText};
 use serde::{Deserialize, Serialize};
 use tsify::Tsify;
 
@@ -61,10 +61,15 @@ pub struct AuthenticationRecoveryCopyEvidence {
 }
 impl AuthenticationRecoveryCopyRequest {
     pub fn project(self) -> AuthenticationRecoveryCopyEvidence {
-        let candidate_present = self
+        let candidate_presence = if self
             .texts
             .iter()
-            .any(|text| BackupCodePageText::new(text).contains_backup_code_candidate());
+            .any(|text| BackupCodePageText::new(text).contains_backup_code_candidate())
+        {
+            BackupCodeCandidatePresence::Present
+        } else {
+            BackupCodeCandidatePresence::Absent
+        };
         let safe: Vec<_> = self
             .texts
             .iter()
@@ -72,13 +77,13 @@ impl AuthenticationRecoveryCopyRequest {
             .collect();
         let mut selected: Vec<_> = safe.iter().copied().filter(|text| {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
-                AuthenticationBackupCodesEvidence { text, candidate_present: false }) == AuthenticationBackupCodesObservation::Present
+                AuthenticationBackupCodesEvidence { text, candidate_presence: BackupCodeCandidatePresence::Absent }) == AuthenticationBackupCodesObservation::Present
         }).collect();
-        if candidate_present {
+        if candidate_presence == BackupCodeCandidatePresence::Present {
             // Match the original filter against the initial strict set, not incrementally.
             let contextual: Vec<_> = safe.iter().copied().filter(|text| !selected.contains(text) &&
                 AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
-                    AuthenticationBackupCodesEvidence { text, candidate_present: true }) == AuthenticationBackupCodesObservation::Present
+                    AuthenticationBackupCodesEvidence { text, candidate_presence: BackupCodeCandidatePresence::Present }) == AuthenticationBackupCodesObservation::Present
             ).collect();
             selected.extend(contextual);
         }

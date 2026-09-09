@@ -4,6 +4,7 @@ use super::{
 };
 use crate::AuthenticationBackupCodesEvidence;
 use crate::AuthenticationBackupCodesObservation;
+use crate::BackupCodeCandidatePresence;
 
 impl AuthenticationPageObservation {
     pub(super) const fn classify_enrollment_workflow(self) -> AuthenticationWorkflowMatch {
@@ -83,7 +84,7 @@ impl AuthenticationWorkflowMatch {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
                 AuthenticationBackupCodesEvidence {
                     text: backup_codes_copy,
-                    candidate_present: false
+                    candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
             super::AuthenticationBackupCodesObservation::Present

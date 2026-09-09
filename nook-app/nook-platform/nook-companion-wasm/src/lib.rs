@@ -22,6 +22,8 @@ use nook_companion_core::AuthenticationBackupCodesObservation;
 use nook_companion_core::AuthenticationEnrollmentObservation;
 use nook_companion_core::AuthenticationUsernameEvidence;
 use nook_companion_core::AuthenticationWorkflowMatch;
+#[cfg(test)]
+use nook_companion_core::BackupCodeCandidatePresence;
 use nook_companion_core::BackupCodePageText;
 use nook_companion_core::PageInputFieldObservation;
 use nook_companion_core::VaultHostObservation;
@@ -565,7 +567,7 @@ mod tests {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
                 AuthenticationBackupCodesEvidence {
                     text: "Use a backup code instead",
-                    candidate_present: false
+                    candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
             nook_companion_core::AuthenticationBackupCodesObservation::Absent
@@ -574,7 +576,7 @@ mod tests {
             AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
                 AuthenticationBackupCodesEvidence {
                     text: "Save your recovery codes in a secure place",
-                    candidate_present: false
+                    candidate_presence: BackupCodeCandidatePresence::Absent
                 }
             ),
             nook_companion_core::AuthenticationBackupCodesObservation::Present
@@ -970,7 +972,7 @@ mod wasm_tests {
                 AuthenticationBackupCodesObservation::Present,
             ),
         ] {
-            let classified = AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: text, candidate_present: false });
+            let classified = AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(AuthenticationBackupCodesEvidence { text: text, candidate_presence: BackupCodeCandidatePresence::Absent });
             let js_value = serde_wasm_bindgen::to_value(&classified)?;
             let decoded: AuthenticationBackupCodesObservation =
                 serde_wasm_bindgen::from_value(js_value)?;

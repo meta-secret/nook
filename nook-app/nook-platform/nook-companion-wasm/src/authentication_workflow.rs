@@ -2,6 +2,7 @@ use nook_companion_core::AuthenticationBackupCodesEvidence;
 use nook_companion_core::AuthenticationBackupCodesObservation;
 use nook_companion_core::AuthenticationEnrollmentObservation;
 use nook_companion_core::AuthenticationWorkflowMatch;
+use nook_companion_core::BackupCodeCandidatePresence;
 use nook_companion_core::{
     AuthenticationWorkflowRuntimeResponse, AuthenticationWorkflowSnapshotResponse,
     WebsiteLoginOptions,
@@ -68,8 +69,13 @@ pub fn classify_authentication_backup_codes_observation(
 ) -> nook_companion_core::AuthenticationBackupCodesObservation {
     AuthenticationBackupCodesObservation::classify_authentication_backup_codes_observation(
         AuthenticationBackupCodesEvidence {
-            text: text,
-            candidate_present: candidate_present,
+            text,
+            // Translate the existing browser ABI into semantic core evidence.
+            candidate_presence: if candidate_present {
+                BackupCodeCandidatePresence::Present
+            } else {
+                BackupCodeCandidatePresence::Absent
+            },
         },
     )
 }

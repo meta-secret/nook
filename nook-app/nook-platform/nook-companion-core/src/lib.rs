@@ -233,3 +233,6 @@ pub use authentication_workflow::{
 
 mod passkey_session_material;
 pub use passkey_session_material::*;
+
+mod recovery_code_language;
+pub use recovery_code_language::BackupCodeCandidatePresence;

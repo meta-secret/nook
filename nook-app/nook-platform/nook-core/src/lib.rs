@@ -475,3 +475,5 @@ pub use sync_provider_store::{
 };
 
 pub use sync_provider_store::{SharedGrantProviderOutcome, SharedGrantProviderRequest};
+
+pub use nook_companion_core::BackupCodeCandidatePresence;
