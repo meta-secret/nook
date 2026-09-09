@@ -19,24 +19,14 @@ vaults they touch.
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
     GraphId,
-    graphById,
     HereKind,
-    hereDevices,
-    isHere,
     type KeyGraph,
-    passkeysForDevice,
     Reach,
-    storeLabel,
-    vaultsForDevice,
+    KeyGraphView,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
   import { Ink } from './terminal-ink'
-  import {
-    banner,
-    opening,
-    outputFor,
-    type TerminalBlock,
-  } from './terminal-reports'
+  import { type TerminalBlock, KeyTerminalReport } from './terminal-reports'
 
   interface Segment {
     key: string
@@ -59,18 +49,18 @@ vaults they touch.
   let history = $state<string[]>([])
   let historyIndex = $state(0)
   let nextId = $state(2)
-  let transcript = $state<TerminalBlock[]>(opening(graphById(GraphId.Tangle)))
-
-  const graph = $derived(graphById(graphId))
-  const mine = $derived(hereDevices(graph))
+  let transcript = $state<TerminalBlock[]>(
+    new KeyTerminalReport(KeyGraphView.graphById(GraphId.Tangle)).opening(),
+  )
+  const graph = $derived(KeyGraphView.graphById(graphId))
+  const mine = $derived(new KeyGraphView(graph).hereDevices())
   const mineId = $derived(mine.map((device) => device.shortId).join(''))
   const otherDevices = $derived(
     graph.devices.filter((device) => {
-      const nookNamedArgument116: Parameters<typeof isHere>[0] = {
-        graph,
+      const nookNamedArgument116: Parameters<KeyGraphView['isHere']>[0] = {
         device,
       }
-      return !isHere(nookNamedArgument116)
+      return !new KeyGraphView(graph).isHere(nookNamedArgument116)
     }),
   )
 
@@ -81,18 +71,22 @@ vaults they touch.
     historyIndex = history.length
     draft = ''
     if (command === 'clear') {
-      transcript = [banner(graph)]
+      transcript = [new KeyTerminalReport(graph).banner()]
       nextId = 1
       void scrollToEnd()
       return
     }
-    const nookNamedArgument182: Parameters<typeof outputFor>[0] = {
-      graph,
-      command,
-    }
+    const nookNamedArgument182: Parameters<KeyTerminalReport['outputFor']>[0] =
+      {
+        command,
+      }
     transcript = [
       ...transcript,
-      { id: nextId, prompt: command, lines: outputFor(nookNamedArgument182) },
+      {
+        id: nextId,
+        prompt: command,
+        lines: new KeyTerminalReport(graph).outputFor(nookNamedArgument182),
+      },
     ]
     nextId += 1
     void scrollToEnd()
@@ -213,7 +207,7 @@ vaults they touch.
       historyIndex = 0
       nextId = 2
       draft = ''
-      transcript = opening(graphById(next))
+      transcript = new KeyTerminalReport(KeyGraphView.graphById(next)).opening()
     }}
   />
 
@@ -223,12 +217,10 @@ vaults they touch.
     </p>
 
     {#each mine as device (device.id)}
-      {@const devicePasskeys: Parameters<typeof passkeysForDevice>[0] = {
-        graph,
+      {@const devicePasskeys: Parameters<KeyGraphView["passkeysForDevice"]>[0] = {
         device,
       }}
-      {@const deviceVaults: Parameters<typeof vaultsForDevice>[0] = {
-        graph,
+      {@const deviceVaults: Parameters<KeyGraphView["vaultsForDevice"]>[0] = {
         deviceId: device.id,
       }}
       <div
@@ -257,10 +249,10 @@ vaults they touch.
               Unlocked by
             </dt>
             <dd class="mt-1.5 flex flex-wrap gap-1.5">
-              {#each passkeysForDevice(devicePasskeys) as passkey (passkey.id)}
+              {#each new KeyGraphView(graph).passkeysForDevice(devicePasskeys) as passkey (passkey.id)}
                 <button
                   type="button"
-                  aria-label={`Insert passkey ${passkey.shortId}, ${storeLabel(passkey.store)}`}
+                  aria-label={`Insert passkey ${passkey.shortId}, ${KeyGraphView.storeLabel(passkey.store)}`}
                   class="flex items-baseline gap-1.5 rounded border border-[#5f4d2e] bg-[#1d1710] px-2 py-1 transition hover:border-[#e0a458] motion-reduce:transition-none"
                   onclick={() => insertId(passkey.shortId)}
                 >
@@ -268,7 +260,7 @@ vaults they touch.
                     {passkey.shortId}
                   </span>
                   <span class="text-[10px] text-[#a2937a]">
-                    {storeLabel(passkey.store)}
+                    {KeyGraphView.storeLabel(passkey.store)}
                   </span>
                   {#if passkey.reach === Reach.Elsewhere}
                     <span
@@ -288,7 +280,7 @@ vaults they touch.
               Opens
             </dt>
             <dd class="mt-1.5 flex flex-wrap gap-1.5">
-              {#each vaultsForDevice(deviceVaults) as vault (vault.id)}
+              {#each new KeyGraphView(graph).vaultsForDevice(deviceVaults) as vault (vault.id)}
                 <button
                   type="button"
                   aria-label={`Insert vault ${vault.shortId}, ${vault.label}`}
@@ -484,8 +476,7 @@ vaults they touch.
       </p>
       <ul class="mt-2 border-l border-dashed border-[#332b1e] pl-3">
         {#each otherDevices as device (device.id)}
-          {@const deviceVaults: Parameters<typeof vaultsForDevice>[0] = {
-            graph,
+          {@const deviceVaults: Parameters<KeyGraphView["vaultsForDevice"]>[0] = {
             deviceId: device.id,
           }}
           <li class="flex flex-wrap items-center gap-x-3 gap-y-0.5 py-1.5">
@@ -502,7 +493,7 @@ vaults they touch.
               {device.platform}
             </span>
             <span class="ml-auto flex shrink-0 flex-wrap gap-1.5">
-              {#each vaultsForDevice(deviceVaults) as vault (vault.id)}
+              {#each new KeyGraphView(graph).vaultsForDevice(deviceVaults) as vault (vault.id)}
                 <span class="font-mono text-[11px] text-[#6b6047]">
                   {vault.shortId}
                 </span>

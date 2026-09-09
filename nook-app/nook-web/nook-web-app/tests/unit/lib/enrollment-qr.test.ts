@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'vitest'
-import { createEnrollmentQrOptions, enrollmentQrSize } from '$lib/enrollment/qr'
+import { EnrollmentQrPresentation, enrollmentQrSize } from '$lib/enrollment/qr'
 
-describe('createEnrollmentQrOptions', () => {
+describe('EnrollmentQrPresentation', () => {
   test('configures a styled enrollment QR with quartile correction', () => {
     const link = 'https://nook.example/#enroll=abc123'
-    const options = createEnrollmentQrOptions({
+    const options = new EnrollmentQrPresentation({
       enrollmentLink: link,
       dense: false,
-    })
+    }).options
 
     expect(options.width).toBe(enrollmentQrSize)
     expect(options.height).toBe(enrollmentQrSize)
@@ -25,10 +25,10 @@ describe('createEnrollmentQrOptions', () => {
   })
 
   test('uses maximum capacity without a badge for dense member invitations', () => {
-    const options = createEnrollmentQrOptions({
+    const options = new EnrollmentQrPresentation({
       enrollmentLink: 'https://nook.example/app/#sentinel-onboard=x',
       dense: true,
-    })
+    }).options
 
     expect(options.qrOptions?.errorCorrectionLevel).toBe('L')
     expect(Object.hasOwn(options, 'image')).toBe(false)

@@ -10,30 +10,29 @@ type SentinelRequestCopy = {
   readonly onFailure: () => void;
 };
 
-export async function runSentinelDashboardAction({
-  allowed,
-  setBusy,
-  action,
-}: SentinelDashboardAction): Promise<void> {
-  if (!allowed) return;
-  setBusy(true);
-  try {
-    await action();
-  } finally {
-    setBusy(false);
+export class SentinelDashboardInteraction {
+  constructor(private readonly request: SentinelDashboardAction) {}
+  async execute(): Promise<void> {
+    const { allowed, setBusy, action } = this.request;
+    if (!allowed) return;
+    setBusy(true);
+    try {
+      await action();
+    } finally {
+      setBusy(false);
+    }
   }
 }
-
-export async function copySentinelRequest({
-  request,
-  onCopied,
-  onFailure,
-}: SentinelRequestCopy): Promise<void> {
-  if (!request) return;
-  try {
-    await navigator.clipboard.writeText(request);
-    onCopied();
-  } catch {
-    onFailure();
+export class SentinelRequestClipboard {
+  constructor(private readonly request: SentinelRequestCopy) {}
+  async execute(): Promise<void> {
+    const { request, onCopied, onFailure } = this.request;
+    if (!request) return;
+    try {
+      await navigator.clipboard.writeText(request);
+      onCopied();
+    } catch {
+      onFailure();
+    }
   }
 }

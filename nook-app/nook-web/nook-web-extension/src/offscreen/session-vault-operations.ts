@@ -15,7 +15,7 @@ import type {
   CompanionExtensionPresence,
   CompanionIdentityDiscoveryObservation,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { scrubProviderCredentials } from '../lib/provider-credential-staging'
+import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import { ExtensionSessionMessageType } from '../lib/extension-session-message-type'
 import type { ExtensionSessionRequest } from './session-request-adapter'
 import { extensionVaultGrant } from './session-vault-grant'
@@ -193,7 +193,7 @@ export async function importExtensionVaultWithDependencies({
     }
     return await withActivatedExtensionIdentity(activationArgs)
   } finally {
-    scrubProviderCredentials(grantedProviders)
+    new ProviderCredentialBuffer(grantedProviders).clear()
   }
 }
 

@@ -2,10 +2,7 @@ import { afterEach, describe, expect, test } from 'vitest'
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   AUTHENTICATION_MUTATION_ATTRIBUTE_FILTER,
-  authenticationMutationImpact,
-  mutationBelongsOnlyToMountedWidget,
-  mutationCanChangeAuthenticationWorkflows,
-  recordAuthenticationRecoveryEvidenceState,
+  authenticationSurfaceObservation,
 } from '../../../../nook-web-extension/src/content/autofill/authentication-surface-observation'
 
 function childListMutation(
@@ -49,7 +46,7 @@ function observation(
 
 afterEach(() => {
   document.body.replaceChildren()
-  recordAuthenticationRecoveryEvidenceState()
+  authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
 })
 
 describe('authentication surface mutation filtering', () => {
@@ -59,27 +56,39 @@ describe('authentication surface mutation filtering', () => {
     host.append(child)
 
     const childAttributeRequest: Parameters<
-      typeof mutationBelongsOnlyToMountedWidget
+      typeof authenticationSurfaceObservation.mutationBelongsOnlyToMountedWidget
     >[0] = { record: attributeMutation(child), mountedHost: host }
-    expect(mutationBelongsOnlyToMountedWidget(childAttributeRequest)).toBe(true)
+    expect(
+      authenticationSurfaceObservation.mutationBelongsOnlyToMountedWidget(
+        childAttributeRequest,
+      ),
+    ).toBe(true)
 
     const hostInsertionRequest: Parameters<
-      typeof mutationBelongsOnlyToMountedWidget
+      typeof authenticationSurfaceObservation.mutationBelongsOnlyToMountedWidget
     >[0] = {
       record: childListMutation(document.body, [host]),
       mountedHost: host,
     }
-    expect(mutationBelongsOnlyToMountedWidget(hostInsertionRequest)).toBe(true)
+    expect(
+      authenticationSurfaceObservation.mutationBelongsOnlyToMountedWidget(
+        hostInsertionRequest,
+      ),
+    ).toBe(true)
 
     const formInsertionRequest: Parameters<
-      typeof mutationBelongsOnlyToMountedWidget
+      typeof authenticationSurfaceObservation.mutationBelongsOnlyToMountedWidget
     >[0] = {
       record: childListMutation(document.body, [
         document.createElement('form'),
       ]),
       mountedHost: host,
     }
-    expect(mutationBelongsOnlyToMountedWidget(formInsertionRequest)).toBe(false)
+    expect(
+      authenticationSurfaceObservation.mutationBelongsOnlyToMountedWidget(
+        formInsertionRequest,
+      ),
+    ).toBe(false)
   })
 
   test('remounts for external controls and their native labels', () => {
@@ -101,13 +110,16 @@ describe('authentication surface mutation filtering', () => {
       attributeMutation(label),
       { type: 'characterData', target: labelText } as unknown as MutationRecord,
     ]) {
-      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
         records: [record],
         mountedHost: false,
         renderedWorkflow: observation(form),
       }
       expect(
-        authenticationMutationImpact(request).shouldRemountRenderedWorkflow,
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldRemountRenderedWorkflow,
       ).toBe(true)
     }
   })
@@ -126,7 +138,7 @@ describe('authentication surface mutation filtering', () => {
     const renderedWorkflow = observation(form, root)
     const insertedSearch = document.createElement('input')
     const impact = (record: MutationRecord) =>
-      authenticationMutationImpact({
+      authenticationSurfaceObservation.authenticationMutationImpact({
         records: [record],
         mountedHost: false,
         renderedWorkflow,
@@ -151,12 +163,16 @@ describe('authentication surface mutation filtering', () => {
     const form = document.querySelector<HTMLFormElement>('#login')
     const navigation = document.querySelector<HTMLButtonElement>('#navigation')
     if (!form || !navigation) throw new Error('expected mutation fixture')
-    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+    const request: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
       records: [attributeMutation(navigation)],
       mountedHost: false,
       renderedWorkflow: observation(form),
     }
-    expect(authenticationMutationImpact(request)).toEqual({
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact(request),
+    ).toEqual({
       shouldRemountRenderedWorkflow: false,
       shouldScheduleScan: true,
     })
@@ -176,14 +192,17 @@ describe('authentication surface mutation filtering', () => {
     const hostRemoval = childListMutation(document.body, [], [detachedHost])
     const paragraphInsertion = childListMutation(document.body, [paragraph])
     for (const record of [textMutation, paragraphInsertion, hostRemoval]) {
-      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
         records: [record],
         mountedHost: false,
         renderedWorkflow: false,
       }
-      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
-        false,
-      )
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(false)
     }
   })
 
@@ -191,7 +210,7 @@ describe('authentication surface mutation filtering', () => {
     const form = document.createElement('form')
     form.innerHTML = '<input type="password" />'
     expect(
-      mutationCanChangeAuthenticationWorkflows(
+      authenticationSurfaceObservation.mutationCanChangeAuthenticationWorkflows(
         childListMutation(document.body, [form]),
       ),
     ).toBe(true)
@@ -199,7 +218,7 @@ describe('authentication surface mutation filtering', () => {
     const prose = document.createElement('div')
     prose.textContent = 'Marketing copy changed'
     expect(
-      mutationCanChangeAuthenticationWorkflows(
+      authenticationSurfaceObservation.mutationCanChangeAuthenticationWorkflows(
         childListMutation(document.body, [prose]),
       ),
     ).toBe(false)
@@ -213,14 +232,17 @@ describe('authentication surface mutation filtering', () => {
     qrImage.alt = 'Authenticator QR code'
 
     for (const evidence of [passkeyLink, qrImage]) {
-      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
         records: [childListMutation(document.body, [evidence])],
         mountedHost: false,
         renderedWorkflow: false,
       }
-      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
-        true,
-      )
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(true)
     }
   })
 
@@ -235,14 +257,17 @@ describe('authentication surface mutation filtering', () => {
       childListMutation(document.body, [insertedFrame]),
       attributeMutation(updatedFrame),
     ]) {
-      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
         records: [record],
         mountedHost: false,
         renderedWorkflow: false,
       }
-      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
-        true,
-      )
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(true)
     }
   })
 
@@ -257,14 +282,17 @@ describe('authentication surface mutation filtering', () => {
       childListMutation(document.body, [label]),
       attributeMutation(label),
     ]) {
-      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
         records: [record],
         mountedHost: false,
         renderedWorkflow: false,
       }
-      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
-        true,
-      )
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(true)
     }
   })
 
@@ -277,7 +305,9 @@ describe('authentication surface mutation filtering', () => {
     const labelText = label?.firstChild
     if (!(labelText instanceof Text)) throw new Error('expected label text')
     labelText.data = 'Use passkey'
-    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+    const request: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
       records: [
         {
           type: 'characterData',
@@ -288,20 +318,28 @@ describe('authentication surface mutation filtering', () => {
       renderedWorkflow: false,
     }
 
-    expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(true)
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact(request)
+        .shouldScheduleScan,
+    ).toBe(true)
   })
 
   test('rescans dynamically inserted email-verification checkpoints', () => {
     const checkpoint = document.createElement('div')
     checkpoint.textContent = 'Please verify your email before continuing.'
     document.body.append(checkpoint)
-    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+    const request: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
       records: [childListMutation(document.body, [checkpoint])],
       mountedHost: false,
       renderedWorkflow: false,
     }
 
-    expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(true)
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact(request)
+        .shouldScheduleScan,
+    ).toBe(true)
   })
 
   test('rescans dynamically inserted backup-code evidence', () => {
@@ -323,14 +361,17 @@ describe('authentication surface mutation filtering', () => {
         target: paragraphText,
       } as unknown as MutationRecord,
     ]) {
-      const request: Parameters<typeof authenticationMutationImpact>[0] = {
+      const request: Parameters<
+        typeof authenticationSurfaceObservation.authenticationMutationImpact
+      >[0] = {
         records: [record],
         mountedHost: false,
         renderedWorkflow: false,
       }
-      expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(
-        true,
-      )
+      expect(
+        authenticationSurfaceObservation.authenticationMutationImpact(request)
+          .shouldScheduleScan,
+      ).toBe(true)
     }
   })
 
@@ -342,11 +383,13 @@ describe('authentication surface mutation filtering', () => {
     const code = document.createElement('code')
     code.textContent = 'A1B2-C3D4-E5F6'
     document.body.append(heading, instructions, code)
-    recordAuthenticationRecoveryEvidenceState()
+    authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     heading.remove()
     instructions.remove()
     code.remove()
-    const request: Parameters<typeof authenticationMutationImpact>[0] = {
+    const request: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
       records: [
         childListMutation(document.body, [], [heading, instructions, code]),
       ],
@@ -354,26 +397,33 @@ describe('authentication surface mutation filtering', () => {
       renderedWorkflow: false,
     }
 
-    expect(authenticationMutationImpact(request).shouldScheduleScan).toBe(true)
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact(request)
+        .shouldScheduleScan,
+    ).toBe(true)
 
     document.body.append(heading, instructions, code)
-    recordAuthenticationRecoveryEvidenceState()
+    authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     heading.hidden = true
     instructions.hidden = true
     code.hidden = true
-    const hiddenRequest: Parameters<typeof authenticationMutationImpact>[0] = {
+    const hiddenRequest: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
       records: [attributeMutation(heading)],
       mountedHost: false,
       renderedWorkflow: false,
     }
-    expect(authenticationMutationImpact(hiddenRequest).shouldScheduleScan).toBe(
-      true,
-    )
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact(
+        hiddenRequest,
+      ).shouldScheduleScan,
+    ).toBe(true)
 
     heading.hidden = false
     instructions.hidden = false
     code.hidden = false
-    recordAuthenticationRecoveryEvidenceState()
+    authenticationSurfaceObservation.recordAuthenticationRecoveryEvidenceState()
     const headingText = heading.firstChild
     if (!(headingText instanceof Text)) {
       throw new Error('expected recovery heading text')
@@ -381,7 +431,9 @@ describe('authentication surface mutation filtering', () => {
     headingText.data = 'Account details'
     instructions.textContent = 'Your account is ready.'
     code.textContent = '12:01'
-    const textRequest: Parameters<typeof authenticationMutationImpact>[0] = {
+    const textRequest: Parameters<
+      typeof authenticationSurfaceObservation.authenticationMutationImpact
+    >[0] = {
       records: [
         {
           type: 'characterData',
@@ -391,8 +443,9 @@ describe('authentication surface mutation filtering', () => {
       mountedHost: false,
       renderedWorkflow: false,
     }
-    expect(authenticationMutationImpact(textRequest).shouldScheduleScan).toBe(
-      true,
-    )
+    expect(
+      authenticationSurfaceObservation.authenticationMutationImpact(textRequest)
+        .shouldScheduleScan,
+    ).toBe(true)
   })
 })

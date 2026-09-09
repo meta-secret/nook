@@ -1,10 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import type { NookSecretRecord } from '$lib/nook'
-import {
-  freeDecryptedSecrets,
-  toggleSecretExposure,
-  withDecryptedSecret,
-} from '$lib/vault/secret-exposure'
+import { SecretExposure } from '$lib/vault/secret-exposure'
 
 function fakeRecord(value: string) {
   return {
@@ -18,8 +14,7 @@ describe('secret exposure lifecycle', () => {
     const load = vi.fn(async () => fakeRecord('credential'))
     expect(load).not.toHaveBeenCalled()
 
-    const records = await toggleSecretExposure({
-      records: {},
+    const records = await new SecretExposure({}).toggle({
       id: 'secret-1',
       load: load,
     })
@@ -30,8 +25,7 @@ describe('secret exposure lifecycle', () => {
 
   test('hiding a revealed secret frees and removes plaintext', async () => {
     const record = fakeRecord('credential')
-    const records = await toggleSecretExposure({
-      records: { 'secret-1': record },
+    const records = await new SecretExposure({ 'secret-1': record }).toggle({
       id: 'secret-1',
       load: vi.fn(),
     })
@@ -44,8 +38,7 @@ describe('secret exposure lifecycle', () => {
     const record = fakeRecord('credential')
     const copied = vi.fn()
 
-    await withDecryptedSecret({
-      records: {},
+    await new SecretExposure({}).withRecord({
       id: 'secret-1',
       load: async () => record,
       action: (secret) => copied(secret.primaryCredential),
@@ -59,8 +52,7 @@ describe('secret exposure lifecycle', () => {
     const record = fakeRecord('credential')
     const load = vi.fn()
 
-    await withDecryptedSecret({
-      records: { 'secret-1': record },
+    await new SecretExposure({ 'secret-1': record }).withRecord({
       id: 'secret-1',
       load: load,
       action: () => {},
@@ -74,8 +66,7 @@ describe('secret exposure lifecycle', () => {
     const record = fakeRecord('credential')
 
     await expect(
-      withDecryptedSecret({
-        records: {},
+      new SecretExposure({}).withRecord({
         id: 'secret-1',
         load: async () => record,
         action: () => {
@@ -90,7 +81,7 @@ describe('secret exposure lifecycle', () => {
     const first = fakeRecord('first')
     const second = fakeRecord('second')
 
-    freeDecryptedSecrets({ first, second })
+    new SecretExposure({ first, second }).free()
 
     expect(first.free).toHaveBeenCalledOnce()
     expect(second.free).toHaveBeenCalledOnce()

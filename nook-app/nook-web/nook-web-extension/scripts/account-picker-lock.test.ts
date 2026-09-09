@@ -94,7 +94,7 @@ describe('account picker authorization cleanup', () => {
   })
 
   test('rehydrates only picker records carrying a validated frame target', async () => {
-    const { persistedAccountPickerCleanupPlan } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const stored = {
       'nook.extension.login-picker.framed': {
@@ -114,7 +114,9 @@ describe('account picker authorization cleanup', () => {
       },
     }
 
-    expect(persistedAccountPickerCleanupPlan(stored)).toEqual({
+    expect(
+      accountPickerSessions.persistedAccountPickerCleanupPlan(stored),
+    ).toEqual({
       storageKeys: [
         'nook.extension.login-picker.framed',
         'nook.extension.login-picker.legacy-unframed',
@@ -147,7 +149,10 @@ describe('account picker authorization cleanup', () => {
     expect(overlap.authorizationGeneration).toBe(
       cleanup.authorizationGeneration,
     )
-    const result = await accountPickers.loadLoginPicker('persisted-request')
+    const result =
+      await accountPickers.accountPickerSessions.loadLoginPicker(
+        'persisted-request',
+      )
     await accountPickers.completeAccountPickerAuthorizationCleanup(
       cleanup.authorizationGeneration,
       CleanupEvidence.Full,
@@ -267,7 +272,7 @@ describe('account picker authorization cleanup', () => {
   })
 
   test('rejects picker rehydration after a worker restart during cleanup', async () => {
-    const { loadLoginPicker } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     globalThis.chrome = {
       runtime: {},
@@ -279,13 +284,15 @@ describe('account picker authorization cleanup', () => {
       },
     } as typeof chrome
 
-    expect(await loadLoginPicker('persisted-request')).toEqual({
+    expect(
+      await accountPickerSessions.loadLoginPicker('persisted-request'),
+    ).toEqual({
       kind: 'unavailable',
     })
   })
 
   test('closes visible picker surfaces during cleanup', async () => {
-    const { clearPendingAccountPickers } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const removedTabs: number[] = []
     let rejectStorage = false
@@ -326,17 +333,17 @@ describe('account picker authorization cleanup', () => {
       },
     } as typeof chrome
 
-    await clearPendingAccountPickers()
+    await accountPickerSessions.clearPendingAccountPickers()
 
     expect(removedTabs).toEqual([21])
     rejectStorage = true
-    await expect(clearPendingAccountPickers()).rejects.toThrow(
-      'account picker cleanup failed',
-    )
+    await expect(
+      accountPickerSessions.clearPendingAccountPickers(),
+    ).rejects.toThrow('account picker cleanup failed')
     rejectStorage = false
     rejectRemoval = true
-    await expect(clearPendingAccountPickers()).rejects.toThrow(
-      'account picker cleanup failed',
-    )
+    await expect(
+      accountPickerSessions.clearPendingAccountPickers(),
+    ).rejects.toThrow('account picker cleanup failed')
   })
 })

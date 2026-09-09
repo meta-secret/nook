@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { formatProviderSyncStatus } from '$lib/auth/provider-sync-status'
+import { ProviderSyncStatusView } from '$lib/auth/provider-sync-status'
 
 const labels = {
   lastSynced: 'Last synced',
@@ -15,7 +15,7 @@ describe('formatProviderSyncStatus', () => {
     }).format(new Date(lastSyncedAt))
 
     expect(
-      formatProviderSyncStatus({
+      new ProviderSyncStatusView({
         provider: {
           syncCheckpoint: {
             state: 'synced',
@@ -27,20 +27,20 @@ describe('formatProviderSyncStatus', () => {
         },
         locale: 'en',
         labels: labels,
-      }),
+      }).text,
     ).toBe(`Last synced ${timestamp} · v42`)
   })
 
   test('reports an absent or invalid timestamp as not synced', () => {
     expect(
-      formatProviderSyncStatus({
+      new ProviderSyncStatusView({
         provider: { syncCheckpoint: { state: 'neverSynced' } },
         locale: 'en',
         labels: labels,
-      }),
+      }).text,
     ).toBe('Not synced yet')
     expect(
-      formatProviderSyncStatus({
+      new ProviderSyncStatusView({
         provider: {
           syncCheckpoint: {
             state: 'synced',
@@ -52,7 +52,7 @@ describe('formatProviderSyncStatus', () => {
         },
         locale: 'en',
         labels: labels,
-      }),
+      }).text,
     ).toBe('Not synced yet')
   })
 })

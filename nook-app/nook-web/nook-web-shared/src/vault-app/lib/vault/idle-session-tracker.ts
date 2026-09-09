@@ -1,4 +1,4 @@
-/** User input events that reset the idle lock timer while the vault is unlocked. */
+/** Browser activity lifetime for one unlocked vault interaction. */
 const ACTIVITY_EVENTS = [
   "pointerdown",
   "keydown",
@@ -7,25 +7,37 @@ const ACTIVITY_EVENTS = [
   "click",
 ] as const;
 
-export type VaultIdleSessionTracker = {
-  start: () => void;
-  stop: () => void;
-  recordActivity: () => void;
+export enum VaultIdleWarningKind {
+  Disabled = "disabled",
+  Enabled = "enabled",
+}
+
+export type VaultIdleWarning =
+  | { readonly kind: VaultIdleWarningKind.Disabled }
+  | {
+      readonly kind: VaultIdleWarningKind.Enabled;
+      readonly leadMs: number;
+      readonly notify: () => void;
+    };
+
+export type VaultIdleSessionTrackerConfiguration = {
+  readonly timeoutMs: number;
+  readonly warning: VaultIdleWarning;
+  readonly onExpire: () => void;
 };
 
-enum ScheduledTimersKind {
+enum WarningTimerKind {
   NotScheduled = "not-scheduled",
   Scheduled = "scheduled",
 }
 
+type WarningTimer =
+  | { kind: WarningTimerKind.NotScheduled }
+  | { kind: WarningTimerKind.Scheduled; handle: ReturnType<typeof setTimeout> };
+
 type ScheduledTimers = {
   expire: ReturnType<typeof setTimeout>;
-  warning:
-    | { kind: ScheduledTimersKind.NotScheduled }
-    | {
-        kind: ScheduledTimersKind.Scheduled;
-        handle: ReturnType<typeof setTimeout>;
-      };
+  warning: WarningTimer;
 };
 
 enum SessionStateKind {
@@ -37,100 +49,95 @@ type SessionState =
   | { kind: SessionStateKind.Stopped }
   | { kind: SessionStateKind.Tracking; timers: ScheduledTimers };
 
-type VaultIdleSessionTrackerConfiguration = {
-  timeoutMs: number;
-  warningMs: number;
-  onExpire: () => void;
-  onWarning?: () => void;
-};
+export class VaultIdleSessionTracker {
+  private state: SessionState = { kind: SessionStateKind.Stopped };
 
-export function createVaultIdleSessionTracker(
-  options: VaultIdleSessionTrackerConfiguration,
-): VaultIdleSessionTracker {
-  let state: SessionState = { kind: SessionStateKind.Stopped };
+  constructor(
+    private readonly configuration: VaultIdleSessionTrackerConfiguration,
+  ) {}
 
-  const clearTimers = (timers: ScheduledTimers) => {
+  private clearTimers(timers: ScheduledTimers): void {
     clearTimeout(timers.expire);
-    if (timers.warning.kind === ScheduledTimersKind.Scheduled) {
+    if (timers.warning.kind === WarningTimerKind.Scheduled) {
       clearTimeout(timers.warning.handle);
     }
-  };
+  }
 
-  const detachActivityListeners = () => {
+  private detachActivityListeners(): void {
     if (!("document" in globalThis)) return;
     for (const event of ACTIVITY_EVENTS) {
-      document.removeEventListener(event, onActivity);
+      document.removeEventListener(event, this.onActivity);
     }
-  };
+  }
 
-  const scheduleTimers = () => {
-    if (state.kind === SessionStateKind.Tracking) {
-      clearTimers(state.timers);
-    }
-
-    const expire = setTimeout(() => {
-      if (state.kind !== SessionStateKind.Tracking) return;
-      clearTimers(state.timers);
-      state = { kind: SessionStateKind.Stopped };
-      detachActivityListeners();
-      options.onExpire();
-    }, options.timeoutMs);
-
-    let warning: ScheduledTimers["warning"] = {
-      kind: ScheduledTimersKind.NotScheduled,
-    };
+  private scheduleTimers(): void {
+    if (this.state.kind === SessionStateKind.Tracking)
+      this.clearTimers(this.state.timers);
+    const expire = setTimeout(() => expire(), this.configuration.timeoutMs);
+    let warning: WarningTimer = { kind: WarningTimerKind.NotScheduled };
+    const policy = this.configuration.warning;
     if (
-      options.onWarning &&
-      options.warningMs > 0 &&
-      options.warningMs < options.timeoutMs
+      policy.kind === VaultIdleWarningKind.Enabled &&
+      policy.leadMs > 0 &&
+      policy.leadMs < this.configuration.timeoutMs
     ) {
-      const warningDelay = options.timeoutMs - options.warningMs;
       warning = {
-        kind: ScheduledTimersKind.Scheduled,
-        handle: setTimeout(() => {
-          if (state.kind !== SessionStateKind.Tracking) return;
-          state = {
-            kind: SessionStateKind.Tracking,
-            timers: {
-              ...state.timers,
-              warning: { kind: ScheduledTimersKind.NotScheduled },
-            },
-          };
-          options.onWarning?.();
-        }, warningDelay),
+        kind: WarningTimerKind.Scheduled,
+        handle: setTimeout(
+          () => this.warn(policy.notify),
+          this.configuration.timeoutMs - policy.leadMs,
+        ),
       };
     }
-    state = { kind: SessionStateKind.Tracking, timers: { expire, warning } };
-  };
+    this.state = {
+      kind: SessionStateKind.Tracking,
+      timers: { expire, warning },
+    };
+  }
 
-  const onActivity = () => {
-    if (state.kind !== SessionStateKind.Tracking) return;
-    scheduleTimers();
-  };
+  private expire(): void {
+    if (this.state.kind !== SessionStateKind.Tracking) return;
+    this.clearTimers(this.state.timers);
+    this.state = { kind: SessionStateKind.Stopped };
+    this.detachActivityListeners();
+    this.configuration.onExpire();
+  }
 
-  const start = () => {
-    if (state.kind === SessionStateKind.Tracking || !("document" in globalThis))
+  private warn(notify: () => void): void {
+    if (this.state.kind !== SessionStateKind.Tracking) return;
+    this.state = {
+      kind: SessionStateKind.Tracking,
+      timers: {
+        ...this.state.timers,
+        warning: { kind: WarningTimerKind.NotScheduled },
+      },
+    };
+    notify();
+  }
+
+  // The DOM requires a stable callback identity for listener removal.
+  private readonly onActivity = (): void => this.recordActivity();
+
+  recordActivity(): void {
+    if (this.state.kind === SessionStateKind.Tracking) this.scheduleTimers();
+  }
+
+  start(): void {
+    if (
+      this.state.kind === SessionStateKind.Tracking ||
+      !("document" in globalThis)
+    )
       return;
     for (const event of ACTIVITY_EVENTS) {
-      const addEventListenerArgs: Parameters<
-        typeof document.addEventListener
-      >[2] = { passive: true };
-      document.addEventListener(event, onActivity, addEventListenerArgs);
+      document.addEventListener(event, this.onActivity, { passive: true });
     }
-    scheduleTimers();
-  };
+    this.scheduleTimers();
+  }
 
-  const stop = () => {
-    if (state.kind === SessionStateKind.Tracking) {
-      clearTimers(state.timers);
-    }
-    state = { kind: SessionStateKind.Stopped };
-    detachActivityListeners();
-  };
-
-  return {
-    start,
-    stop,
-    recordActivity: onActivity,
-  };
+  stop(): void {
+    if (this.state.kind === SessionStateKind.Tracking)
+      this.clearTimers(this.state.timers);
+    this.state = { kind: SessionStateKind.Stopped };
+    this.detachActivityListeners();
+  }
 }

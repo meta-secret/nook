@@ -1,9 +1,20 @@
 export class SerialOperationQueue {
+  private async completionOf<Result>(
+    operation: Promise<Result>,
+  ): Promise<void> {
+    try {
+      await operation;
+    } catch {
+      // The operation promise still rejects for its caller. The queue tail only
+      // represents completion, so one failed operation cannot block later work.
+    }
+  }
+
   private tail: Promise<void> = Promise.resolve();
 
   enqueue<T>(operation: () => T | Promise<T>): Promise<T> {
     const result = this.tail.then(operation);
-    this.tail = completionOf(result);
+    this.tail = this.completionOf(result);
     return result;
   }
 
@@ -13,14 +24,5 @@ export class SerialOperationQueue {
 
   reset(): void {
     this.tail = Promise.resolve();
-  }
-}
-
-async function completionOf<Result>(operation: Promise<Result>): Promise<void> {
-  try {
-    await operation;
-  } catch {
-    // The operation promise still rejects for its caller. The queue tail only
-    // represents completion, so one failed operation cannot block later work.
   }
 }

@@ -1,10 +1,7 @@
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type { SerializedStorageProvider } from '../lib/provider-credential-staging'
-import {
-  extensionSessionProviderIdentities,
-  scrubProviderCredentials,
-} from '../lib/provider-credential-staging'
+import { ProviderCredentialBuffer } from '../lib/provider-credential-staging'
 import {
   ExtensionSessionRequestValidation,
   type ExtensionSessionRequest as GeneratedExtensionSessionRequest,
@@ -417,7 +414,7 @@ function stageExtensionSessionIngressRequest(
     }
     try {
       const stagedProviders = structuredClone(providers)
-      scrubProviderCredentials(providers)
+      new ProviderCredentialBuffer(providers).clear()
       request.payload.providers = []
       return {
         kind: ExtensionSessionIngressStageKind.Staged,
@@ -427,7 +424,7 @@ function stageExtensionSessionIngressRequest(
         },
       }
     } catch {
-      scrubProviderCredentials(providers)
+      new ProviderCredentialBuffer(providers).clear()
       request.payload.providers = []
       return { kind: ExtensionSessionIngressStageKind.Invalid }
     }
@@ -450,7 +447,7 @@ function clearExtensionSessionIngressRequest(
   request: ParsedExtensionSessionTransportRequest,
 ): void {
   if (request.type === ExtensionSessionMessageType.ImportVault) {
-    scrubProviderCredentials(request.payload.providers)
+    new ProviderCredentialBuffer(request.payload.providers).clear()
     request.payload.providers = []
     return
   }
@@ -505,9 +502,9 @@ export async function parseExtensionSessionRequest(
             ...request,
             payload: {
               ...request.payload,
-              providers: extensionSessionProviderIdentities(
+              providers: new ProviderCredentialBuffer(
                 request.payload.providers,
-              ),
+              ).identities(),
             },
           }
         : request

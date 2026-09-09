@@ -7,7 +7,6 @@ type EnrollmentLinkRequest = {
   readonly code: string;
   readonly baseUrl: string;
 };
-
 import {
   build_enrollment_link,
   configured_vault_application,
@@ -39,93 +38,97 @@ type EnrollmentUrlCode =
   | { kind: EnrollmentUrlCodeKind.Absent }
   | { kind: EnrollmentUrlCodeKind.Present; code: string };
 
-export function enrollmentAppRootUrl({
-  siteRoot,
-  appKind,
-}: EnrollmentApplicationRoot): string {
-  const normalized = siteRoot.replace(/\/$/, "");
-  if (
-    appKind === VaultApplication.Simple ||
-    appKind === VaultApplication.Sentinel
-  ) {
-    return `${normalized}/`;
-  }
-  return normalized.endsWith("/app") ? `${normalized}/` : `${normalized}/app/`;
-}
+/** Owns enrollment URL consumption and history cleanup for its browser host. */
+class EnrollmentBrowser {
+  constructor(private readonly browser: typeof globalThis) {}
 
-/** Vault app root used in QR links (`/app/` below the public site root). */
-export function getEnrollmentLinkBase(): string {
-  if (!("window" in globalThis)) {
-    return "";
+  enrollmentAppRootUrl({
+    siteRoot,
+    appKind,
+  }: EnrollmentApplicationRoot): string {
+    const normalized = siteRoot.replace(/\/$/, "");
+    if (
+      appKind === VaultApplication.Simple ||
+      appKind === VaultApplication.Sentinel
+    ) {
+      return `${normalized}/`;
+    }
+    return normalized.endsWith("/app")
+      ? `${normalized}/`
+      : `${normalized}/app/`;
   }
-  const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
-  if (configured) {
-    const enrollmentAppRootUrlArgs: Parameters<typeof enrollmentAppRootUrl>[0] =
-      { siteRoot: configured, appKind: configured_vault_application() };
-    return enrollmentAppRootUrl(enrollmentAppRootUrlArgs);
-  }
-  const basePath = ((...[v = "/"]) => v)(import.meta.env.BASE_URL).replace(
-    /\/$/,
-    "",
-  );
-  const enrollmentAppRootUrlArgs2: Parameters<typeof enrollmentAppRootUrl>[0] =
-    {
-      siteRoot: `${window.location.origin}${basePath}`,
+
+  getEnrollmentLinkBase(): string {
+    if (!("window" in this.browser)) {
+      return "";
+    }
+    const configured = import.meta.env.VITE_PUBLIC_APP_URL?.trim();
+    if (configured) {
+      const enrollmentAppRootUrlArgs: Parameters<
+        typeof this.enrollmentAppRootUrl
+      >[0] = { siteRoot: configured, appKind: configured_vault_application() };
+      return this.enrollmentAppRootUrl(enrollmentAppRootUrlArgs);
+    }
+    const basePath = ((...[v = "/"]) => v)(import.meta.env.BASE_URL).replace(
+      /\/$/,
+      "",
+    );
+    const enrollmentAppRootUrlArgs2: Parameters<
+      typeof this.enrollmentAppRootUrl
+    >[0] = {
+      siteRoot: `${this.browser.window.location.origin}${basePath}`,
       appKind: configured_vault_application(),
     };
-  return enrollmentAppRootUrl(enrollmentAppRootUrlArgs2);
-}
-
-/** Deep link scanned from a QR code — opens the browser and carries the raw code in the hash. */
-export function buildEnrollmentLink({
-  code,
-  baseUrl,
-}: EnrollmentLinkRequest): string {
-  return build_enrollment_link(code, baseUrl);
-}
-
-/**
- * Read an enrollment code from the current page URL (hash or query), then
- * strip it from the address bar so secrets do not linger in history.
- */
-export function consumeEnrollmentFromLocation(): EnrollmentLocation {
-  if (!("window" in globalThis)) {
-    return { kind: EnrollmentLocationKind.Absent };
+    return this.enrollmentAppRootUrl(enrollmentAppRootUrlArgs2);
   }
 
-  const url = new URL(window.location.href);
-  const raw = enrollmentCodeFromUrl(url);
-
-  if (raw.kind === EnrollmentUrlCodeKind.Absent) {
-    return { kind: EnrollmentLocationKind.Absent };
+  buildEnrollmentLink({ code, baseUrl }: EnrollmentLinkRequest): string {
+    return build_enrollment_link(code, baseUrl);
   }
 
-  const replaceStateArgs: Parameters<typeof history.replaceState>[0] = {
-    state: EnrollmentHistoryState.EnrollmentConsumed,
-  };
-  history.replaceState(
-    replaceStateArgs,
-    "",
-    `${url.pathname}${url.search}${url.hash}`,
-  );
-  return {
-    kind: EnrollmentLocationKind.Consumed,
-    payload: normalize_enrollment_code(raw.code),
-  };
-}
+  consumeEnrollmentFromLocation(): EnrollmentLocation {
+    if (!("window" in this.browser)) {
+      return { kind: EnrollmentLocationKind.Absent };
+    }
 
-function enrollmentCodeFromUrl(url: URL): EnrollmentUrlCode {
-  if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
-    const code = decodeURIComponent(
-      url.hash.slice(ENROLLMENT_HASH_PREFIX.length),
+    const url = new URL(this.browser.window.location.href);
+    const raw = this.enrollmentCodeFromUrl(url);
+
+    if (raw.kind === EnrollmentUrlCodeKind.Absent) {
+      return { kind: EnrollmentLocationKind.Absent };
+    }
+
+    const replaceStateArgs: Parameters<
+      typeof this.browser.history.replaceState
+    >[0] = {
+      state: EnrollmentHistoryState.EnrollmentConsumed,
+    };
+    this.browser.history.replaceState(
+      replaceStateArgs,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
     );
-    url.hash = "";
-    return { kind: EnrollmentUrlCodeKind.Present, code };
+    return {
+      kind: EnrollmentLocationKind.Consumed,
+      payload: normalize_enrollment_code(raw.code),
+    };
   }
-  const code = url.searchParams.get("enroll")?.valueOf();
-  if (code) {
-    url.searchParams.delete("enroll");
-    return { kind: EnrollmentUrlCodeKind.Present, code };
+
+  private enrollmentCodeFromUrl(url: URL): EnrollmentUrlCode {
+    if (url.hash.startsWith(ENROLLMENT_HASH_PREFIX)) {
+      const code = decodeURIComponent(
+        url.hash.slice(ENROLLMENT_HASH_PREFIX.length),
+      );
+      url.hash = "";
+      return { kind: EnrollmentUrlCodeKind.Present, code };
+    }
+    const code = url.searchParams.get("enroll")?.valueOf();
+    if (code) {
+      url.searchParams.delete("enroll");
+      return { kind: EnrollmentUrlCodeKind.Present, code };
+    }
+    return { kind: EnrollmentUrlCodeKind.Absent };
   }
-  return { kind: EnrollmentUrlCodeKind.Absent };
 }
+
+export const enrollmentBrowser = new EnrollmentBrowser(globalThis);

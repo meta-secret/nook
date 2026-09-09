@@ -1,193 +1,193 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../generated/i18n-keys'
-  import { onMount, untrack } from 'svelte'
-  import { VaultState } from '$lib/vault.svelte'
+  import { I18N_KEYS } from "../generated/i18n-keys";
+  import { onMount, untrack } from "svelte";
+  import { VaultState } from "$lib/vault.svelte";
   import {
     DeviceProtectionStatus,
     ExternalDeviceIdentityAuthorizationMode,
     type StartSentinelGenesisArgs,
-  } from '$app-wasm'
+  } from "$app-wasm";
   import {
     ExtensionConnectIntentKind,
     LegalRouteKind,
-    extensionConnectIntent,
-    legalRoute,
+    ExtensionConnectionIntentProjection,
+    LegalRouteProjection,
     type ExtensionConnectIntent,
-  } from '$lib/app/route-state'
-  import { ColorMode, manualColorMode, systemColorMode } from '$lib/app/theme'
+  } from "$lib/app/route-state";
+  import { ColorMode, browserColorMode } from "$lib/app/theme";
   import {
     type EnrollmentSubmitQueue,
     EnrollmentSubmitQueueKind,
-    isSentinelParticipantKeyPending,
-    isSentinelParticipantResponsePending,
+    PendingVaultCreationView as PendingCreation,
     PendingVaultCreationKind,
     type VaultCreationQueue,
     VaultCreationQueueKind,
-  } from '$lib/vault/creation-queue'
-  import AppSurface from '$lib/components/app/AppSurface.svelte'
+  } from "$lib/vault/creation-queue";
+  import AppSurface from "$lib/components/app/AppSurface.svelte";
   import type {
     EnrollmentCodeUseRequest,
     PairedExtensionDiscoveryRetry,
     PairedExtensionUnlockPoll,
-  } from '$lib/app/app-interaction-types'
-  import { getLegalPageFromPath, isLogsPath } from '$lib/content/legal'
-  import { isAppLogsPath } from '$lib/app/logs-api'
+  } from "$lib/app/app-interaction-types";
+  import { ApplicationRoutePresentation as ApplicationRoute } from "$lib/content/legal";
+  import { AppLogsLocation } from "$lib/app/logs-api";
   import {
-    adoptExtensionIdentity,
-    discoverPairedExtensionIdentity,
-    extensionConnectRequestFromLocation,
     ExtensionConnectRequestStateKind,
     ExtensionIdentityRequestSource,
-    isExtensionConnectPath,
-    requestPairedExtensionUnlock,
     type ExtensionIdentityAdoption,
     type ExtensionConnectRequestState,
-  } from '$lib/extension/connect'
+    extensionConnectionBrowser as connectionBrowser,
+  } from "$lib/extension/connect";
   import {
-    connectInstalledExtension,
     ExtensionSetupOfferKind,
-    loadExtensionSetupOffer,
-    observeExtensionSetupChanges,
-    openExtensionInstaller,
     type ExtensionSetupOffer,
-  } from '$lib/app/extension-setup'
+    extensionSetupBrowser,
+  } from "$lib/app/extension-setup";
   import {
     APP_SHELL_WIDTH,
     APP_SHELL_WIDTH_WIDE,
     APP_VERSION,
-    appShellSpacing,
-  } from '$lib/app/shell-layout'
-  import { SettingsSection } from '$lib/vault/state/ui.svelte'
+    ApplicationShellLayout,
+  } from "$lib/app/shell-layout";
+  import { SettingsSection } from "$lib/vault/state/ui.svelte";
   import {
     assess_vault_security,
     configured_vault_application_is_simple,
     configured_vault_application_is_sentinel,
     configured_vault_application_supports_extension,
-  } from '$app-wasm'
-  import { consumeSentinelOnboardingFromLocation } from '$lib/enrollment/sentinel-onboarding-link'
+  } from "$app-wasm";
+  import { sentinelOnboardingBrowser } from "$lib/enrollment/sentinel-onboarding-link";
   import {
     initialExtensionConnectIntent,
     initialLegalRoute,
-  } from '$lib/app/route-state'
+  } from "$lib/app/route-state";
+  import { sentinelGenesisBrowser } from "$lib/enrollment/sentinel-genesis-link";
+  import * as deviceProtectionActions from "$lib/vault/device-protection.svelte";
+  import * as sentinelGenesisActions from "$lib/vault/sentinel-genesis";
+  import { ExistingVaultImportLifecycle } from "$lib/vault/existing-vault-import.svelte";
   import {
-    consumeSentinelGenesisParticipantResponseFromLocation,
-    consumeSentinelGenesisRequestFromLocation,
-  } from '$lib/enrollment/sentinel-genesis-link'
-  import * as deviceProtectionActions from '$lib/vault/device-protection.svelte'
-  import * as sentinelGenesisActions from '$lib/vault/sentinel-genesis'
-  import {
-    ExistingVaultImportLifecycle,
-    loginUnlockStoreId,
-  } from '$lib/vault/existing-vault-import.svelte'
-  import {
-    mountBrowserLifecycle,
     THEME_STORAGE_KEY,
-    updateApplicationDocument,
-  } from '$lib/app/browser-lifecycle'
+    vaultBrowserLifecycle,
+  } from "$lib/app/browser-lifecycle";
   import {
     ActiveVaultKind,
     LoginSetupKind,
-  } from '$lib/vault/state/provider.svelte'
+  } from "$lib/vault/state/provider.svelte";
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
-    workspacePath,
-    workspaceRouteFromPath,
-  } from '$lib/app/workspace-route'
-  import { applyWorkspaceRoute } from '$lib/vault/ui'
-  import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/paired-vault-identity-status'
-  const IS_SIMPLE_APP = configured_vault_application_is_simple()
-  const IS_SENTINEL_APP = configured_vault_application_is_sentinel()
-  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
-  const vault = new VaultState()
-  const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault)
+    WorkspaceLocation,
+    WorkspacePath,
+  } from "$lib/app/workspace-route";
+  import { VaultWorkspaceActions } from "$lib/vault/ui";
+  import { ExtensionPairedVaultIdentityStatusMessageStatus } from "$web-shared/extension/paired-vault-identity-status";
+  const IS_SIMPLE_APP = configured_vault_application_is_simple();
+  const IS_SENTINEL_APP = configured_vault_application_is_sentinel();
+  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
+  const vault = new VaultState();
+  const existingVaultImportLifecycle = new ExistingVaultImportLifecycle(vault);
   const vaultSecurityRecommendations = $derived(
     assess_vault_security(
       vault.syncProviders.length,
       vault.vaultMembers.length,
     ),
-  )
-  let colorMode = $state<ColorMode>(systemColorMode())
-  let followsSystemColorMode = $state(true)
-  let legalPageState = $state(initialLegalRoute())
+  );
+  let colorMode = $state<ColorMode>(browserColorMode.systemColorMode());
+  let followsSystemColorMode = $state(true);
+  let legalPageState = $state(initialLegalRoute());
   let logsPage = $state<boolean>(
-    'window' in globalThis && isLogsPath(window.location.pathname),
-  )
+    "window" in globalThis &&
+      new ApplicationRoute(window.location.pathname).isLogsPath(),
+  );
   let appLogsPage = $state<boolean>(
-    'window' in globalThis && isAppLogsPath(window.location.pathname),
-  )
+    "window" in globalThis &&
+      new AppLogsLocation(window.location.pathname).matches,
+  );
   const initialExtensionConnectRequestState: ExtensionConnectIntent =
-    initialExtensionConnectIntent(SUPPORTS_EXTENSION)
+    initialExtensionConnectIntent(SUPPORTS_EXTENSION);
   let extensionConnectRoute = $state<boolean>(
-    'window' in globalThis
-      ? SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
+    "window" in globalThis
+      ? SUPPORTS_EXTENSION &&
+          connectionBrowser.isExtensionConnectPath(window.location.pathname)
       : false,
-  )
+  );
   let extensionConnectRequestState = $state<ExtensionConnectIntent>(
     initialExtensionConnectRequestState,
-  )
+  );
   // Keep the public extension handoff request in memory after leaving the
   // consent route. On reload, the site asks the installed extension for a new
   // vault-bound handoff only when that extension already holds an approved
   // grant for the active local vault.
   let extensionIdentityRequestState = $state<ExtensionConnectIntent>(
     initialExtensionConnectRequestState,
-  )
-  let extensionBackedVaultSession = $state(false)
-  let extensionDiscoveryStoreId = $state('')
+  );
+  let extensionBackedVaultSession = $state(false);
+  let extensionDiscoveryStoreId = $state("");
   let extensionSetupStateValue = $state<ExtensionSetupOffer>({
     kind: ExtensionSetupOfferKind.Hidden,
-  })
-  let extensionInstallBusy = $state(false)
-  let extensionConnectError = $state(false)
-  const EXTENSION_LOCKED_RETRY_MS = 3_000
+  });
+  let extensionInstallBusy = $state(false);
+  let extensionConnectError = $state(false);
+  const EXTENSION_LOCKED_RETRY_MS = 3_000;
   let sentinelInvitationRequest = $state(
-    'window' in globalThis && !IS_SIMPLE_APP
-      ? consumeSentinelGenesisRequestFromLocation()
-      : '',
-  )
+    "window" in globalThis && !IS_SIMPLE_APP
+      ? sentinelGenesisBrowser.consumeSentinelGenesisRequestFromLocation()
+      : "",
+  );
   let sentinelParticipantResponse = $state(
-    'window' in globalThis && !IS_SIMPLE_APP
-      ? consumeSentinelGenesisParticipantResponseFromLocation()
-      : '',
-  )
+    "window" in globalThis && !IS_SIMPLE_APP
+      ? sentinelGenesisBrowser.consumeSentinelGenesisParticipantResponseFromLocation()
+      : "",
+  );
   let sentinelOnboardingPackage = $state(
-    'window' in globalThis && !IS_SIMPLE_APP
-      ? consumeSentinelOnboardingFromLocation()
-      : '',
-  )
+    "window" in globalThis && !IS_SIMPLE_APP
+      ? sentinelOnboardingBrowser.consumeSentinelOnboardingFromLocation()
+      : "",
+  );
   function syncRoute(event?: Event) {
     if (!IS_SIMPLE_APP) {
-      const invitationRequest = consumeSentinelGenesisRequestFromLocation()
-      if (invitationRequest || event?.type === 'popstate') {
-        sentinelInvitationRequest = invitationRequest
-        if (isSentinelParticipantResponsePending(pendingVaultCreationState))
-          finishPendingCreation()
+      const invitationRequest =
+        sentinelGenesisBrowser.consumeSentinelGenesisRequestFromLocation();
+      if (invitationRequest || event?.type === "popstate") {
+        sentinelInvitationRequest = invitationRequest;
+        if (
+          new PendingCreation(
+            pendingVaultCreationState,
+          ).isSentinelParticipantResponsePending()
+        )
+          finishPendingCreation();
       }
       const participantResponse =
-        consumeSentinelGenesisParticipantResponseFromLocation()
-      if (participantResponse) sentinelParticipantResponse = participantResponse
-      const onboardingPackage = consumeSentinelOnboardingFromLocation()
-      if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage
+        sentinelGenesisBrowser.consumeSentinelGenesisParticipantResponseFromLocation();
+      if (participantResponse)
+        sentinelParticipantResponse = participantResponse;
+      const onboardingPackage =
+        sentinelOnboardingBrowser.consumeSentinelOnboardingFromLocation();
+      if (onboardingPackage) sentinelOnboardingPackage = onboardingPackage;
     }
-    legalPageState = legalRoute(getLegalPageFromPath(window.location.pathname))
-    logsPage = isLogsPath(window.location.pathname)
-    appLogsPage = isAppLogsPath(window.location.pathname)
+    legalPageState = new LegalRouteProjection(
+      new ApplicationRoute(window.location.pathname).getLegalPageFromPath(),
+    ).route;
+    logsPage = new ApplicationRoute(window.location.pathname).isLogsPath();
+    appLogsPage = new AppLogsLocation(window.location.pathname).matches;
     extensionConnectRoute =
-      SUPPORTS_EXTENSION && isExtensionConnectPath(window.location.pathname)
-    const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
+      SUPPORTS_EXTENSION &&
+      connectionBrowser.isExtensionConnectPath(window.location.pathname);
+    const workspaceRoute = new WorkspacePath(window.location.pathname).route;
     const leavesSentinelChooser =
       legalPageState.kind !== LegalRouteKind.Application ||
       logsPage ||
       appLogsPage ||
       extensionConnectRoute ||
       (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace &&
-        workspaceRoute.route !== WorkspaceRoute.Vault)
+        workspaceRoute.route !== WorkspaceRoute.Vault);
     if (
       leavesSentinelChooser &&
-      isSentinelParticipantKeyPending(pendingVaultCreationState)
+      new PendingCreation(
+        pendingVaultCreationState,
+      ).isSentinelParticipantKeyPending()
     )
-      finishPendingCreation()
+      finishPendingCreation();
     if (
       legalPageState.kind === LegalRouteKind.Application &&
       !logsPage &&
@@ -195,150 +195,149 @@
       !extensionConnectRoute
     ) {
       if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
-        const applyWorkspaceRouteArgs2: Parameters<
-          typeof applyWorkspaceRoute
-        >[0] = { state: vault, route: workspaceRoute.route }
-        applyWorkspaceRoute(applyWorkspaceRouteArgs2)
-        const replaceStateArgs: Parameters<typeof history.replaceState>[0] = {}
+        new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+          route: workspaceRoute.route,
+        });
+
         history.replaceState(
-          replaceStateArgs,
-          '',
-          workspacePath(workspaceRoute.route),
-        )
+          {},
+          "",
+          new WorkspaceLocation(workspaceRoute.route).path,
+        );
       } else {
-        const applyWorkspaceRouteArgs: Parameters<
-          typeof applyWorkspaceRoute
-        >[0] = { state: vault, route: WorkspaceRoute.Vault }
-        applyWorkspaceRoute(applyWorkspaceRouteArgs)
-        const replaceStateArgs2: Parameters<typeof history.replaceState>[0] = {}
+        new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+          route: WorkspaceRoute.Vault,
+        });
+
         history.replaceState(
-          replaceStateArgs2,
-          '',
-          workspacePath(WorkspaceRoute.Vault),
-        )
+          {},
+          "",
+          new WorkspaceLocation(WorkspaceRoute.Vault).path,
+        );
       }
     }
     const routeConnectRequest: ExtensionConnectRequestState = SUPPORTS_EXTENSION
-      ? extensionConnectRequestFromLocation(window.location)
-      : { kind: ExtensionConnectRequestStateKind.Absent }
-    extensionConnectRequestState = extensionConnectIntent(routeConnectRequest)
+      ? connectionBrowser.extensionConnectRequestFromLocation(window.location)
+      : { kind: ExtensionConnectRequestStateKind.Absent };
+    extensionConnectRequestState = new ExtensionConnectionIntentProjection(
+      routeConnectRequest,
+    ).intent;
     if (
       routeConnectRequest.kind === ExtensionConnectRequestStateKind.Requested
     ) {
       extensionIdentityRequestState = {
         kind: ExtensionConnectIntentKind.Requested,
         request: routeConnectRequest.request,
-      }
+      };
     }
   }
   $effect(() => {
-    if (!vault.isAuthenticated || !('window' in globalThis)) return
-    const workspaceRoute = workspaceRouteFromPath(window.location.pathname)
+    if (!vault.isAuthenticated || !("window" in globalThis)) return;
+    const workspaceRoute = new WorkspacePath(window.location.pathname).route;
     if (workspaceRoute.kind === WorkspaceRouteLookupKind.Workspace) {
       untrack(() =>
         (() => {
-          const applyWorkspaceRouteArgs3: Parameters<
-            typeof applyWorkspaceRoute
-          >[0] = { state: vault, route: workspaceRoute.route }
-          return applyWorkspaceRoute(applyWorkspaceRouteArgs3)
+          return new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+            route: workspaceRoute.route,
+          });
         })(),
-      )
+      );
     }
-  })
+  });
   function navigateHome() {
-    const applyWorkspaceRouteArgs4: Parameters<typeof applyWorkspaceRoute>[0] =
-      { state: vault, route: WorkspaceRoute.Vault }
-    applyWorkspaceRoute(applyWorkspaceRouteArgs4)
-    const pushStateArgs: Parameters<typeof history.pushState>[0] = {}
-    history.pushState(pushStateArgs, '', workspacePath(WorkspaceRoute.Vault))
-    legalPageState = { kind: LegalRouteKind.Application }
-    logsPage = false
-    appLogsPage = false
-    extensionConnectRoute = false
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+      route: WorkspaceRoute.Vault,
+    });
+
+    history.pushState({}, "", new WorkspaceLocation(WorkspaceRoute.Vault).path);
+    legalPageState = { kind: LegalRouteKind.Application };
+    logsPage = false;
+    appLogsPage = false;
+    extensionConnectRoute = false;
     extensionConnectRequestState = {
       kind: ExtensionConnectIntentKind.Absent,
-    }
+    };
   }
   function finishExtensionConnect(approved = false) {
     if (!approved) {
       extensionIdentityRequestState = {
         kind: ExtensionConnectIntentKind.Absent,
-      }
+      };
     }
-    const applyWorkspaceRouteArgs5: Parameters<typeof applyWorkspaceRoute>[0] =
-      { state: vault, route: WorkspaceRoute.Vault }
-    applyWorkspaceRoute(applyWorkspaceRouteArgs5)
-    const pushStateArgs2: Parameters<typeof history.pushState>[0] = {}
-    history.pushState(pushStateArgs2, '', workspacePath(WorkspaceRoute.Vault))
-    legalPageState = { kind: LegalRouteKind.Application }
-    logsPage = false
-    appLogsPage = false
-    extensionConnectRoute = false
+
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute({
+      route: WorkspaceRoute.Vault,
+    });
+
+    history.pushState({}, "", new WorkspaceLocation(WorkspaceRoute.Vault).path);
+    legalPageState = { kind: LegalRouteKind.Application };
+    logsPage = false;
+    appLogsPage = false;
+    extensionConnectRoute = false;
     extensionConnectRequestState = {
       kind: ExtensionConnectIntentKind.Absent,
-    }
+    };
   }
   onMount(() => {
     const mountBrowserLifecycleArgs: Parameters<
-      typeof mountBrowserLifecycle
+      typeof vaultBrowserLifecycle.mountBrowserLifecycle
     >[0] = {
       vault,
       followsSystemColorMode: () => followsSystemColorMode,
       setColorMode: (mode) => {
-        colorMode = mode
+        colorMode = mode;
       },
       stopFollowingSystemColorMode: () => {
-        followsSystemColorMode = false
+        followsSystemColorMode = false;
       },
       syncRoute,
-    }
-    return mountBrowserLifecycle(mountBrowserLifecycleArgs)
-  })
+    };
+    return vaultBrowserLifecycle.mountBrowserLifecycle(
+      mountBrowserLifecycleArgs,
+    );
+  });
   $effect(() => {
-    const updateApplicationDocumentArgs: Parameters<
-      typeof updateApplicationDocument
-    >[0] = {
+    vaultBrowserLifecycle.updateApplicationDocument({
       colorMode,
       legalRoute: legalPageState,
       logsPage,
       extensionConnectRoute,
       sentinelApplication: IS_SENTINEL_APP,
-    }
-    updateApplicationDocument(updateApplicationDocumentArgs)
-  })
+    });
+  });
   async function handleUnlock(skipExtensionDiscovery = false) {
     const existingVaultImport =
       vault.loginRequiresExistingVault &&
-      vault.loginSetup.kind === LoginSetupKind.Active
+      vault.loginSetup.kind === LoginSetupKind.Active;
     const existingVaultImportNeedsIdentity =
       vault.clientPolicy.existing_vault_identity_recovery_required(
         vault.loginRequiresExistingVault,
         vault.loginSetup.kind === LoginSetupKind.Active,
         vault.deviceProtectionReady,
-      )
+      );
     if (
       vault.addProviderOpen &&
       vault.loginSetup.kind === LoginSetupKind.Active &&
       !existingVaultImportNeedsIdentity
     ) {
-      await vault.connectStagedProvider()
-      return
+      await vault.connectStagedProvider();
+      return;
     }
-    let activeStoreId = loginUnlockStoreId(vault)
+    let activeStoreId = existingVaultImportLifecycle.unlockStoreId;
     if (existingVaultImport) {
       try {
-        activeStoreId = await vault.discoverStagedVaultStoreId()
+        activeStoreId = await vault.discoverStagedVaultStoreId();
         if (!activeStoreId) {
-          vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound)
-          return
+          vault.errorMsg = vault.t(I18N_KEYS.AuthStorageExistingVaultNotFound);
+          return;
         }
-        existingVaultImportLifecycle.remember(activeStoreId)
+        existingVaultImportLifecycle.remember(activeStoreId);
       } catch (error) {
         vault.errorMsg =
           error instanceof Error
             ? error.message
-            : vault.t(I18N_KEYS.AuthStorageSyncFailed)
-        return
+            : vault.t(I18N_KEYS.AuthStorageSyncFailed);
+        return;
       }
     }
     if (
@@ -350,33 +349,32 @@
       !vault.isVerifying &&
       !vault.deviceAuthorizationInProgress
     ) {
-      const connectRequest = extensionIdentityRequestState.request
+      const connectRequest = extensionIdentityRequestState.request;
       const authorizeWithExternalDeviceIdentityArgs: Parameters<
         typeof vault.authorizeWithExternalDeviceIdentity
       >[0] = {
         adopt: (manager) => {
-          const adoptionArgs: ExtensionIdentityAdoption = {
+          return connectionBrowser.adoptExtensionIdentity({
             manager,
             request: connectRequest,
-          }
-          return adoptExtensionIdentity(adoptionArgs)
+          });
         },
         mode: existingVaultImport
           ? ExternalDeviceIdentityAuthorizationMode.DeferInitialization
           : ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
-      }
+      };
       const adopted = await vault.authorizeWithExternalDeviceIdentity(
         authorizeWithExternalDeviceIdentityArgs,
-      )
+      );
       if (adopted) {
-        extensionBackedVaultSession = true
+        extensionBackedVaultSession = true;
         await (existingVaultImport
           ? existingVaultImportLifecycle.resume()
-          : vault.loadDb())
-        return
+          : vault.loadDb());
+        return;
       }
       if (skipExtensionDiscovery) {
-        return
+        return;
       }
     }
     if (
@@ -385,9 +383,9 @@
       (vault.localVaultPresent || existingVaultImport) &&
       activeStoreId
     ) {
-      extensionDiscoveryStoreId = ''
-      const discoveryStatus = await resumePairedExtensionVault(activeStoreId)
-      if (vault.isAuthenticated) return
+      extensionDiscoveryStoreId = "";
+      const discoveryStatus = await resumePairedExtensionVault(activeStoreId);
+      if (vault.isAuthenticated) return;
       if (
         discoveryStatus ===
           ExtensionPairedVaultIdentityStatusMessageStatus.Locked ||
@@ -398,24 +396,24 @@
           discoveryStatus ===
           ExtensionPairedVaultIdentityStatusMessageStatus.Locked
         ) {
-          await requestPairedExtensionUnlock(activeStoreId)
+          await connectionBrowser.requestPairedExtensionUnlock(activeStoreId);
         }
-        const unlockWait: PairedExtensionUnlockPoll = {
+
+        await waitForPairedExtensionUnlock({
           storeId: activeStoreId,
-        }
-        await waitForPairedExtensionUnlock(unlockWait)
-        if (vault.isAuthenticated) return
+        });
+        if (vault.isAuthenticated) return;
       }
     }
     if (skipExtensionDiscovery) {
-      return
+      return;
     }
     if (existingVaultNeedsDeviceUnlock || existingVaultImportNeedsIdentity) {
       if (
         extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested
       ) {
-        const connectRequest = extensionIdentityRequestState.request
+        const connectRequest = extensionIdentityRequestState.request;
         const extensionIdentityCanUnlock =
           (connectRequest.source !==
             ExtensionIdentityRequestSource.PairedVault ||
@@ -423,119 +421,116 @@
           (connectRequest.source ===
             ExtensionIdentityRequestSource.PairedVault ||
             extensionBackedVaultSession ||
-            vault.deviceProtectionStatus === DeviceProtectionStatus.Missing)
+            vault.deviceProtectionStatus === DeviceProtectionStatus.Missing);
         if (extensionIdentityCanUnlock) {
           const authorizeWithExternalDeviceIdentityArgs2: Parameters<
             typeof vault.authorizeWithExternalDeviceIdentity
           >[0] = {
             adopt: (manager) => {
-              const adoptionArgs: ExtensionIdentityAdoption = {
+              return connectionBrowser.adoptExtensionIdentity({
                 manager,
                 request: connectRequest,
-              }
-              return adoptExtensionIdentity(adoptionArgs)
+              });
             },
             mode: existingVaultImport
               ? ExternalDeviceIdentityAuthorizationMode.DeferInitialization
               : ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
-          }
+          };
           const adopted = await vault.authorizeWithExternalDeviceIdentity(
             authorizeWithExternalDeviceIdentityArgs2,
-          )
-          if (!adopted) return
-          extensionBackedVaultSession = true
+          );
+          if (!adopted) return;
+          extensionBackedVaultSession = true;
           await (existingVaultImport
             ? existingVaultImportLifecycle.resume()
-            : vault.loadDb())
-          return
+            : vault.loadDb());
+          return;
         }
       }
-      pendingExistingVaultUnlock = true
+      pendingExistingVaultUnlock = true;
       if (vault.deviceProtectionStatus === DeviceProtectionStatus.Passkey) {
-        const unlockRequest: Parameters<
-          typeof deviceProtectionActions.unlockDeviceProtection
-        >[0] = { state: vault, initializeSession: true }
-        await deviceProtectionActions.unlockDeviceProtection(unlockRequest)
+        await new deviceProtectionActions.DeviceProtectionActions(
+          vault,
+        ).unlockDeviceProtection({ initializeSession: true });
       }
-      return
+      return;
     }
     if (existingVaultImport) {
-      await existingVaultImportLifecycle.resume()
-      return
+      await existingVaultImportLifecycle.resume();
+      return;
     }
     if (vault.loginSetup.kind === LoginSetupKind.Active) {
-      await vault.connectStagedProvider()
-      return
+      await vault.connectStagedProvider();
+      return;
     }
-    await vault.loadDb()
+    await vault.loadDb();
   }
   async function handleSettingsReconnect() {
     if (vault.loginSetup.kind === LoginSetupKind.Active) {
-      await vault.connectAndSyncStagedProvider()
-      return
+      await vault.connectAndSyncStagedProvider();
+      return;
     }
-    await vault.manualSync()
+    await vault.manualSync();
   }
   function toggleColorMode() {
-    followsSystemColorMode = false
-    const manualColorModeArgs: Parameters<typeof manualColorMode>[0] = {
+    followsSystemColorMode = false;
+
+    colorMode = browserColorMode.manualColorMode({
       current: colorMode,
       storageKey: THEME_STORAGE_KEY,
-    }
-    colorMode = manualColorMode(manualColorModeArgs)
+    });
   }
-  const appVersion = APP_VERSION
+  const appVersion = APP_VERSION;
   const shellWidth = $derived(
     vault.settingsOpen &&
       vault.settingsSection === SettingsSection.DevicesAccess
       ? APP_SHELL_WIDTH_WIDE
       : APP_SHELL_WIDTH,
-  )
-  let secretsAddOpen = $state(false)
+  );
+  let secretsAddOpen = $state(false);
   const shellSpacing = $derived.by(() => {
-    const appShellSpacingArgs: Parameters<typeof appShellSpacing>[0] = {
+    return new ApplicationShellLayout({
       legalRouteKind: legalPageState.kind,
       logsOpen: logsPage,
       extensionConnectOpen: extensionConnectRoute,
       authenticated: vault.isAuthenticated,
       editorOpen: secretsAddOpen,
-    }
-    return appShellSpacing(appShellSpacingArgs)
-  })
+    }).spacing;
+  });
   /** Existing vault unlock / `#enroll=` join keep passkey-first; empty create defers passkey. */
-  const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending)
+  const urlEnrollmentPending = $derived(vault.enrollmentFromUrlPending);
   const requiresPasskeyFirst = $derived(
     vault.localVaultPresent ||
       vault.localVaults.length > 0 ||
       vault.loginRequiresExistingVault ||
       urlEnrollmentPending,
-  )
+  );
   const existingVaultNeedsDeviceUnlock = $derived(
     requiresPasskeyFirst && !vault.deviceProtectionReady,
-  )
+  );
   const showLoginWithoutPasskey = $derived(
     !requiresPasskeyFirst && vault.providersLoaded,
-  )
+  );
   let pendingVaultCreationState = $state<VaultCreationQueue>({
     kind: VaultCreationQueueKind.Idle,
-  })
-  let pendingExistingVaultUnlock = $state(false)
-  let pendingEnrollmentDeviceUnlock = $state(false)
+  });
+  let pendingExistingVaultUnlock = $state(false);
+  let pendingEnrollmentDeviceUnlock = $state(false);
   let pendingEnrollmentSubmitState = $state<EnrollmentSubmitQueue>({
     kind: EnrollmentSubmitQueueKind.Idle,
-  })
+  });
   const showPasskeyOverlay = $derived(
     pendingVaultCreationState.kind ===
       VaultCreationQueueKind.WaitingForDevice && !vault.deviceProtectionReady,
-  )
+  );
   const showExistingVaultPasskeyOverlay = $derived(
     pendingExistingVaultUnlock && existingVaultNeedsDeviceUnlock,
-  )
+  );
   const showEnrollmentPasskeyOverlay = $derived(
     pendingEnrollmentDeviceUnlock &&
       urlEnrollmentPending &&
       !vault.deviceProtectionReady,
-  )
+  );
 
   async function handleUseEnrollmentCode({
     code,
@@ -545,20 +540,18 @@
       pendingEnrollmentSubmitState = {
         kind: EnrollmentSubmitQueueKind.WaitingForDevice,
         request: { code, password },
-      }
-      pendingEnrollmentDeviceUnlock = true
-      return
+      };
+      pendingEnrollmentDeviceUnlock = true;
+      return;
     }
     pendingEnrollmentSubmitState = {
       kind: EnrollmentSubmitQueueKind.Idle,
-    }
-    const enrollmentRequest: Parameters<
-      typeof vault.connectWithEnrollmentCode
-    >[0] = {
+    };
+
+    await vault.connectWithEnrollmentCode({
       code,
       password,
-    }
-    await vault.connectWithEnrollmentCode(enrollmentRequest)
+    });
   }
 
   async function resumePairedExtensionVault(
@@ -570,12 +563,13 @@
   > {
     const discoveringStagedImport =
       vault.loginRequiresExistingVault &&
-      vault.loginSetup.kind === LoginSetupKind.Active
-    extensionDiscoveryStoreId = storeId
-    const discovery = await discoverPairedExtensionIdentity(storeId)
+      vault.loginSetup.kind === LoginSetupKind.Active;
+    extensionDiscoveryStoreId = storeId;
+    const discovery =
+      await connectionBrowser.discoverPairedExtensionIdentity(storeId);
     const openVaultIsDifferentStore =
       vault.activeVault.kind === ActiveVaultKind.Open &&
-      vault.activeVault.storeId !== storeId
+      vault.activeVault.storeId !== storeId;
     if (
       vault.isAuthenticated ||
       extensionConnectRoute ||
@@ -586,54 +580,52 @@
       return discovery.status ===
         ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault
         ? ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
-        : discovery.status
+        : discovery.status;
     }
     if (
       discovery.status ===
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked
     ) {
-      const lockedRetry: PairedExtensionDiscoveryRetry = {
+      schedulePairedExtensionDiscoveryRetry({
         storeId,
         discoveringStagedImport,
-      }
-      schedulePairedExtensionDiscoveryRetry(lockedRetry)
-      return ExtensionPairedVaultIdentityStatusMessageStatus.Locked
+      });
+      return ExtensionPairedVaultIdentityStatusMessageStatus.Locked;
     }
     if (
       discovery.status !==
       ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
     ) {
-      const unavailableRetry: PairedExtensionDiscoveryRetry = {
+      schedulePairedExtensionDiscoveryRetry({
         storeId,
         discoveringStagedImport,
-      }
-      schedulePairedExtensionDiscoveryRetry(unavailableRetry)
-      return ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable
+      });
+      return ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable;
     }
     extensionIdentityRequestState = {
       kind: ExtensionConnectIntentKind.Requested,
       request: discovery.request,
-    }
-    await handleUnlock(true)
-    return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked
+    };
+    await handleUnlock(true);
+    return ExtensionPairedVaultIdentityStatusMessageStatus.Unlocked;
   }
 
-  const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000
-  const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350
+  const PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS = 30_000;
+  const PAIRED_EXTENSION_UNLOCK_RETRY_MS = 350;
 
   async function waitForPairedExtensionUnlock(
     request: PairedExtensionUnlockPoll,
   ): Promise<void> {
-    const deadline = Date.now() + PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS
+    const deadline = Date.now() + PAIRED_EXTENSION_UNLOCK_TIMEOUT_MS;
     for (let attempt = 0; Date.now() < deadline; attempt += 1) {
       if (attempt > 0) {
         await new Promise<void>((resolve) => {
-          window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS)
-        })
+          window.setTimeout(resolve, PAIRED_EXTENSION_UNLOCK_RETRY_MS);
+        });
       }
-      await resumePairedExtensionVault(request.storeId)
+      await resumePairedExtensionVault(request.storeId);
       if (vault.isAuthenticated) {
-        return
+        return;
       }
     }
   }
@@ -644,13 +636,13 @@
     window.setTimeout(() => {
       if (
         !vault.isAuthenticated &&
-        (loginUnlockStoreId(vault) === request.storeId ||
+        (existingVaultImportLifecycle.unlockStoreId === request.storeId ||
           request.discoveringStagedImport) &&
         extensionDiscoveryStoreId === request.storeId
       ) {
-        extensionDiscoveryStoreId = ''
+        extensionDiscoveryStoreId = "";
       }
-    }, EXTENSION_LOCKED_RETRY_MS)
+    }, EXTENSION_LOCKED_RETRY_MS);
   }
 
   async function handleCreateDeviceVault(label: string) {
@@ -659,38 +651,37 @@
         ExtensionConnectIntentKind.Requested &&
       vault.deviceId !== extensionIdentityRequestState.request.deviceId
     ) {
-      const connectRequest = extensionIdentityRequestState.request
+      const connectRequest = extensionIdentityRequestState.request;
       const authorizationRequest: Parameters<
         typeof vault.authorizeWithExternalDeviceIdentity
       >[0] = {
         adopt: (manager) => {
-          const adoptionArgs: ExtensionIdentityAdoption = {
+          return connectionBrowser.adoptExtensionIdentity({
             manager,
             request: connectRequest,
-          }
-          return adoptExtensionIdentity(adoptionArgs)
+          });
         },
         mode: ExternalDeviceIdentityAuthorizationMode.ContinueInitialization,
-      }
+      };
       const adopted =
-        await vault.authorizeWithExternalDeviceIdentity(authorizationRequest)
-      if (!adopted) return
+        await vault.authorizeWithExternalDeviceIdentity(authorizationRequest);
+      if (!adopted) return;
     }
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
         kind: VaultCreationQueueKind.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.Simple, label },
-      }
-      return
+      };
+      return;
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    await vault.createLocalVaultWithDeviceKeys(label)
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle };
+    await vault.createLocalVaultWithDeviceKeys(label);
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
       vault.isAuthenticated
     ) {
-      extensionBackedVaultSession = true
+      extensionBackedVaultSession = true;
     }
   }
 
@@ -701,27 +692,27 @@
       pendingVaultCreationState = {
         kind: VaultCreationQueueKind.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.Sentinel, args },
-      }
-      return false
+      };
+      return false;
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    await vault.startSentinelGenesis(args)
-    return true
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle };
+    await vault.startSentinelGenesis(args);
+    return true;
   }
   function finishPendingCreation(): void {
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle };
   }
   async function handleCreateSentinelParticipantKey(): Promise<string> {
     if (!vault.deviceProtectionReady) {
       pendingVaultCreationState = {
         kind: VaultCreationQueueKind.WaitingForDevice,
         request: { kind: PendingVaultCreationKind.SentinelParticipantKey },
-      }
-      return ''
+      };
+      return "";
     }
-    return sentinelGenesisActions
-      .createPublicKeyAnnouncement(vault)
-      .finally(finishPendingCreation)
+    return new sentinelGenesisActions.SentinelGenesisActions(vault)
+      .createPublicKeyAnnouncement()
+      .finally(finishPendingCreation);
   }
   async function handleCreateSentinelParticipantResponse(
     requestPayload: string,
@@ -733,15 +724,13 @@
           kind: PendingVaultCreationKind.SentinelParticipantResponse,
           requestPayload,
         },
-      }
-      return ''
+      };
+      return "";
     }
-    const createParticipantResponseArgs: Parameters<
-      typeof sentinelGenesisActions.createParticipantResponse
-    >[0] = { state: vault, requestPayload }
-    return sentinelGenesisActions
-      .createParticipantResponse(createParticipantResponseArgs)
-      .finally(finishPendingCreation)
+
+    return new sentinelGenesisActions.SentinelGenesisActions(vault)
+      .createParticipantResponse({ requestPayload })
+      .finally(finishPendingCreation);
   }
   async function handleAcceptSentinelOnboarding(packageJson: string) {
     if (!vault.deviceProtectionReady) {
@@ -751,89 +740,93 @@
           kind: PendingVaultCreationKind.SentinelOnboarding,
           packageJson,
         },
-      }
-      return
+      };
+      return;
     }
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
-    const acceptOnboardingPackageArgs: Parameters<
-      typeof sentinelGenesisActions.acceptOnboardingPackage
-    >[0] = { state: vault, packageJson }
-    await sentinelGenesisActions.acceptOnboardingPackage(
-      acceptOnboardingPackageArgs,
-    )
-    sentinelOnboardingPackage = ''
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle };
+
+    await new sentinelGenesisActions.SentinelGenesisActions(
+      vault,
+    ).acceptOnboardingPackage({ packageJson });
+    sentinelOnboardingPackage = "";
   }
 
   async function refreshExtensionSetupStatus() {
     if (!SUPPORTS_EXTENSION || !vault.isAuthenticated) {
-      extensionSetupStateValue = { kind: ExtensionSetupOfferKind.Hidden }
-      return
+      extensionSetupStateValue = { kind: ExtensionSetupOfferKind.Hidden };
+      return;
     }
-    extensionSetupStateValue = await loadExtensionSetupOffer(vault.activeVault)
+    extensionSetupStateValue =
+      await extensionSetupBrowser.loadExtensionSetupOffer(vault.activeVault);
   }
 
   async function handleExtensionInstall() {
-    extensionInstallBusy = true
+    extensionInstallBusy = true;
     try {
-      await openExtensionInstaller()
+      await extensionSetupBrowser.openExtensionInstaller();
     } finally {
-      extensionInstallBusy = false
+      extensionInstallBusy = false;
     }
   }
 
   async function handleExtensionConnect() {
-    extensionInstallBusy = true
-    extensionConnectError = false
+    extensionInstallBusy = true;
+    extensionConnectError = false;
     try {
-      extensionConnectError = !(await connectInstalledExtension())
+      extensionConnectError =
+        !(await extensionSetupBrowser.connectInstalledExtension());
     } finally {
-      extensionInstallBusy = false
+      extensionInstallBusy = false;
     }
   }
 
   $effect(() => {
-    void vault.isAuthenticated
-    void vault.activeVault
-    void refreshExtensionSetupStatus()
+    void vault.isAuthenticated;
+    void vault.activeVault;
+    void refreshExtensionSetupStatus();
 
-    return observeExtensionSetupChanges(refreshExtensionSetupStatus)
-  })
+    return extensionSetupBrowser.observeExtensionSetupChanges(
+      refreshExtensionSetupStatus,
+    );
+  });
 
   $effect(() => {
     if (
       vault.helpOpen &&
-      isSentinelParticipantKeyPending(pendingVaultCreationState)
+      new PendingCreation(
+        pendingVaultCreationState,
+      ).isSentinelParticipantKeyPending()
     )
-      return finishPendingCreation()
+      return finishPendingCreation();
     if (
       pendingVaultCreationState.kind !==
         VaultCreationQueueKind.WaitingForDevice ||
       !vault.deviceProtectionReady ||
       vault.isVerifying
     )
-      return
-    const pending = pendingVaultCreationState.request
+      return;
+    const pending = pendingVaultCreationState.request;
     if (
       pending.kind === PendingVaultCreationKind.SentinelParticipantKey ||
       pending.kind === PendingVaultCreationKind.SentinelParticipantResponse
     )
-      return
-    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+      return;
+    pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle };
     if (pending.kind === PendingVaultCreationKind.Simple) {
-      void vault.createLocalVaultWithDeviceKeys(pending.label)
-      return
+      void vault.createLocalVaultWithDeviceKeys(pending.label);
+      return;
     }
     if (pending.kind === PendingVaultCreationKind.SentinelOnboarding) {
-      void handleAcceptSentinelOnboarding(pending.packageJson)
-      return
+      void handleAcceptSentinelOnboarding(pending.packageJson);
+      return;
     }
     if (pending.kind === PendingVaultCreationKind.Sentinel) {
-      void vault.startSentinelGenesis(pending.args)
+      void vault.startSentinelGenesis(pending.args);
     }
-  })
+  });
 
   $effect(() => {
-    const storeId = loginUnlockStoreId(vault)
+    const storeId = existingVaultImportLifecycle.unlockStoreId;
     if (
       extensionIdentityRequestState.kind ===
         ExtensionConnectIntentKind.Requested &&
@@ -844,7 +837,7 @@
     ) {
       extensionIdentityRequestState = {
         kind: ExtensionConnectIntentKind.Absent,
-      }
+      };
     }
     if (
       !SUPPORTS_EXTENSION ||
@@ -860,10 +853,10 @@
       !storeId ||
       extensionDiscoveryStoreId === storeId
     ) {
-      return
+      return;
     }
-    void resumePairedExtensionVault(storeId)
-  })
+    void resumePairedExtensionVault(storeId);
+  });
 
   $effect(() => {
     if (
@@ -871,13 +864,13 @@
       !vault.deviceProtectionReady ||
       vault.isVerifying
     ) {
-      return
+      return;
     }
-    pendingExistingVaultUnlock = false
+    pendingExistingVaultUnlock = false;
     void (existingVaultImportLifecycle.waitingForDevice
       ? existingVaultImportLifecycle.resume()
-      : vault.loadDb())
-  })
+      : vault.loadDb());
+  });
 
   // `#enroll=` lands on an empty browser: open device protection immediately so
   // the create-vault landing never appears as the primary action.
@@ -887,10 +880,10 @@
       vault.deviceProtectionReady ||
       vault.isInitializing
     ) {
-      return
+      return;
     }
-    pendingEnrollmentDeviceUnlock = true
-  })
+    pendingEnrollmentDeviceUnlock = true;
+  });
 
   $effect(() => {
     if (
@@ -899,15 +892,15 @@
       !vault.deviceProtectionReady ||
       vault.isVerifying
     ) {
-      return
+      return;
     }
-    const pending = pendingEnrollmentSubmitState.request
+    const pending = pendingEnrollmentSubmitState.request;
     pendingEnrollmentSubmitState = {
       kind: EnrollmentSubmitQueueKind.Idle,
-    }
-    pendingEnrollmentDeviceUnlock = false
-    void vault.connectWithEnrollmentCode(pending)
-  })
+    };
+    pendingEnrollmentDeviceUnlock = false;
+    void vault.connectWithEnrollmentCode(pending);
+  });
 </script>
 
 <AppSurface
@@ -945,9 +938,9 @@
       showExistingVaultPasskeyOverlay ||
       showEnrollmentPasskeyOverlay,
     sentinelInvitationRequest,
-    sentinelParticipantResponsePending: isSentinelParticipantResponsePending(
+    sentinelParticipantResponsePending: new PendingCreation(
       pendingVaultCreationState,
-    ),
+    ).isSentinelParticipantResponsePending(),
     sentinelParticipantResponse,
     sentinelOnboardingPackage,
     onUnlock: handleUnlock,
@@ -957,8 +950,8 @@
       existingVaultImportLifecycle.unlockWithPassword(unlockRequest),
     onSwitchVault: () => existingVaultImportLifecycle.leave(),
     onSentinelUnlocked: () => {
-      sentinelInvitationRequest = ''
-      return existingVaultImportLifecycle.finish()
+      sentinelInvitationRequest = "";
+      return existingVaultImportLifecycle.finish();
     },
     onCreateDeviceVault: handleCreateDeviceVault,
     onStartSentinelGenesis: handleStartSentinelGenesis,
@@ -967,15 +960,15 @@
       handleCreateSentinelParticipantResponse,
     onDismissPasskey: () => {
       if (showExistingVaultPasskeyOverlay) {
-        pendingExistingVaultUnlock = false
-        existingVaultImportLifecycle.cancel()
-        return
+        pendingExistingVaultUnlock = false;
+        existingVaultImportLifecycle.cancel();
+        return;
       }
       if (showEnrollmentPasskeyOverlay) {
-        pendingEnrollmentDeviceUnlock = false
-        return
+        pendingEnrollmentDeviceUnlock = false;
+        return;
       }
-      pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle }
+      pendingVaultCreationState = { kind: VaultCreationQueueKind.Idle };
     },
   }}
   authenticatedWorkspaceProps={{
@@ -990,7 +983,7 @@
     onExtensionConnect: () => void handleExtensionConnect(),
     onSettingsReconnect: handleSettingsReconnect,
     onEditorOpenChange: (open) => {
-      secretsAddOpen = open
+      secretsAddOpen = open;
     },
   }}
   onNavigateHome={navigateHome}

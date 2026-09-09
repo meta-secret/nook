@@ -1,9 +1,12 @@
 <script lang="ts">
-  type MermaidDiagramRendering = { readonly src: string; readonly diagramTheme: MermaidTheme }
+  type MermaidDiagramRendering = {
+    readonly src: string;
+    readonly diagramTheme: MermaidTheme;
+  };
 
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { MermaidTheme, renderMermaidDiagram } from '$lib/content/mermaid-diagram'
-  import type { VaultState } from '$lib/vault.svelte'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { MermaidTheme, mermaidRenderer } from "$lib/content/mermaid-diagram";
+  import type { VaultState } from "$lib/vault.svelte";
 
   let {
     vault,
@@ -11,31 +14,38 @@
     sectionId,
     theme = MermaidTheme.Dark,
   }: {
-    vault: VaultState
-    source: string
-    sectionId: string
-    theme?: MermaidTheme
-  } = $props()
+    vault: VaultState;
+    source: string;
+    sectionId: string;
+    theme?: MermaidTheme;
+  } = $props();
 
-  let svgHtml = $state('')
-  let renderError = $state('')
+  let svgHtml = $state("");
+  let renderError = $state("");
 
   async function paintDiagram({ src, diagramTheme }: MermaidDiagramRendering) {
-    renderError = ''
+    renderError = "";
     try {
-      const renderMermaidDiagramArgs: Parameters<typeof renderMermaidDiagram>[0] = { source: src, theme: diagramTheme };
-      svgHtml = await renderMermaidDiagram(renderMermaidDiagramArgs)
+      const renderMermaidDiagramArgs: Parameters<
+        typeof mermaidRenderer.renderMermaidDiagram
+      >[0] = { source: src, theme: diagramTheme };
+      svgHtml = await mermaidRenderer.renderMermaidDiagram(
+        renderMermaidDiagramArgs,
+      );
     } catch (error) {
-      svgHtml = ''
+      svgHtml = "";
       renderError =
-        error instanceof Error ? error.message : 'Failed to render diagram'
+        error instanceof Error ? error.message : "Failed to render diagram";
     }
   }
 
   $effect(() => {
-    const paintDiagramArgs: Parameters<typeof paintDiagram>[0] = { src: source, diagramTheme: theme };
-    void paintDiagram(paintDiagramArgs)
-  })
+    const paintDiagramArgs: Parameters<typeof paintDiagram>[0] = {
+      src: source,
+      diagramTheme: theme,
+    };
+    void paintDiagram(paintDiagramArgs);
+  });
 </script>
 
 <div

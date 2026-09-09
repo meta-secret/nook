@@ -2,7 +2,7 @@
   import { onMount } from "svelte";
   import { RefreshCw } from "@lucide/svelte";
   import QRCodeStyling from "qr-code-styling";
-  import { createEnrollmentQrOptions } from "$lib/enrollment/qr";
+  import { EnrollmentQrPresentation } from "$lib/enrollment/qr";
   import {
     QrCodeContainerMountKind,
     QrCodeMountKind,
@@ -26,11 +26,13 @@
   let qrCode = $state.raw<QrCodeMount>({ kind: QrCodeMountKind.Unmounted });
   let isReady = $state(false);
   const options = $derived.by(() => {
-    const optionsRequest: Parameters<typeof createEnrollmentQrOptions>[0] = {
+    const optionsRequest: ConstructorParameters<
+      typeof EnrollmentQrPresentation
+    >[0] = {
       enrollmentLink,
       dense,
     };
-    return createEnrollmentQrOptions(optionsRequest);
+    return new EnrollmentQrPresentation(optionsRequest).options;
   });
 
   onMount(() => {

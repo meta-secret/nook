@@ -7,7 +7,7 @@ import {
   type StoredExtensionPairingGrant,
 } from '../pairing-grants'
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
-import { sendSessionMessage } from './pairing-identity'
+import { extensionPairingIdentity } from './pairing-identity'
 
 export type AuthenticatorCodeSessionResponse = {
   ok: true
@@ -48,7 +48,9 @@ export async function authenticatorCodeFromSession({
   grant,
   secretId,
 }: AuthenticatorCodeFromSessionArgs): Promise<AuthenticatorCodeSessionResponse> {
-  const message: Parameters<typeof sendSessionMessage>[0] = {
+  const message: Parameters<
+    typeof extensionPairingIdentity.sendSessionMessage
+  >[0] = {
     type: 'nook:extension-session-authenticator-code',
     payload: {
       ...extensionSessionGrantIdentity(grant),
@@ -56,7 +58,9 @@ export async function authenticatorCodeFromSession({
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  const response = responseRecord(await sendSessionMessage(message))
+  const response = responseRecord(
+    await extensionPairingIdentity.sendSessionMessage(message),
+  )
   if (
     response.ok !== true ||
     typeof response.code !== 'string' ||
@@ -72,11 +76,15 @@ export async function authenticatorCodeFromSession({
 export async function authenticatorPreviewFromSession(
   otpauthUri: string,
 ): Promise<AuthenticatorPreviewSessionResponse> {
-  const message: Parameters<typeof sendSessionMessage>[0] = {
+  const message: Parameters<
+    typeof extensionPairingIdentity.sendSessionMessage
+  >[0] = {
     type: 'nook:extension-session-authenticator-enroll-preview',
     payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
-  const response = responseRecord(await sendSessionMessage(message))
+  const response = responseRecord(
+    await extensionPairingIdentity.sendSessionMessage(message),
+  )
   const preview = response.preview
   if (
     response.ok !== true ||
@@ -113,11 +121,15 @@ export async function authenticatorPreviewFromSession(
 export async function stagedAuthenticatorCodeFromSession(
   otpauthUri: string,
 ): Promise<AuthenticatorCodeSessionResponse> {
-  const message: Parameters<typeof sendSessionMessage>[0] = {
+  const message: Parameters<
+    typeof extensionPairingIdentity.sendSessionMessage
+  >[0] = {
     type: 'nook:extension-session-authenticator-enroll-code',
     payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
-  const response = responseRecord(await sendSessionMessage(message))
+  const response = responseRecord(
+    await extensionPairingIdentity.sendSessionMessage(message),
+  )
   if (
     response.ok !== true ||
     typeof response.code !== 'string' ||
@@ -141,7 +153,9 @@ export async function confirmAuthenticatorEnrollment({
   otpauthUri,
   origin,
 }: ConfirmAuthenticatorEnrollmentArgs): Promise<AuthenticatorSecretSessionResponse> {
-  const message: Parameters<typeof sendSessionMessage>[0] = {
+  const message: Parameters<
+    typeof extensionPairingIdentity.sendSessionMessage
+  >[0] = {
     type: 'nook:extension-session-authenticator-enroll-confirm',
     payload: {
       ...extensionSessionGrantIdentity(grant),
@@ -150,7 +164,9 @@ export async function confirmAuthenticatorEnrollment({
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  return authenticatorSecretResponse(await sendSessionMessage(message))
+  return authenticatorSecretResponse(
+    await extensionPairingIdentity.sendSessionMessage(message),
+  )
 }
 
 type AuthenticatorBackupCodesSessionAttachmentRequest = {
@@ -167,7 +183,9 @@ export async function attachAuthenticatorBackupCodesFromSession({
   mode,
 }: AuthenticatorBackupCodesSessionAttachmentRequest): Promise<VerifiedAuthenticatorBackupAttachResponse> {
   const transportCodes = [...codes]
-  const message: Parameters<typeof sendSessionMessage>[0] = {
+  const message: Parameters<
+    typeof extensionPairingIdentity.sendSessionMessage
+  >[0] = {
     type: 'nook:extension-session-authenticator-backup-attach',
     payload: {
       ...extensionSessionGrantIdentity(grant),
@@ -179,7 +197,7 @@ export async function attachAuthenticatorBackupCodesFromSession({
   }
   try {
     return verifiedAuthenticatorBackupAttachResponse(
-      await sendSessionMessage(message),
+      await extensionPairingIdentity.sendSessionMessage(message),
     )
   } finally {
     transportCodes.fill('')

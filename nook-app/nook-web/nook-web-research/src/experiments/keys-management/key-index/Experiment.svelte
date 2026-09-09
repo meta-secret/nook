@@ -50,30 +50,17 @@ it connects to.
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import GraphSwitch from '../_shared/GraphSwitch.svelte'
   import {
-    defaultNode,
     type Device,
-    devicesForPasskey,
-    devicesForVault,
     GraphId,
-    graphById,
     HereKind,
-    hereDevices,
-    highlightFor,
-    isHere,
     type KeyGraph,
-    kindLabel,
     KeyStore,
     NodeKind,
     type NodeRef,
-    openableHere,
     type Passkey,
-    passkeysForDevice,
-    passkeysForVault,
     Reach,
-    storeLabel,
     type Vault,
-    vaultsForDevice,
-    vaultsForPasskey,
+    KeyGraphView,
   } from '../_shared/key-graph'
   import type { ExperimentProps } from '../../index'
   import { ChipMark } from './chip-mark'
@@ -113,23 +100,22 @@ it connects to.
 
   let { navigate }: ExperimentProps = $props()
   let graphId = $state(GraphId.Tangle)
-  let selected = $state<NodeRef>(defaultNode(graphById(GraphId.Tangle)))
-
-  const graph = $derived(graphById(graphId))
+  let selected = $state<NodeRef>(
+    new KeyGraphView(KeyGraphView.graphById(GraphId.Tangle)).defaultNode(),
+  )
+  const graph = $derived(KeyGraphView.graphById(graphId))
   const highlight = $derived.by(() => {
-    const selectionContext: Parameters<typeof highlightFor>[0] = {
-      graph,
+    const selectionContext: Parameters<KeyGraphView['highlightFor']>[0] = {
       node: selected,
     }
-    return highlightFor(selectionContext)
+    return new KeyGraphView(graph).highlightFor(selectionContext)
   })
   const others = $derived(
     graph.devices.filter((device) => {
-      const nookNamedArgument204: Parameters<typeof isHere>[0] = {
-        graph,
+      const nookNamedArgument204: Parameters<KeyGraphView['isHere']>[0] = {
         device,
       }
-      return !isHere(nookNamedArgument204)
+      return !new KeyGraphView(graph).isHere(nookNamedArgument204)
     }),
   )
   const groups = $derived.by(() => {
@@ -165,13 +151,15 @@ it connects to.
   )
 
   function labelFor({ source, node }: LabelForArgs): string {
-    if (node.kind !== NodeKind.Device) return kindLabel(node.kind)
+    if (node.kind !== NodeKind.Device) return KeyGraphView.kindLabel(node.kind)
     const mine = source.devices.some((device) => {
-      const nookNamedArgument207: Parameters<typeof isHere>[0] = {
-        graph: source,
+      const nookNamedArgument207: Parameters<KeyGraphView['isHere']>[0] = {
         device,
       }
-      return device.id === node.id && isHere(nookNamedArgument207)
+      return (
+        device.id === node.id &&
+        new KeyGraphView(source).isHere(nookNamedArgument207)
+      )
     })
     return mine ? 'My device' : 'Other device'
   }
@@ -182,15 +170,14 @@ it connects to.
       kind: NodeKind.Passkey,
       id: passkey.id,
       shortId: passkey.shortId,
-      note: storeLabel(passkey.store),
+      note: KeyGraphView.storeLabel(passkey.store),
       tint: STORE_INK[passkey.store],
       mark: passkey.reach === Reach.Here ? ChipMark.Plain : ChipMark.Away,
     }
   }
 
   function deviceChip({ source, device }: DeviceChipArgs): DetailChip {
-    const nookNamedArgument208: Parameters<typeof isHere>[0] = {
-      graph: source,
+    const nookNamedArgument208: Parameters<KeyGraphView['isHere']>[0] = {
       device,
     }
     return {
@@ -200,13 +187,14 @@ it connects to.
       shortId: device.shortId,
       note: device.label,
       tint: '#7d8892',
-      mark: isHere(nookNamedArgument208) ? ChipMark.Mine : ChipMark.Away,
+      mark: new KeyGraphView(source).isHere(nookNamedArgument208)
+        ? ChipMark.Mine
+        : ChipMark.Away,
     }
   }
 
   function vaultChip({ source, vault }: VaultChipArgs): DetailChip {
-    const nookNamedArgument209: Parameters<typeof openableHere>[0] = {
-      graph: source,
+    const nookNamedArgument209: Parameters<KeyGraphView['openableHere']>[0] = {
       vault,
     }
     return {
@@ -216,19 +204,25 @@ it connects to.
       shortId: vault.shortId,
       note: vault.label,
       tint: '#7d8892',
-      mark: openableHere(nookNamedArgument209) ? ChipMark.Plain : ChipMark.Away,
+      mark: new KeyGraphView(source).openableHere(nookNamedArgument209)
+        ? ChipMark.Plain
+        : ChipMark.Away,
     }
   }
 
   function groupsFor({ source, node }: GroupsForArgs): DetailGroup[] {
     if (node.kind === NodeKind.Passkey) {
-      const nookNamedArgument210: Parameters<typeof devicesForPasskey>[0] = {
-        graph: source,
+      const nookNamedArgument210: Parameters<
+        KeyGraphView['devicesForPasskey']
+      >[0] = {
         passkeyId: node.id,
       }
-      const devices = devicesForPasskey(nookNamedArgument210)
-      const nookNamedArgument215: Parameters<typeof vaultsForPasskey>[0] = {
-        graph: source,
+      const devices = new KeyGraphView(source).devicesForPasskey(
+        nookNamedArgument210,
+      )
+      const nookNamedArgument215: Parameters<
+        KeyGraphView['vaultsForPasskey']
+      >[0] = {
         passkeyId: node.id,
       }
       return [
@@ -238,11 +232,12 @@ it connects to.
           empty: 'not enrolled here',
           chips: devices
             .filter((device) => {
-              const nookNamedArgument211: Parameters<typeof isHere>[0] = {
-                graph: source,
+              const nookNamedArgument211: Parameters<
+                KeyGraphView['isHere']
+              >[0] = {
                 device,
               }
-              return isHere(nookNamedArgument211)
+              return new KeyGraphView(source).isHere(nookNamedArgument211)
             })
             .map((device) => {
               const nookNamedArgument212: Parameters<typeof deviceChip>[0] = {
@@ -258,11 +253,12 @@ it connects to.
           empty: 'none',
           chips: devices
             .filter((device) => {
-              const nookNamedArgument213: Parameters<typeof isHere>[0] = {
-                graph: source,
+              const nookNamedArgument213: Parameters<
+                KeyGraphView['isHere']
+              >[0] = {
                 device,
               }
-              return !isHere(nookNamedArgument213)
+              return !new KeyGraphView(source).isHere(nookNamedArgument213)
             })
             .map((device) => {
               const nookNamedArgument214: Parameters<typeof deviceChip>[0] = {
@@ -276,42 +272,46 @@ it connects to.
           key: 'vaults',
           title: 'Opens',
           empty: 'none',
-          chips: vaultsForPasskey(nookNamedArgument215).map((vault) => {
-            const nookNamedArgument216: Parameters<typeof vaultChip>[0] = {
-              source,
-              vault,
-            }
-            return vaultChip(nookNamedArgument216)
-          }),
+          chips: new KeyGraphView(source)
+            .vaultsForPasskey(nookNamedArgument215)
+            .map((vault) => {
+              const nookNamedArgument216: Parameters<typeof vaultChip>[0] = {
+                source,
+                vault,
+              }
+              return vaultChip(nookNamedArgument216)
+            }),
         },
       ]
     }
 
     if (node.kind === NodeKind.Device) {
       const devices = source.devices.filter((device) => device.id === node.id)
-      const nookNamedArgument217: Parameters<typeof vaultsForDevice>[0] = {
-        graph: source,
+      const nookNamedArgument217: Parameters<
+        KeyGraphView['vaultsForDevice']
+      >[0] = {
         deviceId: node.id,
       }
       const vaults: DetailGroup = {
         key: 'vaults',
         title: 'Opens',
         empty: 'none',
-        chips: vaultsForDevice(nookNamedArgument217).map((vault) => {
-          const nookNamedArgument218: Parameters<typeof vaultChip>[0] = {
-            source,
-            vault,
-          }
-          return vaultChip(nookNamedArgument218)
-        }),
+        chips: new KeyGraphView(source)
+          .vaultsForDevice(nookNamedArgument217)
+          .map((vault) => {
+            const nookNamedArgument218: Parameters<typeof vaultChip>[0] = {
+              source,
+              vault,
+            }
+            return vaultChip(nookNamedArgument218)
+          }),
       }
       if (
         !devices.some((device) => {
-          const nookNamedArgument219: Parameters<typeof isHere>[0] = {
-            graph: source,
+          const nookNamedArgument219: Parameters<KeyGraphView['isHere']>[0] = {
             device,
           }
-          return isHere(nookNamedArgument219)
+          return new KeyGraphView(source).isHere(nookNamedArgument219)
         })
       )
         return [vaults]
@@ -323,9 +323,11 @@ it connects to.
           chips: devices
             .flatMap((device) => {
               const nookNamedArgument220: Parameters<
-                typeof passkeysForDevice
-              >[0] = { graph: source, device }
-              return passkeysForDevice(nookNamedArgument220)
+                KeyGraphView['passkeysForDevice']
+              >[0] = { device }
+              return new KeyGraphView(source).passkeysForDevice(
+                nookNamedArgument220,
+              )
             })
             .map(passkeyChip),
         },
@@ -336,13 +338,17 @@ it connects to.
     return source.vaults
       .filter((vault) => vault.id === node.id)
       .flatMap((vault) => {
-        const nookNamedArgument221: Parameters<typeof devicesForVault>[0] = {
-          graph: source,
+        const nookNamedArgument221: Parameters<
+          KeyGraphView['devicesForVault']
+        >[0] = {
           vault,
         }
-        const devices = devicesForVault(nookNamedArgument221)
-        const nookNamedArgument226: Parameters<typeof passkeysForVault>[0] = {
-          graph: source,
+        const devices = new KeyGraphView(source).devicesForVault(
+          nookNamedArgument221,
+        )
+        const nookNamedArgument226: Parameters<
+          KeyGraphView['passkeysForVault']
+        >[0] = {
           vault,
         }
         return [
@@ -352,11 +358,12 @@ it connects to.
             empty: 'not enrolled',
             chips: devices
               .filter((device) => {
-                const nookNamedArgument222: Parameters<typeof isHere>[0] = {
-                  graph: source,
+                const nookNamedArgument222: Parameters<
+                  KeyGraphView['isHere']
+                >[0] = {
                   device,
                 }
-                return isHere(nookNamedArgument222)
+                return new KeyGraphView(source).isHere(nookNamedArgument222)
               })
               .map((device) => {
                 const nookNamedArgument223: Parameters<typeof deviceChip>[0] = {
@@ -372,11 +379,12 @@ it connects to.
             empty: 'none',
             chips: devices
               .filter((device) => {
-                const nookNamedArgument224: Parameters<typeof isHere>[0] = {
-                  graph: source,
+                const nookNamedArgument224: Parameters<
+                  KeyGraphView['isHere']
+                >[0] = {
                   device,
                 }
-                return !isHere(nookNamedArgument224)
+                return !new KeyGraphView(source).isHere(nookNamedArgument224)
               })
               .map((device) => {
                 const nookNamedArgument225: Parameters<typeof deviceChip>[0] = {
@@ -390,7 +398,9 @@ it connects to.
             key: 'passkeys',
             title: 'Opened by',
             empty: 'none',
-            chips: passkeysForVault(nookNamedArgument226).map(passkeyChip),
+            chips: new KeyGraphView(source)
+              .passkeysForVault(nookNamedArgument226)
+              .map(passkeyChip),
           },
         ]
       })
@@ -469,7 +479,7 @@ it connects to.
     {graph}
     onGraph={(next) => {
       graphId = next
-      selected = defaultNode(graphById(next))
+      selected = new KeyGraphView(KeyGraphView.graphById(next)).defaultNode()
     }}
   />
 
@@ -480,17 +490,15 @@ it connects to.
       class="min-w-0 lg:sticky lg:top-20 lg:max-h-[calc(100svh-6rem)] lg:overflow-y-auto lg:pr-2"
       aria-label="Key index"
     >
-      {#each hereDevices(graph) as device (device.id)}
+      {#each new KeyGraphView(graph).hereDevices() as device (device.id)}
         {@const deviceSelection: Parameters<typeof chosen>[0] = {
           kind: NodeKind.Device,
           id: device.id,
         }}
-        {@const passkeyLookup: Parameters<typeof passkeysForDevice>[0] = {
-          graph,
+        {@const passkeyLookup: Parameters<KeyGraphView["passkeysForDevice"]>[0] = {
           device,
         }}
-        {@const vaultLookup: Parameters<typeof vaultsForDevice>[0] = {
-          graph,
+        {@const vaultLookup: Parameters<KeyGraphView["vaultsForDevice"]>[0] = {
           deviceId: device.id,
         }}
         <section
@@ -520,10 +528,10 @@ it connects to.
           <p class="mt-2 text-[11px] text-[#9aa4ad]">{device.platform}</p>
           <p class="mt-2 flex flex-wrap items-center gap-1.5">
             <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
-              {passkeysForDevice(passkeyLookup).length} passkeys
+              {new KeyGraphView(graph).passkeysForDevice(passkeyLookup).length} passkeys
             </span>
             <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
-              {vaultsForDevice(vaultLookup).length} vaults
+              {new KeyGraphView(graph).vaultsForDevice(vaultLookup).length} vaults
             </span>
           </p>
         </section>
@@ -591,7 +599,7 @@ it connects to.
                   {/if}
                 </span>
                 <span class="mt-0.5 block truncate text-[11px] text-[#7d8892]">
-                  {storeLabel(passkey.store)} · {passkey.label}
+                  {KeyGraphView.storeLabel(passkey.store)} · {passkey.label}
                 </span>
               </span>
               {#if marked(passkeySelection) && !chosen(passkeySelection)}
@@ -619,8 +627,7 @@ it connects to.
             kind: NodeKind.Vault,
             id: vault.id,
           }}
-          {@const vaultAvailability: Parameters<typeof openableHere>[0] = {
-            graph,
+          {@const vaultAvailability: Parameters<KeyGraphView["openableHere"]>[0] = {
             vault,
           }}
           <li class="min-w-0">
@@ -644,7 +651,7 @@ it connects to.
                   <span class={idClass(vaultSelection)}>
                     {vault.shortId}
                   </span>
-                  {#if openableHere(vaultAvailability)}
+                  {#if new KeyGraphView(graph).openableHere(vaultAvailability)}
                     <span class="{STATE} text-[#5fd39f]">Opens here</span>
                   {:else}
                     <span class="{STATE} text-[#e0a33b]">Not here</span>
@@ -725,7 +732,7 @@ it connects to.
               style={`background:${STORE_INK[passkey.store]}`}
               aria-hidden="true"
             ></span>
-            {storeLabel(passkey.store)}
+            {KeyGraphView.storeLabel(passkey.store)}
           </span>
           {#if passkey.reach === Reach.Here}
             <span class="{STATE} bg-[#132119] text-[#5fd39f]">Usable here</span>
@@ -744,8 +751,7 @@ it connects to.
       {/each}
 
       {#each pickedDevices as device (device.id)}
-        {@const pickedDeviceLocation: Parameters<typeof isHere>[0] = {
-          graph,
+        {@const pickedDeviceLocation: Parameters<KeyGraphView["isHere"]>[0] = {
           device,
         }}
         <p class="mt-2 font-mono text-[2rem] leading-none tracking-tight">
@@ -756,14 +762,14 @@ it connects to.
           <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
             {device.platform}
           </span>
-          {#if isHere(pickedDeviceLocation)}
+          {#if new KeyGraphView(graph).isHere(pickedDeviceLocation)}
             <span class="{STATE} bg-[#241209] text-[#f0703a]">This browser</span
             >
           {:else}
             <span class="{STATE} bg-[#12161b] text-[#7d8892]">Read only</span>
           {/if}
         </div>
-        {#if isHere(pickedDeviceLocation)}
+        {#if new KeyGraphView(graph).isHere(pickedDeviceLocation)}
           <div class="mt-4 flex flex-wrap items-center gap-1.5">
             <button type="button" class={ACTION}>rename</button>
             <button type="button" class={ACTION}>enrol passkey</button>
@@ -778,8 +784,7 @@ it connects to.
       {/each}
 
       {#each pickedVaults as vault (vault.id)}
-        {@const pickedVaultAvailability: Parameters<typeof openableHere>[0] = {
-          graph,
+        {@const pickedVaultAvailability: Parameters<KeyGraphView["openableHere"]>[0] = {
           vault,
         }}
         <p class="mt-2 font-mono text-[2rem] leading-none tracking-tight">
@@ -790,7 +795,7 @@ it connects to.
           <span class="{STATE} bg-[#12161b] text-[#c4ccd4]">
             {vault.secrets} secrets
           </span>
-          {#if openableHere(pickedVaultAvailability)}
+          {#if new KeyGraphView(graph).openableHere(pickedVaultAvailability)}
             <span class="{STATE} bg-[#132119] text-[#5fd39f]">Opens here</span>
           {:else}
             <span class="{STATE} bg-[#241a12] text-[#e0a33b]">

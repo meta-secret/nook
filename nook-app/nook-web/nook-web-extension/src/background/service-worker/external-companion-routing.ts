@@ -2,8 +2,8 @@ import { isNokeySender } from './routing-trust'
 import type * as RuntimeMessages from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   OpenCompanionLauncherNormalizationKind,
-  type normalizeOpenCompanionLauncherMessage,
-} from '../../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
+  NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
+} from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import type * as PairingIdentity from './pairing-identity'
 import type * as PairingImport from './pairing-import'
 import type * as SessionLifecycle from './session-lifecycle'
@@ -20,19 +20,19 @@ type ExternalCompanionRoutingArgs = {
 }
 
 export type ExternalCompanionRoutingDependencies = {
-  createIdentityHandoff: typeof PairingIdentity.createIdentityHandoff
-  createPairedIdentityHandoff: typeof PairingIdentity.createPairedIdentityHandoff
-  discoverPairedVaultIdentity: typeof PairingIdentity.discoverPairedVaultIdentity
-  hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
+  createIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createIdentityHandoff
+  createPairedIdentityHandoff: typeof PairingIdentity.extensionPairingIdentity.createPairedIdentityHandoff
+  discoverPairedVaultIdentity: typeof PairingIdentity.extensionPairingIdentity.discoverPairedVaultIdentity
+  hasPairingApprovedType: typeof PairingIdentity.extensionPairingIdentity.hasPairingApprovedType
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
-  isExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionIdentityHandoffRequestMessage
-  isExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityDiscoveryMessage
-  isExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultIdentityHandoffRequestMessage
-  isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.isExtensionPairedVaultUnlockRequestMessage
-  normalizeOpenCompanionLauncherMessage: typeof normalizeOpenCompanionLauncherMessage
-  openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
-  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
-  requestPairedVaultUnlock: typeof PairingIdentity.requestPairedVaultUnlock
+  isExtensionIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionIdentityHandoffRequestMessage.is
+  isExtensionPairedVaultIdentityDiscoveryMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityDiscoveryMessage.is
+  isExtensionPairedVaultIdentityHandoffRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultIdentityHandoffRequestMessage.is
+  isExtensionPairedVaultUnlockRequestMessage: typeof RuntimeMessages.ExtensionPairedVaultUnlockRequestMessage.is
+  normalizeOpenCompanionLauncherMessage: typeof NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage
+  openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
+  requestPairedVaultUnlock: typeof PairingIdentity.extensionPairingIdentity.requestPairedVaultUnlock
 }
 
 type MessageResponse = Parameters<
@@ -78,7 +78,10 @@ export function routeExternalCompanionMessage({
     refreshAuthenticationSurfaces,
     requestPairedVaultUnlock,
   } = dependencies
-  const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
+  const launcherMessage =
+    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage(
+      message,
+    )
   if (
     launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
   ) {

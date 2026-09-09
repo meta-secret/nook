@@ -3,12 +3,7 @@ import {
   ExtensionInstallMethod,
   ExtensionInstallSource,
   ExtensionSetupStatus,
-  browserSupportsExtensionInstallation,
-  extensionInstallLandingUrl,
-  loadExtensionInstallTarget,
-  openExtensionInstallTarget,
-  resolveExtensionSetupState,
-  shouldOfferExtensionSetup,
+  extensionInstallationBrowser,
 } from '$lib/extension/install'
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from '$web-shared/extension/runtime-messages'
 import type {
@@ -87,7 +82,7 @@ function installExtensionIdentityTransportSimulation(
 describe('extension install target', () => {
   test('supports installation in a desktop browser', () => {
     expect(
-      browserSupportsExtensionInstallation({
+      extensionInstallationBrowser.browserSupportsExtensionInstallation({
         maxTouchPoints: 0,
         platform: 'MacIntel',
         userAgent:
@@ -99,7 +94,7 @@ describe('extension install target', () => {
 
   test('uses the mobile user agent fallback when client hints report desktop', () => {
     expect(
-      browserSupportsExtensionInstallation({
+      extensionInstallationBrowser.browserSupportsExtensionInstallation({
         maxTouchPoints: 5,
         platform: 'Linux armv8l',
         userAgent: 'Mozilla/5.0 (Linux; Android 16) Chrome/140 Safari/537.36',
@@ -138,15 +133,19 @@ describe('extension install target', () => {
       },
     },
   ])('does not support installation in an $label', ({ environment }) => {
-    expect(browserSupportsExtensionInstallation(environment)).toBe(false)
     expect(
-      shouldOfferExtensionSetup({
+      extensionInstallationBrowser.browserSupportsExtensionInstallation(
+        environment,
+      ),
+    ).toBe(false)
+    expect(
+      extensionInstallationBrowser.shouldOfferExtensionSetup({
         status: ExtensionSetupStatus.NotInstalled,
         environment: environment,
       }),
     ).toBe(false)
     expect(
-      shouldOfferExtensionSetup({
+      extensionInstallationBrowser.shouldOfferExtensionSetup({
         status: ExtensionSetupStatus.InstalledUnpaired,
         environment: environment,
       }),
@@ -162,9 +161,11 @@ describe('extension install target', () => {
       })),
     )
 
-    await expect(loadExtensionInstallTarget()).resolves.toEqual({
+    await expect(
+      extensionInstallationBrowser.loadExtensionInstallTarget(),
+    ).resolves.toEqual({
       installMethod: ExtensionInstallMethod.ManualZip,
-      installUrl: extensionInstallLandingUrl(),
+      installUrl: extensionInstallationBrowser.extensionInstallLandingUrl(),
       source: ExtensionInstallSource.Fallback,
     })
   })
@@ -185,7 +186,9 @@ describe('extension install target', () => {
       })),
     )
 
-    await expect(loadExtensionInstallTarget()).resolves.toEqual({
+    await expect(
+      extensionInstallationBrowser.loadExtensionInstallTarget(),
+    ).resolves.toEqual({
       installMethod: ExtensionInstallMethod.ChromeWebStore,
       installUrl: `https://chromewebstore.google.com/detail/${extensionId}`,
       channel: 'production',
@@ -200,7 +203,7 @@ describe('extension install target', () => {
 
     const installUrl =
       'https://chromewebstore.google.com/detail/abcdefghijklmnopqrstuvwxyzabcdef'
-    openExtensionInstallTarget({
+    extensionInstallationBrowser.openExtensionInstallTarget({
       installMethod: ExtensionInstallMethod.ChromeWebStore,
       installUrl,
       source: ExtensionInstallSource.Metadata,
@@ -216,7 +219,9 @@ describe('extension install target', () => {
 
 describe('extension setup status', () => {
   test('reports not_installed when the content-script attribute is missing', async () => {
-    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+    await expect(
+      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
+    ).resolves.toEqual({
       status: ExtensionSetupStatus.NotInstalled,
     })
   })
@@ -226,7 +231,9 @@ describe('extension setup status', () => {
       ExtensionPairedVaultIdentityStatusMessageStatus.Unavailable,
     )
 
-    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+    await expect(
+      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
+    ).resolves.toEqual({
       status: ExtensionSetupStatus.InstalledUnpaired,
     })
   })
@@ -236,7 +243,9 @@ describe('extension setup status', () => {
       ExtensionPairedVaultIdentityStatusMessageStatus.Locked,
     )
 
-    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+    await expect(
+      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
+    ).resolves.toEqual({
       status: ExtensionSetupStatus.Paired,
     })
   })
@@ -246,7 +255,9 @@ describe('extension setup status', () => {
       ExtensionPairedVaultIdentityStatusMessageStatus.DifferentVault,
     )
 
-    await expect(resolveExtensionSetupState(activeVault)).resolves.toEqual({
+    await expect(
+      extensionInstallationBrowser.resolveExtensionSetupState(activeVault),
+    ).resolves.toEqual({
       status: ExtensionSetupStatus.PairedElsewhere,
       connectedVaultStoreId: 'store-previous',
       connectedVaultName: 'Previous vault',

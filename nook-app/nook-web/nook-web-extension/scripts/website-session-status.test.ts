@@ -9,10 +9,8 @@ describe('passive website session status transport', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const {
-      ExtensionSessionStatusAvailability,
-      websiteSessionStatusTransport,
-    } = await import('../src/background/service-worker/pairing-identity')
+    const { ExtensionSessionStatusAvailability, extensionPairingIdentity } =
+      await import('../src/background/service-worker/pairing-identity')
     for (const malformed of [
       { ok: false, status: DeviceProtectionStatus.Pin },
       { ok: true },
@@ -22,20 +20,20 @@ describe('passive website session status transport', () => {
       { ok: true, status: DeviceProtectionStatus.PinSetup },
       { ok: true, status: DeviceProtectionStatus.Unlocked },
     ]) {
-      expect(websiteSessionStatusTransport(malformed)).toBe(
-        ExtensionSessionStatusAvailability.Unavailable,
-      )
+      expect(
+        extensionPairingIdentity.websiteSessionStatusTransport(malformed),
+      ).toBe(ExtensionSessionStatusAvailability.Unavailable)
     }
 
     expect(
-      websiteSessionStatusTransport({
+      extensionPairingIdentity.websiteSessionStatusTransport({
         ok: true,
         status: DeviceProtectionStatus.Pin,
       }),
     ).toBe(ExtensionSessionStatusAvailability.Locked)
 
     expect(
-      websiteSessionStatusTransport({
+      extensionPairingIdentity.websiteSessionStatusTransport({
         ok: true,
         status: DeviceProtectionStatus.Unlocked,
         device: {

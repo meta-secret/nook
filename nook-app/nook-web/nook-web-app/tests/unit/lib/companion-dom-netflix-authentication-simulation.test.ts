@@ -10,9 +10,8 @@ import {
   authentication_page_observation_facts_priority,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
   FormSubmissionResult,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   DomAuthenticationSimulationOutcomeKind,
@@ -107,9 +106,10 @@ function expectFailClosed(html: string): void {
   }
   expect(username.value).toBe('')
   expect(password.value).toBe('')
-  const [observation] = summarizeAuthenticationWorkflowForms()
+  const [observation] =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()
   if (!observation) throw new Error('expected rejected Netflix observation')
-  const facts = authenticationPageObservationFacts({
+  const facts = passwordFormInteraction.authenticationPageObservationFacts({
     observation,
     authenticatorSetupHint: false,
     backupCodesHint: false,
@@ -198,9 +198,10 @@ describe('Netflix DOM-backed authentication simulation', () => {
     expect(disclosure.textContent).toContain('protected by reCAPTCHA')
     expect(language.tagName).toBe('SELECT')
 
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected Netflix observation')
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,

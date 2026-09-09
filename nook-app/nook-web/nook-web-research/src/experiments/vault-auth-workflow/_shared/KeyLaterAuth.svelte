@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Check, Fingerprint, Timer } from '@lucide/svelte'
   import ScenarioBar from '../../nook-auth/_shared/ScenarioBar.svelte'
-  import { vaultAuthStepMessage } from './vault-auth-workflow-messages'
+  import { VaultAuthStepMessage } from './vault-auth-workflow-messages'
   import {
-    createVaultAuthWorkflowState,
+    VaultAuthWorkflowState,
     Presence,
     type SentinelLaunch,
     SentinelUi,
@@ -15,7 +15,7 @@
   }
 
   let { onSentinel }: Props = $props()
-  const workflow = createVaultAuthWorkflowState()
+  const workflow = new VaultAuthWorkflowState()
   let vaultName = $state('')
   const presence = $derived(workflow.presence)
   const step = $derived(workflow.step)
@@ -80,7 +80,7 @@
               <p
                 class={`text-lg ${index === step ? 'font-semibold' : 'text-[#666]'}`}
               >
-                {vaultAuthStepMessage(label)}
+                {new VaultAuthStepMessage(label).text}
               </p>
 
               {#if presence === Presence.Empty && index === step && step === 0}

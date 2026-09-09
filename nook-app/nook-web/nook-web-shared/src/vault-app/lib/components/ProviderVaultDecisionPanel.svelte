@@ -1,29 +1,29 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import type { I18nKey } from '../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import type { I18nKey } from "../../../generated/i18n-keys";
   import {
     ProviderVaultDecision,
     ProviderVaultDecisionReason,
     ProviderVaultIdentityEligibility,
-  } from '$app-wasm'
+  } from "$app-wasm";
   import {
     CheckCircle2,
     CircleHelp,
     Fingerprint,
     RefreshCw,
-  } from '@lucide/svelte'
-  import { onMount } from 'svelte'
-  import { Button } from '$lib/components/ui/button'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "@lucide/svelte";
+  import { onMount } from "svelte";
+  import { Button } from "$lib/components/ui/button";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
-    loadProviderVaultEvidence,
-    preparedProviderVaultIdentities,
+    ProviderVaultEvidenceReader,
+    PreparedProviderVaultIdentities,
     ProviderVaultEvidenceKind,
     ProviderVaultIdentityCurrentKind,
     ProviderVaultIdentitySelectionKind,
     type ProviderVaultEvidence,
     type ProviderVaultIdentitySelection,
-  } from '$lib/vault/provider-vault-decision'
+  } from "$lib/vault/provider-vault-decision";
 
   let {
     vault,
@@ -34,30 +34,30 @@
     onImport,
     onCancel,
   }: {
-    vault: VaultState
-    providerLabel: string
-    localStoreId: string
-    remoteStoreId: string
-    isBusy: boolean
+    vault: VaultState;
+    providerLabel: string;
+    localStoreId: string;
+    remoteStoreId: string;
+    isBusy: boolean;
     onImport: (
       selection: ProviderVaultIdentitySelection,
-    ) => void | Promise<void>
-    onCancel: () => void | Promise<void>
-  } = $props()
+    ) => void | Promise<void>;
+    onCancel: () => void | Promise<void>;
+  } = $props();
 
   let evidence = $state<ProviderVaultEvidence>({
     kind: ProviderVaultEvidenceKind.Loading,
-  })
+  });
   let identitySelection = $state<ProviderVaultIdentitySelection>({
     kind: ProviderVaultIdentitySelectionKind.NotSelected,
-  })
+  });
 
   const preparedIdentities = $derived(
     evidence.kind === ProviderVaultEvidenceKind.Ready
-      ? preparedProviderVaultIdentities(evidence.identities)
+      ? new PreparedProviderVaultIdentities(evidence.identities).identities
       : [],
-  )
-  const identitySelectionRequired = $derived(preparedIdentities.length > 1)
+  );
+  const identitySelectionRequired = $derived(preparedIdentities.length > 1);
   const importIdentitySelection = $derived.by(
     (): ProviderVaultIdentitySelection => {
       if (
@@ -65,27 +65,27 @@
           ProviderVaultIdentitySelectionKind.Selected ||
         preparedIdentities.length !== 1
       ) {
-        return identitySelection
+        return identitySelection;
       }
       return {
         kind: ProviderVaultIdentitySelectionKind.Selected,
         identityId: preparedIdentities[0]!.identityId,
-      }
+      };
     },
-  )
+  );
   const importDisabled = $derived(
     isBusy ||
       evidence.kind !== ProviderVaultEvidenceKind.Ready ||
       (identitySelectionRequired &&
         identitySelection.kind ===
           ProviderVaultIdentitySelectionKind.NotSelected),
-  )
+  );
 
   function selectIdentity(identityId: string): void {
     identitySelection = {
       kind: ProviderVaultIdentitySelectionKind.Selected,
       identityId,
-    }
+    };
   }
 
   function identityStatusKey(
@@ -93,45 +93,47 @@
   ): I18nKey {
     switch (eligibility) {
       case ProviderVaultIdentityEligibility.LinkedAndPrepared:
-        return I18N_KEYS.AuthStorageProviderVaultIdentityReady
+        return I18N_KEYS.AuthStorageProviderVaultIdentityReady;
       case ProviderVaultIdentityEligibility.LinkedButUnavailable:
-        return I18N_KEYS.AuthStorageProviderVaultIdentityUnavailable
+        return I18N_KEYS.AuthStorageProviderVaultIdentityUnavailable;
       case ProviderVaultIdentityEligibility.NotLinked:
-        return I18N_KEYS.AuthStorageProviderVaultIdentityNotLinked
+        return I18N_KEYS.AuthStorageProviderVaultIdentityNotLinked;
     }
   }
 
   function reasonKey(reason: ProviderVaultDecisionReason): I18nKey {
     switch (reason) {
       case ProviderVaultDecisionReason.ReadyToAdopt:
-        return I18N_KEYS.AuthStorageProviderVaultReasonReady
+        return I18N_KEYS.AuthStorageProviderVaultReasonReady;
       case ProviderVaultDecisionReason.CurrentVaultContainsUserData:
-        return I18N_KEYS.AuthStorageProviderVaultReasonLocalData
+        return I18N_KEYS.AuthStorageProviderVaultReasonLocalData;
       case ProviderVaultDecisionReason.CurrentVaultStateUnavailable:
-        return I18N_KEYS.AuthStorageProviderVaultReasonUnknown
+        return I18N_KEYS.AuthStorageProviderVaultReasonUnknown;
       case ProviderVaultDecisionReason.LinkedIdentityUnavailable:
-        return I18N_KEYS.AuthStorageProviderVaultReasonIdentityUnavailable
+        return I18N_KEYS.AuthStorageProviderVaultReasonIdentityUnavailable;
       case ProviderVaultDecisionReason.NoLinkedIdentity:
-        return I18N_KEYS.AuthStorageProviderVaultReasonNoIdentity
+        return I18N_KEYS.AuthStorageProviderVaultReasonNoIdentity;
     }
   }
 
   onMount(() => {
     void vault
       .enqueueStorage(() => {
-        const request: Parameters<typeof loadProviderVaultEvidence>[0] = {
+        const request: ConstructorParameters<
+          typeof ProviderVaultEvidenceReader
+        >[0] = {
           manager: vault.requireManager(),
           providerStoreId: remoteStoreId,
-        }
-        return loadProviderVaultEvidence(request)
+        };
+        return new ProviderVaultEvidenceReader(request).execute();
       })
       .then((result) => {
-        evidence = result
+        evidence = result;
       })
       .catch(() => {
-        evidence = { kind: ProviderVaultEvidenceKind.Failed }
-      })
-  })
+        evidence = { kind: ProviderVaultEvidenceKind.Failed };
+      });
+  });
 </script>
 
 <div class="space-y-4" data-testid="provider-vault-decision-panel">

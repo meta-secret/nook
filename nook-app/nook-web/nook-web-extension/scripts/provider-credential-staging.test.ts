@@ -2,20 +2,18 @@ import { describe, expect, test } from 'bun:test'
 import {
   type ProviderCredentialCleanupArgs,
   ProviderCredentialStagingKind,
-  runWithProviderCredentialCleanup,
-  scrubProviderCredentials,
-  stageProviderCredentials,
   type SerializedStorageProvider,
+  ProviderCredentialBuffer,
 } from '../src/lib/provider-credential-staging'
 import type { StorageProvider } from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 
 async function stageFixture(providers: SerializedStorageProvider[]) {
-  const args: Parameters<typeof stageProviderCredentials>[0] = {
+  const args: Parameters<typeof ProviderCredentialBuffer.stage>[0] = {
     providers,
     decode: async (candidate) =>
       structuredClone(candidate) as StorageProvider[],
   }
-  return stageProviderCredentials(args)
+  return ProviderCredentialBuffer.stage(args)
 }
 
 describe('provider credential staging', () => {
@@ -71,7 +69,7 @@ describe('provider credential staging', () => {
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.Staged)
     if (staging.kind !== ProviderCredentialStagingKind.Staged) return
-    scrubProviderCredentials(staging.providers)
+    new ProviderCredentialBuffer(staging.providers).clear()
 
     expect(staging.providers[0]).toEqual({
       id: 'drive',
@@ -95,7 +93,9 @@ describe('provider credential staging', () => {
       },
     }
 
-    await expect(runWithProviderCredentialCleanup(args)).resolves.toEqual({
+    await expect(
+      ProviderCredentialBuffer.runWithCleanup(args),
+    ).resolves.toEqual({
       ok: true,
     })
     expect(observedDuringHandoff).toBe('github_pat_snapshot_secret')
@@ -111,7 +111,7 @@ describe('provider credential staging', () => {
       },
     }
 
-    await expect(runWithProviderCredentialCleanup(args)).rejects.toThrow(
+    await expect(ProviderCredentialBuffer.runWithCleanup(args)).rejects.toThrow(
       'handoff failed',
     )
     expect(providers[0]).not.toHaveProperty('githubPat')
@@ -124,7 +124,7 @@ describe('provider credential staging', () => {
       { githubPat: 'github_pat_following_secret' },
     ] as StorageProvider[]
 
-    scrubProviderCredentials(providers)
+    new ProviderCredentialBuffer(providers).clear()
 
     expect(providers[2]).not.toHaveProperty('githubPat')
   })
@@ -140,7 +140,7 @@ describe('provider credential staging', () => {
     const staging = await stageFixture(source)
 
     expect(staging.kind).toBe(ProviderCredentialStagingKind.InvalidInput)
-    scrubProviderCredentials(source)
+    new ProviderCredentialBuffer(source).clear()
     expect(source[0]).not.toHaveProperty('githubPat')
   })
 

@@ -26,10 +26,9 @@ import {
 import { toBytes, toNumbers } from './session-key-material'
 import { extensionVaultGrant } from './session-vault-grant'
 import {
-  clearWebsitePasskeyRequests,
-  handleWebsitePasskeyOperation,
   type WebsitePasskeyOperationArgs,
   type WebsitePasskeyOperationResponse,
+  sessionWebsitePasskeys,
 } from './session-website-passkey-operations'
 
 const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
@@ -107,7 +106,7 @@ export async function handleSessionMessage({
     }
     case ExtensionSessionMessageType.Reset: {
       pendingLoginSaveOfferStore.clearAll()
-      clearWebsitePasskeyRequests()
+      sessionWebsitePasskeys.clearWebsitePasskeyRequests()
       context.resetOperations(new Error('Extension session reset.'))
       const activeManager = await getManager()
       activeManager.reset_vault_session()
@@ -643,7 +642,9 @@ export async function handleSessionMessage({
         flushEvent: flushPasskeyEventToProviders,
       }
       const response: WebsitePasskeyOperationResponse =
-        await handleWebsitePasskeyOperation(operationArgs)
+        await sessionWebsitePasskeys.handleWebsitePasskeyOperation(
+          operationArgs,
+        )
       return response
     }
     case ExtensionSessionMessageType.Lock:

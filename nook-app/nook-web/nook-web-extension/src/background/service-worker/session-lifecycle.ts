@@ -1,7 +1,4 @@
-import {
-  isRuntimeNookVaultAppUrl,
-  runtimeSimpleVaultUrl,
-} from '../../lib/simple-vault-runtime'
+import { simpleVaultRuntime } from '../../lib/simple-vault-runtime'
 import { DeviceProtectionStatus } from '../../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import { OpenCompanionLauncherIntent } from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../../lib/extension-runtime-request-type'
@@ -29,215 +26,218 @@ type ExtensionSessionDocumentState =
       operation: Promise<void>
     }
 
-let extensionSessionDocumentState: ExtensionSessionDocumentState = {
-  kind: ExtensionSessionDocumentStateKind.Closed,
-}
-
-export async function ensureExtensionSessionDocument(): Promise<void> {
-  if (
-    extensionSessionDocumentState.kind ===
-    ExtensionSessionDocumentStateKind.Closing
-  ) {
-    await extensionSessionDocumentState.operation
-  }
-  if (
-    extensionSessionDocumentState.kind ===
-    ExtensionSessionDocumentStateKind.Open
-  )
-    return
-  if (
-    extensionSessionDocumentState.kind ===
-    ExtensionSessionDocumentStateKind.Creating
-  ) {
-    return extensionSessionDocumentState.operation
-  }
-  const nookTypedArgs0_0: Parameters<
-    typeof chrome.offscreen.createDocument
-  >[0] = {
-    url: extensionSessionDocument,
-    reasons: ['WORKERS'],
-    justification:
-      'Keep a user-authorized extension device identity in memory for a 15-minute session.',
-  }
-  const operation = chrome.offscreen
-    .createDocument(nookTypedArgs0_0)
-    .catch((error) => {
-      // Manifest V3 permits only one offscreen document. A restarted service
-      // worker may race with the existing session document; it is safe to use
-      // that already-open document.
-      if (String(error).includes('single offscreen')) {
-        return
-      }
-      throw error
-    })
-    .then(() => {
-      if (
-        extensionSessionDocumentState.kind ===
-          ExtensionSessionDocumentStateKind.Creating &&
-        extensionSessionDocumentState.operation === operation
-      ) {
-        extensionSessionDocumentState = {
-          kind: ExtensionSessionDocumentStateKind.Open,
-        }
-      }
-    })
-  extensionSessionDocumentState = {
-    kind: ExtensionSessionDocumentStateKind.Creating,
-    operation,
-  }
-  return operation
-}
-
-export function closeExtensionSessionDocument(): Promise<void> {
-  if (
-    extensionSessionDocumentState.kind ===
-    ExtensionSessionDocumentStateKind.Closing
-  ) {
-    return extensionSessionDocumentState.operation
-  }
-  const closure = chrome.offscreen.closeDocument().finally(() => {
-    if (
-      extensionSessionDocumentState.kind ===
-        ExtensionSessionDocumentStateKind.Closing &&
-      extensionSessionDocumentState.operation === closure
-    ) {
-      extensionSessionDocumentState = {
-        kind: ExtensionSessionDocumentStateKind.Closed,
-      }
-    }
-  })
-  extensionSessionDocumentState = {
-    kind: ExtensionSessionDocumentStateKind.Closing,
-    operation: closure,
-  }
-  return closure
-}
-
-export function isUnlockedSessionStatus(status: unknown): boolean {
-  return Boolean(
-    status &&
-    typeof status === 'object' &&
-    'status' in status &&
-    status.status === DeviceProtectionStatus.Unlocked,
-  )
-}
-
-export function openSimpleVault(path = ''): void {
-  const nookTypedArgs0_1: Parameters<typeof chrome.tabs.create>[0] = {
-    url: runtimeSimpleVaultUrl(path),
-  }
-  void chrome.tabs.create(nookTypedArgs0_1)
-}
-
 type AuthenticationSurfaceNotification = {
   type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces
 }
 
 type AuthenticationSurfaceRefreshSuccess = { ok: true }
 
-function authenticationSurfaceRefreshSucceeded(
-  response: unknown,
-): response is AuthenticationSurfaceRefreshSuccess {
-  return (
-    !!response &&
-    typeof response === 'object' &&
-    'ok' in response &&
-    response.ok === true
-  )
-}
-
 type AuthenticationSurfaceDeliveryRequest = {
   tabId: number
   message: AuthenticationSurfaceNotification
 }
 
-function authenticationSurfaceTabId(tab: chrome.tabs.Tab): number | false {
-  if (
-    typeof tab.id !== 'number' ||
-    !Number.isInteger(tab.id) ||
-    typeof tab.url !== 'string' ||
-    isRuntimeNookVaultAppUrl(tab.url)
-  ) {
-    return false
+/** Owns the browser runtime resources shared by these interactions. */
+class ExtensionSessionLifecycle {
+  private extensionSessionDocumentState: ExtensionSessionDocumentState = {
+    kind: ExtensionSessionDocumentStateKind.Closed,
   }
-  try {
-    const protocol = new URL(tab.url).protocol
-    if (!['http:', 'https:'].includes(protocol)) return false
-  } catch {
-    return false
-  }
-  return tab.id
-}
-
-async function deliverAuthenticationSurfaceNotification({
-  tabId,
-  message,
-}: AuthenticationSurfaceDeliveryRequest): Promise<void> {
-  const response = await chrome.tabs.sendMessage(tabId, message)
-  if (!authenticationSurfaceRefreshSucceeded(response)) {
-    throw new Error('authentication surface refresh rejected')
-  }
-}
-
-async function notifyAuthenticationSurfaces(
-  message: AuthenticationSurfaceNotification,
-): Promise<void> {
-  const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
-  const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
-    chrome.tabs.query(queryArgs, resolve)
-  })
-  const eligibleTabIds: number[] = []
-  for (const tab of tabs) {
-    const tabId = authenticationSurfaceTabId(tab)
-    if (tabId !== false) eligibleTabIds.push(tabId)
-  }
-  const deliveries = await Promise.allSettled(
-    eligibleTabIds.map((tabId) => {
-      const deliveryRequest: AuthenticationSurfaceDeliveryRequest = {
-        tabId,
-        message,
-      }
-      return deliverAuthenticationSurfaceNotification(deliveryRequest)
-    }),
-  )
-  if (deliveries.some((delivery) => delivery.status === 'rejected')) {
-    throw new Error('authentication surface refresh delivery failed')
-  }
-}
-
-export function refreshAuthenticationSurfaces(): Promise<void> {
-  const args: AuthenticationSurfaceNotification = {
-    type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
-  }
-  return notifyAuthenticationSurfaces(args)
-}
-export async function openCompanionLauncher(
-  intent: OpenCompanionLauncherIntent,
-): Promise<void> {
-  const popupUrl = chrome.runtime.getURL('popup/index.html')
-  const launcherUrl =
-    intent === OpenCompanionLauncherIntent.Pair
-      ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
-      : popupUrl
-  if (chrome.windows?.create) {
-    const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
-      url: launcherUrl,
-      type: 'popup',
-      width: 440,
-      height: 620,
-      focused: true,
+  async ensureExtensionSessionDocument(): Promise<void> {
+    if (
+      this.extensionSessionDocumentState.kind ===
+      ExtensionSessionDocumentStateKind.Closing
+    ) {
+      await this.extensionSessionDocumentState.operation
     }
-    await chrome.windows.create(nookTypedArgs0_7)
-    return
+    if (
+      this.extensionSessionDocumentState.kind ===
+      ExtensionSessionDocumentStateKind.Open
+    )
+      return
+    if (
+      this.extensionSessionDocumentState.kind ===
+      ExtensionSessionDocumentStateKind.Creating
+    ) {
+      return this.extensionSessionDocumentState.operation
+    }
+    const nookTypedArgs0_0: Parameters<
+      typeof chrome.offscreen.createDocument
+    >[0] = {
+      url: extensionSessionDocument,
+      reasons: ['WORKERS'],
+      justification:
+        'Keep a user-authorized extension device identity in memory for a 15-minute session.',
+    }
+    const operation = chrome.offscreen
+      .createDocument(nookTypedArgs0_0)
+      .catch((error) => {
+        // Manifest V3 permits only one offscreen document. A restarted service
+        // worker may race with the existing session document; it is safe to use
+        // that already-open document.
+        if (String(error).includes('single offscreen')) {
+          return
+        }
+        throw error
+      })
+      .then(() => {
+        if (
+          this.extensionSessionDocumentState.kind ===
+            ExtensionSessionDocumentStateKind.Creating &&
+          this.extensionSessionDocumentState.operation === operation
+        ) {
+          this.extensionSessionDocumentState = {
+            kind: ExtensionSessionDocumentStateKind.Open,
+          }
+        }
+      })
+    this.extensionSessionDocumentState = {
+      kind: ExtensionSessionDocumentStateKind.Creating,
+      operation,
+    }
+    return operation
   }
-  const nookTypedArgs0_8: Parameters<typeof chrome.tabs.create>[0] = {
-    url: launcherUrl,
+
+  closeExtensionSessionDocument(): Promise<void> {
+    if (
+      this.extensionSessionDocumentState.kind ===
+      ExtensionSessionDocumentStateKind.Closing
+    ) {
+      return this.extensionSessionDocumentState.operation
+    }
+    const closure = chrome.offscreen.closeDocument().finally(() => {
+      if (
+        this.extensionSessionDocumentState.kind ===
+          ExtensionSessionDocumentStateKind.Closing &&
+        this.extensionSessionDocumentState.operation === closure
+      ) {
+        this.extensionSessionDocumentState = {
+          kind: ExtensionSessionDocumentStateKind.Closed,
+        }
+      }
+    })
+    this.extensionSessionDocumentState = {
+      kind: ExtensionSessionDocumentStateKind.Closing,
+      operation: closure,
+    }
+    return closure
   }
-  await chrome.tabs.create(nookTypedArgs0_8)
+
+  isUnlockedSessionStatus(status: unknown): boolean {
+    return Boolean(
+      status &&
+      typeof status === 'object' &&
+      'status' in status &&
+      status.status === DeviceProtectionStatus.Unlocked,
+    )
+  }
+
+  openSimpleVault(path = ''): void {
+    const nookTypedArgs0_1: Parameters<typeof chrome.tabs.create>[0] = {
+      url: simpleVaultRuntime.runtimeSimpleVaultUrl(path),
+    }
+    void chrome.tabs.create(nookTypedArgs0_1)
+  }
+
+  private authenticationSurfaceRefreshSucceeded(
+    response: unknown,
+  ): response is AuthenticationSurfaceRefreshSuccess {
+    return (
+      !!response &&
+      typeof response === 'object' &&
+      'ok' in response &&
+      response.ok === true
+    )
+  }
+
+  private authenticationSurfaceTabId(tab: chrome.tabs.Tab): number | false {
+    if (
+      typeof tab.id !== 'number' ||
+      !Number.isInteger(tab.id) ||
+      typeof tab.url !== 'string' ||
+      simpleVaultRuntime.isRuntimeNookVaultAppUrl(tab.url)
+    ) {
+      return false
+    }
+    try {
+      const protocol = new URL(tab.url).protocol
+      if (!['http:', 'https:'].includes(protocol)) return false
+    } catch {
+      return false
+    }
+    return tab.id
+  }
+
+  private async deliverAuthenticationSurfaceNotification({
+    tabId,
+    message,
+  }: AuthenticationSurfaceDeliveryRequest): Promise<void> {
+    const response = await chrome.tabs.sendMessage(tabId, message)
+    if (!this.authenticationSurfaceRefreshSucceeded(response)) {
+      throw new Error('authentication surface refresh rejected')
+    }
+  }
+
+  private async notifyAuthenticationSurfaces(
+    message: AuthenticationSurfaceNotification,
+  ): Promise<void> {
+    const queryArgs: Parameters<typeof chrome.tabs.query>[0] = {}
+    const tabs = await new Promise<chrome.tabs.Tab[]>((resolve) => {
+      chrome.tabs.query(queryArgs, resolve)
+    })
+    const eligibleTabIds: number[] = []
+    for (const tab of tabs) {
+      const tabId = this.authenticationSurfaceTabId(tab)
+      if (tabId !== false) eligibleTabIds.push(tabId)
+    }
+    const deliveries = await Promise.allSettled(
+      eligibleTabIds.map((tabId) => {
+        const deliveryRequest: AuthenticationSurfaceDeliveryRequest = {
+          tabId,
+          message,
+        }
+        return this.deliverAuthenticationSurfaceNotification(deliveryRequest)
+      }),
+    )
+    if (deliveries.some((delivery) => delivery.status === 'rejected')) {
+      throw new Error('authentication surface refresh delivery failed')
+    }
+  }
+
+  refreshAuthenticationSurfaces(): Promise<void> {
+    const args: AuthenticationSurfaceNotification = {
+      type: ExtensionRuntimeRequestType.RefreshAuthenticationSurfaces,
+    }
+    return this.notifyAuthenticationSurfaces(args)
+  }
+
+  async openCompanionLauncher(
+    intent: OpenCompanionLauncherIntent,
+  ): Promise<void> {
+    const popupUrl = chrome.runtime.getURL('popup/index.html')
+    const launcherUrl =
+      intent === OpenCompanionLauncherIntent.Pair
+        ? `${popupUrl}?intent=${OpenCompanionLauncherIntent.Pair}`
+        : popupUrl
+    if (chrome.windows?.create) {
+      const nookTypedArgs0_7: Parameters<typeof chrome.windows.create>[0] = {
+        url: launcherUrl,
+        type: 'popup',
+        width: 440,
+        height: 620,
+        focused: true,
+      }
+      await chrome.windows.create(nookTypedArgs0_7)
+      return
+    }
+    const nookTypedArgs0_8: Parameters<typeof chrome.tabs.create>[0] = {
+      url: launcherUrl,
+    }
+    await chrome.tabs.create(nookTypedArgs0_8)
+  }
+
+  openCompanionLauncherBestEffort(intent: OpenCompanionLauncherIntent): void {
+    void this.openCompanionLauncher(intent).catch(() => {})
+  }
 }
 
-export function openCompanionLauncherBestEffort(
-  intent: OpenCompanionLauncherIntent,
-): void {
-  void openCompanionLauncher(intent).catch(() => {})
-}
+export const extensionSessionLifecycle = new ExtensionSessionLifecycle()

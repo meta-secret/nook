@@ -1,28 +1,25 @@
 <script lang="ts">
   type VaultPasswordUnlock = {
-    readonly entryId: string
-    readonly password: string
-  }
+    readonly entryId: string;
+    readonly password: string;
+  };
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     NookSelectedVaultIdentityContextKind,
     type NookPasswordEntrySummary,
-  } from '$app-wasm'
-  import { ShieldCheck } from '@lucide/svelte'
-  import { Button } from '$lib/components/ui/button'
-  import LoginAuthorizationStep from '$lib/components/login/LoginAuthorizationStep.svelte'
-  import LoginVaultIdentityContext from '$lib/components/login/LoginVaultIdentityContext.svelte'
-  import LoginVaultCard from '$lib/components/login/LoginVaultCard.svelte'
-  import LoginVaultNameForm from '$lib/components/login/LoginVaultNameForm.svelte'
-  import LoginVaultWorkflowNav from '$lib/components/login/LoginVaultWorkflowNav.svelte'
-  import SentinelCeremonyPanel from '$lib/components/login/SentinelCeremonyPanel.svelte'
-  import type { VaultState } from '$lib/vault.svelte'
-  import {
-    isSentinelVault,
-    sentinelCeremonyIsVisible,
-  } from '$lib/vault/sentinel-unlock'
-  import type { PasswordEntrySelection } from '$lib/vault/state/session.svelte'
+  } from "$app-wasm";
+  import { ShieldCheck } from "@lucide/svelte";
+  import { Button } from "$lib/components/ui/button";
+  import LoginAuthorizationStep from "$lib/components/login/LoginAuthorizationStep.svelte";
+  import LoginVaultIdentityContext from "$lib/components/login/LoginVaultIdentityContext.svelte";
+  import LoginVaultCard from "$lib/components/login/LoginVaultCard.svelte";
+  import LoginVaultNameForm from "$lib/components/login/LoginVaultNameForm.svelte";
+  import LoginVaultWorkflowNav from "$lib/components/login/LoginVaultWorkflowNav.svelte";
+  import SentinelCeremonyPanel from "$lib/components/login/SentinelCeremonyPanel.svelte";
+  import type { VaultState } from "$lib/vault.svelte";
+  import { SentinelUnlockActions } from "$lib/vault/sentinel-unlock";
+  import type { PasswordEntrySelection } from "$lib/vault/state/session.svelte";
   import {
     DeviceKeysUnlockCapabilityKind,
     LoginVaultEntryKind,
@@ -31,17 +28,17 @@
     type DeviceKeysUnlockCapability,
     type LoginVaultEntry,
     type PasswordUnlockCapability,
-  } from './login-unlock-state'
+  } from "./login-unlock-state";
   import {
-    loadLoginVaultIdentityContext,
+    LoginVaultIdentityReader,
     LoginVaultIdentityContextKind,
     type LoginVaultIdentityContext as LoginVaultIdentityContextState,
-  } from './login-vault-identity-context'
+  } from "./login-vault-identity-context";
 
   type PasswordEntrySummary = Pick<
     NookPasswordEntrySummary,
-    'id' | 'label' | 'createdAt'
-  >
+    "id" | "label" | "createdAt"
+  >;
 
   let {
     vault,
@@ -60,29 +57,31 @@
     onCreateAnotherVault,
     onImportFromSync,
   }: {
-    vault: VaultState
-    vaultEntry: LoginVaultEntry
-    hasMultipleVaults?: boolean
-    passwordEntries?: PasswordEntrySummary[]
-    selectedPasswordEntry: PasswordEntrySelection
-    isVerifying: boolean
-    isInitializing: boolean
-    isUnlocking?: boolean
-    onUnlock: () => void | Promise<void>
-    onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>
-    onSelectPasswordEntry: (selection: PasswordEntrySelection) => void
-    onOpenDevicesAccess: () => void | Promise<void>
-    onSwitchVault: () => void | Promise<void>
-    onCreateAnotherVault: (label: string) => void | Promise<void>
-    onImportFromSync: () => void
-  } = $props()
+    vault: VaultState;
+    vaultEntry: LoginVaultEntry;
+    hasMultipleVaults?: boolean;
+    passwordEntries?: PasswordEntrySummary[];
+    selectedPasswordEntry: PasswordEntrySelection;
+    isVerifying: boolean;
+    isInitializing: boolean;
+    isUnlocking?: boolean;
+    onUnlock: () => void | Promise<void>;
+    onUnlockWithPassword: (args: VaultPasswordUnlock) => void | Promise<void>;
+    onSelectPasswordEntry: (selection: PasswordEntrySelection) => void;
+    onOpenDevicesAccess: () => void | Promise<void>;
+    onSwitchVault: () => void | Promise<void>;
+    onCreateAnotherVault: (label: string) => void | Promise<void>;
+    onImportFromSync: () => void;
+  } = $props();
 
-  const isBusy = $derived(isVerifying || isInitializing)
-  let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open)
-  const showSentinelCeremony = $derived(sentinelCeremonyIsVisible(vault))
+  const isBusy = $derived(isVerifying || isInitializing);
+  let workflow = $state<LoginVaultWorkflow>(LoginVaultWorkflow.Open);
+  const showSentinelCeremony = $derived(
+    new SentinelUnlockActions(vault).sentinelCeremonyIsVisible(),
+  );
   const hidePasswordUnlock = $derived(
-    showSentinelCeremony || isSentinelVault(vault),
-  )
+    showSentinelCeremony || new SentinelUnlockActions(vault).isSentinelVault(),
+  );
   const passwordUnlock = $derived<PasswordUnlockCapability>(
     hidePasswordUnlock
       ? { kind: PasswordUnlockCapabilityKind.Unavailable }
@@ -90,49 +89,50 @@
           kind: PasswordUnlockCapabilityKind.Available,
           unlock: onUnlockWithPassword,
         },
-  )
+  );
   let identityContext = $state<LoginVaultIdentityContextState>({
     kind: LoginVaultIdentityContextKind.Loading,
-  })
-  let identityContextLoadGeneration = 0
+  });
+  let identityContextLoadGeneration = 0;
 
   $effect(() => {
     if (!vault.hasManager) {
-      identityContext = { kind: LoginVaultIdentityContextKind.Loading }
-      return
+      identityContext = { kind: LoginVaultIdentityContextKind.Loading };
+      return;
     }
     if (vaultEntry.kind !== LoginVaultEntryKind.Available) {
       identityContext = {
         kind: NookSelectedVaultIdentityContextKind.Empty,
-      }
-      return
+      };
+      return;
     }
 
-    const storeId = vaultEntry.entry.storeId
-    const generation = ++identityContextLoadGeneration
-    identityContext = { kind: LoginVaultIdentityContextKind.Loading }
-    const identityContextRequest: Parameters<
-      typeof loadLoginVaultIdentityContext
+    const storeId = vaultEntry.entry.storeId;
+    const generation = ++identityContextLoadGeneration;
+    identityContext = { kind: LoginVaultIdentityContextKind.Loading };
+    const identityContextRequest: ConstructorParameters<
+      typeof LoginVaultIdentityReader
     >[0] = {
       manager: vault.requireManager(),
       storeId,
-    }
-    void loadLoginVaultIdentityContext(identityContextRequest)
+    };
+    void new LoginVaultIdentityReader(identityContextRequest)
+      .execute()
       .then((context) => {
-        if (generation !== identityContextLoadGeneration) return
-        identityContext = context
+        if (generation !== identityContextLoadGeneration) return;
+        identityContext = context;
       })
       .catch(() => {
-        if (generation !== identityContextLoadGeneration) return
-        identityContext = { kind: LoginVaultIdentityContextKind.Failed }
-      })
+        if (generation !== identityContextLoadGeneration) return;
+        identityContext = { kind: LoginVaultIdentityContextKind.Failed };
+      });
 
     return () => {
       if (generation === identityContextLoadGeneration) {
-        identityContextLoadGeneration += 1
+        identityContextLoadGeneration += 1;
       }
-    }
-  })
+    };
+  });
 
   const deviceKeysUnlock = $derived<DeviceKeysUnlockCapability>(
     vault.loginDeviceKeysCapable
@@ -141,7 +141,7 @@
           kind: DeviceKeysUnlockCapabilityKind.Unavailable,
           reason: vault.t(I18N_KEYS.LoginUnlockDeviceKeysUnavailable),
         },
-  )
+  );
 </script>
 
 <div class="space-y-5" data-testid="login-local-unlock-step">
@@ -207,7 +207,7 @@
           loginPasswordPrompt={vault.loginPasswordPrompt}
           {deviceKeysUnlock}
           onConsumeLoginPasswordPrompt={() => {
-            vault.loginPasswordPrompt = false
+            vault.loginPasswordPrompt = false;
           }}
           {onUnlock}
           {passwordUnlock}

@@ -81,131 +81,137 @@ export type IdentityDirectoryLoadState =
       readonly view: IdentityDirectoryView;
     };
 
-function readMember(member: NookIdentityMemberSnapshot): IdentityMemberView {
-  try {
-    return {
-      appId: member.appId,
-      currentBrowser: member.currentBrowser,
-      localProtection: member.localProtection,
-      label:
-        member.labelKind === NookIdentityMemberLabelKind.Known
-          ? { kind: DashboardTextKind.Known, value: member.label() }
-          : { kind: DashboardTextKind.Unknown },
-    };
-  } finally {
-    member.free();
-  }
-}
+export class IdentityDirectoryReader {
+  constructor(private readonly request: NookVaultManager) {}
+  async load(): Promise<IdentityDirectoryAccessView> {
+    const manager = this.request;
 
-function readText(value: NookDeviceAccessText): DashboardText {
-  try {
-    return value.kind === NookDeviceAccessTextKind.Known
-      ? { kind: DashboardTextKind.Known, value: value.value() }
-      : { kind: DashboardTextKind.Unknown };
-  } finally {
-    value.free();
-  }
-}
-
-function readTimestamp(
-  value: NookPasskeyTimestampEvidence,
-): DashboardTimestamp {
-  try {
-    if (value.kind === NookPasskeyTimestampEvidenceKind.Known) {
-      return { kind: DashboardTimestampKind.Known, value: value.value() };
+    const request = manager.identity_directory_snapshot_request();
+    const snapshot = await request.resolve().finally(() => request.free());
+    try {
+      const identities: IdentityDirectoryEntry[] = [];
+      for (let index = 0; index < snapshot.length; index += 1) {
+        identities.push(
+          IdentityDirectoryReader.readIdentity(snapshot.identity(index)),
+        );
+      }
+      const selection: IdentityDirectorySelection =
+        snapshot.selectionKind === NookIdentityDirectorySelectionKind.Selected
+          ? {
+              kind: IdentityDirectorySelectionKind.Selected,
+              identityId: snapshot.selectedIdentityId,
+            }
+          : { kind: IdentityDirectorySelectionKind.Empty };
+      return {
+        directory: { identities, selection },
+        access: IdentityDirectoryReader.readAccess(snapshot.device_access()),
+      };
+    } finally {
+      snapshot.free();
     }
-    return value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
-      ? { kind: DashboardTimestampKind.NotYetObserved }
-      : { kind: DashboardTimestampKind.Unavailable };
-  } finally {
-    value.free();
   }
-}
-
-function readVaultAccess(entry: NookDeviceVaultAccess): VaultAccessView {
-  try {
-    return {
-      storeId: entry.storeId,
-      label: entry.label,
-      verified: entry.accessState === NookDeviceVaultAccessState.Verified,
-      verifiedAt: readText(entry.verifiedAt),
-      lastLocalUpdateAt: readText(entry.lastLocalUpdateAt),
-    };
-  } finally {
-    entry.free();
-  }
-}
-
-function readAccess(snapshot: NookDeviceAccessSnapshot): DashboardView {
-  try {
-    return {
-      protection: snapshot.protection,
-      identityState: snapshot.identityState,
-      deviceId: readText(snapshot.deviceId),
-      credentialId: readText(snapshot.credentialId),
-      passkeyName: readText(snapshot.passkeyName),
-      providerLabel: readText(snapshot.providerLabel),
-      createdAt: readTimestamp(snapshot.createdAt),
-      lastUsedAt: readTimestamp(snapshot.lastUsedAt),
-      keeper: snapshot.keeper,
-      vaults: snapshot.vaults().map(readVaultAccess),
-    };
-  } finally {
-    snapshot.free();
-  }
-}
-
-function readIdentity(identity: NookIdentitySnapshot): IdentityDirectoryEntry {
-  try {
-    return {
-      identityId: identity.identityId,
-      label: identity.label,
-      localAccess: identity.localAccess,
-      members: identity.members().map(readMember),
-      vaults: identity.vaults().map(readVaultAccess),
-    };
-  } finally {
-    identity.free();
-  }
-}
-
-export async function loadIdentityDirectoryAccessView(
-  manager: NookVaultManager,
-): Promise<IdentityDirectoryAccessView> {
-  const request = manager.identity_directory_snapshot_request();
-  const snapshot = await request.resolve().finally(() => request.free());
-  try {
-    const identities: IdentityDirectoryEntry[] = [];
-    for (let index = 0; index < snapshot.length; index += 1) {
-      identities.push(readIdentity(snapshot.identity(index)));
+  private static readMember(
+    member: NookIdentityMemberSnapshot,
+  ): IdentityMemberView {
+    try {
+      return {
+        appId: member.appId,
+        currentBrowser: member.currentBrowser,
+        localProtection: member.localProtection,
+        label:
+          member.labelKind === NookIdentityMemberLabelKind.Known
+            ? { kind: DashboardTextKind.Known, value: member.label() }
+            : { kind: DashboardTextKind.Unknown },
+      };
+    } finally {
+      member.free();
     }
-    const selection: IdentityDirectorySelection =
-      snapshot.selectionKind === NookIdentityDirectorySelectionKind.Selected
-        ? {
-            kind: IdentityDirectorySelectionKind.Selected,
-            identityId: snapshot.selectedIdentityId,
-          }
-        : { kind: IdentityDirectorySelectionKind.Empty };
-    return {
-      directory: { identities, selection },
-      access: readAccess(snapshot.device_access()),
-    };
-  } finally {
-    snapshot.free();
   }
-}
-
-export function selectedIdentity(
-  directory: IdentityDirectoryView,
-): SelectedIdentityEntry {
-  if (directory.selection.kind === IdentityDirectorySelectionKind.Empty) {
+  private static readText(value: NookDeviceAccessText): DashboardText {
+    try {
+      return value.kind === NookDeviceAccessTextKind.Known
+        ? { kind: DashboardTextKind.Known, value: value.value() }
+        : { kind: DashboardTextKind.Unknown };
+    } finally {
+      value.free();
+    }
+  }
+  private static readTimestamp(
+    value: NookPasskeyTimestampEvidence,
+  ): DashboardTimestamp {
+    try {
+      if (value.kind === NookPasskeyTimestampEvidenceKind.Known) {
+        return { kind: DashboardTimestampKind.Known, value: value.value() };
+      }
+      return value.kind === NookPasskeyTimestampEvidenceKind.NotYetObserved
+        ? { kind: DashboardTimestampKind.NotYetObserved }
+        : { kind: DashboardTimestampKind.Unavailable };
+    } finally {
+      value.free();
+    }
+  }
+  private static readVaultAccess(
+    entry: NookDeviceVaultAccess,
+  ): VaultAccessView {
+    try {
+      return {
+        storeId: entry.storeId,
+        label: entry.label,
+        verified: entry.accessState === NookDeviceVaultAccessState.Verified,
+        verifiedAt: IdentityDirectoryReader.readText(entry.verifiedAt),
+        lastLocalUpdateAt: IdentityDirectoryReader.readText(
+          entry.lastLocalUpdateAt,
+        ),
+      };
+    } finally {
+      entry.free();
+    }
+  }
+  private static readAccess(snapshot: NookDeviceAccessSnapshot): DashboardView {
+    try {
+      return {
+        protection: snapshot.protection,
+        identityState: snapshot.identityState,
+        deviceId: IdentityDirectoryReader.readText(snapshot.deviceId),
+        credentialId: IdentityDirectoryReader.readText(snapshot.credentialId),
+        passkeyName: IdentityDirectoryReader.readText(snapshot.passkeyName),
+        providerLabel: IdentityDirectoryReader.readText(snapshot.providerLabel),
+        createdAt: IdentityDirectoryReader.readTimestamp(snapshot.createdAt),
+        lastUsedAt: IdentityDirectoryReader.readTimestamp(snapshot.lastUsedAt),
+        keeper: snapshot.keeper,
+        vaults: snapshot.vaults().map(IdentityDirectoryReader.readVaultAccess),
+      };
+    } finally {
+      snapshot.free();
+    }
+  }
+  private static readIdentity(
+    identity: NookIdentitySnapshot,
+  ): IdentityDirectoryEntry {
+    try {
+      return {
+        identityId: identity.identityId,
+        label: identity.label,
+        localAccess: identity.localAccess,
+        members: identity.members().map(IdentityDirectoryReader.readMember),
+        vaults: identity.vaults().map(IdentityDirectoryReader.readVaultAccess),
+      };
+    } finally {
+      identity.free();
+    }
+  }
+  static selectedIdentity(
+    directory: IdentityDirectoryView,
+  ): SelectedIdentityEntry {
+    if (directory.selection.kind === IdentityDirectorySelectionKind.Empty) {
+      return { kind: IdentityDirectorySelectionKind.Empty };
+    }
+    const selectedIdentityId = directory.selection.identityId;
+    for (const identity of directory.identities) {
+      if (identity.identityId === selectedIdentityId) {
+        return { kind: IdentityDirectorySelectionKind.Selected, identity };
+      }
+    }
     return { kind: IdentityDirectorySelectionKind.Empty };
   }
-  const selectedIdentityId = directory.selection.identityId;
-  for (const identity of directory.identities) {
-    if (identity.identityId === selectedIdentityId) {
-      return { kind: IdentityDirectorySelectionKind.Selected, identity };
-    }
-  }
-  return { kind: IdentityDirectorySelectionKind.Empty };
 }

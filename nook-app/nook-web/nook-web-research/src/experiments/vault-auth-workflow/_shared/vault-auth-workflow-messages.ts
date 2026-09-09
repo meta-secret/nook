@@ -31,6 +31,11 @@ const VAULT_AUTH_STEP_CATALOG: Record<
   },
 }
 
-export function vaultAuthStepMessage(key: VaultAuthStepKey): string {
-  return VAULT_AUTH_STEP_CATALOG[VaultAuthLocale.English][key]
+export class VaultAuthStepMessage {
+  constructor(private readonly request: VaultAuthStepKey) {}
+  get text(): string {
+    const key = this.request
+
+    return VAULT_AUTH_STEP_CATALOG[VaultAuthLocale.English][key]
+  }
 }

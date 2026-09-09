@@ -5,20 +5,17 @@ import {
   DRIVE_READONLY_SCOPE,
   GoogleDriveOAuthScope,
   GoogleOAuthPrompt,
-  isGoogleOAuthConfigured,
-  isOAuthAccessTokenExpired,
-  oauthTokensToConfig,
-  requestGoogleAccessToken,
   type GoogleAccessTokenRequest,
   type GoogleOAuthConfigurationUpdate,
   type GoogleOAuthExpiryAssessment,
   type GoogleTokenPromptRequest,
+  googleOAuthSession,
 } from '$lib/auth/google/oauth'
 import { oauthConfigurationNotApplicable } from '$lib/auth/providers'
 
 describe('google-oauth', () => {
   it('is configured with the committed client id', () => {
-    expect(isGoogleOAuthConfigured()).toBe(true)
+    expect(googleOAuthSession.isGoogleOAuthConfigured()).toBe(true)
   })
 
   it('detects expired oauth access tokens with skew', () => {
@@ -29,12 +26,14 @@ describe('google-oauth', () => {
       },
       existing: oauthConfigurationNotApplicable(),
     }
-    const expired = oauthTokensToConfig(configurationUpdate)
+    const expired = googleOAuthSession.oauthTokensToConfig(configurationUpdate)
     const expiryAssessment: GoogleOAuthExpiryAssessment = {
       config: expired,
       skewMs: 60_000,
     }
-    expect(isOAuthAccessTokenExpired(expiryAssessment)).toBe(true)
+    expect(googleOAuthSession.isOAuthAccessTokenExpired(expiryAssessment)).toBe(
+      true,
+    )
   })
 
   it('settles concurrent token requests independently by scope', async () => {
@@ -76,13 +75,14 @@ describe('google-oauth', () => {
       scope: GoogleDriveOAuthScope.AppData,
       prompt: GoogleOAuthPrompt.Default,
     }
-    const appdataToken = requestGoogleAccessToken(appDataRequest)
+    const appdataToken =
+      googleOAuthSession.requestGoogleAccessToken(appDataRequest)
     const sharedScope = `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`
     const sharedRequest: GoogleAccessTokenRequest = {
       scope: GoogleDriveOAuthScope.Shared,
       prompt: GoogleOAuthPrompt.Default,
     }
-    const fileToken = requestGoogleAccessToken(sharedRequest)
+    const fileToken = googleOAuthSession.requestGoogleAccessToken(sharedRequest)
 
     await vi.waitFor(() => {
       expect(requests.get(DRIVE_APPDATA_SCOPE)).toHaveBeenCalledOnce()

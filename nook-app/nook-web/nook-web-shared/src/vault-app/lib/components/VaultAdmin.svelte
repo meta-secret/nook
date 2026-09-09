@@ -1,35 +1,35 @@
 <script lang="ts">
   type VaultNameDraftChange = {
-    readonly entry: NookLocalVaultEntry
-    readonly value: string
-  }
+    readonly entry: NookLocalVaultEntry;
+    readonly value: string;
+  };
   type VaultPasswordCreation = {
-    readonly label: string
-    readonly password: string
-  }
+    readonly label: string;
+    readonly password: string;
+  };
   type VaultPasswordEntryUpdate = {
-    readonly entryId: PasswordEntryId
-    readonly password: string
-  }
+    readonly entryId: PasswordEntryId;
+    readonly password: string;
+  };
   type EnrollmentCodeIssue = {
-    readonly entryId: PasswordEntryId
-    readonly password: string
-  }
+    readonly entryId: PasswordEntryId;
+    readonly password: string;
+  };
   type BitwardenVaultImport = {
-    readonly json: string
-    readonly password: string
-  }
-  type AuthenticatorMigrationUriCollection = string[]
+    readonly json: string;
+    readonly password: string;
+  };
+  type AuthenticatorMigrationUriCollection = string[];
 
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import type { ExtensionSetupOffer } from "$lib/app/extension-setup";
   import {
-    vaultEntryHoldsExtensionGrant,
-    resolveVaultExtensionLink,
+    VaultGrantPresentation,
+    VaultExtensionPresentation,
     type ExtensionConnectedEntryRequest,
     type VaultExtensionLinkRequest,
     type VaultSwitcherEntryLabel,
-  } from './vault-switcher-extension'
+  } from "./vault-switcher-extension";
   import {
     Check,
     CheckCircle2,
@@ -40,38 +40,38 @@
     RefreshCw,
     ShieldCheck,
     X,
-  } from '@lucide/svelte'
-  import SettingsAccordionSection from '$lib/components/settings/SettingsAccordionSection.svelte'
-  import AuthStorage from '$lib/components/AuthStorage.svelte'
-  import VaultPasswordCard from '$lib/components/VaultPasswordCard.svelte'
-  import BitwardenImportPanel from '$lib/components/BitwardenImportPanel.svelte'
-  import KeePassXcImportPanel from '$lib/components/KeePassXcImportPanel.svelte'
-  import LastPassImportPanel from '$lib/components/LastPassImportPanel.svelte'
-  import KeeperImportPanel from '$lib/components/KeeperImportPanel.svelte'
-  import OnePasswordImportPanel from '$lib/components/OnePasswordImportPanel.svelte'
-  import ApplePasswordsImportPanel from '$lib/components/ApplePasswordsImportPanel.svelte'
-  import ChromePasswordsImportPanel from '$lib/components/ChromePasswordsImportPanel.svelte'
-  import DashlaneImportPanel from '$lib/components/DashlaneImportPanel.svelte'
-  import GoogleAuthenticatorImportPanel from '$lib/components/GoogleAuthenticatorImportPanel.svelte'
-  import ProtonPassImportPanel from '$lib/components/ProtonPassImportPanel.svelte'
-  import { Button } from '$lib/components/ui/button'
+  } from "@lucide/svelte";
+  import SettingsAccordionSection from "$lib/components/settings/SettingsAccordionSection.svelte";
+  import AuthStorage from "$lib/components/AuthStorage.svelte";
+  import VaultPasswordCard from "$lib/components/VaultPasswordCard.svelte";
+  import BitwardenImportPanel from "$lib/components/BitwardenImportPanel.svelte";
+  import KeePassXcImportPanel from "$lib/components/KeePassXcImportPanel.svelte";
+  import LastPassImportPanel from "$lib/components/LastPassImportPanel.svelte";
+  import KeeperImportPanel from "$lib/components/KeeperImportPanel.svelte";
+  import OnePasswordImportPanel from "$lib/components/OnePasswordImportPanel.svelte";
+  import ApplePasswordsImportPanel from "$lib/components/ApplePasswordsImportPanel.svelte";
+  import ChromePasswordsImportPanel from "$lib/components/ChromePasswordsImportPanel.svelte";
+  import DashlaneImportPanel from "$lib/components/DashlaneImportPanel.svelte";
+  import GoogleAuthenticatorImportPanel from "$lib/components/GoogleAuthenticatorImportPanel.svelte";
+  import ProtonPassImportPanel from "$lib/components/ProtonPassImportPanel.svelte";
+  import { Button } from "$lib/components/ui/button";
   import type {
     NookLocalVaultEntry,
     NookPasswordEntrySummary,
     PasswordEntryId,
-  } from '$app-wasm'
-  import type { VaultState } from '$lib/vault.svelte'
-  import type { NookImportResult } from '$lib/nook'
+  } from "$app-wasm";
+  import type { VaultState } from "$lib/vault.svelte";
+  import type { NookImportResult } from "$lib/nook";
   import type {
     ProviderSetupRequest,
     StorageProvider,
-  } from '$lib/auth/providers'
+  } from "$lib/auth/providers";
   import {
     ActiveVaultKind,
     type LoginSetup,
-  } from '$lib/vault/state/provider.svelte'
-  import { AdminAccordionSection } from '$lib/vault/state/ui.svelte'
-  import type { NookManualProviderSync } from '$app-wasm'
+  } from "$lib/vault/state/provider.svelte";
+  import { AdminAccordionSection } from "$lib/vault/state/ui.svelte";
+  import type { NookManualProviderSync } from "$app-wasm";
   import {
     ImportProviderSectionKind,
     VaultLabelEditorKind,
@@ -81,7 +81,7 @@
     type VaultLabelEditor,
     type VaultRenameOperation,
     type VaultSwitchOperation,
-  } from './vault-admin-state'
+  } from "./vault-admin-state";
 
   let {
     vault,
@@ -94,8 +94,8 @@
     isSaving,
     addProviderOpen = false,
     loginSetup,
-    githubPat = $bindable(''),
-    githubRepo = $bindable(''),
+    githubPat = $bindable(""),
+    githubRepo = $bindable(""),
     passwordEntries,
     isPasswordBusy,
     passwordError,
@@ -125,113 +125,117 @@
     onImportProtonPass,
     activeSection = $bindable(AdminAccordionSection.Vaults),
   }: {
-    vault: VaultState
-    extensionSetupState: ExtensionSetupOffer
-    isVerifying: boolean
-    isInitializing: boolean
-    syncProviders: StorageProvider[]
-    manualProviderSync: NookManualProviderSync
-    isAuthenticated: boolean
-    isSaving: boolean
-    addProviderOpen?: boolean
-    loginSetup: LoginSetup
-    githubPat: string
-    githubRepo: string
-    passwordEntries: NookPasswordEntrySummary[]
-    isPasswordBusy: boolean
-    passwordError: string
-    enrollmentCode: string
-    canManageExistingPasswords: boolean
-    onReconnect: () => void | Promise<void>
-    onSyncProvider?: (id: string) => void | Promise<void>
-    onBeginAddProvider?: () => void
-    onCancelAddProvider?: () => void
-    onBeginSetup: (request: ProviderSetupRequest) => void
-    onCancelSetup: () => void
-    onRemoveProvider?: (id: string) => void | Promise<void>
-    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
-    onUpdatePassword: (args: VaultPasswordEntryUpdate) => void | Promise<void>
-    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
-    onClearCode: () => void
-    onImportBitwarden: (args: BitwardenVaultImport) => Promise<NookImportResult>
-    onImportKeePassXc: (csv: string) => Promise<NookImportResult>
-    onImportLastPass: (csv: string) => Promise<NookImportResult>
-    onImportKeeper: (csv: string) => Promise<NookImportResult>
-    onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>
+    vault: VaultState;
+    extensionSetupState: ExtensionSetupOffer;
+    isVerifying: boolean;
+    isInitializing: boolean;
+    syncProviders: StorageProvider[];
+    manualProviderSync: NookManualProviderSync;
+    isAuthenticated: boolean;
+    isSaving: boolean;
+    addProviderOpen?: boolean;
+    loginSetup: LoginSetup;
+    githubPat: string;
+    githubRepo: string;
+    passwordEntries: NookPasswordEntrySummary[];
+    isPasswordBusy: boolean;
+    passwordError: string;
+    enrollmentCode: string;
+    canManageExistingPasswords: boolean;
+    onReconnect: () => void | Promise<void>;
+    onSyncProvider?: (id: string) => void | Promise<void>;
+    onBeginAddProvider?: () => void;
+    onCancelAddProvider?: () => void;
+    onBeginSetup: (request: ProviderSetupRequest) => void;
+    onCancelSetup: () => void;
+    onRemoveProvider?: (id: string) => void | Promise<void>;
+    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>;
+    onUpdatePassword: (args: VaultPasswordEntryUpdate) => void | Promise<void>;
+    onRemovePassword: (entryId: PasswordEntryId) => void | Promise<void>;
+    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>;
+    onClearCode: () => void;
+    onImportBitwarden: (
+      args: BitwardenVaultImport,
+    ) => Promise<NookImportResult>;
+    onImportKeePassXc: (csv: string) => Promise<NookImportResult>;
+    onImportLastPass: (csv: string) => Promise<NookImportResult>;
+    onImportKeeper: (csv: string) => Promise<NookImportResult>;
+    onImportOnePassword: (archive: Uint8Array) => Promise<NookImportResult>;
     onImportApplePasswords: (
       exportBytes: Uint8Array,
-    ) => Promise<NookImportResult>
-    onImportChromePasswords: (csv: string) => Promise<NookImportResult>
-    onImportDashlane: (exportBytes: Uint8Array) => Promise<NookImportResult>
+    ) => Promise<NookImportResult>;
+    onImportChromePasswords: (csv: string) => Promise<NookImportResult>;
+    onImportDashlane: (exportBytes: Uint8Array) => Promise<NookImportResult>;
     onImportGoogleAuthenticator: (
       migrationUris: AuthenticatorMigrationUriCollection,
-    ) => Promise<NookImportResult>
-    onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>
-    activeSection?: AdminAccordionSection
-  } = $props()
+    ) => Promise<NookImportResult>;
+    onImportProtonPass: (exportBytes: Uint8Array) => Promise<NookImportResult>;
+    activeSection?: AdminAccordionSection;
+  } = $props();
 
-  let newVaultName = $state('')
-  let drafts = $state<Record<string, string>>({})
-  let draftSeed = $state('')
-  let creating = $state(false)
+  let newVaultName = $state("");
+  let drafts = $state<Record<string, string>>({});
+  let draftSeed = $state("");
+  let creating = $state(false);
   let editingStoreId = $state<VaultLabelEditor>({
     kind: VaultLabelEditorKind.Closed,
-  })
+  });
   let renamingStoreId = $state<VaultRenameOperation>({
     kind: VaultRenameOperationKind.Idle,
-  })
+  });
   let switchingTo = $state<VaultSwitchOperation>({
     kind: VaultSwitchOperationKind.Idle,
-  })
+  });
   let activeImportProvider = $state<ImportProviderSection>({
     kind: ImportProviderSectionKind.Closed,
-  })
+  });
   function toggleAdminSection(section: AdminAccordionSection): void {
     activeSection =
-      activeSection === section ? AdminAccordionSection.Closed : section
+      activeSection === section ? AdminAccordionSection.Closed : section;
   }
 
   function importProviderOpen(providerId: string): boolean {
     return (
       activeImportProvider.kind === ImportProviderSectionKind.Open &&
       activeImportProvider.providerId === providerId
-    )
+    );
   }
 
   function toggleImportProvider(providerId: string): void {
     activeImportProvider = importProviderOpen(providerId)
       ? { kind: ImportProviderSectionKind.Closed }
-      : { kind: ImportProviderSectionKind.Open, providerId }
+      : { kind: ImportProviderSectionKind.Open, providerId };
   }
 
   const activeStoreId = $derived(
     vault.activeVault.kind === ActiveVaultKind.Open
       ? vault.activeVault.storeId.trim()
-      : '',
-  )
-  const vaults = $derived(vault.localVaults)
-  const unnamedVaultLabel = $derived(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+      : "",
+  );
+  const vaults = $derived(vault.localVaults);
+  const unnamedVaultLabel = $derived(
+    vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
+  );
   const extensionEntryLabels = $derived.by((): VaultSwitcherEntryLabel[] => {
-    const labels: VaultSwitcherEntryLabel[] = []
+    const labels: VaultSwitcherEntryLabel[] = [];
     for (const entry of vaults) {
       const label: VaultSwitcherEntryLabel = {
         storeId: entry.storeId,
         displayName: entry.display_label(unnamedVaultLabel),
-      }
-      labels.push(label)
+      };
+      labels.push(label);
     }
-    return labels
-  })
+    return labels;
+  });
   const extensionLink = $derived.by(() => {
     const request: VaultExtensionLinkRequest = {
       offer: extensionSetupState,
       activeStoreId,
       entries: extensionEntryLabels,
-    }
-    return resolveVaultExtensionLink(request)
-  })
-  const hasPasswords = $derived(passwordEntries.length > 0)
+    };
+    return new VaultExtensionPresentation(request).link;
+  });
+  const hasPasswords = $derived(passwordEntries.length > 0);
   const isBusy = $derived(
     isVerifying ||
       isInitializing ||
@@ -239,116 +243,116 @@
       creating ||
       renamingStoreId.kind === VaultRenameOperationKind.Renaming ||
       switchingTo.kind === VaultSwitchOperationKind.Switching,
-  )
+  );
 
   function buildDrafts() {
-    const next: Record<string, string> = {}
+    const next: Record<string, string> = {};
     for (const entry of vaults) {
       next[entry.storeId] = entry.display_label(
         vault.t(I18N_KEYS.LoginVaultPickerUnnamed),
-      )
+      );
     }
-    drafts = next
+    drafts = next;
   }
 
   $effect(() => {
     const seed = vaults
-      .map((entry) => `${entry.storeId}:${((v) => (v ? v : ''))(entry.label)}`)
-      .join('|')
+      .map((entry) => `${entry.storeId}:${((v) => (v ? v : ""))(entry.label)}`)
+      .join("|");
     if (seed !== draftSeed) {
-      draftSeed = seed
-      buildDrafts()
+      draftSeed = seed;
+      buildDrafts();
     }
-  })
+  });
 
   function draftFor(entry: NookLocalVaultEntry) {
     return ((
       ...[v = entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))]
-    ) => v)(drafts[entry.storeId])
+    ) => v)(drafts[entry.storeId]);
   }
 
   function setDraft({ entry, value }: VaultNameDraftChange) {
-    drafts = { ...drafts, [entry.storeId]: value }
+    drafts = { ...drafts, [entry.storeId]: value };
   }
 
   function canSave(entry: NookLocalVaultEntry) {
-    const draft = draftFor(entry).trim()
+    const draft = draftFor(entry).trim();
     return (
       !isBusy &&
       draft.length > 0 &&
       draft !== entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
-    )
+    );
   }
 
   function beginRename(entry: NookLocalVaultEntry) {
-    if (isBusy) return
+    if (isBusy) return;
     const setDraftArgs: Parameters<typeof setDraft>[0] = {
       entry,
       value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)),
-    }
-    setDraft(setDraftArgs)
+    };
+    setDraft(setDraftArgs);
     editingStoreId = {
       kind: VaultLabelEditorKind.Editing,
       storeId: entry.storeId,
-    }
+    };
   }
 
   function cancelRename(entry: NookLocalVaultEntry) {
     const setDraftArgs2: Parameters<typeof setDraft>[0] = {
       entry,
       value: entry.display_label(vault.t(I18N_KEYS.LoginVaultPickerUnnamed)),
-    }
-    setDraft(setDraftArgs2)
+    };
+    setDraft(setDraftArgs2);
     if (
       editingStoreId.kind === VaultLabelEditorKind.Editing &&
       editingStoreId.storeId === entry.storeId
     ) {
-      editingStoreId = { kind: VaultLabelEditorKind.Closed }
+      editingStoreId = { kind: VaultLabelEditorKind.Closed };
     }
   }
 
   async function createVault() {
-    const label = newVaultName.trim()
-    if (!label || isBusy) return
-    creating = true
+    const label = newVaultName.trim();
+    if (!label || isBusy) return;
+    creating = true;
     try {
-      await vault.createLocalVaultWithDeviceKeys(label)
+      await vault.createLocalVaultWithDeviceKeys(label);
       if (!vault.errorMsg) {
-        newVaultName = ''
+        newVaultName = "";
       }
     } finally {
-      creating = false
+      creating = false;
     }
   }
 
   async function renameVault(entry: NookLocalVaultEntry) {
-    if (!canSave(entry)) return
+    if (!canSave(entry)) return;
     renamingStoreId = {
       kind: VaultRenameOperationKind.Renaming,
       storeId: entry.storeId,
-    }
+    };
     try {
       const renameLocalVaultArgs: Parameters<typeof vault.renameLocalVault>[0] =
-        { storeId: entry.storeId, label: draftFor(entry) }
-      await vault.renameLocalVault(renameLocalVaultArgs)
+        { storeId: entry.storeId, label: draftFor(entry) };
+      await vault.renameLocalVault(renameLocalVaultArgs);
       if (!vault.errorMsg) {
-        editingStoreId = { kind: VaultLabelEditorKind.Closed }
+        editingStoreId = { kind: VaultLabelEditorKind.Closed };
       }
     } finally {
-      renamingStoreId = { kind: VaultRenameOperationKind.Idle }
+      renamingStoreId = { kind: VaultRenameOperationKind.Idle };
     }
   }
 
   async function switchTo(entry: NookLocalVaultEntry) {
-    if (entry.storeId === activeStoreId || isBusy) return
+    if (entry.storeId === activeStoreId || isBusy) return;
     switchingTo = {
       kind: VaultSwitchOperationKind.Switching,
       storeId: entry.storeId,
-    }
+    };
     try {
-      await vault.switchToVault(entry.storeId)
+      await vault.switchToVault(entry.storeId);
     } finally {
-      switchingTo = { kind: VaultSwitchOperationKind.Idle }
+      switchingTo = { kind: VaultSwitchOperationKind.Idle };
     }
   }
 </script>
@@ -371,8 +375,8 @@
           const tArgs: Parameters<typeof vault.t>[0] = {
             key: I18N_KEYS.VaultAdminVaultCount,
             replacements: { count: String(vaults.length) },
-          }
-          return vault.t(tArgs)
+          };
+          return vault.t(tArgs);
         })()}
       </span>
     {/snippet}
@@ -396,12 +400,12 @@
             value={newVaultName}
             disabled={isBusy}
             oninput={(event) => {
-              newVaultName = (event.currentTarget as HTMLInputElement).value
+              newVaultName = (event.currentTarget as HTMLInputElement).value;
             }}
             onkeydown={(event) => {
-              if (event.key === 'Enter') {
-                event.preventDefault()
-                void createVault()
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void createVault();
               }
             }}
           />
@@ -460,16 +464,16 @@
                       const setDraftArgs3: Parameters<typeof setDraft>[0] = {
                         entry,
                         value: (event.currentTarget as HTMLInputElement).value,
-                      }
-                      return setDraft(setDraftArgs3)
+                      };
+                      return setDraft(setDraftArgs3);
                     })()}
                   onkeydown={(event) => {
-                    if (event.key === 'Enter') {
-                      event.preventDefault()
-                      void renameVault(entry)
-                    } else if (event.key === 'Escape') {
-                      event.preventDefault()
-                      cancelRename(entry)
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void renameVault(entry);
+                    } else if (event.key === "Escape") {
+                      event.preventDefault();
+                      cancelRename(entry);
                     }
                   }}
                 />
@@ -487,7 +491,7 @@
                     <span class="truncate text-sm font-medium text-foreground">
                       {entry.display_label(unnamedVaultLabel)}
                     </span>
-                    {#if vaultEntryHoldsExtensionGrant(grantRequest)}
+                    {#if new VaultGrantPresentation(grantRequest).connected}
                       <span
                         class="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary"
                         data-testid="vault-admin-extension-badge"
@@ -637,8 +641,8 @@
                   replacements: {
                     count: String(passwordEntries.length),
                   },
-                }
-                return vault.t(tArgs2)
+                };
+                return vault.t(tArgs2);
               })()}
         {:else}
           <Lock class="size-3" />
@@ -674,8 +678,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.ApplePasswordsImportSource)}
         subtitle={vault.t(I18N_KEYS.ApplePasswordsImportDescription)}
-        open={importProviderOpen('apple-passwords')}
-        onToggle={() => toggleImportProvider('apple-passwords')}
+        open={importProviderOpen("apple-passwords")}
+        onToggle={() => toggleImportProvider("apple-passwords")}
         testId="apple-passwords-import-section"
       >
         <ApplePasswordsImportPanel
@@ -689,8 +693,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.ChromePasswordsImportSource)}
         subtitle={vault.t(I18N_KEYS.ChromePasswordsImportDescription)}
-        open={importProviderOpen('chrome-passwords')}
-        onToggle={() => toggleImportProvider('chrome-passwords')}
+        open={importProviderOpen("chrome-passwords")}
+        onToggle={() => toggleImportProvider("chrome-passwords")}
         testId="chrome-passwords-import-section"
       >
         <ChromePasswordsImportPanel
@@ -704,8 +708,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.DashlaneImportSource)}
         subtitle={vault.t(I18N_KEYS.DashlaneImportDescription)}
-        open={importProviderOpen('dashlane')}
-        onToggle={() => toggleImportProvider('dashlane')}
+        open={importProviderOpen("dashlane")}
+        onToggle={() => toggleImportProvider("dashlane")}
         testId="dashlane-import-section"
       >
         <DashlaneImportPanel
@@ -719,8 +723,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.GoogleAuthenticatorImportSource)}
         subtitle={vault.t(I18N_KEYS.GoogleAuthenticatorImportDescription)}
-        open={importProviderOpen('google-authenticator')}
-        onToggle={() => toggleImportProvider('google-authenticator')}
+        open={importProviderOpen("google-authenticator")}
+        onToggle={() => toggleImportProvider("google-authenticator")}
         testId="google-authenticator-import-section"
       >
         <GoogleAuthenticatorImportPanel
@@ -734,8 +738,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.BitwardenImportSource)}
         subtitle={vault.t(I18N_KEYS.BitwardenImportDescription)}
-        open={importProviderOpen('bitwarden')}
-        onToggle={() => toggleImportProvider('bitwarden')}
+        open={importProviderOpen("bitwarden")}
+        onToggle={() => toggleImportProvider("bitwarden")}
         testId="bitwarden-import-section"
       >
         <BitwardenImportPanel
@@ -749,8 +753,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.KeepassxcImportSource)}
         subtitle={vault.t(I18N_KEYS.KeepassxcImportDescription)}
-        open={importProviderOpen('keepassxc')}
-        onToggle={() => toggleImportProvider('keepassxc')}
+        open={importProviderOpen("keepassxc")}
+        onToggle={() => toggleImportProvider("keepassxc")}
         testId="keepassxc-import-section"
       >
         <KeePassXcImportPanel
@@ -764,8 +768,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.LastpassImportSource)}
         subtitle={vault.t(I18N_KEYS.LastpassImportDescription)}
-        open={importProviderOpen('lastpass')}
-        onToggle={() => toggleImportProvider('lastpass')}
+        open={importProviderOpen("lastpass")}
+        onToggle={() => toggleImportProvider("lastpass")}
         testId="lastpass-import-section"
       >
         <LastPassImportPanel
@@ -779,8 +783,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.KeeperImportSource)}
         subtitle={vault.t(I18N_KEYS.KeeperImportDescription)}
-        open={importProviderOpen('keeper')}
-        onToggle={() => toggleImportProvider('keeper')}
+        open={importProviderOpen("keeper")}
+        onToggle={() => toggleImportProvider("keeper")}
         testId="keeper-import-section"
       >
         <KeeperImportPanel
@@ -794,8 +798,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.OnepasswordImportSource)}
         subtitle={vault.t(I18N_KEYS.OnepasswordImportDescription)}
-        open={importProviderOpen('onepassword')}
-        onToggle={() => toggleImportProvider('onepassword')}
+        open={importProviderOpen("onepassword")}
+        onToggle={() => toggleImportProvider("onepassword")}
         testId="onepassword-import-section"
       >
         <OnePasswordImportPanel
@@ -809,8 +813,8 @@
       <SettingsAccordionSection
         title={vault.t(I18N_KEYS.ProtonPassImportSource)}
         subtitle={vault.t(I18N_KEYS.ProtonPassImportDescription)}
-        open={importProviderOpen('proton-pass')}
-        onToggle={() => toggleImportProvider('proton-pass')}
+        open={importProviderOpen("proton-pass")}
+        onToggle={() => toggleImportProvider("proton-pass")}
         testId="proton-pass-import-section"
       >
         <ProtonPassImportPanel

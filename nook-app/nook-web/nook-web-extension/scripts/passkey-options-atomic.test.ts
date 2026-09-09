@@ -26,7 +26,7 @@ function pairingGrant(id: string): StoredExtensionPairingGrant {
 
 describe('website passkey options', () => {
   test('rejects all vault options when any vault returns a malformed list', async () => {
-    const [{ websitePasskeyOptions }, { WebsitePasskeyRequestContextKind }] =
+    const [{ websitePasskeyRequests }, { WebsitePasskeyRequestContextKind }] =
       await Promise.all([
         import('../src/background/service-worker/passkey-operations'),
         import('../src/background/service-worker/pairing-identity'),
@@ -68,7 +68,9 @@ describe('website passkey options', () => {
       })),
       sendSessionMessage,
     }
-    const args: Parameters<typeof websitePasskeyOptions>[0] = {
+    const args: Parameters<
+      typeof websitePasskeyRequests.websitePasskeyOptions
+    >[0] = {
       message: {
         type: WebsitePasskeyOptionsMessageType.NookWebsitePasskeyOptions,
         payload: {
@@ -82,7 +84,9 @@ describe('website passkey options', () => {
       dependencies,
     }
 
-    await expect(websitePasskeyOptions(args)).resolves.toEqual({
+    await expect(
+      websitePasskeyRequests.websitePasskeyOptions(args),
+    ).resolves.toEqual({
       ok: true,
       status: WebsitePasskeyOptionsStatus.Invalid,
       options: [],

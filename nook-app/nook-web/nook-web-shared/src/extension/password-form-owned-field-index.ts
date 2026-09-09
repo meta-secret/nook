@@ -20,7 +20,7 @@ const EMPTY_OWNED_AUTHENTICATION_FIELDS: OwnedAuthenticationFields = {
   oneTimeCodeFields: [],
 };
 
-class OwnedAuthenticationFieldIndex {
+export class OwnedAuthenticationFieldIndex {
   readonly passwordFieldsSource: readonly HTMLInputElement[];
   readonly usernameFieldsSource: readonly HTMLInputElement[];
   readonly oneTimeCodeFieldsSource: readonly HTMLInputElement[];
@@ -79,28 +79,27 @@ class OwnedAuthenticationFieldIndex {
     if (field.form)
       this.mutableFieldsFor(field.form).oneTimeCodeFields.push(field);
   }
-}
+  private static readonly indexesByPasswordFieldSource = new WeakMap<
+    readonly HTMLInputElement[],
+    OwnedAuthenticationFieldIndex
+  >();
 
-const indexesByPasswordFieldSource = new WeakMap<
-  readonly HTMLInputElement[],
-  OwnedAuthenticationFieldIndex
->();
-
-export function ownedAuthenticationFields({
-  owner,
-  passwordFields,
-  usernameFields,
-  oneTimeCodeFields,
-}: OwnedAuthenticationFieldsRequest): OwnedAuthenticationFields {
-  const fields: OwnedAuthenticationFields = {
+  static fields({
+    owner,
     passwordFields,
     usernameFields,
     oneTimeCodeFields,
-  };
-  let index = indexesByPasswordFieldSource.get(passwordFields);
-  if (!index || !index.matches(fields)) {
-    index = new OwnedAuthenticationFieldIndex(fields);
-    indexesByPasswordFieldSource.set(passwordFields, index);
+  }: OwnedAuthenticationFieldsRequest): OwnedAuthenticationFields {
+    const fields: OwnedAuthenticationFields = {
+      passwordFields,
+      usernameFields,
+      oneTimeCodeFields,
+    };
+    let index = this.indexesByPasswordFieldSource.get(passwordFields);
+    if (!index || !index.matches(fields)) {
+      index = new OwnedAuthenticationFieldIndex(fields);
+      this.indexesByPasswordFieldSource.set(passwordFields, index);
+    }
+    return index.fieldsFor(owner);
   }
-  return index.fieldsFor(owner);
 }

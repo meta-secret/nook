@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'vitest'
-import { sentinelGenesisLinkBaseForWorkspace } from '$lib/enrollment/sentinel-genesis-link'
+import { sentinelGenesisBrowser } from '$lib/enrollment/sentinel-genesis-link'
 
 describe('Sentinel Genesis links', () => {
   test('uses the configured public origin and the current canonical workspace', () => {
     expect(
-      sentinelGenesisLinkBaseForWorkspace({
+      sentinelGenesisBrowser.sentinelGenesisLinkBaseForWorkspace({
         enrollmentLinkBase: 'https://public.nook.example/app/',
         currentLocation:
           'https://preview.internal.example/vault/?preview=919#ignored',
@@ -14,7 +14,7 @@ describe('Sentinel Genesis links', () => {
 
   test('strips the unified preview mount from the public ceremony link', () => {
     expect(
-      sentinelGenesisLinkBaseForWorkspace({
+      sentinelGenesisBrowser.sentinelGenesisLinkBaseForWorkspace({
         enrollmentLinkBase: 'https://public.nook.example/',
         currentLocation:
           'https://preview.internal.example/sentinel/vault#ignored',

@@ -11,15 +11,12 @@ import {
   companion_authentication_workflow_match_kind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { clickAdvanceControl } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
+import { authenticationSubmissionControls } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import type { FakeLoginCredentials } from './companion-credential-fill-simulation'
 
 const TESLA_FAKE_CREDENTIALS: FakeLoginCredentials = {
@@ -186,15 +183,20 @@ class TeslaAuthenticationFixture {
     fixture.primary.addEventListener('click', () => {
       primaryState = TeslaFixtureControlState.Activated
     })
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected rejected Tesla form')
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
       usernameField: fixture.email,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(primaryState).toBe(TeslaFixtureControlState.Untouched)
     expect(fixture.email.value).toBe(TESLA_FAKE_CREDENTIALS.username)
   }
@@ -209,7 +211,8 @@ describe('Tesla DOM-backed authentication simulation', () => {
   test('fills only Email, enables Next, and activates it exactly once', () => {
     expect(location.href).toBe('https://auth.tesla.com/oauth2/v1/authorize')
     const fixture = TeslaAuthenticationFixture.stable().install()
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     const [observation] = observations
     if (!observation) throw new Error('expected Tesla observation')
@@ -231,7 +234,7 @@ describe('Tesla DOM-backed authentication simulation', () => {
     expect(fixture.email.type).toBe('text')
     expect(fixture.primary.disabled).toBe(true)
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -272,13 +275,15 @@ describe('Tesla DOM-backed authentication simulation', () => {
     fixture.email.value = TESLA_FAKE_CREDENTIALS.username
     fixture.email.dispatchEvent(new InputEvent('input', { bubbles: true }))
     expect(fixture.primary.disabled).toBe(false)
-    const refreshedObservation = summarizeAuthenticationWorkflowForms()[0]
+    const refreshedObservation =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
     if (!refreshedObservation) throw new Error('expected enabled Tesla form')
-    const refreshedFacts = authenticationPageObservationFacts({
-      observation: refreshedObservation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const refreshedFacts =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: refreshedObservation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     const refreshedAdvanceControl = refreshedFacts.detailedAdvanceControl
     if (
       !refreshedAdvanceControl ||
@@ -293,7 +298,9 @@ describe('Tesla DOM-backed authentication simulation', () => {
     ).toBe(true)
     fixture.email.value = ''
     fixture.email.dispatchEvent(new InputEvent('input', { bubbles: true }))
-    const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
+    const fillRequest: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: refreshedObservation.root,
       formScope: refreshedObservation.formScope,
@@ -309,15 +316,17 @@ describe('Tesla DOM-backed authentication simulation', () => {
         alternativesState = TeslaFixtureControlState.Activated
       })
     }
-    expect(fillLoginCredentials(fillRequest)).toBe(true)
+    expect(passwordFormInteraction.fillLoginCredentials(fillRequest)).toBe(true)
     expect(fixture.email.value).toBe(TESLA_FAKE_CREDENTIALS.username)
     expect(fixture.primary.disabled).toBe(false)
-    const submissionRequest: Parameters<typeof submitLoginForm>[0] = {
+    const submissionRequest: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: refreshedObservation.root,
       formScope: refreshedObservation.formScope,
     }
-    expect(submitLoginForm(submissionRequest)).toBe(
+    expect(passwordFormInteraction.submitLoginForm(submissionRequest)).toBe(
       FormSubmissionResult.Submitted,
     )
     expect(primaryActivationCount).toBe(1)
@@ -341,16 +350,21 @@ describe('Tesla DOM-backed authentication simulation', () => {
 
   test('rejects Next while the observed empty-state control is disabled', () => {
     const fixture = TeslaAuthenticationFixture.stable().install()
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected inert Tesla form')
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
       usernameField: fixture.email,
     }
     expect(fixture.primary.disabled).toBe(true)
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(fixture.email.value).toBe('')
   })
 

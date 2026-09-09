@@ -1,7 +1,7 @@
 import { NookBrowserLocale } from "$app-wasm";
 import {
   EnrollmentLocationKind,
-  consumeEnrollmentFromLocation,
+  enrollmentBrowser,
 } from "$lib/enrollment/code";
 import type { VaultIdleSessionTracker } from "$lib/vault/idle-session-tracker";
 import { VaultStateSlices } from "$lib/vault/state/index.svelte";
@@ -51,20 +51,20 @@ export type EnrollmentLink =
   | { kind: EnrollmentLinkKind.Absent }
   | { kind: EnrollmentLinkKind.Pending; payload: string };
 
-function initialEnrollmentLink(): EnrollmentLink {
-  if (!("window" in globalThis)) return { kind: EnrollmentLinkKind.Absent };
-  const enrollment = consumeEnrollmentFromLocation();
-  return enrollment.kind === EnrollmentLocationKind.Consumed
-    ? { kind: EnrollmentLinkKind.Pending, payload: enrollment.payload }
-    : { kind: EnrollmentLinkKind.Absent };
-}
-
 type LifecycleSyncSchedule = {
   readonly callback: () => void;
   readonly intervalMs: number;
 };
 
 export class VaultLifecycleState extends VaultStateSlices {
+  private static initialEnrollmentLink(): EnrollmentLink {
+    if (!("window" in globalThis)) return { kind: EnrollmentLinkKind.Absent };
+    const enrollment = enrollmentBrowser.consumeEnrollmentFromLocation();
+    return enrollment.kind === EnrollmentLocationKind.Consumed
+      ? { kind: EnrollmentLinkKind.Pending, payload: enrollment.payload }
+      : { kind: EnrollmentLinkKind.Absent };
+  }
+
   constructor() {
     super(new VaultRuntimeSliceState(new NookBrowserLocale()));
   }
@@ -172,7 +172,8 @@ export class VaultLifecycleState extends VaultStateSlices {
     this.initialization = { kind: VaultInitializationKind.NotStarted };
   }
 
-  private enrollmentLink: EnrollmentLink = initialEnrollmentLink();
+  private enrollmentLink: EnrollmentLink =
+    VaultLifecycleState.initialEnrollmentLink();
 
   get enrollmentLinkState(): EnrollmentLink {
     return this.enrollmentLink;

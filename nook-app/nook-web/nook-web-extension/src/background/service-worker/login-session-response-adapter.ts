@@ -1,6 +1,6 @@
 import {
   type WebsiteLoginFillResponse,
-  isWebsiteLoginFillResponse,
+  WebsiteLoginOptionsMessage as WebsiteLoginOptionsMessageSchema,
 } from '../../lib/login-fill-messages'
 import { NookWebsiteLoginSaveDecision } from '../../lib/login-save-messages'
 import type { AuthenticationOutcomeVerdict } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
@@ -20,7 +20,7 @@ export function decodeWebsiteLoginFillResponse(
   if (
     response &&
     typeof response === 'object' &&
-    isWebsiteLoginFillResponse(response)
+    WebsiteLoginOptionsMessageSchema.isWebsiteLoginFillResponse(response)
   ) {
     return response
   }

@@ -1,26 +1,21 @@
 import { afterEach, describe, expect, test } from 'vitest'
+import { authenticationSubmissionBridge } from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 import {
-  installIsolatedAuthenticationDirectSubmitBridge,
-  installPageAuthenticationDirectSubmitBridge,
-} from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
-import {
-  authenticationPageObservationFacts,
-  clearLoginCredentials,
-  fillLoginCredentials,
   FormSubmissionResult,
   PasswordFormQueryKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormCredentialInteraction,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 function observedAuthenticationWorkflow() {
-  const observation = summarizeAuthenticationWorkflowForms()[0]
+  const observation =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
 
 function authenticationFacts() {
-  return authenticationPageObservationFacts({
+  return passwordFormInteraction.authenticationPageObservationFacts({
     observation: observedAuthenticationWorkflow(),
     authenticatorSetupHint: false,
     backupCodesHint: false,
@@ -28,12 +23,14 @@ function authenticationFacts() {
 }
 
 function fillTrackedCredentials() {
-  const request: Parameters<typeof fillLoginCredentials>[0] = {
+  const request: Parameters<
+    typeof passwordFormInteraction.fillLoginCredentials
+  >[0] = {
     credentials: { username: 'vault-user', password: 'vault-password' },
     kind: PasswordFormQueryKind.Root,
     root: document,
   }
-  expect(fillLoginCredentials(request)).toBe(true)
+  expect(passwordFormInteraction.fillLoginCredentials(request)).toBe(true)
   return request
 }
 
@@ -181,7 +178,7 @@ describe('credential submission observation facts', () => {
       .querySelector<HTMLFieldSetElement>('#password-fields')
       ?.setAttribute('disabled', '')
     expect(
-      fillLoginCredentials({
+      passwordFormInteraction.fillLoginCredentials({
         credentials: { username: 'vault-user', password: 'vault-password' },
         kind: PasswordFormQueryKind.Root,
         root: document,
@@ -216,7 +213,7 @@ describe('credential submission observation facts', () => {
     })
 
     expect(
-      fillLoginCredentials({
+      passwordFormInteraction.fillLoginCredentials({
         credentials: { username: 'vault-user', password: 'vault-password' },
         kind: PasswordFormQueryKind.Root,
         root: document,
@@ -250,16 +247,21 @@ describe('credential submission observation facts', () => {
       form.append(userPassword)
       form.action = '/capture'
     })
-    const request: Parameters<typeof submitLoginForm>[0] = {
+    const request: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       kind: PasswordFormQueryKind.Root,
       root: document,
       submissionApproval: {
         isApproved: () => form.action === approvedAction,
-        reject: () => clearLoginCredentials(fillRequest),
+        reject: () =>
+          passwordFormCredentialInteraction.clearLoginCredentials(fillRequest),
       },
     }
 
-    expect(submitLoginForm(request)).toBe(FormSubmissionResult.Rejected)
+    expect(passwordFormInteraction.submitLoginForm(request)).toBe(
+      FormSubmissionResult.Rejected,
+    )
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -290,16 +292,21 @@ describe('credential submission observation facts', () => {
     )
     form.addEventListener('submit', (event) => event.preventDefault())
     const clearRequest = fillTrackedCredentials()
-    const request: Parameters<typeof submitLoginForm>[0] = {
+    const request: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       kind: PasswordFormQueryKind.Root,
       root: document,
       submissionApproval: {
         isApproved: () => form.action === approvedAction,
-        reject: () => clearLoginCredentials(clearRequest),
+        reject: () =>
+          passwordFormCredentialInteraction.clearLoginCredentials(clearRequest),
       },
     }
 
-    expect(submitLoginForm(request)).toBe(FormSubmissionResult.Rejected)
+    expect(passwordFormInteraction.submitLoginForm(request)).toBe(
+      FormSubmissionResult.Rejected,
+    )
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -319,8 +326,8 @@ describe('credential submission observation facts', () => {
     const approvedAction = button.formAction
     const clearRequest = fillTrackedCredentials()
     testCleanups.push(
-      installIsolatedAuthenticationDirectSubmitBridge(),
-      installPageAuthenticationDirectSubmitBridge(),
+      authenticationSubmissionBridge.installIsolatedAuthenticationDirectSubmitBridge(),
+      authenticationSubmissionBridge.installPageAuthenticationDirectSubmitBridge(),
     )
     const pageSubmit = HTMLFormElement.prototype.submit
     let submits = 0
@@ -334,12 +341,15 @@ describe('credential submission observation facts', () => {
       true,
     )
     expect(
-      submitLoginForm({
+      passwordFormInteraction.submitLoginForm({
         kind: PasswordFormQueryKind.Root,
         root: document,
         submissionApproval: {
           isApproved: () => button.formAction === approvedAction,
-          reject: () => clearLoginCredentials(clearRequest),
+          reject: () =>
+            passwordFormCredentialInteraction.clearLoginCredentials(
+              clearRequest,
+            ),
         },
       }),
     ).toBe(FormSubmissionResult.Rejected)
@@ -369,7 +379,7 @@ describe('credential submission observation facts', () => {
     )
 
     expect(
-      submitLoginForm({
+      passwordFormInteraction.submitLoginForm({
         kind: PasswordFormQueryKind.Root,
         root: document,
         submissionApproval: { isApproved: () => true, reject: () => {} },
@@ -398,7 +408,7 @@ describe('credential submission observation facts', () => {
     `
     const latestFill = fillTrackedCredentials()
 
-    clearLoginCredentials(latestFill)
+    passwordFormCredentialInteraction.clearLoginCredentials(latestFill)
 
     expect(oldPassword.value).toBe('user-retained')
     expect(
@@ -425,12 +435,15 @@ describe('credential submission observation facts', () => {
     const clearRequest = fillTrackedCredentials()
 
     expect(
-      submitLoginForm({
+      passwordFormInteraction.submitLoginForm({
         kind: PasswordFormQueryKind.Root,
         root: document,
         submissionApproval: {
           isApproved: () => true,
-          reject: () => clearLoginCredentials(clearRequest),
+          reject: () =>
+            passwordFormCredentialInteraction.clearLoginCredentials(
+              clearRequest,
+            ),
         },
       }),
     ).toBe(FormSubmissionResult.Rejected)

@@ -20,10 +20,7 @@ import {
   belongs_to_simple_vault,
   normalize_simple_vault_base_url,
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import {
-  defaultSimpleVaultBaseUrl,
-  sentinelVaultBaseUrl,
-} from '../../src/lib/simple-vault-target'
+import { SimpleVaultTarget } from '../../src/lib/simple-vault-target'
 import { startMockAuthServer } from '../mock-auth'
 import { waitForExtensionPairingReady } from './extension-approval'
 import {
@@ -39,7 +36,7 @@ export {
   attachNookLogsForTest,
   installMockPasskeyRuntime,
   lockExtensionSession,
-  sentinelVaultBaseUrl,
+  SimpleVaultTarget,
   readPersistedAppLogs,
   readExtensionPersistenceSnapshot,
   waitForExtensionPairingReady,
@@ -110,7 +107,7 @@ export const connectedSetupState = {
   lastLocalSyncAt: '2026-07-07T00:00:00.000Z',
 }
 export const simpleVaultBaseUrl = normalize_simple_vault_base_url(
-  process.env.NOOK_SIMPLE_VAULT_URL || defaultSimpleVaultBaseUrl(),
+  process.env.NOOK_SIMPLE_VAULT_URL || SimpleVaultTarget.defaultBase(),
 )
 
 /**
@@ -120,7 +117,7 @@ export const simpleVaultBaseUrl = normalize_simple_vault_base_url(
  */
 export function e2eSentinelVaultBaseUrl(): string {
   try {
-    return sentinelVaultBaseUrl(simpleVaultBaseUrl)
+    return new SimpleVaultTarget(simpleVaultBaseUrl).sentinelBase
   } catch {
     return 'https://sentinel.nokey.sh/'
   }

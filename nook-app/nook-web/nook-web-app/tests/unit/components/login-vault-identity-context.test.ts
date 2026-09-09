@@ -4,7 +4,7 @@ import {
   type NookIdentitySnapshot,
   type NookVaultManager,
 } from '$app-wasm'
-import { loadLoginVaultIdentityContext } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
+import { LoginVaultIdentityReader } from '../../../../nook-web-shared/src/vault-app/lib/components/login/login-vault-identity-context'
 
 function linkedIdentity(
   identityId: string,
@@ -68,10 +68,10 @@ describe('login vault identity context', () => {
       currentIdentity: ['identity-personal', 'Personal'],
     })
 
-    const context = await loadLoginVaultIdentityContext({
+    const context = await new LoginVaultIdentityReader({
       manager,
       storeId: 'store_selectedvault',
-    })
+    }).execute()
 
     expect(selectedVaultRequest).toHaveBeenCalledWith('store_selectedvault')
     expect(context).toEqual({
@@ -93,10 +93,10 @@ describe('login vault identity context', () => {
       identities: [['identity-work', 'Work']],
     })
 
-    const context = await loadLoginVaultIdentityContext({
+    const context = await new LoginVaultIdentityReader({
       manager,
       storeId: 'store_selectedvault',
-    })
+    }).execute()
 
     expect(context).toEqual({
       kind: NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent,
@@ -111,10 +111,10 @@ describe('login vault identity context', () => {
       identities: [],
     })
 
-    const context = await loadLoginVaultIdentityContext({
+    const context = await new LoginVaultIdentityReader({
       manager,
       storeId: 'store_selectedvault',
-    })
+    }).execute()
 
     expect(context).toEqual({
       kind: NookSelectedVaultIdentityContextKind.Empty,

@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import {
-  authenticationRecoveryCopy,
-  pageHasDocumentBackupCodeHint,
-} from '../../../../nook-web-extension/src/lib/backup-code-candidates'
+import { recoveryCopyObservation } from '../../../../nook-web-extension/src/lib/backup-code-candidates'
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -15,9 +12,13 @@ describe('backup-code presentation evidence', () => {
       <ul><li>A1B2-C3D4-E5F6</li></ul>
     `
 
-    expect(authenticationRecoveryCopy()).toBe('Save your recovery codes')
-    expect(authenticationRecoveryCopy()).not.toContain('A1B2-C3D4-E5F6')
-    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).toBe(
+      'Save your recovery codes',
+    )
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).not.toContain(
+      'A1B2-C3D4-E5F6',
+    )
+    expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
   })
 
   test('drops mixed instructional copy that contains an inline secret', () => {
@@ -26,9 +27,13 @@ describe('backup-code presentation evidence', () => {
       <h1>Backup codes</h1>
     `
 
-    expect(authenticationRecoveryCopy()).toBe('Backup codes')
-    expect(authenticationRecoveryCopy()).not.toContain('A1B2-C3D4-E5F6')
-    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).toBe(
+      'Backup codes',
+    )
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).not.toContain(
+      'A1B2-C3D4-E5F6',
+    )
+    expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
   })
 
   test('keeps digit-format instructions without mixing separate elements', () => {
@@ -38,10 +43,10 @@ describe('backup-code presentation evidence', () => {
       <p>Save this device</p>
     `
 
-    expect(authenticationRecoveryCopy()).toBe(
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).toBe(
       'Save your 8-digit backup codes somewhere secure.',
     )
-    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+    expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
   })
 
   test('uses visible instructional paragraphs but excludes hidden and code-bearing copy', () => {
@@ -53,13 +58,19 @@ describe('backup-code presentation evidence', () => {
       <button>Copy A1B2-C3D4-E5F6</button>
     `
 
-    expect(authenticationRecoveryCopy()).toBe(
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).toBe(
       'Save these recovery codes somewhere secure. Backup codes',
     )
-    expect(authenticationRecoveryCopy()).not.toContain('hidden')
-    expect(authenticationRecoveryCopy()).not.toContain('inactive')
-    expect(authenticationRecoveryCopy()).not.toContain('A1B2-C3D4-E5F6')
-    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).not.toContain(
+      'hidden',
+    )
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).not.toContain(
+      'inactive',
+    )
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).not.toContain(
+      'A1B2-C3D4-E5F6',
+    )
+    expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
   })
 
   test('rejects backup-code login and ordinary OTP copy', () => {
@@ -69,7 +80,9 @@ describe('backup-code presentation evidence', () => {
       'One-time code',
     ]) {
       document.body.innerHTML = `<h1>${heading}</h1>`
-      expect(pageHasDocumentBackupCodeHint()).toBe(false)
+      expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(
+        false,
+      )
     }
   })
 
@@ -79,7 +92,9 @@ describe('backup-code presentation evidence', () => {
       <p>Save these recovery codes somewhere secure.</p>
     `
 
-    expect(authenticationRecoveryCopy()).toContain('Save these recovery codes')
-    expect(pageHasDocumentBackupCodeHint()).toBe(true)
+    expect(recoveryCopyObservation.authenticationRecoveryCopy()).toContain(
+      'Save these recovery codes',
+    )
+    expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
   })
 })

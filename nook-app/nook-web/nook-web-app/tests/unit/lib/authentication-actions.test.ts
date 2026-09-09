@@ -23,9 +23,7 @@ const actionMocks = vi.hoisted(() => ({
 vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
   clearLoginCredentials: actionMocks.clearLoginCredentials,
   fillGeneratedPassword: actionMocks.fillGeneratedPassword,
-  fillLoginCredentials: actionMocks.fillLoginCredentials,
   fillOneTimeCode: actionMocks.fillOneTimeCode,
-  findWorkflowPasskeyControl: actionMocks.findWorkflowPasskeyControl,
   FormSubmissionResult: {
     NotObserved: 'not-observed',
     Submitted: 'submitted',
@@ -33,7 +31,11 @@ vi.mock('../../../../nook-web-shared/src/extension/password-forms', () => ({
   },
   PasskeyControlLookupKind: { Absent: 'absent', Found: 'found' },
   PasswordFormQueryKind: { Scoped: 'scoped' },
-  submitLoginForm: actionMocks.submitLoginForm,
+  passwordFormInteraction: {
+    fillLoginCredentials: actionMocks.fillLoginCredentials,
+    findWorkflowPasskeyControl: actionMocks.findWorkflowPasskeyControl,
+    submitLoginForm: actionMocks.submitLoginForm,
+  },
 }))
 
 vi.mock(
@@ -54,11 +56,19 @@ vi.mock(
       Failed: 'failed',
       ControlMissing: 'control-missing',
     },
-    requiredAuthenticationObservationBinding: () => ({
-      kind: 'required',
-      token: 'rendered-observation',
-    }),
-    performRevalidatedAuthenticationAction: actionMocks.performRevalidation,
+    RevalidatedAuthenticationAction: class {
+      constructor(
+        private readonly request: ConstructorParameters<
+          typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction
+        >[0],
+      ) {}
+      execute() {
+        return actionMocks.performRevalidation(this.request)
+      }
+      static requiredAuthenticationObservationBinding() {
+        return { kind: 'required', token: 'rendered-observation' }
+      }
+    },
   }),
 )
 
@@ -69,7 +79,9 @@ vi.mock(
       Delivered: 'delivered',
       Unavailable: 'unavailable',
     },
-    sendLoginFillMessage: actionMocks.sendLoginFill,
+    loginFillRuntimeTransport: {
+      sendLoginFillMessage: actionMocks.sendLoginFill,
+    },
   }),
 )
 
@@ -80,31 +92,35 @@ vi.mock(
       Delivered: 'delivered',
       Unavailable: 'unavailable',
     },
-    sendAuthenticationWorkflowSnapshotRuntimeMessage: vi.fn(),
-    sendAuthenticationOutcomeRuntimeMessage: vi.fn(),
-    sendAuthenticatorBackupAttachRuntimeMessage: vi.fn(),
-    sendAuthenticatorCodeRuntimeMessage: actionMocks.sendAuthenticatorCode,
-    sendAuthenticatorEnrollmentConfirmRuntimeMessage: vi.fn(),
-    sendAuthenticatorEnrollmentStageRuntimeMessage: vi.fn(),
-    sendAuthenticatorOptionsRuntimeMessage: vi.fn(),
-    sendAuthenticatorPickerOpenRuntimeMessage: vi.fn(),
-    sendAuthenticatorPreviewRuntimeMessage: vi.fn(),
-    sendDecodedRuntimeMessage: vi.fn(),
-    sendGeneratePasswordRuntimeMessage: actionMocks.sendGeneratePassword,
-    sendLoginOptionsRuntimeMessage: vi.fn(),
-    sendLoginPickerOpenRuntimeMessage: vi.fn(),
-    sendLoginSaveActionRuntimeMessage: vi.fn(),
-    sendLoginSaveOfferRuntimeMessage: vi.fn(),
-    sendLoginSavePendingRuntimeMessage: vi.fn(),
-    sendRuntimeMessageWithoutResponse: vi.fn(),
+    authenticationRuntimeTransport: {
+      sendAuthenticationWorkflowSnapshotRuntimeMessage: vi.fn(),
+      sendAuthenticationOutcomeRuntimeMessage: vi.fn(),
+      sendAuthenticatorBackupAttachRuntimeMessage: vi.fn(),
+      sendAuthenticatorCodeRuntimeMessage: actionMocks.sendAuthenticatorCode,
+      sendAuthenticatorEnrollmentConfirmRuntimeMessage: vi.fn(),
+      sendAuthenticatorEnrollmentStageRuntimeMessage: vi.fn(),
+      sendAuthenticatorOptionsRuntimeMessage: vi.fn(),
+      sendAuthenticatorPickerOpenRuntimeMessage: vi.fn(),
+      sendAuthenticatorPreviewRuntimeMessage: vi.fn(),
+      sendDecodedRuntimeMessage: vi.fn(),
+      sendGeneratePasswordRuntimeMessage: actionMocks.sendGeneratePassword,
+      sendLoginOptionsRuntimeMessage: vi.fn(),
+      sendLoginPickerOpenRuntimeMessage: vi.fn(),
+      sendLoginSaveActionRuntimeMessage: vi.fn(),
+      sendLoginSaveOfferRuntimeMessage: vi.fn(),
+      sendLoginSavePendingRuntimeMessage: vi.fn(),
+      sendRuntimeMessageWithoutResponse: vi.fn(),
+    },
   }),
 )
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-ui',
   () => ({
-    setFlightProgress: vi.fn(),
-    translatedMessage: (key: string) => key,
+    workflowUi: {
+      setFlightProgress: vi.fn(),
+      translatedMessage: (key: string) => key,
+    },
   }),
 )
 
@@ -114,14 +130,9 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
   pickerState: {},
   widgetState: { busy: false, credentialActuationInFlight: false },
 }))
-
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
-import { fillAuthenticatorCode } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'
-import {
-  fillAndSubmitAccount,
-  generatePasswordWithNook,
-  proposePasskeyWithNook,
-} from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
+import { authenticatorInteraction } from '../../../../nook-web-extension/src/content/autofill/authenticator-actions'
+import { loginPasskeyInteraction } from '../../../../nook-web-extension/src/content/autofill/login-passkey-actions'
 
 const workflow = {
   root: document,
@@ -235,7 +246,7 @@ describe('revalidated authentication actions', () => {
     })
 
     await expect(
-      fillAndSubmitAccount({
+      loginPasskeyInteraction.fillAndSubmitAccount({
         account: {
           vaultStoreId: 'vault',
           secretId: 'login',
@@ -274,7 +285,7 @@ describe('revalidated authentication actions', () => {
     })
 
     await expect(
-      fillAuthenticatorCode({
+      authenticatorInteraction.fillAuthenticatorCode({
         account: { vaultStoreId: 'vault', secretId: 'otp' },
         workflow,
         approval,
@@ -292,7 +303,7 @@ describe('revalidated authentication actions', () => {
     const delivery = deferred<{ kind: string; response: typeof response }>()
     actionMocks.sendLoginFill.mockReturnValue(delivery.promise)
     const ui = controls()
-    const pending = fillAndSubmitAccount({
+    const pending = loginPasskeyInteraction.fillAndSubmitAccount({
       account: {
         vaultStoreId: 'vault',
         secretId: 'login',
@@ -320,7 +331,7 @@ describe('revalidated authentication actions', () => {
     const delivery = deferred<{ kind: string; response: typeof response }>()
     actionMocks.sendAuthenticatorCode.mockReturnValue(delivery.promise)
     const ui = controls()
-    const pending = fillAuthenticatorCode({
+    const pending = authenticatorInteraction.fillAuthenticatorCode({
       account: { vaultStoreId: 'vault', secretId: 'otp' },
       workflow,
       approval,
@@ -345,7 +356,7 @@ describe('revalidated authentication actions', () => {
     const delivery = deferred<{ kind: string; response: typeof response }>()
     actionMocks.sendGeneratePassword.mockReturnValue(delivery.promise)
     const ui = controls()
-    const pending = generatePasswordWithNook({
+    const pending = loginPasskeyInteraction.generatePasswordWithNook({
       workflow,
       approval,
       ...ui,
@@ -371,7 +382,7 @@ describe('revalidated authentication actions', () => {
     const ui = controls()
     document.body.append(ui.continueButton)
 
-    await proposePasskeyWithNook({
+    await loginPasskeyInteraction.proposePasskeyWithNook({
       description: ui.description,
       continueButton: ui.continueButton,
       action: AuthenticationWorkflowAction.UsePasskey,
@@ -380,7 +391,7 @@ describe('revalidated authentication actions', () => {
     })
     expect(click).not.toHaveBeenCalled()
 
-    await proposePasskeyWithNook({
+    await loginPasskeyInteraction.proposePasskeyWithNook({
       description: ui.description,
       continueButton: ui.continueButton,
       action: AuthenticationWorkflowAction.UsePasskey,
@@ -405,7 +416,7 @@ describe('revalidated authentication actions', () => {
       return { kind: 'rejected' }
     })
 
-    await proposePasskeyWithNook({
+    await loginPasskeyInteraction.proposePasskeyWithNook({
       description: ui.description,
       continueButton: ui.continueButton,
       action: AuthenticationWorkflowAction.UsePasskey,
@@ -448,7 +459,7 @@ describe('revalidated authentication actions', () => {
     }))
 
     await expect(
-      fillAndSubmitAccount({
+      loginPasskeyInteraction.fillAndSubmitAccount({
         account: {
           vaultStoreId: 'vault',
           secretId: 'login',
@@ -495,7 +506,7 @@ describe('revalidated authentication actions', () => {
     })
 
     await expect(
-      fillAndSubmitAccount({
+      loginPasskeyInteraction.fillAndSubmitAccount({
         account: {
           vaultStoreId: 'vault',
           secretId: 'login',
@@ -537,7 +548,7 @@ describe('revalidated authentication actions', () => {
     })
 
     await expect(
-      fillAndSubmitAccount({
+      loginPasskeyInteraction.fillAndSubmitAccount({
         account: {
           vaultStoreId: 'vault',
           secretId: 'login',
@@ -568,7 +579,7 @@ describe('revalidated authentication actions', () => {
     })
 
     await expect(
-      fillAuthenticatorCode({
+      authenticatorInteraction.fillAuthenticatorCode({
         account: { vaultStoreId: 'vault', secretId: 'otp' },
         workflow,
         approval,
@@ -589,7 +600,11 @@ describe('revalidated authentication actions', () => {
       },
     })
 
-    await generatePasswordWithNook({ workflow, approval, ...controls() })
+    await loginPasskeyInteraction.generatePasswordWithNook({
+      workflow,
+      approval,
+      ...controls(),
+    })
 
     expect(actionMocks.performRevalidation).toHaveBeenCalledTimes(2)
     expect(actionMocks.performRevalidation.mock.calls[1]?.[0]).toMatchObject({

@@ -6,14 +6,12 @@ import {
   ExtensionSessionQueueKind,
 } from '../src/offscreen/session-request-adapter'
 import {
-  clearWebsitePasskeyRequests,
-  handleWebsitePasskeyOperation,
   type AssertPasskeyRequest,
   type CancelPasskeyRequest,
   type RegisterPasskeyRequest,
   type WebsitePasskeyOperationArgs,
-  websitePasskeyRequestIsActive,
   type WebsitePasskeyRequestActivityArgs,
+  sessionWebsitePasskeys,
 } from '../src/offscreen/session-website-passkey-operations'
 
 type MockManagerState = {
@@ -101,7 +99,7 @@ function assertRequest(requestId: string): AssertPasskeyRequest {
 
 describe('website passkey session operations', () => {
   test('cancellation blocks a ceremony until session reset cleanup', async () => {
-    clearWebsitePasskeyRequests()
+    sessionWebsitePasskeys.clearWebsitePasskeyRequests()
     const state: MockManagerState = {
       registrationContinuationObserved: false,
       assertionContinuationObserved: false,
@@ -117,20 +115,24 @@ describe('website passkey session operations', () => {
     }
 
     await expect(
-      handleWebsitePasskeyOperation(cancellationArgs),
+      sessionWebsitePasskeys.handleWebsitePasskeyOperation(cancellationArgs),
     ).resolves.toEqual({ ok: true })
     const canceledActivity: WebsitePasskeyRequestActivityArgs = {
       requestId: 'request-cancel',
       expiresAt: Date.now() + 60_000,
     }
-    expect(websitePasskeyRequestIsActive(canceledActivity)).toBe(false)
+    expect(
+      sessionWebsitePasskeys.websitePasskeyRequestIsActive(canceledActivity),
+    ).toBe(false)
 
-    clearWebsitePasskeyRequests()
-    expect(websitePasskeyRequestIsActive(canceledActivity)).toBe(true)
+    sessionWebsitePasskeys.clearWebsitePasskeyRequests()
+    expect(
+      sessionWebsitePasskeys.websitePasskeyRequestIsActive(canceledActivity),
+    ).toBe(true)
   })
 
   test('routes registration and assertion through the vault dependencies', async () => {
-    clearWebsitePasskeyRequests()
+    sessionWebsitePasskeys.clearWebsitePasskeyRequests()
     const state: MockManagerState = {
       registrationContinuationObserved: false,
       assertionContinuationObserved: false,
@@ -161,7 +163,7 @@ describe('website passkey session operations', () => {
     }
 
     await expect(
-      handleWebsitePasskeyOperation(registrationArgs),
+      sessionWebsitePasskeys.handleWebsitePasskeyOperation(registrationArgs),
     ).resolves.toEqual({
       ok: true,
       credentialId: 'registration-credential',
@@ -169,16 +171,16 @@ describe('website passkey session operations', () => {
       attestationObject: 'registration-attestation',
       transports: ['internal'],
     })
-    await expect(handleWebsitePasskeyOperation(assertionArgs)).resolves.toEqual(
-      {
-        ok: true,
-        credentialId: 'assertion-credential',
-        clientDataJSON: 'assertion-client-data',
-        authenticatorData: 'assertion-authenticator-data',
-        signature: 'assertion-signature',
-        userHandle: 'assertion-user-handle',
-      },
-    )
+    await expect(
+      sessionWebsitePasskeys.handleWebsitePasskeyOperation(assertionArgs),
+    ).resolves.toEqual({
+      ok: true,
+      credentialId: 'assertion-credential',
+      clientDataJSON: 'assertion-client-data',
+      authenticatorData: 'assertion-authenticator-data',
+      signature: 'assertion-signature',
+      userHandle: 'assertion-user-handle',
+    })
     expect(openCount).toBe(2)
     expect(flushCount).toBe(2)
     expect(state.registrationContinuationObserved).toBe(true)

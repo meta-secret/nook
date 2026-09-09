@@ -1,78 +1,60 @@
 import {
   GeneratePasswordRequestType,
-  isExtensionIdentityHandoffRequestMessage,
-  isExtensionPairedVaultIdentityDiscoveryMessage,
-  isExtensionPairedVaultIdentityHandoffRequestMessage,
-  isExtensionPairedVaultUnlockRequestMessage,
+  ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
+  ExtensionPairedVaultIdentityDiscoveryMessage as ExtensionPairedVaultIdentityDiscoveryMessageSchema,
+  ExtensionPairedVaultIdentityHandoffRequestMessage as ExtensionPairedVaultIdentityHandoffRequestMessageSchema,
+  ExtensionPairedVaultUnlockRequestMessage as ExtensionPairedVaultUnlockRequestMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
-import { normalizeOpenCompanionLauncherMessage } from '../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
+import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../../nook-web-shared/src/extension/companion-launcher-message'
 import { companionWasmReady } from '../../../nook-web-shared/src/extension/companion-ready'
-import { isAuthenticationWorkflowSnapshotMessage } from '../lib/auth-workflow-messages'
+import { AuthenticationWorkflowSnapshotMessage as AuthenticationWorkflowSnapshotMessageSchema } from '../lib/auth-workflow-messages'
 import {
-  isAuthenticatorPickerCancelMessage,
-  isAuthenticatorPickerQueryMessage,
-  isAuthenticatorPickerSelectMessage,
-  isWebsiteAuthenticatorPickerOpenMessage,
+  AuthenticatorPickerCancelMessage as AuthenticatorPickerCancelMessageSchema,
+  AuthenticatorPickerQueryMessage as AuthenticatorPickerQueryMessageSchema,
+  AuthenticatorPickerSelectMessage as AuthenticatorPickerSelectMessageSchema,
+  WebsiteAuthenticatorPickerOpenMessage as WebsiteAuthenticatorPickerOpenMessageSchema,
 } from '../lib/authenticator-picker-messages'
 import {
-  isWebsiteAuthenticatorBackupAttachMessage,
-  isWebsiteAuthenticatorEnrollCodeMessage,
-  isWebsiteAuthenticatorEnrollConfirmMessage,
-  isWebsiteAuthenticatorEnrollDismissMessage,
-  isWebsiteAuthenticatorEnrollPendingMessage,
-  isWebsiteAuthenticatorEnrollPreviewMessage,
-  isWebsiteAuthenticatorEnrollStageMessage,
+  WebsiteAuthenticatorBackupAttachMessage as WebsiteAuthenticatorBackupAttachMessageSchema,
+  WebsiteAuthenticatorEnrollCodeMessage as WebsiteAuthenticatorEnrollCodeMessageSchema,
+  WebsiteAuthenticatorEnrollConfirmMessage as WebsiteAuthenticatorEnrollConfirmMessageSchema,
+  WebsiteAuthenticatorEnrollDismissMessage as WebsiteAuthenticatorEnrollDismissMessageSchema,
+  WebsiteAuthenticatorEnrollPendingMessage as WebsiteAuthenticatorEnrollPendingMessageSchema,
+  WebsiteAuthenticatorEnrollPreviewMessage as WebsiteAuthenticatorEnrollPreviewMessageSchema,
+  WebsiteAuthenticatorEnrollStageMessage as WebsiteAuthenticatorEnrollStageMessageSchema,
 } from '../lib/enrollment-messages'
 import {
-  isWebsiteAuthenticatorFillMessage,
-  isWebsiteAuthenticatorOptionsMessage,
-  isWebsiteLoginOptionsMessage,
-  isWebsiteLoginRevealMessage,
+  WebsiteAuthenticatorFillMessage as WebsiteAuthenticatorFillMessageSchema,
+  WebsiteAuthenticatorOptionsMessage as WebsiteAuthenticatorOptionsMessageSchema,
+  WebsiteLoginOptionsMessage as WebsiteLoginOptionsMessageSchema,
+  WebsiteLoginRevealMessage as WebsiteLoginRevealMessageSchema,
 } from '../lib/login-fill-messages'
 import {
-  isLoginPickerCancelMessage,
-  isLoginPickerQueryMessage,
-  isLoginPickerSelectMessage,
-  isWebsiteLoginPickerOpenMessage,
+  LoginPickerCancelMessage as LoginPickerCancelMessageSchema,
+  LoginPickerQueryMessage as LoginPickerQueryMessageSchema,
+  LoginPickerSelectMessage as LoginPickerSelectMessageSchema,
+  WebsiteLoginPickerOpenMessage as WebsiteLoginPickerOpenMessageSchema,
 } from '../lib/login-picker-messages'
 import {
-  isWebsiteLoginSaveCommitMessage,
-  isWebsiteLoginSaveDismissMessage,
-  isWebsiteLoginSaveOfferMessage,
-  isWebsiteLoginSavePendingMessage,
+  WebsiteLoginSaveCommitMessage as WebsiteLoginSaveCommitMessageSchema,
+  WebsiteLoginSaveDismissMessage as WebsiteLoginSaveDismissMessageSchema,
+  WebsiteLoginSaveOfferMessage as WebsiteLoginSaveOfferMessageSchema,
+  WebsiteLoginSavePendingMessage as WebsiteLoginSavePendingMessageSchema,
 } from '../lib/login-save-messages'
-import { isAuthenticationOutcomeClassifyMessage } from '../lib/outcome-evidence-messages'
+import { AuthenticationOutcomeClassifyMessage as AuthenticationOutcomeClassifyMessageSchema } from '../lib/outcome-evidence-messages'
 import {
-  isWebsitePasskeyCancelMessage,
-  isWebsitePasskeyOptionsMessage,
-  isWebsitePasskeyPerformMessage,
+  WebsitePasskeyCancelMessage as WebsitePasskeyCancelMessageSchema,
+  WebsitePasskeyOptionsMessage as WebsitePasskeyOptionsMessageSchema,
+  WebsitePasskeyPerformMessage as WebsitePasskeyPerformMessageSchema,
 } from '../lib/webauthn-messages'
 import {
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
-  clearPendingAccountPickers,
   completeAccountPickerAuthorizationCleanup,
   releaseAccountPickerAuthorizationCleanup,
-  websiteLoginMatchAvailability,
-  websiteLoginOptions,
+  accountPickerSessions,
 } from './service-worker/account-pickers'
-import {
-  cancelAuthenticatorPicker,
-  clearStagedAuthenticatorEnrollments,
-  rebindStagedAuthenticatorEnrollmentsAuthorization,
-  openWebsiteAuthenticatorPicker,
-  queryAuthenticatorPicker,
-  selectAuthenticatorPicker,
-  websiteAuthenticatorBackupAttach,
-  websiteAuthenticatorEnrollCode,
-  websiteAuthenticatorEnrollConfirm,
-  websiteAuthenticatorEnrollDismiss,
-  websiteAuthenticatorEnrollPending,
-  websiteAuthenticatorEnrollPreview,
-  websiteAuthenticatorEnrollStage,
-  websiteAuthenticatorFill,
-  websiteAuthenticatorOptions,
-} from './service-worker/authenticator-operations'
+import { authenticatorEnrollmentOperations } from './service-worker/authenticator-operations'
 import {
   cancelLoginPicker,
   openWebsiteLoginPicker,
@@ -84,27 +66,14 @@ import {
   websiteLoginSaveOffer,
   websiteLoginSavePending,
 } from './service-worker/login-operations'
-import {
-  createIdentityHandoff,
-  createPairedIdentityHandoff,
-  discoverPairedVaultIdentity,
-  hasPairingApprovedType,
-  isAuthorizedWebsiteSender,
-  openExtensionPairing,
-  requestPairedVaultUnlock,
-} from './service-worker/pairing-identity'
+import { extensionPairingIdentity } from './service-worker/pairing-identity'
 import {
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
 } from './service-worker/pairing-import'
 import { handlePairingStateQuery } from './service-worker/pairing-state-query'
-import { isExtensionPairingStateQueryMessage } from '../lib/pairing-state'
-import {
-  cancelWebsitePasskey,
-  matchingPasskeyAvailabilityForOriginSafe,
-  performWebsitePasskey,
-  websitePasskeyOptions,
-} from './service-worker/passkey-operations'
+import { ExtensionPairingStateQueryMessage as ExtensionPairingStateQueryMessageSchema } from '../lib/pairing-state'
+import { websitePasskeyRequests } from './service-worker/passkey-operations'
 import {
   ExtensionLifecycleRoutingResult,
   recoverInterruptedAuthorizationCleanup,
@@ -118,12 +87,8 @@ import {
   authenticationWorkflowSavedLoginCapability,
 } from './service-worker/authentication-workflow-routing'
 import {
-  closeExtensionSessionDocument,
-  ensureExtensionSessionDocument,
   extensionSessionDocument,
-  openCompanionLauncher,
-  openSimpleVault,
-  refreshAuthenticationSurfaces,
+  extensionSessionLifecycle,
 } from './service-worker/session-lifecycle'
 import {
   isExtensionAuthenticationSurfacesRefreshMessage,
@@ -131,38 +96,61 @@ import {
   isExtensionSessionExpiryMessage,
   isExtensionSessionLockMessage,
 } from './service-worker/session-runtime-messages'
-import {
-  authenticationWorkflowSnapshot,
-  classifyAuthenticationOutcome,
-  generateSuggestedPassword,
-} from './vault-runtime'
+import { backgroundVaultRuntime } from './vault-runtime'
 
 const extensionLifecycleRoutingDependencies: Parameters<
   typeof routeExtensionLifecycleMessage
 >[0]['dependencies'] = {
   accountPickerAuthorizationCleanupPending,
   beginAccountPickerAuthorizationCleanup,
-  clearPendingAccountPickers,
-  clearStagedAuthenticatorEnrollments,
-  rebindStagedAuthenticatorEnrollmentsAuthorization,
-  closeExtensionSessionDocument,
+  clearPendingAccountPickers:
+    accountPickerSessions.clearPendingAccountPickers.bind(
+      accountPickerSessions,
+    ),
+  clearStagedAuthenticatorEnrollments:
+    authenticatorEnrollmentOperations.clearStagedAuthenticatorEnrollments.bind(
+      authenticatorEnrollmentOperations,
+    ),
+  rebindStagedAuthenticatorEnrollmentsAuthorization:
+    authenticatorEnrollmentOperations.rebindStagedAuthenticatorEnrollmentsAuthorization.bind(
+      authenticatorEnrollmentOperations,
+    ),
+  closeExtensionSessionDocument:
+    extensionSessionLifecycle.closeExtensionSessionDocument.bind(
+      extensionSessionLifecycle,
+    ),
   completeAccountPickerAuthorizationCleanup,
-  ensureExtensionSessionDocument,
+  ensureExtensionSessionDocument:
+    extensionSessionLifecycle.ensureExtensionSessionDocument.bind(
+      extensionSessionLifecycle,
+    ),
   extensionSessionDocument,
   handlePairingStateQuery,
-  hasPairingApprovedType,
+  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType.bind(
+    extensionPairingIdentity,
+  ),
   importLocalEventLogUpdate,
   importPairingAfterCompanionReady,
   isExtensionAuthenticationSurfacesRefreshMessage,
-  isExtensionPairingStateQueryMessage,
+  isExtensionPairingStateQueryMessage:
+    ExtensionPairingStateQueryMessageSchema.is,
   isExtensionSessionEnsureMessage,
   isExtensionSessionExpiryMessage,
   isExtensionSessionLockMessage,
-  openCompanionLauncher,
-  openExtensionPairing,
-  openSimpleVault,
+  openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
+    extensionSessionLifecycle,
+  ),
+  openExtensionPairing: extensionPairingIdentity.openExtensionPairing.bind(
+    extensionPairingIdentity,
+  ),
+  openSimpleVault: extensionSessionLifecycle.openSimpleVault.bind(
+    extensionSessionLifecycle,
+  ),
   releaseAccountPickerAuthorizationCleanup,
-  refreshAuthenticationSurfaces,
+  refreshAuthenticationSurfaces:
+    extensionSessionLifecycle.refreshAuthenticationSurfaces.bind(
+      extensionSessionLifecycle,
+    ),
 }
 
 void recoverInterruptedAuthorizationCleanup(
@@ -174,19 +162,42 @@ void recoverInterruptedAuthorizationCleanup(
 const externalCompanionRoutingDependencies: Parameters<
   typeof routeExternalCompanionMessage
 >[0]['dependencies'] = {
-  createIdentityHandoff,
-  createPairedIdentityHandoff,
-  discoverPairedVaultIdentity,
-  hasPairingApprovedType,
+  createIdentityHandoff: extensionPairingIdentity.createIdentityHandoff.bind(
+    extensionPairingIdentity,
+  ),
+  createPairedIdentityHandoff:
+    extensionPairingIdentity.createPairedIdentityHandoff.bind(
+      extensionPairingIdentity,
+    ),
+  discoverPairedVaultIdentity:
+    extensionPairingIdentity.discoverPairedVaultIdentity.bind(
+      extensionPairingIdentity,
+    ),
+  hasPairingApprovedType: extensionPairingIdentity.hasPairingApprovedType.bind(
+    extensionPairingIdentity,
+  ),
   importPairingAfterCompanionReady,
-  isExtensionIdentityHandoffRequestMessage,
-  isExtensionPairedVaultIdentityDiscoveryMessage,
-  isExtensionPairedVaultIdentityHandoffRequestMessage,
-  isExtensionPairedVaultUnlockRequestMessage,
-  normalizeOpenCompanionLauncherMessage,
-  openCompanionLauncher,
-  refreshAuthenticationSurfaces,
-  requestPairedVaultUnlock,
+  isExtensionIdentityHandoffRequestMessage:
+    ExtensionIdentityHandoffRequestMessageSchema.is,
+  isExtensionPairedVaultIdentityDiscoveryMessage:
+    ExtensionPairedVaultIdentityDiscoveryMessageSchema.is,
+  isExtensionPairedVaultIdentityHandoffRequestMessage:
+    ExtensionPairedVaultIdentityHandoffRequestMessageSchema.is,
+  isExtensionPairedVaultUnlockRequestMessage:
+    ExtensionPairedVaultUnlockRequestMessageSchema.is,
+  normalizeOpenCompanionLauncherMessage:
+    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
+  openCompanionLauncher: extensionSessionLifecycle.openCompanionLauncher.bind(
+    extensionSessionLifecycle,
+  ),
+  refreshAuthenticationSurfaces:
+    extensionSessionLifecycle.refreshAuthenticationSurfaces.bind(
+      extensionSessionLifecycle,
+    ),
+  requestPairedVaultUnlock:
+    extensionPairingIdentity.requestPairedVaultUnlock.bind(
+      extensionPairingIdentity,
+    ),
 }
 
 // eslint-disable-next-line max-params -- Chrome owns the runtime listener callback signature.
@@ -206,7 +217,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return lifecycleResult
   }
 
-  if (isWebsiteLoginPickerOpenMessage(message)) {
+  if (WebsiteLoginPickerOpenMessageSchema.is(message)) {
     const nookTypedArgs0_0: Parameters<typeof openWebsiteLoginPicker>[0] = {
       message,
       sender,
@@ -223,7 +234,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isLoginPickerQueryMessage(message)) {
+  if (LoginPickerQueryMessageSchema.is(message)) {
     const nookTypedArgs0_1: Parameters<typeof queryLoginPicker>[0] = {
       message,
       sender,
@@ -240,7 +251,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isLoginPickerSelectMessage(message)) {
+  if (LoginPickerSelectMessageSchema.is(message)) {
     const nookTypedArgs0_2: Parameters<typeof selectLoginPicker>[0] = {
       message,
       sender,
@@ -257,7 +268,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isLoginPickerCancelMessage(message)) {
+  if (LoginPickerCancelMessageSchema.is(message)) {
     const nookTypedArgs0_3: Parameters<typeof cancelLoginPicker>[0] = {
       message,
       sender,
@@ -274,11 +285,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorPickerOpenMessage(message)) {
+  if (WebsiteAuthenticatorPickerOpenMessageSchema.is(message)) {
     const nookTypedArgs0_4: Parameters<
-      typeof openWebsiteAuthenticatorPicker
+      typeof authenticatorEnrollmentOperations.openWebsiteAuthenticatorPicker
     >[0] = { message, sender }
-    void openWebsiteAuthenticatorPicker(nookTypedArgs0_4)
+    void authenticatorEnrollmentOperations
+      .openWebsiteAuthenticatorPicker(nookTypedArgs0_4)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs6: Parameters<typeof sendResponse>[0] = {
@@ -290,12 +302,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticatorPickerQueryMessage(message)) {
-    const nookTypedArgs0_5: Parameters<typeof queryAuthenticatorPicker>[0] = {
+  if (AuthenticatorPickerQueryMessageSchema.is(message)) {
+    const nookTypedArgs0_5: Parameters<
+      typeof authenticatorEnrollmentOperations.queryAuthenticatorPicker
+    >[0] = {
       message,
       sender,
     }
-    void queryAuthenticatorPicker(nookTypedArgs0_5)
+    void authenticatorEnrollmentOperations
+      .queryAuthenticatorPicker(nookTypedArgs0_5)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs7: Parameters<typeof sendResponse>[0] = {
@@ -307,12 +322,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticatorPickerSelectMessage(message)) {
-    const nookTypedArgs0_6: Parameters<typeof selectAuthenticatorPicker>[0] = {
+  if (AuthenticatorPickerSelectMessageSchema.is(message)) {
+    const nookTypedArgs0_6: Parameters<
+      typeof authenticatorEnrollmentOperations.selectAuthenticatorPicker
+    >[0] = {
       message,
       sender,
     }
-    void selectAuthenticatorPicker(nookTypedArgs0_6)
+    void authenticatorEnrollmentOperations
+      .selectAuthenticatorPicker(nookTypedArgs0_6)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs8: Parameters<typeof sendResponse>[0] = {
@@ -324,12 +342,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticatorPickerCancelMessage(message)) {
-    const nookTypedArgs0_7: Parameters<typeof cancelAuthenticatorPicker>[0] = {
+  if (AuthenticatorPickerCancelMessageSchema.is(message)) {
+    const nookTypedArgs0_7: Parameters<
+      typeof authenticatorEnrollmentOperations.cancelAuthenticatorPicker
+    >[0] = {
       message,
       sender,
     }
-    void cancelAuthenticatorPicker(nookTypedArgs0_7)
+    void authenticatorEnrollmentOperations
+      .cancelAuthenticatorPicker(nookTypedArgs0_7)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs9: Parameters<typeof sendResponse>[0] = {
@@ -341,12 +362,14 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticationWorkflowSnapshotMessage(message)) {
-    const nookTypedArgs0_1: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+  if (AuthenticationWorkflowSnapshotMessageSchema.is(message)) {
+    const nookTypedArgs0_1: Parameters<
+      typeof extensionPairingIdentity.isAuthorizedWebsiteSender
+    >[0] = {
       sender,
       origin: message.payload.origin,
     }
-    if (!isAuthorizedWebsiteSender(nookTypedArgs0_1)) {
+    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_1)) {
       const nookTypedArgs0_2: Parameters<typeof sendResponse>[0] = {
         ok: false,
         reason: 'workflow-forbidden-origin',
@@ -359,11 +382,20 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     >[0]['dependencies'] = {
       companionWasmReady,
       authenticationPasskeyEvidenceIsSafe,
-      authenticationWorkflowSnapshot,
+      authenticationWorkflowSnapshot:
+        backgroundVaultRuntime.authenticationWorkflowSnapshot.bind(
+          backgroundVaultRuntime,
+        ),
       authenticationWorkflowRequiresLoginMatchAvailability,
       authenticationWorkflowSavedLoginCapability,
-      matchingPasskeyAvailabilityForOriginSafe,
-      websiteLoginMatchAvailability,
+      matchingPasskeyAvailabilityForOriginSafe:
+        websitePasskeyRequests.matchingPasskeyAvailabilityForOriginSafe.bind(
+          websitePasskeyRequests,
+        ),
+      websiteLoginMatchAvailability:
+        accountPickerSessions.websiteLoginMatchAvailability.bind(
+          accountPickerSessions,
+        ),
     }
     const workflowRequest: Parameters<
       typeof authenticationWorkflowMessageResponse
@@ -378,14 +410,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isAuthenticationOutcomeClassifyMessage(message)) {
+  if (AuthenticationOutcomeClassifyMessageSchema.is(message)) {
     const nookTypedArgs0_3: Parameters<
-      typeof classifyAuthenticationOutcome
+      typeof backgroundVaultRuntime.classifyAuthenticationOutcome
     >[0] = {
       observation: message.payload.observation,
       timeoutMs: message.payload.timeoutMs,
     }
-    void classifyAuthenticationOutcome(nookTypedArgs0_3)
+    void backgroundVaultRuntime
+      .classifyAuthenticationOutcome(nookTypedArgs0_3)
       .then((verdict) => {
         const nookArrowArgs11: Parameters<typeof sendResponse>[0] = {
           ok: true,
@@ -414,11 +447,13 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     'origin' in message.payload &&
     typeof message.payload.origin === 'string'
   ) {
-    const nookTypedArgs0_4: Parameters<typeof isAuthorizedWebsiteSender>[0] = {
+    const nookTypedArgs0_4: Parameters<
+      typeof extensionPairingIdentity.isAuthorizedWebsiteSender
+    >[0] = {
       sender,
       origin: (message.payload as { origin: string }).origin,
     }
-    if (!isAuthorizedWebsiteSender(nookTypedArgs0_4)) {
+    if (!extensionPairingIdentity.isAuthorizedWebsiteSender(nookTypedArgs0_4)) {
       const nookTypedArgs0_5: Parameters<typeof sendResponse>[0] = {
         ok: false,
         reason: 'generate-password-forbidden-origin',
@@ -426,7 +461,8 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
       sendResponse(nookTypedArgs0_5)
       return false
     }
-    void generateSuggestedPassword()
+    void backgroundVaultRuntime
+      .generateSuggestedPassword()
       .then((password) => {
         const nookArrowArgs13: Parameters<typeof sendResponse>[0] = {
           ok: true,
@@ -444,12 +480,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsitePasskeyOptionsMessage(message)) {
-    const nookTypedArgs0_8: Parameters<typeof websitePasskeyOptions>[0] = {
+  if (WebsitePasskeyOptionsMessageSchema.is(message)) {
+    const nookTypedArgs0_8: Parameters<
+      typeof websitePasskeyRequests.websitePasskeyOptions
+    >[0] = {
       message,
       sender,
     }
-    void websitePasskeyOptions(nookTypedArgs0_8)
+    void websitePasskeyRequests
+      .websitePasskeyOptions(nookTypedArgs0_8)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs15: Parameters<typeof sendResponse>[0] = {
@@ -461,12 +500,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsitePasskeyPerformMessage(message)) {
-    const nookTypedArgs0_9: Parameters<typeof performWebsitePasskey>[0] = {
+  if (WebsitePasskeyPerformMessageSchema.is(message)) {
+    const nookTypedArgs0_9: Parameters<
+      typeof websitePasskeyRequests.performWebsitePasskey
+    >[0] = {
       message,
       sender,
     }
-    void performWebsitePasskey(nookTypedArgs0_9)
+    void websitePasskeyRequests
+      .performWebsitePasskey(nookTypedArgs0_9)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs16: Parameters<typeof sendResponse>[0] = {
@@ -478,12 +520,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsitePasskeyCancelMessage(message)) {
-    const nookTypedArgs0_10: Parameters<typeof cancelWebsitePasskey>[0] = {
+  if (WebsitePasskeyCancelMessageSchema.is(message)) {
+    const nookTypedArgs0_10: Parameters<
+      typeof websitePasskeyRequests.cancelWebsitePasskey
+    >[0] = {
       message,
       sender,
     }
-    void cancelWebsitePasskey(nookTypedArgs0_10)
+    void websitePasskeyRequests
+      .cancelWebsitePasskey(nookTypedArgs0_10)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs17: Parameters<typeof sendResponse>[0] = {
@@ -495,12 +540,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginOptionsMessage(message)) {
-    const nookTypedArgs0_11: Parameters<typeof websiteLoginOptions>[0] = {
+  if (WebsiteLoginOptionsMessageSchema.is(message)) {
+    const nookTypedArgs0_11: Parameters<
+      typeof accountPickerSessions.websiteLoginOptions
+    >[0] = {
       message,
       sender,
     }
-    void websiteLoginOptions(nookTypedArgs0_11)
+    void accountPickerSessions
+      .websiteLoginOptions(nookTypedArgs0_11)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs18: Parameters<typeof sendResponse>[0] = {
@@ -512,7 +560,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginRevealMessage(message)) {
+  if (WebsiteLoginRevealMessageSchema.is(message)) {
     const nookTypedArgs0_12: Parameters<typeof websiteLoginFill>[0] = {
       message,
       sender,
@@ -529,7 +577,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginSaveOfferMessage(message)) {
+  if (WebsiteLoginSaveOfferMessageSchema.is(message)) {
     const nookTypedArgs0_13: Parameters<typeof websiteLoginSaveOffer>[0] = {
       message,
       sender,
@@ -546,7 +594,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginSavePendingMessage(message)) {
+  if (WebsiteLoginSavePendingMessageSchema.is(message)) {
     const nookTypedArgs0_14: Parameters<typeof websiteLoginSavePending>[0] = {
       message,
       sender,
@@ -563,7 +611,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginSaveCommitMessage(message)) {
+  if (WebsiteLoginSaveCommitMessageSchema.is(message)) {
     const nookTypedArgs0_15: Parameters<typeof websiteLoginSaveCommit>[0] = {
       message,
       sender,
@@ -580,7 +628,7 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteLoginSaveDismissMessage(message)) {
+  if (WebsiteLoginSaveDismissMessageSchema.is(message)) {
     const nookTypedArgs0_16: Parameters<typeof websiteLoginSaveDismiss>[0] = {
       message,
       sender,
@@ -597,10 +645,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorOptionsMessage(message)) {
-    const nookTypedArgs0_17: Parameters<typeof websiteAuthenticatorOptions>[0] =
-      { message, sender }
-    void websiteAuthenticatorOptions(nookTypedArgs0_17)
+  if (WebsiteAuthenticatorOptionsMessageSchema.is(message)) {
+    const nookTypedArgs0_17: Parameters<
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorOptions
+    >[0] = { message, sender }
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorOptions(nookTypedArgs0_17)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs24: Parameters<typeof sendResponse>[0] = {
@@ -612,12 +662,15 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorFillMessage(message)) {
-    const nookTypedArgs0_18: Parameters<typeof websiteAuthenticatorFill>[0] = {
+  if (WebsiteAuthenticatorFillMessageSchema.is(message)) {
+    const nookTypedArgs0_18: Parameters<
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorFill
+    >[0] = {
       message,
       sender,
     }
-    void websiteAuthenticatorFill(nookTypedArgs0_18)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorFill(nookTypedArgs0_18)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs25: Parameters<typeof sendResponse>[0] = {
@@ -629,11 +682,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollPreviewMessage(message)) {
+  if (WebsiteAuthenticatorEnrollPreviewMessageSchema.is(message)) {
     const nookTypedArgs0_19: Parameters<
-      typeof websiteAuthenticatorEnrollPreview
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollPreview
     >[0] = { message, sender }
-    void websiteAuthenticatorEnrollPreview(nookTypedArgs0_19)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorEnrollPreview(nookTypedArgs0_19)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs26: Parameters<typeof sendResponse>[0] = {
@@ -645,11 +699,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollStageMessage(message)) {
+  if (WebsiteAuthenticatorEnrollStageMessageSchema.is(message)) {
     const nookTypedArgs0_20: Parameters<
-      typeof websiteAuthenticatorEnrollStage
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollStage
     >[0] = { message, sender }
-    void websiteAuthenticatorEnrollStage(nookTypedArgs0_20)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorEnrollStage(nookTypedArgs0_20)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs27: Parameters<typeof sendResponse>[0] = {
@@ -661,11 +716,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollCodeMessage(message)) {
+  if (WebsiteAuthenticatorEnrollCodeMessageSchema.is(message)) {
     const nookTypedArgs0_21: Parameters<
-      typeof websiteAuthenticatorEnrollCode
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollCode
     >[0] = { message, sender }
-    void websiteAuthenticatorEnrollCode(nookTypedArgs0_21)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorEnrollCode(nookTypedArgs0_21)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs28: Parameters<typeof sendResponse>[0] = {
@@ -677,11 +733,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollConfirmMessage(message)) {
+  if (WebsiteAuthenticatorEnrollConfirmMessageSchema.is(message)) {
     const nookTypedArgs0_22: Parameters<
-      typeof websiteAuthenticatorEnrollConfirm
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollConfirm
     >[0] = { message, sender }
-    void websiteAuthenticatorEnrollConfirm(nookTypedArgs0_22)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorEnrollConfirm(nookTypedArgs0_22)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs29: Parameters<typeof sendResponse>[0] = {
@@ -693,11 +750,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollDismissMessage(message)) {
+  if (WebsiteAuthenticatorEnrollDismissMessageSchema.is(message)) {
     const nookTypedArgs0_23: Parameters<
-      typeof websiteAuthenticatorEnrollDismiss
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollDismiss
     >[0] = { message, sender }
-    void websiteAuthenticatorEnrollDismiss(nookTypedArgs0_23)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorEnrollDismiss(nookTypedArgs0_23)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs30: Parameters<typeof sendResponse>[0] = {
@@ -709,11 +767,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorEnrollPendingMessage(message)) {
+  if (WebsiteAuthenticatorEnrollPendingMessageSchema.is(message)) {
     const nookTypedArgs0_24: Parameters<
-      typeof websiteAuthenticatorEnrollPending
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorEnrollPending
     >[0] = { message, sender }
-    void websiteAuthenticatorEnrollPending(nookTypedArgs0_24)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorEnrollPending(nookTypedArgs0_24)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs31: Parameters<typeof sendResponse>[0] = {
@@ -725,11 +784,12 @@ chrome.runtime.onMessage.addListener((runtimeMessage, sender, sendResponse) => {
     return true
   }
 
-  if (isWebsiteAuthenticatorBackupAttachMessage(message)) {
+  if (WebsiteAuthenticatorBackupAttachMessageSchema.is(message)) {
     const nookTypedArgs0_25: Parameters<
-      typeof websiteAuthenticatorBackupAttach
+      typeof authenticatorEnrollmentOperations.websiteAuthenticatorBackupAttach
     >[0] = { message, sender }
-    void websiteAuthenticatorBackupAttach(nookTypedArgs0_25)
+    void authenticatorEnrollmentOperations
+      .websiteAuthenticatorBackupAttach(nookTypedArgs0_25)
       .then(sendResponse)
       .catch(() => {
         const nookArrowArgs32: Parameters<typeof sendResponse>[0] = {

@@ -8,12 +8,7 @@ import {
   DashboardTimestampKind,
   type DashboardView,
 } from "../devices-access-dashboard-state";
-import {
-  formatAccessDate,
-  isPasskeyProtection,
-  lastUsedLabel,
-  protectionLabel,
-} from "./access-chain";
+import { AccessChainPresentation } from "./access-chain";
 
 export enum PasskeyCardFactKind {
   Fingerprint = "fingerprint",
@@ -71,133 +66,139 @@ type TextOrFallbackRequest = {
   readonly fallback: string;
 };
 
-function textOrFallback({ value, fallback }: TextOrFallbackRequest): string {
-  return value.kind === DashboardTextKind.Known ? value.value : fallback;
-}
+export class PasskeyCardPresentation {
+  constructor(private readonly request: PasskeyCardSummaryRequest) {}
+  get summary(): PasskeyCardSummary {
+    const { vault, view } = this.request;
 
-function createdLabel({ vault, value }: CreatedLabelRequest): string {
-  if (value.kind !== DashboardTimestampKind.Known) {
-    return vault.t(I18N_KEYS.DevicesAccessUnknownLegacy);
+    const unknown = vault.t(I18N_KEYS.DevicesAccessUnknown);
+    const keeperLabelArgs: Parameters<typeof this.keeperLabel>[0] = {
+      vault,
+      keeper: view.keeper,
+    };
+    const lastUsedLabelArgs: Parameters<
+      AccessChainPresentation["lastUsedLabel"]
+    >[0] = {
+      value: view.lastUsedAt,
+    };
+    const protectionLabelArgs: Parameters<
+      AccessChainPresentation["protectionLabel"]
+    >[0] = {
+      protection: view.protection,
+    };
+    const createdLabelArgs: Parameters<typeof this.createdLabel>[0] = {
+      vault,
+      value: view.createdAt,
+    };
+    const titleArgs: Parameters<typeof this.textOrFallback>[0] = {
+      value: view.passkeyName,
+      fallback: vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed),
+    };
+    const fingerprintArgs: Parameters<typeof this.textOrFallback>[0] = {
+      value: view.credentialId,
+      fallback: unknown,
+    };
+    return {
+      title: this.textOrFallback(titleArgs),
+      typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePasskey),
+      modeLabel: new AccessChainPresentation(vault).protectionLabel(
+        protectionLabelArgs,
+      ),
+      facts: [
+        {
+          kind: PasskeyCardFactKind.Fingerprint,
+          label: vault.t(I18N_KEYS.DevicesAccessCredentialId),
+          value: this.textOrFallback(fingerprintArgs),
+        },
+        {
+          kind: PasskeyCardFactKind.Keeper,
+          label: vault.t(I18N_KEYS.DevicesAccessKeeperLabel),
+          value:
+            view.providerLabel.kind === DashboardTextKind.Known
+              ? view.providerLabel.value
+              : this.keeperLabel(keeperLabelArgs),
+        },
+        {
+          kind: PasskeyCardFactKind.Created,
+          label: vault.t(I18N_KEYS.DevicesAccessCreated),
+          value: this.createdLabel(createdLabelArgs),
+        },
+        {
+          kind: PasskeyCardFactKind.LastUsed,
+          label: vault.t(I18N_KEYS.DevicesAccessLastUsedColumn),
+          value: new AccessChainPresentation(vault).lastUsedLabel(
+            lastUsedLabelArgs,
+          ),
+        },
+      ],
+    };
   }
-  const formatAccessDateArgs: Parameters<typeof formatAccessDate>[0] = {
-    vault,
-    value: value.value,
-  };
-  return formatAccessDate(formatAccessDateArgs);
-}
-
-function keeperLabel({ vault, keeper }: KeeperLabelRequest): string {
-  const key = (() => {
-    if (keeper === PasskeyKeeperKind.ApplePasswords) {
-      return I18N_KEYS.DevicesAccessKeeperApplePasswords;
-    }
-    if (keeper === PasskeyKeeperKind.GooglePasswordManager) {
-      return I18N_KEYS.DevicesAccessKeeperGooglePasswordManager;
-    }
-    if (keeper === PasskeyKeeperKind.Chrome) {
-      return I18N_KEYS.DevicesAccessKeeperChrome;
-    }
-    if (keeper === PasskeyKeeperKind.ProtonPass) {
-      return I18N_KEYS.DevicesAccessKeeperProtonPass;
-    }
-    if (keeper === PasskeyKeeperKind.OnePassword) {
-      return I18N_KEYS.DevicesAccessKeeperOnepassword;
-    }
-    if (keeper === PasskeyKeeperKind.Bitwarden) {
-      return I18N_KEYS.DevicesAccessKeeperBitwarden;
-    }
-    if (keeper === PasskeyKeeperKind.WindowsHello) {
-      return I18N_KEYS.DevicesAccessKeeperWindowsHello;
-    }
-    if (keeper === PasskeyKeeperKind.Dashlane) {
-      return I18N_KEYS.DevicesAccessKeeperDashlane;
-    }
-    if (keeper === PasskeyKeeperKind.Enpass) {
-      return I18N_KEYS.DevicesAccessKeeperEnpass;
-    }
-    if (keeper === PasskeyKeeperKind.Keeper) {
-      return I18N_KEYS.DevicesAccessKeeperKeeper;
-    }
-    if (keeper === PasskeyKeeperKind.NordPass) {
-      return I18N_KEYS.DevicesAccessKeeperNordpass;
-    }
-    if (keeper === PasskeyKeeperKind.SamsungPass) {
-      return I18N_KEYS.DevicesAccessKeeperSamsungPass;
-    }
-    return I18N_KEYS.DevicesAccessKeeperUnknown;
-  })();
-  return vault.t(key);
-}
-
-export function buildPasskeyCardSummary({
-  vault,
-  view,
-}: PasskeyCardSummaryRequest): PasskeyCardSummary {
-  const unknown = vault.t(I18N_KEYS.DevicesAccessUnknown);
-  const keeperLabelArgs: Parameters<typeof keeperLabel>[0] = {
-    vault,
-    keeper: view.keeper,
-  };
-  const lastUsedLabelArgs: Parameters<typeof lastUsedLabel>[0] = {
-    vault,
-    value: view.lastUsedAt,
-  };
-  const protectionLabelArgs: Parameters<typeof protectionLabel>[0] = {
-    vault,
-    protection: view.protection,
-  };
-  const createdLabelArgs: Parameters<typeof createdLabel>[0] = {
-    vault,
-    value: view.createdAt,
-  };
-  const titleArgs: Parameters<typeof textOrFallback>[0] = {
-    value: view.passkeyName,
-    fallback: vault.t(I18N_KEYS.DevicesAccessPasskeyUnnamed),
-  };
-  const fingerprintArgs: Parameters<typeof textOrFallback>[0] = {
-    value: view.credentialId,
-    fallback: unknown,
-  };
-  return {
-    title: textOrFallback(titleArgs),
-    typeLabel: vault.t(I18N_KEYS.DevicesAccessKeyTypePasskey),
-    modeLabel: protectionLabel(protectionLabelArgs),
-    facts: [
-      {
-        kind: PasskeyCardFactKind.Fingerprint,
-        label: vault.t(I18N_KEYS.DevicesAccessCredentialId),
-        value: textOrFallback(fingerprintArgs),
-      },
-      {
-        kind: PasskeyCardFactKind.Keeper,
-        label: vault.t(I18N_KEYS.DevicesAccessKeeperLabel),
-        value:
-          view.providerLabel.kind === DashboardTextKind.Known
-            ? view.providerLabel.value
-            : keeperLabel(keeperLabelArgs),
-      },
-      {
-        kind: PasskeyCardFactKind.Created,
-        label: vault.t(I18N_KEYS.DevicesAccessCreated),
-        value: createdLabel(createdLabelArgs),
-      },
-      {
-        kind: PasskeyCardFactKind.LastUsed,
-        label: vault.t(I18N_KEYS.DevicesAccessLastUsedColumn),
-        value: lastUsedLabel(lastUsedLabelArgs),
-      },
-    ],
-  };
-}
-
-export function passkeyCardSummaryState(
-  request: PasskeyCardSummaryRequest,
-): PasskeyCardSummaryState {
-  if (!isPasskeyProtection(request.view.protection)) {
-    return PASSKEY_CARD_SUMMARY_ABSENT;
+  private textOrFallback({ value, fallback }: TextOrFallbackRequest): string {
+    return value.kind === DashboardTextKind.Known ? value.value : fallback;
   }
-  return {
-    kind: PasskeyCardSummaryKind.Present,
-    summary: buildPasskeyCardSummary(request),
-  };
+  private createdLabel({ vault, value }: CreatedLabelRequest): string {
+    if (value.kind !== DashboardTimestampKind.Known) {
+      return vault.t(I18N_KEYS.DevicesAccessUnknownLegacy);
+    }
+    const formatAccessDateArgs: Parameters<
+      AccessChainPresentation["formatAccessDate"]
+    >[0] = {
+      value: value.value,
+    };
+    return new AccessChainPresentation(vault).formatAccessDate(
+      formatAccessDateArgs,
+    );
+  }
+  private keeperLabel({ vault, keeper }: KeeperLabelRequest): string {
+    const key = (() => {
+      if (keeper === PasskeyKeeperKind.ApplePasswords) {
+        return I18N_KEYS.DevicesAccessKeeperApplePasswords;
+      }
+      if (keeper === PasskeyKeeperKind.GooglePasswordManager) {
+        return I18N_KEYS.DevicesAccessKeeperGooglePasswordManager;
+      }
+      if (keeper === PasskeyKeeperKind.Chrome) {
+        return I18N_KEYS.DevicesAccessKeeperChrome;
+      }
+      if (keeper === PasskeyKeeperKind.ProtonPass) {
+        return I18N_KEYS.DevicesAccessKeeperProtonPass;
+      }
+      if (keeper === PasskeyKeeperKind.OnePassword) {
+        return I18N_KEYS.DevicesAccessKeeperOnepassword;
+      }
+      if (keeper === PasskeyKeeperKind.Bitwarden) {
+        return I18N_KEYS.DevicesAccessKeeperBitwarden;
+      }
+      if (keeper === PasskeyKeeperKind.WindowsHello) {
+        return I18N_KEYS.DevicesAccessKeeperWindowsHello;
+      }
+      if (keeper === PasskeyKeeperKind.Dashlane) {
+        return I18N_KEYS.DevicesAccessKeeperDashlane;
+      }
+      if (keeper === PasskeyKeeperKind.Enpass) {
+        return I18N_KEYS.DevicesAccessKeeperEnpass;
+      }
+      if (keeper === PasskeyKeeperKind.Keeper) {
+        return I18N_KEYS.DevicesAccessKeeperKeeper;
+      }
+      if (keeper === PasskeyKeeperKind.NordPass) {
+        return I18N_KEYS.DevicesAccessKeeperNordpass;
+      }
+      if (keeper === PasskeyKeeperKind.SamsungPass) {
+        return I18N_KEYS.DevicesAccessKeeperSamsungPass;
+      }
+      return I18N_KEYS.DevicesAccessKeeperUnknown;
+    })();
+    return vault.t(key);
+  }
+  get state(): PasskeyCardSummaryState {
+    const request = this.request;
+    if (!AccessChainPresentation.isPasskeyProtection(request.view.protection)) {
+      return PASSKEY_CARD_SUMMARY_ABSENT;
+    }
+    return {
+      kind: PasskeyCardSummaryKind.Present,
+      summary: this.summary,
+    };
+  }
 }

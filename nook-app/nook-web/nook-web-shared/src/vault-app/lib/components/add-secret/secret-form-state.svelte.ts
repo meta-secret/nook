@@ -7,7 +7,6 @@ type SecretFormSubmissionAssessment = {
   readonly selectedType: SecretType;
   readonly isSaving: boolean;
 };
-
 import {
   authenticator_setup_key_changed,
   default_password_generation_options,
@@ -59,10 +58,14 @@ export class SecretFormState {
   submitError = $state("");
 
   generationLength = $state(passwordGenerationDefaults.length);
-  generationUppercase = $state(passwordGenerationDefaults.uppercase);
-  generationLowercase = $state(passwordGenerationDefaults.lowercase);
-  generationNumbers = $state(passwordGenerationDefaults.numbers);
-  generationSymbols = $state(passwordGenerationDefaults.symbols);
+  generationUppercase = $state(
+    passwordGenerationDefaults.uppercase === "Included",
+  );
+  generationLowercase = $state(
+    passwordGenerationDefaults.lowercase === "Included",
+  );
+  generationNumbers = $state(passwordGenerationDefaults.numbers === "Included");
+  generationSymbols = $state(passwordGenerationDefaults.symbols === "Included");
 
   load(item: NookSecretRecord): void {
     if (item.type === SecretType.Login) {

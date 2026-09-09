@@ -6,11 +6,11 @@ import tailwindcss from '@tailwindcss/vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { svelteTesting } from '@testing-library/svelte/vite'
 import {
-  buildRobotsTxt,
-  buildSitemapXml,
+  RobotsDocument,
+  SitemapDocument,
   ConfiguredSiteUrlEnvironment,
   DefaultSiteUrlEnvironment,
-  siteUrlFromEnv,
+  SiteUrlConfiguration,
   type SiteUrlEnvironment,
 } from '../nook-web-shared/src/vault-app/lib/content/sitemap'
 import {
@@ -170,8 +170,8 @@ function seoStaticFiles(outputDirectory: string): Plugin {
   const serveDevelopmentSeoFiles = (server: ViteDevServer): void => {
     server.middlewares.use((request, response, next) => {
       const pathname = request.url?.split(/[?#]/, 1)[0]
-      const siteUrl = siteUrlFromEnv(currentSiteUrlEnvironment())
-      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = {
+      const siteUrl = new SiteUrlConfiguration(currentSiteUrlEnvironment()).url
+      const sitemapArgs: ConstructorParameters<typeof SitemapDocument>[0] = {
         siteUrl,
         lastmod: new Date(),
       }
@@ -179,13 +179,13 @@ function seoStaticFiles(outputDirectory: string): Plugin {
         pathname === '/robots.txt'
           ? {
               kind: SeoStaticFileKind.Served,
-              body: buildRobotsTxt(siteUrl),
+              body: new RobotsDocument(siteUrl).text,
               contentType: 'text/plain; charset=utf-8',
             }
           : pathname === '/sitemap.xml'
             ? {
                 kind: SeoStaticFileKind.Served,
-                body: buildSitemapXml(sitemapArgs),
+                body: new SitemapDocument(sitemapArgs).xml,
                 contentType: 'application/xml; charset=utf-8',
               }
             : { kind: SeoStaticFileKind.PassThrough }
@@ -207,13 +207,19 @@ function seoStaticFiles(outputDirectory: string): Plugin {
     },
     writeBundle() {
       const outDir = join(process.cwd(), outputDirectory)
-      const siteUrl = siteUrlFromEnv(currentSiteUrlEnvironment())
-      const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = {
+      const siteUrl = new SiteUrlConfiguration(currentSiteUrlEnvironment()).url
+      const sitemapArgs: ConstructorParameters<typeof SitemapDocument>[0] = {
         siteUrl,
         lastmod: new Date(),
       }
-      writeFileSync(join(outDir, 'sitemap.xml'), buildSitemapXml(sitemapArgs))
-      writeFileSync(join(outDir, 'robots.txt'), buildRobotsTxt(siteUrl))
+      writeFileSync(
+        join(outDir, 'sitemap.xml'),
+        new SitemapDocument(sitemapArgs).xml,
+      )
+      writeFileSync(
+        join(outDir, 'robots.txt'),
+        new RobotsDocument(siteUrl).text,
+      )
     },
   }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest'
-import { buildEnrollmentLink, enrollmentAppRootUrl } from '$lib/enrollment/code'
+import { enrollmentBrowser } from '$lib/enrollment/code'
 import {
   NookEnrollmentIssueInput,
   NookEnrollmentEntryLabelState,
@@ -56,13 +56,13 @@ function decodeOuterJson(code: string): Record<string, unknown> {
 describe('enrollment-code links', () => {
   test('isolated applications generate links at their own root', () => {
     expect(
-      enrollmentAppRootUrl({
+      enrollmentBrowser.enrollmentAppRootUrl({
         siteRoot: 'https://simple.nokey.sh',
         appKind: VaultApplication.Simple,
       }),
     ).toBe('https://simple.nokey.sh/')
     expect(
-      enrollmentAppRootUrl({
+      enrollmentBrowser.enrollmentAppRootUrl({
         siteRoot: 'https://sentinel.nokey.sh/',
         appKind: VaultApplication.Sentinel,
       }),
@@ -71,7 +71,7 @@ describe('enrollment-code links', () => {
 
   test('the unified development application keeps its /app route', () => {
     expect(
-      enrollmentAppRootUrl({
+      enrollmentBrowser.enrollmentAppRootUrl({
         siteRoot: 'https://nokey.sh',
         appKind: VaultApplication.UnifiedDevelopment,
       }),
@@ -84,7 +84,7 @@ describe('enrollment-code links', () => {
       'hunter2',
     )
     expect(
-      buildEnrollmentLink({
+      enrollmentBrowser.buildEnrollmentLink({
         code: code,
         baseUrl: 'https://nook.example',
       }),
@@ -104,7 +104,7 @@ describe('enrollment-code links', () => {
       samplePayload(),
       'hunter2',
     )
-    const link = buildEnrollmentLink({
+    const link = enrollmentBrowser.buildEnrollmentLink({
       code: code,
       baseUrl: 'https://nook.example',
     })
@@ -117,7 +117,7 @@ describe('enrollment-code links', () => {
       'hunter2',
       'Desk',
     )
-    const link = buildEnrollmentLink({
+    const link = enrollmentBrowser.buildEnrollmentLink({
       code: code,
       baseUrl: 'https://nook.example',
     })

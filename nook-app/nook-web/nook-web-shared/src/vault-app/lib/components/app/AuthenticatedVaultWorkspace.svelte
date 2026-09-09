@@ -1,54 +1,54 @@
 <script lang="ts">
   type SecretAddModeChange = {
-    readonly open: boolean
-    readonly selection: SecretTypeSelection
-  }
+    readonly open: boolean;
+    readonly selection: SecretTypeSelection;
+  };
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { onDestroy, tick } from 'svelte'
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  import { onDestroy, tick } from "svelte";
   import {
     ExtensionSetupOfferKind,
     type ExtensionSetupOffer,
-  } from '$lib/app/extension-setup'
+  } from "$lib/app/extension-setup";
   import {
     configured_vault_application_supports_extension,
     ProviderSyncFailureHandling,
     ProviderSyncVisibility,
-  } from '$app-wasm'
-  import { ExtensionSetupStatus } from '$lib/extension/install'
-  import ExtensionInstallSetupCard from '$lib/components/ExtensionInstallSetupCard.svelte'
-  import OnboardDevice from '$lib/components/OnboardDevice.svelte'
-  import PendingJoinsBanner from '$lib/components/PendingJoinsBanner.svelte'
-  import SecretVault from '$lib/components/SecretVault.svelte'
-  import VaultAdmin from '$lib/components/VaultAdmin.svelte'
-  import DevicesAccessDashboard from '$lib/components/DevicesAccessDashboard.svelte'
-  import VaultBottomNav from '$lib/components/VaultBottomNav.svelte'
-  import VaultSecurityGuideBanner from '$lib/components/VaultSecurityGuideBanner.svelte'
-  import VaultSettingsAccordion from '$lib/components/settings/VaultSettingsAccordion.svelte'
-  import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import { generate_password, SecretType } from '$lib/nook'
+  } from "$app-wasm";
+  import { ExtensionSetupStatus } from "$lib/extension/install";
+  import ExtensionInstallSetupCard from "$lib/components/ExtensionInstallSetupCard.svelte";
+  import OnboardDevice from "$lib/components/OnboardDevice.svelte";
+  import PendingJoinsBanner from "$lib/components/PendingJoinsBanner.svelte";
+  import SecretVault from "$lib/components/SecretVault.svelte";
+  import VaultAdmin from "$lib/components/VaultAdmin.svelte";
+  import DevicesAccessDashboard from "$lib/components/DevicesAccessDashboard.svelte";
+  import VaultBottomNav from "$lib/components/VaultBottomNav.svelte";
+  import VaultSecurityGuideBanner from "$lib/components/VaultSecurityGuideBanner.svelte";
+  import VaultSettingsAccordion from "$lib/components/settings/VaultSettingsAccordion.svelte";
+  import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
+  import { generate_password, SecretType } from "$lib/nook";
   import {
     SecretTypeSelectionKind,
     type SecretTypeSelection,
-  } from '$lib/components/secret-form-state'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$lib/components/secret-form-state";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     AdminAccordionSection,
     SettingsAccordionSection,
     SettingsSection,
-  } from '$lib/vault/state/ui.svelte'
+  } from "$lib/vault/state/ui.svelte";
   import {
     SecretEditorModeKind,
     type SecretEditorMode,
-  } from './authenticated-vault-workspace-state'
+  } from "./authenticated-vault-workspace-state";
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
-    workspaceRouteFromPath,
-  } from '$lib/app/workspace-route'
-  import { applyWorkspaceRoute, pushWorkspaceRoute } from '$lib/vault/ui'
+    WorkspacePath,
+  } from "$lib/app/workspace-route";
+  import { VaultWorkspaceActions } from "$lib/vault/ui";
 
-  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension()
+  const SUPPORTS_EXTENSION = configured_vault_application_supports_extension();
 
   let {
     vault,
@@ -65,99 +65,100 @@
     headerDevicesAccessRequestGeneration = 0,
     onHeaderDevicesAccessRequestHandled = () => {},
   }: {
-    vault: VaultState
-    extensionSetupState: ExtensionSetupOffer
-    extensionInstallBusy: boolean
-    extensionConnectError: boolean
-    hasSecurityRecommendations: boolean
-    needsSyncProvider: boolean
-    needsAnotherDevice: boolean
-    onExtensionInstall: () => void
-    onExtensionConnect: () => void
-    onSettingsReconnect: () => void
-    onEditorOpenChange: (open: boolean) => void
-    headerDevicesAccessRequestGeneration?: number
-    onHeaderDevicesAccessRequestHandled?: () => void
-  } = $props()
+    vault: VaultState;
+    extensionSetupState: ExtensionSetupOffer;
+    extensionInstallBusy: boolean;
+    extensionConnectError: boolean;
+    hasSecurityRecommendations: boolean;
+    needsSyncProvider: boolean;
+    needsAnotherDevice: boolean;
+    onExtensionInstall: () => void;
+    onExtensionConnect: () => void;
+    onSettingsReconnect: () => void;
+    onEditorOpenChange: (open: boolean) => void;
+    headerDevicesAccessRequestGeneration?: number;
+    onHeaderDevicesAccessRequestHandled?: () => void;
+  } = $props();
 
-  const appVersion = '0.1.0'
-  let secretsAddOpen = $state(false)
+  const appVersion = "0.1.0";
+  let secretsAddOpen = $state(false);
   let secretsAddFormType = $state<SecretEditorMode>({
     kind: SecretEditorModeKind.Closed,
-  })
-  let secretsEditorResetKey = $state(0)
-  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault)
+  });
+  let secretsEditorResetKey = $state(0);
+  let devicesAccessReturnRoute = $state(WorkspaceRoute.Vault);
   const secretsNoteEditorOpen = $derived(
     secretsAddOpen &&
       secretsAddFormType.kind === SecretEditorModeKind.Adding &&
       secretsAddFormType.itemType === SecretType.SecureNote,
-  )
+  );
 
   function setAddMode({ open, selection }: SecretAddModeChange) {
-    secretsAddOpen = open
+    secretsAddOpen = open;
     secretsAddFormType =
       open && selection.kind === SecretTypeSelectionKind.EditingFields
         ? {
             kind: SecretEditorModeKind.Adding,
             itemType: selection.itemType,
           }
-        : { kind: SecretEditorModeKind.Closed }
-    onEditorOpenChange(open)
+        : { kind: SecretEditorModeKind.Closed };
+    onEditorOpenChange(open);
   }
 
   function leaveSecretsEditor() {
-    secretsAddOpen = false
-    secretsAddFormType = { kind: SecretEditorModeKind.Closed }
-    secretsEditorResetKey += 1
-    onEditorOpenChange(false)
+    secretsAddOpen = false;
+    secretsAddFormType = { kind: SecretEditorModeKind.Closed };
+    secretsEditorResetKey += 1;
+    onEditorOpenChange(false);
   }
 
   function openDevicesAccessFromHeader() {
-    const currentRoute = workspaceRouteFromPath(window.location.pathname)
+    const currentRoute = new WorkspacePath(window.location.pathname).route;
     if (
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
       currentRoute.route === WorkspaceRoute.DevicesAccess
     ) {
-      return
+      return;
     }
 
-    leaveSecretsEditor()
+    leaveSecretsEditor();
     devicesAccessReturnRoute =
       currentRoute.kind === WorkspaceRouteLookupKind.Workspace &&
       currentRoute.route !== WorkspaceRoute.DevicesAccess
         ? currentRoute.route
-        : WorkspaceRoute.Vault
+        : WorkspaceRoute.Vault;
     const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
       section: SettingsSection.DevicesAccess,
       accordion: SettingsAccordionSection.Devices,
-    }
-    vault.openSettings(settingsRequest)
+    };
+    vault.openSettings(settingsRequest);
   }
 
   $effect(() => {
-    if (headerDevicesAccessRequestGeneration === 0) return
-    openDevicesAccessFromHeader()
-    onHeaderDevicesAccessRequestHandled()
-  })
+    if (headerDevicesAccessRequestGeneration === 0) return;
+    openDevicesAccessFromHeader();
+    onHeaderDevicesAccessRequestHandled();
+  });
 
   async function closeDevicesAccess() {
-    pushWorkspaceRoute(devicesAccessReturnRoute)
-    const routeApplication: Parameters<typeof applyWorkspaceRoute>[0] = {
-      state: vault,
+    VaultWorkspaceActions.pushWorkspaceRoute(devicesAccessReturnRoute);
+    const routeApplication: Parameters<
+      VaultWorkspaceActions["applyWorkspaceRoute"]
+    >[0] = {
       route: devicesAccessReturnRoute,
-    }
-    applyWorkspaceRoute(routeApplication)
-    await tick()
+    };
+    new VaultWorkspaceActions(vault).applyWorkspaceRoute(routeApplication);
+    await tick();
     document
       .querySelector<HTMLButtonElement>(
         '[data-testid="header-devices-access-btn"]',
       )
-      ?.focus()
+      ?.focus();
   }
 
   onDestroy(() => {
-    onEditorOpenChange(false)
-  })
+    onEditorOpenChange(false);
+  });
 </script>
 
 <div
@@ -196,8 +197,8 @@
             const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
               section: SettingsSection.Onboard,
               accordion: SettingsAccordionSection.Devices,
-            }
-            vault.openSettings(settingsRequest)
+            };
+            vault.openSettings(settingsRequest);
           }}
         />
       {/if}
@@ -232,8 +233,8 @@
               providerId: id,
               visibility: ProviderSyncVisibility.Visible,
               failureHandling: ProviderSyncFailureHandling.Capture,
-            }
-            return vault.syncProviderById(syncRequest)
+            };
+            return vault.syncProviderById(syncRequest);
           }}
           onBeginAddProvider={() => vault.beginAddProvider()}
           onCancelAddProvider={() => vault.cancelAddProvider()}
@@ -247,11 +248,11 @@
             vault.updateVaultPasswordEntry(passwordRequest)}
           onRemovePassword={(id) => vault.removeVaultPasswordEntry(id)}
           onIssueCode={({ entryId, password }) => {
-            const provider = vault.syncProviders[0]
+            const provider = vault.syncProviders[0];
             if (!provider) {
               throw new Error(
                 vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr),
-              )
+              );
             }
             const issueRequest: Parameters<
               typeof vault.issueEnrollmentCode
@@ -259,8 +260,8 @@
               entryId,
               password,
               providerId: provider.id,
-            }
-            return vault.issueEnrollmentCode(issueRequest)
+            };
+            return vault.issueEnrollmentCode(issueRequest);
           }}
           onClearCode={() => vault.clearEnrollmentCode()}
           onImportBitwarden={(importRequest) =>
@@ -336,8 +337,8 @@
                 {
                   section: SettingsSection.Storage,
                   accordion: SettingsAccordionSection.Devices,
-                }
-              vault.openSettings(settingsRequest)
+                };
+              vault.openSettings(settingsRequest);
             }}
           />
         {/if}
@@ -381,28 +382,28 @@
       settingsOpen={vault.settingsOpen}
       settingsSection={vault.settingsSection}
       onSelectSecrets={() => {
-        leaveSecretsEditor()
-        vault.closeSettings()
+        leaveSecretsEditor();
+        vault.closeSettings();
       }}
       onSelectOnboard={() => {
-        leaveSecretsEditor()
+        leaveSecretsEditor();
         const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
           section: SettingsSection.Onboard,
           accordion: SettingsAccordionSection.Devices,
-        }
-        vault.openSettings(settingsRequest)
+        };
+        vault.openSettings(settingsRequest);
       }}
       onSelectAdmin={() => {
-        leaveSecretsEditor()
-        vault.openAdmin()
+        leaveSecretsEditor();
+        vault.openAdmin();
       }}
       onSelectSettings={() => {
-        leaveSecretsEditor()
+        leaveSecretsEditor();
         const settingsRequest: Parameters<typeof vault.openSettings>[0] = {
           section: SettingsSection.Storage,
           accordion: SettingsAccordionSection.Devices,
-        }
-        vault.openSettings(settingsRequest)
+        };
+        vault.openSettings(settingsRequest);
       }}
     />
   </div>

@@ -11,7 +11,7 @@ import { SentinelDashboard } from '$lib/components/login/sentinel-dashboard-port
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import SentinelCardStackDashboard from '$lib/components/login/SentinelCardStackDashboard.svelte'
 import type { VaultState } from '$lib/vault.svelte'
-import { finalize, start } from '$lib/vault/sentinel-genesis'
+import { SentinelGenesisActions } from '$lib/vault/sentinel-genesis'
 
 type GenesisDashboardProps = ComponentProps<typeof SentinelCardStackDashboard> &
   ComponentProps<typeof SentinelTerminalDashboard>
@@ -84,9 +84,11 @@ class GenesisFinalizationFixture {
   }
 
   async reject(): Promise<void> {
-    await expect(finalize(this.state as unknown as VaultState)).rejects.toBe(
-      this.failure,
-    )
+    await expect(
+      new SentinelGenesisActions(
+        this.state as unknown as VaultState,
+      ).finalize(),
+    ).rejects.toBe(this.failure)
     expect(this.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
     expect(this.previousParticipant.free).toHaveBeenCalledOnce()
     expect(this.status.free).toHaveBeenCalledOnce()
@@ -218,7 +220,9 @@ describe('Sentinel genesis finalization projection', () => {
       await fireEvent.click(button)
       expect(fixture.finalizeAction).toHaveBeenCalledOnce()
       await expect(
-        finalize(fixture.state as unknown as VaultState),
+        new SentinelGenesisActions(
+          fixture.state as unknown as VaultState,
+        ).finalize(),
       ).rejects.toBe(fixture.failure)
       await view.rerender(fixture.dashboardProps())
       expect(
@@ -230,7 +234,9 @@ describe('Sentinel genesis finalization projection', () => {
       )
       fixture.status.phase = SentinelGenesisPhase.Inactive
       await expect(
-        finalize(fixture.state as unknown as VaultState),
+        new SentinelGenesisActions(
+          fixture.state as unknown as VaultState,
+        ).finalize(),
       ).rejects.toBe(fixture.failure)
       await view.rerender(fixture.dashboardProps())
       expect(view.queryAllByTestId('sentinel-genesis-finalize')).toHaveLength(0)
@@ -252,11 +258,14 @@ describe('Sentinel genesis finalization projection', () => {
       const fixture = new GenesisFinalizationFixture()
       fixture.state.sentinelGenesisPhase = SentinelGenesisPhase.Inactive
       fixture.status.phase = SentinelGenesisPhase.AwaitingCompletionCheck
-      const request: Parameters<typeof start>[0] = {
-        state: fixture.state as unknown as VaultState,
+      const request: Parameters<SentinelGenesisActions['start']>[0] = {
         args: { label: 'Genesis fixture', participantCount: 3, threshold: 2 },
       }
-      await expect(start(request)).rejects.toBe(fixture.failure)
+      await expect(
+        new SentinelGenesisActions(
+          fixture.state as unknown as VaultState,
+        ).start(request),
+      ).rejects.toBe(fixture.failure)
       expect(fixture.manager.sentinel_genesis_status).toHaveBeenCalledOnce()
       expect(fixture.state.sentinelGenesisPhase).toBe(
         SentinelGenesisPhase.AwaitingCompletionCheck,

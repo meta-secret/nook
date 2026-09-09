@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, test } from 'vitest'
 import {
   FormSubmissionResult,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { SiteFixturePilotExpectation } from '../../../../nook-web-extension/e2e/mock-auth/src/lib/site-fixtures'
 import {
@@ -159,7 +159,8 @@ describe('popular login shell templates', () => {
         (field) => field.type === 'password',
       )
       document.body.innerHTML = renderStepHtml(fixture, 0)
-      const observations = summarizeAuthenticationWorkflowForms()
+      const observations =
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()
       expect(observations.length).toBeGreaterThan(0)
       const summary = observations[0]?.summary
       expect(summary).toBeTruthy()
@@ -174,7 +175,8 @@ describe('popular login shell templates', () => {
           fixture,
           fixture.steps.length - 1,
         )
-        const passwordObservations = summarizeAuthenticationWorkflowForms()
+        const passwordObservations =
+          passwordFormInteraction.summarizeAuthenticationWorkflowForms()
         expect(passwordObservations.length).toBeGreaterThan(0)
         expect(
           ((v) => (v ? v : 0))(

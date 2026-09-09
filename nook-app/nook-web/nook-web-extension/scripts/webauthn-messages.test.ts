@@ -1,14 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  isWebsitePasskeyCancelMessage,
-  isWebsitePasskeyOptionsMessage,
-  isWebsitePasskeyPerformMessage,
-  parsedWebsitePasskeyRequest,
-  websitePasskeyRequestJson,
   WebsitePasskeyCeremony,
   WebsitePasskeyCredentialSelectionKind,
   type WebsitePasskeyRequestJsonArgs,
   WebsitePasskeyRequestParseKind,
+  WebsitePasskeyCancelMessage as WebsitePasskeyCancelMessageSchema,
+  WebsitePasskeyOptionsMessage as WebsitePasskeyOptionsMessageSchema,
+  WebsitePasskeyPerformMessage as WebsitePasskeyPerformMessageSchema,
 } from '../src/lib/webauthn-messages'
 
 const requestJson = JSON.stringify({
@@ -25,19 +23,19 @@ describe('website passkey runtime messages', () => {
       expiresAt: Date.now() + 60_000,
     }
     expect(
-      isWebsitePasskeyOptionsMessage({
+      WebsitePasskeyOptionsMessageSchema.is({
         type: 'nook:website-passkey-options',
         payload,
       }),
     ).toBe(true)
     expect(
-      isWebsitePasskeyPerformMessage({
+      WebsitePasskeyPerformMessageSchema.is({
         type: 'nook:website-passkey-perform',
         payload: { ...payload, vaultStoreId: 'store_test' },
       }),
     ).toBe(true)
     expect(
-      isWebsitePasskeyCancelMessage({
+      WebsitePasskeyCancelMessageSchema.is({
         type: 'nook:website-passkey-cancel',
         payload: { requestId: payload.requestId },
       }),
@@ -46,7 +44,7 @@ describe('website passkey runtime messages', () => {
 
   test('rejects oversized, malformed, and unscoped messages', () => {
     expect(
-      isWebsitePasskeyOptionsMessage({
+      WebsitePasskeyOptionsMessageSchema.is({
         type: 'nook:website-passkey-options',
         payload: {
           requestId: 'short',
@@ -56,7 +54,7 @@ describe('website passkey runtime messages', () => {
       }),
     ).toBe(false)
     expect(
-      isWebsitePasskeyPerformMessage({
+      WebsitePasskeyPerformMessageSchema.is({
         type: 'nook:website-passkey-perform',
         payload: {
           requestId: 'request-1234567890',
@@ -69,7 +67,7 @@ describe('website passkey runtime messages', () => {
       }),
     ).toBe(false)
     expect(
-      isWebsitePasskeyPerformMessage({
+      WebsitePasskeyPerformMessageSchema.is({
         type: 'nook:website-passkey-perform',
         payload: {
           requestId: 'request-1234567890',
@@ -83,7 +81,9 @@ describe('website passkey runtime messages', () => {
       ceremony: WebsitePasskeyCeremony.Get,
       requestJson: '{',
     }
-    expect(parsedWebsitePasskeyRequest(parseArgs)).toEqual({
+    expect(
+      WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(parseArgs),
+    ).toEqual({
       kind: WebsitePasskeyRequestParseKind.Rejected,
     })
   })
@@ -93,7 +93,8 @@ describe('website passkey runtime messages', () => {
       ceremony: WebsitePasskeyCeremony.Get,
       requestJson,
     }
-    const parsed = parsedWebsitePasskeyRequest(parseArgs)
+    const parsed =
+      WebsitePasskeyOptionsMessageSchema.parsedWebsitePasskeyRequest(parseArgs)
     expect(parsed.kind).toBe(WebsitePasskeyRequestParseKind.Parsed)
     if (parsed.kind !== WebsitePasskeyRequestParseKind.Parsed) return
 
@@ -103,7 +104,11 @@ describe('website passkey runtime messages', () => {
         kind: WebsitePasskeyCredentialSelectionKind.RequestDefaults,
       },
     }
-    expect(websitePasskeyRequestJson(requestDefaultsArgs)).toBe(requestJson)
+    expect(
+      WebsitePasskeyOptionsMessageSchema.websitePasskeyRequestJson(
+        requestDefaultsArgs,
+      ),
+    ).toBe(requestJson)
 
     const selectedArgs: WebsitePasskeyRequestJsonArgs = {
       request: parsed.request,
@@ -112,7 +117,13 @@ describe('website passkey runtime messages', () => {
         credentialId: 'credential_test',
       },
     }
-    expect(JSON.parse(websitePasskeyRequestJson(selectedArgs))).toEqual({
+    expect(
+      JSON.parse(
+        WebsitePasskeyOptionsMessageSchema.websitePasskeyRequestJson(
+          selectedArgs,
+        ),
+      ),
+    ).toEqual({
       origin: 'https://login.example.com',
       rpId: 'example.com',
       allowCredentials: [{ id: 'credential_test' }],
@@ -125,8 +136,10 @@ describe('website passkey runtime messages', () => {
         credentialId: '',
       },
     }
-    expect(() => websitePasskeyRequestJson(emptySelectionArgs)).toThrow(
-      'Selected passkey credential ID must not be empty.',
-    )
+    expect(() =>
+      WebsitePasskeyOptionsMessageSchema.websitePasskeyRequestJson(
+        emptySelectionArgs,
+      ),
+    ).toThrow('Selected passkey credential ID must not be empty.')
   })
 })

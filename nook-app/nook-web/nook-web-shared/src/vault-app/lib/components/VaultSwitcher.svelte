@@ -1,277 +1,277 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
   import {
     Check,
     ChevronDown,
     FolderKey,
     Puzzle,
     SlidersHorizontal,
-  } from '@lucide/svelte'
-  import type { NookLocalVaultEntry } from '$app-wasm'
-  import type { VaultState } from '$lib/vault.svelte'
-  import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
-  import type { ExtensionSetupOffer } from '$lib/app/extension-setup'
+  } from "@lucide/svelte";
+  import type { NookLocalVaultEntry } from "$app-wasm";
+  import type { VaultState } from "$lib/vault.svelte";
+  import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
+  import type { ExtensionSetupOffer } from "$lib/app/extension-setup";
   import {
     ConnectedVaultMenuNoteKind,
-    connectedVaultMenuNote,
-    currentVaultCanPairExtension,
-    resolveVaultExtensionLink,
-    vaultEntryHoldsExtensionGrant,
+    ConnectedVaultMenuPresentation,
+    VaultPairingPresentation,
+    VaultExtensionPresentation,
+    VaultGrantPresentation,
     type ConnectedVaultMenuNoteRequest,
     type CurrentVaultPairingAvailabilityRequest,
     type ExtensionConnectedEntryRequest,
     type VaultExtensionLinkRequest,
     type VaultSwitcherEntryLabel,
-  } from './vault-switcher-extension'
+  } from "./vault-switcher-extension";
   import {
     DisplayedVaultKind,
     VaultSwitchStateKind,
     VaultSwitcherLayerKind,
     VaultSwitcherMenuPlacementKind,
     VaultSwitcherRootKind,
-    placeVaultSwitcherMenu,
+    VaultSwitcherAnchor,
     portalVaultSwitcherMenu,
-    vaultSwitcherContainsNode,
+    VaultSwitcherPointerTarget,
     type DisplayedVault,
     type VaultSwitchState,
     type VaultSwitcherContainsNodeRequest,
     type VaultSwitcherLayer,
     type VaultSwitcherMenuPlacement,
     type VaultSwitcherRoot,
-  } from './vault-switcher-state'
+  } from "./vault-switcher-state";
 
   let {
     vault,
     extensionSetupState,
     onPairExtension,
   }: {
-    vault: VaultState
-    extensionSetupState: ExtensionSetupOffer
-    onPairExtension: () => void
-  } = $props()
+    vault: VaultState;
+    extensionSetupState: ExtensionSetupOffer;
+    onPairExtension: () => void;
+  } = $props();
 
-  let open = $state(false)
+  let open = $state(false);
   let root = $state<VaultSwitcherRoot>({
     kind: VaultSwitcherRootKind.Unmounted,
-  })
+  });
   let trigger = $state<VaultSwitcherLayer>({
     kind: VaultSwitcherLayerKind.Unmounted,
-  })
+  });
   let menu = $state<VaultSwitcherLayer>({
     kind: VaultSwitcherLayerKind.Unmounted,
-  })
+  });
   let placement = $state<VaultSwitcherMenuPlacement>({
     kind: VaultSwitcherMenuPlacementKind.Closed,
-  })
+  });
   let switchState = $state<VaultSwitchState>({
     kind: VaultSwitchStateKind.Idle,
-  })
+  });
 
   const activeStoreId = $derived(
     vault.activeVault.kind === ActiveVaultKind.Open
       ? vault.activeVault.storeId.trim()
-      : '',
-  )
-  const vaults = $derived(vault.localVaults)
-  const unnamedLabel = $derived(vault.t(I18N_KEYS.LoginVaultPickerUnnamed))
+      : "",
+  );
+  const vaults = $derived(vault.localVaults);
+  const unnamedLabel = $derived(vault.t(I18N_KEYS.LoginVaultPickerUnnamed));
   const entryLabels = $derived.by((): VaultSwitcherEntryLabel[] => {
-    const labels: VaultSwitcherEntryLabel[] = []
+    const labels: VaultSwitcherEntryLabel[] = [];
     for (const entry of vaults) {
       const label: VaultSwitcherEntryLabel = {
         storeId: entry.storeId,
         displayName: entry.display_label(unnamedLabel),
-      }
-      labels.push(label)
+      };
+      labels.push(label);
     }
-    return labels
-  })
+    return labels;
+  });
   const extensionLink = $derived.by(() => {
     const request: VaultExtensionLinkRequest = {
       offer: extensionSetupState,
       activeStoreId,
       entries: entryLabels,
-    }
-    return resolveVaultExtensionLink(request)
-  })
+    };
+    return new VaultExtensionPresentation(request).link;
+  });
   const canPairCurrentVault = $derived.by(() => {
     const request: CurrentVaultPairingAvailabilityRequest = {
       link: extensionLink,
       activeStoreId,
-    }
-    return currentVaultCanPairExtension(request)
-  })
+    };
+    return new VaultPairingPresentation(request).available;
+  });
   const connectedNote = $derived.by(() => {
     const request: ConnectedVaultMenuNoteRequest = {
       link: extensionLink,
       entries: entryLabels,
-    }
-    return connectedVaultMenuNote(request)
-  })
+    };
+    return new ConnectedVaultMenuPresentation(request).note;
+  });
   const triggerHoldsGrant = $derived.by(() => {
     const request: ExtensionConnectedEntryRequest = {
       link: extensionLink,
       storeId: activeStoreId,
-    }
-    return vaultEntryHoldsExtensionGrant(request)
-  })
+    };
+    return new VaultGrantPresentation(request).connected;
+  });
   const activeVault = $derived.by((): DisplayedVault => {
     for (const entry of vaults) {
       if (entry.storeId === activeStoreId) {
-        return { kind: DisplayedVaultKind.Available, entry }
+        return { kind: DisplayedVaultKind.Available, entry };
       }
     }
     for (const entry of vaults) {
-      return { kind: DisplayedVaultKind.Available, entry }
+      return { kind: DisplayedVaultKind.Available, entry };
     }
-    return { kind: DisplayedVaultKind.Unavailable }
-  })
+    return { kind: DisplayedVaultKind.Unavailable };
+  });
   const activeLabel = $derived(
     activeVault.kind === DisplayedVaultKind.Available
       ? activeVault.entry.display_label(unnamedLabel)
       : vault.t(I18N_KEYS.NavVault),
-  )
-  const vaultCount = $derived(vaults.length)
+  );
+  const vaultCount = $derived(vaults.length);
   const isBusy = $derived(
     vault.isVerifying ||
       vault.isInitializing ||
       switchState.kind === VaultSwitchStateKind.Switching,
-  )
+  );
 
   const triggerClass =
-    'inline-flex h-10 min-w-0 max-w-full items-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70'
+    "inline-flex h-10 min-w-0 max-w-full items-center gap-2 rounded-lg border border-border/40 bg-background/60 px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-foreground sm:bg-background/70";
 
   function closeMenu() {
-    open = false
-    placement = { kind: VaultSwitcherMenuPlacementKind.Closed }
+    open = false;
+    placement = { kind: VaultSwitcherMenuPlacementKind.Closed };
   }
 
   function handleDocumentClick(event: MouseEvent) {
-    if (!open) return
-    const target = event.target
+    if (!open) return;
+    const target = event.target;
     if (!(target instanceof Node)) {
-      closeMenu()
-      return
+      closeMenu();
+      return;
     }
     const containsRequest: VaultSwitcherContainsNodeRequest = {
       root,
       menu,
       node: target,
-    }
-    if (!vaultSwitcherContainsNode(containsRequest)) closeMenu()
+    };
+    if (!new VaultSwitcherPointerTarget(containsRequest).contained) closeMenu();
   }
 
   function handleDocumentKeydown(event: KeyboardEvent) {
-    if (open && event.key === 'Escape') closeMenu()
+    if (open && event.key === "Escape") closeMenu();
   }
 
   function handleViewportChange() {
-    if (open) closeMenu()
+    if (open) closeMenu();
   }
 
   function captureRoot(element: HTMLDivElement) {
-    root = { kind: VaultSwitcherRootKind.Mounted, element }
+    root = { kind: VaultSwitcherRootKind.Mounted, element };
     return {
       destroy() {
-        root = { kind: VaultSwitcherRootKind.Unmounted }
+        root = { kind: VaultSwitcherRootKind.Unmounted };
       },
-    }
+    };
   }
 
   function captureTrigger(element: HTMLButtonElement) {
-    trigger = { kind: VaultSwitcherLayerKind.Mounted, element }
+    trigger = { kind: VaultSwitcherLayerKind.Mounted, element };
     return {
       destroy() {
-        trigger = { kind: VaultSwitcherLayerKind.Unmounted }
+        trigger = { kind: VaultSwitcherLayerKind.Unmounted };
       },
-    }
+    };
   }
 
   function bindMenu(element: HTMLDivElement) {
-    const portal = portalVaultSwitcherMenu(element)
-    menu = { kind: VaultSwitcherLayerKind.Mounted, element }
+    const portal = portalVaultSwitcherMenu(element);
+    menu = { kind: VaultSwitcherLayerKind.Mounted, element };
     return {
       destroy() {
-        portal.destroy()
-        menu = { kind: VaultSwitcherLayerKind.Unmounted }
+        portal.destroy();
+        menu = { kind: VaultSwitcherLayerKind.Unmounted };
       },
-    }
+    };
   }
 
   $effect(() => {
     if (!vault.isAuthenticated || vault.isVerifying) {
-      open = false
-      placement = { kind: VaultSwitcherMenuPlacementKind.Closed }
-      return
+      open = false;
+      placement = { kind: VaultSwitcherMenuPlacementKind.Closed };
+      return;
     }
-    if (!open) return
-    document.addEventListener('click', handleDocumentClick)
-    document.addEventListener('keydown', handleDocumentKeydown)
-    window.addEventListener('scroll', handleViewportChange, true)
-    window.addEventListener('resize', handleViewportChange)
+    if (!open) return;
+    document.addEventListener("click", handleDocumentClick);
+    document.addEventListener("keydown", handleDocumentKeydown);
+    window.addEventListener("scroll", handleViewportChange, true);
+    window.addEventListener("resize", handleViewportChange);
     return () => {
-      document.removeEventListener('click', handleDocumentClick)
-      document.removeEventListener('keydown', handleDocumentKeydown)
-      window.removeEventListener('scroll', handleViewportChange, true)
-      window.removeEventListener('resize', handleViewportChange)
-    }
-  })
+      document.removeEventListener("click", handleDocumentClick);
+      document.removeEventListener("keydown", handleDocumentKeydown);
+      window.removeEventListener("scroll", handleViewportChange, true);
+      window.removeEventListener("resize", handleViewportChange);
+    };
+  });
 
   async function toggleOpen() {
     if (open) {
-      closeMenu()
-      return
+      closeMenu();
+      return;
     }
     try {
-      await vault.refreshLocalVaultCatalog()
+      await vault.refreshLocalVaultCatalog();
       if (trigger.kind !== VaultSwitcherLayerKind.Mounted) {
-        closeMenu()
-        return
+        closeMenu();
+        return;
       }
-      const anchor = placeVaultSwitcherMenu(
+      const anchor = new VaultSwitcherAnchor(
         trigger.element.getBoundingClientRect(),
-      )
+      ).placement;
       placement = {
         kind: VaultSwitcherMenuPlacementKind.Open,
         top: anchor.top,
         left: anchor.left,
         minWidth: anchor.minWidth,
-      }
-      open = true
+      };
+      open = true;
     } catch {
-      closeMenu()
+      closeMenu();
     }
   }
 
   async function switchTo(entry: NookLocalVaultEntry) {
-    if (entry.storeId === activeStoreId || isBusy) return
-    closeMenu()
+    if (entry.storeId === activeStoreId || isBusy) return;
+    closeMenu();
     switchState = {
       kind: VaultSwitchStateKind.Switching,
       storeId: entry.storeId,
-    }
+    };
     try {
-      await vault.switchToVault(entry.storeId)
+      await vault.switchToVault(entry.storeId);
     } finally {
-      switchState = { kind: VaultSwitchStateKind.Idle }
+      switchState = { kind: VaultSwitchStateKind.Idle };
     }
   }
 
   function openAdmin() {
-    closeMenu()
-    vault.openAdmin()
+    closeMenu();
+    vault.openAdmin();
   }
 
   function pairCurrentVault() {
-    closeMenu()
-    onPairExtension()
+    closeMenu();
+    onPairExtension();
   }
 
   function optionHoldsGrant(storeId: string): boolean {
     const request: ExtensionConnectedEntryRequest = {
       link: extensionLink,
       storeId,
-    }
-    return vaultEntryHoldsExtensionGrant(request)
+    };
+    return new VaultGrantPresentation(request).connected;
   }
 </script>
 
@@ -284,7 +284,7 @@
       aria-haspopup="menu"
       aria-expanded={open}
       data-testid="vault-switcher-trigger"
-      data-extension-connected={triggerHoldsGrant ? 'true' : 'false'}
+      data-extension-connected={triggerHoldsGrant ? "true" : "false"}
       disabled={isBusy}
       onclick={() => void toggleOpen()}
     >
@@ -330,8 +330,8 @@
               replacements: {
                 count: String(vaultCount),
               },
-            }
-            return vault.t(translationRequest)
+            };
+            return vault.t(translationRequest);
           })()}
     </p>
     {#if connectedNote.kind === ConnectedVaultMenuNoteKind.MissingLocally}
@@ -345,8 +345,8 @@
             replacements: {
               vault: connectedNote.vaultName,
             },
-          }
-          return vault.t(connectedRequest)
+          };
+          return vault.t(connectedRequest);
         })()}
       </p>
     {/if}
@@ -364,7 +364,7 @@
               : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'}"
             data-testid="vault-switcher-option"
             data-store-id={entry.storeId}
-            data-extension-connected={holdsGrant ? 'true' : 'false'}
+            data-extension-connected={holdsGrant ? "true" : "false"}
             disabled={isBusy || isActive}
             onclick={() => void switchTo(entry)}
           >
@@ -405,8 +405,8 @@
           data-testid="vault-switcher-pair-btn"
           disabled={isBusy}
           onclick={(event) => {
-            event.stopPropagation()
-            pairCurrentVault()
+            event.stopPropagation();
+            pairCurrentVault();
           }}
         >
           <Puzzle class="size-4" />
@@ -420,8 +420,8 @@
         data-testid="vault-switcher-admin-btn"
         disabled={isBusy}
         onclick={(event) => {
-          event.stopPropagation()
-          openAdmin()
+          event.stopPropagation();
+          openAdmin();
         }}
       >
         <SlidersHorizontal class="size-4" />

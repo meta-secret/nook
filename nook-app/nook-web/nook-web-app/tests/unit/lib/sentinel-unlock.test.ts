@@ -21,7 +21,7 @@ import {
 } from '$lib/vault/state/provider.svelte'
 import type { NookSecretRecord } from '$lib/nook'
 import type { VaultState } from '$lib/vault.svelte'
-import { finalizeSentinelUnlock } from '$lib/vault/sentinel-unlock'
+import { SentinelUnlockActions } from '$lib/vault/sentinel-unlock'
 
 enum LoginSurface {
   Gate = 'gate',
@@ -101,7 +101,9 @@ class SentinelFinalizationFixture {
   }
 
   async finalize(): Promise<void> {
-    await finalizeSentinelUnlock(this.state as unknown as VaultState)
+    await new SentinelUnlockActions(
+      this.state as unknown as VaultState,
+    ).finalizeSentinelUnlock()
   }
 
   renderLogin(surface: LoginSurface) {

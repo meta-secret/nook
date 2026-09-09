@@ -36,29 +36,43 @@ type MountTestWidgetShellArgs = {
 type RevalidatedEnrollmentRequest = { start: () => void }
 
 vi.mock('../../../../nook-web-extension/src/lib/auth-widget-policy', () => ({
-  isTrustedAuthAction: () => true,
+  AuthenticationGesture: class AuthenticationGestureFixture {
+    get trusted() {
+      return true
+    }
+  },
 }))
 
 vi.mock(
   '../../../../nook-web-extension/src/lib/auth-workflow-messages',
-  () => ({ authenticationWorkflowApprovalsMatch: () => true }),
+  () => ({
+    AuthenticationWorkflowApproval: {
+      authenticationWorkflowApprovalsMatch: () => true,
+    },
+  }),
 )
 
 vi.mock('../../../../nook-web-extension/src/content/enrollment-flow', () => ({
-  detectEnrollmentHints: () => ({ qr: false, backupCodes: false }),
-  renderEnrollmentActions: vi.fn(),
-  startQrEnrollment: () => actions.startQrEnrollment(),
+  authenticatorEnrollmentInteraction: {
+    detectEnrollmentHints: () => ({
+      qr: false,
+      backupCodes: false,
+    }),
+    renderEnrollmentActions: vi.fn(),
+    startQrEnrollment: () => actions.startQrEnrollment(),
+  },
 }))
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/backup-code-workflow-action',
   () => ({
-    startRevalidatedEnrollmentAction: async (
-      request: RevalidatedEnrollmentRequest,
-    ) => {
-      actions.revalidateEnrollment(request)
-      request.start()
-      return true
+    RevalidatedEnrollmentAction: class {
+      constructor(private readonly request: RevalidatedEnrollmentRequest) {}
+      async execute() {
+        actions.revalidateEnrollment(this.request)
+        this.request.start()
+        return true
+      }
     },
   }),
 )
@@ -66,23 +80,27 @@ vi.mock(
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/authenticator-actions',
   () => ({
-    cancelPendingAuthenticatorPickerRequest: vi.fn(),
-    continueWithAuthenticator: vi.fn(),
+    authenticatorInteraction: {
+      cancelPendingAuthenticatorPickerRequest: vi.fn(),
+      continueWithAuthenticator: vi.fn(),
+    },
   }),
 )
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/login-passkey-actions',
   () => ({
-    cancelPendingLoginPickerRequest: () => {
-      actions.events.push('cancel-login-picker')
-      actions.cancelLoginPicker()
-    },
-    continueWithNook: () => actions.continueWithNook(),
-    generatePasswordWithNook: vi.fn(),
-    proposePasskeyWithNook: () => {
-      actions.events.push('propose-passkey')
-      actions.proposePasskeyWithNook()
+    loginPasskeyInteraction: {
+      cancelPendingLoginPickerRequest: () => {
+        actions.events.push('cancel-login-picker')
+        actions.cancelLoginPicker()
+      },
+      continueWithNook: () => actions.continueWithNook(),
+      generatePasswordWithNook: vi.fn(),
+      proposePasskeyWithNook: () => {
+        actions.events.push('propose-passkey')
+        actions.proposePasskeyWithNook()
+      },
     },
   }),
 )
@@ -106,45 +124,49 @@ vi.mock('../../../../nook-web-extension/src/content/autofill/state', () => ({
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/widget-shell',
   () => ({
-    buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
-    enrollmentCopy: actions.enrollmentCopy,
-    createWidgetShell: () => {
-      const host = document.createElement('aside')
-      host.id = 'widget-host'
-      const body = document.createElement('div')
-      const continueButton = document.createElement('button')
-      continueButton.dataset.primary = 'true'
-      const openVaultButton = document.createElement('button')
-      body.append(continueButton, openVaultButton)
-      host.append(body)
-      return {
-        host,
-        body,
-        step: document.createElement('p'),
-        title: document.createElement('h1'),
-        description: document.createElement('p'),
-        continueButton,
-        openVaultButton,
-      }
+    authenticationWidgetShell: {
+      buildEnrollmentFlowHost: () => ({ isBusy: () => false }),
+      enrollmentCopy: actions.enrollmentCopy,
+      createWidgetShell: () => {
+        const host = document.createElement('aside')
+        host.id = 'widget-host'
+        const body = document.createElement('div')
+        const continueButton = document.createElement('button')
+        continueButton.dataset.primary = 'true'
+        const openVaultButton = document.createElement('button')
+        body.append(continueButton, openVaultButton)
+        host.append(body)
+        return {
+          host,
+          body,
+          step: document.createElement('p'),
+          title: document.createElement('h1'),
+          description: document.createElement('p'),
+          continueButton,
+          openVaultButton,
+        }
+      },
+      mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) =>
+        document.body.append(shell.host),
     },
-    mountWidgetShell: ({ shell }: MountTestWidgetShellArgs) =>
-      document.body.append(shell.host),
   }),
 )
 
 vi.mock(
   '../../../../nook-web-extension/src/content/autofill/workflow-ui',
   () => ({
-    removeWidget: vi.fn(),
-    translatedMessage: (key: string) => key,
     workflowCopy: () => ({
       titleKey: 'widgetLoginTitle',
       descriptionKey: 'widgetLoginDescription',
     }),
+    workflowUi: {
+      removeWidget: vi.fn(),
+      translatedMessage: (key: string) => key,
+    },
   }),
 )
 
-import { renderWidget } from '../../../../nook-web-extension/src/content/autofill/widget-rendering'
+import { authenticationWidgetRenderer } from '../../../../nook-web-extension/src/content/autofill/widget-rendering'
 
 const workflow = {
   root: document,
@@ -161,7 +183,7 @@ const workflow = {
     formCount: 0,
     observedAt: 0,
   },
-} as Parameters<typeof renderWidget>[0]['workflow']
+} as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]['workflow']
 
 const snapshot = {
   kind: 0,
@@ -172,10 +194,12 @@ const snapshot = {
   approvalRequirement: 'explicit-user-approval',
   savedLoginCapability: 'fill-saved-login',
   observationIndex: 0,
-} as Parameters<typeof renderWidget>[0]['snapshot']
+} as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]['snapshot']
 
 type RenderPasskeyWidgetArgs = {
-  loginMatches: Parameters<typeof renderWidget>[0]['loginMatches']
+  loginMatches: Parameters<
+    typeof authenticationWidgetRenderer.renderWidget
+  >[0]['loginMatches']
 }
 
 function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
@@ -185,8 +209,8 @@ function renderPasskeyWidget({ loginMatches }: RenderPasskeyWidgetArgs): void {
     facts: {},
     loginMatches,
     vaultConnection: { connected: true, vaultName: 'Personal' },
-  } as Parameters<typeof renderWidget>[0]
-  renderWidget(args)
+  } as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]
+  authenticationWidgetRenderer.renderWidget(args)
 }
 
 function savedLoginButton(): HTMLButtonElement | false {
@@ -227,7 +251,9 @@ describe('passkey workflow saved-login fallback', () => {
 
   test('omits saved login for empty and unavailable matches', () => {
     const unavailableMatches: Array<
-      Parameters<typeof renderWidget>[0]['loginMatches']
+      Parameters<
+        typeof authenticationWidgetRenderer.renderWidget
+      >[0]['loginMatches']
     > = [{ kind: 'ready', count: 0 }, { kind: 'unavailable' }]
     for (const loginMatches of unavailableMatches) {
       document.body.replaceChildren()
@@ -266,9 +292,9 @@ describe('authenticator enrollment workflow', () => {
       facts: {},
       loginMatches: { kind: 'unavailable' },
       vaultConnection: { connected: true, vaultName: 'Personal' },
-    } as Parameters<typeof renderWidget>[0]
+    } as Parameters<typeof authenticationWidgetRenderer.renderWidget>[0]
 
-    renderWidget(args)
+    authenticationWidgetRenderer.renderWidget(args)
     const primary = document.querySelector<HTMLButtonElement>(
       'button[data-primary="true"]',
     )

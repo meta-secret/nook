@@ -1,21 +1,21 @@
 import { mount } from "svelte";
 import "./app.css";
 import { configured_vault_application, type VaultApplication } from "$app-wasm";
-import { createVaultStartupShell } from "$lib/app/startup-shell";
-import { ensureAppWasm } from "$lib/runtime/wasm-bootstrap";
+import { VaultStartupShell } from "$lib/app/startup-shell";
+import { vaultApplicationRuntime } from "$lib/runtime/wasm-bootstrap";
 
 export async function mountVaultApp(
   expectedKind: VaultApplication,
 ): Promise<void> {
   const target = document.getElementById("app");
   if (!target) throw new Error("Vault app mount target is missing");
-  const startupShellArgs: Parameters<typeof createVaultStartupShell>[0] = {
+  const startupShellArgs: ConstructorParameters<typeof VaultStartupShell>[0] = {
     target,
   };
-  const startupShell = createVaultStartupShell(startupShellArgs);
+  const startupShell = new VaultStartupShell(startupShellArgs);
 
   try {
-    await ensureAppWasm(expectedKind);
+    await vaultApplicationRuntime.ensureAppWasm(expectedKind);
     const { default: App } = await import("./App.svelte");
     const configuredKind = configured_vault_application();
     if (configuredKind !== expectedKind) {

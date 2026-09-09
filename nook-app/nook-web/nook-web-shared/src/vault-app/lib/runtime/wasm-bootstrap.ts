@@ -12,19 +12,24 @@ type AppWasmStartup =
   | { kind: AppWasmStartupKind.NotStarted }
   | { kind: AppWasmStartupKind.Initializing; completion: Promise<void> };
 
-let appWasmStartup: AppWasmStartup = { kind: AppWasmStartupKind.NotStarted };
-
-/** Initialize the shared engine and bind it to this web app before app code loads. */
-export function ensureAppWasm(application: VaultApplication): Promise<void> {
-  if (appWasmStartup.kind === AppWasmStartupKind.Initializing) {
-    return appWasmStartup.completion;
-  }
-  const promise = initNookWasm().then(() => {
-    configure_vault_application(application);
-  });
-  appWasmStartup = {
-    kind: AppWasmStartupKind.Initializing,
-    completion: promise,
+/** Owns the browser runtime resources shared by these interactions. */
+class VaultApplicationRuntime {
+  private appWasmStartup: AppWasmStartup = {
+    kind: AppWasmStartupKind.NotStarted,
   };
-  return promise;
+  ensureAppWasm(application: VaultApplication): Promise<void> {
+    if (this.appWasmStartup.kind === AppWasmStartupKind.Initializing) {
+      return this.appWasmStartup.completion;
+    }
+    const promise = initNookWasm().then(() => {
+      configure_vault_application(application);
+    });
+    this.appWasmStartup = {
+      kind: AppWasmStartupKind.Initializing,
+      completion: promise,
+    };
+    return promise;
+  }
 }
+
+export const vaultApplicationRuntime = new VaultApplicationRuntime();

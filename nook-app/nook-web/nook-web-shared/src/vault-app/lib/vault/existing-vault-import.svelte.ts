@@ -23,22 +23,6 @@ import {
   type ActiveVault,
 } from "$lib/vault/state/provider.svelte";
 
-export function loginUnlockStoreId(vault: VaultState): string {
-  if (vault.activeVault.kind === ActiveVaultKind.Open) {
-    const storeId = vault.activeVault.storeId.trim();
-    if (storeId) return storeId;
-  }
-  if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
-    const storeId = vault.selectedLoginVault.storeId.trim();
-    if (storeId) return storeId;
-  }
-  if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
-    const storeId = vault.localVaultCatalog.first.storeId.trim();
-    if (storeId) return storeId;
-  }
-  return "";
-}
-
 /** Browser orchestration for an existing-vault import retained across device unlock. */
 type ExistingVaultPasswordUnlock = {
   readonly entryId: string;
@@ -51,6 +35,23 @@ export class ExistingVaultImportLifecycle {
   });
 
   constructor(private readonly vault: VaultState) {}
+
+  get unlockStoreId(): string {
+    const vault = this.vault;
+    if (vault.activeVault.kind === ActiveVaultKind.Open) {
+      const storeId = vault.activeVault.storeId.trim();
+      if (storeId) return storeId;
+    }
+    if (vault.selectedLoginVault.kind === LoginVaultSelectionKind.Selected) {
+      const storeId = vault.selectedLoginVault.storeId.trim();
+      if (storeId) return storeId;
+    }
+    if (vault.localVaultCatalog.kind === LocalVaultCatalogKind.Available) {
+      const storeId = vault.localVaultCatalog.first.storeId.trim();
+      if (storeId) return storeId;
+    }
+    return "";
+  }
 
   get waitingForDevice(): boolean {
     return this.queue.kind === ExistingVaultImportQueueKind.WaitingForDevice;

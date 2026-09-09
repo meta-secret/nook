@@ -3,7 +3,10 @@ import initNookWasm, {
   NookClientRunModeUtil,
   NookRuntimeConfig,
 } from '$app-wasm'
-import { createVaultIdleSessionTracker } from '$lib/vault/idle-session-tracker'
+import {
+  VaultIdleSessionTracker,
+  VaultIdleWarningKind,
+} from '$lib/vault/idle-session-tracker'
 
 beforeAll(async () => {
   await initNookWasm()
@@ -57,9 +60,9 @@ describe('resolveVaultIdleWarningMs', () => {
 describe('createVaultIdleSessionTracker', () => {
   test('fires expire callback after timeout with no activity', async () => {
     let expired = false
-    const tracker = createVaultIdleSessionTracker({
+    const tracker = new VaultIdleSessionTracker({
       timeoutMs: 50,
-      warningMs: 0,
+      warning: { kind: VaultIdleWarningKind.Disabled },
       onExpire: () => {
         expired = true
       },
@@ -73,9 +76,9 @@ describe('createVaultIdleSessionTracker', () => {
 
   test('activity resets the idle timer', async () => {
     let expired = false
-    const tracker = createVaultIdleSessionTracker({
+    const tracker = new VaultIdleSessionTracker({
       timeoutMs: 80,
-      warningMs: 0,
+      warning: { kind: VaultIdleWarningKind.Disabled },
       onExpire: () => {
         expired = true
       },
@@ -91,9 +94,9 @@ describe('createVaultIdleSessionTracker', () => {
 
   test('expiration detaches every activity listener before locking', async () => {
     const removeListener = vi.spyOn(document, 'removeEventListener')
-    const tracker = createVaultIdleSessionTracker({
+    const tracker = new VaultIdleSessionTracker({
       timeoutMs: 30,
-      warningMs: 0,
+      warning: { kind: VaultIdleWarningKind.Disabled },
       onExpire: () => {
         tracker.stop()
       },

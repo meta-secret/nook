@@ -1,41 +1,31 @@
 import { BROWSER_MESSAGE_KEYS } from '../../lib/browser-message-keys'
+
 import {
   type EnrollmentFlowHost,
   type EnrollmentPageHints,
 } from '../enrollment-flow'
-import { cancelPendingAuthenticatorPickerRequest } from './authenticator-actions'
+
+import { authenticatorInteraction } from './authenticator-actions'
+
 import {
-  cancelPendingLoginPickerRequest,
-  sendDecodedRuntimeMessage,
-  sendAuthenticationOutcomeRuntimeMessage,
-  sendAuthenticatorBackupAttachRuntimeMessage,
-  sendAuthenticatorCodeRuntimeMessage,
-  sendAuthenticatorEnrollmentConfirmRuntimeMessage,
-  sendAuthenticatorEnrollmentStageRuntimeMessage,
-  sendAuthenticatorOptionsRuntimeMessage,
-  sendAuthenticatorPreviewRuntimeMessage,
-  sendRuntimeMessageWithoutResponse,
+  loginPasskeyInteraction,
+  authenticationRuntimeTransport,
 } from './login-passkey-actions'
+
 import {
   WidgetPlacementKind,
   widgetState,
   type WidgetWorkflowRoot,
 } from './state'
+
 import {
-  applyWidgetPosition,
-  attachPointerDrag,
   PointerDragBehaviorKind,
-  clampWidgetPosition,
+  authenticationWidgetPosition,
 } from './widget-position'
+
 import type { PilotVaultConnection, WorkflowCopy } from './workflow-ui'
-import {
-  WIDGET_HOST_ID,
-  progressLabel,
-  removeWidget,
-  translatedMessage,
-  translatedMessageWithSubstitution,
-  vaultConnectionLabel,
-} from './workflow-ui'
+
+import { WIDGET_HOST_ID, workflowUi } from './workflow-ui'
 
 const WIDGET_PANEL_STYLES = `
     :host {
@@ -267,52 +257,6 @@ type BuildEnrollmentFlowHostArgs = {
   openVaultButton: HTMLButtonElement
 }
 
-export function buildEnrollmentFlowHost({
-  panel,
-  step,
-  title,
-  description,
-  continueButton,
-  openVaultButton,
-}: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
-  return {
-    panel,
-    step,
-    title,
-    description,
-    continueButton,
-    openVaultButton,
-    setBusy: (value: boolean) => {
-      widgetState.busy = value
-    },
-    isBusy: () => widgetState.busy,
-    sendDecodedRuntimeMessage,
-    sendAuthenticationOutcomeRuntimeMessage,
-    sendAuthenticatorBackupAttachRuntimeMessage,
-    sendAuthenticatorCodeRuntimeMessage,
-    sendAuthenticatorEnrollmentConfirmRuntimeMessage,
-    sendAuthenticatorEnrollmentStageRuntimeMessage,
-    sendAuthenticatorOptionsRuntimeMessage,
-    sendAuthenticatorPreviewRuntimeMessage,
-    sendRuntimeMessageWithoutResponse,
-    translatedMessage,
-    translatedMessageWithSubstitution,
-  }
-}
-
-export function enrollmentCopy(hints: EnrollmentPageHints): WorkflowCopy {
-  if (hints.qr) {
-    return {
-      titleKey: BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
-      descriptionKey: BROWSER_MESSAGE_KEYS.WidgetEnrollDescription,
-    }
-  }
-  return {
-    titleKey: BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
-    descriptionKey: BROWSER_MESSAGE_KEYS.WidgetBackupDescription,
-  }
-}
-
 interface WidgetShell {
   host: HTMLElement
   panel: HTMLDivElement
@@ -332,174 +276,11 @@ type CreateWidgetMarkArgs = {
   size: number
 }
 
-export function createWidgetMark({
-  className,
-  size,
-}: CreateWidgetMarkArgs): HTMLImageElement {
-  const mark = document.createElement('img')
-  mark.className = className
-  mark.src = chrome.runtime.getURL('icons/nook.png')
-  mark.alt = ''
-  mark.setAttribute('aria-hidden', 'true')
-  mark.width = size
-  mark.height = size
-  return mark
-}
-
 type CreateWidgetShellArgs = {
   copy: WorkflowCopy
   vaultConnection: PilotVaultConnection
   currentStep: number
   totalSteps: number
-}
-
-export function createWidgetShell({
-  copy,
-  vaultConnection,
-  currentStep,
-  totalSteps,
-}: CreateWidgetShellArgs): WidgetShell {
-  const host = document.createElement('aside')
-  host.id = WIDGET_HOST_ID
-  host.setAttribute(
-    'aria-label',
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
-  )
-
-  const panel = document.createElement('div')
-  panel.className = 'panel'
-  panel.setAttribute('data-testid', 'nook-auth-gate')
-
-  const toolbar = document.createElement('div')
-  toolbar.className = 'toolbar'
-  toolbar.setAttribute('data-testid', 'nook-auth-gate-drag')
-
-  const step = document.createElement('p')
-  step.className = 'step-label'
-  const nookTypedArgs0_0: Parameters<typeof progressLabel>[0] = {
-    currentStep,
-    totalSteps,
-  }
-  step.textContent = progressLabel(nookTypedArgs0_0)
-
-  const collapseButton = document.createElement('button')
-  collapseButton.type = 'button'
-  collapseButton.className = 'icon-button collapse-button'
-  collapseButton.textContent = '▾'
-  collapseButton.setAttribute(
-    'aria-label',
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetCollapse),
-  )
-
-  const dismissButton = document.createElement('button')
-  dismissButton.type = 'button'
-  dismissButton.className = 'icon-button dismiss-button'
-  dismissButton.textContent = '×'
-  dismissButton.setAttribute(
-    'aria-label',
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
-  )
-  dismissButton.addEventListener('click', () => {
-    cancelPendingAuthenticatorPickerRequest()
-    cancelPendingLoginPickerRequest()
-    widgetState.dismissed = true
-    removeWidget()
-  })
-  toolbar.append(step, collapseButton, dismissButton)
-
-  const body = document.createElement('div')
-  body.className = 'body'
-
-  const nookTypedArgs0_1: Parameters<typeof createWidgetMark>[0] = {
-    className: 'mark',
-    size: 52,
-  }
-  const mark = createWidgetMark(nookTypedArgs0_1)
-
-  const title = document.createElement('h1')
-  title.textContent = translatedMessage(copy.titleKey)
-
-  const site = document.createElement('p')
-  site.className = 'site-context'
-  site.textContent = location.hostname
-
-  const vaultStatus = document.createElement('p')
-  vaultStatus.className = 'vault-status'
-  vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
-  vaultStatus.dataset.connected = vaultConnection.connected ? 'true' : 'false'
-  vaultStatus.textContent = vaultConnectionLabel(vaultConnection)
-
-  const description = document.createElement('p')
-  description.className = 'description'
-  description.textContent = translatedMessage(copy.descriptionKey)
-
-  const continueButton = document.createElement('button')
-  continueButton.type = 'button'
-  continueButton.className = 'primary-button'
-
-  const openVaultButton = document.createElement('button')
-  openVaultButton.type = 'button'
-  openVaultButton.className = 'secondary-button'
-  openVaultButton.setAttribute(
-    'aria-label',
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetOpenVault),
-  )
-  openVaultButton.textContent = translatedMessage(
-    BROWSER_MESSAGE_KEYS.WidgetOpenVault,
-  )
-  openVaultButton.addEventListener('click', () => {
-    const nookTypedArgs0_0: Parameters<typeof chrome.runtime.sendMessage>[0] = {
-      type: 'nook:open-simple-vault',
-    }
-    void chrome.runtime.sendMessage(nookTypedArgs0_0)
-  })
-
-  body.append(
-    mark,
-    site,
-    vaultStatus,
-    title,
-    description,
-    continueButton,
-    openVaultButton,
-  )
-
-  const collapsedLaunch = document.createElement('button')
-  collapsedLaunch.type = 'button'
-  collapsedLaunch.className = 'collapsed-launch'
-  const nookTypedArgs0_2: Parameters<typeof progressLabel>[0] = {
-    currentStep,
-    totalSteps,
-  }
-  collapsedLaunch.setAttribute(
-    'aria-label',
-    `${translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${progressLabel(nookTypedArgs0_2)}`,
-  )
-  collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
-
-  const nookTypedArgs0_3: Parameters<typeof createWidgetMark>[0] = {
-    className: 'collapsed-mark',
-    size: 40,
-  }
-  const collapsedMark = createWidgetMark(nookTypedArgs0_3)
-  const collapsedProgress = document.createElement('span')
-  collapsedProgress.className = 'collapsed-progress'
-  collapsedProgress.textContent = `${currentStep}/${totalSteps}`
-  collapsedLaunch.append(collapsedMark, collapsedProgress)
-
-  return {
-    host,
-    panel,
-    toolbar,
-    body,
-    step,
-    title,
-    description,
-    continueButton,
-    openVaultButton,
-    collapseButton,
-    collapsedLaunch,
-  }
 }
 
 type MountWidgetShellArgs = {
@@ -508,81 +289,350 @@ type MountWidgetShellArgs = {
   workflowRoot: WidgetWorkflowRoot
 }
 
-export function mountWidgetShell({
-  shell,
-  workflowKey,
-  workflowRoot,
-}: MountWidgetShellArgs): void {
-  const { host, panel, toolbar, body, collapseButton, collapsedLaunch } = shell
-  const applyCollapsedState = (): void => {
-    panel.classList.toggle('is-collapsed', widgetState.collapsed)
-    collapseButton.hidden = widgetState.collapsed
-    toolbar.hidden = widgetState.collapsed
-    body.hidden = widgetState.collapsed
-    collapsedLaunch.hidden = !widgetState.collapsed
-    host.setAttribute('aria-expanded', widgetState.collapsed ? 'false' : 'true')
-    requestAnimationFrame(() => {
-      if (widgetState.placement.kind === WidgetPlacementKind.Unpositioned)
-        return
-      const nookTypedArgs0_4: Parameters<typeof clampWidgetPosition>[0] = {
-        left: widgetState.placement.position.left,
-        top: widgetState.placement.position.top,
-        width: host.offsetWidth,
-        height: host.offsetHeight,
+/** Owns the browser runtime resources shared by these interactions. */
+type AuthenticationWidgetShellContext = {
+  readonly widgetState: typeof widgetState
+}
+class AuthenticationWidgetShell {
+  constructor(private readonly ui: AuthenticationWidgetShellContext) {}
+
+  buildEnrollmentFlowHost({
+    panel,
+    step,
+    title,
+    description,
+    continueButton,
+    openVaultButton,
+  }: BuildEnrollmentFlowHostArgs): EnrollmentFlowHost {
+    return {
+      panel,
+      step,
+      title,
+      description,
+      continueButton,
+      openVaultButton,
+      setBusy: (value: boolean) => {
+        this.ui.widgetState.busy = value
+      },
+      isBusy: () => this.ui.widgetState.busy,
+      sendDecodedRuntimeMessage:
+        authenticationRuntimeTransport.sendDecodedRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendAuthenticationOutcomeRuntimeMessage:
+        authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendAuthenticatorBackupAttachRuntimeMessage:
+        authenticationRuntimeTransport.sendAuthenticatorBackupAttachRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendAuthenticatorCodeRuntimeMessage:
+        authenticationRuntimeTransport.sendAuthenticatorCodeRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendAuthenticatorEnrollmentConfirmRuntimeMessage:
+        authenticationRuntimeTransport.sendAuthenticatorEnrollmentConfirmRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendAuthenticatorEnrollmentStageRuntimeMessage:
+        authenticationRuntimeTransport.sendAuthenticatorEnrollmentStageRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendAuthenticatorOptionsRuntimeMessage:
+        authenticationRuntimeTransport.sendAuthenticatorOptionsRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendAuthenticatorPreviewRuntimeMessage:
+        authenticationRuntimeTransport.sendAuthenticatorPreviewRuntimeMessage.bind(
+          authenticationRuntimeTransport,
+        ),
+      sendRuntimeMessageWithoutResponse:
+        authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse.bind(
+          authenticationRuntimeTransport,
+        ),
+      translatedMessage: workflowUi.translatedMessage.bind(workflowUi),
+      translatedMessageWithSubstitution:
+        workflowUi.translatedMessageWithSubstitution.bind(workflowUi),
+    }
+  }
+
+  enrollmentCopy(hints: EnrollmentPageHints): WorkflowCopy {
+    if (hints.qr) {
+      return {
+        titleKey: BROWSER_MESSAGE_KEYS.WidgetEnrollTitle,
+        descriptionKey: BROWSER_MESSAGE_KEYS.WidgetEnrollDescription,
       }
-      const position = clampWidgetPosition(nookTypedArgs0_4)
-      widgetState.setPosition(position)
-      const nookTypedArgs0_5: Parameters<typeof applyWidgetPosition>[0] = {
-        host,
-        position,
-      }
-      applyWidgetPosition(nookTypedArgs0_5)
+    }
+    return {
+      titleKey: BROWSER_MESSAGE_KEYS.WidgetBackupTitle,
+      descriptionKey: BROWSER_MESSAGE_KEYS.WidgetBackupDescription,
+    }
+  }
+
+  createWidgetMark({
+    className,
+    size,
+  }: CreateWidgetMarkArgs): HTMLImageElement {
+    const mark = document.createElement('img')
+    mark.className = className
+    mark.src = chrome.runtime.getURL('icons/nook.png')
+    mark.alt = ''
+    mark.setAttribute('aria-hidden', 'true')
+    mark.width = size
+    mark.height = size
+    return mark
+  }
+
+  createWidgetShell({
+    copy,
+    vaultConnection,
+    currentStep,
+    totalSteps,
+  }: CreateWidgetShellArgs): WidgetShell {
+    const host = document.createElement('aside')
+    host.id = WIDGET_HOST_ID
+    host.setAttribute(
+      'aria-label',
+      workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
+    )
+
+    const panel = document.createElement('div')
+    panel.className = 'panel'
+    panel.setAttribute('data-testid', 'nook-auth-gate')
+
+    const toolbar = document.createElement('div')
+    toolbar.className = 'toolbar'
+    toolbar.setAttribute('data-testid', 'nook-auth-gate-drag')
+
+    const step = document.createElement('p')
+    step.className = 'step-label'
+    const nookTypedArgs0_0: Parameters<typeof workflowUi.progressLabel>[0] = {
+      currentStep,
+      totalSteps,
+    }
+    step.textContent = workflowUi.progressLabel(nookTypedArgs0_0)
+
+    const collapseButton = document.createElement('button')
+    collapseButton.type = 'button'
+    collapseButton.className = 'icon-button collapse-button'
+    collapseButton.textContent = '▾'
+    collapseButton.setAttribute(
+      'aria-label',
+      workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetCollapse),
+    )
+
+    const dismissButton = document.createElement('button')
+    dismissButton.type = 'button'
+    dismissButton.className = 'icon-button dismiss-button'
+    dismissButton.textContent = '×'
+    dismissButton.setAttribute(
+      'aria-label',
+      workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
+    )
+    dismissButton.addEventListener('click', () => {
+      authenticatorInteraction.cancelPendingAuthenticatorPickerRequest()
+      loginPasskeyInteraction.cancelPendingLoginPickerRequest()
+      this.ui.widgetState.dismissed = true
+      workflowUi.removeWidget()
     })
+    toolbar.append(step, collapseButton, dismissButton)
+
+    const body = document.createElement('div')
+    body.className = 'body'
+
+    const nookTypedArgs0_1: Parameters<typeof this.createWidgetMark>[0] = {
+      className: 'mark',
+      size: 52,
+    }
+    const mark = this.createWidgetMark(nookTypedArgs0_1)
+
+    const title = document.createElement('h1')
+    title.textContent = workflowUi.translatedMessage(copy.titleKey)
+
+    const site = document.createElement('p')
+    site.className = 'site-context'
+    site.textContent = location.hostname
+
+    const vaultStatus = document.createElement('p')
+    vaultStatus.className = 'vault-status'
+    vaultStatus.setAttribute('data-testid', 'nook-auth-gate-vault-status')
+    vaultStatus.dataset.connected = vaultConnection.connected ? 'true' : 'false'
+    vaultStatus.textContent = workflowUi.vaultConnectionLabel(vaultConnection)
+
+    const description = document.createElement('p')
+    description.className = 'description'
+    description.textContent = workflowUi.translatedMessage(copy.descriptionKey)
+
+    const continueButton = document.createElement('button')
+    continueButton.type = 'button'
+    continueButton.className = 'primary-button'
+
+    const openVaultButton = document.createElement('button')
+    openVaultButton.type = 'button'
+    openVaultButton.className = 'secondary-button'
+    openVaultButton.setAttribute(
+      'aria-label',
+      workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetOpenVault),
+    )
+    openVaultButton.textContent = workflowUi.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetOpenVault,
+    )
+    openVaultButton.addEventListener('click', () => {
+      const nookTypedArgs0_0: Parameters<typeof chrome.runtime.sendMessage>[0] =
+        {
+          type: 'nook:open-simple-vault',
+        }
+      void chrome.runtime.sendMessage(nookTypedArgs0_0)
+    })
+
+    body.append(
+      mark,
+      site,
+      vaultStatus,
+      title,
+      description,
+      continueButton,
+      openVaultButton,
+    )
+
+    const collapsedLaunch = document.createElement('button')
+    collapsedLaunch.type = 'button'
+    collapsedLaunch.className = 'collapsed-launch'
+    const nookTypedArgs0_2: Parameters<typeof workflowUi.progressLabel>[0] = {
+      currentStep,
+      totalSteps,
+    }
+    collapsedLaunch.setAttribute(
+      'aria-label',
+      `${workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetExpand)}: ${workflowUi.progressLabel(nookTypedArgs0_2)}`,
+    )
+    collapsedLaunch.setAttribute('data-testid', 'nook-auth-gate-expand')
+
+    const nookTypedArgs0_3: Parameters<typeof this.createWidgetMark>[0] = {
+      className: 'collapsed-mark',
+      size: 40,
+    }
+    const collapsedMark = this.createWidgetMark(nookTypedArgs0_3)
+    const collapsedProgress = document.createElement('span')
+    collapsedProgress.className = 'collapsed-progress'
+    collapsedProgress.textContent = `${currentStep}/${totalSteps}`
+    collapsedLaunch.append(collapsedMark, collapsedProgress)
+
+    return {
+      host,
+      panel,
+      toolbar,
+      body,
+      step,
+      title,
+      description,
+      continueButton,
+      openVaultButton,
+      collapseButton,
+      collapsedLaunch,
+    }
   }
 
-  collapseButton.addEventListener('click', () => {
-    widgetState.collapsed = true
-    applyCollapsedState()
-  })
+  mountWidgetShell({
+    shell,
+    workflowKey,
+    workflowRoot,
+  }: MountWidgetShellArgs): void {
+    const { host, panel, toolbar, body, collapseButton, collapsedLaunch } =
+      shell
+    const applyCollapsedState = (): void => {
+      panel.classList.toggle('is-collapsed', this.ui.widgetState.collapsed)
+      collapseButton.hidden = this.ui.widgetState.collapsed
+      toolbar.hidden = this.ui.widgetState.collapsed
+      body.hidden = this.ui.widgetState.collapsed
+      collapsedLaunch.hidden = !this.ui.widgetState.collapsed
+      host.setAttribute(
+        'aria-expanded',
+        this.ui.widgetState.collapsed ? 'false' : 'true',
+      )
+      requestAnimationFrame(() => {
+        if (
+          this.ui.widgetState.placement.kind ===
+          WidgetPlacementKind.Unpositioned
+        )
+          return
+        const nookTypedArgs0_4: Parameters<
+          typeof authenticationWidgetPosition.clampWidgetPosition
+        >[0] = {
+          left: this.ui.widgetState.placement.position.left,
+          top: this.ui.widgetState.placement.position.top,
+          width: host.offsetWidth,
+          height: host.offsetHeight,
+        }
+        const position =
+          authenticationWidgetPosition.clampWidgetPosition(nookTypedArgs0_4)
+        this.ui.widgetState.setPosition(position)
+        const nookTypedArgs0_5: Parameters<
+          typeof authenticationWidgetPosition.applyWidgetPosition
+        >[0] = {
+          host,
+          position,
+        }
+        authenticationWidgetPosition.applyWidgetPosition(nookTypedArgs0_5)
+      })
+    }
 
-  const style = document.createElement('style')
-  style.textContent = WIDGET_PANEL_STYLES
-  panel.append(toolbar, body, collapsedLaunch)
-  const nookTypedArgs0_1: Parameters<typeof host.attachShadow>[0] = {
-    mode: 'open',
-  }
-  host.attachShadow(nookTypedArgs0_1).append(style, panel)
-  document.documentElement.append(host)
-  widgetState.attachHost(host)
-  widgetState.assignWorkflowKey(workflowKey)
-  widgetState.setRenderedWorkflowRoot(workflowRoot)
+    collapseButton.addEventListener('click', () => {
+      this.ui.widgetState.collapsed = true
+      applyCollapsedState()
+    })
 
-  const nookTypedArgs0_6: Parameters<typeof attachPointerDrag>[0] = {
-    host,
-    handle: toolbar,
-    behavior: { kind: PointerDragBehaviorKind.DragOnly },
-  }
-  attachPointerDrag(nookTypedArgs0_6)
-  const nookTypedArgs0_2: Parameters<typeof attachPointerDrag>[0]['behavior'] =
-    {
+    const style = document.createElement('style')
+    style.textContent = WIDGET_PANEL_STYLES
+    panel.append(toolbar, body, collapsedLaunch)
+    const nookTypedArgs0_1: Parameters<typeof host.attachShadow>[0] = {
+      mode: 'open',
+    }
+    host.attachShadow(nookTypedArgs0_1).append(style, panel)
+    document.documentElement.append(host)
+    this.ui.widgetState.attachHost(host)
+    this.ui.widgetState.assignWorkflowKey(workflowKey)
+    this.ui.widgetState.setRenderedWorkflowRoot(workflowRoot)
+
+    const nookTypedArgs0_6: Parameters<
+      typeof authenticationWidgetPosition.attachPointerDrag
+    >[0] = {
+      host,
+      handle: toolbar,
+      behavior: { kind: PointerDragBehaviorKind.DragOnly },
+    }
+    authenticationWidgetPosition.attachPointerDrag(nookTypedArgs0_6)
+    const nookTypedArgs0_2: Parameters<
+      typeof authenticationWidgetPosition.attachPointerDrag
+    >[0]['behavior'] = {
       kind: PointerDragBehaviorKind.Tappable,
       onTap: () => {
-        widgetState.collapsed = false
+        this.ui.widgetState.collapsed = false
         applyCollapsedState()
       },
     }
-  const nookTypedArgs0_7: Parameters<typeof attachPointerDrag>[0] = {
-    host,
-    handle: collapsedLaunch,
-    behavior: nookTypedArgs0_2,
-  }
-  attachPointerDrag(nookTypedArgs0_7)
-  applyCollapsedState()
-  if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {
-    const nookTypedArgs0_8: Parameters<typeof applyWidgetPosition>[0] = {
+    const nookTypedArgs0_7: Parameters<
+      typeof authenticationWidgetPosition.attachPointerDrag
+    >[0] = {
       host,
-      position: widgetState.placement.position,
+      handle: collapsedLaunch,
+      behavior: nookTypedArgs0_2,
     }
-    applyWidgetPosition(nookTypedArgs0_8)
+    authenticationWidgetPosition.attachPointerDrag(nookTypedArgs0_7)
+    applyCollapsedState()
+    if (this.ui.widgetState.placement.kind === WidgetPlacementKind.Positioned) {
+      const nookTypedArgs0_8: Parameters<
+        typeof authenticationWidgetPosition.applyWidgetPosition
+      >[0] = {
+        host,
+        position: this.ui.widgetState.placement.position,
+      }
+      authenticationWidgetPosition.applyWidgetPosition(nookTypedArgs0_8)
+    }
   }
 }
+
+export const authenticationWidgetShell = new AuthenticationWidgetShell({
+  widgetState,
+})

@@ -8,18 +8,17 @@
   } from '@lucide/svelte'
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
-  import {
-    grantsForIdentity,
-    identities,
-    identityById,
-    vaultById,
-  } from './identity-vault-fixtures'
+  import { identities, identityVaultFixtures } from './identity-vault-fixtures'
 
   let { navigate }: ExperimentProps = $props()
 
   let selectedIdentityId = $state('idn_7c9d')
-  const selectedIdentity = $derived(identityById(selectedIdentityId))
-  const selectedGrants = $derived(grantsForIdentity(selectedIdentityId))
+  const selectedIdentity = $derived(
+    identityVaultFixtures.identityById(selectedIdentityId),
+  )
+  const selectedGrants = $derived(
+    identityVaultFixtures.grantsForIdentity(selectedIdentityId),
+  )
 </script>
 
 <svelte:head>
@@ -34,7 +33,9 @@
     <ol>
       {#each identities as identity (identity.id)}
         {@const active = identity.id === selectedIdentityId}
-        {@const vaultCount = grantsForIdentity(identity.id).length}
+        {@const vaultCount = identityVaultFixtures.grantsForIdentity(
+          identity.id,
+        ).length}
         <li>
           <button
             type="button"
@@ -110,7 +111,7 @@
         </div>
         <div class="vault-stack">
           {#each selectedGrants as grant (grant.id)}
-            {@const vault = vaultById(grant.vaultId)}
+            {@const vault = identityVaultFixtures.vaultById(grant.vaultId)}
             <article class="vault-card">
               <div class="vault-topline">
                 <span class="vault-icon"><Vault class="size-5" /></span>

@@ -57,17 +57,20 @@ export type VaultSwitcherContainsNodeRequest = {
   node: Node;
 };
 
-export function placeVaultSwitcherMenu(
-  triggerRect: DOMRect,
-): VaultSwitcherMenuAnchor {
-  const minWidth = Math.max(triggerRect.width, 288);
-  const maxLeft = Math.max(8, window.innerWidth - minWidth - 8);
-  const left = Math.min(Math.max(8, triggerRect.left), maxLeft);
-  return {
-    top: triggerRect.bottom + 6,
-    left,
-    minWidth,
-  };
+export class VaultSwitcherAnchor {
+  constructor(private readonly request: DOMRect) {}
+  get placement(): VaultSwitcherMenuAnchor {
+    const triggerRect = this.request;
+
+    const minWidth = Math.max(triggerRect.width, 288);
+    const maxLeft = Math.max(8, window.innerWidth - minWidth - 8);
+    const left = Math.min(Math.max(8, triggerRect.left), maxLeft);
+    return {
+      top: triggerRect.bottom + 6,
+      left,
+      minWidth,
+    };
+  }
 }
 
 export function portalVaultSwitcherMenu(node: HTMLElement) {
@@ -82,17 +85,20 @@ export function portalVaultSwitcherMenu(node: HTMLElement) {
   };
 }
 
-export function vaultSwitcherContainsNode(
-  request: VaultSwitcherContainsNodeRequest,
-): boolean {
-  if (
-    request.root.kind === VaultSwitcherRootKind.Mounted &&
-    request.root.element.contains(request.node)
-  ) {
-    return true;
+export class VaultSwitcherPointerTarget {
+  constructor(private readonly request: VaultSwitcherContainsNodeRequest) {}
+  get contained(): boolean {
+    const request = this.request;
+
+    if (
+      request.root.kind === VaultSwitcherRootKind.Mounted &&
+      request.root.element.contains(request.node)
+    ) {
+      return true;
+    }
+    return (
+      request.menu.kind === VaultSwitcherLayerKind.Mounted &&
+      request.menu.element.contains(request.node)
+    );
   }
-  return (
-    request.menu.kind === VaultSwitcherLayerKind.Mounted &&
-    request.menu.element.contains(request.node)
-  );
 }

@@ -60,80 +60,88 @@ export type ConnectedVaultMenuNoteRequest = {
   entries: readonly VaultSwitcherEntryLabel[];
 };
 
-export function displayNameForVaultStore(
-  request: VaultEntryDisplayNameRequest,
-): string {
-  for (const entry of request.entries) {
-    if (entry.storeId === request.storeId) return entry.displayName;
+export class VaultEntryLabel {
+  constructor(private readonly request: VaultEntryDisplayNameRequest) {}
+  get text(): string {
+    const request = this.request;
+    for (const entry of request.entries) {
+      if (entry.storeId === request.storeId) return entry.displayName;
+    }
+    return request.fallbackName;
   }
-  return request.fallbackName;
 }
-
-export function resolveVaultExtensionLink(
-  request: VaultExtensionLinkRequest,
-): VaultExtensionLink {
-  if (request.offer.kind === ExtensionSetupOfferKind.Hidden) {
-    return { kind: VaultExtensionLinkKind.None };
-  }
-  const setup = request.offer.setup;
-  if (setup.status === ExtensionSetupStatus.NotInstalled) {
-    return { kind: VaultExtensionLinkKind.None };
-  }
-  if (setup.status === ExtensionSetupStatus.InstalledUnpaired) {
-    return { kind: VaultExtensionLinkKind.Unpaired };
-  }
-  if (setup.status === ExtensionSetupStatus.Paired) {
-    const nameRequest: VaultEntryDisplayNameRequest = {
-      entries: request.entries,
-      storeId: request.activeStoreId,
-      fallbackName: request.activeStoreId,
-    };
+export class VaultExtensionPresentation {
+  constructor(private readonly request: VaultExtensionLinkRequest) {}
+  get link(): VaultExtensionLink {
+    const request = this.request;
+    if (request.offer.kind === ExtensionSetupOfferKind.Hidden) {
+      return { kind: VaultExtensionLinkKind.None };
+    }
+    const setup = request.offer.setup;
+    if (setup.status === ExtensionSetupStatus.NotInstalled) {
+      return { kind: VaultExtensionLinkKind.None };
+    }
+    if (setup.status === ExtensionSetupStatus.InstalledUnpaired) {
+      return { kind: VaultExtensionLinkKind.Unpaired };
+    }
+    if (setup.status === ExtensionSetupStatus.Paired) {
+      const nameRequest: VaultEntryDisplayNameRequest = {
+        entries: request.entries,
+        storeId: request.activeStoreId,
+        fallbackName: request.activeStoreId,
+      };
+      return {
+        kind: VaultExtensionLinkKind.Connected,
+        storeId: request.activeStoreId,
+        vaultName: new VaultEntryLabel(nameRequest).text,
+      };
+    }
     return {
       kind: VaultExtensionLinkKind.Connected,
-      storeId: request.activeStoreId,
-      vaultName: displayNameForVaultStore(nameRequest),
+      storeId: setup.connectedVaultStoreId,
+      vaultName: setup.connectedVaultName,
     };
   }
-  return {
-    kind: VaultExtensionLinkKind.Connected,
-    storeId: setup.connectedVaultStoreId,
-    vaultName: setup.connectedVaultName,
-  };
 }
-
-export function currentVaultCanPairExtension(
-  request: CurrentVaultPairingAvailabilityRequest,
-): boolean {
-  if (request.activeStoreId.trim() === "") return false;
-  if (request.link.kind === VaultExtensionLinkKind.Unpaired) return true;
-  return (
-    request.link.kind === VaultExtensionLinkKind.Connected &&
-    request.link.storeId !== request.activeStoreId
-  );
-}
-
-export function vaultEntryHoldsExtensionGrant(
-  request: ExtensionConnectedEntryRequest,
-): boolean {
-  return (
-    request.link.kind === VaultExtensionLinkKind.Connected &&
-    request.link.storeId === request.storeId
-  );
-}
-
-export function connectedVaultMenuNote(
-  request: ConnectedVaultMenuNoteRequest,
-): ConnectedVaultMenuNote {
-  if (request.link.kind !== VaultExtensionLinkKind.Connected) {
-    return { kind: ConnectedVaultMenuNoteKind.Hidden };
+export class VaultPairingPresentation {
+  constructor(
+    private readonly request: CurrentVaultPairingAvailabilityRequest,
+  ) {}
+  get available(): boolean {
+    const request = this.request;
+    if (request.activeStoreId.trim() === "") return false;
+    if (request.link.kind === VaultExtensionLinkKind.Unpaired) return true;
+    return (
+      request.link.kind === VaultExtensionLinkKind.Connected &&
+      request.link.storeId !== request.activeStoreId
+    );
   }
-  for (const entry of request.entries) {
-    if (entry.storeId === request.link.storeId) {
+}
+export class VaultGrantPresentation {
+  constructor(private readonly request: ExtensionConnectedEntryRequest) {}
+  get connected(): boolean {
+    const request = this.request;
+    return (
+      request.link.kind === VaultExtensionLinkKind.Connected &&
+      request.link.storeId === request.storeId
+    );
+  }
+}
+export class ConnectedVaultMenuPresentation {
+  constructor(private readonly request: ConnectedVaultMenuNoteRequest) {}
+  get note(): ConnectedVaultMenuNote {
+    const request = this.request;
+    if (request.link.kind !== VaultExtensionLinkKind.Connected) {
       return { kind: ConnectedVaultMenuNoteKind.Hidden };
     }
+    for (const entry of request.entries) {
+      if (entry.storeId === request.link.storeId) {
+        return { kind: ConnectedVaultMenuNoteKind.Hidden };
+      }
+    }
+    return {
+      kind: ConnectedVaultMenuNoteKind.MissingLocally,
+      vaultName: request.link.vaultName,
+    };
   }
-  return {
-    kind: ConnectedVaultMenuNoteKind.MissingLocally,
-    vaultName: request.link.vaultName,
-  };
 }

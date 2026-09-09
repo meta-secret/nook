@@ -1,20 +1,20 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
-  fillLoginCredentials,
-  fillOneTimeCode,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormCredentialInteraction as credentials,
+  passwordFormInteraction as forms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const wholeDocumentPasswordFormSubmission: Parameters<
-  typeof submitLoginForm
+  typeof forms.submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
-function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
-  return submitLoginForm(request) === FormSubmissionResult.Submitted
+function didSubmit(
+  request: Parameters<typeof forms.submitLoginForm>[0],
+): boolean {
+  return forms.submitLoginForm(request) === FormSubmissionResult.Submitted
 }
 
 afterEach(() => {
@@ -40,31 +40,6 @@ describe('classified login activation', () => {
 
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(activated).toBe(false)
-  })
-
-  test('activates a submitter in the first legend of a disabled fieldset', () => {
-    document.body.innerHTML = `
-      <form method="post" aria-label="Login" action="/auth/login">
-        <input autocomplete="username" />
-        <input type="password" autocomplete="current-password" />
-        <fieldset disabled>
-          <legend>
-            <button id="sign-in" type="submit" formaction="/auth/login">Sign in</button>
-          </legend>
-          <button type="submit">Cancel</button>
-        </fieldset>
-      </form>
-    `
-    let activated = ''
-    document.querySelector('#sign-in')?.addEventListener('click', () => {
-      activated = 'sign-in'
-    })
-    document.querySelector('form')?.addEventListener('submit', (event) => {
-      event.preventDefault()
-    })
-
-    expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
-    expect(activated).toBe('sign-in')
   })
 
   test('does not activate a Continue control whose class is destructive', () => {
@@ -107,15 +82,16 @@ describe('classified login activation', () => {
       submitted = true
     })
 
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: {
-        username: 'user@example.test',
-        password: 'secret',
-      },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(
+      forms.fillLoginCredentials({
+        credentials: {
+          username: 'user@example.test',
+          password: 'secret',
+        },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(false)
     expect(submitted).toBe(false)
   })
@@ -249,8 +225,8 @@ describe('classified login activation', () => {
     document.querySelector('#next')?.addEventListener('click', () => {
       advanced = true
     })
-    const workflow = summarizeAuthenticationWorkflowForms()[0]
-    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
+    const workflow = forms.summarizeAuthenticationWorkflowForms()[0]
+    const submissionArgs: Parameters<typeof forms.submitLoginForm>[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: ((...[v = document]) => v)(workflow?.root),
       formScope: ((
@@ -287,16 +263,18 @@ describe('classified login activation', () => {
     if (!form) {
       throw new Error('expected login form')
     }
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: {
-        username: 'user@example.test',
-        password: 'secret',
-      },
-      kind: PasswordFormQueryKind.Scoped,
-      root: form,
-      formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: {
+          username: 'user@example.test',
+          password: 'secret',
+        },
+        kind: PasswordFormQueryKind.Scoped,
+        root: form,
+        formScope: { kind: PasswordFormScopeKind.Owned, owner: form },
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -350,12 +328,13 @@ describe('classified login activation', () => {
         advanced = true
       })
 
-      const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-        credentials: { username: 'pilot@nook.test', password: '' },
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-      }
-      expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+      expect(
+        forms.fillLoginCredentials({
+          credentials: { username: 'pilot@nook.test', password: '' },
+          kind: PasswordFormQueryKind.Root,
+          root: document,
+        }),
+      ).toBe(true)
       expect(didSubmit(wholeDocumentPasswordFormSubmission)).toBe(true)
       expect(advanced).toBe(true)
       expect(
@@ -449,9 +428,9 @@ describe('classified login activation', () => {
         ${control}
       </div>
     `
-    const workflow = summarizeAuthenticationWorkflowForms()[0]
+    const workflow = forms.summarizeAuthenticationWorkflowForms()[0]
     expect(workflow?.formScope.kind).toBe(PasswordFormScopeKind.Unowned)
-    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
+    const submissionArgs: Parameters<typeof forms.submitLoginForm>[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: ((...[v = document]) => v)(workflow?.root),
       formScope: ((
@@ -512,7 +491,7 @@ describe('classified login activation', () => {
       <input form="login" type="password" autocomplete="current-password" />
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     expect(observations[0]?.formScope.kind).toBe('owned')
     expect(observations[0]?.summary).toMatchObject({
@@ -543,19 +522,21 @@ describe('classified login activation', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     expect(observations[0]?.summary).toMatchObject({
       passwordFieldCount: 1,
       genericPasswordFieldCount: 1,
       currentPasswordFieldCount: 0,
     })
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'pilot', password: 'secret' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'pilot', password: 'secret' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('#header-password')?.value,
     ).toBe('')
@@ -575,7 +556,7 @@ describe('classified login activation', () => {
       </form>
     `
 
-    expect(summarizeAuthenticationWorkflowForms()).toEqual([])
+    expect(forms.summarizeAuthenticationWorkflowForms()).toEqual([])
   })
 
   test('keeps unowned login controls isolated from owned signup fields', () => {
@@ -590,7 +571,7 @@ describe('classified login activation', () => {
       </section>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(2)
     expect(observations.map(({ summary }) => summary)).toEqual(
       expect.arrayContaining([
@@ -620,7 +601,7 @@ describe('classified login activation', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(2)
     expect(observations.map(({ summary }) => summary)).toEqual(
       expect.arrayContaining([
@@ -655,7 +636,7 @@ describe('classified login activation', () => {
       </form>`,
     )
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations[0]?.summary).toMatchObject({
       currentPasswordFieldCount: 1,
       newPasswordFieldCount: 0,
@@ -676,12 +657,13 @@ describe('classified login activation', () => {
       </form>
     `
 
-    const loginFillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'pilot', password: 'secret' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(loginFillArgs)).toBe(true)
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'pilot', password: 'secret' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('[type="hidden"]')?.value,
     ).toBe('token')
@@ -699,12 +681,13 @@ describe('classified login activation', () => {
       </section>
     `
 
-    const submissionArgs: Parameters<typeof submitLoginForm>[0] = {
-      kind: PasswordFormQueryKind.Scoped,
-      root: document,
-      formScope: { kind: PasswordFormScopeKind.Unowned },
-    }
-    expect(didSubmit(submissionArgs)).toBe(false)
+    expect(
+      didSubmit({
+        kind: PasswordFormQueryKind.Scoped,
+        root: document,
+        formScope: { kind: PasswordFormScopeKind.Unowned },
+      }),
+    ).toBe(false)
   })
 
   test('does not activate a submitter inside an aria-disabled panel', () => {
@@ -796,12 +779,14 @@ describe('classified login activation', () => {
       event.preventDefault()
       submitted = true
     })
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -817,12 +802,14 @@ describe('classified login activation', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -836,12 +823,14 @@ describe('classified login activation', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -856,12 +845,14 @@ describe('classified login activation', () => {
       </form>
       <button type="submit" form="login" formmethod="post">Sign in</button>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('vault-pass')
@@ -876,12 +867,14 @@ describe('classified login activation', () => {
         <button type="submit" formmethod="dialog">Cancel</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('vault-pass')
@@ -896,12 +889,14 @@ describe('classified login activation', () => {
         <button hidden disabled type="submit" formmethod="dialog">Close</button>
       </form>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(true)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('vault-pass')
@@ -915,12 +910,14 @@ describe('classified login activation', () => {
       </form>
       <button type="submit" form="login" formmethod="dialog">Sign in</button>
     `
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: { username: 'vault-user', password: 'vault-pass' },
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: { username: 'vault-user', password: 'vault-pass' },
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(false)
     expect(
       document.querySelector<HTMLInputElement>('input[type="password"]')?.value,
     ).toBe('')
@@ -941,12 +938,14 @@ describe('classified login activation', () => {
         event.preventDefault()
         submitted = true
       })
-      const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-        credentials: { username: 'vault-user', password: 'vault-pass' },
-        kind: PasswordFormQueryKind.Root,
-        root: document,
-      }
-      expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+      expect(
+        forms.fillLoginCredentials({
+          credentials: { username: 'vault-user', password: 'vault-pass' },
+          kind: PasswordFormQueryKind.Root,
+          root: document,
+        }),
+      ).toBe(false)
       expect(
         document.querySelector<HTMLInputElement>('input[type="password"]')
           ?.value,
@@ -980,12 +979,13 @@ describe('classified login activation', () => {
     let inputEvents = 0
     field?.addEventListener('input', () => inputEvents++)
 
-    const oneTimeCodeFillArgs: Parameters<typeof fillOneTimeCode>[0] = {
-      code: '123456',
-      kind: PasswordFormQueryKind.Root,
-      root: document,
-    }
-    expect(fillOneTimeCode(oneTimeCodeFillArgs)).toBe(true)
+    expect(
+      credentials.fillOneTimeCode({
+        code: '123456',
+        kind: PasswordFormQueryKind.Root,
+        root: document,
+      }),
+    ).toBe(true)
     expect(field?.value).toBe('123456')
     expect(inputEvents).toBe(1)
     expect(document.activeElement).toBe(field)

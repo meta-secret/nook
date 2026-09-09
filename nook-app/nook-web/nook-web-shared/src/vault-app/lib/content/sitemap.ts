@@ -45,12 +45,17 @@ export class ConfiguredSiteUrlEnvironment {
 export type SiteUrlEnvironment =
   DefaultSiteUrlEnvironment | ConfiguredSiteUrlEnvironment;
 
-export function siteUrlFromEnv(environment: SiteUrlEnvironment): string {
-  const trimmed = environment.siteUrl.trim();
-  if (trimmed) {
-    return trimmed.replace(/\/$/, "");
+export class SiteUrlConfiguration {
+  constructor(private readonly request: SiteUrlEnvironment) {}
+  get url(): string {
+    const environment = this.request;
+
+    const trimmed = environment.siteUrl.trim();
+    if (trimmed) {
+      return trimmed.replace(/\/$/, "");
+    }
+    return DEFAULT_SITE_URL;
   }
-  return DEFAULT_SITE_URL;
 }
 
 type AbsoluteSiteUrlRequest = {
@@ -58,23 +63,17 @@ type AbsoluteSiteUrlRequest = {
   readonly path: string;
 };
 
-export function absoluteSiteUrl({
-  siteUrl,
-  path,
-}: AbsoluteSiteUrlRequest): string {
-  const base = siteUrl.replace(/\/$/, "");
-  if (path === "/") {
-    return `${base}/`;
-  }
-  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
-}
+export class PublicSiteLocation {
+  constructor(private readonly request: AbsoluteSiteUrlRequest) {}
+  get url(): string {
+    const { siteUrl, path } = this.request;
 
-function escapeXml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+    const base = siteUrl.replace(/\/$/, "");
+    if (path === "/") {
+      return `${base}/`;
+    }
+    return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+  }
 }
 
 type SitemapXmlDocument = {
@@ -82,38 +81,54 @@ type SitemapXmlDocument = {
   readonly lastmod: Date;
 };
 
-export function buildSitemapXml({
-  siteUrl,
-  lastmod,
-}: SitemapXmlDocument): string {
-  const isoDate = lastmod.toISOString().slice(0, 10);
-  const body = PUBLIC_SITEMAP_ENTRIES.map(
-    (entry) => `  <url>
-    <loc>${escapeXml(
+export class SitemapDocument {
+  private static escapeXml(value: string): string {
+    return value
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  constructor(private readonly request: SitemapXmlDocument) {}
+  get xml(): string {
+    const { siteUrl, lastmod } = this.request;
+
+    const isoDate = lastmod.toISOString().slice(0, 10);
+    const body = PUBLIC_SITEMAP_ENTRIES.map(
+      (entry) => `  <url>
+    <loc>${SitemapDocument.escapeXml(
       (() => {
-        const absoluteSiteUrlArgs: Parameters<typeof absoluteSiteUrl>[0] = {
+        const absoluteSiteUrlArgs: ConstructorParameters<
+          typeof PublicSiteLocation
+        >[0] = {
           siteUrl,
           path: entry.path,
         };
-        return absoluteSiteUrl(absoluteSiteUrlArgs);
+        return new PublicSiteLocation(absoluteSiteUrlArgs).url;
       })(),
     )}</loc>
     <lastmod>${isoDate}</lastmod>
     <changefreq>${entry.changefreq}</changefreq>
     <priority>${entry.priority}</priority>
   </url>`,
-  ).join("\n");
+    ).join("\n");
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
+    return `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${body}
 </urlset>
 `;
+  }
 }
 
-export function buildRobotsTxt(siteUrl: string): string {
-  const base = siteUrl.replace(/\/$/, "");
-  return `User-agent: *
+export class RobotsDocument {
+  constructor(private readonly request: string) {}
+  get text(): string {
+    const siteUrl = this.request;
+
+    const base = siteUrl.replace(/\/$/, "");
+    return `User-agent: *
 Allow: /$
 Allow: /about.html
 Allow: /privacy.html
@@ -140,4 +155,5 @@ Disallow: /vault
 
 Sitemap: ${base}/sitemap.xml
 `;
+  }
 }

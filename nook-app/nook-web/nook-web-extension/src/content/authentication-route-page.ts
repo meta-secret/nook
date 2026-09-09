@@ -1,15 +1,15 @@
-import {
-  notifyAuthenticationSubmitValueAssigned,
-  observeAuthenticationSubmitValueAssignments,
-} from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
-import {
-  notifyAuthenticationRouteChanged,
-  observeAuthenticationRouteHistory,
-} from '../../../nook-web-shared/src/extension/authentication-route-history'
-import { installPageAuthenticationDirectSubmitBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
+import { authenticationFactObserver } from '../../../nook-web-shared/src/extension/authentication-fact-attributes'
+import { authenticationRouteBrowser } from '../../../nook-web-shared/src/extension/authentication-route-history'
+import { authenticationSubmissionBridge } from '../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 
-observeAuthenticationRouteHistory(notifyAuthenticationRouteChanged)
-observeAuthenticationSubmitValueAssignments(
-  notifyAuthenticationSubmitValueAssigned,
+authenticationRouteBrowser.observeAuthenticationRouteHistory(
+  authenticationRouteBrowser.notifyAuthenticationRouteChanged.bind(
+    authenticationRouteBrowser,
+  ),
 )
-installPageAuthenticationDirectSubmitBridge()
+authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
+  authenticationFactObserver.notifyAuthenticationSubmitValueAssigned.bind(
+    authenticationFactObserver,
+  ),
+)
+authenticationSubmissionBridge.installPageAuthenticationDirectSubmitBridge()

@@ -12,8 +12,8 @@ import {
   companion_authentication_workflow_match_kind,
   CompanionAuthenticationWorkflowMatchKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { classifiedAuthenticationWorkflowObservations } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
-import { summarizeAuthenticationWorkflowForms } from '../../../../nook-web-shared/src/extension/password-forms'
+import { AuthenticationWorkflowClassification } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+import { passwordFormInteraction } from '../../../../nook-web-shared/src/extension/password-forms'
 
 afterEach(cleanup)
 
@@ -25,11 +25,12 @@ test('does not treat authenticator enrollment verification as a login challenge'
 })
 
 function classifyRenderedScenario(): CompanionAuthenticationWorkflowMatchKind {
-  const observations = classifiedAuthenticationWorkflowObservations({
-    workflowForms: summarizeAuthenticationWorkflowForms(),
+  const observations = new AuthenticationWorkflowClassification({
+    workflowForms:
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
     authenticatorSetupHint: false,
     backupCodesHint: false,
-  }).map(({ facts }) => facts)
+  }).observations.map(({ facts }) => facts)
   return companion_authentication_workflow_match_kind(
     classify_companion_authentication_workflow_facts({ observations }),
   )

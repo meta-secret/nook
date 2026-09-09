@@ -1,4 +1,4 @@
-import { defaultSimpleVaultBaseUrl } from './lib/simple-vault-target'
+import { SimpleVaultTarget } from './lib/simple-vault-target'
 import {
   nook_vault_app_exclude_match_patterns,
   sentinel_vault_match_patterns,
@@ -115,7 +115,7 @@ export function createManifest(
 ): ExtensionManifest {
   const simpleVaultBaseUrl =
     args.kind === ExtensionManifestBuildKind.StoreRelease
-      ? defaultSimpleVaultBaseUrl()
+      ? SimpleVaultTarget.defaultBase()
       : args.simpleVaultBaseUrl
   const simpleVaultMatch = simple_vault_match_pattern(simpleVaultBaseUrl)
   const vaultAppExclusions =

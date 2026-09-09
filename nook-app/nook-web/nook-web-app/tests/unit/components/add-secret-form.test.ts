@@ -2,6 +2,7 @@ import { describe, expect, test, vi } from 'vitest'
 import { fireEvent, render, waitFor } from '@testing-library/svelte'
 import {
   SecretType,
+  default_password_generation_options,
   type NookSecretRecord,
   type PasswordGenerationOptions,
 } from '$lib/nook'
@@ -95,13 +96,9 @@ describe('AddSecretForm password generation', () => {
     await fireEvent.click(view.getByTestId('password-generator-toggle'))
     await fireEvent.click(view.getByTestId('generate-password-btn'))
 
-    expect(onGeneratePassword).toHaveBeenCalledWith({
-      length: 20,
-      lowercase: true,
-      uppercase: true,
-      numbers: true,
-      symbols: true,
-    })
+    expect(onGeneratePassword).toHaveBeenCalledWith(
+      default_password_generation_options(),
+    )
     expect((view.getByTestId('secret-value') as HTMLInputElement).value).toBe(
       'rust-generated-password',
     )

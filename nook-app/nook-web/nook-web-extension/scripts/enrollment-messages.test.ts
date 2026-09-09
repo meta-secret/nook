@@ -3,20 +3,17 @@ import { companionWasmReady } from '../../nook-web-shared/src/extension/companio
 await companionWasmReady
 import { describe, expect, test } from 'bun:test'
 import {
-  isWebsiteAuthenticatorBackupAttachMessage,
-  isWebsiteAuthenticatorEnrollConfirmMessage,
-  isWebsiteAuthenticatorEnrollPreviewMessage,
-  isWebsiteAuthenticatorEnrollStageMessage,
+  WebsiteAuthenticatorBackupAttachMessage as WebsiteAuthenticatorBackupAttachMessageSchema,
+  WebsiteAuthenticatorEnrollConfirmMessage as WebsiteAuthenticatorEnrollConfirmMessageSchema,
+  WebsiteAuthenticatorEnrollPreviewMessage as WebsiteAuthenticatorEnrollPreviewMessageSchema,
+  WebsiteAuthenticatorEnrollStageMessage as WebsiteAuthenticatorEnrollStageMessageSchema,
 } from '../src/lib/enrollment-messages'
-import {
-  extractDocumentBackupCodeCandidates,
-  pageHasDocumentBackupCodeHint,
-} from '../src/lib/backup-code-candidates'
+import { recoveryCopyObservation } from '../src/lib/backup-code-candidates'
 
 describe('enrollment message guards', () => {
   test('accepts bounded otpauth preview, stage, and confirm payloads', () => {
     expect(
-      isWebsiteAuthenticatorEnrollPreviewMessage({
+      WebsiteAuthenticatorEnrollPreviewMessageSchema.is({
         type: 'nook:website-authenticator-enroll-preview',
         payload: {
           origin: 'https://example.test',
@@ -27,7 +24,7 @@ describe('enrollment message guards', () => {
     ).toBe(true)
 
     expect(
-      isWebsiteAuthenticatorEnrollStageMessage({
+      WebsiteAuthenticatorEnrollStageMessageSchema.is({
         type: 'nook:website-authenticator-enroll-stage',
         payload: {
           origin: 'https://example.test',
@@ -39,7 +36,7 @@ describe('enrollment message guards', () => {
     ).toBe(true)
 
     expect(
-      isWebsiteAuthenticatorEnrollConfirmMessage({
+      WebsiteAuthenticatorEnrollConfirmMessageSchema.is({
         type: 'nook:website-authenticator-enroll-confirm',
         payload: {
           origin: 'https://example.test',
@@ -50,7 +47,7 @@ describe('enrollment message guards', () => {
     ).toBe(true)
 
     expect(
-      isWebsiteAuthenticatorEnrollConfirmMessage({
+      WebsiteAuthenticatorEnrollConfirmMessageSchema.is({
         type: 'nook:website-authenticator-enroll-confirm',
         payload: {
           origin: 'https://example.test',
@@ -64,7 +61,7 @@ describe('enrollment message guards', () => {
 
   test('rejects hotp, missing vault, and invalid backup attach modes', () => {
     expect(
-      isWebsiteAuthenticatorEnrollPreviewMessage({
+      WebsiteAuthenticatorEnrollPreviewMessageSchema.is({
         type: 'nook:website-authenticator-enroll-preview',
         payload: {
           origin: 'https://example.test',
@@ -74,7 +71,7 @@ describe('enrollment message guards', () => {
     ).toBe(false)
 
     expect(
-      isWebsiteAuthenticatorBackupAttachMessage({
+      WebsiteAuthenticatorBackupAttachMessageSchema.is({
         type: 'nook:website-authenticator-backup-attach',
         payload: {
           origin: 'https://example.test',
@@ -87,7 +84,7 @@ describe('enrollment message guards', () => {
     ).toBe(false)
 
     expect(
-      isWebsiteAuthenticatorBackupAttachMessage({
+      WebsiteAuthenticatorBackupAttachMessageSchema.is({
         type: 'nook:website-authenticator-backup-attach',
         payload: {
           origin: 'https://example.test',
@@ -113,10 +110,9 @@ describe('backup code candidate extraction', () => {
       'alice@example.test',
     ].join('\n')
 
-    expect(extractDocumentBackupCodeCandidates(text)).toEqual([
-      'A1B2-C3D4-E5F6',
-      'G7H8-I9J0-K1L2',
-    ])
+    expect(
+      recoveryCopyObservation.extractDocumentBackupCodeCandidates(text),
+    ).toEqual(['A1B2-C3D4-E5F6', 'G7H8-I9J0-K1L2'])
   })
 
   test('does not treat 2fa inside emails as a backup-code page hint', () => {
@@ -130,11 +126,15 @@ describe('backup code candidate extraction', () => {
       value: { body },
     })
     try {
-      expect(pageHasDocumentBackupCodeHint()).toBe(false)
+      expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(
+        false,
+      )
       body.innerText = 'Save your backup codes\nA1B2-C3D4-E5F6'
-      expect(pageHasDocumentBackupCodeHint()).toBe(true)
+      expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(true)
       body.innerText = 'Enable 2FA codes for your account'
-      expect(pageHasDocumentBackupCodeHint()).toBe(false)
+      expect(recoveryCopyObservation.pageHasDocumentBackupCodeHint()).toBe(
+        false,
+      )
     } finally {
       if (!documentWasPresent) {
         Reflect.deleteProperty(globalThis, 'document')

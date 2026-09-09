@@ -1,31 +1,31 @@
 <script lang="ts">
   type EnrollmentCodeUnlock = {
-    readonly code: string
-    readonly password: string
-  }
+    readonly code: string;
+    readonly password: string;
+  };
 
   type VaultPasswordUnlock = {
-    readonly entryId: string
-    readonly password: string
-  }
+    readonly entryId: string;
+    readonly password: string;
+  };
 
   import {
     configured_vault_application,
     type StartSentinelGenesisArgs,
-  } from '$app-wasm'
-  import { onDestroy } from 'svelte'
-  import LoginGate from '$lib/components/LoginGate.svelte'
-  import PasskeyAuthOverlay from '$lib/components/PasskeyAuthOverlay.svelte'
-  import VaultStatusBar from '$lib/components/VaultStatusBar.svelte'
-  import { VaultStatusBarVariant } from '$lib/components/vault-status-bar-state'
+  } from "$app-wasm";
+  import { onDestroy } from "svelte";
+  import LoginGate from "$lib/components/LoginGate.svelte";
+  import PasskeyAuthOverlay from "$lib/components/PasskeyAuthOverlay.svelte";
+  import VaultStatusBar from "$lib/components/VaultStatusBar.svelte";
+  import { VaultStatusBarVariant } from "$lib/components/vault-status-bar-state";
   import {
     WorkspaceRoute,
     WorkspaceRouteLookupKind,
-    workspaceRouteFromPath,
-  } from '$lib/app/workspace-route'
-  import type { VaultState } from '$lib/vault.svelte'
+    WorkspacePath,
+  } from "$lib/app/workspace-route";
+  import type { VaultState } from "$lib/vault.svelte";
 
-  const APP_KIND = configured_vault_application()
+  const APP_KIND = configured_vault_application();
 
   let {
     vault,
@@ -49,55 +49,57 @@
     onCreateSentinelParticipantResponse,
     onDismissPasskey,
   }: {
-    vault: VaultState
-    showAccessGate: boolean
-    existingVaultNeedsDeviceUnlock: boolean
-    usesExtensionDeviceIdentity: boolean
-    showPasskeyOverlay: boolean
-    sentinelInvitationRequest: string
-    sentinelParticipantResponsePending: boolean
-    sentinelParticipantResponse: string
-    sentinelOnboardingPackage: string
-    onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>
-    onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>
-    onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>
-    onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>
-    onSwitchVault: () => Promise<void>
-    onSentinelUnlocked: () => Promise<void>
-    onCreateDeviceVault: (label: string) => Promise<void>
-    onStartSentinelGenesis: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onCreateSentinelParticipantKey: () => Promise<string>
+    vault: VaultState;
+    showAccessGate: boolean;
+    existingVaultNeedsDeviceUnlock: boolean;
+    usesExtensionDeviceIdentity: boolean;
+    showPasskeyOverlay: boolean;
+    sentinelInvitationRequest: string;
+    sentinelParticipantResponsePending: boolean;
+    sentinelParticipantResponse: string;
+    sentinelOnboardingPackage: string;
+    onUnlock: (skipExtensionDiscovery?: boolean) => Promise<void>;
+    onUseEnrollmentCode: (args: EnrollmentCodeUnlock) => Promise<void>;
+    onAcceptSentinelOnboardingPackage: (packageJson: string) => Promise<void>;
+    onUnlockWithPassword: (args: VaultPasswordUnlock) => Promise<void>;
+    onSwitchVault: () => Promise<void>;
+    onSentinelUnlocked: () => Promise<void>;
+    onCreateDeviceVault: (label: string) => Promise<void>;
+    onStartSentinelGenesis: (
+      args: StartSentinelGenesisArgs,
+    ) => Promise<boolean>;
+    onCreateSentinelParticipantKey: () => Promise<string>;
     onCreateSentinelParticipantResponse: (
       requestPayload: string,
-    ) => Promise<string>
-    onDismissPasskey: () => void
-  } = $props()
+    ) => Promise<string>;
+    onDismissPasskey: () => void;
+  } = $props();
 
-  const appVersion = '0.1.0'
+  const appVersion = "0.1.0";
 
   function devicesAccessRouteOpen(): boolean {
-    if (!('window' in globalThis)) return false
-    const route = workspaceRouteFromPath(window.location.pathname)
+    if (!("window" in globalThis)) return false;
+    const route = new WorkspacePath(window.location.pathname).route;
     return (
       route.kind === WorkspaceRouteLookupKind.Workspace &&
       route.route === WorkspaceRoute.DevicesAccess
-    )
+    );
   }
 
   function sentinelInvitationOpen(): boolean {
-    return sentinelInvitationRequest.trim().length > 0
+    return sentinelInvitationRequest.trim().length > 0;
   }
 
   function identityTransitionPending(): boolean {
-    return vault.devicesAccessIdentityTransitionPending
+    return vault.devicesAccessIdentityTransitionPending;
   }
 
   onDestroy(() => {
     if (vault.isAuthenticated) {
-      vault.devicesAccessIdentityProtectionOpen = false
-      vault.devicesAccessIdentityTransitionPending = false
+      vault.devicesAccessIdentityProtectionOpen = false;
+      vault.devicesAccessIdentityTransitionPending = false;
     }
-  })
+  });
 </script>
 
 <div class="space-y-6">

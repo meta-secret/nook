@@ -15,8 +15,7 @@ vi.mock(
     sendRuntimeMessageWithoutResponse: vi.fn(),
   }),
 )
-
-import { captureSubmittedLogin } from '../../../../nook-web-extension/src/content/autofill/login-save'
+import { loginSaveInteraction } from '../../../../nook-web-extension/src/content/autofill/login-save'
 import { widgetState } from '../../../../nook-web-extension/src/content/autofill/state'
 
 afterEach(() => {
@@ -34,7 +33,10 @@ describe('submitted login capture', () => {
     const local = document.querySelector<HTMLButtonElement>('#local')
     const foreign = document.querySelector<HTMLButtonElement>('#foreign')
     if (!form || !local || !foreign) throw new Error('expected submit fixture')
-    form.addEventListener('submit', captureSubmittedLogin)
+    form.addEventListener(
+      'submit',
+      loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
+    )
 
     form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }))
     form.dispatchEvent(
@@ -53,7 +55,10 @@ describe('submitted login capture', () => {
       <input type="password" autocomplete="current-password" value="secret" /></form>`
     const form = document.querySelector('form')
     if (!form) throw new Error('expected ordinary login form')
-    form.addEventListener('submit', captureSubmittedLogin)
+    form.addEventListener(
+      'submit',
+      loginSaveInteraction.captureSubmittedLogin.bind(loginSaveInteraction),
+    )
 
     form.dispatchEvent(new SubmitEvent('submit', { cancelable: true }))
 

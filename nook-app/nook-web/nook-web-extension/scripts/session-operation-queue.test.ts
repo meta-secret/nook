@@ -5,6 +5,7 @@ import {
   SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
+  SessionOperationFailureKind,
 } from '../src/lib/session-operation-queue'
 
 enum ReleaseGateKind {
@@ -32,23 +33,21 @@ type SecretResidency =
   | { kind: SecretResidencyKind.Resident; secret: string }
   | { kind: SecretResidencyKind.Cleared }
 
-function deferred() {
-  let gate: ReleaseGate = { kind: ReleaseGateKind.Waiting }
-  const promise = new Promise<void>((resolve) => {
-    gate = { kind: ReleaseGateKind.Releasable, release: resolve }
+class SessionOperationGate {
+  private gate: ReleaseGate = { kind: ReleaseGateKind.Waiting }
+  readonly promise = new Promise<void>((resolve) => {
+    this.gate = { kind: ReleaseGateKind.Releasable, release: resolve }
   })
-  return {
-    promise,
-    release: () => {
-      if (gate.kind === ReleaseGateKind.Releasable) gate.release()
-    },
+
+  release(): void {
+    if (this.gate.kind === ReleaseGateKind.Releasable) this.gate.release()
   }
 }
 
 describe('SessionOperationQueue', () => {
   test('serializes work and prioritizes interactive operations', async () => {
     const queue = new SessionOperationQueue()
-    const blocker = deferred()
+    const blocker = new SessionOperationGate()
     const order: string[] = []
     const first = queue.enqueue({
       operation: async () => {
@@ -82,7 +81,7 @@ describe('SessionOperationQueue', () => {
 
   test('expires queued work and clears its sensitive input', async () => {
     const queue = new SessionOperationQueue()
-    const blocker = deferred()
+    const blocker = new SessionOperationGate()
     const first = queue.enqueue({
       operation: () => blocker.promise,
       options: DEFAULT_SESSION_OPERATION_OPTIONS,
@@ -141,7 +140,7 @@ describe('SessionOperationQueue', () => {
 
   test('closes terminally and clears queued sensitive input', async () => {
     const queue = new SessionOperationQueue()
-    const blocker = deferred()
+    const blocker = new SessionOperationGate()
     const first = queue.enqueue({
       operation: () => blocker.promise,
       options: DEFAULT_SESSION_OPERATION_OPTIONS,
@@ -176,5 +175,57 @@ describe('SessionOperationQueue', () => {
     ).rejects.toThrow('session expired')
     blocker.release()
     await first
+  })
+  test('rejects an already expired request before dispatch and releases its input once', async () => {
+    const queue = new SessionOperationQueue()
+    let dispatched = 0
+    let released = 0
+    const request = queue.enqueue({
+      operation: async () => {
+        dispatched += 1
+      },
+      options: {
+        priority: SessionOperationPriority.Normal,
+        expiry: {
+          kind: SessionOperationExpiryKind.Deadline,
+          expiresAt: Date.now() - 1,
+        },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: () => {
+            released += 1
+          },
+        },
+      },
+    })
+    await expect(request).rejects.toMatchObject({
+      kind: SessionOperationFailureKind.Expired,
+    })
+    queue.close(new Error('closed'))
+    expect(dispatched).toBe(0)
+    expect(released).toBe(1)
+  })
+
+  test('closing the queue leaves cleanup of running work with that operation', async () => {
+    const queue = new SessionOperationQueue()
+    const gate = new SessionOperationGate()
+    let released = 0
+    const running = queue.enqueue({
+      operation: () => gate.promise,
+      options: {
+        priority: SessionOperationPriority.Normal,
+        expiry: { kind: SessionOperationExpiryKind.None },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: () => {
+            released += 1
+          },
+        },
+      },
+    })
+    queue.close(new Error('closed'))
+    expect(released).toBe(0)
+    gate.release()
+    await running
   })
 })

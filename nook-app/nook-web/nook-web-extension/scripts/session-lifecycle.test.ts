@@ -15,10 +15,10 @@ describe('ensureExtensionSessionDocument', () => {
         },
       },
     } as typeof chrome
-    const { ensureExtensionSessionDocument } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await ensureExtensionSessionDocument()
+    await extensionSessionLifecycle.ensureExtensionSessionDocument()
     expect(createAttempts).toBe(1)
   })
 })
@@ -36,11 +36,13 @@ describe('openCompanionLauncherBestEffort', () => {
         create: () => Promise.reject(new Error('launcher unavailable')),
       },
     } as typeof chrome
-    const { openCompanionLauncher } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     await expect(
-      openCompanionLauncher(OpenCompanionLauncherIntent.Default),
+      extensionSessionLifecycle.openCompanionLauncher(
+        OpenCompanionLauncherIntent.Default,
+      ),
     ).rejects.toThrow('launcher unavailable')
   })
 
@@ -56,11 +58,13 @@ describe('openCompanionLauncherBestEffort', () => {
         create: () => Promise.reject(new Error('launcher unavailable')),
       },
     } as typeof chrome
-    const { openCompanionLauncherBestEffort } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
     expect(() =>
-      openCompanionLauncherBestEffort(OpenCompanionLauncherIntent.Default),
+      extensionSessionLifecycle.openCompanionLauncherBestEffort(
+        OpenCompanionLauncherIntent.Default,
+      ),
     ).not.toThrow()
     await Promise.resolve()
   })
@@ -83,10 +87,10 @@ describe('authentication surface notifications', () => {
         },
       },
     } as unknown as typeof chrome
-    const { refreshAuthenticationSurfaces } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await refreshAuthenticationSurfaces()
+    await extensionSessionLifecycle.refreshAuthenticationSurfaces()
 
     expect(messages).toEqual([
       { tabId: 7, type: 'nook:refresh-authentication-surfaces' },
@@ -106,12 +110,12 @@ describe('authentication surface notifications', () => {
         sendMessage: () => Promise.reject(new Error('tab unavailable')),
       },
     } as unknown as typeof chrome
-    const { refreshAuthenticationSurfaces } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
-      'authentication surface refresh delivery failed',
-    )
+    await expect(
+      extensionSessionLifecycle.refreshAuthenticationSurfaces(),
+    ).rejects.toThrow('authentication surface refresh delivery failed')
   })
 
   test('reports refresh failure when every eligible tab replies with failure', async () => {
@@ -125,12 +129,12 @@ describe('authentication surface notifications', () => {
         sendMessage: () => Promise.resolve({ ok: false }),
       },
     } as unknown as typeof chrome
-    const { refreshAuthenticationSurfaces } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
-      'authentication surface refresh delivery failed',
-    )
+    await expect(
+      extensionSessionLifecycle.refreshAuthenticationSurfaces(),
+    ).rejects.toThrow('authentication surface refresh delivery failed')
   })
 
   test('reports refresh failure when any eligible tab rejects delivery', async () => {
@@ -145,12 +149,12 @@ describe('authentication surface notifications', () => {
           Promise.resolve(tabId === 7 ? { ok: true } : { ok: false }),
       },
     } as unknown as typeof chrome
-    const { refreshAuthenticationSurfaces } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await expect(refreshAuthenticationSurfaces()).rejects.toThrow(
-      'authentication surface refresh delivery failed',
-    )
+    await expect(
+      extensionSessionLifecycle.refreshAuthenticationSurfaces(),
+    ).rejects.toThrow('authentication surface refresh delivery failed')
   })
 
   test('ignores restricted and Nook vault tabs without autofill listeners', async () => {
@@ -169,10 +173,10 @@ describe('authentication surface notifications', () => {
         },
       },
     } as unknown as typeof chrome
-    const { refreshAuthenticationSurfaces } =
+    const { extensionSessionLifecycle } =
       await import('../src/background/service-worker/session-lifecycle')
 
-    await refreshAuthenticationSurfaces()
+    await extensionSessionLifecycle.refreshAuthenticationSurfaces()
 
     expect(messages).toEqual([])
   })

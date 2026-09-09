@@ -2,13 +2,13 @@ import { expect, test } from '../fixtures'
 import { connectLocalVault, UI_TIMEOUT_MS } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
-  isExtensionPairedVaultIdentityDiscoveryMessage,
-  isOpenCompanionLauncherMessage,
+  OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   type CompanionIdentityDiscoveryTransportResponse,
   type ExtensionPairedVaultIdentityDiscoveryMessage,
   type OpenCompanionLauncherMessage,
+  ExtensionPairedVaultIdentityDiscoveryMessage as ExtensionPairedVaultIdentityDiscoveryMessageSchema,
 } from '../../../nook-web-shared/src/extension/runtime-messages'
 import type { CompanionIdentityStatus } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { installMockPasskeyRuntime } from '../passkey-mock'
@@ -146,7 +146,9 @@ test('offer browser extension install on vault home and in Devices', async ({
     throw new Error('Paired-vault discovery message was not recorded.')
   }
   const discoveryMessage = JSON.parse(encodedDiscoveryMessage)
-  if (!isExtensionPairedVaultIdentityDiscoveryMessage(discoveryMessage)) {
+  if (
+    !ExtensionPairedVaultIdentityDiscoveryMessageSchema.is(discoveryMessage)
+  ) {
     throw new Error('Paired-vault discovery message was malformed.')
   }
   const discoveryPayload = Reflect.get(discoveryMessage, 'payload')
@@ -176,7 +178,7 @@ test('offer browser extension install on vault home and in Devices', async ({
     throw new Error('Companion launcher message was not recorded.')
   }
   const launcherMessage = JSON.parse(encodedLauncherMessage)
-  if (!isOpenCompanionLauncherMessage(launcherMessage)) {
+  if (!OpenCompanionLauncherMessageGuard.is(launcherMessage)) {
     throw new Error('Companion launcher message was malformed.')
   }
   expect(launcherMessage.payload).toEqual({ intent: 'pair' })

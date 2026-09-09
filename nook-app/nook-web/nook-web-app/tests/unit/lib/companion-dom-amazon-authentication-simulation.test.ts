@@ -8,9 +8,8 @@ import {
   CompanionAuthenticationWorkflowMatchKind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
   FormSubmissionResult,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   DomAuthenticationSimulationOutcomeKind,
@@ -58,10 +57,11 @@ describe('Amazon DOM-backed authentication simulation', () => {
       submissionResult: FormSubmissionResult.Submitted,
       submittedControlIdentity: 'Continue',
     })
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation)
       throw new Error('expected Amazon authentication observation')
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,

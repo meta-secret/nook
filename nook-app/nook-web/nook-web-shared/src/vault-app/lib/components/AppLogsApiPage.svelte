@@ -1,37 +1,33 @@
 <script lang="ts">
-  import { onMount } from 'svelte'
-  import { loadAppLogsResponse, parseAppLogsQuery } from '$lib/app/logs-api'
+  import { onMount } from "svelte";
+  import { AppLogsExport, AppLogsQueryString } from "$lib/app/logs-api";
   import {
     LogsPageStateKind,
     type LogsPageState,
-  } from './app-logs-api-page-state'
-  import {
-    formatAppLogsError,
-    formatAppLogsLoading,
-    formatAppLogsPayload,
-  } from './app-logs-json-serialization'
+  } from "./app-logs-api-page-state";
+  import { AppLogsJsonDocument } from "./app-logs-json-serialization";
 
-  let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading })
+  let state = $state<LogsPageState>({ kind: LogsPageStateKind.Loading });
 
   onMount(() => {
-    document.title = 'Nook app logs (JSON)'
+    document.title = "Nook app logs (JSON)";
 
     void (async () => {
       try {
-        const query = parseAppLogsQuery(window.location.search)
+        const query = new AppLogsQueryString(window.location.search).query;
         state = {
           kind: LogsPageStateKind.Loaded,
-          payload: await loadAppLogsResponse(query),
-        }
+          payload: await new AppLogsExport(query).execute(),
+        };
       } catch (cause) {
         state = {
           kind: LogsPageStateKind.Failed,
           message:
-            cause instanceof Error ? cause.message : 'Failed to load app logs',
-        }
+            cause instanceof Error ? cause.message : "Failed to load app logs",
+        };
       }
-    })()
-  })
+    })();
+  });
 </script>
 
 <svelte:head>
@@ -40,11 +36,14 @@
 
 <main class="app-logs-api-page">
   {#if state.kind === LogsPageStateKind.Failed}
-    <pre data-testid="app-logs-error">{formatAppLogsError(state.message)}</pre>
+    <pre data-testid="app-logs-error">{AppLogsJsonDocument.error(state.message)
+        .text}</pre>
   {:else if state.kind === LogsPageStateKind.Loaded}
-    <pre data-testid="app-logs-json">{formatAppLogsPayload(state.payload)}</pre>
+    <pre data-testid="app-logs-json">{new AppLogsJsonDocument(state.payload)
+        .text}</pre>
   {:else}
-    <pre data-testid="app-logs-loading">{formatAppLogsLoading()}</pre>
+    <pre data-testid="app-logs-loading">{AppLogsJsonDocument.loading()
+        .text}</pre>
   {/if}
 </main>
 
@@ -54,8 +53,8 @@
     background: #0a0a0a;
     color: #e5e5e5;
     font-family:
-      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
-      'Courier New', monospace;
+      ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+      "Courier New", monospace;
     font-size: 12px;
     line-height: 1.45;
   }

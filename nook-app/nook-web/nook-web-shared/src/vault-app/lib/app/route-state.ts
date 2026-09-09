@@ -1,11 +1,11 @@
 import {
-  extensionConnectRequestFromLocation,
   ExtensionConnectRequestStateKind,
   type ExtensionConnectRequest,
   type ExtensionConnectRequestState,
+  extensionConnectionBrowser,
 } from "$lib/extension/connect";
 import {
-  getLegalPageFromPath,
+  ApplicationRoutePresentation,
   LegalPageLookupKind,
   type LegalPageId,
   type LegalPageLookup,
@@ -20,10 +20,15 @@ export type LegalRoute =
   | { kind: LegalRouteKind.Application }
   | { kind: LegalRouteKind.Legal; page: LegalPageId };
 
-export function legalRoute(page: LegalPageLookup): LegalRoute {
-  return page.kind === LegalPageLookupKind.LegalPage
-    ? { kind: LegalRouteKind.Legal, page: page.page }
-    : { kind: LegalRouteKind.Application };
+export class LegalRouteProjection {
+  constructor(private readonly request: LegalPageLookup) {}
+  get route(): LegalRoute {
+    const page = this.request;
+
+    return page.kind === LegalPageLookupKind.LegalPage
+      ? { kind: LegalRouteKind.Legal, page: page.page }
+      : { kind: LegalRouteKind.Application };
+  }
 }
 
 export enum ExtensionConnectIntentKind {
@@ -38,17 +43,24 @@ export type ExtensionConnectIntent =
       request: ExtensionConnectRequest;
     };
 
-export function extensionConnectIntent(
-  state: ExtensionConnectRequestState,
-): ExtensionConnectIntent {
-  return state.kind === ExtensionConnectRequestStateKind.Requested
-    ? { kind: ExtensionConnectIntentKind.Requested, request: state.request }
-    : { kind: ExtensionConnectIntentKind.Absent };
+export class ExtensionConnectionIntentProjection {
+  constructor(private readonly request: ExtensionConnectRequestState) {}
+  get intent(): ExtensionConnectIntent {
+    const state = this.request;
+
+    return state.kind === ExtensionConnectRequestStateKind.Requested
+      ? { kind: ExtensionConnectIntentKind.Requested, request: state.request }
+      : { kind: ExtensionConnectIntentKind.Absent };
+  }
 }
 
 export function initialLegalRoute(): LegalRoute {
   return "window" in globalThis
-    ? legalRoute(getLegalPageFromPath(window.location.pathname))
+    ? new LegalRouteProjection(
+        new ApplicationRoutePresentation(
+          window.location.pathname,
+        ).getLegalPageFromPath(),
+      ).route
     : { kind: LegalRouteKind.Application };
 }
 
@@ -56,8 +68,10 @@ export function initialExtensionConnectIntent(
   supportsExtension: boolean,
 ): ExtensionConnectIntent {
   return "window" in globalThis && supportsExtension
-    ? extensionConnectIntent(
-        extensionConnectRequestFromLocation(window.location),
-      )
+    ? new ExtensionConnectionIntentProjection(
+        extensionConnectionBrowser.extensionConnectRequestFromLocation(
+          window.location,
+        ),
+      ).intent
     : { kind: ExtensionConnectIntentKind.Absent };
 }

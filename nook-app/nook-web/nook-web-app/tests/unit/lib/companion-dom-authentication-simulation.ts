@@ -9,19 +9,15 @@ import {
   type AuthenticationPageObservationFacts,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  classifiedAuthenticationWorkflowObservations,
-  liveApprovedAuthenticationWorkflow,
+  AuthenticationWorkflowClassification,
+  LiveApprovedAuthenticationWorkflow,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
-  clearLoginCredentials,
-  fillLoginCredentials,
-  findOneTimeCodeFields,
-  findPasswordFields,
-  findUsernameFields,
   FormSubmissionResult,
   PasswordFormQueryKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormCredentialInteraction,
+  passwordFormInteraction,
+  passwordFieldDiscovery,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import type { SiteFixtureField } from '../../../../nook-web-extension/e2e/mock-auth/src/lib/site-fixtures'
 import {
@@ -90,9 +86,9 @@ function orderedObservedFields(
   observation: DomCredentialObservation,
 ): HTMLInputElement[] {
   const observedFields = [
-    ...findUsernameFields(observation),
-    ...findPasswordFields(observation),
-    ...findOneTimeCodeFields(observation),
+    ...passwordFieldDiscovery.findUsernameFields(observation),
+    ...passwordFieldDiscovery.findPasswordFields(observation),
+    ...passwordFieldDiscovery.findOneTimeCodeFields(observation),
   ]
   const observed = new Set(observedFields)
   return Array.from(
@@ -122,7 +118,9 @@ type DomCredentialPlanning = {
   readonly rejection: CredentialFillRejection | false
 }
 
-type DomCredentialObservation = Parameters<typeof fillLoginCredentials>[0]
+type DomCredentialObservation = Parameters<
+  typeof passwordFormInteraction.fillLoginCredentials
+>[0]
 
 type DomCredentialPlanningRequest = {
   readonly observation: DomCredentialObservation
@@ -183,16 +181,17 @@ export function simulateDomAuthentication({
     })
   }
 
-  const workflowForms = summarizeAuthenticationWorkflowForms()
-  const classifiedRequest: Parameters<
-    typeof classifiedAuthenticationWorkflowObservations
+  const workflowForms =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+  const classifiedRequest: ConstructorParameters<
+    typeof AuthenticationWorkflowClassification
   >[0] = {
     workflowForms,
     authenticatorSetupHint: false,
     backupCodesHint: false,
   }
-  const classified =
-    classifiedAuthenticationWorkflowObservations(classifiedRequest)
+  const classified = new AuthenticationWorkflowClassification(classifiedRequest)
+    .observations
   const matchRequest: Parameters<
     typeof classify_companion_authentication_workflow_facts
   >[0] = {
@@ -253,7 +252,9 @@ export function simulateDomAuthentication({
     }
   }
 
-  const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
+  const fillRequest: Parameters<
+    typeof passwordFormInteraction.fillLoginCredentials
+  >[0] = {
     kind: PasswordFormQueryKind.Scoped,
     ...selected.observation,
     credentials,
@@ -291,29 +292,33 @@ export function simulateDomAuthentication({
       submittedControlIdentity,
     }
   }
-  const filled = fillLoginCredentials(fillRequest)
+  const filled = passwordFormInteraction.fillLoginCredentials(fillRequest)
   const approvalIsActive = (): boolean => {
-    const approvalRequest: Parameters<
-      typeof liveApprovedAuthenticationWorkflow
+    const approvalRequest: ConstructorParameters<
+      typeof LiveApprovedAuthenticationWorkflow
     >[0] = {
       approved: selected,
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    return liveApprovedAuthenticationWorkflow(approvalRequest)
+    return new LiveApprovedAuthenticationWorkflow(approvalRequest).observation
   }
   const approvedFill = filled && approvalIsActive()
-  if (filled && !approvedFill) clearLoginCredentials(fillRequest)
-  const submissionRequest: Parameters<typeof submitLoginForm>[0] = {
+  if (filled && !approvedFill)
+    passwordFormCredentialInteraction.clearLoginCredentials(fillRequest)
+  const submissionRequest: Parameters<
+    typeof passwordFormInteraction.submitLoginForm
+  >[0] = {
     kind: PasswordFormQueryKind.Scoped,
     ...selected.observation,
     submissionApproval: {
       isApproved: approvalIsActive,
-      reject: () => clearLoginCredentials(fillRequest),
+      reject: () =>
+        passwordFormCredentialInteraction.clearLoginCredentials(fillRequest),
     },
   }
   const submissionResult = approvedFill
-    ? submitLoginForm(submissionRequest)
+    ? passwordFormInteraction.submitLoginForm(submissionRequest)
     : FormSubmissionResult.NotObserved
   return {
     kind: DomAuthenticationSimulationOutcomeKind.Login,

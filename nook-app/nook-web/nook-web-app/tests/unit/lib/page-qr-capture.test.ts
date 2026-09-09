@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from 'vitest'
-import { decodeVisibleOtpauthCandidates } from '../../../../nook-web-extension/src/lib/page-qr-capture'
+import { pageQrCapture } from '../../../../nook-web-extension/src/lib/page-qr-capture'
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -32,7 +32,9 @@ describe('page QR otpauth capture', () => {
       })
     }
 
-    await expect(decodeVisibleOtpauthCandidates()).resolves.toEqual({
+    await expect(
+      pageQrCapture.decodeVisibleOtpauthCandidates(),
+    ).resolves.toEqual({
       status: 'ready',
       candidates: [{ sourceLabel: 'QR 1', otpauthUri: uri }],
     })
@@ -61,7 +63,9 @@ describe('page QR otpauth capture', () => {
       })
     }
 
-    await expect(decodeVisibleOtpauthCandidates()).resolves.toEqual({
+    await expect(
+      pageQrCapture.decodeVisibleOtpauthCandidates(),
+    ).resolves.toEqual({
       status: 'unsupported',
       candidates: [],
     })

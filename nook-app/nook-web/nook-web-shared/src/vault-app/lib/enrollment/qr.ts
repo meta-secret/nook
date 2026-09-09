@@ -10,44 +10,46 @@ type EnrollmentQrCreationOptions = {
   readonly dense: boolean;
 };
 
-export function createEnrollmentQrOptions({
-  enrollmentLink,
-  dense,
-}: EnrollmentQrCreationOptions) {
-  return {
-    width: enrollmentQrSize,
-    height: enrollmentQrSize,
-    type: "svg",
-    shape: "square",
-    data: enrollmentLink,
-    margin: 4,
-    qrOptions: {
-      typeNumber: 0,
-      mode: "Byte",
-      errorCorrectionLevel: dense ? "L" : "Q",
-    },
-    ...(dense ? {} : { image: nookQrBadgeImage }),
-    imageOptions: {
-      hideBackgroundDots: true,
-      imageSize: dense ? 0 : 0.13,
+export class EnrollmentQrPresentation {
+  constructor(private readonly request: EnrollmentQrCreationOptions) {}
+
+  get options(): Partial<Options> {
+    const { enrollmentLink, dense } = this.request;
+    return {
+      width: enrollmentQrSize,
+      height: enrollmentQrSize,
+      type: "svg",
+      shape: "square",
+      data: enrollmentLink,
       margin: 4,
-      saveAsBlob: false,
-    },
-    dotsOptions: {
-      color: ink,
-      type: "dots",
-    },
-    cornersSquareOptions: {
-      color: ink,
-      type: "extra-rounded",
-    },
-    cornersDotOptions: {
-      color: ink,
-      type: "dot",
-    },
-    backgroundOptions: {
-      color: "#ffffff",
-      round: 0.08,
-    },
-  } satisfies Partial<Options>;
+      qrOptions: {
+        typeNumber: 0,
+        mode: "Byte",
+        errorCorrectionLevel: dense ? "L" : "Q",
+      },
+      ...(dense ? {} : { image: nookQrBadgeImage }),
+      imageOptions: {
+        hideBackgroundDots: true,
+        imageSize: dense ? 0 : 0.13,
+        margin: 4,
+        saveAsBlob: false,
+      },
+      dotsOptions: {
+        color: ink,
+        type: "dots",
+      },
+      cornersSquareOptions: {
+        color: ink,
+        type: "extra-rounded",
+      },
+      cornersDotOptions: {
+        color: ink,
+        type: "dot",
+      },
+      backgroundOptions: {
+        color: "#ffffff",
+        round: 0.08,
+      },
+    } satisfies Partial<Options>;
+  }
 }

@@ -11,15 +11,12 @@ import {
   companion_authentication_workflow_match_kind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { clickAdvanceControl } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
+import { authenticationSubmissionControls } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import type { FakeLoginCredentials } from './companion-credential-fill-simulation'
 
 const AIRBNB_FAKE_CREDENTIALS: FakeLoginCredentials = {
@@ -175,15 +172,20 @@ class AirbnbAuthenticationFixture {
     fixture.primary.addEventListener('click', () => {
       state = AirbnbFixtureState.Activated
     })
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected rejected Airbnb observation')
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
       usernameField: fixture.identity,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(state).toBe(AirbnbFixtureState.Untouched)
   }
 }
@@ -197,7 +199,8 @@ describe('Airbnb DOM-backed authentication simulation', () => {
   test('fills only the associated-label identity and activates Continue once', () => {
     expect(location.href).toBe('https://www.airbnb.com/login')
     const fixture = AirbnbAuthenticationFixture.stable().install()
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     const [observation] = observations
     if (!observation) throw new Error('expected Airbnb observation')
@@ -223,7 +226,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
     expect(fixture.primary).toMatchObject({ type: 'submit', disabled: false })
     expect(fixture.primary.hasAttribute('data-testid')).toBe(false)
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -277,7 +280,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
       expect(alternative.form).not.toBeInstanceOf(HTMLFormElement)
     }
     expect(
-      fillLoginCredentials({
+      passwordFormInteraction.fillLoginCredentials({
         kind: PasswordFormQueryKind.Scoped,
         root: observation.root,
         formScope: observation.formScope,
@@ -286,7 +289,7 @@ describe('Airbnb DOM-backed authentication simulation', () => {
     ).toBe(true)
     expect(fixture.identity.value).toBe(AIRBNB_FAKE_CREDENTIALS.username)
     expect(
-      submitLoginForm({
+      passwordFormInteraction.submitLoginForm({
         kind: PasswordFormQueryKind.Scoped,
         root: observation.root,
         formScope: observation.formScope,
@@ -320,9 +323,10 @@ describe('Airbnb DOM-backed authentication simulation', () => {
 
   test('rejects ambiguous semantic submits', () => {
     AirbnbAuthenticationFixture.ambiguous().install()
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected ambiguous Airbnb observation')
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,

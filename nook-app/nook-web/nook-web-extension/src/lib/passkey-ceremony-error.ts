@@ -8,14 +8,19 @@ type PasskeyCeremonyErrorArgs = {
   action: PasskeyOperation
 }
 
-export function passkeyCeremonyError(args: PasskeyCeremonyErrorArgs): Error {
-  const { error, action } = args
-  if (error instanceof DOMException && error.name === 'NotAllowedError') {
-    return new Error(
-      `PASSKEY_CEREMONY_NOT_ALLOWED: Passkey ${action} request did not finish.`,
-    )
+export class PasskeyCeremonyFailure {
+  constructor(private readonly request: PasskeyCeremonyErrorArgs) {}
+  get error(): Error {
+    const args = this.request
+
+    const { error, action } = args
+    if (error instanceof DOMException && error.name === 'NotAllowedError') {
+      return new Error(
+        `PASSKEY_CEREMONY_NOT_ALLOWED: Passkey ${action} request did not finish.`,
+      )
+    }
+    return error instanceof Error
+      ? error
+      : new Error(`Passkey ${action} ceremony failed.`)
   }
-  return error instanceof Error
-    ? error
-    : new Error(`Passkey ${action} ceremony failed.`)
 }

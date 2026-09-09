@@ -1,29 +1,28 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
-  classifiedAuthenticationWorkflowObservations,
-  liveApprovedAuthenticationWorkflow,
+  AuthenticationWorkflowClassification,
+  LiveApprovedAuthenticationWorkflow,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
 } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
+  passwordFormInteraction as forms,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const wholeDocumentPasswordFormSubmission: Parameters<
-  typeof submitLoginForm
+  typeof forms.submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
-function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
-  return submitLoginForm(request) === FormSubmissionResult.Submitted
+function didSubmit(
+  request: Parameters<typeof forms.submitLoginForm>[0],
+): boolean {
+  return forms.submitLoginForm(request) === FormSubmissionResult.Submitted
 }
 
 function ownedFormId(observation: PasswordFormObservation): string {
@@ -33,33 +32,29 @@ function ownedFormId(observation: PasswordFormObservation): string {
 }
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
-  const observation = summarizeAuthenticationWorkflowForms()[0]
+  const observation = forms.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
 
-function classifiedObservedAuthenticationWorkflow(): ReturnType<
-  typeof classifiedAuthenticationWorkflowObservations
->[number] {
-  const classified = classifiedAuthenticationWorkflowObservations({
+function classifiedObservedAuthenticationWorkflow(): AuthenticationWorkflowClassification['observations'][number] {
+  const classified = new AuthenticationWorkflowClassification({
     workflowForms: [observedAuthenticationWorkflow()],
     authenticatorSetupHint: false,
     backupCodesHint: false,
-  })[0]
+  }).observations[0]
   if (!classified) throw new Error('expected an approved workflow')
   return classified
 }
 
 function approvedWorkflowIsStillCurrent(
-  approved: ReturnType<
-    typeof classifiedAuthenticationWorkflowObservations
-  >[number],
+  approved: AuthenticationWorkflowClassification['observations'][number],
 ): boolean {
-  return liveApprovedAuthenticationWorkflow({
+  return new LiveApprovedAuthenticationWorkflow({
     approved,
     authenticatorSetupHint: false,
     backupCodesHint: false,
-  })
+  }).observation
 }
 
 afterEach(() => {
@@ -81,7 +76,7 @@ describe('authentication workflow ranking', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     const password = observations.find(
       (observation) => ownedFormId(observation) === 'password-login',
     )
@@ -92,14 +87,14 @@ describe('authentication workflow ranking', () => {
       throw new Error('expected independent password and passkey workflows')
     }
     expect(
-      authenticationPageObservationFacts({
+      forms.authenticationPageObservationFacts({
         observation: password,
         authenticatorSetupHint: false,
         backupCodesHint: false,
       }).authenticator.detailedPasskeyControl,
     ).toEqual({ kind: 'absent' })
     expect(
-      authenticationPageObservationFacts({
+      forms.authenticationPageObservationFacts({
         observation: passkey,
         authenticatorSetupHint: false,
         backupCodesHint: false,
@@ -131,7 +126,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -147,7 +142,7 @@ describe('authentication workflow ranking', () => {
         `<form method="post" id="password-${index}" action="/login"><input autocomplete="username" /><input type="password" autocomplete="current-password" /><button type="submit">Sign in</button></form>`,
     ).join('')
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -166,7 +161,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(
       observations.some(
         (observation) => ownedFormId(observation) === 'passkey-login',
@@ -194,7 +189,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -216,7 +211,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -240,7 +235,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -264,7 +259,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     const ownedFormIds = observations.map(ownedFormId)
     expect(ownedFormIds.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
@@ -287,7 +282,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = forms.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -324,7 +319,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -347,7 +342,7 @@ describe('authentication workflow ranking', () => {
     `
 
     expect(
-      authenticationPageObservationFacts({
+      forms.authenticationPageObservationFacts({
         observation: observedAuthenticationWorkflow(),
         authenticatorSetupHint: false,
         backupCodesHint: false,
@@ -377,7 +372,7 @@ describe('authentication workflow ranking', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(
       observations.some((observation) => observation.root === document),
     ).toBe(false)
@@ -409,16 +404,18 @@ describe('authentication workflow ranking', () => {
     if (!username || !password) {
       throw new Error('expected separate username and password fields')
     }
-    const fillArgs: Parameters<typeof fillLoginCredentials>[0] = {
-      credentials: {
-        username: 'user@example.test',
-        password: 'secret',
-      },
-      kind: PasswordFormQueryKind.Scoped,
-      root: passkey.root,
-      formScope: passkey.formScope,
-    }
-    expect(fillLoginCredentials(fillArgs)).toBe(false)
+
+    expect(
+      forms.fillLoginCredentials({
+        credentials: {
+          username: 'user@example.test',
+          password: 'secret',
+        },
+        kind: PasswordFormQueryKind.Scoped,
+        root: passkey.root,
+        formScope: passkey.formScope,
+      }),
+    ).toBe(false)
     expect(username.value).toBe('')
     expect(password.value).toBe('')
   })
@@ -430,14 +427,14 @@ describe('authentication workflow ranking', () => {
     passkey.textContent = 'Sign in with a passkey'
     document.body.append(passkey)
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     const selected = observations[0]
     if (!selected) {
       throw new Error('expected a direct-body passkey workflow')
     }
     expect(selected.summary.passkeyControlPresent).toBe(true)
     expect(
-      authenticationPageObservationFacts({
+      forms.authenticationPageObservationFacts({
         observation: selected,
         authenticatorSetupHint: false,
         backupCodesHint: false,
@@ -545,7 +542,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -576,7 +573,7 @@ describe('authentication workflow ranking', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -604,7 +601,7 @@ describe('authentication workflow ranking', () => {
       </div>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -631,7 +628,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -656,7 +653,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -681,7 +678,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -706,7 +703,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -730,7 +727,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -755,7 +752,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -781,7 +778,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -807,7 +804,7 @@ describe('authentication workflow ranking', () => {
       <button type="submit" form="login">Sign in</button>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -829,7 +826,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -855,7 +852,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -882,7 +879,7 @@ describe('authentication workflow ranking', () => {
       <form method="post" id="otp-trailing" action="/otp"><input autocomplete="one-time-code" inputmode="numeric" /></form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -908,7 +905,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -932,7 +929,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -956,7 +953,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -980,7 +977,7 @@ describe('authentication workflow ranking', () => {
       </form>
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations = forms.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(

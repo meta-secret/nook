@@ -36,7 +36,7 @@ describe('websiteLoginOptions', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { websiteLoginMatchAvailability, websiteLoginOptions } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     let grantAccessResponse: GrantAccessResponse = {
       response: {
@@ -92,7 +92,7 @@ describe('websiteLoginOptions', () => {
       loginAccountAvailabilityForOrigin,
       openCompanionLauncherBestEffort,
     }
-    const response = await websiteLoginOptions({
+    const response = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
       sender: {
         id: 'nook-extension',
@@ -121,30 +121,32 @@ describe('websiteLoginOptions', () => {
         status: WebsiteAuthenticatorResponseStatus.Locked,
       },
     }
-    const passiveResponse = await websiteLoginMatchAvailability({
-      origin: 'https://example.test',
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
-      dependencies,
-    })
+    const passiveResponse =
+      await accountPickerSessions.websiteLoginMatchAvailability({
+        origin: 'https://example.test',
+        sender: {
+          id: 'nook-extension',
+          url: 'https://example.test/login',
+          tab: { id: 42 },
+        },
+        dependencies,
+      })
     expect(passiveResponse).toEqual({ kind: 'locked' })
     expect(passiveAvailableWebsiteGrants).toHaveBeenCalledTimes(1)
     expect(availableWebsiteGrants).toHaveBeenCalledTimes(1)
     expect(openCompanionLauncherBestEffort).toHaveBeenCalledTimes(1)
 
     grantAccessResponse = { grants: [] }
-    const unlockedPassiveResponse = await websiteLoginMatchAvailability({
-      origin: 'https://example.test',
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
-      dependencies,
-    })
+    const unlockedPassiveResponse =
+      await accountPickerSessions.websiteLoginMatchAvailability({
+        origin: 'https://example.test',
+        sender: {
+          id: 'nook-extension',
+          url: 'https://example.test/login',
+          tab: { id: 42 },
+        },
+        dependencies,
+      })
     expect(unlockedPassiveResponse).toEqual({ kind: 'ready', count: 0 })
     expect(availabilityRequests).toHaveLength(1)
     expect(availabilityRequests[0]?.queue).toMatchObject({
@@ -154,15 +156,16 @@ describe('websiteLoginOptions', () => {
     expect(availabilityRequests[0]?.queue.expiresAt).toBeGreaterThan(Date.now())
 
     loginAccountAvailability = { ok: false }
-    const failedPassiveResponse = await websiteLoginMatchAvailability({
-      origin: 'https://example.test',
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
-      },
-      dependencies,
-    })
+    const failedPassiveResponse =
+      await accountPickerSessions.websiteLoginMatchAvailability({
+        origin: 'https://example.test',
+        sender: {
+          id: 'nook-extension',
+          url: 'https://example.test/login',
+          tab: { id: 42 },
+        },
+        dependencies,
+      })
     expect(failedPassiveResponse).toEqual({ kind: 'unavailable' })
 
     const failedSessionList = mock(() =>
@@ -188,15 +191,17 @@ describe('websiteLoginOptions', () => {
       loginAccountAvailabilityForOrigin(failedListRequest),
     ).resolves.toEqual({ ok: false })
 
-    const interactiveResponse = await websiteLoginOptions({
-      message: { payload: { origin: 'https://example.test' } },
-      sender: {
-        id: 'nook-extension',
-        url: 'https://example.test/login',
-        tab: { id: 42 },
+    const interactiveResponse = await accountPickerSessions.websiteLoginOptions(
+      {
+        message: { payload: { origin: 'https://example.test' } },
+        sender: {
+          id: 'nook-extension',
+          url: 'https://example.test/login',
+          tab: { id: 42 },
+        },
+        dependencies,
       },
-      dependencies,
-    })
+    )
     expect(interactiveResponse).toEqual({
       ok: true,
       status: 'ready',
@@ -209,7 +214,7 @@ describe('websiteLoginOptions', () => {
     grantAccessResponse = {
       response: { ok: false, reason: 'login-forbidden-origin' },
     }
-    const rejectedResponse = await websiteLoginOptions({
+    const rejectedResponse = await accountPickerSessions.websiteLoginOptions({
       message: { payload: { origin: 'https://example.test' } },
       sender: {
         id: 'foreign-extension',
@@ -231,7 +236,7 @@ describe('websiteLoginOptions', () => {
   })
 
   test('withholds direct account results invalidated during lookup', async () => {
-    const { websiteLoginOptions } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const { websiteAuthenticatorOptions } =
       await import('../src/background/service-worker/authenticator-operations')
@@ -248,7 +253,7 @@ describe('websiteLoginOptions', () => {
     }
     const sender = { id: 'nook-extension' }
     const message = { payload: { origin: 'https://example.test' } }
-    const loginResponse = await websiteLoginOptions({
+    const loginResponse = await accountPickerSessions.websiteLoginOptions({
       message,
       sender,
       dependencies: {

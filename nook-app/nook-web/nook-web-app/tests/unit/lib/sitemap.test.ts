@@ -1,11 +1,11 @@
 import { describe, expect, test } from 'vitest'
 import {
-  absoluteSiteUrl,
-  buildRobotsTxt,
-  buildSitemapXml,
+  PublicSiteLocation,
+  RobotsDocument,
+  SitemapDocument,
   ConfiguredSiteUrlEnvironment,
   PUBLIC_SITEMAP_ENTRIES,
-  siteUrlFromEnv,
+  SiteUrlConfiguration,
 } from '$lib/content/sitemap'
 
 describe('sitemap', () => {
@@ -15,11 +15,11 @@ describe('sitemap', () => {
   })
 
   test('buildSitemapXml emits valid loc tags for nokey.sh', () => {
-    const sitemapArgs: Parameters<typeof buildSitemapXml>[0] = {
+    const sitemapArgs: ConstructorParameters<typeof SitemapDocument>[0] = {
       siteUrl: 'https://nokey.sh',
       lastmod: new Date('2026-06-28T12:00:00Z'),
     }
-    const xml = buildSitemapXml(sitemapArgs)
+    const xml = new SitemapDocument(sitemapArgs).xml
     expect(xml).toContain('<loc>https://nokey.sh/</loc>')
     expect(xml).toContain('<loc>https://nokey.sh/privacy.html</loc>')
     expect(xml).toContain('<loc>https://nokey.sh/terms.html</loc>')
@@ -27,13 +27,13 @@ describe('sitemap', () => {
   })
 
   test('buildRobotsTxt references sitemap URL', () => {
-    expect(buildRobotsTxt('https://nokey.sh')).toContain(
+    expect(new RobotsDocument('https://nokey.sh').text).toContain(
       'Sitemap: https://nokey.sh/sitemap.xml',
     )
   })
 
   test('buildRobotsTxt indexes the landing page but excludes the app', () => {
-    const robots = buildRobotsTxt('https://nokey.sh')
+    const robots = new RobotsDocument('https://nokey.sh').text
     expect(robots).toContain('Allow: /$')
     expect(robots).toContain('Allow: /about.html')
     expect(robots).toContain('Allow: /privacy.html')
@@ -56,15 +56,17 @@ describe('sitemap', () => {
 
   test('siteUrlFromEnv prefers VITE_SITE_URL', () => {
     const environment = new ConfiguredSiteUrlEnvironment('https://example.com/')
-    expect(siteUrlFromEnv(environment)).toBe('https://example.com')
+    expect(new SiteUrlConfiguration(environment).url).toBe(
+      'https://example.com',
+    )
   })
 
   test('absoluteSiteUrl normalizes trailing slashes', () => {
     expect(
-      absoluteSiteUrl({
+      new PublicSiteLocation({
         siteUrl: 'https://nokey.sh/',
         path: '/privacy.html',
-      }),
+      }).url,
     ).toBe('https://nokey.sh/privacy.html')
   })
 })

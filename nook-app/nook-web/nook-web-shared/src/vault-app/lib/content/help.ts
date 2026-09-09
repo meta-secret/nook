@@ -10,8 +10,12 @@ export type HelpSection = {
 };
 
 /** Mermaid source for the local-first vault model (rendered in Help). */
-export function helpArchitectureDiagram(t: (key: string) => string): string {
-  return `flowchart TB
+export class HelpArchitectureDiagram {
+  constructor(private readonly request: (key: string) => string) {}
+  get source(): string {
+    const t = this.request;
+
+    return `flowchart TB
   subgraph device["${t(I18N_KEYS.HelpDiagramDevice)}"]
     V[${t(I18N_KEYS.HelpDiagramLocalProjection)}]
     E[${t(I18N_KEYS.HelpDiagramEventStore)}]
@@ -25,6 +29,7 @@ export function helpArchitectureDiagram(t: (key: string) => string): string {
   E <-->|${t(I18N_KEYS.HelpDiagramSetUnion)}| D
   E --> V
   K --> V`;
+  }
 }
 
 export const HELP_SECTIONS: HelpSection[] = [
@@ -38,7 +43,7 @@ export const HELP_SECTIONS: HelpSection[] = [
       I18N_KEYS.HelpSectionsLocalFirstBullet3,
       I18N_KEYS.HelpSectionsLocalFirstBullet4,
     ],
-    diagram: helpArchitectureDiagram,
+    diagram: (translate) => new HelpArchitectureDiagram(translate).source,
   },
   {
     id: "unlock",

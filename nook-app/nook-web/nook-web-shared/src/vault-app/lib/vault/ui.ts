@@ -4,249 +4,251 @@ import type {
   SettingsNavigationRequest,
   UiActionsContext,
 } from "$lib/vault/action-contexts";
-import {
-  clearTabScopedBrowserData,
-  deleteLocalBrowserData,
-  requireLocalDataRecoverySupport,
-} from "$lib/runtime/browser-data";
+import { browserDataLifecycle } from "$lib/runtime/browser-data";
 import { set_vault_session_locked } from "$app-wasm";
 import {
   AdminAccordionSection,
   SettingsAccordionSection,
   SettingsSection,
 } from "$lib/vault/state/ui.svelte";
-import { WorkspaceRoute, workspacePath } from "$lib/app/workspace-route";
+import { WorkspaceRoute, WorkspaceLocation } from "$lib/app/workspace-route";
 
-export type OpenSettingsRequest = SettingsNavigationRequest & {
-  readonly state: UiActionsContext;
-};
-
-export function pushWorkspaceRoute(route: WorkspaceRoute): void {
-  if (!("window" in globalThis)) return;
-  const path = workspacePath(route);
-  const nextUrl = new URL(path, window.location.href);
-  if (
-    window.location.pathname === nextUrl.pathname &&
-    window.location.search === "" &&
-    window.location.hash === ""
-  ) {
-    return;
-  }
-  const pushStateArgs: Parameters<typeof window.history.pushState>[0] = {};
-  window.history.pushState(pushStateArgs, "", path);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
+export type OpenSettingsRequest = SettingsNavigationRequest & {};
 
 type SettingsViewSelection = {
-  readonly state: UiActionsContext;
   readonly section: SettingsSection;
   readonly accordion: SettingsAccordionSection;
 };
 
-function applySettings({
-  state,
-  section,
-  accordion,
-}: SettingsViewSelection): void {
-  state.helpOpen = false;
-  state.settingsSection = section;
-  if (section === SettingsSection.Storage) {
-    state.cancelProviderSetup();
-    state.cancelAddProvider();
-    state.settingsAccordionSection = accordion;
-  }
-  state.settingsOpen = true;
-  // Access and enrolled-device settings read last-known evidence. A vault
-  // sync here races that snapshot when the dashboard remounts after leaving
-  // Access through "Manage enrolled devices".
-  const skipDeviceRefresh =
-    section === SettingsSection.DevicesAccess ||
-    (section === SettingsSection.Storage &&
-      accordion === SettingsAccordionSection.Devices);
-  if (!skipDeviceRefresh) {
-    void state.refreshDeviceState();
-  }
-}
-
 type AdminViewSelection = {
-  readonly state: UiActionsContext;
   readonly accordion: OpenAdminAccordion;
 };
-
-function applyAdmin({ state, accordion }: AdminViewSelection): void {
-  state.helpOpen = false;
-  state.cancelProviderSetup();
-  state.cancelAddProvider();
-  state.adminAccordionSection = accordion;
-  state.settingsSection = SettingsSection.Admin;
-  state.settingsOpen = true;
-  void state.refreshLocalVaultCatalog();
-  void state.refreshDeviceState();
-}
-
-function applyVault(state: UiActionsContext): void {
-  state.cancelProviderSetup();
-  state.cancelAddProvider();
-  state.settingsOpen = false;
-  state.helpOpen = false;
-}
 
 /** Apply browser history to UI state without creating another history entry. */
 type WorkspaceRouteApplication = {
-  readonly state: UiActionsContext;
   readonly route: WorkspaceRoute;
 };
 
-export function applyWorkspaceRoute({
-  state,
-  route,
-}: WorkspaceRouteApplication): void {
-  switch (route) {
-    case WorkspaceRoute.Vault:
-      applyVault(state);
-      return;
-    case WorkspaceRoute.DevicesAccess:
-      (() => {
-        const applySettingsArgs: Parameters<typeof applySettings>[0] = {
-          state,
-          section: SettingsSection.DevicesAccess,
-          accordion: SettingsAccordionSection.Devices,
-        };
-        return applySettings(applySettingsArgs);
-      })();
-      return;
-    case WorkspaceRoute.Admin:
-      (() => {
-        const applyAdminArgs: Parameters<typeof applyAdmin>[0] = {
-          state,
-          accordion: AdminAccordionSection.Vaults,
-        };
-        return applyAdmin(applyAdminArgs);
-      })();
-      return;
-    case WorkspaceRoute.Onboard:
-      (() => {
-        const applySettingsArgs2: Parameters<typeof applySettings>[0] = {
-          state,
-          section: SettingsSection.Onboard,
-          accordion: SettingsAccordionSection.Devices,
-        };
-        return applySettings(applySettingsArgs2);
-      })();
-      return;
-    case WorkspaceRoute.Settings:
-      (() => {
-        const applySettingsArgs3: Parameters<typeof applySettings>[0] = {
-          state,
-          section: SettingsSection.Storage,
-          accordion: SettingsAccordionSection.Devices,
-        };
-        return applySettings(applySettingsArgs3);
-      })();
-      return;
-    case WorkspaceRoute.Help:
-      state.settingsOpen = false;
-      state.helpOpen = true;
-  }
-}
-
-function workspaceRouteForSettings(section: SettingsSection): WorkspaceRoute {
-  switch (section) {
-    case SettingsSection.DevicesAccess:
-      return WorkspaceRoute.DevicesAccess;
-    case SettingsSection.Admin:
-      return WorkspaceRoute.Admin;
-    case SettingsSection.Onboard:
-      return WorkspaceRoute.Onboard;
-    case SettingsSection.Storage:
-      return WorkspaceRoute.Settings;
-  }
-}
-
-export function openSettings({
-  state,
-  section,
-  accordion,
-}: OpenSettingsRequest): void {
-  pushWorkspaceRoute(workspaceRouteForSettings(section));
-  const applySettingsArgs4: Parameters<typeof applySettings>[0] = {
-    state,
-    section,
-    accordion,
-  };
-  applySettings(applySettingsArgs4);
-}
-
 type AdminPanelOpening = {
-  readonly state: UiActionsContext;
   readonly accordion: OpenAdminAccordion;
 };
 
-export function openAdmin({ state, accordion }: AdminPanelOpening): void {
-  pushWorkspaceRoute(WorkspaceRoute.Admin);
-  const applyAdminArgs2: Parameters<typeof applyAdmin>[0] = {
-    state,
-    accordion,
-  };
-  applyAdmin(applyAdminArgs2);
-}
+/** Owns browser orchestration for one ui context. */
+export class VaultWorkspaceActions {
+  constructor(private readonly state: UiActionsContext) {}
 
-export function closeSettings(state: UiActionsContext): void {
-  pushWorkspaceRoute(WorkspaceRoute.Vault);
-  applyVault(state);
-}
-
-export async function deleteLocalData(state: UiActionsContext): Promise<void> {
-  if (!state.hasManager || state.isSaving || state.localDataDeletionStarted)
-    return;
-  state.errorMsg = "";
-  state.dismissSuccess();
-  state.isSaving = true;
-  state.stopIdleSessionTracking();
-  state.stopVaultSync();
-  try {
-    const manager = state.requireManager();
-    await state.waitForStorageChain();
-    requireLocalDataRecoverySupport();
-    state.localDataDeletionStarted = true;
-    await deleteLocalBrowserData(() => {
-      return manager.delete_local_browser_data();
-    });
-  } catch {
-    const managerWasZeroized = state.localDataDeletionStarted;
-    set_vault_session_locked(true);
-    state.clearUnlockedSession(!managerWasZeroized);
-    state.localDataDeletionStarted = false;
-    state.errorMsg = state.t(I18N_KEYS.SettingsDeleteLocalError);
-    state.isSaving = false;
+  static pushWorkspaceRoute(route: WorkspaceRoute): void {
+    if (!("window" in globalThis)) return;
+    const path = new WorkspaceLocation(route).path;
+    const nextUrl = new URL(path, window.location.href);
+    if (
+      window.location.pathname === nextUrl.pathname &&
+      window.location.search === "" &&
+      window.location.hash === ""
+    ) {
+      return;
+    }
+    const pushStateArgs: Parameters<typeof window.history.pushState>[0] = {};
+    window.history.pushState(pushStateArgs, "", path);
+    window.dispatchEvent(new PopStateEvent("popstate"));
   }
-}
 
-export async function handleRemoteLocalBrowserDataDeletion(
-  state: UiActionsContext,
-): Promise<void> {
-  if (state.localDataDeletionStarted) return;
-  const resetManager = state.hasManager
-    ? state.enqueueStorage(() =>
-        state.requireManager().quiesce_for_local_recovery(),
-      )
-    : state.waitForStorageChain();
-  state.localDataDeletionStarted = true;
-  state.stopIdleSessionTracking();
-  state.stopVaultSync();
-  set_vault_session_locked(true);
-  state.clearUnlockedSession(false);
-  await resetManager;
-  clearTabScopedBrowserData();
-}
+  private applySettings({ section, accordion }: SettingsViewSelection): void {
+    const state = state;
+    state.helpOpen = false;
+    state.settingsSection = section;
+    if (section === SettingsSection.Storage) {
+      state.cancelProviderSetup();
+      state.cancelAddProvider();
+      state.settingsAccordionSection = accordion;
+    }
+    state.settingsOpen = true;
+    // Access and enrolled-device settings read last-known evidence. A vault
+    // sync here races that snapshot when the dashboard remounts after leaving
+    // Access through "Manage enrolled devices".
+    const skipDeviceRefresh =
+      section === SettingsSection.DevicesAccess ||
+      (section === SettingsSection.Storage &&
+        accordion === SettingsAccordionSection.Devices);
+    if (!skipDeviceRefresh) {
+      void state.refreshDeviceState();
+    }
+  }
 
-export function openHelp(state: UiActionsContext): void {
-  pushWorkspaceRoute(WorkspaceRoute.Help);
-  state.settingsOpen = false;
-  state.helpOpen = true;
-}
+  private applyAdmin({ accordion }: AdminViewSelection): void {
+    const state = state;
+    state.helpOpen = false;
+    state.cancelProviderSetup();
+    state.cancelAddProvider();
+    state.adminAccordionSection = accordion;
+    state.settingsSection = SettingsSection.Admin;
+    state.settingsOpen = true;
+    void state.refreshLocalVaultCatalog();
+    void state.refreshDeviceState();
+  }
 
-export function closeHelp(state: UiActionsContext): void {
-  pushWorkspaceRoute(WorkspaceRoute.Vault);
-  state.helpOpen = false;
+  private applyVault(): void {
+    const state = state;
+    state.cancelProviderSetup();
+    state.cancelAddProvider();
+    state.settingsOpen = false;
+    state.helpOpen = false;
+  }
+
+  applyWorkspaceRoute({ route }: WorkspaceRouteApplication): void {
+    const state = state;
+    switch (route) {
+      case WorkspaceRoute.Vault:
+        this.applyVault();
+        return;
+      case WorkspaceRoute.DevicesAccess:
+        (() => {
+          const applySettingsArgs: Parameters<
+            VaultWorkspaceActions["applySettings"]
+          >[0] = {
+            section: SettingsSection.DevicesAccess,
+            accordion: SettingsAccordionSection.Devices,
+          };
+          return this.applySettings(applySettingsArgs);
+        })();
+        return;
+      case WorkspaceRoute.Admin:
+        (() => {
+          const applyAdminArgs: Parameters<
+            VaultWorkspaceActions["applyAdmin"]
+          >[0] = {
+            accordion: AdminAccordionSection.Vaults,
+          };
+          return this.applyAdmin(applyAdminArgs);
+        })();
+        return;
+      case WorkspaceRoute.Onboard:
+        (() => {
+          const applySettingsArgs2: Parameters<
+            VaultWorkspaceActions["applySettings"]
+          >[0] = {
+            section: SettingsSection.Onboard,
+            accordion: SettingsAccordionSection.Devices,
+          };
+          return this.applySettings(applySettingsArgs2);
+        })();
+        return;
+      case WorkspaceRoute.Settings:
+        (() => {
+          const applySettingsArgs3: Parameters<
+            VaultWorkspaceActions["applySettings"]
+          >[0] = {
+            section: SettingsSection.Storage,
+            accordion: SettingsAccordionSection.Devices,
+          };
+          return this.applySettings(applySettingsArgs3);
+        })();
+        return;
+      case WorkspaceRoute.Help:
+        state.settingsOpen = false;
+        state.helpOpen = true;
+    }
+  }
+
+  private static workspaceRouteForSettings(
+    section: SettingsSection,
+  ): WorkspaceRoute {
+    switch (section) {
+      case SettingsSection.DevicesAccess:
+        return WorkspaceRoute.DevicesAccess;
+      case SettingsSection.Admin:
+        return WorkspaceRoute.Admin;
+      case SettingsSection.Onboard:
+        return WorkspaceRoute.Onboard;
+      case SettingsSection.Storage:
+        return WorkspaceRoute.Settings;
+    }
+  }
+
+  openSettings({ section, accordion }: OpenSettingsRequest): void {
+    const state = state;
+    VaultWorkspaceActions.pushWorkspaceRoute(
+      VaultWorkspaceActions.workspaceRouteForSettings(section),
+    );
+    const applySettingsArgs4: Parameters<
+      VaultWorkspaceActions["applySettings"]
+    >[0] = {
+      section,
+      accordion,
+    };
+    this.applySettings(applySettingsArgs4);
+  }
+
+  openAdmin({ accordion }: AdminPanelOpening): void {
+    const state = state;
+    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Admin);
+    const applyAdminArgs2: Parameters<VaultWorkspaceActions["applyAdmin"]>[0] =
+      {
+        accordion,
+      };
+    this.applyAdmin(applyAdminArgs2);
+  }
+
+  closeSettings(): void {
+    const state = state;
+    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Vault);
+    this.applyVault();
+  }
+
+  async deleteLocalData(): Promise<void> {
+    const state = state;
+    if (!state.hasManager || state.isSaving || state.localDataDeletionStarted)
+      return;
+    state.errorMsg = "";
+    state.dismissSuccess();
+    state.isSaving = true;
+    state.stopIdleSessionTracking();
+    state.stopVaultSync();
+    try {
+      const manager = state.requireManager();
+      await state.waitForStorageChain();
+      browserDataLifecycle.requireLocalDataRecoverySupport();
+      state.localDataDeletionStarted = true;
+      await browserDataLifecycle.deleteLocalBrowserData(() => {
+        return manager.delete_local_browser_data();
+      });
+    } catch {
+      const managerWasZeroized = state.localDataDeletionStarted;
+      set_vault_session_locked(true);
+      state.clearUnlockedSession(!managerWasZeroized);
+      state.localDataDeletionStarted = false;
+      state.errorMsg = state.t(I18N_KEYS.SettingsDeleteLocalError);
+      state.isSaving = false;
+    }
+  }
+
+  async handleRemoteLocalBrowserDataDeletion(): Promise<void> {
+    const state = state;
+    if (state.localDataDeletionStarted) return;
+    const resetManager = state.hasManager
+      ? state.enqueueStorage(() =>
+          state.requireManager().quiesce_for_local_recovery(),
+        )
+      : state.waitForStorageChain();
+    state.localDataDeletionStarted = true;
+    state.stopIdleSessionTracking();
+    state.stopVaultSync();
+    set_vault_session_locked(true);
+    state.clearUnlockedSession(false);
+    await resetManager;
+    browserDataLifecycle.clearTabScopedBrowserData();
+  }
+
+  openHelp(): void {
+    const state = state;
+    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Help);
+    state.settingsOpen = false;
+    state.helpOpen = true;
+  }
+
+  closeHelp(): void {
+    const state = state;
+    VaultWorkspaceActions.pushWorkspaceRoute(WorkspaceRoute.Vault);
+    state.helpOpen = false;
+  }
 }

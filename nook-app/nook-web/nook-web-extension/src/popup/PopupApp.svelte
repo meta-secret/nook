@@ -17,21 +17,17 @@
   import NookIcon from '../../../nook-web-shared/src/components/NookIcon.svelte'
   import {
     ExtensionTranslationRequestKind,
-    plainExtensionTranslation,
     type ExtensionI18n,
     type ExtensionTranslationRequest,
+    extensionLocaleCatalog,
   } from '../lib/i18n'
   import {
-    createExtensionPasskey,
-    createExtensionPin,
     DeviceMode,
     DeviceProtectionStatus,
     ExtensionSessionDeviceStateKind,
-    recoverExtensionPasskey,
-    unlockExtensionPasskey,
-    unlockExtensionPin,
     type ExtensionDeviceProtectionResult,
     type ExtensionSessionDeviceState,
+    extensionWasmRuntime,
   } from '../lib/nook-wasm'
   import {
     PairingCandidateKind,
@@ -56,7 +52,7 @@
   } = $props()
 
   function translatePlain(key: I18nKey): string {
-    return i18n.t(plainExtensionTranslation(key))
+    return i18n.t(extensionLocaleCatalog.plainExtensionTranslation(key))
   }
 
   function initialProtectionStatus(): DeviceProtectionStatus {
@@ -200,11 +196,13 @@
   function createPasskey(): void {
     const args: Parameters<typeof runDeviceAction>[0] = {
       action: () => {
-        const createArgs: Parameters<typeof createExtensionPasskey>[0] = {
+        const createArgs: Parameters<
+          typeof extensionWasmRuntime.createExtensionPasskey
+        >[0] = {
           passkeyLabel,
           deviceMode,
         }
-        return createExtensionPasskey(createArgs)
+        return extensionWasmRuntime.createExtensionPasskey(createArgs)
       },
       fallbackKey: I18N_KEYS.DeviceProtectionPasskeyCreateNotAllowed,
     }
@@ -213,7 +211,8 @@
 
   function useExistingPasskey(): void {
     const args: Parameters<typeof runDeviceAction>[0] = {
-      action: recoverExtensionPasskey,
+      action:
+        extensionWasmRuntime.recoverExtensionPasskey.bind(extensionWasmRuntime),
       fallbackKey: I18N_KEYS.DeviceProtectionPasskeyRecoveryNotAllowed,
     }
     void runDeviceAction(args)
@@ -221,7 +220,8 @@
 
   function unlockPasskey(): void {
     const args: Parameters<typeof runDeviceAction>[0] = {
-      action: unlockExtensionPasskey,
+      action:
+        extensionWasmRuntime.unlockExtensionPasskey.bind(extensionWasmRuntime),
       fallbackKey: I18N_KEYS.DeviceProtectionPasskeyUnlockNotAllowed,
     }
     void runDeviceAction(args)
@@ -233,7 +233,7 @@
       return
     }
     const args: Parameters<typeof runDeviceAction>[0] = {
-      action: () => createExtensionPin(pin),
+      action: () => extensionWasmRuntime.createExtensionPin(pin),
       fallbackKey: I18N_KEYS.DeviceProtectionPinSetupFailed,
     }
     void runDeviceAction(args)
@@ -241,7 +241,7 @@
 
   function unlockPin(): void {
     const args: Parameters<typeof runDeviceAction>[0] = {
-      action: () => unlockExtensionPin(pin),
+      action: () => extensionWasmRuntime.unlockExtensionPin(pin),
       fallbackKey: I18N_KEYS.DeviceProtectionPinUnlockFailed,
     }
     void runDeviceAction(args)

@@ -1,5 +1,5 @@
 import { setupStorageKey } from '../pairing-grants'
-import { getPairingStorage } from './pairing-identity'
+import { extensionPairingIdentity } from './pairing-identity'
 
 type RuntimeMessageListener = Parameters<
   typeof chrome.runtime.onMessage.addListener
@@ -22,7 +22,8 @@ export function handlePairingStateQuery({
     sendResponse(forbiddenResponse)
     return false
   }
-  void getPairingStorage(setupStorageKey)
+  void extensionPairingIdentity
+    .getPairingStorage(setupStorageKey)
     .then((stored) => {
       const storedStateResponse: Parameters<typeof sendResponse>[0] = {
         ok: true,

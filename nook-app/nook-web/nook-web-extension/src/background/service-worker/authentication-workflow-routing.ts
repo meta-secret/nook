@@ -19,17 +19,17 @@ import {
   MatchingPasskeyAvailabilityKind,
   passkeyAccountCountForClassification,
 } from './passkey-availability'
-import type { matchingPasskeyAvailabilityForOriginSafe } from './passkey-operations'
+import type { websitePasskeyRequests } from './passkey-operations'
 import type * as VaultRuntime from '../vault-runtime'
 
 export type AuthenticationWorkflowRoutingDependencies = {
   companionWasmReady: Promise<void>
   authenticationPasskeyEvidenceIsSafe: typeof authenticationPasskeyEvidenceIsSafe
-  authenticationWorkflowSnapshot: typeof VaultRuntime.authenticationWorkflowSnapshot
+  authenticationWorkflowSnapshot: typeof VaultRuntime.backgroundVaultRuntime.authenticationWorkflowSnapshot
   authenticationWorkflowSavedLoginCapability: typeof authenticationWorkflowSavedLoginCapability
   authenticationWorkflowRequiresLoginMatchAvailability: typeof authenticationWorkflowRequiresLoginMatchAvailability
-  matchingPasskeyAvailabilityForOriginSafe: typeof matchingPasskeyAvailabilityForOriginSafe
-  websiteLoginMatchAvailability: typeof AccountPickers.websiteLoginMatchAvailability
+  matchingPasskeyAvailabilityForOriginSafe: typeof websitePasskeyRequests.matchingPasskeyAvailabilityForOriginSafe
+  websiteLoginMatchAvailability: typeof AccountPickers.accountPickerSessions.websiteLoginMatchAvailability
 }
 
 export function authenticationPasskeyEvidenceIsSafe(

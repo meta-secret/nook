@@ -1,32 +1,36 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
-  classifiedAuthenticationWorkflowObservations,
-  liveApprovedAuthenticationWorkflow,
+  AuthenticationWorkflowClassification,
+  LiveApprovedAuthenticationWorkflow,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
   MAX_AUTHENTICATION_OBSERVED_FIELD_COUNT,
   MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
 } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
-  authenticationPageObservationFacts,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 const wholeDocumentPasswordFormSubmission: Parameters<
-  typeof submitLoginForm
+  typeof passwordFormInteraction.submitLoginForm
 >[0] = { kind: PasswordFormQueryKind.Root, root: document }
 
-function didSubmit(request: Parameters<typeof submitLoginForm>[0]): boolean {
-  return submitLoginForm(request) === FormSubmissionResult.Submitted
+function didSubmit(
+  request: Parameters<typeof passwordFormInteraction.submitLoginForm>[0],
+): boolean {
+  return (
+    passwordFormInteraction.submitLoginForm(request) ===
+    FormSubmissionResult.Submitted
+  )
 }
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
-  const observation = summarizeAuthenticationWorkflowForms()[0]
+  const observation =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
@@ -38,14 +42,18 @@ function ownedFormId(observation: PasswordFormObservation): string {
 }
 
 function detailedAdvance(
-  facts: ReturnType<typeof authenticationPageObservationFacts>,
+  facts: ReturnType<
+    typeof passwordFormInteraction.authenticationPageObservationFacts
+  >,
 ) {
   const detailed = facts.detailedAdvanceControl
   return detailed ? detailed : { kind: 'absent' as const }
 }
 
 function handlerSignals(
-  facts: ReturnType<typeof authenticationPageObservationFacts>,
+  facts: ReturnType<
+    typeof passwordFormInteraction.authenticationPageObservationFacts
+  >,
 ) {
   const signals = facts.ceremony.oneTimeCodeHandlerSignals
   return signals ? signals : []
@@ -66,7 +74,7 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -92,7 +100,7 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -121,7 +129,7 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -146,7 +154,7 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -185,7 +193,7 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -212,7 +220,7 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -229,7 +237,7 @@ describe('authentication observation bounds', () => {
       />
     `
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -261,15 +269,17 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const classifiedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
+    const classifiedRequest: ConstructorParameters<
+      typeof AuthenticationWorkflowClassification
     >[0] = {
-      workflowForms: summarizeAuthenticationWorkflowForms(),
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    const classified =
-      classifiedAuthenticationWorkflowObservations(classifiedRequest)
+    const classified = new AuthenticationWorkflowClassification(
+      classifiedRequest,
+    ).observations
     const selected = classified[0]
     if (!selected) {
       throw new Error('expected the transportable login workflow')
@@ -291,7 +301,8 @@ describe('authentication observation bounds', () => {
       ${decoys}
     `
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS)
     expect(
       observations.some(
@@ -319,15 +330,17 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const classifiedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
+    const classifiedRequest: ConstructorParameters<
+      typeof AuthenticationWorkflowClassification
     >[0] = {
-      workflowForms: summarizeAuthenticationWorkflowForms(),
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    const classified =
-      classifiedAuthenticationWorkflowObservations(classifiedRequest)
+    const classified = new AuthenticationWorkflowClassification(
+      classifiedRequest,
+    ).observations
     const selected = classified[0]
     if (!selected) {
       throw new Error('expected the transportable login workflow')
@@ -360,15 +373,17 @@ describe('authentication observation bounds', () => {
       </form>
     `
 
-    const classifiedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
+    const classifiedRequest: ConstructorParameters<
+      typeof AuthenticationWorkflowClassification
     >[0] = {
-      workflowForms: summarizeAuthenticationWorkflowForms(),
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    const classified =
-      classifiedAuthenticationWorkflowObservations(classifiedRequest)
+    const classified = new AuthenticationWorkflowClassification(
+      classifiedRequest,
+    ).observations
     const selected = classified[0]
     if (!selected) {
       throw new Error('expected the transportable login workflow')
@@ -385,48 +400,55 @@ describe('authentication observation bounds', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const classifiedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
+    const classifiedRequest: ConstructorParameters<
+      typeof AuthenticationWorkflowClassification
     >[0] = {
-      workflowForms: summarizeAuthenticationWorkflowForms(),
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    const first =
-      classifiedAuthenticationWorkflowObservations(classifiedRequest)[0]
+    const first = new AuthenticationWorkflowClassification(classifiedRequest)
+      .observations[0]
     if (!first) {
       throw new Error('expected the login workflow')
     }
     document
       .querySelector('input[type="password"]')
       ?.setAttribute('autocomplete', 'password')
-    const refreshedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
+    const refreshedRequest: ConstructorParameters<
+      typeof AuthenticationWorkflowClassification
     >[0] = {
-      workflowForms: summarizeAuthenticationWorkflowForms(),
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    const refreshed =
-      classifiedAuthenticationWorkflowObservations(refreshedRequest)[0]
+    const refreshed = new AuthenticationWorkflowClassification(refreshedRequest)
+      .observations[0]
     if (!refreshed) {
       throw new Error('expected the refreshed login workflow')
     }
-    const staleCheck: Parameters<typeof liveApprovedAuthenticationWorkflow>[0] =
-      {
-        approved: first,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }
-    const refreshedCheck: Parameters<
-      typeof liveApprovedAuthenticationWorkflow
+    const staleCheck: ConstructorParameters<
+      typeof LiveApprovedAuthenticationWorkflow
+    >[0] = {
+      approved: first,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    const refreshedCheck: ConstructorParameters<
+      typeof LiveApprovedAuthenticationWorkflow
     >[0] = {
       approved: refreshed,
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    expect(liveApprovedAuthenticationWorkflow(staleCheck)).toBe(false)
-    expect(liveApprovedAuthenticationWorkflow(refreshedCheck)).toBe(true)
+    expect(new LiveApprovedAuthenticationWorkflow(staleCheck).observation).toBe(
+      false,
+    )
+    expect(
+      new LiveApprovedAuthenticationWorkflow(refreshedCheck).observation,
+    ).toBe(true)
     let submitted = false
     document.querySelector('form')?.addEventListener('submit', (event) => {
       event.preventDefault()
@@ -444,15 +466,16 @@ describe('authentication observation bounds', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const classifiedRequest: Parameters<
-      typeof classifiedAuthenticationWorkflowObservations
+    const classifiedRequest: ConstructorParameters<
+      typeof AuthenticationWorkflowClassification
     >[0] = {
-      workflowForms: summarizeAuthenticationWorkflowForms(),
+      workflowForms:
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
     }
-    const approved =
-      classifiedAuthenticationWorkflowObservations(classifiedRequest)[0]
+    const approved = new AuthenticationWorkflowClassification(classifiedRequest)
+      .observations[0]
     if (!approved) {
       throw new Error('expected the login workflow')
     }
@@ -466,12 +489,15 @@ describe('authentication observation bounds', () => {
       <button type="submit">Verify</button>
     `
     document.body.prepend(otp)
-    const liveCheck: Parameters<typeof liveApprovedAuthenticationWorkflow>[0] =
-      {
-        approved,
-        authenticatorSetupHint: false,
-        backupCodesHint: false,
-      }
-    expect(liveApprovedAuthenticationWorkflow(liveCheck)).toBe(false)
+    const liveCheck: ConstructorParameters<
+      typeof LiveApprovedAuthenticationWorkflow
+    >[0] = {
+      approved,
+      authenticatorSetupHint: false,
+      backupCodesHint: false,
+    }
+    expect(new LiveApprovedAuthenticationWorkflow(liveCheck).observation).toBe(
+      false,
+    )
   })
 })

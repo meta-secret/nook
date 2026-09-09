@@ -1,28 +1,28 @@
 <script lang="ts">
-  type SyncConflictReasonCollection = string[]
+  type SyncConflictReasonCollection = string[];
 
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
   import {
     JoinEnrollmentState,
     NookLocalFolderHealthState,
     NookSyncConflictReviewState,
-  } from '$app-wasm'
-  import JoinEnrollmentDialog from '$lib/components/JoinEnrollmentDialog.svelte'
-  import { JoinEnrollmentDialogVariant } from '$lib/components/join-enrollment-dialog-state'
-  import LocalFolderMultipleVaultsDialog from '$lib/components/LocalFolderMultipleVaultsDialog.svelte'
-  import VaultSyncConflictDialog from '$lib/components/VaultSyncConflictDialog.svelte'
-  import { Button } from '$lib/components/ui/button'
-  import * as multiDeviceActions from '$lib/vault/multi-device'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$app-wasm";
+  import JoinEnrollmentDialog from "$lib/components/JoinEnrollmentDialog.svelte";
+  import { JoinEnrollmentDialogVariant } from "$lib/components/join-enrollment-dialog-state";
+  import LocalFolderMultipleVaultsDialog from "$lib/components/LocalFolderMultipleVaultsDialog.svelte";
+  import VaultSyncConflictDialog from "$lib/components/VaultSyncConflictDialog.svelte";
+  import { Button } from "$lib/components/ui/button";
+  import * as multiDeviceActions from "$lib/vault/multi-device";
+  import type { VaultState } from "$lib/vault.svelte";
 
-  let { vault }: { vault: VaultState } = $props()
+  let { vault }: { vault: VaultState } = $props();
 
   function shortId(id: string): string {
-    return id.length > 18 ? `${id.slice(0, 18)}...` : id
+    return id.length > 18 ? `${id.slice(0, 18)}...` : id;
   }
 
   function conflictReasons(reasons: SyncConflictReasonCollection): string {
-    return reasons.length > 0 ? reasons.join(', ') : 'key epoch rotation'
+    return reasons.length > 0 ? reasons.join(", ") : "key epoch rotation";
   }
 </script>
 
@@ -36,10 +36,12 @@
   isBusy={vault.isVerifying}
   bind:enrollSecretsKey={vault.enrollSecretsKey}
   bind:enrollMembersKey={vault.enrollMembersKey}
-  onConfirm={() => multiDeviceActions.confirmJoinRequest(vault)}
+  onConfirm={() =>
+    new multiDeviceActions.VaultDeviceActions(vault).confirmJoinRequest()}
   onEnrollWithKeys={() => vault.enrollAndConnect()}
   onCreateFreshVault={() => vault.createFreshVault()}
-  onCancel={() => multiDeviceActions.dismissJoinEnrollment(vault)}
+  onCancel={() =>
+    new multiDeviceActions.VaultDeviceActions(vault).dismissJoinEnrollment()}
 />
 
 {#if vault.syncConflictReview.state === NookSyncConflictReviewState.RequiresDecision}
@@ -68,7 +70,7 @@
 {#if vault.replacementConflicts.length > 0}
   <div
     class={`fixed left-4 right-4 z-50 mx-auto max-w-2xl rounded-lg border border-amber-500/40 bg-amber-950/95 p-4 text-sm text-amber-50 shadow-lg ${
-      vault.securityConflicts.length > 0 ? 'bottom-32' : 'bottom-4'
+      vault.securityConflicts.length > 0 ? "bottom-32" : "bottom-4"
     }`}
   >
     <p class="font-medium">{vault.t(I18N_KEYS.AppSecretSyncConflicts)}</p>
@@ -82,8 +84,8 @@
                 replacements: {
                   id: shortId(conflict.oldSecretId),
                 },
-              }
-              return vault.t(translationRequest)
+              };
+              return vault.t(translationRequest);
             })()}
           </p>
           <div class="mt-2 flex flex-wrap gap-2">
@@ -98,8 +100,8 @@
                   >[0] = {
                     oldSecretId: conflict.oldSecretId,
                     chosenSecretId: candidateSecretId,
-                  }
-                  void vault.resolveReplacementConflict(resolutionRequest)
+                  };
+                  void vault.resolveReplacementConflict(resolutionRequest);
                 }}
               >
                 {(() => {
@@ -108,8 +110,8 @@
                     replacements: {
                       id: shortId(candidateSecretId),
                     },
-                  }
-                  return vault.t(translationRequest2)
+                  };
+                  return vault.t(translationRequest2);
                 })()}
               </Button>
             {/each}
@@ -126,7 +128,7 @@
   >
     <p class="font-medium">{vault.t(I18N_KEYS.AppSecurityConflict)}</p>
     <div class="mt-2 space-y-2 text-red-100">
-      {#each vault.securityConflicts as conflict (conflict.events.join(':'))}
+      {#each vault.securityConflicts as conflict (conflict.events.join(":"))}
         <p>{conflictReasons(conflict.reasons)}</p>
       {/each}
     </div>

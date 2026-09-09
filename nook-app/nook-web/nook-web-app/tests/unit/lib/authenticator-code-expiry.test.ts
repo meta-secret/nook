@@ -17,7 +17,11 @@ vi.mock(
 
 vi.mock(
   '../../../../nook-web-extension/src/background/service-worker/pairing-identity',
-  () => ({ sendSessionMessage: mocks.sendSessionMessage }),
+  () => ({
+    extensionPairingIdentity: {
+      sendSessionMessage: mocks.sendSessionMessage,
+    },
+  }),
 )
 
 import { stagedAuthenticatorCodeFromSession } from '../../../../nook-web-extension/src/background/service-worker/authenticator-session-adapter'

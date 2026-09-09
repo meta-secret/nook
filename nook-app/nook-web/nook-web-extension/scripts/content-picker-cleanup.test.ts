@@ -248,7 +248,7 @@ test('refresh does not rescan when staged offer dismissal is rejected', async ()
 test('refresh dismisses an in-flight save offer before rescanning', async () => {
   const { SavePageWatchKind, scanState, saveOfferState } =
     await import('../src/content/autofill/state')
-  const { stageSaveForCredentials } =
+  const { loginSaveInteraction } =
     await import('../src/content/autofill/login-save')
   const { routeAutofillMessage } =
     await import('../src/content/autofill/message-router')
@@ -258,7 +258,7 @@ test('refresh dismisses an in-flight save offer before rescanning', async () => 
   }
   deferRuntimeResponse()
   sendMessage.mockClear()
-  const staging = stageSaveForCredentials(credentials)
+  const staging = loginSaveInteraction.stageSaveForCredentials(credentials)
   const schedule = mock(() => {})
   scanState.schedule = schedule
   const responseCapture = captureRefreshResponse()

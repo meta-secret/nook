@@ -1,21 +1,20 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
-  classifiedAuthenticationWorkflowObservations,
-  liveApprovedAuthenticationWorkflow,
+  AuthenticationWorkflowClassification,
+  LiveApprovedAuthenticationWorkflow,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
 import {
-  findPasskeyControl,
-  findWorkflowPasskeyControl,
-  pageHasPasskeyControl,
   PasskeyControlLookupKind,
   PasswordFormScopeKind,
-  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
+  passwordFieldDiscovery,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import { MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
-  const observation = summarizeAuthenticationWorkflowForms()[0]
+  const observation =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
@@ -43,7 +42,8 @@ describe('passkey control detection', () => {
         <button type="submit">Sign in</button>
       </form>`
 
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations.length).toBeLessThanOrEqual(
       MAX_AUTHENTICATION_WORKFLOW_OBSERVATIONS,
     )
@@ -65,11 +65,11 @@ describe('passkey control detection', () => {
       </form>
     `
     const workflow = observedAuthenticationWorkflow()
-    const approved = classifiedAuthenticationWorkflowObservations({
+    const approved = new AuthenticationWorkflowClassification({
       workflowForms: [workflow],
       authenticatorSetupHint: false,
       backupCodesHint: false,
-    })[0]
+    }).observations[0]
     if (!approved) throw new Error('expected an approved password workflow')
     document
       .querySelector('form')
@@ -78,11 +78,11 @@ describe('passkey control detection', () => {
         '<form method="post" action="/auth/login"><button type="button">Use passkey</button></form>',
       )
     expect(
-      liveApprovedAuthenticationWorkflow({
+      new LiveApprovedAuthenticationWorkflow({
         approved,
         authenticatorSetupHint: false,
         backupCodesHint: false,
-      }),
+      }).observation,
     ).toBe(false)
   })
 
@@ -93,11 +93,11 @@ describe('passkey control detection', () => {
       </form>
     `
     const workflow = observedAuthenticationWorkflow()
-    const classified = classifiedAuthenticationWorkflowObservations({
+    const classified = new AuthenticationWorkflowClassification({
       workflowForms: [workflow],
       authenticatorSetupHint: false,
       backupCodesHint: false,
-    })[0]
+    }).observations[0]
     if (!classified) throw new Error('expected an approved passkey workflow')
     const approved = {
       ...classified,
@@ -116,11 +116,11 @@ describe('passkey control detection', () => {
         '<form method="post" id="inserted-passkey" action="/auth/login"><button type="button">Use passkey</button></form>',
       )
     expect(
-      liveApprovedAuthenticationWorkflow({
+      new LiveApprovedAuthenticationWorkflow({
         approved,
         authenticatorSetupHint: false,
         backupCodesHint: false,
-      }),
+      }).observation,
     ).toBe(false)
   })
 
@@ -137,8 +137,11 @@ describe('passkey control detection', () => {
       </form>
     `
 
-    expect(pageHasPasskeyControl()).toBe(false)
-    expect(summarizeAuthenticationWorkflowForms()[0]?.summary).toMatchObject({
+    expect(passwordFieldDiscovery.pageHasPasskeyControl()).toBe(false)
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
+        ?.summary,
+    ).toMatchObject({
       passkeyControlPresent: false,
       currentPasswordFieldCount: 1,
     })
@@ -148,7 +151,7 @@ describe('passkey control detection', () => {
     document.body.innerHTML = `
       <button type="button" data-nook-passkey-control>Continue</button>
     `
-    const marked = findPasskeyControl()
+    const marked = passwordFieldDiscovery.findPasskeyControl()
     expect(marked.kind).toBe(PasskeyControlLookupKind.Found)
     if (marked.kind === PasskeyControlLookupKind.Found) {
       expect(marked.control.getAttribute('data-nook-passkey-control')).toBe('')
@@ -157,12 +160,12 @@ describe('passkey control detection', () => {
     document.body.innerHTML = `
       <button type="button">Sign in with a passkey</button>
     `
-    const labeled = findPasskeyControl()
+    const labeled = passwordFieldDiscovery.findPasskeyControl()
     expect(labeled.kind).toBe(PasskeyControlLookupKind.Found)
     if (labeled.kind === PasskeyControlLookupKind.Found) {
       expect(labeled.control.textContent).toContain('passkey')
     }
-    expect(pageHasPasskeyControl()).toBe(true)
+    expect(passwordFieldDiscovery.pageHasPasskeyControl()).toBe(true)
   })
 
   test('binds a passkey link on a method-less form as an owned control', () => {
@@ -172,7 +175,9 @@ describe('passkey control detection', () => {
         <a href="/webauthn">Use passkey</a>
       </form>
     `
-    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    const control = passwordFormInteraction.findWorkflowPasskeyControl(
+      observedAuthenticationWorkflow(),
+    )
     expect(control.kind).toBe(PasskeyControlLookupKind.Found)
     if (control.kind === PasskeyControlLookupKind.Found) {
       expect(control.control.textContent).toContain('passkey')
@@ -187,7 +192,9 @@ describe('passkey control detection', () => {
         <a href="/webauthn">Use passkey</a>
       </form>
     `
-    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    const control = passwordFormInteraction.findWorkflowPasskeyControl(
+      observedAuthenticationWorkflow(),
+    )
     expect(control.kind).toBe(PasskeyControlLookupKind.Found)
     if (control.kind === PasskeyControlLookupKind.Found) {
       expect(control.control.textContent).toContain('passkey')
@@ -200,7 +207,9 @@ describe('passkey control detection', () => {
         <button type="button" data-nook-passkey-control>Continue</button>
       </form>
     `
-    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    const control = passwordFormInteraction.findWorkflowPasskeyControl(
+      observedAuthenticationWorkflow(),
+    )
     expect(control.kind).toBe(PasskeyControlLookupKind.Absent)
   })
 
@@ -212,7 +221,9 @@ describe('passkey control detection', () => {
         <button id="delete-account" type="button" data-nook-passkey-control>Continue</button>
       </form>
     `
-    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    const control = passwordFormInteraction.findWorkflowPasskeyControl(
+      observedAuthenticationWorkflow(),
+    )
     expect(control.kind).toBe(PasskeyControlLookupKind.Absent)
   })
 
@@ -224,7 +235,7 @@ describe('passkey control detection', () => {
     `
     const stale = observedAuthenticationWorkflow()
     expect(stale.summary.newPasswordFieldCount).toBe(0)
-    expect(findWorkflowPasskeyControl(stale).kind).toBe(
+    expect(passwordFormInteraction.findWorkflowPasskeyControl(stale).kind).toBe(
       PasskeyControlLookupKind.Found,
     )
     document
@@ -233,7 +244,7 @@ describe('passkey control detection', () => {
         'afterbegin',
         '<input type="password" autocomplete="new-password" />',
       )
-    expect(findWorkflowPasskeyControl(stale).kind).toBe(
+    expect(passwordFormInteraction.findWorkflowPasskeyControl(stale).kind).toBe(
       PasskeyControlLookupKind.Absent,
     )
   })
@@ -246,7 +257,9 @@ describe('passkey control detection', () => {
         <button type="button" formmethod="get">Use passkey</button>
       </form>
     `
-    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    const control = passwordFormInteraction.findWorkflowPasskeyControl(
+      observedAuthenticationWorkflow(),
+    )
     expect(control.kind).toBe(PasskeyControlLookupKind.Found)
     if (control.kind === PasskeyControlLookupKind.Found) {
       expect(control.control.textContent).toContain('passkey')
@@ -262,14 +275,18 @@ describe('passkey control detection', () => {
       </form>
     `
     expect(
-      findWorkflowPasskeyControl(observedAuthenticationWorkflow()).kind,
+      passwordFormInteraction.findWorkflowPasskeyControl(
+        observedAuthenticationWorkflow(),
+      ).kind,
     ).toBe(PasskeyControlLookupKind.Absent)
   })
 
   test('skips hidden and inert passkey candidates before exact actuation', () => {
     document.body.innerHTML = `<button hidden>Use hidden passkey</button>`
     expect(
-      findWorkflowPasskeyControl(observedAuthenticationWorkflow()).kind,
+      passwordFormInteraction.findWorkflowPasskeyControl(
+        observedAuthenticationWorkflow(),
+      ).kind,
     ).toBe(PasskeyControlLookupKind.Absent)
     document.body.innerHTML = `
       <form method="post" id="login" action="/auth/login">
@@ -278,7 +295,9 @@ describe('passkey control detection', () => {
         <button id="safe">Use passkey</button>
       </form>
     `
-    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    const control = passwordFormInteraction.findWorkflowPasskeyControl(
+      observedAuthenticationWorkflow(),
+    )
     expect(control).toMatchObject({
       kind: PasskeyControlLookupKind.Found,
       control: document.querySelector('#safe'),
@@ -287,7 +306,9 @@ describe('passkey control detection', () => {
 
   test('binds the exact later passkey candidate approved by Rust', () => {
     document.body.innerHTML = `<form method="post" id="login" action="/auth/login"><input autocomplete="username" /><button id="inert" disabled>Use passkey</button><button id="safe">Use passkey</button></form>`
-    const control = findWorkflowPasskeyControl(observedAuthenticationWorkflow())
+    const control = passwordFormInteraction.findWorkflowPasskeyControl(
+      observedAuthenticationWorkflow(),
+    )
     expect(control.kind).toBe(PasskeyControlLookupKind.Found)
     if (control.kind === PasskeyControlLookupKind.Found)
       expect(control.control.id).toBe('safe')
@@ -307,11 +328,13 @@ describe('passkey control detection', () => {
       </form>
     `
     expect(
-      summarizeAuthenticationWorkflowForms().some(
-        (observation) =>
-          observation.formScope.kind === PasswordFormScopeKind.Owned &&
-          observation.formScope.owner.id === 'safe-login',
-      ),
+      passwordFormInteraction
+        .summarizeAuthenticationWorkflowForms()
+        .some(
+          (observation) =>
+            observation.formScope.kind === PasswordFormScopeKind.Owned &&
+            observation.formScope.owner.id === 'safe-login',
+        ),
     ).toBe(true)
   })
 
@@ -329,10 +352,12 @@ describe('passkey control detection', () => {
       </section>
     `
     expect(
-      summarizeAuthenticationWorkflowForms().some(
-        (observation) =>
-          observation.root === document.querySelector('#safe-login'),
-      ),
+      passwordFormInteraction
+        .summarizeAuthenticationWorkflowForms()
+        .some(
+          (observation) =>
+            observation.root === document.querySelector('#safe-login'),
+        ),
     ).toBe(true)
   })
 })

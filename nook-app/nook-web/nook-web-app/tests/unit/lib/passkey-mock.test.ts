@@ -1,6 +1,6 @@
 import { afterEach, expect, test, vi } from 'vitest'
 import { installMockPasskeyRuntime } from '../../../e2e/passkey-mock'
-import { installPageAuthenticationDirectSubmitBridge } from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
+import { authenticationSubmissionBridge } from '../../../../nook-web-shared/src/extension/authentication-direct-submit-bridge'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -31,7 +31,8 @@ test('allows credential prototype interception without corrupting form descripto
   try {
     // A plain-object credentials mock installs `get` on Object.prototype,
     // making the bridge's data descriptor look like an accessor descriptor.
-    const stopBridge = installPageAuthenticationDirectSubmitBridge()
+    const stopBridge =
+      authenticationSubmissionBridge.installPageAuthenticationDirectSubmitBridge()
     try {
       const request: CredentialRequestOptions = {
         publicKey: {

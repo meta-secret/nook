@@ -5,10 +5,20 @@ enum EvidenceStatus {
   Sealed = 'SEALED',
 }
 
-export function vaultIdentityEvidenceStatus(recorded: boolean): EvidenceStatus {
-  return recorded ? EvidenceStatus.Recorded : EvidenceStatus.Pending
+export class VaultIdentityEvidence {
+  constructor(private readonly request: boolean) {}
+  get status(): EvidenceStatus {
+    const recorded = this.request
+
+    return recorded ? EvidenceStatus.Recorded : EvidenceStatus.Pending
+  }
 }
 
-export function atomicGenesisEvidenceStatus(sealed: boolean): EvidenceStatus {
-  return sealed ? EvidenceStatus.Sealed : EvidenceStatus.Held
+export class AtomicGenesisEvidence {
+  constructor(private readonly request: boolean) {}
+  get status(): EvidenceStatus {
+    const sealed = this.request
+
+    return sealed ? EvidenceStatus.Sealed : EvidenceStatus.Held
+  }
 }

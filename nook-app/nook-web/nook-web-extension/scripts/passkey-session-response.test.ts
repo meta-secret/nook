@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test'
 import {
-  decodePasskeySetupResponse,
-  decodePasskeyUnlockResponse,
   type PasskeySetupMaterial,
   type PasskeySetupResponse,
   type PasskeyUnlockResponse,
+  PasskeySetupResponse as PasskeySetupResponseSchema,
+  PasskeyUnlockResponse as PasskeyUnlockResponseSchema,
 } from '../src/lib/passkey-session-response'
 
 const fixedByteArrayArgs: { length: number } = { length: 32 }
@@ -20,7 +20,9 @@ describe('passkey session response decoding', () => {
       userHandle: fixedBytes,
       prfInput: fixedBytes,
     }
-    expect(decodePasskeySetupResponse(response)).toEqual(expected)
+    expect(
+      PasskeySetupResponseSchema.decodePasskeySetupResponse(response),
+    ).toEqual(expected)
   })
 
   test('leaves setup key-material policy to the Rust option builder', () => {
@@ -31,8 +33,14 @@ describe('passkey session response decoding', () => {
       setup: { userHandle: fixedBytes, prfInput: [1] },
     }
 
-    expect(decodePasskeySetupResponse(emptyResponse).userHandle).toEqual([])
-    expect(decodePasskeySetupResponse(shortResponse).prfInput).toEqual([1])
+    expect(
+      PasskeySetupResponseSchema.decodePasskeySetupResponse(emptyResponse)
+        .userHandle,
+    ).toEqual([])
+    expect(
+      PasskeySetupResponseSchema.decodePasskeySetupResponse(shortResponse)
+        .prfInput,
+    ).toEqual([1])
   })
 
   test('leaves unlock material policy to the Rust option builder', () => {
@@ -43,9 +51,13 @@ describe('passkey session response decoding', () => {
       material: { credentialId: [1], prfInput: [2] },
     }
 
-    expect(decodePasskeyUnlockResponse(emptyCredential).credentialId).toEqual(
-      [],
-    )
-    expect(decodePasskeyUnlockResponse(shortPrfInput).prfInput).toEqual([2])
+    expect(
+      PasskeyUnlockResponseSchema.decodePasskeyUnlockResponse(emptyCredential)
+        .credentialId,
+    ).toEqual([])
+    expect(
+      PasskeyUnlockResponseSchema.decodePasskeyUnlockResponse(shortPrfInput)
+        .prfInput,
+    ).toEqual([2])
   })
 })

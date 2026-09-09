@@ -1,8 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import {
-  quiesceOtherTabsForLocalRecovery,
-  requireLocalDataRecoverySupport,
-} from '$lib/runtime/browser-data'
+import { browserDataLifecycle } from '$lib/runtime/browser-data'
 
 afterEach(() => {
   vi.useRealTimers()
@@ -15,12 +12,12 @@ describe('local data recovery support', () => {
     vi.stubGlobal('navigator', {})
     vi.stubGlobal('BroadcastChannel', broadcastChannel)
 
-    expect(() => requireLocalDataRecoverySupport()).toThrow(
-      'Safe cross-tab local data deletion is unavailable',
-    )
-    await expect(quiesceOtherTabsForLocalRecovery()).rejects.toThrow(
-      'Safe cross-tab local data deletion is unavailable',
-    )
+    expect(() =>
+      browserDataLifecycle.requireLocalDataRecoverySupport(),
+    ).toThrow('Safe cross-tab local data deletion is unavailable')
+    await expect(
+      browserDataLifecycle.quiesceOtherTabsForLocalRecovery(),
+    ).rejects.toThrow('Safe cross-tab local data deletion is unavailable')
     expect(broadcastChannel).not.toHaveBeenCalled()
   })
 
@@ -77,7 +74,7 @@ describe('local data recovery support', () => {
     vi.stubGlobal('BroadcastChannel', RecoveryChannel)
 
     const rejection = expect(
-      quiesceOtherTabsForLocalRecovery(),
+      browserDataLifecycle.quiesceOtherTabsForLocalRecovery(),
     ).rejects.toThrow('peer failed')
     await vi.runAllTimersAsync()
     await rejection

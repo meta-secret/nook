@@ -1,9 +1,7 @@
 import { afterEach, describe, expect, test } from 'vitest'
 import {
   AUTHENTICATION_ROUTE_HISTORY_SOURCE,
-  isAuthenticationRouteHistoryMessage,
-  notifyAuthenticationRouteChanged,
-  observeAuthenticationRouteHistory,
+  authenticationRouteBrowser,
 } from '../../../../nook-web-shared/src/extension/authentication-route-history'
 
 afterEach(() => {
@@ -13,9 +11,11 @@ afterEach(() => {
 describe('authentication route history', () => {
   test('notifies on pushState, replaceState, and popstate without DOM mutations', () => {
     const routes: string[] = []
-    const stop = observeAuthenticationRouteHistory(() => {
-      routes.push(location.pathname)
-    })
+    const stop = authenticationRouteBrowser.observeAuthenticationRouteHistory(
+      () => {
+        routes.push(location.pathname)
+      },
+    )
 
     window.history.pushState({}, '', '/login')
     window.history.replaceState({}, '', '/login/verify')
@@ -43,9 +43,11 @@ describe('authentication route history', () => {
       value: navigation,
     })
     const routes: string[] = []
-    const stop = observeAuthenticationRouteHistory(() => {
-      routes.push(location.pathname)
-    })
+    const stop = authenticationRouteBrowser.observeAuthenticationRouteHistory(
+      () => {
+        routes.push(location.pathname)
+      },
+    )
     listeners[0]?.()
     stop()
     listeners[0]?.()
@@ -56,9 +58,11 @@ describe('authentication route history', () => {
 
   test('notifies on hashchange without DOM mutations', () => {
     const routes: string[] = []
-    const stop = observeAuthenticationRouteHistory(() => {
-      routes.push(location.hash)
-    })
+    const stop = authenticationRouteBrowser.observeAuthenticationRouteHistory(
+      () => {
+        routes.push(location.hash)
+      },
+    )
 
     window.location.hash = '#/login'
     window.dispatchEvent(new HashChangeEvent('hashchange'))
@@ -74,7 +78,7 @@ describe('authentication route history', () => {
     window.postMessage = ((message: unknown, targetOrigin: string) => {
       posted.push({ message, targetOrigin })
     }) as typeof window.postMessage
-    notifyAuthenticationRouteChanged()
+    authenticationRouteBrowser.notifyAuthenticationRouteChanged()
     window.postMessage = originalPostMessage
 
     expect(posted).toEqual([
@@ -88,7 +92,9 @@ describe('authentication route history', () => {
       origin: location.origin,
       source: window,
     })
-    expect(isAuthenticationRouteHistoryMessage(event)).toBe(true)
+    expect(
+      authenticationRouteBrowser.isAuthenticationRouteHistoryMessage(event),
+    ).toBe(true)
     expect(AUTHENTICATION_ROUTE_HISTORY_SOURCE).toBe(
       'nook-authentication-route-v1',
     )
@@ -108,7 +114,9 @@ describe('authentication route history', () => {
       configurable: true,
       value: 'null',
     })
-    expect(() => notifyAuthenticationRouteChanged()).not.toThrow()
+    expect(() =>
+      authenticationRouteBrowser.notifyAuthenticationRouteChanged(),
+    ).not.toThrow()
     expect(posted).toEqual([])
     Object.defineProperty(location, 'origin', {
       configurable: true,
@@ -116,7 +124,7 @@ describe('authentication route history', () => {
     })
     window.postMessage = originalPostMessage
     expect(
-      isAuthenticationRouteHistoryMessage(
+      authenticationRouteBrowser.isAuthenticationRouteHistoryMessage(
         new MessageEvent('message', {
           data: { source: AUTHENTICATION_ROUTE_HISTORY_SOURCE },
           origin: 'null',

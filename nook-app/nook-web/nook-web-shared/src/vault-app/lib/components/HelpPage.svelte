@@ -1,46 +1,44 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { BookOpen, ChevronDown, ChevronLeft } from '@lucide/svelte'
-  import { HELP_SECTIONS } from '$lib/content/help'
-  import HelpMermaidDiagram from '$lib/components/HelpMermaidDiagram.svelte'
-  import { appPath } from '$lib/content/legal'
-  import { Button } from '$lib/components/ui/button'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { BookOpen, ChevronDown, ChevronLeft } from "@lucide/svelte";
+  import { HELP_SECTIONS } from "$lib/content/help";
+  import HelpMermaidDiagram from "$lib/components/HelpMermaidDiagram.svelte";
+  import { ApplicationRoutePresentation } from "$lib/content/legal";
+  import { Button } from "$lib/components/ui/button";
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from '$lib/components/ui/card'
-  import { MermaidTheme } from '$lib/content/mermaid-diagram'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$lib/components/ui/card";
+  import { MermaidTheme } from "$lib/content/mermaid-diagram";
+  import type { VaultState } from "$lib/vault.svelte";
 
   let {
     vault,
     onClose,
     colorMode = MermaidTheme.Dark,
   }: {
-    vault: VaultState
-    onClose: () => void
-    colorMode?: MermaidTheme
-  } = $props()
+    vault: VaultState;
+    onClose: () => void;
+    colorMode?: MermaidTheme;
+  } = $props();
 
   function scrollToSection(id: string) {
     const scrollIntoViewArgs: ScrollIntoViewOptions = {
-      behavior: 'smooth',
-      block: 'start',
+      behavior: "smooth",
+      block: "start",
     };
-    document
-      .getElementById(`help-${id}`)
-      ?.scrollIntoView(scrollIntoViewArgs)
+    document.getElementById(`help-${id}`)?.scrollIntoView(scrollIntoViewArgs);
   }
 
   function handleSectionJump(event: Event) {
-    const select = event.currentTarget as HTMLSelectElement
-    const id = select.value
-    if (!id) return
-    scrollToSection(id)
-    select.value = ''
+    const select = event.currentTarget as HTMLSelectElement;
+    const id = select.value;
+    if (!id) return;
+    scrollToSection(id);
+    select.value = "";
   }
 </script>
 
@@ -147,14 +145,14 @@
         aria-label={vault.t(I18N_KEYS.LegalDocumentsLabel)}
       >
         <a
-          href={appPath('/privacy.html')}
+          href={new ApplicationRoutePresentation("/privacy.html").appPath()}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
           {vault.t(I18N_KEYS.LegalPrivacyPolicy)}
         </a>
         <span aria-hidden="true">·</span>
         <a
-          href={appPath('/terms.html')}
+          href={new ApplicationRoutePresentation("/terms.html").appPath()}
           class="font-medium underline-offset-4 hover:text-foreground hover:underline"
         >
           {vault.t(I18N_KEYS.LegalTermsOfService)}

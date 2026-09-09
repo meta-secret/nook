@@ -1,39 +1,39 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
-  import { ChevronLeft } from '@lucide/svelte'
-  import MarkdownContent from '$lib/components/MarkdownContent.svelte'
-  import { Button } from '$lib/components/ui/button'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
+  import { ChevronLeft } from "@lucide/svelte";
+  import MarkdownContent from "$lib/components/MarkdownContent.svelte";
+  import { Button } from "$lib/components/ui/button";
   import {
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-  } from '$lib/components/ui/card'
+  } from "$lib/components/ui/card";
   import {
     LegalPageId,
-    appPath,
-    legalPageForId,
-  } from '$lib/content/legal'
-  import type { VaultState } from '$lib/vault.svelte'
+    ApplicationRoutePresentation,
+    LegalPageSelection,
+  } from "$lib/content/legal";
+  import type { VaultState } from "$lib/vault.svelte";
 
   let {
     vault,
     pageId,
     onClose,
   }: {
-    vault: VaultState
-    pageId: LegalPageId
-    onClose: () => void
-  } = $props()
+    vault: VaultState;
+    pageId: LegalPageId;
+    onClose: () => void;
+  } = $props();
 
-  const page = $derived(legalPageForId(pageId))
+  const page = $derived(new LegalPageSelection(pageId).legalPageForId());
   const otherPageId = $derived<LegalPageId>(
-    pageId === LegalPageId.Privacy
-      ? LegalPageId.Terms
-      : LegalPageId.Privacy,
-  )
-  const otherPage = $derived(legalPageForId(otherPageId))
+    pageId === LegalPageId.Privacy ? LegalPageId.Terms : LegalPageId.Privacy,
+  );
+  const otherPage = $derived(
+    new LegalPageSelection(otherPageId).legalPageForId(),
+  );
 </script>
 
 <div
@@ -80,7 +80,7 @@
         aria-label={vault.t(I18N_KEYS.LegalDocumentsLabel)}
       >
         <a
-          href={appPath(otherPage.path)}
+          href={new ApplicationRoutePresentation(otherPage.path).appPath()}
           class="font-medium text-foreground/80 underline-offset-4 hover:text-foreground hover:underline"
           data-testid="legal-document-related-link"
         >

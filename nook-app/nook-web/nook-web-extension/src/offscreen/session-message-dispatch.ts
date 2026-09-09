@@ -1,8 +1,7 @@
 import {
   ProviderCredentialStagingKind,
-  scrubProviderCredentials,
   type SerializedExtensionStorageProviders,
-  stageProviderCredentials,
+  ProviderCredentialBuffer,
 } from '../lib/provider-credential-staging'
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import {
@@ -240,23 +239,23 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
     }
     const providerCandidate: SerializedExtensionStorageProviders =
       payload.providers
-    const stagingArgs: Parameters<typeof stageProviderCredentials>[0] = {
+    const stagingArgs: Parameters<typeof ProviderCredentialBuffer.stage>[0] = {
       providers: providerCandidate,
       decode: this.context.decodeProviders,
     }
-    const stagingOperation = stageProviderCredentials(stagingArgs)
+    const stagingOperation = ProviderCredentialBuffer.stage(stagingArgs)
     let stagingOwnership = StagingOwnership.Queue
     const clearQueuedStaging = () => {
       if (stagingOwnership !== StagingOwnership.Queue) return
       stagingOwnership = StagingOwnership.Cleared
       void stagingOperation.then((staging) => {
         if (staging.kind === ProviderCredentialStagingKind.Staged) {
-          scrubProviderCredentials(staging.providers)
+          new ProviderCredentialBuffer(staging.providers).clear()
         }
       })
     }
     payload.providers = []
-    scrubProviderCredentials(providerCandidate)
+    new ProviderCredentialBuffer(providerCandidate).clear()
     // Reserve the queue position before cold WASM decoding can yield. Reset
     // must remain a terminal barrier after every import accepted before it.
     const nookNamedArgs1_1: EnqueueSessionOperationArgs<
@@ -267,7 +266,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
         const staging = await stagingOperation
         if (operationGeneration !== this.operationGeneration) {
           if (staging.kind === ProviderCredentialStagingKind.Staged) {
-            scrubProviderCredentials(staging.providers)
+            new ProviderCredentialBuffer(staging.providers).clear()
           }
           stagingOwnership = StagingOwnership.Cleared
           throw new Error('Extension session request expired.')
@@ -299,7 +298,7 @@ export class ExtensionSessionMessageDispatcher<SessionResponse> {
           }
           return await this.context.handleMessage(stagedProviderRequest)
         } finally {
-          scrubProviderCredentials(stagedProviders)
+          new ProviderCredentialBuffer(stagedProviders).clear()
           payload.providers = []
           stagingOwnership = StagingOwnership.Cleared
         }

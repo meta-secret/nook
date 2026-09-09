@@ -4,7 +4,6 @@ type StoredVaultSynchronization = {
   readonly pat: string;
   readonly repo: string;
 };
-
 import type {
   NookImportResult,
   NookJoinRequest,
@@ -28,10 +27,10 @@ import {
   generate_secret_id,
   VaultAccessStatus,
 } from "$app-wasm";
-import { createLogger, initWasmLogging } from "$lib/runtime/log";
+import { browserLogRuntime } from "$lib/runtime/log";
 
 await initNookWasm();
-initWasmLogging();
+browserLogRuntime.initWasmLogging();
 
 export type {
   NookImportResult,
@@ -70,7 +69,7 @@ export function isoTimestamp(): string {
 export async function getVaultManager(): Promise<NookVaultManager> {
   const loadWasm = async () => {
     await initNookWasm();
-    initWasmLogging();
+    browserLogRuntime.initWasmLogging();
     const manager = new NookVaultManagerClass();
     drainWasmStatusIntoLog(manager);
     return manager;
@@ -106,7 +105,7 @@ export function syncVaultFromStorage({
   ) as Promise<NookVaultSyncResult>;
 }
 
-const wasmLog = createLogger("wasm");
+const wasmLog = browserLogRuntime.createLogger("wasm");
 
 /**
  * Pipe the wasm manager's status channel (e.g. `GITHUB_FETCH_START`,

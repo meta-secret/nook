@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
   import {
     FolderOpen,
     FolderPlus,
@@ -7,155 +7,164 @@
     RefreshCw,
     ShieldCheck,
     Users,
-  } from '@lucide/svelte'
-  import { buttonVariants } from '$lib/components/ui/button/button.svelte'
-  import { Button } from '$lib/components/ui/button'
-  import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
+  } from "@lucide/svelte";
+  import { buttonVariants } from "$lib/components/ui/button/button.svelte";
+  import { Button } from "$lib/components/ui/button";
+  import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
   import type {
     GoogleDriveMode,
     ICloudMode,
     OAuthFilePreset,
-  } from '$lib/auth/providers'
+  } from "$lib/auth/providers";
   import {
     DEFAULT_DRIVE_BACKUP_NAME,
-    hasGoogleDriveFolder,
-    hasICloudShareTarget,
+    OAuthFilePresentation,
     oauthAccessToken,
-    oauthAccountLabel,
     OAuthAccessTokenKind,
-  } from '$lib/auth/providers'
-  import { createLogger } from '$lib/runtime/log'
+  } from "$lib/auth/providers";
+  import { browserLogRuntime } from "$lib/runtime/log";
   import {
     BrowserOAuthProvider,
     OAuthOriginUnsupportedReason,
     resolveCurrentOAuthOriginSupport,
-  } from '$lib/auth/oauth-origin'
-  import { cn } from '$lib/utils'
-  import type { VaultState } from '$lib/vault.svelte'
-  import * as oauthActions from '$lib/vault/oauth'
-  import { OAuthFileDraftKind } from '$lib/vault/state/provider.svelte'
-  import { SharedFolderAction } from './oauth-provider-setup-state'
+  } from "$lib/auth/oauth-origin";
+  import { cn } from "$lib/utils";
+  import type { VaultState } from "$lib/vault.svelte";
+  import * as oauthActions from "$lib/vault/oauth";
+  import { OAuthFileDraftKind } from "$lib/vault/state/provider.svelte";
+  import { SharedFolderAction } from "./oauth-provider-setup-state";
 
-  const log = createLogger('icloud-oauth')
+  const log = browserLogRuntime.createLogger("icloud-oauth");
 
   let {
     vault,
     githubRepo = $bindable(DEFAULT_DRIVE_BACKUP_NAME),
-    idPrefix = 'provider',
-    preset = 'google-drive' as OAuthFilePreset,
+    idPrefix = "provider",
+    preset = "google-drive" as OAuthFilePreset,
     isVerifying,
     isInitializing,
     onCancelSetup,
     onConnect,
   }: {
-    vault: VaultState
-    githubRepo?: string
-    idPrefix?: string
-    preset?: OAuthFilePreset
-    isVerifying: boolean
-    isInitializing: boolean
-    onCancelSetup: () => void
-    onConnect: () => void | Promise<void>
-  } = $props()
+    vault: VaultState;
+    githubRepo?: string;
+    idPrefix?: string;
+    preset?: OAuthFilePreset;
+    isVerifying: boolean;
+    isInitializing: boolean;
+    onCancelSetup: () => void;
+    onConnect: () => void | Promise<void>;
+  } = $props();
 
-  const isICloud = $derived(preset === 'icloud')
+  const isICloud = $derived(preset === "icloud");
   const googleDriveMode = $derived.by((): GoogleDriveMode => {
-    const draft = vault.oauthFileDraft
-    if (draft.kind !== OAuthFileDraftKind.Configured) return 'private'
-    return draft.config.driveMode
-  })
+    const draft = vault.oauthFileDraft;
+    if (draft.kind !== OAuthFileDraftKind.Configured) return "private";
+    return draft.config.driveMode;
+  });
   const iCloudMode = $derived.by((): ICloudMode => {
-    const draft = vault.oauthFileDraft
-    if (draft.kind !== OAuthFileDraftKind.Configured) return 'private'
-    return draft.config.iCloudMode
-  })
+    const draft = vault.oauthFileDraft;
+    if (draft.kind !== OAuthFileDraftKind.Configured) return "private";
+    return draft.config.iCloudMode;
+  });
   const isSharedGoogleDrive = $derived(
-    !isICloud && googleDriveMode === 'shared',
-  )
-  const isSharedICloud = $derived(isICloud && iCloudMode === 'shared')
-  const isSharedProvider = $derived(isSharedGoogleDrive || isSharedICloud)
+    !isICloud && googleDriveMode === "shared",
+  );
+  const isSharedICloud = $derived(isICloud && iCloudMode === "shared");
+  const isSharedProvider = $derived(isSharedGoogleDrive || isSharedICloud);
   const oauthSignedIn = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
       oauthAccessToken(vault.oauthFileDraft.config).kind ===
         OAuthAccessTokenKind.Available,
-  )
+  );
   const sharedTargetReady = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
       ((isSharedGoogleDrive &&
-        hasGoogleDriveFolder(vault.oauthFileDraft.config)) ||
+        new OAuthFilePresentation(
+          vault.oauthFileDraft.config,
+        ).hasGoogleDriveFolder()) ||
         (isSharedICloud &&
-          hasICloudShareTarget(vault.oauthFileDraft.config))),
-  )
+          new OAuthFilePresentation(
+            vault.oauthFileDraft.config,
+          ).hasICloudShareTarget())),
+  );
   const canConnect = $derived(
     oauthSignedIn && (!isSharedProvider || sharedTargetReady),
-  )
+  );
   const oauthAccount = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
-      ? oauthAccountLabel(vault.oauthFileDraft.config)
-      : '',
-  )
+      ? new OAuthFilePresentation(
+          vault.oauthFileDraft.config,
+        ).oauthAccountLabel()
+      : "",
+  );
   const oauthBusy = $derived(
     isICloud ? vault.icloudOAuthBusy : vault.googleOAuthBusy,
-  )
+  );
   const icloudSignInPreparing = $derived(
     isICloud && vault.icloudOAuthPreparing && !vault.icloudOAuthReady,
-  )
+  );
   const oauthOriginSupport = $derived(
     resolveCurrentOAuthOriginSupport(
       isICloud ? BrowserOAuthProvider.ICloud : BrowserOAuthProvider.GoogleDrive,
     ),
-  )
-  const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported)
+  );
+  const oauthOriginUnsupported = $derived(!oauthOriginSupport.supported);
   const oauthOriginUnsupportedMessage = $derived.by(() => {
-    if (oauthOriginSupport.supported) return ''
+    if (oauthOriginSupport.supported) return "";
     const translationRequest: Parameters<typeof vault.t>[0] = {
-      key: oauthOriginSupport.reason ===
+      key:
+        oauthOriginSupport.reason ===
         OAuthOriginUnsupportedReason.CloudflarePrPreview
-        ? I18N_KEYS.ProviderSetupOauthPreviewOriginUnsupported
-        : I18N_KEYS.ProviderSetupOauthOriginUnsupported,
+          ? I18N_KEYS.ProviderSetupOauthPreviewOriginUnsupported
+          : I18N_KEYS.ProviderSetupOauthOriginUnsupported,
       replacements: { origin: oauthOriginSupport.origin },
     };
-    return vault.t(translationRequest)
-  })
+    return vault.t(translationRequest);
+  });
 
-  let connectionStepOpen = $state(true)
-  let sharedFolderStepOpen = $state(false)
-  let syncStepOpen = $state(false)
-  let icloudSignInPrepareStarted = $state(false)
-  let sharedFolderAction = $state(SharedFolderAction.Create)
-  let collaboratorEmail = $state('')
-  let sharedFolderRef = $state('')
-  let sharedFolderBusy = $state(false)
+  let connectionStepOpen = $state(true);
+  let sharedFolderStepOpen = $state(false);
+  let syncStepOpen = $state(false);
+  let icloudSignInPrepareStarted = $state(false);
+  let sharedFolderAction = $state(SharedFolderAction.Create);
+  let collaboratorEmail = $state("");
+  let sharedFolderRef = $state("");
+  let sharedFolderBusy = $state(false);
 
   function selectGoogleDriveMode(mode: GoogleDriveMode) {
-    vault.selectGoogleDriveMode(mode)
-    connectionStepOpen = true
-    sharedFolderStepOpen = false
-    syncStepOpen = false
+    vault.selectGoogleDriveMode(mode);
+    connectionStepOpen = true;
+    sharedFolderStepOpen = false;
+    syncStepOpen = false;
   }
 
   function selectICloudMode(mode: ICloudMode) {
-    vault.selectICloudMode(mode)
-    connectionStepOpen = true
-    sharedFolderStepOpen = false
-    syncStepOpen = false
+    vault.selectICloudMode(mode);
+    connectionStepOpen = true;
+    sharedFolderStepOpen = false;
+    syncStepOpen = false;
   }
 
   async function createSharedFolder() {
-    if (sharedFolderBusy) return
-    sharedFolderBusy = true
-    vault.errorMsg = ''
+    if (sharedFolderBusy) return;
+    sharedFolderBusy = true;
+    vault.errorMsg = "";
     try {
       if (isSharedICloud) {
-        await oauthActions.createICloudSharedProvider(vault)
+        await new oauthActions.VaultOAuthActions(
+          vault,
+        ).createICloudSharedProvider();
       } else {
         const createRequest: Parameters<
-          typeof oauthActions.createGoogleSharedFolder
-        >[0] = { state: vault, collaboratorEmail }
-        await oauthActions.createGoogleSharedFolder(createRequest)
+          oauthActions.VaultOAuthActions["createGoogleSharedFolder"]
+        >[0] = { collaboratorEmail };
+        await new oauthActions.VaultOAuthActions(
+          vault,
+        ).createGoogleSharedFolder(createRequest);
       }
-      sharedFolderStepOpen = false
-      syncStepOpen = true
+      sharedFolderStepOpen = false;
+      syncStepOpen = true;
     } catch (error) {
       vault.errorMsg =
         error instanceof Error
@@ -164,30 +173,34 @@
               isSharedICloud
                 ? I18N_KEYS.ProviderSetupIcloudSharedCreateFailed
                 : I18N_KEYS.ProviderSetupGoogleSharedCreateFailed,
-            )
+            );
     } finally {
-      sharedFolderBusy = false
+      sharedFolderBusy = false;
     }
   }
 
   async function useSharedFolder() {
-    if (sharedFolderBusy) return
-    sharedFolderBusy = true
-    vault.errorMsg = ''
+    if (sharedFolderBusy) return;
+    sharedFolderBusy = true;
+    vault.errorMsg = "";
     try {
       if (isSharedICloud) {
         const useRequest: Parameters<
-          typeof oauthActions.useICloudSharedProvider
-        >[0] = { state: vault, shareReference: sharedFolderRef }
-        await oauthActions.useICloudSharedProvider(useRequest)
+          oauthActions.VaultOAuthActions["useICloudSharedProvider"]
+        >[0] = { state: vault, shareReference: sharedFolderRef };
+        await new oauthActions.VaultOAuthActions(vault).useICloudSharedProvider(
+          useRequest,
+        );
       } else {
         const useRequest: Parameters<
-          typeof oauthActions.useGoogleSharedFolder
-        >[0] = { state: vault, folderRef: sharedFolderRef }
-        await oauthActions.useGoogleSharedFolder(useRequest)
+          oauthActions.VaultOAuthActions["useGoogleSharedFolder"]
+        >[0] = { folderRef: sharedFolderRef };
+        await new oauthActions.VaultOAuthActions(vault).useGoogleSharedFolder(
+          useRequest,
+        );
       }
-      sharedFolderStepOpen = false
-      syncStepOpen = true
+      sharedFolderStepOpen = false;
+      syncStepOpen = true;
     } catch (error) {
       vault.errorMsg =
         error instanceof Error
@@ -196,14 +209,14 @@
               isSharedICloud
                 ? I18N_KEYS.ProviderSetupIcloudSharedConnectFailed
                 : I18N_KEYS.ProviderSetupGoogleSharedConnectFailed,
-            )
+            );
     } finally {
-      sharedFolderBusy = false
+      sharedFolderBusy = false;
     }
   }
 
   function watchICloudSignInIntent(node: HTMLElement) {
-    let deferredSignInPending = false
+    let deferredSignInPending = false;
     const handleClick = (event: MouseEvent) => {
       if (
         !isICloud ||
@@ -212,55 +225,62 @@
         oauthSignedIn ||
         event.defaultPrevented
       ) {
-        return
+        return;
       }
-      log.info('CloudKit native sign-in click observed')
+      log.info("CloudKit native sign-in click observed");
       if (deferredSignInPending) {
-        log.info('CloudKit native sign-in click ignored: wait already pending')
-        return
+        log.info("CloudKit native sign-in click ignored: wait already pending");
+        return;
       }
-      deferredSignInPending = true
+      deferredSignInPending = true;
       window.setTimeout(() => {
-        deferredSignInPending = false
+        deferredSignInPending = false;
         if (
           !isICloud ||
           !vault.icloudOAuthReady ||
           vault.icloudOAuthBusy ||
           oauthSignedIn
         ) {
-          log.info('CloudKit native sign-in deferred wait skipped')
-          return
+          log.info("CloudKit native sign-in deferred wait skipped");
+          return;
         }
-        log.info('CloudKit native sign-in deferred wait started')
-        const signInWithICloudArgs: Parameters<typeof oauthActions.signInWithICloud>[0] = {
-          state: vault,
+        log.info("CloudKit native sign-in deferred wait started");
+        const signInWithICloudArgs: Parameters<
+          oauthActions.VaultOAuthActions["signInWithICloud"]
+        >[0] = {
           clickPreparedControl: false,
         };
-        void oauthActions.signInWithICloud(signInWithICloudArgs)
-      }, 0)
-    }
-    const addEventListenerArgs: Parameters<typeof node.addEventListener>[2] = { capture: true };
-    node.addEventListener('click', handleClick, addEventListenerArgs)
+        void new oauthActions.VaultOAuthActions(vault).signInWithICloud(
+          signInWithICloudArgs,
+        );
+      }, 0);
+    };
+    const addEventListenerArgs: Parameters<typeof node.addEventListener>[2] = {
+      capture: true,
+    };
+    node.addEventListener("click", handleClick, addEventListenerArgs);
     return {
       destroy() {
-        const removeEventListenerArgs: Parameters<typeof node.removeEventListener>[2] = { capture: true };
-        node.removeEventListener('click', handleClick, removeEventListenerArgs)
+        const removeEventListenerArgs: Parameters<
+          typeof node.removeEventListener
+        >[2] = { capture: true };
+        node.removeEventListener("click", handleClick, removeEventListenerArgs);
       },
-    }
+    };
   }
 
   $effect(() => {
     if (oauthSignedIn) {
-      connectionStepOpen = false
-      sharedFolderStepOpen = isSharedProvider && !sharedTargetReady
-      syncStepOpen = !isSharedProvider || sharedTargetReady
+      connectionStepOpen = false;
+      sharedFolderStepOpen = isSharedProvider && !sharedTargetReady;
+      syncStepOpen = !isSharedProvider || sharedTargetReady;
     }
-  })
+  });
 
   $effect(() => {
     if (!isICloud) {
-      icloudSignInPrepareStarted = false
-      return
+      icloudSignInPrepareStarted = false;
+      return;
     }
     if (
       !oauthOriginUnsupported &&
@@ -268,15 +288,15 @@
       !vault.icloudOAuthPreparing &&
       !icloudSignInPrepareStarted
     ) {
-      icloudSignInPrepareStarted = true
-      void oauthActions.prepareICloudSignIn(vault)
+      icloudSignInPrepareStarted = true;
+      void new oauthActions.VaultOAuthActions(vault).prepareICloudSignIn();
     }
-  })
+  });
 </script>
 
 <div
   class="space-y-4"
-  data-testid={isICloud ? 'icloud-oauth-setup' : 'google-oauth-setup'}
+  data-testid={isICloud ? "icloud-oauth-setup" : "google-oauth-setup"}
 >
   <div class="flex items-center gap-2 text-sm">
     {#if isICloud}
@@ -339,8 +359,8 @@
         : vault.t(I18N_KEYS.ProviderSetupGoogleConnectionSubtitle)}
       bind:open={connectionStepOpen}
       testId={isICloud
-        ? 'icloud-setup-connection-step'
-        : 'google-setup-connection-step'}
+        ? "icloud-setup-connection-step"
+        : "google-setup-connection-step"}
     >
       <p class="text-sm text-foreground text-pretty">
         {isICloud
@@ -359,8 +379,8 @@
       <fieldset
         class="space-y-2"
         data-testid={isICloud
-          ? 'icloud-mode-fieldset'
-          : 'google-drive-mode-fieldset'}
+          ? "icloud-mode-fieldset"
+          : "google-drive-mode-fieldset"}
       >
         <legend class="text-xs font-medium text-foreground">
           {vault.t(
@@ -382,19 +402,19 @@
             type="button"
             role="radio"
             aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
-              'private'}
+              "private"}
             class="flex gap-2.5 px-3 py-3 text-left transition-colors {(isICloud
               ? iCloudMode
               : googleDriveMode) === 'private'
               ? 'bg-primary/[0.06] text-foreground'
               : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
             data-testid={isICloud
-              ? 'icloud-mode-private'
-              : 'google-drive-mode-private'}
+              ? "icloud-mode-private"
+              : "google-drive-mode-private"}
             onclick={() =>
               isICloud
-                ? selectICloudMode('private')
-                : selectGoogleDriveMode('private')}
+                ? selectICloudMode("private")
+                : selectGoogleDriveMode("private")}
           >
             <LockKeyhole class="mt-0.5 size-4 shrink-0" />
             <span>
@@ -418,19 +438,19 @@
             type="button"
             role="radio"
             aria-checked={(isICloud ? iCloudMode : googleDriveMode) ===
-              'shared'}
+              "shared"}
             class="flex gap-2.5 border-t border-border/40 px-3 py-3 text-left transition-colors sm:border-t-0 sm:border-l {(isICloud
               ? iCloudMode
               : googleDriveMode) === 'shared'
               ? 'bg-primary/[0.06] text-foreground'
               : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
             data-testid={isICloud
-              ? 'icloud-mode-shared'
-              : 'google-drive-mode-shared'}
+              ? "icloud-mode-shared"
+              : "google-drive-mode-shared"}
             onclick={() =>
               isICloud
-                ? selectICloudMode('shared')
-                : selectGoogleDriveMode('shared')}
+                ? selectICloudMode("shared")
+                : selectGoogleDriveMode("shared")}
           >
             <Users class="mt-0.5 size-4 shrink-0" />
             <span>
@@ -488,9 +508,9 @@
       {#if isICloud}
         <div
           class={cn(
-            'apple-cloudkit-control relative min-h-9 w-full sm:w-fit',
+            "apple-cloudkit-control relative min-h-9 w-full sm:w-fit",
             (oauthBusy || icloudSignInPreparing || oauthOriginUnsupported) &&
-              'pointer-events-none opacity-60',
+              "pointer-events-none opacity-60",
           )}
           data-testid="icloud-sign-in-btn"
           use:watchICloudSignInIntent
@@ -500,8 +520,13 @@
           {#if oauthBusy || icloudSignInPreparing}
             <div
               class={cn(
-                (() => { const buttonVariantsArgs: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs); })(),
-                'absolute inset-0 w-full sm:w-auto',
+                (() => {
+                  const buttonVariantsArgs: Parameters<
+                    typeof buttonVariants
+                  >[0] = { variant: "default", size: "sm" };
+                  return buttonVariants(buttonVariantsArgs);
+                })(),
+                "absolute inset-0 w-full sm:w-auto",
               )}
             >
               {vault.t(I18N_KEYS.ProviderSetupIcloudSigningIn)}
@@ -512,8 +537,12 @@
         <button
           type="button"
           class={cn(
-            (() => { const buttonVariantsArgs2: Parameters<typeof buttonVariants>[0] = { variant: 'default', size: 'sm' }; return buttonVariants(buttonVariantsArgs2); })(),
-            'w-full sm:w-auto',
+            (() => {
+              const buttonVariantsArgs2: Parameters<typeof buttonVariants>[0] =
+                { variant: "default", size: "sm" };
+              return buttonVariants(buttonVariantsArgs2);
+            })(),
+            "w-full sm:w-auto",
           )}
           data-testid="google-sign-in-btn"
           disabled={oauthBusy || oauthOriginUnsupported}
@@ -531,8 +560,8 @@
         <p
           class="text-xs text-muted-foreground"
           data-testid={isICloud
-            ? 'icloud-origin-unsupported'
-            : 'google-origin-unsupported'}
+            ? "icloud-origin-unsupported"
+            : "google-origin-unsupported"}
         >
           {oauthOriginUnsupportedMessage}
         </p>
@@ -541,7 +570,7 @@
       {#if vault.errorMsg}
         <p
           class="text-xs text-destructive"
-          data-testid={isICloud ? 'icloud-oauth-error' : 'google-oauth-error'}
+          data-testid={isICloud ? "icloud-oauth-error" : "google-oauth-error"}
         >
           {vault.errorMsg}
         </p>
@@ -551,24 +580,32 @@
         <p
           class="text-xs text-muted-foreground"
           data-testid={isICloud
-            ? 'icloud-account-status'
-            : 'google-account-status'}
+            ? "icloud-account-status"
+            : "google-account-status"}
         >
           {isICloud
-            ? (() => { const translationRequest2: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
-  replacements: {
-                account:
-                  oauthAccount || vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
-              },
-}; return vault.t(translationRequest2); })()
-            : (() => { const translationRequest3: Parameters<typeof vault.t>[0] = {
-  key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
-  replacements: {
-                account:
-                  oauthAccount || vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
-              },
-}; return vault.t(translationRequest3); })()}
+            ? (() => {
+                const translationRequest2: Parameters<typeof vault.t>[0] = {
+                  key: I18N_KEYS.ProviderSetupIcloudSignedInAs,
+                  replacements: {
+                    account:
+                      oauthAccount ||
+                      vault.t(I18N_KEYS.AuthStorageIcloudSignedIn),
+                  },
+                };
+                return vault.t(translationRequest2);
+              })()
+            : (() => {
+                const translationRequest3: Parameters<typeof vault.t>[0] = {
+                  key: I18N_KEYS.ProviderSetupGoogleSignedInAs,
+                  replacements: {
+                    account:
+                      oauthAccount ||
+                      vault.t(I18N_KEYS.AuthStorageGoogleSignedIn),
+                  },
+                };
+                return vault.t(translationRequest3);
+              })()}
         </p>
       {/if}
 
@@ -603,8 +640,8 @@
         disabled={!oauthSignedIn}
         bind:open={sharedFolderStepOpen}
         testId={isSharedICloud
-          ? 'icloud-shared-target-step'
-          : 'google-shared-folder-step'}
+          ? "icloud-shared-target-step"
+          : "google-shared-folder-step"}
       >
         <div
           class="grid overflow-hidden rounded-lg border border-border/50 sm:grid-cols-2"
@@ -624,8 +661,8 @@
               ? 'bg-primary/[0.06] text-foreground'
               : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
             data-testid={isSharedICloud
-              ? 'icloud-shared-create-mode'
-              : 'google-shared-folder-create-mode'}
+              ? "icloud-shared-create-mode"
+              : "google-shared-folder-create-mode"}
             onclick={() => (sharedFolderAction = SharedFolderAction.Create)}
           >
             <FolderPlus class="size-4 shrink-0" />
@@ -644,8 +681,8 @@
               ? 'bg-primary/[0.06] text-foreground'
               : 'text-muted-foreground hover:bg-accent/40 hover:text-foreground'}"
             data-testid={isSharedICloud
-              ? 'icloud-shared-join-mode'
-              : 'google-shared-folder-join-mode'}
+              ? "icloud-shared-join-mode"
+              : "google-shared-folder-join-mode"}
             onclick={() => (sharedFolderAction = SharedFolderAction.Join)}
           >
             <FolderOpen class="size-4 shrink-0" />
@@ -691,8 +728,8 @@
             type="button"
             size="sm"
             data-testid={isSharedICloud
-              ? 'icloud-create-share-btn'
-              : 'google-create-shared-folder-btn'}
+              ? "icloud-create-share-btn"
+              : "google-create-shared-folder-btn"}
             disabled={sharedFolderBusy ||
               (!isSharedICloud && !collaboratorEmail.trim())}
             onclick={() => void createSharedFolder()}
@@ -727,8 +764,8 @@
               autocomplete="off"
               spellcheck="false"
               data-testid={isSharedICloud
-                ? 'icloud-shared-ref'
-                : 'google-shared-folder-ref'}
+                ? "icloud-shared-ref"
+                : "google-shared-folder-ref"}
               class="flex h-9 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-hidden focus:ring-2 focus:ring-ring"
               placeholder={vault.t(
                 isSharedICloud
@@ -748,8 +785,8 @@
             type="button"
             size="sm"
             data-testid={isSharedICloud
-              ? 'icloud-use-share-btn'
-              : 'google-use-shared-folder-btn'}
+              ? "icloud-use-share-btn"
+              : "google-use-shared-folder-btn"}
             disabled={sharedFolderBusy || !sharedFolderRef.trim()}
             onclick={() => void useSharedFolder()}
           >
@@ -770,8 +807,8 @@
           <p
             class="rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground"
             data-testid={isSharedICloud
-              ? 'icloud-shared-status'
-              : 'google-shared-folder-status'}
+              ? "icloud-shared-status"
+              : "google-shared-folder-status"}
           >
             {vault.sharedGrantInstructions}
           </p>
@@ -795,7 +832,7 @@
           : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect)}
       disabled={!canConnect}
       bind:open={syncStepOpen}
-      testId={isICloud ? 'icloud-setup-sync-step' : 'google-setup-sync-step'}
+      testId={isICloud ? "icloud-setup-sync-step" : "google-setup-sync-step"}
     >
       <p class="text-sm text-muted-foreground text-pretty">
         {vault.t(I18N_KEYS.AuthStorageSyncSetupDesc)}

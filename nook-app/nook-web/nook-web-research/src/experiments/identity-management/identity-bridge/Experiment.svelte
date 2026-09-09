@@ -3,12 +3,9 @@
   import ExperimentBack from '$lib/components/ExperimentBack.svelte'
   import type { ExperimentProps } from '../../index'
   import {
-    grantsForIdentity,
-    grantsForVault,
     identities,
-    identityById,
     vaults,
-    vaultById,
+    identityVaultFixtures,
   } from '../_shared/identity-vault-fixtures'
   import BridgeGraph from './BridgeGraph.svelte'
   import { BridgePerspective } from './bridge-perspective'
@@ -18,9 +15,15 @@
   let selectedPerspective = $state(BridgePerspective.Identities)
   let selectedIdentityId = $state('idn_7c9d')
   let selectedVaultId = $state('vlt_home')
-  const selectedIdentity = $derived(identityById(selectedIdentityId))
-  const selectedVault = $derived(vaultById(selectedVaultId))
-  const selectedVaultGrants = $derived(grantsForVault(selectedVaultId))
+  const selectedIdentity = $derived(
+    identityVaultFixtures.identityById(selectedIdentityId),
+  )
+  const selectedVault = $derived(
+    identityVaultFixtures.vaultById(selectedVaultId),
+  )
+  const selectedVaultGrants = $derived(
+    identityVaultFixtures.grantsForVault(selectedVaultId),
+  )
 </script>
 
 <svelte:head>
@@ -62,7 +65,9 @@
       <ol>
         {#each identities as identity (identity.id)}
           {@const active = identity.id === selectedIdentityId}
-          {@const vaultCount = grantsForIdentity(identity.id).length}
+          {@const vaultCount = identityVaultFixtures.grantsForIdentity(
+            identity.id,
+          ).length}
           <li>
             <button
               type="button"
@@ -87,7 +92,9 @@
       <ol class="vault-list">
         {#each vaults as vault (vault.id)}
           {@const active = vault.id === selectedVaultId}
-          {@const identityCount = grantsForVault(vault.id).length}
+          {@const identityCount = identityVaultFixtures.grantsForVault(
+            vault.id,
+          ).length}
           <li>
             <button
               type="button"
@@ -116,10 +123,11 @@
       <header class="page-header">
         <p class="eyebrow">Identity view</p>
         <h1 id="bridge-title">
-          {selectedIdentity.label} connects its devices to {grantsForIdentity(
+          {selectedIdentity.label} connects its devices to {identityVaultFixtures.grantsForIdentity(
             selectedIdentityId,
           ).length}
-          {grantsForIdentity(selectedIdentityId).length === 1
+          {identityVaultFixtures.grantsForIdentity(selectedIdentityId)
+            .length === 1
             ? 'vault'
             : 'vaults'}.
         </h1>

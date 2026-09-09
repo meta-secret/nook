@@ -6,9 +6,9 @@ import {
   type StoreId,
 } from "$app-wasm";
 import {
-  inactiveSentinelUnlockSession,
   type SentinelStoredDeliverySummary,
   type SentinelUnlockSessionStatus,
+  SentinelUnlockActions,
 } from "$lib/vault/sentinel-unlock";
 export enum SentinelGenesisTargetKind {
   NotSelected = "not-selected",
@@ -54,7 +54,7 @@ export class VaultSentinelState {
   sentinelUnlockRequest = $state("");
   /** Rust-owned unlock-session progress rendered by the web layer. */
   sentinelUnlockSession = $state<SentinelUnlockSessionStatus>(
-    inactiveSentinelUnlockSession(),
+    SentinelUnlockActions.inactiveSentinelUnlockSession(),
   );
   /** Provider-free encrypted deliveries available to this protected device. */
   sentinelStoredDeliveries = $state<SentinelStoredDeliverySummary[]>([]);

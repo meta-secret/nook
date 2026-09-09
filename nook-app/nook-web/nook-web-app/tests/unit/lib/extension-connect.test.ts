@@ -1,28 +1,24 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   ExtensionConnectIntentKind,
-  extensionConnectIntent,
+  ExtensionConnectionIntentProjection,
 } from '$lib/app/route-state'
 import {
   ExtensionConnectScope,
   ExtensionIdentityRequestSource,
   ExtensionConnectRequestStateKind,
   ExtensionPairingDeliveryKind,
-  deliverExtensionPairingApproval,
-  extensionConnectRequestFromLocation,
-  isExtensionConnectPath,
-  openInstalledExtension,
-  requestPairedExtensionUnlock,
+  extensionConnectionBrowser,
 } from '$lib/extension/connect'
 import {
-  isBeginExtensionPairingMessage,
-  isExtensionIdentityHandoffRequestMessage,
-  isExtensionLocalEventLogUpdatedMessage,
-  isOpenCompanionLauncherMessage,
+  BeginExtensionPairingMessage as BeginExtensionPairingMessageGuard,
+  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
+  OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
   OpenCompanionLauncherIntent,
   ExtensionPairingVaultType,
   ExtensionPairingApprovedMessageType,
-  isExtensionPairingApprovedMessage,
+  ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
+  ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
 } from '../../../../nook-web-shared/src/extension/runtime-messages'
 import {
   extensionPairingGrantPolicyReady,
@@ -53,17 +49,24 @@ afterEach(() => {
 
 describe('extension connect route parsing', () => {
   test('accepts the canonical extension-connect path', () => {
-    expect(isExtensionConnectPath('/extension-connect')).toBe(true)
-    expect(isExtensionConnectPath('/extension-connect/')).toBe(true)
-    expect(isExtensionConnectPath('/vault')).toBe(false)
+    expect(
+      extensionConnectionBrowser.isExtensionConnectPath('/extension-connect'),
+    ).toBe(true)
+    expect(
+      extensionConnectionBrowser.isExtensionConnectPath('/extension-connect/'),
+    ).toBe(true)
+    expect(extensionConnectionBrowser.isExtensionConnectPath('/vault')).toBe(
+      false,
+    )
   })
 
   test('parses complete pairing requests', () => {
-    const request = extensionConnectRequestFromLocation(
-      locationFromUrl(
-        'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&device_label=Nook%20Extension&nonce=n-1&scopes=vault-access,password-filling,sync-provider-credentials',
-      ),
-    )
+    const request =
+      extensionConnectionBrowser.extensionConnectRequestFromLocation(
+        locationFromUrl(
+          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&extension_id=ext-123&device_label=Nook%20Extension&nonce=n-1&scopes=vault-access,password-filling,sync-provider-credentials',
+        ),
+      )
 
     expect(request).toEqual({
       kind: ExtensionConnectRequestStateKind.Requested,
@@ -85,26 +88,27 @@ describe('extension connect route parsing', () => {
   })
 
   test('rejects requests that cannot deliver the grant to an extension', () => {
-    const request = extensionConnectRequestFromLocation(
-      locationFromUrl(
-        'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&nonce=n-1&scopes=vault-access',
-      ),
-    )
+    const request =
+      extensionConnectionBrowser.extensionConnectRequestFromLocation(
+        locationFromUrl(
+          'https://nokey.sh/extension-connect?device_id=device-1&device_public_key=enc-pk&device_signing_public_key=sign-pk&nonce=n-1&scopes=vault-access',
+        ),
+      )
 
-    expect(extensionConnectIntent(request)).toEqual({
+    expect(new ExtensionConnectionIntentProjection(request).intent).toEqual({
       kind: ExtensionConnectIntentKind.Absent,
     })
   })
 
   test('rejects the removed website-first setup link', () => {
     expect(
-      extensionConnectIntent(
-        extensionConnectRequestFromLocation(
+      new ExtensionConnectionIntentProjection(
+        extensionConnectionBrowser.extensionConnectRequestFromLocation(
           locationFromUrl(
             'https://simple.nokey.sh/extension-connect?extension_id=ext-123',
           ),
         ),
-      ),
+      ).intent,
     ).toEqual({ kind: ExtensionConnectIntentKind.Absent })
   })
 })
@@ -133,7 +137,9 @@ describe('installed extension launcher', () => {
       runtime: { sendMessage },
     })
 
-    await expect(openInstalledExtension()).resolves.toBe(true)
+    await expect(
+      extensionConnectionBrowser.openInstalledExtension(),
+    ).resolves.toBe(true)
     expect(sendMessage).toHaveBeenCalledOnce()
   })
 
@@ -143,19 +149,21 @@ describe('installed extension launcher', () => {
       runtime: { sendMessage },
     })
 
-    await expect(openInstalledExtension()).resolves.toBe(false)
+    await expect(
+      extensionConnectionBrowser.openInstalledExtension(),
+    ).resolves.toBe(false)
     expect(sendMessage).not.toHaveBeenCalled()
   })
 
   test('accepts only the supported companion launcher intent', () => {
     expect(
-      isOpenCompanionLauncherMessage({
+      OpenCompanionLauncherMessageGuard.is({
         type: 'nook:open-companion-launcher',
         payload: { intent: OpenCompanionLauncherIntent.Pair },
       }),
     ).toBe(true)
     expect(
-      isOpenCompanionLauncherMessage({
+      OpenCompanionLauncherMessageGuard.is({
         type: 'nook:open-companion-launcher',
         payload: { intent: 'forget-vault' },
       }),
@@ -183,7 +191,7 @@ describe('extension pairing approved message', () => {
   ]
 
   function approvalDeliveryArgs(): Parameters<
-    typeof deliverExtensionPairingApproval
+    typeof extensionConnectionBrowser.deliverExtensionPairingApproval
   >[0] {
     return {
       request: {
@@ -224,7 +232,9 @@ describe('extension pairing approved message', () => {
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
 
     await expect(
-      deliverExtensionPairingApproval(approvalDeliveryArgs()),
+      extensionConnectionBrowser.deliverExtensionPairingApproval(
+        approvalDeliveryArgs(),
+      ),
     ).resolves.toEqual({ kind: ExtensionPairingDeliveryKind.Delivered })
     expect(sendMessage).toHaveBeenCalledOnce()
   })
@@ -238,7 +248,9 @@ describe('extension pairing approved message', () => {
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
 
     await expect(
-      deliverExtensionPairingApproval(approvalDeliveryArgs()),
+      extensionConnectionBrowser.deliverExtensionPairingApproval(
+        approvalDeliveryArgs(),
+      ),
     ).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
     })
@@ -258,7 +270,9 @@ describe('extension pairing approved message', () => {
       },
     })
     await expect(
-      deliverExtensionPairingApproval(approvalDeliveryArgs()),
+      extensionConnectionBrowser.deliverExtensionPairingApproval(
+        approvalDeliveryArgs(),
+      ),
     ).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.MessagingUnavailable,
     })
@@ -274,7 +288,9 @@ describe('extension pairing approved message', () => {
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
 
-    const delivery = deliverExtensionPairingApproval(approvalDeliveryArgs())
+    const delivery = extensionConnectionBrowser.deliverExtensionPairingApproval(
+      approvalDeliveryArgs(),
+    )
     await vi.advanceTimersByTimeAsync(6_000)
 
     await expect(delivery).resolves.toEqual({
@@ -292,7 +308,9 @@ describe('extension pairing approved message', () => {
     )
     vi.stubGlobal('chrome', { runtime: { sendMessage } })
 
-    const delivery = deliverExtensionPairingApproval(approvalDeliveryArgs())
+    const delivery = extensionConnectionBrowser.deliverExtensionPairingApproval(
+      approvalDeliveryArgs(),
+    )
     await vi.runAllTimersAsync()
     await expect(delivery).resolves.toEqual({
       kind: ExtensionPairingDeliveryKind.PlaintextProviderMigrationRequired,
@@ -301,7 +319,7 @@ describe('extension pairing approved message', () => {
 
   test('accepts complete approved grants', () => {
     expect(
-      isExtensionPairingApprovedMessage({
+      ExtensionPairingApprovedMessageSchema.is({
         type: 'nook:extension-pairing-approved',
         payload: {
           vaultType: ExtensionPairingVaultType.Simple,
@@ -322,7 +340,7 @@ describe('extension pairing approved message', () => {
 
   test('rejects Sentinel grants before extension persistence', () => {
     expect(
-      isExtensionPairingApprovedMessage({
+      ExtensionPairingApprovedMessageSchema.is({
         type: 'nook:extension-pairing-approved',
         payload: {
           vaultType: 'sentinel',
@@ -343,7 +361,7 @@ describe('extension pairing approved message', () => {
 
   test('accepts encrypted local event-log notifications and rejects empty snapshots', () => {
     expect(
-      isExtensionLocalEventLogUpdatedMessage({
+      ExtensionLocalEventLogUpdatedMessageGuard.is({
         type: 'nook:extension-local-event-log-updated',
         payload: {
           vaultStoreId: 'store-1',
@@ -352,7 +370,7 @@ describe('extension pairing approved message', () => {
       }),
     ).toBe(true)
     expect(
-      isExtensionLocalEventLogUpdatedMessage({
+      ExtensionLocalEventLogUpdatedMessageGuard.is({
         type: 'nook:extension-local-event-log-updated',
         payload: {
           vaultStoreId: 'store-1',
@@ -630,7 +648,7 @@ describe('extension pairing approved message', () => {
 describe('extension-owned pairing start', () => {
   test('requires the complete extension device request', () => {
     expect(
-      isBeginExtensionPairingMessage({
+      BeginExtensionPairingMessageGuard.is({
         type: 'nook:begin-extension-pairing',
         payload: {
           deviceId: 'device-1',
@@ -641,7 +659,7 @@ describe('extension-owned pairing start', () => {
       }),
     ).toBe(true)
     expect(
-      isBeginExtensionPairingMessage({
+      BeginExtensionPairingMessageGuard.is({
         type: 'nook:begin-extension-pairing',
         payload: {
           deviceId: 'device-1',
@@ -664,9 +682,9 @@ describe('extension-owned pairing start', () => {
         expectedDeviceSigningPublicKey: 'signing-key',
       },
     }
-    expect(isExtensionIdentityHandoffRequestMessage(message)).toBe(true)
+    expect(ExtensionIdentityHandoffRequestMessageSchema.is(message)).toBe(true)
     expect(
-      isExtensionIdentityHandoffRequestMessage({
+      ExtensionIdentityHandoffRequestMessageSchema.is({
         ...message,
         payload: { ...message.payload, nonce: '' },
       }),
@@ -699,7 +717,9 @@ describe('paired extension unlock request', () => {
       },
     })
 
-    await expect(requestPairedExtensionUnlock('store-1')).resolves.toBe(true)
+    await expect(
+      extensionConnectionBrowser.requestPairedExtensionUnlock('store-1'),
+    ).resolves.toBe(true)
   })
 
   test('stops waiting when extension messaging does not answer', async () => {
@@ -714,7 +734,8 @@ describe('paired extension unlock request', () => {
       },
     })
 
-    const result = requestPairedExtensionUnlock('store-1')
+    const result =
+      extensionConnectionBrowser.requestPairedExtensionUnlock('store-1')
     await vi.advanceTimersByTimeAsync(5_000)
     await expect(result).resolves.toBe(false)
   })

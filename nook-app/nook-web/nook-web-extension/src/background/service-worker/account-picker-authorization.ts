@@ -4,11 +4,7 @@ import {
   type CleanupTransitionOutcome,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
-import {
-  getSessionStorage,
-  removeSessionStorage,
-  setSessionStorage,
-} from './pairing-identity'
+import { extensionPairingIdentity } from './pairing-identity'
 
 export const ACCOUNT_PICKER_CLEANUP_STORAGE_KEY =
   'nook.extension.account-picker-cleanup'
@@ -39,7 +35,7 @@ async function initializedAccountPickerAuthorizationState(): Promise<void> {
   ) {
     accountPickerAuthorizationStatePromise = (async () => {
       await companionWasmReady
-      const stored = await getSessionStorage(
+      const stored = await extensionPairingIdentity.getSessionStorage(
         ACCOUNT_PICKER_AUTHORIZATION_EPOCH_STORAGE_KEY,
       )
       const candidate = stored[ACCOUNT_PICKER_AUTHORIZATION_EPOCH_STORAGE_KEY]
@@ -48,10 +44,12 @@ async function initializedAccountPickerAuthorizationState(): Promise<void> {
           ? candidate
           : crypto.randomUUID()
       if (candidate !== epoch) {
-        const epochStorage: Parameters<typeof setSessionStorage>[0] = {
+        const epochStorage: Parameters<
+          typeof extensionPairingIdentity.setSessionStorage
+        >[0] = {
           [ACCOUNT_PICKER_AUTHORIZATION_EPOCH_STORAGE_KEY]: epoch,
         }
-        await setSessionStorage(epochStorage)
+        await extensionPairingIdentity.setSessionStorage(epochStorage)
       }
       const wasmEpoch: ConstructorParameters<
         typeof AccountPickerAuthorizationLifecycle
@@ -113,12 +111,14 @@ export async function beginAccountPickerAuthorizationCleanup(): Promise<AccountP
     .begin_cleanup(crypto.randomUUID())
     .into_lifecycle()
   const generation = accountPickerAuthorizationState.snapshot()
-  const cleanupStorage: Parameters<typeof setSessionStorage>[0] = {
+  const cleanupStorage: Parameters<
+    typeof extensionPairingIdentity.setSessionStorage
+  >[0] = {
     [ACCOUNT_PICKER_CLEANUP_STORAGE_KEY]: true,
     [ACCOUNT_PICKER_AUTHORIZATION_EPOCH_STORAGE_KEY]: generation,
   }
   try {
-    await setSessionStorage(cleanupStorage)
+    await extensionPairingIdentity.setSessionStorage(cleanupStorage)
     return {
       authorizationGeneration: generation,
       markerStatus: AccountPickerCleanupMarkerStatus.Persisted,
@@ -144,7 +144,9 @@ export async function completeAccountPickerAuthorizationCleanup(
         evidence,
       )
     ) {
-      await removeSessionStorage(ACCOUNT_PICKER_CLEANUP_STORAGE_KEY)
+      await extensionPairingIdentity.removeSessionStorage(
+        ACCOUNT_PICKER_CLEANUP_STORAGE_KEY,
+      )
     }
   } catch (error) {
     releaseAccountPickerAuthorizationCleanup(authorizationGeneration)
@@ -173,7 +175,7 @@ export function releaseAccountPickerAuthorizationCleanup(
 }
 
 export async function accountPickerAuthorizationCleanupPending(): Promise<boolean> {
-  const cleanupStorage = await getSessionStorage(
+  const cleanupStorage = await extensionPairingIdentity.getSessionStorage(
     ACCOUNT_PICKER_CLEANUP_STORAGE_KEY,
   )
   return cleanupStorage[ACCOUNT_PICKER_CLEANUP_STORAGE_KEY] === true

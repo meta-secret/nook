@@ -18,30 +18,27 @@ type JsonSerializationValue =
   | readonly JsonSerializationValue[]
   | { readonly [key: string]: JsonSerializationValue };
 
-// JSON.stringify is a host adapter whose replacer necessarily receives every
-// JSON transport value. Keep that generic boundary here and return immediately.
-// eslint-disable-next-line max-params
-function preserveJsonSerializationValue(
-  _key: string,
-  value: JsonSerializationValue,
-): JsonSerializationValue {
-  return value;
-}
+export class AppLogsJsonDocument {
+  constructor(private readonly document: AppLogsDocument) {}
 
-function formatAppLogsDocument(document: AppLogsDocument): string {
-  return JSON.stringify(document, preserveJsonSerializationValue, 2);
-}
+  get text(): string {
+    return JSON.stringify(this.document, AppLogsJsonDocument.preserveValue, 2);
+  }
 
-export function formatAppLogsError(message: string): string {
-  const document: AppLogsErrorDocument = { error: message };
-  return formatAppLogsDocument(document);
-}
+  static error(message: string): AppLogsJsonDocument {
+    return new AppLogsJsonDocument({ error: message });
+  }
 
-export function formatAppLogsPayload(payload: AppLogsResponse): string {
-  return formatAppLogsDocument(payload);
-}
+  static loading(): AppLogsJsonDocument {
+    return new AppLogsJsonDocument({ loading: true });
+  }
 
-export function formatAppLogsLoading(): string {
-  const document: AppLogsLoadingDocument = { loading: true };
-  return formatAppLogsDocument(document);
+  // JSON.stringify requires a two-argument host callback for its replacer.
+  // eslint-disable-next-line max-params
+  private static preserveValue(
+    _key: string,
+    value: JsonSerializationValue,
+  ): JsonSerializationValue {
+    return value;
+  }
 }

@@ -10,10 +10,22 @@ vi.mock(
     AuthenticationObservationBindingKind: { Unbound: 'unbound' },
     RevalidatedAuthenticationActionOutcomeKind: { Acted: 'acted' },
     RevalidatedAuthenticationActResultKind: { Acted: 'acted' },
-    performRevalidatedAuthenticationAction: mocks.revalidate,
+    RevalidatedAuthenticationAction: class {
+      constructor(
+        private readonly request: ConstructorParameters<
+          typeof import('../../../../nook-web-extension/src/content/autofill/workflow-revalidation').RevalidatedAuthenticationAction
+        >[0],
+      ) {}
+      execute() {
+        return mocks.revalidate(this.request)
+      }
+      static requiredAuthenticationObservationBinding() {
+        return { kind: 'required', token: 'rendered-observation' }
+      }
+    },
   }),
 )
-import { startRevalidatedEnrollmentAction } from '../../../../nook-web-extension/src/content/autofill/backup-code-workflow-action'
+import { RevalidatedEnrollmentAction } from '../../../../nook-web-extension/src/content/autofill/backup-code-workflow-action'
 beforeEach(() => vi.clearAllMocks())
 describe('backup-code workflow action', () => {
   function connectedHost() {
@@ -37,12 +49,12 @@ describe('backup-code workflow action', () => {
     }
     const host = connectedHost()
     await expect(
-      startRevalidatedEnrollmentAction({
+      new RevalidatedEnrollmentAction({
         workflow,
         host,
         action: AuthenticationWorkflowAction.SaveBackupCodes,
         start: mocks.startEnrollment,
-      } as never),
+      } as never).execute(),
     ).resolves.toBe(true)
     expect(mocks.revalidate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -54,12 +66,12 @@ describe('backup-code workflow action', () => {
   test('does not extract when Rust rejects the refreshed workflow', async () => {
     mocks.revalidate.mockResolvedValue(false)
     await expect(
-      startRevalidatedEnrollmentAction({
+      new RevalidatedEnrollmentAction({
         workflow: {} as never,
         host: connectedHost() as never,
         action: AuthenticationWorkflowAction.SaveBackupCodes,
         start: mocks.startEnrollment,
-      }),
+      }).execute(),
     ).resolves.toBe(false)
     expect(mocks.startEnrollment).not.toHaveBeenCalled()
   })
@@ -84,9 +96,9 @@ describe('backup-code workflow action', () => {
       action: AuthenticationWorkflowAction.SaveBackupCodes,
       start: mocks.startEnrollment,
     }
-    const first = startRevalidatedEnrollmentAction(request as never)
+    const first = new RevalidatedEnrollmentAction(request as never).execute()
     await expect(
-      startRevalidatedEnrollmentAction(request as never),
+      new RevalidatedEnrollmentAction(request as never).execute(),
     ).resolves.toBe(false)
     expect(mocks.revalidate).toHaveBeenCalledOnce()
     release?.()

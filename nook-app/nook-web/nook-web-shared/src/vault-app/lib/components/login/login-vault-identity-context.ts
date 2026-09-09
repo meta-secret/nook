@@ -33,46 +33,50 @@ export type LoginVaultIdentityContext =
       readonly currentIdentity: LoginVaultLinkedIdentity;
     };
 
-function readLinkedIdentity(
-  identity: NookIdentitySnapshot,
-): LoginVaultLinkedIdentity {
-  try {
-    return {
-      identityId: identity.identityId,
-      label: identity.label,
-    };
-  } finally {
-    identity.free();
+export class LoginVaultIdentityReader {
+  constructor(private readonly request: LoadLoginVaultIdentityContextArgs) {}
+  async execute(): Promise<LoginVaultIdentityContext> {
+    const { manager, storeId } = this.request;
+    const request = manager.selected_vault_identity_context_request(storeId);
+    const snapshot = await request.resolve().finally(() => request.free());
+    try {
+      const kind = snapshot.selectedVaultContextKind;
+      if (kind === NookSelectedVaultIdentityContextKind.Empty) {
+        return { kind };
+      }
+
+      const identities: LoginVaultLinkedIdentity[] = [];
+      for (let index = 0; index < snapshot.length; index += 1) {
+        identities.push(
+          LoginVaultIdentityReader.readLinkedIdentity(snapshot.identity(index)),
+        );
+      }
+
+      if (kind === NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent) {
+        return { kind, identities };
+      }
+
+      return {
+        kind,
+        identities,
+        currentIdentity: LoginVaultIdentityReader.readLinkedIdentity(
+          snapshot.current_browser_identity(),
+        ),
+      };
+    } finally {
+      snapshot.free();
+    }
   }
-}
-
-export async function loadLoginVaultIdentityContext({
-  manager,
-  storeId,
-}: LoadLoginVaultIdentityContextArgs): Promise<LoginVaultIdentityContext> {
-  const request = manager.selected_vault_identity_context_request(storeId);
-  const snapshot = await request.resolve().finally(() => request.free());
-  try {
-    const kind = snapshot.selectedVaultContextKind;
-    if (kind === NookSelectedVaultIdentityContextKind.Empty) {
-      return { kind };
+  static readLinkedIdentity(
+    identity: NookIdentitySnapshot,
+  ): LoginVaultLinkedIdentity {
+    try {
+      return {
+        identityId: identity.identityId,
+        label: identity.label,
+      };
+    } finally {
+      identity.free();
     }
-
-    const identities: LoginVaultLinkedIdentity[] = [];
-    for (let index = 0; index < snapshot.length; index += 1) {
-      identities.push(readLinkedIdentity(snapshot.identity(index)));
-    }
-
-    if (kind === NookSelectedVaultIdentityContextKind.LinkedWithoutCurrent) {
-      return { kind, identities };
-    }
-
-    return {
-      kind,
-      identities,
-      currentIdentity: readLinkedIdentity(snapshot.current_browser_identity()),
-    };
-  } finally {
-    snapshot.free();
   }
 }

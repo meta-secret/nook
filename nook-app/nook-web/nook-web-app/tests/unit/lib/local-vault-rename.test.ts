@@ -22,18 +22,19 @@ vi.mock('$app-wasm', () => ({
 }))
 
 vi.mock('$lib/runtime/log', () => ({
-  createLogger: () => ({
-    debug: vi.fn(),
-    info: vi.fn(),
-    warn: vi.fn(),
-  }),
+  browserLogRuntime: {
+    createLogger: () => ({
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+    }),
+  },
 }))
 
 vi.mock('$lib/auth/providers', () => ({
   saveAuthProviders: vi.fn(),
 }))
-
-import { renameLocalVaultLabel } from '$lib/vault/local-login'
+import { VaultLoginActions } from '$lib/vault/local-login'
 import { ActiveVaultKind } from '$lib/vault/state/provider.svelte'
 import type { VaultState } from '$lib/vault.svelte'
 
@@ -64,8 +65,7 @@ describe('renameLocalVaultLabel', () => {
       isVerifying: false,
     } as unknown as VaultState
 
-    await renameLocalVaultLabel({
-      state: state,
+    await new VaultLoginActions(state).renameLocalVaultLabel({
       storeId: 'store-1',
       label: 'New name',
     })

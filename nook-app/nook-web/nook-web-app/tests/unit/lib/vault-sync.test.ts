@@ -7,10 +7,9 @@ import {
   NookSyncConflictReview,
   VaultSyncConflictKind,
 } from '$app-wasm'
-import { syncConflictLabel } from '$lib/vault/sync.svelte'
+import { SyncConflictPresentation } from '$lib/vault/sync.svelte'
 import {
-  translationKey,
-  translationReplacements,
+  TranslationMessage,
   type TranslationRequest,
 } from '$lib/vault/translation'
 
@@ -49,13 +48,15 @@ function buildConflict(kind: VaultSyncConflictKind): NookPendingSyncConflict {
 
 function labelFor(review: NookSyncConflictReview): string {
   try {
-    return syncConflictLabel({
+    return new SyncConflictPresentation({
       syncConflictReview: review,
       t: (request: TranslationRequest) => {
-        const replacements = translationReplacements(request)
-        return `${translationKey(request)}:${((v) => (v ? v : ''))(replacements.provider)}`
+        const replacements = new TranslationMessage(
+          request,
+        ).translationReplacements()
+        return `${new TranslationMessage(request).translationKey()}:${((v) => (v ? v : ''))(replacements.provider)}`
       },
-    })
+    }).label
   } finally {
     review.free()
   }

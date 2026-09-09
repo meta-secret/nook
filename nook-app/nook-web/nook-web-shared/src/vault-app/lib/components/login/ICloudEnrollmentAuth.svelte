@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { I18N_KEYS } from '../../../../generated/i18n-keys'
-  import { prepareICloudSignInControl } from "$lib/auth/icloud/oauth";
+  import { I18N_KEYS } from "../../../../generated/i18n-keys";
+  import { iCloudOAuthSession } from "$lib/auth/icloud/oauth";
   import type { VaultState } from "$lib/vault.svelte";
 
   let { vault }: { vault: VaultState } = $props();
@@ -12,7 +12,7 @@
   $effect(() => {
     if (!open || prepareStarted) return;
     prepareStarted = true;
-    void prepareICloudSignInControl().catch((error) => {
+    void iCloudOAuthSession.prepareICloudSignInControl().catch((error) => {
       prepareError =
         error instanceof Error
           ? vault.t(error.message)

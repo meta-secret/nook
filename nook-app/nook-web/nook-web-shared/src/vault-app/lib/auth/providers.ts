@@ -403,28 +403,6 @@ export type OAuthFileName =
   | { kind: OAuthFileNameKind.Unresolved }
   | { kind: OAuthFileNameKind.Resolved; fileName: string };
 
-export function oauthFileName(config: OAuthFileConfig): OAuthFileName {
-  const fileName =
-    config.fileName.state === "fileName" ? config.fileName.value.trim() : "";
-  return fileName.length > 0
-    ? { kind: OAuthFileNameKind.Resolved, fileName }
-    : { kind: OAuthFileNameKind.Unresolved };
-}
-
-export function oauthAccountLabel(config: OAuthFileConfig): string {
-  return config.accountEmail.state === "email"
-    ? config.accountEmail.value.trim()
-    : "";
-}
-
-export function hasGoogleDriveFolder(config: OAuthFileConfig): boolean {
-  return config.folderId.state === "folderId";
-}
-
-export function hasICloudShareTarget(config: OAuthFileConfig): boolean {
-  return config.iCloudShareTarget.state === "sharedTarget";
-}
-
 export enum LocalFolderHandleKind {
   Unselected = "unselected",
   Selected = "selected",
@@ -433,16 +411,6 @@ export enum LocalFolderHandleKind {
 export type LocalFolderHandle =
   | { kind: LocalFolderHandleKind.Unselected }
   | { kind: LocalFolderHandleKind.Selected; handleId: string };
-
-export function localFolderHandle(
-  config: LocalFolderConfig,
-): LocalFolderHandle {
-  const handleId =
-    config.handleId.state === "handleId" ? config.handleId.value.trim() : "";
-  return handleId.length > 0
-    ? { kind: LocalFolderHandleKind.Selected, handleId }
-    : { kind: LocalFolderHandleKind.Unselected };
-}
 
 export { NookStoredOAuthFileConfigurationState };
 
@@ -472,14 +440,6 @@ export function isConfiguredLocalFolder(
   );
 }
 
-export function isICloudProvider(provider: StorageProvider): boolean {
-  const configuration = provider.oauthFile;
-  return (
-    isConfiguredOAuthFile(configuration) &&
-    configuration.config.preset === "icloud"
-  );
-}
-
 export enum LocalFolderProviderConfigurationKind {
   Missing = "missing",
   Configured = "configured",
@@ -491,17 +451,6 @@ export type LocalFolderProviderConfiguration =
       kind: LocalFolderProviderConfigurationKind.Configured;
       config: LocalFolderConfig;
     };
-
-export function localFolderProviderConfiguration(
-  provider: StorageProvider,
-): LocalFolderProviderConfiguration {
-  return provider.localFolder.state === "configured"
-    ? {
-        kind: LocalFolderProviderConfigurationKind.Configured,
-        config: provider.localFolder.config,
-      }
-    : { kind: LocalFolderProviderConfigurationKind.Missing };
-}
 
 export type DuplicateSyncProvider =
   | {
@@ -712,4 +661,67 @@ export function localizedProviderStorageDetail({
     t(I18N_KEYS.AuthStorageIcloudNotSignedIn),
     t(I18N_KEYS.AuthStorageLocalFolderNeedsReconnect),
   );
+}
+
+export class OAuthFilePresentation {
+  constructor(private readonly value: OAuthFileConfig) {}
+  oauthFileName(): OAuthFileName {
+    const config = this.value;
+    const fileName =
+      config.fileName.state === "fileName" ? config.fileName.value.trim() : "";
+    return fileName.length > 0
+      ? { kind: OAuthFileNameKind.Resolved, fileName }
+      : { kind: OAuthFileNameKind.Unresolved };
+  }
+
+  oauthAccountLabel(): string {
+    const config = this.value;
+    return config.accountEmail.state === "email"
+      ? config.accountEmail.value.trim()
+      : "";
+  }
+
+  hasGoogleDriveFolder(): boolean {
+    const config = this.value;
+    return config.folderId.state === "folderId";
+  }
+
+  hasICloudShareTarget(): boolean {
+    const config = this.value;
+    return config.iCloudShareTarget.state === "sharedTarget";
+  }
+}
+
+export class LocalFolderPresentation {
+  constructor(private readonly value: LocalFolderConfig) {}
+  localFolderHandle(): LocalFolderHandle {
+    const config = this.value;
+    const handleId =
+      config.handleId.state === "handleId" ? config.handleId.value.trim() : "";
+    return handleId.length > 0
+      ? { kind: LocalFolderHandleKind.Selected, handleId }
+      : { kind: LocalFolderHandleKind.Unselected };
+  }
+}
+
+export class StorageProviderPresentation {
+  constructor(private readonly value: StorageProvider) {}
+  isICloudProvider(): boolean {
+    const provider = this.value;
+    const configuration = provider.oauthFile;
+    return (
+      isConfiguredOAuthFile(configuration) &&
+      configuration.config.preset === "icloud"
+    );
+  }
+
+  localFolderProviderConfiguration(): LocalFolderProviderConfiguration {
+    const provider = this.value;
+    return provider.localFolder.state === "configured"
+      ? {
+          kind: LocalFolderProviderConfigurationKind.Configured,
+          config: provider.localFolder.config,
+        }
+      : { kind: LocalFolderProviderConfigurationKind.Missing };
+  }
 }

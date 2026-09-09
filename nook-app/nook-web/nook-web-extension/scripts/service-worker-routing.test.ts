@@ -3,7 +3,7 @@ import {
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
 } from '../../nook-web-shared/src/extension/companion-launcher-message'
-import { normalizeOpenCompanionLauncherMessage } from '../../nook-web-shared/src/extension/companion-launcher-message-adapter'
+import { NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema } from '../../nook-web-shared/src/extension/companion-launcher-message'
 import { ExtensionRuntimeRequestType } from '../src/lib/extension-runtime-request-type'
 import type { ExtensionLifecycleRoutingDependencies } from '../src/background/service-worker/extension-lifecycle-routing'
 import type { ExternalCompanionRoutingDependencies } from '../src/background/service-worker/external-companion-routing'
@@ -117,7 +117,8 @@ const externalDependencies: ExternalCompanionRoutingDependencies = {
   isExtensionPairedVaultIdentityDiscoveryMessage: mock(() => false),
   isExtensionPairedVaultIdentityHandoffRequestMessage: mock(() => false),
   isExtensionPairedVaultUnlockRequestMessage: mock(() => false),
-  normalizeOpenCompanionLauncherMessage,
+  normalizeOpenCompanionLauncherMessage:
+    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage,
   openCompanionLauncher,
   refreshAuthenticationSurfaces,
   requestPairedVaultUnlock: unusedAsyncDependency,

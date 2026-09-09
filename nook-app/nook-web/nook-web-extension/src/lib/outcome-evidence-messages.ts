@@ -21,49 +21,48 @@ export enum AuthenticationOutcomeClassifyMessageType {
   NookAuthenticationOutcomeClassify = 'nook:authentication-outcome-classify',
 }
 
-export type AuthenticationOutcomeClassifyMessage = {
-  type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify
-  payload: {
+/** Structural browser wire value; validation requires no instance methods or runtime state. */
+export class AuthenticationOutcomeClassifyMessage {
+  private constructor() {}
+  declare readonly type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify
+  declare readonly payload: {
     observation: AuthenticationOutcomeObservationView
     timeoutMs: number
   }
-}
+  static is(message: unknown): message is AuthenticationOutcomeClassifyMessage {
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      !('type' in message) ||
+      message.type !==
+        AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify ||
+      !('payload' in message) ||
+      !message.payload ||
+      typeof message.payload !== 'object' ||
+      Array.isArray(message.payload)
+    ) {
+      return false
+    }
+    const payload =
+      message.payload as AuthenticationOutcomeClassifyMessage['payload']
 
-export function isAuthenticationOutcomeClassifyMessage(
-  message: unknown,
-): message is AuthenticationOutcomeClassifyMessage {
-  if (
-    !message ||
-    typeof message !== 'object' ||
-    !('type' in message) ||
-    message.type !==
-      AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify ||
-    !('payload' in message) ||
-    !message.payload ||
-    typeof message.payload !== 'object' ||
-    Array.isArray(message.payload)
-  ) {
-    return false
+    const observation = payload.observation
+    if (!observation || typeof observation !== 'object') return false
+    const view = observation as AuthenticationOutcomeObservationView
+    return (
+      typeof view.navigatedAwayFromAuthPath === 'boolean' &&
+      typeof view.authFieldsPresent === 'boolean' &&
+      typeof view.successMarkerPresent === 'boolean' &&
+      typeof view.errorMarkerPresent === 'boolean' &&
+      typeof view.sameDocumentMutation === 'boolean' &&
+      typeof view.inIframe === 'boolean' &&
+      typeof view.elapsedMs === 'number' &&
+      Number.isFinite(view.elapsedMs) &&
+      view.elapsedMs >= 0 &&
+      'timeoutMs' in payload &&
+      typeof payload.timeoutMs === 'number' &&
+      Number.isFinite(payload.timeoutMs) &&
+      payload.timeoutMs > 0
+    )
   }
-  const payload =
-    message.payload as AuthenticationOutcomeClassifyMessage['payload']
-
-  const observation = payload.observation
-  if (!observation || typeof observation !== 'object') return false
-  const view = observation as AuthenticationOutcomeObservationView
-  return (
-    typeof view.navigatedAwayFromAuthPath === 'boolean' &&
-    typeof view.authFieldsPresent === 'boolean' &&
-    typeof view.successMarkerPresent === 'boolean' &&
-    typeof view.errorMarkerPresent === 'boolean' &&
-    typeof view.sameDocumentMutation === 'boolean' &&
-    typeof view.inIframe === 'boolean' &&
-    typeof view.elapsedMs === 'number' &&
-    Number.isFinite(view.elapsedMs) &&
-    view.elapsedMs >= 0 &&
-    'timeoutMs' in payload &&
-    typeof payload.timeoutMs === 'number' &&
-    Number.isFinite(payload.timeoutMs) &&
-    payload.timeoutMs > 0
-  )
 }

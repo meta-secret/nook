@@ -14,9 +14,9 @@ import type {
 } from '../../../../nook-web-shared/src/vault-app/lib/vault/action-contexts'
 import { I18N_KEYS } from '../../../../nook-web-shared/src/generated/i18n-keys'
 import ProviderVaultDecisionPanel from '../../../../nook-web-shared/src/vault-app/lib/components/ProviderVaultDecisionPanel.svelte'
-import { loadProviders } from '../../../../nook-web-shared/src/vault-app/lib/vault/providers.svelte'
+import { VaultProviderActions } from '../../../../nook-web-shared/src/vault-app/lib/vault/providers.svelte'
 import { ProviderVaultIdentitySelectionKind } from '../../../../nook-web-shared/src/vault-app/lib/vault/provider-vault-decision'
-import { activateImportedProviderVaultIdentity } from '../../../../nook-web-shared/src/vault-app/lib/vault/sync-resolution'
+import { SyncConflictActions } from '../../../../nook-web-shared/src/vault-app/lib/vault/sync-resolution'
 import { LoginVaultSelectionKind } from '../../../../nook-web-shared/src/vault-app/lib/vault/state/provider.svelte'
 import type { VaultState } from '../../../../nook-web-shared/src/vault-app/lib/vault.svelte'
 
@@ -166,12 +166,11 @@ test('selected local target survives loading the selected identity providers', a
       }),
     }),
   } as unknown as ProviderActionsContext
-  const request: Parameters<typeof loadProviders>[0] = {
-    state,
+  const request: Parameters<VaultProviderActions['loadProviders']>[0] = {
     options: { ensureLocalRow: false },
   }
 
-  await loadProviders(request)
+  await new VaultProviderActions(state).loadProviders(request)
 
   expect(state.providers).toEqual([identityProvider])
   expect(openActiveVault).toHaveBeenCalledWith('store-a')
@@ -200,13 +199,17 @@ test('completed import transitions to the selected locked identity', async () =>
     selectLoginVault: (storeId: string) => calls.push(`select:${storeId}`),
     t: () => 'vault imported; identity selection failed',
   } as unknown as SyncActionsContext
-  const request: Parameters<typeof activateImportedProviderVaultIdentity>[0] = {
+  const request: Parameters<
+    SyncConflictActions['activateImportedProviderVaultIdentity']
+  >[0] = {
     state,
     identityId: 'identity-personal',
     importedStoreId: 'store-a',
   }
 
-  await activateImportedProviderVaultIdentity(request)
+  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(
+    request,
+  )
 
   expect(calls).toEqual([
     'activate',
@@ -235,13 +238,16 @@ test('activation failure preserves the completed import session', async () => {
     selectLoginVault,
     t: () => 'vault imported; identity selection failed',
   } as unknown as SyncActionsContext
-  const request: Parameters<typeof activateImportedProviderVaultIdentity>[0] = {
-    state,
+  const request: Parameters<
+    SyncConflictActions['activateImportedProviderVaultIdentity']
+  >[0] = {
     identityId: 'identity-personal',
     importedStoreId: 'store-a',
   }
 
-  await activateImportedProviderVaultIdentity(request)
+  await new SyncConflictActions(state).activateImportedProviderVaultIdentity(
+    request,
+  )
 
   expect(clearIdentityProviderSession).not.toHaveBeenCalled()
   expect(selectLoginVault).not.toHaveBeenCalled()
@@ -268,8 +274,7 @@ test('status failure keeps the activated identity transition fail closed', async
     t: () => 'vault imported; identity selection failed',
   } as unknown as SyncActionsContext
 
-  await activateImportedProviderVaultIdentity({
-    state,
+  await new SyncConflictActions(state).activateImportedProviderVaultIdentity({
     identityId: 'identity-personal',
     importedStoreId: 'store-a',
   })

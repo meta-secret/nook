@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { appPath } from '$lib/content/legal'
+  import { ApplicationRoutePresentation } from "$lib/content/legal";
 </script>
 
 <footer
@@ -7,7 +7,7 @@
   data-testid="site-footer"
 >
   <a
-    href={appPath('/')}
+    href={new ApplicationRoutePresentation("/").appPath()}
     class="underline-offset-4 hover:text-foreground hover:underline"
     data-testid="footer-about-link"
   >
@@ -15,7 +15,7 @@
   </a>
   <span aria-hidden="true">·</span>
   <a
-    href={appPath('/privacy.html')}
+    href={new ApplicationRoutePresentation("/privacy.html").appPath()}
     class="underline-offset-4 hover:text-foreground hover:underline"
     data-testid="footer-privacy-link"
   >
@@ -23,7 +23,7 @@
   </a>
   <span aria-hidden="true">·</span>
   <a
-    href={appPath('/terms.html')}
+    href={new ApplicationRoutePresentation("/terms.html").appPath()}
     class="underline-offset-4 hover:text-foreground hover:underline"
     data-testid="footer-terms-link"
   >

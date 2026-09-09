@@ -23,13 +23,6 @@ export enum KeyStore {
   SecurityKey = 'security-key',
 }
 
-export function storeLabel(store: KeyStore): string {
-  if (store === KeyStore.ApplePasswords) return 'Apple Passwords'
-  if (store === KeyStore.Bitwarden) return 'Bitwarden'
-  if (store === KeyStore.OnePassword) return '1Password'
-  return 'Security key'
-}
-
 /** Whether this passkey can be presented from the browser you are looking at. */
 export enum Reach {
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
@@ -282,136 +275,39 @@ const fresh: KeyGraph = {
 
 export const graphs: readonly KeyGraph[] = [tangle, simple, fresh]
 
-export function graphById(id: GraphId): KeyGraph {
-  const match = graphs.find((graph) => graph.id === id)
-  return match ? match : tangle
-}
-
 type DevicesForPasskeyArgs = {
-  graph: KeyGraph
   passkeyId: string
 }
 
-export function devicesForPasskey({
-  graph,
-  passkeyId,
-}: DevicesForPasskeyArgs): Device[] {
-  return graph.devices.filter((device) => device.passkeyIds.includes(passkeyId))
-}
-
 type PasskeysForDeviceArgs = {
-  graph: KeyGraph
   device: Device
 }
 
-export function passkeysForDevice({
-  graph,
-  device,
-}: PasskeysForDeviceArgs): Passkey[] {
-  return graph.passkeys.filter((passkey) =>
-    device.passkeyIds.includes(passkey.id),
-  )
-}
-
 type DevicesForVaultArgs = {
-  graph: KeyGraph
   vault: Vault
 }
 
-export function devicesForVault({
-  graph,
-  vault,
-}: DevicesForVaultArgs): Device[] {
-  return graph.devices.filter((device) => vault.deviceIds.includes(device.id))
-}
-
 type VaultsForDeviceArgs = {
-  graph: KeyGraph
   deviceId: string
-}
-
-export function vaultsForDevice({
-  graph,
-  deviceId,
-}: VaultsForDeviceArgs): Vault[] {
-  return graph.vaults.filter((vault) => vault.deviceIds.includes(deviceId))
 }
 
 /** Every vault this passkey reaches, through any device it is enrolled on. */
 type VaultsForPasskeyArgs = {
-  graph: KeyGraph
   passkeyId: string
-}
-
-export function vaultsForPasskey({
-  graph,
-  passkeyId,
-}: VaultsForPasskeyArgs): Vault[] {
-  const nookNamedArgs0_0: Parameters<typeof devicesForPasskey>[0] = {
-    graph,
-    passkeyId,
-  }
-  const deviceIds = devicesForPasskey(nookNamedArgs0_0).map(
-    (device) => device.id,
-  )
-  return graph.vaults.filter((vault) =>
-    vault.deviceIds.some((id) => deviceIds.includes(id)),
-  )
 }
 
 /** Every passkey that reaches this vault, through any device in between. */
 type PasskeysForVaultArgs = {
-  graph: KeyGraph
   vault: Vault
 }
 
-export function passkeysForVault({
-  graph,
-  vault,
-}: PasskeysForVaultArgs): Passkey[] {
-  const nookNamedArgs0_1: Parameters<typeof devicesForVault>[0] = {
-    graph,
-    vault,
-  }
-  const devices = devicesForVault(nookNamedArgs0_1)
-  return graph.passkeys.filter((passkey) =>
-    devices.some((device) => device.passkeyIds.includes(passkey.id)),
-  )
-}
-
-/** The device keys of this browser, if it has one at all. */
-export function hereDevices(graph: KeyGraph): Device[] {
-  if (graph.here.kind === HereKind.Unprepared) return []
-  const id = graph.here.deviceId
-  return graph.devices.filter((device) => device.id === id)
-}
-
 type IsHereArgs = {
-  graph: KeyGraph
   device: Device
-}
-
-export function isHere({ graph, device }: IsHereArgs): boolean {
-  return (
-    graph.here.kind === HereKind.Prepared && graph.here.deviceId === device.id
-  )
 }
 
 /** Whether this browser, as it stands, can open the vault at all. */
 type OpenableHereArgs = {
-  graph: KeyGraph
   vault: Vault
-}
-
-export function openableHere({ graph, vault }: OpenableHereArgs): boolean {
-  return hereDevices(graph).some((device) =>
-    vault.deviceIds.includes(device.id),
-  )
-}
-
-/** The passkeys you could actually present from this browser right now. */
-export function usableHere(graph: KeyGraph): Passkey[] {
-  return graph.passkeys.filter((passkey) => passkey.reach === Reach.Here)
 }
 
 export enum NodeKind {
@@ -421,11 +317,6 @@ export enum NodeKind {
   Device = 'device',
   /** @public Used from Svelte templates; Knip cannot trace enum members there. */
   Vault = 'vault',
-}
-
-export function kindLabel(kind: NodeKind): string {
-  if (kind === NodeKind.Passkey) return 'Passkey'
-  return kind === NodeKind.Device ? 'Device key' : 'Vault'
 }
 
 export interface NodeRef {
@@ -445,75 +336,179 @@ export interface Highlight {
 }
 
 type HighlightForArgs = {
-  graph: KeyGraph
   node: NodeRef
 }
 
-export function highlightFor({ graph, node }: HighlightForArgs): Highlight {
-  if (node.kind === NodeKind.Passkey) {
-    const nookNamedArgs0_2: Parameters<typeof devicesForPasskey>[0] = {
-      graph,
-      passkeyId: node.id,
-    }
-    const devices = devicesForPasskey(nookNamedArgs0_2)
-    const nookNamedArgs0_3: Parameters<typeof vaultsForPasskey>[0] = {
-      graph,
-      passkeyId: node.id,
-    }
-    return {
-      passkeyIds: [node.id],
-      deviceIds: devices.map((device) => device.id),
-      vaultIds: vaultsForPasskey(nookNamedArgs0_3).map((vault) => vault.id),
-    }
+/** Owns browser orchestration for one nook web research/src/experiments/keys management/_shared/key graph context. */
+export class KeyGraphView {
+  constructor(private readonly graph: KeyGraph) {}
+
+  static storeLabel(store: KeyStore): string {
+    if (store === KeyStore.ApplePasswords) return 'Apple Passwords'
+    if (store === KeyStore.Bitwarden) return 'Bitwarden'
+    if (store === KeyStore.OnePassword) return '1Password'
+    return 'Security key'
   }
-  if (node.kind === NodeKind.Device) {
-    const devices = graph.devices.filter((device) => device.id === node.id)
-    const nookNamedArgs0_4: Parameters<typeof vaultsForDevice>[0] = {
-      graph,
-      deviceId: node.id,
+
+  static graphById(id: GraphId): KeyGraph {
+    const match = graphs.find((graph) => graph.id === id)
+    return match ? match : tangle
+  }
+
+  devicesForPasskey({ graph, passkeyId }: DevicesForPasskeyArgs): Device[] {
+    const graph = this.graph
+    return graph.devices.filter((device) =>
+      device.passkeyIds.includes(passkeyId),
+    )
+  }
+
+  passkeysForDevice({ graph, device }: PasskeysForDeviceArgs): Passkey[] {
+    const graph = this.graph
+    return graph.passkeys.filter((passkey) =>
+      device.passkeyIds.includes(passkey.id),
+    )
+  }
+
+  devicesForVault({ graph, vault }: DevicesForVaultArgs): Device[] {
+    const graph = this.graph
+    return graph.devices.filter((device) => vault.deviceIds.includes(device.id))
+  }
+
+  vaultsForDevice({ graph, deviceId }: VaultsForDeviceArgs): Vault[] {
+    const graph = this.graph
+    return graph.vaults.filter((vault) => vault.deviceIds.includes(deviceId))
+  }
+
+  vaultsForPasskey({ graph, passkeyId }: VaultsForPasskeyArgs): Vault[] {
+    const graph = this.graph
+    const nookNamedArgs0_0: Parameters<KeyGraphView['devicesForPasskey']>[0] = {
+      passkeyId,
     }
-    return {
-      passkeyIds: devices.flatMap((device) => {
-        const nookNamedArgument184: Parameters<typeof passkeysForDevice>[0] = {
-          graph,
-          device,
+    const deviceIds = this.devicesForPasskey(nookNamedArgs0_0).map(
+      (device) => device.id,
+    )
+    return graph.vaults.filter((vault) =>
+      vault.deviceIds.some((id) => deviceIds.includes(id)),
+    )
+  }
+
+  passkeysForVault({ graph, vault }: PasskeysForVaultArgs): Passkey[] {
+    const graph = this.graph
+    const nookNamedArgs0_1: Parameters<KeyGraphView['devicesForVault']>[0] = {
+      vault,
+    }
+    const devices = this.devicesForVault(nookNamedArgs0_1)
+    return graph.passkeys.filter((passkey) =>
+      devices.some((device) => device.passkeyIds.includes(passkey.id)),
+    )
+  }
+
+  hereDevices(): Device[] {
+    const graph = this.graph
+    if (graph.here.kind === HereKind.Unprepared) return []
+    const id = graph.here.deviceId
+    return graph.devices.filter((device) => device.id === id)
+  }
+
+  isHere({ graph, device }: IsHereArgs): boolean {
+    const graph = this.graph
+    return (
+      graph.here.kind === HereKind.Prepared && graph.here.deviceId === device.id
+    )
+  }
+
+  openableHere({ graph, vault }: OpenableHereArgs): boolean {
+    const graph = this.graph
+    return this.hereDevices().some((device) =>
+      vault.deviceIds.includes(device.id),
+    )
+  }
+
+  usableHere(): Passkey[] {
+    const graph = this.graph
+    return graph.passkeys.filter((passkey) => passkey.reach === Reach.Here)
+  }
+
+  static kindLabel(kind: NodeKind): string {
+    if (kind === NodeKind.Passkey) return 'Passkey'
+    return kind === NodeKind.Device ? 'Device key' : 'Vault'
+  }
+
+  highlightFor({ graph, node }: HighlightForArgs): Highlight {
+    const graph = this.graph
+    if (node.kind === NodeKind.Passkey) {
+      const nookNamedArgs0_2: Parameters<KeyGraphView['devicesForPasskey']>[0] =
+        {
+          passkeyId: node.id,
         }
-        return passkeysForDevice(nookNamedArgument184).map(
+      const devices = this.devicesForPasskey(nookNamedArgs0_2)
+      const nookNamedArgs0_3: Parameters<KeyGraphView['vaultsForPasskey']>[0] =
+        {
+          passkeyId: node.id,
+        }
+      return {
+        passkeyIds: [node.id],
+        deviceIds: devices.map((device) => device.id),
+        vaultIds: this.vaultsForPasskey(nookNamedArgs0_3).map(
+          (vault) => vault.id,
+        ),
+      }
+    }
+    if (node.kind === NodeKind.Device) {
+      const devices = graph.devices.filter((device) => device.id === node.id)
+      const nookNamedArgs0_4: Parameters<KeyGraphView['vaultsForDevice']>[0] = {
+        deviceId: node.id,
+      }
+      return {
+        passkeyIds: devices.flatMap((device) => {
+          const nookNamedArgument184: Parameters<
+            KeyGraphView['passkeysForDevice']
+          >[0] = {
+            device,
+          }
+          return this.passkeysForDevice(nookNamedArgument184).map(
+            (passkey) => passkey.id,
+          )
+        }),
+        deviceIds: devices.map((device) => device.id),
+        vaultIds: this.vaultsForDevice(nookNamedArgs0_4).map(
+          (vault) => vault.id,
+        ),
+      }
+    }
+    const vaults = graph.vaults.filter((vault) => vault.id === node.id)
+    const devices = vaults.flatMap((vault) => {
+      const nookNamedArgument185: Parameters<
+        KeyGraphView['devicesForVault']
+      >[0] = {
+        vault,
+      }
+      return this.devicesForVault(nookNamedArgument185)
+    })
+    return {
+      passkeyIds: vaults.flatMap((vault) => {
+        const nookNamedArgument186: Parameters<
+          KeyGraphView['passkeysForVault']
+        >[0] = {
+          vault,
+        }
+        return this.passkeysForVault(nookNamedArgument186).map(
           (passkey) => passkey.id,
         )
       }),
       deviceIds: devices.map((device) => device.id),
-      vaultIds: vaultsForDevice(nookNamedArgs0_4).map((vault) => vault.id),
+      vaultIds: vaults.map((vault) => vault.id),
     }
   }
-  const vaults = graph.vaults.filter((vault) => vault.id === node.id)
-  const devices = vaults.flatMap((vault) => {
-    const nookNamedArgument185: Parameters<typeof devicesForVault>[0] = {
-      graph,
-      vault,
-    }
-    return devicesForVault(nookNamedArgument185)
-  })
-  return {
-    passkeyIds: vaults.flatMap((vault) => {
-      const nookNamedArgument186: Parameters<typeof passkeysForVault>[0] = {
-        graph,
-        vault,
-      }
-      return passkeysForVault(nookNamedArgument186).map((passkey) => passkey.id)
-    }),
-    deviceIds: devices.map((device) => device.id),
-    vaultIds: vaults.map((vault) => vault.id),
-  }
-}
 
-/** The node a sketch should open on: this browser, or the first passkey. */
-export function defaultNode(graph: KeyGraph): NodeRef {
-  if (graph.here.kind === HereKind.Prepared) {
-    return { kind: NodeKind.Device, id: graph.here.deviceId }
+  defaultNode(): NodeRef {
+    const graph = this.graph
+    if (graph.here.kind === HereKind.Prepared) {
+      return { kind: NodeKind.Device, id: graph.here.deviceId }
+    }
+    const [first] = graph.passkeys
+    return first
+      ? { kind: NodeKind.Passkey, id: first.id }
+      : { kind: NodeKind.Vault, id: '' }
   }
-  const [first] = graph.passkeys
-  return first
-    ? { kind: NodeKind.Passkey, id: first.id }
-    : { kind: NodeKind.Vault, id: '' }
 }

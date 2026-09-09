@@ -1,14 +1,18 @@
 import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+
 import type { GeneratePasswordRequest } from '../../../../nook-web-shared/src/extension/runtime-messages'
+
 import {
-  isAuthenticationPageObservationView,
   type AuthenticationPageObservationView,
   type AuthenticationWorkflowSnapshotMessage,
+  AuthenticationWorkflowSnapshotMessage as AuthenticationWorkflowSnapshotMessageSchema,
 } from '../../lib/auth-workflow-messages'
+
 import type {
   AuthenticatorPickerCancelMessage,
   WebsiteAuthenticatorPickerOpenMessage,
 } from '../../lib/authenticator-picker-messages'
+
 import type {
   WebsiteAuthenticatorBackupAttachMessage,
   WebsiteAuthenticatorEnrollCodeMessage,
@@ -17,22 +21,27 @@ import type {
   WebsiteAuthenticatorEnrollPreviewMessage,
   WebsiteAuthenticatorEnrollStageMessage,
 } from '../../lib/enrollment-messages'
+
 import type {
   WebsiteAuthenticatorFillMessage,
   WebsiteAuthenticatorOptionsMessage,
   WebsiteLoginOptionsMessage,
 } from '../../lib/login-fill-messages'
+
 import type {
   LoginPickerCancelMessage,
   WebsiteLoginPickerOpenMessage,
 } from '../../lib/login-picker-messages'
+
 import type {
   WebsiteLoginSaveCommitMessage,
   WebsiteLoginSaveDismissMessage,
   WebsiteLoginSaveOfferMessage,
   WebsiteLoginSavePendingMessage,
 } from '../../lib/login-save-messages'
+
 import type { AuthenticationOutcomeClassifyMessage } from '../../lib/outcome-evidence-messages'
+
 import {
   decode_login_picker_open_response,
   decode_authenticator_picker_open_response,
@@ -139,27 +148,6 @@ export type {
   AuthenticationOutcomeResponse,
 }
 
-function sendRuntimeMessage(
-  message: ExtensionRuntimeRequest,
-): Promise<RuntimeMessageDelivery<unknown>> {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage(message, (response: unknown) => {
-      if (chrome.runtime.lastError) {
-        const unavailable: Parameters<typeof resolve>[0] = {
-          kind: RuntimeMessageDeliveryKind.Unavailable,
-        }
-        resolve(unavailable)
-        return
-      }
-      const delivered: Parameters<typeof resolve>[0] = {
-        kind: RuntimeMessageDeliveryKind.Delivered,
-        response,
-      }
-      resolve(delivered)
-    })
-  })
-}
-
 export type RuntimeMessageResponseDecoder<Response> = (
   response: unknown,
 ) => response is Response
@@ -169,343 +157,376 @@ export type DecodedRuntimeMessageArgs<Response> = {
   decode: RuntimeMessageResponseDecoder<Response>
 }
 
-export async function sendDecodedRuntimeMessage<Response>({
-  message,
-  decode,
-}: DecodedRuntimeMessageArgs<Response>): Promise<
-  RuntimeMessageDelivery<Response>
-> {
-  const delivery = await sendRuntimeMessage(message)
-  if (
-    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response ||
-    typeof delivery.response !== 'object'
-  ) {
-    return unavailable()
+/** Owns this browser host’s resources and interaction lifecycle. */
+class AuthenticationRuntimeTransport {
+  constructor(private readonly browser: typeof globalThis) {}
+
+  private sendRuntimeMessage(
+    message: ExtensionRuntimeRequest,
+  ): Promise<RuntimeMessageDelivery<unknown>> {
+    return new Promise((resolve) => {
+      this.browser.chrome.runtime.sendMessage(message, (response: unknown) => {
+        if (this.browser.chrome.runtime.lastError) {
+          const unavailable: Parameters<typeof resolve>[0] = {
+            kind: RuntimeMessageDeliveryKind.Unavailable,
+          }
+          resolve(this.unavailable.bind(this))
+          return
+        }
+        const delivered: Parameters<typeof resolve>[0] = {
+          kind: RuntimeMessageDeliveryKind.Delivered,
+          response,
+        }
+        resolve(delivered)
+      })
+    })
   }
-  return decode(delivery.response)
-    ? {
+
+  async sendDecodedRuntimeMessage<Response>({
+    message,
+    decode,
+  }: DecodedRuntimeMessageArgs<Response>): Promise<
+    RuntimeMessageDelivery<Response>
+  > {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      !delivery.response ||
+      typeof delivery.response !== 'object'
+    ) {
+      return this.unavailable()
+    }
+    return decode(delivery.response)
+      ? {
+          kind: RuntimeMessageDeliveryKind.Delivered,
+          response: delivery.response,
+        }
+      : this.unavailable()
+  }
+
+  private unavailable<Response>(): RuntimeMessageDelivery<Response> {
+    return { kind: RuntimeMessageDeliveryKind.Unavailable }
+  }
+
+  async sendLoginOptionsRuntimeMessage(
+    message: WebsiteLoginOptionsMessage,
+  ): Promise<RuntimeMessageDelivery<WebsiteLoginOptions>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire = delivery.response as WebsiteLoginOptionsWireValue
+      return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: delivery.response,
+        response: decode_website_login_options(responseWire),
       }
-    : unavailable()
-}
-
-function unavailable<Response>(): RuntimeMessageDelivery<Response> {
-  return { kind: RuntimeMessageDeliveryKind.Unavailable }
-}
-
-export async function sendLoginOptionsRuntimeMessage(
-  message: WebsiteLoginOptionsMessage,
-): Promise<RuntimeMessageDelivery<WebsiteLoginOptions>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire = delivery.response as WebsiteLoginOptionsWireValue
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_website_login_options(responseWire),
+    } catch {
+      return this.unavailable()
     }
-  } catch {
-    return unavailable()
   }
-}
 
-export async function sendLoginSaveOfferRuntimeMessage(
-  message: WebsiteLoginSaveOfferMessage,
-): Promise<RuntimeMessageDelivery<WebsiteLoginSaveOfferResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const response = delivery.response as WebsiteLoginSaveOfferResponse
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_website_login_save_offer_response(response),
+  async sendLoginSaveOfferRuntimeMessage(
+    message: WebsiteLoginSaveOfferMessage,
+  ): Promise<RuntimeMessageDelivery<WebsiteLoginSaveOfferResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
     }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendLoginSavePendingRuntimeMessage(
-  message: WebsiteLoginSavePendingMessage,
-): Promise<RuntimeMessageDelivery<WebsiteLoginSavePendingResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const response = delivery.response as WebsiteLoginSavePendingResponse
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_website_login_save_pending_response(response),
+    try {
+      await companionWasmReady
+      const response = delivery.response as WebsiteLoginSaveOfferResponse
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_website_login_save_offer_response(response),
+      }
+    } catch {
+      return this.unavailable()
     }
-  } catch {
-    return unavailable()
   }
-}
 
-export async function sendLoginSaveActionRuntimeMessage(
-  message: WebsiteLoginSaveCommitMessage | WebsiteLoginSaveDismissMessage,
-): Promise<RuntimeMessageDelivery<WebsiteLoginSaveActionResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const response = delivery.response as WebsiteLoginSaveActionResponse
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_website_login_save_action_response(response),
+  async sendLoginSavePendingRuntimeMessage(
+    message: WebsiteLoginSavePendingMessage,
+  ): Promise<RuntimeMessageDelivery<WebsiteLoginSavePendingResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
     }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendLoginPickerOpenRuntimeMessage(
-  message: WebsiteLoginPickerOpenMessage,
-): Promise<RuntimeMessageDelivery<LoginPickerOpenResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire = delivery.response as LoginPickerOpenResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_login_picker_open_response(responseWire),
+    try {
+      await companionWasmReady
+      const response = delivery.response as WebsiteLoginSavePendingResponse
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_website_login_save_pending_response(response),
+      }
+    } catch {
+      return this.unavailable()
     }
-  } catch {
-    return unavailable()
   }
-}
 
-export async function sendAuthenticatorPickerOpenRuntimeMessage(
-  message: WebsiteAuthenticatorPickerOpenMessage,
-): Promise<RuntimeMessageDelivery<AuthenticatorPickerOpenResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire =
-      delivery.response as AuthenticatorPickerOpenResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authenticator_picker_open_response(responseWire),
+  async sendLoginSaveActionRuntimeMessage(
+    message: WebsiteLoginSaveCommitMessage | WebsiteLoginSaveDismissMessage,
+  ): Promise<RuntimeMessageDelivery<WebsiteLoginSaveActionResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
     }
-  } catch {
-    return unavailable()
+    try {
+      await companionWasmReady
+      const response = delivery.response as WebsiteLoginSaveActionResponse
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_website_login_save_action_response(response),
+      }
+    } catch {
+      return this.unavailable()
+    }
   }
-}
 
-export async function sendAuthenticationWorkflowSnapshotRuntimeMessage(
-  message: AuthenticationWorkflowSnapshotMessage,
-): Promise<
-  RuntimeMessageDelivery<AuthenticationWorkflowSnapshotRuntimeResponse>
-> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
+  async sendLoginPickerOpenRuntimeMessage(
+    message: WebsiteLoginPickerOpenMessage,
+  ): Promise<RuntimeMessageDelivery<LoginPickerOpenResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire = delivery.response as LoginPickerOpenResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_login_picker_open_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
   }
-  try {
-    await companionWasmReady
-    const routingWire =
-      delivery.response as AuthenticationWorkflowSnapshotRoutingWire
-    const { selectedFacts, ...responseWire } = routingWire
-    const authenticationWorkflowResponseWire: AuthenticationWorkflowRuntimeResponseWire =
-      responseWire
-    const runtimeResponse = decode_authentication_workflow_runtime_response(
-      authenticationWorkflowResponseWire,
-    )
-    const { workflow: verdict, loginMatches } = runtimeResponse
-    if ('snapshot' in verdict) {
-      if (!isAuthenticationPageObservationView(selectedFacts)) {
-        return unavailable()
+
+  async sendAuthenticatorPickerOpenRuntimeMessage(
+    message: WebsiteAuthenticatorPickerOpenMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticatorPickerOpenResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire =
+        delivery.response as AuthenticatorPickerOpenResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_authenticator_picker_open_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendAuthenticationWorkflowSnapshotRuntimeMessage(
+    message: AuthenticationWorkflowSnapshotMessage,
+  ): Promise<
+    RuntimeMessageDelivery<AuthenticationWorkflowSnapshotRuntimeResponse>
+  > {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const routingWire =
+        delivery.response as AuthenticationWorkflowSnapshotRoutingWire
+      const { selectedFacts, ...responseWire } = routingWire
+      const authenticationWorkflowResponseWire: AuthenticationWorkflowRuntimeResponseWire =
+        responseWire
+      const runtimeResponse = decode_authentication_workflow_runtime_response(
+        authenticationWorkflowResponseWire,
+      )
+      const { workflow: verdict, loginMatches } = runtimeResponse
+      if ('snapshot' in verdict) {
+        if (
+          !AuthenticationWorkflowSnapshotMessageSchema.isAuthenticationPageObservationView(
+            selectedFacts,
+          )
+        ) {
+          return this.unavailable()
+        }
+        return {
+          kind: RuntimeMessageDeliveryKind.Delivered,
+          response: { verdict, loginMatches, selectedFacts },
+        }
       }
       return {
         kind: RuntimeMessageDeliveryKind.Delivered,
-        response: { verdict, loginMatches, selectedFacts },
+        response: { verdict, loginMatches },
       }
+    } catch {
+      return this.unavailable()
     }
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: { verdict, loginMatches },
+  }
+
+  async sendAuthenticatorPreviewRuntimeMessage(
+    message: WebsiteAuthenticatorEnrollPreviewMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
     }
-  } catch {
-    return unavailable()
+    try {
+      await companionWasmReady
+      const responseWire = delivery.response as AuthenticatorPreviewResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_authenticator_preview_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendAuthenticatorBackupAttachRuntimeMessage(
+    message: WebsiteAuthenticatorBackupAttachMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire =
+        delivery.response as AuthenticatorBackupAttachResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_authenticator_backup_attach_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendAuthenticatorCodeRuntimeMessage(
+    message:
+      WebsiteAuthenticatorEnrollCodeMessage | WebsiteAuthenticatorFillMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire = delivery.response as AuthenticatorCodeResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_authenticator_code_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendAuthenticatorOptionsRuntimeMessage(
+    message: WebsiteAuthenticatorOptionsMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire = delivery.response as AuthenticatorOptionsResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_authenticator_options_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendAuthenticatorEnrollmentStageRuntimeMessage(
+    message: WebsiteAuthenticatorEnrollStageMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire =
+        delivery.response as AuthenticatorEnrollmentStageResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_authenticator_enrollment_stage_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendAuthenticatorEnrollmentConfirmRuntimeMessage(
+    message: WebsiteAuthenticatorEnrollConfirmMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire =
+        delivery.response as AuthenticatorEnrollmentConfirmResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response:
+          decode_authenticator_enrollment_confirm_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendAuthenticationOutcomeRuntimeMessage(
+    message: AuthenticationOutcomeClassifyMessage,
+  ): Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire =
+        delivery.response as AuthenticationOutcomeResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_authentication_outcome_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  async sendGeneratePasswordRuntimeMessage(
+    message: GeneratePasswordRequest,
+  ): Promise<RuntimeMessageDelivery<GeneratedPasswordResponse>> {
+    const delivery = await this.sendRuntimeMessage(message)
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return this.unavailable()
+    }
+    try {
+      await companionWasmReady
+      const responseWire = delivery.response as GeneratedPasswordResponseWire
+      return {
+        kind: RuntimeMessageDeliveryKind.Delivered,
+        response: decode_generated_password_response(responseWire),
+      }
+    } catch {
+      return this.unavailable()
+    }
+  }
+
+  sendRuntimeMessageWithoutResponse(message: ExtensionRuntimeRequest): void {
+    void this.sendRuntimeMessage(message)
   }
 }
 
-export async function sendAuthenticatorPreviewRuntimeMessage(
-  message: WebsiteAuthenticatorEnrollPreviewMessage,
-): Promise<RuntimeMessageDelivery<AuthenticatorPreviewResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire = delivery.response as AuthenticatorPreviewResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authenticator_preview_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendAuthenticatorBackupAttachRuntimeMessage(
-  message: WebsiteAuthenticatorBackupAttachMessage,
-): Promise<RuntimeMessageDelivery<AuthenticatorBackupAttachResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire =
-      delivery.response as AuthenticatorBackupAttachResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authenticator_backup_attach_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendAuthenticatorCodeRuntimeMessage(
-  message:
-    WebsiteAuthenticatorEnrollCodeMessage | WebsiteAuthenticatorFillMessage,
-): Promise<RuntimeMessageDelivery<AuthenticatorCodeResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire = delivery.response as AuthenticatorCodeResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authenticator_code_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendAuthenticatorOptionsRuntimeMessage(
-  message: WebsiteAuthenticatorOptionsMessage,
-): Promise<RuntimeMessageDelivery<AuthenticatorOptionsResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire = delivery.response as AuthenticatorOptionsResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authenticator_options_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendAuthenticatorEnrollmentStageRuntimeMessage(
-  message: WebsiteAuthenticatorEnrollStageMessage,
-): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentStageResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire =
-      delivery.response as AuthenticatorEnrollmentStageResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authenticator_enrollment_stage_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendAuthenticatorEnrollmentConfirmRuntimeMessage(
-  message: WebsiteAuthenticatorEnrollConfirmMessage,
-): Promise<RuntimeMessageDelivery<AuthenticatorEnrollmentConfirmResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire =
-      delivery.response as AuthenticatorEnrollmentConfirmResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authenticator_enrollment_confirm_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendAuthenticationOutcomeRuntimeMessage(
-  message: AuthenticationOutcomeClassifyMessage,
-): Promise<RuntimeMessageDelivery<AuthenticationOutcomeResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire = delivery.response as AuthenticationOutcomeResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_authentication_outcome_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export async function sendGeneratePasswordRuntimeMessage(
-  message: GeneratePasswordRequest,
-): Promise<RuntimeMessageDelivery<GeneratedPasswordResponse>> {
-  const delivery = await sendRuntimeMessage(message)
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return unavailable()
-  }
-  try {
-    await companionWasmReady
-    const responseWire = delivery.response as GeneratedPasswordResponseWire
-    return {
-      kind: RuntimeMessageDeliveryKind.Delivered,
-      response: decode_generated_password_response(responseWire),
-    }
-  } catch {
-    return unavailable()
-  }
-}
-
-export function sendRuntimeMessageWithoutResponse(
-  message: ExtensionRuntimeRequest,
-): void {
-  void sendRuntimeMessage(message)
-}
+export const authenticationRuntimeTransport =
+  new AuthenticationRuntimeTransport(globalThis)

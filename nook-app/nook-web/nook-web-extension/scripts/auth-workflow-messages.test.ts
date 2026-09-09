@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import type { AuthenticationPasskeyControlObservation } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationWorkflowApprovalsMatch,
-  isAuthenticationWorkflowSnapshotMessage,
+  AuthenticationWorkflowApproval as AuthenticationWorkflowApprovalSchema,
+  AuthenticationWorkflowSnapshotMessage as AuthenticationWorkflowSnapshotMessageSchema,
 } from '../src/lib/auth-workflow-messages'
 
 const passkeyControlPresent =
@@ -48,7 +48,7 @@ const validMessage = {
 }
 
 function approvalMatcherDependencies(): Parameters<
-  typeof authenticationWorkflowApprovalsMatch
+  typeof AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch
 >[0]['matcherDependencies'] {
   let approvedFactsJson = ''
   return {
@@ -57,7 +57,7 @@ function approvalMatcherDependencies(): Parameters<
       return {} as ReturnType<
         NonNullable<
           Parameters<
-            typeof authenticationWorkflowApprovalsMatch
+            typeof AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch
           >[0]['matcherDependencies']
         >['bind_authentication_page_observation_facts']
       >
@@ -75,31 +75,37 @@ describe('authentication workflow snapshot messages', () => {
     const approved = { workflowKey: 'login:continue', facts }
     const dependencies = approvalMatcherDependencies()
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved,
-        current: { workflowKey: 'login:continue', facts },
-        matcherDependencies: dependencies,
-      }),
+      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
+        {
+          approved,
+          current: { workflowKey: 'login:continue', facts },
+          matcherDependencies: dependencies,
+        },
+      ),
     ).toBe(true)
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved,
-        current: { workflowKey: 'otp:fill', facts },
-        matcherDependencies: dependencies,
-      }),
+      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
+        {
+          approved,
+          current: { workflowKey: 'otp:fill', facts },
+          matcherDependencies: dependencies,
+        },
+      ),
     ).toBe(false)
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved,
-        current: {
-          workflowKey: 'login:continue',
-          facts: {
-            ...facts,
-            fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
+      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
+        {
+          approved,
+          current: {
+            workflowKey: 'login:continue',
+            facts: {
+              ...facts,
+              fields: { ...facts.fields, oneTimeCodeFieldCount: 1 },
+            },
           },
+          matcherDependencies: dependencies,
         },
-        matcherDependencies: dependencies,
-      }),
+      ),
     ).toBe(false)
   })
 
@@ -107,31 +113,35 @@ describe('authentication workflow snapshot messages', () => {
     const approvedFacts = validMessage.payload.observations[0]
     const dependencies = approvalMatcherDependencies()
     expect(
-      authenticationWorkflowApprovalsMatch({
-        approved: { workflowKey: 'login:otp', facts: approvedFacts },
-        current: {
-          workflowKey: 'login:otp',
-          facts: {
-            ...approvedFacts,
-            ceremony: {
-              ...approvedFacts.ceremony,
-              oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
+      AuthenticationWorkflowApprovalSchema.authenticationWorkflowApprovalsMatch(
+        {
+          approved: { workflowKey: 'login:otp', facts: approvedFacts },
+          current: {
+            workflowKey: 'login:otp',
+            facts: {
+              ...approvedFacts,
+              ceremony: {
+                ...approvedFacts.ceremony,
+                oneTimeCodeHandlerSignal: 'onchange=submitNewChallenge()',
+              },
             },
           },
+          matcherDependencies: dependencies,
         },
-        matcherDependencies: dependencies,
-      }),
+      ),
     ).toBe(false)
   })
 
   test('accepts bounded structural page observations', () => {
-    expect(isAuthenticationWorkflowSnapshotMessage(validMessage)).toBe(true)
+    expect(AuthenticationWorkflowSnapshotMessageSchema.is(validMessage)).toBe(
+      true,
+    )
   })
 
   test('accepts WebAuthn email evidence from the generated WASM contract', () => {
     const observation = validMessage.payload.observations[0]
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -216,12 +226,12 @@ describe('authentication workflow snapshot messages', () => {
     })
 
     expect(
-      isAuthenticationWorkflowSnapshotMessage(
+      AuthenticationWorkflowSnapshotMessageSchema.is(
         messageWithEvidence('mixed-phone-or-email'),
       ),
     ).toBe(true)
     expect(
-      isAuthenticationWorkflowSnapshotMessage(
+      AuthenticationWorkflowSnapshotMessageSchema.is(
         messageWithEvidence('mixed-contact-channel'),
       ),
     ).toBe(false)
@@ -231,7 +241,7 @@ describe('authentication workflow snapshot messages', () => {
     const observation = validMessage.payload.observations[0]
     for (const backupCodesCopy of [42, 'x'.repeat(129)]) {
       expect(
-        isAuthenticationWorkflowSnapshotMessage({
+        AuthenticationWorkflowSnapshotMessageSchema.is({
           ...validMessage,
           payload: {
             ...validMessage.payload,
@@ -252,7 +262,7 @@ describe('authentication workflow snapshot messages', () => {
 
   test('accepts the generated passkey presence representation', () => {
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -273,7 +283,7 @@ describe('authentication workflow snapshot messages', () => {
   test('accepts bounded passkey and OTP candidate facts', () => {
     const observation = validMessage.payload.observations[0]
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -332,7 +342,7 @@ describe('authentication workflow snapshot messages', () => {
       ),
     ).toBe(true)
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -343,7 +353,7 @@ describe('authentication workflow snapshot messages', () => {
 
     for (const invalidCount of [-1, 0.5]) {
       expect(
-        isAuthenticationWorkflowSnapshotMessage({
+        AuthenticationWorkflowSnapshotMessageSchema.is({
           ...validMessage,
           payload: {
             ...validMessage.payload,
@@ -364,7 +374,7 @@ describe('authentication workflow snapshot messages', () => {
 
   test('leaves portable upper bounds to the Rust workflow policy', () => {
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -381,7 +391,7 @@ describe('authentication workflow snapshot messages', () => {
       }),
     ).toBe(true)
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -399,7 +409,7 @@ describe('authentication workflow snapshot messages', () => {
       }),
     ).toBe(true)
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -414,7 +424,7 @@ describe('authentication workflow snapshot messages', () => {
 
   test('rejects empty observation batches structurally', () => {
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: { ...validMessage.payload, observations: [] },
       }),
@@ -438,7 +448,7 @@ describe('authentication workflow snapshot messages', () => {
       label: 'Sign in',
     }
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -455,7 +465,7 @@ describe('authentication workflow snapshot messages', () => {
       }),
     ).toBe(true)
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -479,7 +489,7 @@ describe('authentication workflow snapshot messages', () => {
       'submissionDestinationSource',
     )
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,
@@ -496,7 +506,7 @@ describe('authentication workflow snapshot messages', () => {
       }),
     ).toBe(false)
     expect(
-      isAuthenticationWorkflowSnapshotMessage({
+      AuthenticationWorkflowSnapshotMessageSchema.is({
         ...validMessage,
         payload: {
           ...validMessage.payload,

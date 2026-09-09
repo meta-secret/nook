@@ -12,44 +12,45 @@ enum TranslationCatalogLookupKind {
 }
 
 export type LocaleUpdate = {
-  readonly state: VaultState;
   readonly newLocale: NookAppLocale;
   readonly preferWasm: boolean;
 };
 
-function wasmTranslationCatalog(
-  locale: NookAppLocale,
-):
-  | { kind: TranslationCatalogLookupKind.Unavailable }
-  | { kind: TranslationCatalogLookupKind.Loaded; catalog: string } {
-  try {
-    return {
-      kind: TranslationCatalogLookupKind.Loaded,
-      catalog: get_translation_catalog(locale),
-    };
-  } catch {
-    return { kind: TranslationCatalogLookupKind.Unavailable };
-  }
-}
+/** Owns browser orchestration for one locale context. */
+export class VaultLocaleActions {
+  constructor(private readonly state: VaultState) {}
 
-export async function updateLocale({
-  state,
-  newLocale,
-  preferWasm,
-}: LocaleUpdate): Promise<void> {
-  state.locale = newLocale;
-  localStorage.setItem("nook_locale", newLocale);
-  if ("document" in globalThis) {
-    document.documentElement.lang = newLocale;
+  private static wasmTranslationCatalog(
+    locale: NookAppLocale,
+  ):
+    | { kind: TranslationCatalogLookupKind.Unavailable }
+    | { kind: TranslationCatalogLookupKind.Loaded; catalog: string } {
+    try {
+      return {
+        kind: TranslationCatalogLookupKind.Loaded,
+        catalog: get_translation_catalog(locale),
+      };
+    } catch {
+      return { kind: TranslationCatalogLookupKind.Unavailable };
+    }
   }
 
-  if (!preferWasm) {
-    state.translations = default_translation_catalog(newLocale);
-    return;
+  async updateLocale({ newLocale, preferWasm }: LocaleUpdate): Promise<void> {
+    const state = state;
+    state.locale = newLocale;
+    localStorage.setItem("nook_locale", newLocale);
+    if ("document" in globalThis) {
+      document.documentElement.lang = newLocale;
+    }
+
+    if (!preferWasm) {
+      state.translations = default_translation_catalog(newLocale);
+      return;
+    }
+    const wasmCatalog = VaultLocaleActions.wasmTranslationCatalog(newLocale);
+    state.translations =
+      wasmCatalog.kind === TranslationCatalogLookupKind.Loaded
+        ? resolve_translation_catalog(newLocale, wasmCatalog.catalog)
+        : default_translation_catalog(newLocale);
   }
-  const wasmCatalog = wasmTranslationCatalog(newLocale);
-  state.translations =
-    wasmCatalog.kind === TranslationCatalogLookupKind.Loaded
-      ? resolve_translation_catalog(newLocale, wasmCatalog.catalog)
-      : default_translation_catalog(newLocale);
 }

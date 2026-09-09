@@ -28,7 +28,7 @@ export enum VaultAuthExperimentStage {
   Sentinel = 'sentinel',
 }
 
-class VaultAuthWorkflowState {
+export class VaultAuthWorkflowState {
   presence = $state<Presence>(Presence.Empty)
   step = $state(0)
   path = $state<VaultPath>(VaultPath.Undecided)
@@ -91,8 +91,4 @@ class VaultAuthWorkflowState {
     }
     if (this.step > 0) this.step -= 1
   }
-}
-
-export function createVaultAuthWorkflowState(): VaultAuthWorkflowState {
-  return new VaultAuthWorkflowState()
 }

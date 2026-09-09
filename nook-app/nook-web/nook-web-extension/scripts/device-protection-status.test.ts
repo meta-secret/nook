@@ -1,8 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import {
   DeviceProtectionStatus,
-  extensionDeviceProtectionStatus,
-  extensionSessionDevice,
+  extensionWasmRuntime,
 } from '../src/lib/nook-wasm'
 
 describe('extensionDeviceProtectionStatus', () => {
@@ -17,9 +16,9 @@ describe('extensionDeviceProtectionStatus', () => {
       },
     } as typeof chrome
 
-    await expect(extensionDeviceProtectionStatus()).rejects.toThrow(
-      'Unsupported extension device protection status.',
-    )
+    await expect(
+      extensionWasmRuntime.extensionDeviceProtectionStatus(),
+    ).rejects.toThrow('Unsupported extension device protection status.')
   })
 
   test('rejects malformed unlocked device identity', async () => {
@@ -37,7 +36,7 @@ describe('extensionDeviceProtectionStatus', () => {
       },
     } as typeof chrome
 
-    await expect(extensionSessionDevice()).rejects.toThrow(
+    await expect(extensionWasmRuntime.extensionSessionDevice()).rejects.toThrow(
       'Extension session returned malformed device identity.',
     )
   })
@@ -61,7 +60,7 @@ describe('extensionDeviceProtectionStatus', () => {
       },
     } as typeof chrome
 
-    await expect(extensionSessionDevice()).rejects.toThrow(
+    await expect(extensionWasmRuntime.extensionSessionDevice()).rejects.toThrow(
       'Extension session returned malformed device identity.',
     )
   })

@@ -19,117 +19,123 @@ type MatchingSentinelBase =
   | { kind: MatchingSentinelBaseKind.Absent }
   | { kind: MatchingSentinelBaseKind.Present; url: string }
 
-function normalizeBaseUrl(value: string): URL {
-  const url = new URL(value)
-  url.hash = ''
-  url.search = ''
-  if (!url.pathname.endsWith('/')) {
-    url.pathname = `${url.pathname}/`
-  }
-  return url
-}
+/** Owns the configured Simple Vault deployment URL and its browser routes. */
+class SimpleVaultRuntime {
+  constructor(private readonly baseUrl: string) {}
 
-function isRuntimeSimpleVaultHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase()
-  if (host === 'simple.nokey.sh') {
-    return true
+  private normalizeBaseUrl(value: string): URL {
+    const url = new URL(value)
+    url.hash = ''
+    url.search = ''
+    if (!url.pathname.endsWith('/')) {
+      url.pathname = `${url.pathname}/`
+    }
+    return url
   }
-  if (host.startsWith('simple.') && host.endsWith('.nokey.sh')) {
-    return true
-  }
-  return host.endsWith('.nokey-simple.pages.dev')
-}
 
-function isRuntimeSentinelVaultHostname(hostname: string): boolean {
-  const host = hostname.toLowerCase()
-  if (host === 'sentinel.nokey.sh') {
-    return true
+  private isRuntimeSimpleVaultHostname(hostname: string): boolean {
+    const host = hostname.toLowerCase()
+    if (host === 'simple.nokey.sh') {
+      return true
+    }
+    if (host.startsWith('simple.') && host.endsWith('.nokey.sh')) {
+      return true
+    }
+    return host.endsWith('.nokey-simple.pages.dev')
   }
-  if (host.startsWith('sentinel.') && host.endsWith('.nokey.sh')) {
-    return true
-  }
-  return host.endsWith('.nokey-sentinel.pages.dev')
-}
 
-function matchingSentinelBaseUrl(baseUrl: string): MatchingSentinelBase {
-  try {
-    const base = normalizeBaseUrl(baseUrl)
-    const host = base.hostname
-    if (host.startsWith('simple.')) {
-      return {
-        kind: MatchingSentinelBaseKind.Present,
-        url: `${base.protocol}//sentinel.${host.slice('simple.'.length)}/`,
-      }
+  private isRuntimeSentinelVaultHostname(hostname: string): boolean {
+    const host = hostname.toLowerCase()
+    if (host === 'sentinel.nokey.sh') {
+      return true
     }
-    if (host.includes('.nokey-simple.pages.dev')) {
-      return {
-        kind: MatchingSentinelBaseKind.Present,
-        url: `${base.protocol}//${host.replace(
-          '.nokey-simple.pages.dev',
-          '.nokey-sentinel.pages.dev',
-        )}/`,
-      }
+    if (host.startsWith('sentinel.') && host.endsWith('.nokey.sh')) {
+      return true
     }
-    if (base.pathname.endsWith('/simple/')) {
-      return {
-        kind: MatchingSentinelBaseKind.Present,
-        url: new URL(
-          `${base.pathname.slice(0, -'/simple/'.length)}/sentinel/`,
-          base,
-        ).href,
+    return host.endsWith('.nokey-sentinel.pages.dev')
+  }
+
+  private matchingSentinelBaseUrl(baseUrl: string): MatchingSentinelBase {
+    try {
+      const base = this.normalizeBaseUrl(baseUrl)
+      const host = base.hostname
+      if (host.startsWith('simple.')) {
+        return {
+          kind: MatchingSentinelBaseKind.Present,
+          url: `${base.protocol}//sentinel.${host.slice('simple.'.length)}/`,
+        }
       }
+      if (host.includes('.nokey-simple.pages.dev')) {
+        return {
+          kind: MatchingSentinelBaseKind.Present,
+          url: `${base.protocol}//${host.replace(
+            '.nokey-simple.pages.dev',
+            '.nokey-sentinel.pages.dev',
+          )}/`,
+        }
+      }
+      if (base.pathname.endsWith('/simple/')) {
+        return {
+          kind: MatchingSentinelBaseKind.Present,
+          url: new URL(
+            `${base.pathname.slice(0, -'/simple/'.length)}/sentinel/`,
+            base,
+          ).href,
+        }
+      }
+    } catch {
+      return { kind: MatchingSentinelBaseKind.Absent }
     }
-  } catch {
     return { kind: MatchingSentinelBaseKind.Absent }
   }
-  return { kind: MatchingSentinelBaseKind.Absent }
-}
 
-export function runtimeSimpleVaultUrl(path = ''): string {
-  const base = normalizeBaseUrl(SIMPLE_VAULT_BASE_URL)
-  if (!path) {
-    return base.href
-  }
-  const normalized = path.startsWith('/') ? path.slice(1) : path
-  return new URL(normalized, base).href
-}
-
-export function isRuntimeSimpleVaultUrl(candidateUrl: string): boolean {
-  try {
-    const base = normalizeBaseUrl(SIMPLE_VAULT_BASE_URL)
-    const candidate = new URL(candidateUrl)
-    return (
-      candidate.origin === base.origin &&
-      candidate.pathname.startsWith(base.pathname)
-    )
-  } catch {
-    return false
-  }
-}
-
-/** True for any Simple/Sentinel Nook host, not only this build's channel. */
-export function isRuntimeNookVaultAppUrl(candidateUrl: string): boolean {
-  try {
-    const candidate = new URL(candidateUrl)
-    if (
-      isRuntimeSimpleVaultHostname(candidate.hostname) ||
-      isRuntimeSentinelVaultHostname(candidate.hostname)
-    ) {
-      return true
+  runtimeSimpleVaultUrl(path = ''): string {
+    const base = this.normalizeBaseUrl(this.baseUrl)
+    if (!path) {
+      return base.href
     }
-    if (isRuntimeSimpleVaultUrl(candidateUrl)) {
-      return true
-    }
-    const sentinelBase = matchingSentinelBaseUrl(SIMPLE_VAULT_BASE_URL)
-    if (sentinelBase.kind !== MatchingSentinelBaseKind.Present) {
+    const normalized = path.startsWith('/') ? path.slice(1) : path
+    return new URL(normalized, base).href
+  }
+
+  isRuntimeSimpleVaultUrl(candidateUrl: string): boolean {
+    try {
+      const base = this.normalizeBaseUrl(this.baseUrl)
+      const candidate = new URL(candidateUrl)
+      return (
+        candidate.origin === base.origin &&
+        candidate.pathname.startsWith(base.pathname)
+      )
+    } catch {
       return false
     }
-    const base = normalizeBaseUrl(sentinelBase.url)
-    return (
-      candidate.origin === base.origin &&
-      candidate.pathname.startsWith(base.pathname)
-    )
-  } catch {
-    return false
+  }
+
+  isRuntimeNookVaultAppUrl(candidateUrl: string): boolean {
+    try {
+      const candidate = new URL(candidateUrl)
+      if (
+        this.isRuntimeSimpleVaultHostname(candidate.hostname) ||
+        this.isRuntimeSentinelVaultHostname(candidate.hostname)
+      ) {
+        return true
+      }
+      if (this.isRuntimeSimpleVaultUrl(candidateUrl)) {
+        return true
+      }
+      const sentinelBase = this.matchingSentinelBaseUrl(this.baseUrl)
+      if (sentinelBase.kind !== MatchingSentinelBaseKind.Present) {
+        return false
+      }
+      const base = this.normalizeBaseUrl(sentinelBase.url)
+      return (
+        candidate.origin === base.origin &&
+        candidate.pathname.startsWith(base.pathname)
+      )
+    } catch {
+      return false
+    }
   }
 }
+
+export const simpleVaultRuntime = new SimpleVaultRuntime(SIMPLE_VAULT_BASE_URL)

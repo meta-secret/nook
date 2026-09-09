@@ -11,15 +11,12 @@ import {
   companion_authentication_workflow_match_kind,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import {
-  authenticationPageObservationFacts,
-  fillLoginCredentials,
   FormSubmissionResult,
   PasswordFormQueryKind,
   PasswordFormScopeKind,
-  submitLoginForm,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { clickAdvanceControl } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
+import { authenticationSubmissionControls } from '../../../../nook-web-shared/src/extension/password-form-submission-controls'
 import {
   DomAuthenticationSimulationOutcomeKind,
   simulateDomAuthentication,
@@ -190,7 +187,8 @@ describe('Booking.com DOM-backed authentication simulation', () => {
   test('fills only email and activates only the local Continue with email control', () => {
     expect(location.href).toBe('https://account.booking.com/sign-in')
     const fixture = BookingAuthenticationFixture.stable().install()
-    const observations = summarizeAuthenticationWorkflowForms()
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     expect(observations).toHaveLength(1)
     const [observation] = observations
     if (!observation) throw new Error('expected Booking.com observation')
@@ -209,7 +207,7 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(form.hasAttribute('action')).toBe(false)
     expect(form.action).toBe('https://account.booking.com/sign-in')
 
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -261,13 +259,15 @@ describe('Booking.com DOM-backed authentication simulation', () => {
       action: AuthenticationWorkflowAction.ContinueWithNook,
     })
 
-    const fillRequest: Parameters<typeof fillLoginCredentials>[0] = {
+    const fillRequest: Parameters<
+      typeof passwordFormInteraction.fillLoginCredentials
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
       credentials: BOOKING_FAKE_CREDENTIALS,
     }
-    expect(fillLoginCredentials(fillRequest)).toBe(true)
+    expect(passwordFormInteraction.fillLoginCredentials(fillRequest)).toBe(true)
     let primaryState = BookingFixtureControlState.Untouched
     let alternativeState = BookingFixtureControlState.Untouched
     fixture.primary.addEventListener(
@@ -284,12 +284,14 @@ describe('Booking.com DOM-backed authentication simulation', () => {
         () => (alternativeState = BookingFixtureControlState.Activated),
       )
     }
-    const submissionRequest: Parameters<typeof submitLoginForm>[0] = {
+    const submissionRequest: Parameters<
+      typeof passwordFormInteraction.submitLoginForm
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
     }
-    expect(submitLoginForm(submissionRequest)).toBe(
+    expect(passwordFormInteraction.submitLoginForm(submissionRequest)).toBe(
       FormSubmissionResult.Submitted,
     )
     expect(primaryState).toBe(BookingFixtureControlState.Activated)
@@ -333,15 +335,20 @@ describe('Booking.com DOM-backed authentication simulation', () => {
       'click',
       () => (primaryState = BookingFixtureControlState.Activated),
     )
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected rejected Booking.com form')
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
       usernameField: fixture.email,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(primaryState).toBe(BookingFixtureControlState.Untouched)
     expect(fixture.email.value).toBe('')
   })
@@ -356,15 +363,20 @@ describe('Booking.com DOM-backed authentication simulation', () => {
         'click',
         () => (primaryState = BookingFixtureControlState.Activated),
       )
-      const [observation] = summarizeAuthenticationWorkflowForms()
+      const [observation] =
+        passwordFormInteraction.summarizeAuthenticationWorkflowForms()
       if (!observation) throw new Error('expected drifted Booking.com form')
-      const request: Parameters<typeof clickAdvanceControl>[0] = {
+      const request: Parameters<
+        typeof authenticationSubmissionControls.clickAdvanceControl
+      >[0] = {
         kind: PasswordFormQueryKind.Scoped,
         root: observation.root,
         formScope: observation.formScope,
         usernameField: fixture.email,
       }
-      expect(clickAdvanceControl(request)).toBe(false)
+      expect(
+        authenticationSubmissionControls.clickAdvanceControl(request),
+      ).toBe(false)
       expect(primaryState).toBe(BookingFixtureControlState.Untouched)
     },
   )
@@ -372,15 +384,20 @@ describe('Booking.com DOM-backed authentication simulation', () => {
   test('rejects an inert Continue with email control', () => {
     const fixture = BookingAuthenticationFixture.stable().install()
     fixture.primary.setAttribute('aria-disabled', 'true')
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected inert Booking.com form')
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
       usernameField: fixture.email,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
   })
 
   test('rejects an authored cross-origin destination', () => {
@@ -391,15 +408,20 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     }
     expect(fixture.root.hasAttribute('action')).toBe(true)
     expect(fixture.root.action).toBe('https://attacker.example/sign-in')
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected cross-origin Booking.com form')
-    const request: Parameters<typeof clickAdvanceControl>[0] = {
+    const request: Parameters<
+      typeof authenticationSubmissionControls.clickAdvanceControl
+    >[0] = {
       kind: PasswordFormQueryKind.Scoped,
       root: observation.root,
       formScope: observation.formScope,
       usernameField: fixture.email,
     }
-    expect(clickAdvanceControl(request)).toBe(false)
+    expect(authenticationSubmissionControls.clickAdvanceControl(request)).toBe(
+      false,
+    )
     expect(fixture.email.value).toBe('')
   })
 
@@ -445,7 +467,8 @@ describe('Booking.com DOM-backed authentication simulation', () => {
     expect(primary.closest('form')).not.toBeInstanceOf(HTMLFormElement)
     expect(primary.form).toBe(unrelatedForm)
     expect(unrelatedForm.querySelectorAll('input')).toHaveLength(0)
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected unowned Booking.com surface')
     if (!(observation.root instanceof HTMLElement)) {
       throw new Error('expected bounded unowned Booking.com observation')

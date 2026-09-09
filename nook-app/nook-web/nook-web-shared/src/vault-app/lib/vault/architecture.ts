@@ -4,87 +4,87 @@ import {
   type VaultArchitecture,
 } from "$lib/vault/architecture-model";
 import { NookVaultArchitecture } from "$app-wasm";
-import { createLogger } from "$lib/runtime/log";
+import { browserLogRuntime } from "$lib/runtime/log";
 
-const log = createLogger("vault-architecture");
-
-export function draftVaultArchitecture(
-  state: ArchitectureActionsContext,
-): VaultArchitecture {
-  return NookVaultArchitecture.draft(
-    state.draftDeviceMode,
-    state.draftVaultType,
-    state.draftReplicationType,
-  );
-}
+const log = browserLogRuntime.createLogger("vault-architecture");
 
 type VaultArchitectureReplacement = {
-  readonly state: ArchitectureActionsContext;
   readonly architecture: VaultArchitecture;
 };
 
-export function replaceVaultArchitecture({
-  state,
-  architecture,
-}: VaultArchitectureReplacement): void {
-  const previous = state.vaultArchitecture;
-  state.vaultArchitecture = architecture;
-  if (previous !== architecture) previous.free();
-}
+/** Owns browser orchestration for one architecture context. */
+export class VaultArchitectureActions {
+  constructor(private readonly state: ArchitectureActionsContext) {}
 
-export function applyDraftVaultArchitecture(
-  state: ArchitectureActionsContext,
-): void {
-  const replaceVaultArchitectureArgs: Parameters<
-    typeof replaceVaultArchitecture
-  >[0] = { state, architecture: draftVaultArchitecture(state) };
-  replaceVaultArchitecture(replaceVaultArchitectureArgs);
-  state.architectureSecretCreationAllowed =
-    vault_architecture_can_create_secret(state.vaultArchitecture);
-  if (state.hasManager) {
-    state.requireManager().set_vault_architecture(state.vaultArchitecture);
-  }
-}
-
-export function refreshVaultArchitectureFromManager(
-  state: ArchitectureActionsContext,
-): void {
-  if (!state.hasManager) return;
-  let architecture: VaultArchitecture;
-  try {
-    architecture = state.requireManager()
-      .vaultArchitecture as VaultArchitecture;
-  } catch {
-    log.warn("vault architecture metadata could not be loaded");
-    return;
-  }
-  const replaceVaultArchitectureArgs2: Parameters<
-    typeof replaceVaultArchitecture
-  >[0] = { state, architecture };
-  replaceVaultArchitecture(replaceVaultArchitectureArgs2);
-  state.architectureSecretCreationAllowed =
-    vault_architecture_can_create_secret(state.vaultArchitecture);
-  state.draftDeviceMode = state.vaultArchitecture.device_mode;
-  state.draftVaultType = state.vaultArchitecture.vault_type;
-  state.draftReplicationType = state.vaultArchitecture.replication_type;
-  void refreshArchitectureSecretCreationAllowed(state);
-}
-
-export async function refreshArchitectureSecretCreationAllowed(
-  state: ArchitectureActionsContext,
-): Promise<void> {
-  const fallback = vault_architecture_can_create_secret(
-    state.vaultArchitecture,
-  );
-  if (!state.hasManager) {
-    state.architectureSecretCreationAllowed = fallback;
-    return;
-  }
-  try {
-    state.architectureSecretCreationAllowed = await state.enqueueStorage(() =>
-      state.requireManager().can_create_secret_for_vault_architecture(),
+  draftVaultArchitecture(): VaultArchitecture {
+    const state = state;
+    return NookVaultArchitecture.draft(
+      state.draftDeviceMode,
+      state.draftVaultType,
+      state.draftReplicationType,
     );
-  } catch {
-    state.architectureSecretCreationAllowed = fallback;
+  }
+
+  replaceVaultArchitecture({
+    architecture,
+  }: VaultArchitectureReplacement): void {
+    const state = state;
+    const previous = state.vaultArchitecture;
+    state.vaultArchitecture = architecture;
+    if (previous !== architecture) previous.free();
+  }
+
+  applyDraftVaultArchitecture(): void {
+    const state = state;
+    const replaceVaultArchitectureArgs: Parameters<
+      VaultArchitectureActions["replaceVaultArchitecture"]
+    >[0] = { architecture: this.draftVaultArchitecture() };
+    this.replaceVaultArchitecture(replaceVaultArchitectureArgs);
+    state.architectureSecretCreationAllowed =
+      vault_architecture_can_create_secret(state.vaultArchitecture);
+    if (state.hasManager) {
+      state.requireManager().set_vault_architecture(state.vaultArchitecture);
+    }
+  }
+
+  refreshVaultArchitectureFromManager(): void {
+    const state = state;
+    if (!state.hasManager) return;
+    let architecture: VaultArchitecture;
+    try {
+      architecture = state.requireManager()
+        .vaultArchitecture as VaultArchitecture;
+    } catch {
+      log.warn("vault architecture metadata could not be loaded");
+      return;
+    }
+    const replaceVaultArchitectureArgs2: Parameters<
+      VaultArchitectureActions["replaceVaultArchitecture"]
+    >[0] = { architecture };
+    this.replaceVaultArchitecture(replaceVaultArchitectureArgs2);
+    state.architectureSecretCreationAllowed =
+      vault_architecture_can_create_secret(state.vaultArchitecture);
+    state.draftDeviceMode = state.vaultArchitecture.device_mode;
+    state.draftVaultType = state.vaultArchitecture.vault_type;
+    state.draftReplicationType = state.vaultArchitecture.replication_type;
+    void this.refreshArchitectureSecretCreationAllowed();
+  }
+
+  async refreshArchitectureSecretCreationAllowed(): Promise<void> {
+    const state = state;
+    const fallback = vault_architecture_can_create_secret(
+      state.vaultArchitecture,
+    );
+    if (!state.hasManager) {
+      state.architectureSecretCreationAllowed = fallback;
+      return;
+    }
+    try {
+      state.architectureSecretCreationAllowed = await state.enqueueStorage(() =>
+        state.requireManager().can_create_secret_for_vault_architecture(),
+      );
+    } catch {
+      state.architectureSecretCreationAllowed = fallback;
+    }
   }
 }

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import '@xyflow/svelte/dist/style.css'
+  import "@xyflow/svelte/dist/style.css";
   import {
     Background,
     BackgroundVariant,
@@ -7,9 +7,9 @@
     SvelteFlow,
     type AriaLabelConfig,
     type NodeTypes,
-  } from '@xyflow/svelte'
+  } from "@xyflow/svelte";
   import {
-    buildIdentityBridge,
+    IdentityBridgePresentation,
     IdentityBridgeControlPosition,
     type IdentityBridgeDeviceIconKind,
     IdentityBridgeNodeType,
@@ -17,11 +17,11 @@
     type IdentityBridgeCopy,
     type IdentityBridgePerspective,
     type IdentityBridgeVaultSelection,
-  } from './identity-bridge-model'
-  import type { VaultAccessView } from './access-chain'
-  import type { DeviceAccessIdentityState } from '$app-wasm'
-  import IdentityBridgeNode from './IdentityBridgeNode.svelte'
-  import type { PasskeyCardSummaryState } from './passkey-card'
+  } from "./identity-bridge-model";
+  import type { VaultAccessView } from "./access-chain";
+  import type { DeviceAccessIdentityState } from "$app-wasm";
+  import IdentityBridgeNode from "./IdentityBridgeNode.svelte";
+  import type { PasskeyCardSummaryState } from "./passkey-card";
 
   let {
     perspective,
@@ -37,27 +37,29 @@
     controlsLabel,
     ariaLabelConfig,
   }: {
-    perspective: IdentityBridgePerspective
-    selectedVault: IdentityBridgeVaultSelection
-    deviceIdentifier: string
-    identityStatus: DeviceAccessIdentityState
-    protectionLabel: string
-    protectionSummary: PasskeyCardSummaryState
-    deviceIconKind: IdentityBridgeDeviceIconKind
-    vaults: readonly VaultAccessView[]
-    copy: IdentityBridgeCopy
-    graphLabel: string
-    controlsLabel: string
-    ariaLabelConfig: Partial<AriaLabelConfig>
-  } = $props()
+    perspective: IdentityBridgePerspective;
+    selectedVault: IdentityBridgeVaultSelection;
+    deviceIdentifier: string;
+    identityStatus: DeviceAccessIdentityState;
+    protectionLabel: string;
+    protectionSummary: PasskeyCardSummaryState;
+    deviceIconKind: IdentityBridgeDeviceIconKind;
+    vaults: readonly VaultAccessView[];
+    copy: IdentityBridgeCopy;
+    graphLabel: string;
+    controlsLabel: string;
+    ariaLabelConfig: Partial<AriaLabelConfig>;
+  } = $props();
 
   const nodeTypes: NodeTypes = {
     [IdentityBridgeNodeType.Bridge]: IdentityBridgeNode,
-  }
-  let compact = $state(false)
-  let canvasWidth = $state(0)
+  };
+  let compact = $state(false);
+  let canvasWidth = $state(0);
   const graph = $derived.by(() => {
-    const buildIdentityBridgeArgs: Parameters<typeof buildIdentityBridge>[0] = {
+    const buildIdentityBridgeArgs: ConstructorParameters<
+      typeof IdentityBridgePresentation
+    >[0] = {
       perspective,
       selectedVault,
       compact,
@@ -68,22 +70,22 @@
       deviceIconKind,
       vaults,
       copy,
-    }
-    return buildIdentityBridge(buildIdentityBridgeArgs)
-  })
+    };
+    return new IdentityBridgePresentation(buildIdentityBridgeArgs).graph;
+  });
   const selectedVaultKey = $derived(
     selectedVault.kind === IdentityBridgeVaultSelectionKind.Selected
       ? selectedVault.storeId
       : selectedVault.kind,
-  )
+  );
 
   $effect(() => {
-    const media = window.matchMedia('(width < 48rem)')
-    const update = () => (compact = media.matches)
-    update()
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
-  })
+    const media = window.matchMedia("(width < 48rem)");
+    const update = () => (compact = media.matches);
+    update();
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  });
 </script>
 
 <div

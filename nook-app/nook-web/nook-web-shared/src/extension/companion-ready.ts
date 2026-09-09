@@ -6,8 +6,8 @@ import initCompanionWasm, {
   is_extension_connect_scope,
 } from "./nook-companion-wasm/nook_companion_wasm.js";
 import {
-  configureExtensionConnectScopeRuntime,
   type ExtensionConnectScopeRuntime,
+  ExtensionConnectScope,
 } from "./extension-connect-scope";
 
 type ChromeRuntime = {
@@ -109,7 +109,9 @@ async function companionWasmDiskCandidates(): Promise<string[]> {
       process?: { cwd?: () => string; env?: Record<string, string> };
     }
   ).process;
-  const fromEnv = ((v) => (v ? v : ""))(nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim());
+  const fromEnv = ((v) => (v ? v : ""))(
+    nodeProcess?.env?.NOOK_COMPANION_WASM_PATH?.trim(),
+  );
   const cwd = ((v) => (v ? v : ""))(nodeProcess?.cwd?.());
   let join: NodePathJoin["join"] = (...parts: NodePathSegments) =>
     parts.join("/");
@@ -272,6 +274,6 @@ export const companionWasmReady: Promise<void> = startCompanionWasm().then(
       extension_sync_provider_credentials_scope,
       is_extension_connect_scope,
     };
-    configureExtensionConnectScopeRuntime(scopeRuntime);
+    ExtensionConnectScope.configureExtensionConnectScopeRuntime(scopeRuntime);
   },
 );

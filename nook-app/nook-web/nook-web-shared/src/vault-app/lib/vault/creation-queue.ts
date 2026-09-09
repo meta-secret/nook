@@ -32,24 +32,6 @@ export type VaultCreationQueue =
       request: PendingVaultCreation;
     };
 
-export function isSentinelParticipantResponsePending(
-  queue: VaultCreationQueue,
-): boolean {
-  return (
-    queue.kind === VaultCreationQueueKind.WaitingForDevice &&
-    queue.request.kind === PendingVaultCreationKind.SentinelParticipantResponse
-  );
-}
-
-export function isSentinelParticipantKeyPending(
-  queue: VaultCreationQueue,
-): boolean {
-  return (
-    queue.kind === VaultCreationQueueKind.WaitingForDevice &&
-    queue.request.kind === PendingVaultCreationKind.SentinelParticipantKey
-  );
-}
-
 export type PendingExistingVaultImport = {
   storeId: string;
   previousActiveVault: ActiveVault;
@@ -81,3 +63,23 @@ export type EnrollmentSubmitQueue =
       kind: EnrollmentSubmitQueueKind.WaitingForDevice;
       request: PendingEnrollmentSubmit;
     };
+
+export class PendingVaultCreationView {
+  constructor(private readonly value: VaultCreationQueue) {}
+  isSentinelParticipantResponsePending(): boolean {
+    const queue = this.value;
+    return (
+      queue.kind === VaultCreationQueueKind.WaitingForDevice &&
+      queue.request.kind ===
+        PendingVaultCreationKind.SentinelParticipantResponse
+    );
+  }
+
+  isSentinelParticipantKeyPending(): boolean {
+    const queue = this.value;
+    return (
+      queue.kind === VaultCreationQueueKind.WaitingForDevice &&
+      queue.request.kind === PendingVaultCreationKind.SentinelParticipantKey
+    );
+  }
+}

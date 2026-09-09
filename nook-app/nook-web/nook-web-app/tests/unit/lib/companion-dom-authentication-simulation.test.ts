@@ -9,9 +9,8 @@ import {
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { PasswordFormScopeKind } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
-  authenticationPageObservationFacts,
   FormSubmissionResult,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 import {
   DomAuthenticationSimulationOutcomeKind,
@@ -225,19 +224,22 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
-    const chatGptObservation = summarizeAuthenticationWorkflowForms().find(
-      ({ formScope }) =>
-        formScope.kind === PasswordFormScopeKind.Owned &&
-        formScope.owner.querySelector('#email'),
-    )
+    const chatGptObservation = passwordFormInteraction
+      .summarizeAuthenticationWorkflowForms()
+      .find(
+        ({ formScope }) =>
+          formScope.kind === PasswordFormScopeKind.Owned &&
+          formScope.owner.querySelector('#email'),
+      )
     if (!chatGptObservation) {
       throw new Error('expected ChatGPT destination evidence')
     }
-    const chatGptFacts = authenticationPageObservationFacts({
-      observation: chatGptObservation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const chatGptFacts =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: chatGptObservation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     const chatGptDetailed = chatGptFacts.detailedAdvanceControl
     if (!chatGptDetailed || chatGptDetailed.kind !== 'observed') {
       throw new Error('expected ChatGPT control observations')
@@ -306,19 +308,22 @@ describe('DOM-backed companion authentication simulation', () => {
     })
     expect(fieldValue('#email')).toBe(FAKE_CREDENTIALS.username)
     expect(document.querySelectorAll('input[type="password"]')).toHaveLength(0)
-    const openAiObservation = summarizeAuthenticationWorkflowForms().find(
-      ({ formScope }) =>
-        formScope.kind === PasswordFormScopeKind.Owned &&
-        formScope.owner.id === 'openai-identifier-form',
-    )
+    const openAiObservation = passwordFormInteraction
+      .summarizeAuthenticationWorkflowForms()
+      .find(
+        ({ formScope }) =>
+          formScope.kind === PasswordFormScopeKind.Owned &&
+          formScope.owner.id === 'openai-identifier-form',
+      )
     if (!openAiObservation) {
       throw new Error('expected OpenAI destination evidence')
     }
-    const openAiFacts = authenticationPageObservationFacts({
-      observation: openAiObservation,
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const openAiFacts =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: openAiObservation,
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     const openAiDetailed = openAiFacts.detailedAdvanceControl
     if (!openAiDetailed || openAiDetailed.kind !== 'observed') {
       throw new Error('expected OpenAI control observations')
@@ -410,9 +415,10 @@ describe('DOM-backed companion authentication simulation', () => {
       submittedControlIdentity: '',
     })
     expect(result.selectedRoot === document).toBe(true)
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) throw new Error('expected X authentication observation')
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -493,11 +499,12 @@ describe('DOM-backed companion authentication simulation', () => {
       filled: true,
       submissionResult: FormSubmissionResult.Submitted,
     })
-    const [observation] = summarizeAuthenticationWorkflowForms()
+    const [observation] =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
     if (!observation) {
       throw new Error('expected safe actionable authentication observation')
     }
-    const facts = authenticationPageObservationFacts({
+    const facts = passwordFormInteraction.authenticationPageObservationFacts({
       observation,
       authenticatorSetupHint: false,
       backupCodesHint: false,

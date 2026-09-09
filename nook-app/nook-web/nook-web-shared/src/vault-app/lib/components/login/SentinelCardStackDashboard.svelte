@@ -1,10 +1,10 @@
 <script lang="ts">
   type SentinelParticipation = {
-    readonly payload: string
-    readonly participantLabel: string
-  }
+    readonly payload: string;
+    readonly participantLabel: string;
+  };
 
-  import { I18N_KEYS, type I18nKey } from '../../../../generated/i18n-keys'
+  import { I18N_KEYS, type I18nKey } from "../../../../generated/i18n-keys";
   import {
     ArrowLeft,
     Check,
@@ -13,32 +13,32 @@
     Plus,
     RefreshCw,
     ShieldCheck,
-  } from '@lucide/svelte'
-  import EnrollmentQrCode from '$lib/components/EnrollmentQrCode.svelte'
+  } from "@lucide/svelte";
+  import EnrollmentQrCode from "$lib/components/EnrollmentQrCode.svelte";
   import {
-    copySentinelRequest,
-    runSentinelDashboardAction,
-  } from '$lib/components/login/sentinel-dashboard-actions'
-  import { SentinelCardOnboardingStage } from '$lib/components/login/sentinel-dashboard-state'
-  import { Button } from '$lib/components/ui/button'
-  import * as Select from '$lib/components/ui/select'
-  import type { VaultState } from '$lib/vault.svelte'
+    SentinelRequestClipboard as RequestClipboard,
+    SentinelDashboardInteraction as DashboardInteraction,
+  } from "$lib/components/login/sentinel-dashboard-actions";
+  import { SentinelCardOnboardingStage } from "$lib/components/login/sentinel-dashboard-state";
+  import { Button } from "$lib/components/ui/button";
+  import * as Select from "$lib/components/ui/select";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     SentinelGenesisPhase,
     sentinel_genesis_phase_translation_key,
     type NookSentinelGenesisDelivery,
     type NookSentinelGenesisParticipantStatus,
     type StartSentinelGenesisArgs,
-  } from '$app-wasm'
+  } from "$app-wasm";
 
   let {
     vault,
-    name = $bindable(''),
+    name = $bindable(""),
     participantCount = $bindable(3),
     threshold = $bindable(2),
     status,
     request,
-    participantResponse = '',
+    participantResponse = "",
     participants,
     deliveries,
     isBusy,
@@ -51,94 +51,94 @@
     onFinalize,
     onCompleteDelivery,
   }: {
-    vault: VaultState
-    name: string
-    participantCount: number
-    threshold: number
-    status: SentinelGenesisPhase
-    request: string
-    participantResponse?: string
-    participants: NookSentinelGenesisParticipantStatus[]
-    deliveries: NookSentinelGenesisDelivery[]
-    isBusy: boolean
-    initiatorFingerprint: string
-    initiatorKeyLoading: boolean
-    onPrepareInitiator: () => void | Promise<void>
-    onBack: () => void
-    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>
-    onAddParticipant: (args: SentinelParticipation) => void | Promise<void>
-    onFinalize: () => void | Promise<void>
-    onCompleteDelivery: () => void | Promise<void>
-  } = $props()
+    vault: VaultState;
+    name: string;
+    participantCount: number;
+    threshold: number;
+    status: SentinelGenesisPhase;
+    request: string;
+    participantResponse?: string;
+    participants: NookSentinelGenesisParticipantStatus[];
+    deliveries: NookSentinelGenesisDelivery[];
+    isBusy: boolean;
+    initiatorFingerprint: string;
+    initiatorKeyLoading: boolean;
+    onPrepareInitiator: () => void | Promise<void>;
+    onBack: () => void;
+    onStart: (args: StartSentinelGenesisArgs) => Promise<boolean>;
+    onAddParticipant: (args: SentinelParticipation) => void | Promise<void>;
+    onFinalize: () => void | Promise<void>;
+    onCompleteDelivery: () => void | Promise<void>;
+  } = $props();
 
-  let response = $state('')
-  let loadedParticipantResponse = $state('')
-  let participantLabel = $state('')
-  let actionBusy = $state(false)
-  let copied = $state(false)
-  let selected = $state(0)
-  let participantInputError = $state('')
-  let deliveriesAcknowledged = $state(false)
+  let response = $state("");
+  let loadedParticipantResponse = $state("");
+  let participantLabel = $state("");
+  let actionBusy = $state(false);
+  let copied = $state(false);
+  let selected = $state(0);
+  let participantInputError = $state("");
+  let deliveriesAcknowledged = $state(false);
   let onboardingStage = $state<SentinelCardOnboardingStage>(
     SentinelCardOnboardingStage.Identity,
-  )
+  );
 
   const canFinalize = $derived(
     status === SentinelGenesisPhase.ReadyToFinalize ||
       status === SentinelGenesisPhase.AwaitingCompletionCheck,
-  )
+  );
 
-  const t: VaultState['t'] = (request) => vault.t(request)
+  const t: VaultState["t"] = (request) => vault.t(request);
 
   function rosterLabel(key: I18nKey) {
-    const translation: Parameters<VaultState['t']>[0] = {
+    return t({
       key,
       replacements: { count: String(availableRosterSlots) },
-    }
-    return t(translation)
+    });
   }
 
   function policyLabel(key: I18nKey) {
-    const translation: Parameters<VaultState['t']>[0] = {
+    return t({
       key,
       replacements: {
         count: String(participantCount),
         threshold: String(threshold),
       },
-    }
-    return t(translation)
+    });
   }
 
-  const requestCopy = $derived<Parameters<typeof copySentinelRequest>[0]>({
+  const requestCopy = $derived<
+    ConstructorParameters<typeof RequestClipboard>[0]
+  >({
     request,
     onCopied: () => {
-      copied = true
-      setTimeout(() => (copied = false), 1500)
+      copied = true;
+      setTimeout(() => (copied = false), 1500);
     },
     onFailure: () =>
       (vault.errorMsg = t(I18N_KEYS.LoginSentinelGenesisCopyFailed)),
-  })
+  });
 
   const finalization = $derived<
-    Parameters<typeof runSentinelDashboardAction>[0]
+    ConstructorParameters<typeof DashboardInteraction>[0]
   >({
     allowed: canFinalize && !isBusy && !actionBusy,
     setBusy: (value) => (actionBusy = value),
     action: onFinalize,
-  })
+  });
 
   const memberDeliveries = $derived(
     deliveries.filter((delivery) => delivery.deviceId !== vault.deviceId),
-  )
+  );
   const initiatorKeyReady = $derived(
     Boolean(participants[0]?.fingerprint || initiatorFingerprint),
-  )
+  );
   const rosterCount = $derived(
     initiatorKeyReady ? Math.max(1, participants.length) : 0,
-  )
+  );
   const availableRosterSlots = $derived(
     Math.max(0, participantCount - rosterCount),
-  )
+  );
   const policyValid = $derived(
     name.trim().length > 0 &&
       Number.isInteger(participantCount) &&
@@ -147,7 +147,7 @@
       Number.isInteger(threshold) &&
       threshold >= 2 &&
       threshold <= participantCount,
-  )
+  );
   const onboardingStep = $derived(
     onboardingStage === SentinelCardOnboardingStage.Identity
       ? 0
@@ -157,75 +157,74 @@
         : onboardingStage === SentinelCardOnboardingStage.Roster
           ? 2
           : 3,
-  )
+  );
 
   $effect(() => {
-    const incomingResponse = participantResponse.trim()
+    const incomingResponse = participantResponse.trim();
     if (
       incomingResponse &&
       incomingResponse !== loadedParticipantResponse &&
       status === SentinelGenesisPhase.CollectingParticipants
     ) {
-      response = incomingResponse
-      loadedParticipantResponse = incomingResponse
-      participantInputError = ''
+      response = incomingResponse;
+      loadedParticipantResponse = incomingResponse;
+      participantInputError = "";
     }
-  })
+  });
 
   $effect(() => {
     if (status === SentinelGenesisPhase.CollectingParticipants) {
-      onboardingStage = SentinelCardOnboardingStage.Roster
+      onboardingStage = SentinelCardOnboardingStage.Roster;
     } else if (status !== SentinelGenesisPhase.Inactive) {
-      onboardingStage = SentinelCardOnboardingStage.Build
+      onboardingStage = SentinelCardOnboardingStage.Build;
     } else if (
       initiatorKeyReady &&
       (onboardingStage === SentinelCardOnboardingStage.Identity ||
         onboardingStage === SentinelCardOnboardingStage.Build ||
         onboardingStage === SentinelCardOnboardingStage.Roster)
     ) {
-      onboardingStage = SentinelCardOnboardingStage.Name
+      onboardingStage = SentinelCardOnboardingStage.Name;
     } else if (!initiatorKeyReady) {
-      onboardingStage = SentinelCardOnboardingStage.Identity
+      onboardingStage = SentinelCardOnboardingStage.Identity;
     }
-  })
+  });
 
   function changeParticipantCount(value: string) {
-    if (!value) return
-    participantCount = Number(value)
+    if (!value) return;
+    participantCount = Number(value);
   }
 
   function changeThreshold(value: string) {
-    if (!value) return
-    threshold = Number(value)
+    if (!value) return;
+    threshold = Number(value);
   }
 
   function continueToPolicy() {
-    if (!initiatorKeyReady || !name.trim() || isBusy || actionBusy) return
-    onboardingStage = SentinelCardOnboardingStage.Policy
+    if (!initiatorKeyReady || !name.trim() || isBusy || actionBusy) return;
+    onboardingStage = SentinelCardOnboardingStage.Policy;
   }
 
   async function continueToRoster() {
-    if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return
-    actionBusy = true
+    if (!initiatorKeyReady || !policyValid || isBusy || actionBusy) return;
+    actionBusy = true;
     try {
-      const onStartArgs: Parameters<typeof onStart>[0] = {
+      const started = await onStart({
         label: name.trim(),
         participantCount,
         threshold,
-      }
-      const started = await onStart(onStartArgs)
+      });
       if (started !== false) {
-        onboardingStage = SentinelCardOnboardingStage.Roster
+        onboardingStage = SentinelCardOnboardingStage.Roster;
       }
     } catch {
       // The vault action publishes the core error through the shared error UI.
     } finally {
-      actionBusy = false
+      actionBusy = false;
     }
   }
 
   async function addParticipant() {
-    const payload = response.trim()
+    const payload = response.trim();
     if (
       !payload ||
       status !== SentinelGenesisPhase.CollectingParticipants ||
@@ -233,25 +232,24 @@
       isBusy ||
       actionBusy
     )
-      return
-    actionBusy = true
+      return;
+    actionBusy = true;
     try {
-      const onAddParticipantArgs: Parameters<typeof onAddParticipant>[0] = {
+      await onAddParticipant({
         payload,
         participantLabel: participantLabel.trim(),
-      }
-      await onAddParticipant(onAddParticipantArgs)
-      response = ''
-      participantLabel = ''
-      participantInputError = ''
-      selected = participants.length
+      });
+      response = "";
+      participantLabel = "";
+      participantInputError = "";
+      selected = participants.length;
     } catch {
       participantInputError = t(
         I18N_KEYS.LoginSentinelGenesisParticipantImportFailed,
-      )
-      vault.errorMsg = participantInputError
+      );
+      vault.errorMsg = participantInputError;
     } finally {
-      actionBusy = false
+      actionBusy = false;
     }
   }
 </script>
@@ -299,28 +297,28 @@
       {#each [t(I18N_KEYS.LoginSentinelOnboardingStepKeys), t(I18N_KEYS.LoginSentinelOnboardingStepShares), t(I18N_KEYS.LoginSentinelOnboardingStepDevices), t(I18N_KEYS.LoginSentinelOnboardingStepBuild)] as label, index (label)}
         <li
           class={[
-            'flex items-center gap-3 rounded-lg px-3 py-3 transition-colors',
+            "flex items-center gap-3 rounded-lg px-3 py-3 transition-colors",
             index === onboardingStep
-              ? 'bg-[#79dfff]/10 text-white'
+              ? "bg-[#79dfff]/10 text-white"
               : index < onboardingStep
-                ? 'text-[#63eaa1]'
-                : 'text-[#66737e]',
+                ? "text-[#63eaa1]"
+                : "text-[#66737e]",
           ]}
-          data-current={index === onboardingStep ? 'step' : false}
+          data-current={index === onboardingStep ? "step" : false}
         >
           <span
             class={[
-              'grid size-7 shrink-0 place-items-center rounded-full border font-mono text-[10px]',
+              "grid size-7 shrink-0 place-items-center rounded-full border font-mono text-[10px]",
               index < onboardingStep
-                ? 'border-[#63eaa1] bg-[#63eaa1]/10'
+                ? "border-[#63eaa1] bg-[#63eaa1]/10"
                 : index === onboardingStep
-                  ? 'border-[#79dfff] bg-[#79dfff]/10 text-[#79dfff]'
-                  : 'border-white/15',
+                  ? "border-[#79dfff] bg-[#79dfff]/10 text-[#79dfff]"
+                  : "border-white/15",
             ]}
           >
             {#if index < onboardingStep}<Check
                 class="size-3.5"
-              />{:else}{String(index + 1).padStart(2, '0')}{/if}
+              />{:else}{String(index + 1).padStart(2, "0")}{/if}
           </span>
           <span class="text-[10px] font-semibold tracking-[0.12em] uppercase">
             {label}
@@ -354,11 +352,11 @@
         {/if}
         <div class="mt-5 space-y-3">
           <button
-            class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === 0 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
+            class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === 0 ? "border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]" : "border-white/5 border-l-[#657580] bg-[#303840]/85"}`}
             data-testid="sentinel-onboarding-create-keys"
             onclick={() => {
-              selected = 0
-              if (!initiatorKeyReady) void onPrepareInitiator()
+              selected = 0;
+              if (!initiatorKeyReady) void onPrepareInitiator();
             }}
           >
             <span
@@ -427,19 +425,19 @@
 
           {#each participants.slice(1) as participant, index (participant.deviceId)}
             <button
-              class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === index + 1 ? 'border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]' : 'border-white/5 border-l-[#657580] bg-[#303840]/85'}`}
+              class={`grid w-full grid-cols-[auto_1fr_auto] items-center gap-5 border border-l-2 px-5 py-5 text-left transition ${selected === index + 1 ? "border-[#6ed9ff] bg-[#3b4650] shadow-[0_0_30px_rgb(82_198_238/0.08)]" : "border-white/5 border-l-[#657580] bg-[#303840]/85"}`}
               onclick={() => (selected = index + 1)}
             >
               <span
                 class="grid size-10 place-items-center border border-[#71808b] bg-[#202830] font-mono text-[9px] text-[#b9c5ce]"
               >
-                P-{String(index + 2).padStart(2, '0')}
+                P-{String(index + 2).padStart(2, "0")}
               </span>
               <span class="min-w-0">
                 <b class="block truncate text-sm">
                   {participant.label || participant.deviceId} ·
                   {t(I18N_KEYS.LoginSentinelCardStackParticipant)}
-                  {String(index + 2).padStart(2, '0')}
+                  {String(index + 2).padStart(2, "0")}
                 </b>
                 <span
                   class="mt-1 block truncate font-mono text-[10px] text-[#a0abb5]"
@@ -735,7 +733,8 @@
               disabled={!canFinalize || isBusy || actionBusy}
               class="rounded-md bg-[#46e56f] px-7 py-4 text-xs font-bold tracking-wide text-[#112218] uppercase shadow-[0_12px_30px_rgb(45_225_99/0.18)] disabled:opacity-25"
               data-testid="sentinel-genesis-finalize"
-              onclick={() => void runSentinelDashboardAction(finalization)}
+              onclick={() =>
+                void new DashboardInteraction(finalization).execute()}
             >
               {#if actionBusy}<RefreshCw
                   class="mr-2 inline size-4 animate-spin"
@@ -923,7 +922,8 @@
                         variant="outline"
                         class="border-white/20 bg-transparent text-white hover:bg-white/10 hover:text-white"
                         data-testid="sentinel-genesis-copy-request"
-                        onclick={() => void copySentinelRequest(requestCopy)}
+                        onclick={() =>
+                          void new RequestClipboard(requestCopy).execute()}
                       >
                         <Copy class="size-4" />
                         {copied

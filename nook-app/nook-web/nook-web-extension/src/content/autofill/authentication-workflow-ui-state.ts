@@ -1,9 +1,12 @@
 import {
-  authenticationWorkflowScopesMatch,
-  liveApprovedAuthenticationWorkflow,
+  AuthenticationWorkflowScopeComparison,
+  LiveApprovedAuthenticationWorkflow,
 } from '../../../../nook-web-shared/src/extension/password-form-classified-observations'
+
 import type { PasswordFormObservation } from '../../../../nook-web-shared/src/extension/password-forms'
-import { detectEnrollmentHints } from '../enrollment-flow'
+
+import { authenticatorEnrollmentInteraction } from '../enrollment-flow'
+
 import { WidgetWorkflowRootKind, widgetState } from './state'
 
 type PasskeyWidgetStatusUpdate = {
@@ -13,31 +16,39 @@ type PasskeyWidgetStatusUpdate = {
   enableContinue: boolean
 }
 
-export function setStatus({
-  description,
-  continueButton,
-  text,
-  enableContinue,
-}: PasskeyWidgetStatusUpdate): void {
-  description.textContent = text
-  continueButton.disabled = !enableContinue || widgetState.busy
+/** Owns the browser runtime resources shared by these interactions. */
+type AuthenticationWorkflowUiContext = {
+  readonly widgetState: typeof widgetState
 }
+class AuthenticationWorkflowUi {
+  constructor(private readonly ui: AuthenticationWorkflowUiContext) {}
 
-export function approvedWorkflowIsStillCurrent(
-  workflow: PasswordFormObservation,
-): boolean {
-  const rendered = widgetState.renderedWorkflowRoot
-  if (rendered.kind !== WidgetWorkflowRootKind.Assigned) return false
-  const scopePair: Parameters<typeof authenticationWorkflowScopesMatch>[0] = {
-    left: rendered.observation,
-    right: workflow,
+  setStatus({
+    description,
+    continueButton,
+    text,
+    enableContinue,
+  }: PasskeyWidgetStatusUpdate): void {
+    description.textContent = text
+    continueButton.disabled = !enableContinue || this.ui.widgetState.busy
   }
-  if (!authenticationWorkflowScopesMatch(scopePair)) {
-    return false
-  }
-  const hints = detectEnrollmentHints()
-  const liveRequest: Parameters<typeof liveApprovedAuthenticationWorkflow>[0] =
-    {
+
+  approvedWorkflowIsStillCurrent(workflow: PasswordFormObservation): boolean {
+    const rendered = this.ui.widgetState.renderedWorkflowRoot
+    if (rendered.kind !== WidgetWorkflowRootKind.Assigned) return false
+    const scopePair: ConstructorParameters<
+      typeof AuthenticationWorkflowScopeComparison
+    >[0] = {
+      left: rendered.observation,
+      right: workflow,
+    }
+    if (!new AuthenticationWorkflowScopeComparison(scopePair).matches) {
+      return false
+    }
+    const hints = authenticatorEnrollmentInteraction.detectEnrollmentHints()
+    const liveRequest: ConstructorParameters<
+      typeof LiveApprovedAuthenticationWorkflow
+    >[0] = {
       approved: {
         observation: rendered.observation,
         facts: rendered.facts,
@@ -45,5 +56,10 @@ export function approvedWorkflowIsStillCurrent(
       authenticatorSetupHint: hints.qr,
       backupCodesHint: hints.backupCodes,
     }
-  return liveApprovedAuthenticationWorkflow(liveRequest)
+    return new LiveApprovedAuthenticationWorkflow(liveRequest).observation
+  }
 }
+
+export const authenticationWorkflowUi = new AuthenticationWorkflowUi({
+  widgetState,
+})

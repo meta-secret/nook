@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest'
 import { NookSecretTypeFilter } from '$app-wasm'
-import { loadSecretPage, refreshSecretsFromSession } from '$lib/vault/secrets'
+import { VaultSecretActions } from '$lib/vault/secrets'
 import type { VaultState } from '$lib/vault.svelte'
 
 type PageRecord = { label: string; free: ReturnType<typeof vi.fn> }
@@ -52,13 +52,11 @@ describe('loadSecretPage', () => {
       secretQuery: '',
     } as unknown as VaultState
 
-    const olderRequest = loadSecretPage({
-      state: state,
+    const olderRequest = new VaultSecretActions(state).loadSecretPage({
       query: 'older',
       requestedOffset: 0,
     })
-    const newerRequest = loadSecretPage({
-      state: state,
+    const newerRequest = new VaultSecretActions(state).loadSecretPage({
       query: 'newer',
       requestedOffset: 0,
     })
@@ -98,14 +96,15 @@ describe('loadSecretPage', () => {
       secretQuery: 'vault',
     } as unknown as VaultState
 
-    const paginationRequest = loadSecretPage({
-      state: state,
+    const paginationRequest = new VaultSecretActions(state).loadSecretPage({
       query: 'vault',
       requestedOffset: 25,
     })
     expect(state.secretPageOffset).toBe(0)
     expect(state.secretPageRequestOffset).toBe(25)
-    const maintenanceRefresh = refreshSecretsFromSession(state)
+    const maintenanceRefresh = new VaultSecretActions(
+      state,
+    ).refreshSecretsFromSession()
     maintenance.resolve(refreshedPage.page)
     await maintenanceRefresh
     pagination.resolve(paginatedPage.page)

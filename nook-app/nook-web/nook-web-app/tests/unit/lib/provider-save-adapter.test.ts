@@ -25,8 +25,8 @@ import type {
   ProviderSaveContext,
 } from '$lib/vault/action-contexts'
 import {
-  applyActiveProviderCredentials,
-  ensureProviderSaved,
+  ActiveProviderCredentialsActions,
+  ProviderPersistenceActions,
 } from '$lib/vault/providers.svelte'
 import type { TranslationRequest } from '$lib/vault/translation'
 import {
@@ -139,7 +139,7 @@ describe('provider save web adapter', () => {
   test('applies a saved GitHub provider through the portable projection', () => {
     const state = projectionState(githubProvider())
 
-    applyActiveProviderCredentials(state)
+    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
 
     expect(state.storageMode).toBe(GITHUB_PROVIDER_TYPE)
     expect(state.githubPat).toBe('pat')
@@ -155,7 +155,7 @@ describe('provider save web adapter', () => {
     })
     const state = projectionState(oauthProvider(oauthFile))
 
-    applyActiveProviderCredentials(state)
+    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
 
     expect(state.storageMode).toBe(OAUTH_FILE_PROVIDER_TYPE)
     expect(state.githubRepo).toBe('portable-vault.yaml')
@@ -170,7 +170,7 @@ describe('provider save web adapter', () => {
     }
     const state = projectionState(localFolderProvider(localFolder))
 
-    applyActiveProviderCredentials(state)
+    new ActiveProviderCredentialsActions(state).applyActiveProviderCredentials()
 
     expect(state.storageMode).toBe(LOCAL_FOLDER_PROVIDER_TYPE)
     expect(state.configureLocalFolder).toHaveBeenCalledWith(localFolder)
@@ -181,7 +181,9 @@ describe('provider save web adapter', () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
     state.providers = [githubProvider()]
 
-    const saved = await ensureProviderSaved(state)
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
 
     expect(saved).toBe(false)
     expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageDuplicateSyncProvider)
@@ -191,7 +193,9 @@ describe('provider save web adapter', () => {
   test('maps a missing local folder to translated state', async () => {
     const state = providerState(LOCAL_FOLDER_PROVIDER_TYPE)
 
-    const saved = await ensureProviderSaved(state)
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
 
     expect(saved).toBe(false)
     expect(state.errorMsg).toBe(I18N_KEYS.AuthStorageLocalFolderChooseErr)
@@ -201,7 +205,9 @@ describe('provider save web adapter', () => {
   test('applies and persists a successful provider snapshot', async () => {
     const state = providerState(GITHUB_PROVIDER_TYPE)
 
-    const saved = await ensureProviderSaved(state)
+    const saved = await new ProviderPersistenceActions(
+      state,
+    ).ensureProviderSaved()
 
     expect(saved).toBe(true)
     expect(state.providers).toHaveLength(1)

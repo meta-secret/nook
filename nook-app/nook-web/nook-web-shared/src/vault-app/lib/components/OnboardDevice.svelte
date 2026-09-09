@@ -1,16 +1,16 @@
 <script lang="ts">
   type EnrollmentCodeIssue = {
-    readonly entryId: PasswordEntryId
-    readonly password: string
-    readonly providerId: string
-  }
+    readonly entryId: PasswordEntryId;
+    readonly password: string;
+    readonly providerId: string;
+  };
 
   type VaultPasswordCreation = {
-    readonly label: string
-    readonly password: string
-  }
+    readonly label: string;
+    readonly password: string;
+  };
 
-  import { I18N_KEYS } from '../../../generated/i18n-keys'
+  import { I18N_KEYS } from "../../../generated/i18n-keys";
   import {
     ChevronLeft,
     Cloud,
@@ -18,44 +18,41 @@
     Plus,
     QrCode,
     RefreshCw,
-  } from '@lucide/svelte'
-  import EnrollmentOnboardResult from '$lib/components/EnrollmentOnboardResult.svelte'
-  import GitHubProviderSetupWizard from '$lib/components/GitHubProviderSetupWizard.svelte'
-  import LocalFolderProviderSetupWizard from '$lib/components/LocalFolderProviderSetupWizard.svelte'
-  import OAuthProviderSetupWizard from '$lib/components/OAuthProviderSetupWizard.svelte'
-  import ProviderPicker from '$lib/components/ProviderPicker.svelte'
-  import ProviderSetupFields from '$lib/components/ProviderSetupFields.svelte'
-  import SetupWizardStep from '$lib/components/SetupWizardStep.svelte'
-  import OnboardDevicePasswordStep from '$lib/components/onboard-device/OnboardDevicePasswordStep.svelte'
-  import SentinelOnboardingGuidance from '$lib/components/onboard-device/SentinelOnboardingGuidance.svelte'
-  import { Button } from '$lib/components/ui/button'
-  import {
-    buildEnrollmentLink,
-    getEnrollmentLinkBase,
-  } from '$lib/enrollment/code'
+  } from "@lucide/svelte";
+  import EnrollmentOnboardResult from "$lib/components/EnrollmentOnboardResult.svelte";
+  import GitHubProviderSetupWizard from "$lib/components/GitHubProviderSetupWizard.svelte";
+  import LocalFolderProviderSetupWizard from "$lib/components/LocalFolderProviderSetupWizard.svelte";
+  import OAuthProviderSetupWizard from "$lib/components/OAuthProviderSetupWizard.svelte";
+  import ProviderPicker from "$lib/components/ProviderPicker.svelte";
+  import ProviderSetupFields from "$lib/components/ProviderSetupFields.svelte";
+  import SetupWizardStep from "$lib/components/SetupWizardStep.svelte";
+  import OnboardDevicePasswordStep from "$lib/components/onboard-device/OnboardDevicePasswordStep.svelte";
+  import SentinelOnboardingGuidance from "$lib/components/onboard-device/SentinelOnboardingGuidance.svelte";
+  import { Button } from "$lib/components/ui/button";
+  import { enrollmentBrowser } from "$lib/enrollment/code";
   import {
     GITHUB_PROVIDER_TYPE,
     GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-    isICloudProvider,
+    StorageProviderPresentation,
     localizedProviderStorageDetail,
     localizeProviderLabel,
     type ProviderSetupRequest,
     type StorageProvider,
     type StorageProviderType,
-  } from '$lib/auth/providers'
+  } from "$lib/auth/providers";
   import {
     peek_enrollment_issued_at,
     type NookPasswordEntrySummary,
     type PasswordEntryId,
-  } from '$app-wasm'
-  import type { VaultState } from '$lib/vault.svelte'
+  } from "$app-wasm";
+  import type { VaultState } from "$lib/vault.svelte";
   import {
     LoginSetupKind,
     OAuthFileDraftKind,
     OAuthSetupPresetKind,
     type LoginSetup,
-  } from '$lib/vault/state/provider.svelte'
-  import { OnboardingType, VaultType } from '$lib/vault/architecture-model'
+  } from "$lib/vault/state/provider.svelte";
+  import { OnboardingType, VaultType } from "$lib/vault/architecture-model";
   import {
     CompatibleProviderSelectionKind,
     firstCompatibleProvider,
@@ -63,7 +60,7 @@
     providerCapabilityLabelKey,
     provider_onboarding_type,
     provider_supports_replication,
-  } from '$lib/vault/architecture-model'
+  } from "$lib/vault/architecture-model";
   import {
     PasswordEntrySelectionKind,
     ProviderSelectionKind,
@@ -73,7 +70,7 @@
     type ProviderSelection,
     type ResolvedOnboardingPassword,
     type ResolvedOnboardingProvider,
-  } from './onboard-device-state'
+  } from "./onboard-device-state";
 
   let {
     vault,
@@ -86,8 +83,8 @@
     isInitializing,
     addProviderOpen = false,
     loginSetup,
-    githubPat = $bindable(''),
-    githubRepo = $bindable(''),
+    githubPat = $bindable(""),
+    githubRepo = $bindable(""),
     onIssueCode,
     onClearCode,
     onAddPassword,
@@ -97,30 +94,30 @@
     onCancelSetup,
     onConnectProvider,
   }: {
-    vault: VaultState
-    syncProviders: StorageProvider[]
-    passwordEntries: NookPasswordEntrySummary[]
-    enrollmentCode: string
-    isBusy: boolean
-    passwordError: string
-    isVerifying: boolean
-    isInitializing: boolean
-    addProviderOpen?: boolean
-    loginSetup: LoginSetup
-    githubPat: string
-    githubRepo: string
-    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>
-    onClearCode: () => void
-    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>
-    onBeginAddProvider?: () => void
-    onCancelAddProvider?: () => void
-    onBeginSetup: (request: ProviderSetupRequest) => void
-    onCancelSetup: () => void
-    onConnectProvider: () => void | Promise<void>
-  } = $props()
+    vault: VaultState;
+    syncProviders: StorageProvider[];
+    passwordEntries: NookPasswordEntrySummary[];
+    enrollmentCode: string;
+    isBusy: boolean;
+    passwordError: string;
+    isVerifying: boolean;
+    isInitializing: boolean;
+    addProviderOpen?: boolean;
+    loginSetup: LoginSetup;
+    githubPat: string;
+    githubRepo: string;
+    onIssueCode: (args: EnrollmentCodeIssue) => Promise<string>;
+    onClearCode: () => void;
+    onAddPassword: (args: VaultPasswordCreation) => void | Promise<void>;
+    onBeginAddProvider?: () => void;
+    onCancelAddProvider?: () => void;
+    onBeginSetup: (request: ProviderSetupRequest) => void;
+    onCancelSetup: () => void;
+    onConnectProvider: () => void | Promise<void>;
+  } = $props();
 
-  const hasPasswords = $derived(passwordEntries.length > 0)
-  const hasSyncProviders = $derived(syncProviders.length > 0)
+  const hasPasswords = $derived(passwordEntries.length > 0);
+  const hasSyncProviders = $derived(syncProviders.length > 0);
   const compatibleSyncProviders = $derived(
     syncProviders.filter((provider) =>
       provider_supports_replication(
@@ -128,57 +125,57 @@
         vault.vaultArchitecture.replication_type,
       ),
     ),
-  )
+  );
   const hasCompatibleSyncProviders = $derived(
     compatibleSyncProviders.length > 0,
-  )
-  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active)
+  );
+  const showSetup = $derived(loginSetup.kind === LoginSetupKind.Active);
   function setupIs(type: StorageProviderType): boolean {
     return (
       loginSetup.kind === LoginSetupKind.Active &&
       loginSetup.providerType === type
-    )
+    );
   }
-  const addingProvider = $derived(addProviderOpen || showSetup)
+  const addingProvider = $derived(addProviderOpen || showSetup);
   const oauthPreset = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured
       ? vault.oauthFileDraft.config.preset
       : vault.oauthSetupSelection.kind === OAuthSetupPresetKind.Selected
         ? vault.oauthSetupSelection.preset
         : GOOGLE_DRIVE_OAUTH_FILE_PRESET,
-  )
+  );
   const isSentinelVault = $derived(
     vault.vaultArchitecture.vault_type === VaultType.Sentinel,
-  )
+  );
   const sentinelReadyParticipants = $derived(
     ((v) => (v ? v : 0))(vault.vaultArchitecture.sentinel_ready_participants),
-  )
+  );
   const sentinelRequiredParticipants = $derived(
     ((v) => (v ? v : 0))(
       vault.vaultArchitecture.sentinel_required_participants,
     ),
-  )
+  );
 
   let selectedProviderIdState = $state<ProviderSelection>({
     kind: ProviderSelectionKind.Automatic,
-  })
+  });
   let passwordEntry = $state<PasswordEntrySelection>({
     kind: PasswordEntrySelectionKind.NotSelected,
-  })
-  let passwordInput = $state('')
-  let localError = $state('')
-  let isGenerating = $state(false)
+  });
+  let passwordInput = $state("");
+  let localError = $state("");
+  let isGenerating = $state(false);
 
-  let passwordStepOpen = $state(true)
-  let syncStepOpen = $state(false)
-  let generateStepOpen = $state(false)
+  let passwordStepOpen = $state(true);
+  let syncStepOpen = $state(false);
+  let generateStepOpen = $state(false);
 
   function onSelectPasswordEntry(entryId: PasswordEntryId): void {
     passwordEntry = {
       kind: PasswordEntrySelectionKind.Selected,
       entryId,
-    }
-    passwordInput = ''
+    };
+    passwordInput = "";
   }
 
   const effectiveProviderId = $derived.by(() => {
@@ -188,29 +185,29 @@
       providers: syncProviders,
       replicationType: vault.vaultArchitecture.replication_type,
       preference: selectedProviderIdState,
-    }
-    const selection = firstCompatibleProvider(firstCompatibleProviderArgs)
+    };
+    const selection = firstCompatibleProvider(firstCompatibleProviderArgs);
     return selection.kind === CompatibleProviderSelectionKind.Selected
       ? selection.provider.id
-      : ''
-  })
+      : "";
+  });
   const effectivePasswordEntryId = $derived.by(() => {
     if (passwordEntry.kind === PasswordEntrySelectionKind.Selected) {
-      const selectedEntryId = passwordEntry.entryId
+      const selectedEntryId = passwordEntry.entryId;
       if (passwordEntries.some((entry) => entry.id === selectedEntryId)) {
-        return selectedEntryId
+        return selectedEntryId;
       }
     }
-    return ''
-  })
+    return "";
+  });
   const selectedProvider = $derived.by((): ResolvedOnboardingProvider => {
     const provider = syncProviders.find(
       (candidate) => candidate.id === effectiveProviderId,
-    )
+    );
     return provider
       ? { kind: ResolvedOnboardingProviderKind.Available, provider }
-      : { kind: ResolvedOnboardingProviderKind.Unavailable }
-  })
+      : { kind: ResolvedOnboardingProviderKind.Unavailable };
+  });
   const derivedOnboardingType = $derived(
     selectedProvider.kind === ResolvedOnboardingProviderKind.Available
       ? provider_onboarding_type(
@@ -218,54 +215,58 @@
           vault.vaultArchitecture,
         )
       : vault_architecture_onboarding_type(vault.vaultArchitecture),
-  )
+  );
   const usesSharedProviderGrant = $derived(
     derivedOnboardingType === OnboardingType.SharedProviderGrant,
-  )
+  );
   const onboardingTypeTitleKey = $derived(
     derivedOnboardingType === OnboardingType.SharedProviderGrant
       ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantTitle
       : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferTitle,
-  )
+  );
   const onboardingTypeDescriptionKey = $derived(
     derivedOnboardingType === OnboardingType.SharedProviderGrant
       ? I18N_KEYS.ArchitectureModesOnboardingTypeSharedProviderGrantDescription
       : I18N_KEYS.ArchitectureModesOnboardingTypePersonalCredentialTransferDescription,
-  )
+  );
   const requiresSharedJoinerIdentity = $derived(
     usesSharedProviderGrant &&
       selectedProvider.kind === ResolvedOnboardingProviderKind.Available &&
-      !isICloudProvider(selectedProvider.provider),
-  )
+      !new StorageProviderPresentation(
+        selectedProvider.provider,
+      ).isICloudProvider(),
+  );
   const selectedPassword = $derived.by((): ResolvedOnboardingPassword => {
     const entry = passwordEntries.find(
       (candidate) => candidate.id === effectivePasswordEntryId,
-    )
+    );
     return entry
       ? { kind: ResolvedOnboardingPasswordKind.Available, entry }
-      : { kind: ResolvedOnboardingPasswordKind.Unavailable }
-  })
+      : { kind: ResolvedOnboardingPasswordKind.Unavailable };
+  });
   const hasPasswordSelection = $derived(
     selectedPassword.kind === ResolvedOnboardingPasswordKind.Available,
-  )
+  );
   const wizardReady = $derived(
     hasPasswordSelection && hasCompatibleSyncProviders,
-  )
+  );
   const enrollmentLink = $derived.by(() => {
-    if (!enrollmentCode) return ''
-    const enrollmentLinkRequest: Parameters<typeof buildEnrollmentLink>[0] = {
+    if (!enrollmentCode) return "";
+    const enrollmentLinkRequest: Parameters<
+      typeof enrollmentBrowser.buildEnrollmentLink
+    >[0] = {
       code: enrollmentCode,
-      baseUrl: getEnrollmentLinkBase(),
-    }
-    return buildEnrollmentLink(enrollmentLinkRequest)
-  })
+      baseUrl: enrollmentBrowser.getEnrollmentLinkBase(),
+    };
+    return enrollmentBrowser.buildEnrollmentLink(enrollmentLinkRequest);
+  });
   const issuedAt = $derived.by(() => {
-    if (!enrollmentCode) return ''
-    return peek_enrollment_issued_at(enrollmentCode)
-  })
+    if (!enrollmentCode) return "";
+    return peek_enrollment_issued_at(enrollmentCode);
+  });
   const showGenerating = $derived(
     (isGenerating || isBusy) && !enrollmentCode && !localError,
-  )
+  );
 
   const passwordStepSubtitle = $derived(
     selectedPassword.kind === ResolvedOnboardingPasswordKind.Available
@@ -275,8 +276,8 @@
             replacements: {
               label: selectedPassword.entry.label,
             },
-          }
-          return vault.t(tArgs2)
+          };
+          return vault.t(tArgs2);
         })()
       : hasPasswords
         ? passwordEntries.length === 1
@@ -287,11 +288,11 @@
                 replacements: {
                   count: String(passwordEntries.length),
                 },
-              }
-              return vault.t(tArgs)
+              };
+              return vault.t(tArgs);
             })()
         : vault.t(I18N_KEYS.OnboardDeviceWizardPasswordSubtitle),
-  )
+  );
 
   const syncStepSubtitle = $derived(
     hasCompatibleSyncProviders
@@ -304,16 +305,16 @@
                   const localizeProviderLabelArgs: Parameters<
                     typeof localizeProviderLabel
                   >[0] = {
-                    label: ((v) => (v ? v : ''))(
+                    label: ((v) => (v ? v : ""))(
                       compatibleSyncProviders[0]?.label,
                     ),
                     t: vault.t,
-                  }
-                  return localizeProviderLabel(localizeProviderLabelArgs)
+                  };
+                  return localizeProviderLabel(localizeProviderLabelArgs);
                 })(),
               },
-            }
-            return vault.t(translationRequest)
+            };
+            return vault.t(translationRequest);
           })()
         : (() => {
             const tArgs3: Parameters<typeof vault.t>[0] = {
@@ -321,87 +322,87 @@
               replacements: {
                 count: String(compatibleSyncProviders.length),
               },
-            }
-            return vault.t(tArgs3)
+            };
+            return vault.t(tArgs3);
           })()
       : hasSyncProviders
         ? vault.t(I18N_KEYS.OnboardDeviceNoCompatibleSyncProviders)
         : hasPasswords
           ? vault.t(I18N_KEYS.OnboardDeviceWizardSyncSubtitle)
           : vault.t(I18N_KEYS.LoginWizardAvailableAfterConnect),
-  )
+  );
 
   const generateStepSubtitle = $derived(
     wizardReady
       ? vault.t(I18N_KEYS.OnboardDeviceWizardGenerateSubtitleReady)
       : vault.t(I18N_KEYS.OnboardDeviceWizardGenerateSubtitleLocked),
-  )
+  );
 
   $effect(() => {
     if (enrollmentCode) {
-      passwordStepOpen = false
-      syncStepOpen = false
-      generateStepOpen = false
-      return
+      passwordStepOpen = false;
+      syncStepOpen = false;
+      generateStepOpen = false;
+      return;
     }
     if (!hasPasswords) {
-      passwordStepOpen = true
-      syncStepOpen = false
-      generateStepOpen = false
-      return
+      passwordStepOpen = true;
+      syncStepOpen = false;
+      generateStepOpen = false;
+      return;
     }
     if (!hasPasswordSelection) {
-      passwordStepOpen = true
-      syncStepOpen = false
-      generateStepOpen = false
-      return
+      passwordStepOpen = true;
+      syncStepOpen = false;
+      generateStepOpen = false;
+      return;
     }
     if (!hasCompatibleSyncProviders) {
-      passwordStepOpen = false
-      syncStepOpen = true
-      generateStepOpen = false
-      return
+      passwordStepOpen = false;
+      syncStepOpen = true;
+      generateStepOpen = false;
+      return;
     }
-    passwordStepOpen = false
-    syncStepOpen = false
-    generateStepOpen = true
-  })
+    passwordStepOpen = false;
+    syncStepOpen = false;
+    generateStepOpen = true;
+  });
 
   async function submitOnboard() {
-    localError = ''
-    onClearCode()
+    localError = "";
+    onClearCode();
     if (selectedProvider.kind === ResolvedOnboardingProviderKind.Unavailable) {
-      localError = vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr)
-      return
+      localError = vault.t(I18N_KEYS.OnboardDeviceChooseSyncProviderErr);
+      return;
     }
     if (selectedPassword.kind === ResolvedOnboardingPasswordKind.Unavailable) {
-      localError = vault.t(I18N_KEYS.OnboardDeviceChoosePwErr)
-      return
+      localError = vault.t(I18N_KEYS.OnboardDeviceChoosePwErr);
+      return;
     }
     if (!passwordInput) {
-      localError = vault.t(I18N_KEYS.OnboardDeviceEnterPwErr)
-      return
+      localError = vault.t(I18N_KEYS.OnboardDeviceEnterPwErr);
+      return;
     }
     if (requiresSharedJoinerIdentity && !vault.sharedJoinerIdentity.trim()) {
-      localError = vault.t(I18N_KEYS.OnboardDeviceSharedIdentityRequired)
-      return
+      localError = vault.t(I18N_KEYS.OnboardDeviceSharedIdentityRequired);
+      return;
     }
-    isGenerating = true
+    isGenerating = true;
     try {
       const issueRequest: Parameters<typeof onIssueCode>[0] = {
         entryId: selectedPassword.entry.id,
         password: passwordInput,
         providerId: selectedProvider.provider.id,
-      }
-      await onIssueCode(issueRequest)
-      passwordInput = ''
+      };
+      await onIssueCode(issueRequest);
+      passwordInput = "";
     } catch (e) {
       localError =
         e instanceof Error
           ? e.message
-          : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr)
+          : vault.t(I18N_KEYS.OnboardDeviceFailedQrErr);
     } finally {
-      isGenerating = false
+      isGenerating = false;
     }
   }
 </script>
@@ -467,7 +468,7 @@
             </button>
 
             {#if showSetup}
-              {#if setupIs('oauth-file')}
+              {#if setupIs("oauth-file")}
                 <OAuthProviderSetupWizard
                   {vault}
                   bind:githubRepo
@@ -478,7 +479,7 @@
                   {onCancelSetup}
                   onConnect={onConnectProvider}
                 />
-              {:else if setupIs('github')}
+              {:else if setupIs("github")}
                 <GitHubProviderSetupWizard
                   {vault}
                   bind:githubPat
@@ -489,7 +490,7 @@
                   {onCancelSetup}
                   onConnect={onConnectProvider}
                 />
-              {:else if setupIs('local-folder')}
+              {:else if setupIs("local-folder")}
                 <LocalFolderProviderSetupWizard
                   {vault}
                   idPrefix="onboard"
@@ -546,7 +547,7 @@
                     selectedProviderIdState = {
                       kind: ProviderSelectionKind.Selected,
                       providerId: provider.id,
-                    }
+                    };
                   }
                 }}
               >
@@ -571,8 +572,10 @@
                       >{(() => {
                         const localizeProviderLabelArgs2: Parameters<
                           typeof localizeProviderLabel
-                        >[0] = { label: provider.label, t: vault.t }
-                        return localizeProviderLabel(localizeProviderLabelArgs2)
+                        >[0] = { label: provider.label, t: vault.t };
+                        return localizeProviderLabel(
+                          localizeProviderLabelArgs2,
+                        );
                       })()}</span
                     >
                   </div>
@@ -585,10 +588,10 @@
                     {(() => {
                       const localizedProviderStorageDetailRequest: Parameters<
                         typeof localizedProviderStorageDetail
-                      >[0] = { provider, t: vault.t }
+                      >[0] = { provider, t: vault.t };
                       return localizedProviderStorageDetail(
                         localizedProviderStorageDetailRequest,
-                      )
+                      );
                     })()}
                   </div>
                   <div
@@ -644,8 +647,8 @@
         <form
           class="space-y-4"
           onsubmit={(event) => {
-            event.preventDefault()
-            void submitOnboard()
+            event.preventDefault();
+            void submitOnboard();
           }}
         >
           {#if selectedPassword.kind === ResolvedOnboardingPasswordKind.Available}
@@ -675,8 +678,8 @@
                       replacements: {
                         label: selectedPassword.entry.label,
                       },
-                    }
-                    return vault.t(tArgs8)
+                    };
+                    return vault.t(tArgs8);
                   })()
                 : vault.t(I18N_KEYS.VaultPasswordsConfirmPassword)}
             </label>
@@ -784,12 +787,12 @@
               const tArgs9: Parameters<typeof vault.t>[0] = {
                 key: I18N_KEYS.OnboardDeviceIssuedTime,
                 replacements: {
-                  time: issuedAt.slice(0, 19).replace('T', ' ') + ' UTC',
+                  time: issuedAt.slice(0, 19).replace("T", " ") + " UTC",
                 },
-              }
-              return vault.t(tArgs9)
+              };
+              return vault.t(tArgs9);
             })()
-          : ''}
+          : ""}
         linkTitle={vault.t(I18N_KEYS.OnboardDeviceLinkTitle)}
         linkDescription={vault.t(I18N_KEYS.OnboardDeviceLinkDesc)}
         passwordReminder={vault.t(I18N_KEYS.OnboardDeviceSharePassword)}

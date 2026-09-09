@@ -2,9 +2,9 @@ import { describe, expect, test } from 'vitest'
 import {
   DevicesAccessNudgePreference,
   DevicesAccessNudgeStorageKind,
-  parseDevicesAccessNudgePreference,
-  readDevicesAccessNudgeStorage,
-  shouldShowDevicesAccessNudge,
+  StoredDevicesAccessNudge,
+  DevicesAccessNudgeStorage,
+  DevicesAccessNudgePresentation,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 
 describe('Devices & access dashboard state', () => {
@@ -12,32 +12,32 @@ describe('Devices & access dashboard state', () => {
     localStorage.clear()
     const storageKey = 'devices-access-test-preference'
     expect(
-      parseDevicesAccessNudgePreference(
-        readDevicesAccessNudgeStorage({
+      new StoredDevicesAccessNudge(
+        new DevicesAccessNudgeStorage({
           storage: localStorage,
           storageKey: storageKey,
-        }),
-      ),
+        }).state,
+      ).preference,
     ).toBe(DevicesAccessNudgePreference.Visible)
 
     localStorage.setItem(storageKey, DevicesAccessNudgePreference.Dismissed)
     expect(
-      parseDevicesAccessNudgePreference(
-        readDevicesAccessNudgeStorage({
+      new StoredDevicesAccessNudge(
+        new DevicesAccessNudgeStorage({
           storage: localStorage,
           storageKey: storageKey,
-        }),
-      ),
+        }).state,
+      ).preference,
     ).toBe(DevicesAccessNudgePreference.Dismissed)
 
     localStorage.setItem(storageKey, 'unexpected')
     expect(
-      parseDevicesAccessNudgePreference(
-        readDevicesAccessNudgeStorage({
+      new StoredDevicesAccessNudge(
+        new DevicesAccessNudgeStorage({
           storage: localStorage,
           storageKey: storageKey,
-        }),
-      ),
+        }).state,
+      ).preference,
     ).toBe(DevicesAccessNudgePreference.Visible)
   })
 
@@ -45,19 +45,19 @@ describe('Devices & access dashboard state', () => {
     localStorage.clear()
     const storageKey = 'devices-access-test-storage-state'
     expect(
-      readDevicesAccessNudgeStorage({
+      new DevicesAccessNudgeStorage({
         storage: localStorage,
         storageKey: storageKey,
-      }),
+      }).state,
     ).toEqual({
       kind: DevicesAccessNudgeStorageKind.Missing,
     })
     localStorage.setItem(storageKey, 'saved')
     expect(
-      readDevicesAccessNudgeStorage({
+      new DevicesAccessNudgeStorage({
         storage: localStorage,
         storageKey: storageKey,
-      }),
+      }).state,
     ).toEqual({
       kind: DevicesAccessNudgeStorageKind.Stored,
       serialized: 'saved',
@@ -66,41 +66,41 @@ describe('Devices & access dashboard state', () => {
 
   test('preserves the legacy dismissal preference at the storage boundary', () => {
     expect(
-      parseDevicesAccessNudgePreference({
+      new StoredDevicesAccessNudge({
         kind: DevicesAccessNudgeStorageKind.Stored,
         serialized: '1',
-      }),
+      }).preference,
     ).toBe(DevicesAccessNudgePreference.Dismissed)
   })
 
   test('offers the first-run nudge only before any local vault exists', () => {
     expect(
-      shouldShowDevicesAccessNudge({
+      new DevicesAccessNudgePresentation({
         hasActiveLocalVault: false,
         localVaultCount: 0,
         preference: DevicesAccessNudgePreference.Visible,
-      }),
+      }).visible,
     ).toBe(true)
     expect(
-      shouldShowDevicesAccessNudge({
+      new DevicesAccessNudgePresentation({
         hasActiveLocalVault: false,
         localVaultCount: 1,
         preference: DevicesAccessNudgePreference.Visible,
-      }),
+      }).visible,
     ).toBe(false)
     expect(
-      shouldShowDevicesAccessNudge({
+      new DevicesAccessNudgePresentation({
         hasActiveLocalVault: true,
         localVaultCount: 1,
         preference: DevicesAccessNudgePreference.Visible,
-      }),
+      }).visible,
     ).toBe(false)
     expect(
-      shouldShowDevicesAccessNudge({
+      new DevicesAccessNudgePresentation({
         hasActiveLocalVault: false,
         localVaultCount: 0,
         preference: DevicesAccessNudgePreference.Dismissed,
-      }),
+      }).visible,
     ).toBe(false)
   })
 })

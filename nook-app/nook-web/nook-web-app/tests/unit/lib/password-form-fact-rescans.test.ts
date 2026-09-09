@@ -3,20 +3,17 @@ import { authentication_advance_control_is_safe } from '../../../../nook-web-sha
 import {
   AUTHENTICATION_SUBMIT_VALUE_SOURCE,
   authenticationFactAttributeFilter,
-  authenticationFactMutationRequiresScan,
   authenticationFactObserverOptions,
-  isAuthenticationSubmitValueMessage,
-  notifyAuthenticationSubmitValueAssigned,
-  observeAuthenticationSubmitValueAssignments,
+  authenticationFactObserver,
 } from '../../../../nook-web-shared/src/extension/authentication-fact-attributes'
 import {
-  authenticationPageObservationFacts,
-  summarizeAuthenticationWorkflowForms,
   type PasswordFormObservation,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
 
 function observedAuthenticationWorkflow(): PasswordFormObservation {
-  const observation = summarizeAuthenticationWorkflowForms()[0]
+  const observation =
+    passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
   if (!observation) throw new Error('expected an authentication workflow')
   return observation
 }
@@ -41,7 +38,9 @@ describe('authentication fact rescans', () => {
     `
     const mutationFor = (
       target: Element,
-    ): Parameters<typeof authenticationFactMutationRequiresScan>[0] => ({
+    ): Parameters<
+      typeof authenticationFactObserver.authenticationFactMutationRequiresScan
+    >[0] => ({
       type: 'attributes',
       target,
     })
@@ -64,11 +63,13 @@ describe('authentication fact rescans', () => {
       throw new Error('expected authentication mutation fixtures')
     }
 
-    expect(authenticationFactMutationRequiresScan(mutationFor(animation))).toBe(
-      false,
-    )
     expect(
-      authenticationFactMutationRequiresScan({
+      authenticationFactObserver.authenticationFactMutationRequiresScan(
+        mutationFor(animation),
+      ),
+    ).toBe(false)
+    expect(
+      authenticationFactObserver.authenticationFactMutationRequiresScan({
         ...mutationFor(animation),
         attributeName: 'style',
       }),
@@ -82,12 +83,14 @@ describe('authentication fact rescans', () => {
       labelShell,
     ]) {
       expect(
-        authenticationFactMutationRequiresScan(mutationFor(relevant)),
+        authenticationFactObserver.authenticationFactMutationRequiresScan(
+          mutationFor(relevant),
+        ),
       ).toBe(true)
     }
     passkeyLabel.id = 'renamed-passkey-label'
     expect(
-      authenticationFactMutationRequiresScan({
+      authenticationFactObserver.authenticationFactMutationRequiresScan({
         ...mutationFor(passkeyLabel),
         attributeName: 'id',
         oldValue: 'passkey-label',
@@ -95,7 +98,7 @@ describe('authentication fact rescans', () => {
     ).toBe(true)
     passkey.removeAttribute('data-nook-passkey-control')
     expect(
-      authenticationFactMutationRequiresScan({
+      authenticationFactObserver.authenticationFactMutationRequiresScan({
         ...mutationFor(passkey),
         attributeName: 'data-nook-passkey-control',
         oldValue: '',
@@ -131,33 +134,45 @@ describe('authentication fact rescans', () => {
     label.textContent = 'Sign in'
     document.body.append(ticker, label)
     const tickerMutation: Parameters<
-      typeof authenticationFactMutationRequiresScan
+      typeof authenticationFactObserver.authenticationFactMutationRequiresScan
     >[0] = {
       type: 'characterData',
       target: ticker,
     }
     const labelChild = label.childNodes[0]
     const labelMutation: Parameters<
-      typeof authenticationFactMutationRequiresScan
+      typeof authenticationFactObserver.authenticationFactMutationRequiresScan
     >[0] = {
       type: 'characterData',
       target: labelChild ? labelChild : label,
     }
-    expect(authenticationFactMutationRequiresScan(tickerMutation)).toBe(false)
-    expect(authenticationFactMutationRequiresScan(labelMutation)).toBe(true)
+    expect(
+      authenticationFactObserver.authenticationFactMutationRequiresScan(
+        tickerMutation,
+      ),
+    ).toBe(false)
+    expect(
+      authenticationFactObserver.authenticationFactMutationRequiresScan(
+        labelMutation,
+      ),
+    ).toBe(true)
     const recoveryParagraph = document.createElement('p')
     recoveryParagraph.textContent = 'Preparing recovery codes'
     document.body.append(recoveryParagraph)
     const recoveryText = recoveryParagraph.childNodes[0]
     const recoveryMutation: Parameters<
-      typeof authenticationFactMutationRequiresScan
+      typeof authenticationFactObserver.authenticationFactMutationRequiresScan
     >[0] = {
       type: 'characterData',
       target: recoveryText ? recoveryText : recoveryParagraph,
     }
-    expect(authenticationFactMutationRequiresScan(recoveryMutation)).toBe(true)
+    expect(
+      authenticationFactObserver.authenticationFactMutationRequiresScan(
+        recoveryMutation,
+      ),
+    ).toBe(true)
     const recoveryVisibilityMutation: Parameters<
-      typeof authenticationFactMutationRequiresScan
+      typeof authenticationFactObserver.authenticationFactMutationRequiresScan
     >[0] = {
       type: 'attributes',
       target: recoveryParagraph,
@@ -165,7 +180,9 @@ describe('authentication fact rescans', () => {
       oldValue: '',
     }
     expect(
-      authenticationFactMutationRequiresScan(recoveryVisibilityMutation),
+      authenticationFactObserver.authenticationFactMutationRequiresScan(
+        recoveryVisibilityMutation,
+      ),
     ).toBe(true)
     document.body.innerHTML = `
       <span id="passkey-label"><strong>Use passkey</strong></span>
@@ -174,32 +191,38 @@ describe('authentication fact rescans', () => {
     const referencedLabel = document.querySelector('strong')
     const referencedLabelChild = referencedLabel?.childNodes[0]
     const referencedLabelMutation: Parameters<
-      typeof authenticationFactMutationRequiresScan
+      typeof authenticationFactObserver.authenticationFactMutationRequiresScan
     >[0] = {
       type: 'characterData',
       target: referencedLabelChild ? referencedLabelChild : document.body,
     }
     expect(
-      authenticationFactMutationRequiresScan(referencedLabelMutation),
+      authenticationFactObserver.authenticationFactMutationRequiresScan(
+        referencedLabelMutation,
+      ),
     ).toBe(true)
     document.body.innerHTML = `
       <div data-nook-passkey-control><strong>Add passkey</strong></div>
     `
     const markedLabel = document.querySelector('strong')?.childNodes[0]
     const markedMutation: Parameters<
-      typeof authenticationFactMutationRequiresScan
+      typeof authenticationFactObserver.authenticationFactMutationRequiresScan
     >[0] = {
       type: 'characterData',
       target: markedLabel ? markedLabel : document.body,
     }
-    expect(authenticationFactMutationRequiresScan(markedMutation)).toBe(true)
+    expect(
+      authenticationFactObserver.authenticationFactMutationRequiresScan(
+        markedMutation,
+      ),
+    ).toBe(true)
     document.body.innerHTML = `
       <form method="post" aria-label="Login" action="/login" role="form">
         <input autocomplete="username" />
         <input type="submit" value="Delete" title="Remove account" />
       </form>
     `
-    const before = authenticationPageObservationFacts({
+    const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -219,7 +242,7 @@ describe('authentication fact rescans', () => {
     submitter?.setAttribute('title', 'Sign in')
     document.querySelector('form')?.setAttribute('role', 'search')
 
-    const after = authenticationPageObservationFacts({
+    const after = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -320,7 +343,7 @@ describe('authentication fact rescans', () => {
       throw new Error('expected OTP field')
     }
 
-    const before = authenticationPageObservationFacts({
+    const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -329,11 +352,13 @@ describe('authentication fact rescans', () => {
 
     field.setAttribute('oninput', 'this.form.requestSubmit()')
     field.setAttribute('onchange', 'validateCode()')
-    const afterAdd = authenticationPageObservationFacts({
-      observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const afterAdd = passwordFormInteraction.authenticationPageObservationFacts(
+      {
+        observation: observedAuthenticationWorkflow(),
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      },
+    )
     expect(afterAdd.ceremony.oneTimeCodeHandlerSignals).toEqual([
       'oninput=this.form.requestSubmit()',
       'onchange=validateCode()',
@@ -341,11 +366,12 @@ describe('authentication fact rescans', () => {
 
     field.removeAttribute('oninput')
     field.removeAttribute('onchange')
-    const afterRemove = authenticationPageObservationFacts({
-      observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const afterRemove =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: observedAuthenticationWorkflow(),
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     expect(afterRemove.ceremony.oneTimeCodeHandlerSignals).toEqual([])
   })
 
@@ -357,7 +383,7 @@ describe('authentication fact rescans', () => {
         <button type="submit">Sign in</button>
       </form>
     `
-    const before = authenticationPageObservationFacts({
+    const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -375,7 +401,7 @@ describe('authentication fact rescans', () => {
       false,
     )
     document.querySelector('form')?.setAttribute('method', 'post')
-    const after = authenticationPageObservationFacts({
+    const after = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -399,11 +425,12 @@ describe('authentication fact rescans', () => {
         <button type="submit">Continue</button>
       </form>
     `
-    const identifier = authenticationPageObservationFacts({
-      observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const identifier =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: observedAuthenticationWorkflow(),
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     expect(identifier.fields.usernameFieldCount).toBe(1)
     expect(identifier.detailedAdvanceControl).toMatchObject({
       kind: 'observed',
@@ -420,11 +447,12 @@ describe('authentication fact rescans', () => {
         'afterbegin',
         '<input type="email" autocomplete="username" />',
       )
-    const ambiguous = authenticationPageObservationFacts({
-      observation: observedAuthenticationWorkflow(),
-      authenticatorSetupHint: false,
-      backupCodesHint: false,
-    })
+    const ambiguous =
+      passwordFormInteraction.authenticationPageObservationFacts({
+        observation: observedAuthenticationWorkflow(),
+        authenticatorSetupHint: false,
+        backupCodesHint: false,
+      })
     expect(ambiguous.fields.usernameFieldCount).toBe(2)
     expect(ambiguous.detailedAdvanceControl).toEqual({ kind: 'absent' })
     expect(ambiguous.credentialSubmission).toEqual({ kind: 'absent' })
@@ -442,7 +470,7 @@ describe('authentication fact rescans', () => {
     if (!(submitter instanceof HTMLInputElement)) {
       throw new Error('expected the submit input')
     }
-    const before = authenticationPageObservationFacts({
+    const before = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -452,12 +480,15 @@ describe('authentication fact rescans', () => {
       observations: [{ label: expect.stringContaining('Resend code') }],
     })
     let rescans = 0
-    const stop = observeAuthenticationSubmitValueAssignments(() => {
-      rescans += 1
-    })
+    const stop =
+      authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
+        () => {
+          rescans += 1
+        },
+      )
     submitter.value = 'Verify code'
     expect(rescans).toBe(1)
-    const after = authenticationPageObservationFacts({
+    const after = passwordFormInteraction.authenticationPageObservationFacts({
       observation: observedAuthenticationWorkflow(),
       authenticatorSetupHint: false,
       backupCodesHint: false,
@@ -480,16 +511,22 @@ describe('authentication fact rescans', () => {
     if (!(advance instanceof HTMLInputElement)) {
       throw new Error('expected the type-button control')
     }
-    expect(summarizeAuthenticationWorkflowForms()).toHaveLength(0)
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toHaveLength(0)
     let rescans = 0
-    const stop = observeAuthenticationSubmitValueAssignments(() => {
-      rescans += 1
-    })
+    const stop =
+      authenticationFactObserver.observeAuthenticationSubmitValueAssignments(
+        () => {
+          rescans += 1
+        },
+      )
     advance.value = 'Sign in'
     expect(rescans).toBe(1)
-    expect(summarizeAuthenticationWorkflowForms()[0]?.formScope.kind).toBe(
-      'unowned',
-    )
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]
+        ?.formScope.kind,
+    ).toBe('unowned')
     stop()
   })
 
@@ -503,10 +540,13 @@ describe('authentication fact rescans', () => {
         </form>
       </dialog>
     `
-    expect(summarizeAuthenticationWorkflowForms()).toHaveLength(0)
+    expect(
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms(),
+    ).toHaveLength(0)
     document.querySelector('dialog')?.setAttribute('open', '')
     expect(
-      summarizeAuthenticationWorkflowForms()[0]?.summary.passwordFieldCount,
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()[0]?.summary
+        .passwordFieldCount,
     ).toBe(1)
   })
 
@@ -516,7 +556,7 @@ describe('authentication fact rescans', () => {
     window.postMessage = ((message: unknown, targetOrigin: string) => {
       posted.push({ message, targetOrigin })
     }) as typeof window.postMessage
-    notifyAuthenticationSubmitValueAssigned()
+    authenticationFactObserver.notifyAuthenticationSubmitValueAssigned()
     window.postMessage = originalPostMessage
 
     expect(posted).toEqual([
@@ -530,7 +570,9 @@ describe('authentication fact rescans', () => {
       origin: location.origin,
       source: window,
     })
-    expect(isAuthenticationSubmitValueMessage(event)).toBe(true)
+    expect(
+      authenticationFactObserver.isAuthenticationSubmitValueMessage(event),
+    ).toBe(true)
     expect(AUTHENTICATION_SUBMIT_VALUE_SOURCE).toBe(
       'nook-authentication-submit-value-v1',
     )
@@ -550,7 +592,9 @@ describe('authentication fact rescans', () => {
       configurable: true,
       value: 'null',
     })
-    expect(() => notifyAuthenticationSubmitValueAssigned()).not.toThrow()
+    expect(() =>
+      authenticationFactObserver.notifyAuthenticationSubmitValueAssigned(),
+    ).not.toThrow()
     expect(posted).toEqual([])
     Object.defineProperty(location, 'origin', {
       configurable: true,
@@ -558,7 +602,7 @@ describe('authentication fact rescans', () => {
     })
     window.postMessage = originalPostMessage
     expect(
-      isAuthenticationSubmitValueMessage(
+      authenticationFactObserver.isAuthenticationSubmitValueMessage(
         new MessageEvent('message', {
           data: { source: AUTHENTICATION_SUBMIT_VALUE_SOURCE },
           origin: 'null',

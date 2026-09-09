@@ -13,7 +13,7 @@
     BridgeControlPosition,
     BridgeGraphEdgeType,
     BridgeGraphNodeType,
-    buildBridgeGraph,
+    researchIdentityBridge,
   } from './bridge-graph'
   import BridgeGrantEdge from './BridgeGrantEdge.svelte'
   import BridgeGraphNode from './BridgeGraphNode.svelte'
@@ -31,13 +31,15 @@
   }
   let compact = $state(false)
   const graph = $derived.by(() => {
-    const graphContext: Parameters<typeof buildBridgeGraph>[0] = {
+    const graphContext: Parameters<
+      typeof researchIdentityBridge.buildBridgeGraph
+    >[0] = {
       perspective,
       identityId,
       vaultId,
       compact,
     }
-    return buildBridgeGraph(graphContext)
+    return researchIdentityBridge.buildBridgeGraph(graphContext)
   })
 
   $effect(() => {

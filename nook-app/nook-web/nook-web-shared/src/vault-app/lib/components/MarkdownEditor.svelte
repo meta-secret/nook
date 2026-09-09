@@ -1,54 +1,54 @@
 <script lang="ts">
-  import { renderMarkdown } from '$lib/content/markdown'
-  import MarkdownBody from './MarkdownBody.svelte'
+  import { markdownRenderer } from "$lib/content/markdown";
+  import MarkdownBody from "./MarkdownBody.svelte";
   import {
     MarkdownEditorTab,
     TextareaMountKind,
     type TextareaMount,
-  } from './markdown-editor-state'
+  } from "./markdown-editor-state";
 
   let {
-    value = $bindable(''),
-    placeholder = '',
-    testId = 'secret-value',
-    minHeight = 'min-h-[24rem]',
+    value = $bindable(""),
+    placeholder = "",
+    testId = "secret-value",
+    minHeight = "min-h-[24rem]",
     fill = false,
   }: {
-    value?: string
-    placeholder?: string
-    testId?: string
-    minHeight?: string
+    value?: string;
+    placeholder?: string;
+    testId?: string;
+    minHeight?: string;
     /** Grow to fill the parent flex container instead of using a fixed min-height. */
-    fill?: boolean
-  } = $props()
+    fill?: boolean;
+  } = $props();
 
-  let tab = $state(MarkdownEditorTab.Write)
+  let tab = $state(MarkdownEditorTab.Write);
 
-  const previewHtml = $derived(renderMarkdown(value))
+  const previewHtml = $derived(markdownRenderer.renderMarkdown(value));
 
-  let textareaState: TextareaMount = { kind: TextareaMountKind.Unmounted }
+  let textareaState: TextareaMount = { kind: TextareaMountKind.Unmounted };
 
   function registerTextarea(node: HTMLTextAreaElement) {
-    textareaState = { kind: TextareaMountKind.Mounted, element: node }
+    textareaState = { kind: TextareaMountKind.Mounted, element: node };
     return {
       destroy() {
-        textareaState = { kind: TextareaMountKind.Unmounted }
+        textareaState = { kind: TextareaMountKind.Unmounted };
       },
-    }
+    };
   }
 
   function adjustHeight() {
-    if (fill || textareaState.kind === TextareaMountKind.Unmounted) return
-    const textareaEl = textareaState.element
-    textareaEl.style.height = 'auto'
-    textareaEl.style.height = `${textareaEl.scrollHeight}px`
+    if (fill || textareaState.kind === TextareaMountKind.Unmounted) return;
+    const textareaEl = textareaState.element;
+    textareaEl.style.height = "auto";
+    textareaEl.style.height = `${textareaEl.scrollHeight}px`;
   }
 
   $effect(() => {
     if (!fill && tab === MarkdownEditorTab.Write) {
-      setTimeout(adjustHeight, 0)
+      setTimeout(adjustHeight, 0);
     }
-  })
+  });
 </script>
 
 <div
@@ -91,7 +91,7 @@
   </div>
 
   <div
-    class={fill ? 'flex min-h-0 flex-1 flex-col' : `${minHeight} flex flex-col`}
+    class={fill ? "flex min-h-0 flex-1 flex-col" : `${minHeight} flex flex-col`}
   >
     {#if tab === MarkdownEditorTab.Write}
       <textarea

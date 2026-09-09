@@ -3,15 +3,15 @@ import type { LoginCredentials } from '../../../../nook-web-shared/src/extension
 import {
   LoginCredentialsLookupKind,
   PasswordFormQueryKind,
-  readLoginCredentials,
-  summarizeAuthenticationWorkflowForms,
+  passwordFormCredentialInteraction as passwordFormCredentialReader,
+  passwordFormInteraction,
 } from '../../../../nook-web-shared/src/extension/password-forms'
-import { ownedObservationIsLocallyBounded } from '../../../../nook-web-shared/src/extension/password-form-fields'
+import { passwordFieldDiscovery } from '../../../../nook-web-shared/src/extension/password-form-fields'
 import {
   AuthenticationOutcomeResponseKind,
   AuthenticationOutcomeVerdict,
 } from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
-import { isTrustedAuthAction } from '../../lib/auth-widget-policy'
+import { AuthenticationGesture } from '../../lib/auth-widget-policy'
 import {
   NookWebsiteLoginSaveDecision,
   WebsiteLoginSaveCommitMessageType,
@@ -27,11 +27,7 @@ import type {
 } from '../../lib/outcome-evidence-messages'
 import {
   RuntimeMessageDeliveryKind,
-  sendAuthenticationOutcomeRuntimeMessage,
-  sendLoginSaveActionRuntimeMessage,
-  sendLoginSaveOfferRuntimeMessage,
-  sendLoginSavePendingRuntimeMessage,
-  sendRuntimeMessageWithoutResponse,
+  authenticationRuntimeTransport,
 } from './login-passkey-actions'
 import {
   SaveOfferDisplayKind,
@@ -43,18 +39,15 @@ import {
   type PendingSaveWatch,
 } from './state'
 import {
-  applyWidgetPosition,
-  attachPointerDrag,
   PointerDragBehaviorKind,
+  authenticationWidgetPosition,
 } from './widget-position'
-import { createWidgetMark } from './widget-shell'
+import { authenticationWidgetShell } from './widget-shell'
 import {
   OUTCOME_EVIDENCE_POLL_MS,
   OUTCOME_EVIDENCE_TIMEOUT_MS,
   WIDGET_HOST_ID,
-  progressLabel,
-  removeWidget,
-  translatedMessage,
+  workflowUi,
 } from './workflow-ui'
 
 enum AuthenticationOutcomeReadKind {
@@ -69,283 +62,15 @@ type AuthenticationOutcomeRead =
     }
   | { kind: AuthenticationOutcomeReadKind.Unavailable }
 
-const pendingSaveOfferRequests = new Set<Promise<void>>()
-
-export function stopPendingSaveWatch(): void {
-  if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
-  const { watch } = saveOfferState.watch
-  if ('timer' in watch) {
-    window.clearInterval(watch.timer)
-  }
-  watch.observer?.disconnect()
-  saveOfferState.clearPendingWatch()
-}
-
-async function dismissSaveOffer(
-  offer: WebsiteLoginSaveOfferView,
-): Promise<void> {
-  saveOfferState.dismissedOfferIds.add(offer.offerId)
-  const message: Parameters<typeof sendLoginSaveActionRuntimeMessage>[0] = {
-    type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
-    payload: { origin: location.origin, offerId: offer.offerId },
-  }
-  const delivery = await sendLoginSaveActionRuntimeMessage(message)
-  if (
-    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    delivery.response.kind !== 'completed'
-  ) {
-    throw new Error('login save dismissal failed')
-  }
-}
-
-export async function dismissPendingSaveOffer(): Promise<void> {
-  await Promise.all([...pendingSaveOfferRequests])
-  let offer: WebsiteLoginSaveOfferView | false = false
-  if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
-    offer = saveOfferState.watch.watch.offer
-  } else if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
-    offer = saveOfferState.display.offer
-  }
-  stopPendingSaveWatch()
-  saveOfferState.clearActiveOffer()
-  if (!offer) return
-  await dismissSaveOffer(offer)
-}
-
-function pageLooksLikeAuthPath(pathname: string): boolean {
-  return /(?:^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|password|passwd|auth|sso|otp|2fa|mfa|verify)(?:\/|$)/i.test(
-    pathname,
-  )
-}
-
 type AuthenticationOutcomeObservationContext = {
   startedAt: number
   authPath: string
   sawMutation: boolean
 }
 
-function collectOutcomeObservation({
-  startedAt,
-  authPath,
-  sawMutation,
-}: AuthenticationOutcomeObservationContext): AuthenticationOutcomeObservationView {
-  const successMarkerPresent = Boolean(
-    document.querySelector(
-      '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
-    ),
-  )
-  const errorMarkerPresent = Boolean(
-    document.querySelector(
-      '[data-nook-auth-outcome="error"], [role="alert"], .error[role="alert"]',
-    ),
-  )
-  const forms = summarizeAuthenticationWorkflowForms()
-  const authFieldsPresent = forms.some(
-    (form) =>
-      form.summary.passwordFieldCount > 0 ||
-      form.summary.usernameFieldCount > 0 ||
-      form.summary.oneTimeCodeFieldCount > 0,
-  )
-  return {
-    navigatedAwayFromAuthPath:
-      location.pathname !== authPath ||
-      !pageLooksLikeAuthPath(location.pathname),
-    authFieldsPresent,
-    successMarkerPresent,
-    errorMarkerPresent,
-    sameDocumentMutation: sawMutation,
-    inIframe: window !== window.top,
-    elapsedMs: Math.max(0, Date.now() - startedAt),
-  }
-}
-
-async function classifyOutcomeEvidence(
-  observation: AuthenticationOutcomeObservationView,
-): Promise<AuthenticationOutcomeRead> {
-  const message: Parameters<typeof sendAuthenticationOutcomeRuntimeMessage>[0] =
-    {
-      type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
-      payload: {
-        observation,
-        timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
-      },
-    }
-  const sendMessage: Parameters<
-    typeof sendAuthenticationOutcomeRuntimeMessage
-  >[0] = message
-  const delivery = await sendAuthenticationOutcomeRuntimeMessage(sendMessage)
-  if (
-    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    delivery.response.kind !== AuthenticationOutcomeResponseKind.Completed ||
-    !('verdict' in delivery.response)
-  ) {
-    return { kind: AuthenticationOutcomeReadKind.Unavailable }
-  }
-  return {
-    kind: AuthenticationOutcomeReadKind.Available,
-    verdict: delivery.response.verdict,
-  }
-}
-
-export async function evaluatePendingSaveEvidence(): Promise<void> {
-  if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
-  const { watch } = saveOfferState.watch
-  const observationContext: AuthenticationOutcomeObservationContext = {
-    startedAt: watch.startedAt,
-    authPath: watch.authPath,
-    sawMutation: watch.sawMutation,
-  }
-  const observation = collectOutcomeObservation(observationContext)
-  const verdictRead = await classifyOutcomeEvidence(observation)
-  if (
-    verdictRead.kind === AuthenticationOutcomeReadKind.Unavailable ||
-    saveOfferState.watch.kind !== SavePageWatchKind.Watching ||
-    saveOfferState.watch.watch.offer.offerId !== watch.offer.offerId
-  ) {
-    return
-  }
-  const { verdict } = verdictRead
-  if (verdict.allowsCredentialCommit) {
-    stopPendingSaveWatch()
-    if (saveOfferState.dismissedOfferIds.has(watch.offer.offerId)) return
-    widgetState.dismissed = false
-    saveOfferState.showOffer(watch.offer)
-    renderSaveOfferWidget(watch.offer)
-    return
-  }
-  if (
-    verdict.verdict === AuthenticationOutcomeVerdict.Conflicting ||
-    verdict.verdict === AuthenticationOutcomeVerdict.Timeout ||
-    (verdict.verdict === AuthenticationOutcomeVerdict.Insufficient &&
-      observation.errorMarkerPresent)
-  ) {
-    stopPendingSaveWatch()
-    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
-      type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
-      payload: { origin: location.origin, offerId: watch.offer.offerId },
-    }
-    sendRuntimeMessageWithoutResponse(message)
-  }
-}
-
-export function beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
-  stopPendingSaveWatch()
-  const startedAt = Date.now()
-  const authPath = location.pathname
-  const watch: PendingSaveWatch = {
-    offer,
-    startedAt,
-    authPath,
-    sawMutation: false,
-  }
-  watch.observer = new MutationObserver(() => {
-    if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
-    saveOfferState.watch.watch.sawMutation = true
-    void evaluatePendingSaveEvidence()
-  })
-  const nookTypedArgs0_2: Parameters<typeof watch.observer.observe>[1] = {
-    childList: true,
-    subtree: true,
-    attributes: true,
-  }
-  watch.observer.observe(document.documentElement, nookTypedArgs0_2)
-  watch.timer = window.setInterval(() => {
-    void evaluatePendingSaveEvidence()
-  }, OUTCOME_EVIDENCE_POLL_MS)
-  saveOfferState.watchPage(watch)
-  void evaluatePendingSaveEvidence()
-}
-
-export function stageSaveForCredentials(
-  credentials: LoginCredentials,
-): Promise<void> {
-  const trustedSurfaceGeneration = scanState.sequence
-  const stageRequest: StageSaveOfferRequest = {
-    credentials,
-    trustedSurfaceGeneration,
-  }
-  const operation = stageSaveOfferForCredentials(stageRequest)
-  const trackedOperation = operation.finally(() => {
-    pendingSaveOfferRequests.delete(trackedOperation)
-  })
-  pendingSaveOfferRequests.add(trackedOperation)
-  return trackedOperation
-}
-
 type StageSaveOfferRequest = {
   credentials: LoginCredentials
   trustedSurfaceGeneration: number
-}
-
-async function stageSaveOfferForCredentials({
-  credentials,
-  trustedSurfaceGeneration,
-}: StageSaveOfferRequest): Promise<void> {
-  const message: Parameters<typeof sendLoginSaveOfferRuntimeMessage>[0] = {
-    type: WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer,
-    payload: {
-      origin: location.origin,
-      username: credentials.username,
-      password: credentials.password,
-    },
-  }
-  const delivery = await sendLoginSaveOfferRuntimeMessage(message)
-  credentials.password = ''
-  credentials.username = ''
-  if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
-    return
-  }
-  const { response } = delivery
-  if (response.kind !== 'offer-available') return
-  const { offer } = response
-  if (trustedSurfaceGeneration !== scanState.sequence) {
-    await dismissSaveOffer(offer)
-    return
-  }
-  if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
-  beginPendingSaveWatch(offer)
-}
-
-export function captureSubmittedLogin(event: Event): void {
-  const target = event.target
-  if (
-    !(event instanceof SubmitEvent) ||
-    !(target instanceof HTMLFormElement) ||
-    widgetState.busy
-  ) {
-    return
-  }
-  const observations = summarizeAuthenticationWorkflowForms()
-  const workflow = observations.find(
-    (candidate) =>
-      candidate.formScope.kind === 'owned' &&
-      candidate.formScope.owner === target,
-  )
-  if (!workflow || workflow.summary.passwordFieldCount === 0) return
-  const { submitter } = event
-  if (submitter) {
-    if (
-      !(
-        submitter instanceof HTMLButtonElement ||
-        submitter instanceof HTMLInputElement
-      ) ||
-      submitter.form !== target ||
-      (ownedObservationIsLocallyBounded(workflow) &&
-        !workflow.root.contains(submitter))
-    ) {
-      return
-    }
-  } else if (ownedObservationIsLocallyBounded(workflow)) {
-    return
-  }
-  const nookTypedArgs0_1: Parameters<typeof readLoginCredentials>[0] = {
-    kind: PasswordFormQueryKind.Scoped,
-    root: workflow.root,
-    formScope: workflow.formScope,
-  }
-  const credentials = readLoginCredentials(nookTypedArgs0_1)
-  if (credentials.kind === LoginCredentialsLookupKind.Absent) return
-  void stageSaveForCredentials(credentials.credentials)
 }
 
 export enum PendingSaveOfferLoadKind {
@@ -357,207 +82,511 @@ export type PendingSaveOfferLoad =
   | { kind: PendingSaveOfferLoadKind.Absent }
   | { kind: PendingSaveOfferLoadKind.Loaded; offer: WebsiteLoginSaveOfferView }
 
-export async function loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
-  const message: Parameters<typeof sendLoginSavePendingRuntimeMessage>[0] = {
-    type: WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending,
-    payload: { origin: location.origin },
+/** Owns the browser runtime resources shared by these interactions. */
+class LoginSaveInteraction {
+  private pendingSaveOfferRequests = new Set<Promise<void>>()
+  stopPendingSaveWatch(): void {
+    if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
+    const { watch } = saveOfferState.watch
+    if ('timer' in watch) {
+      window.clearInterval(watch.timer)
+    }
+    watch.observer?.disconnect()
+    saveOfferState.clearPendingWatch()
   }
-  const delivery = await sendLoginSavePendingRuntimeMessage(message)
-  if (
-    delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-    !delivery.response?.ok ||
-    !('state' in delivery.response) ||
-    delivery.response.state !== 'available' ||
-    !('offer' in delivery.response)
-  )
-    return { kind: PendingSaveOfferLoadKind.Absent }
-  const { response } = delivery
-  if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) {
-    return { kind: PendingSaveOfferLoadKind.Absent }
-  }
-  return { kind: PendingSaveOfferLoadKind.Loaded, offer: response.offer }
-}
 
-export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
-  removeWidget()
-  saveOfferState.showOffer(offer)
-  const host = document.createElement('div')
-  host.id = WIDGET_HOST_ID
-  host.setAttribute('data-testid', 'nook-auth-widget')
-  host.setAttribute('role', 'dialog')
-  host.setAttribute(
-    'aria-label',
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
-  )
-  host.setAttribute('aria-expanded', 'true')
-  const nookTypedArgs0_5: Parameters<typeof host.attachShadow>[0] = {
-    mode: 'open',
-  }
-  const shadow = host.attachShadow(nookTypedArgs0_5)
-
-  const panel = document.createElement('div')
-  panel.className = 'panel'
-  panel.setAttribute('data-testid', 'nook-auth-gate')
-
-  const toolbar = document.createElement('div')
-  toolbar.className = 'toolbar'
-  toolbar.setAttribute('data-testid', 'nook-auth-gate-drag')
-
-  const step = document.createElement('p')
-  step.className = 'step-label'
-  const nookTypedArgs0_2: Parameters<typeof progressLabel>[0] = {
-    currentStep: 4,
-    totalSteps: 4,
-  }
-  step.textContent = progressLabel(nookTypedArgs0_2)
-
-  const dismissButton = document.createElement('button')
-  dismissButton.type = 'button'
-  dismissButton.className = 'icon-button dismiss-button'
-  dismissButton.textContent = '×'
-  dismissButton.setAttribute(
-    'aria-label',
-    translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
-  )
-  dismissButton.addEventListener('click', () => {
+  private async dismissSaveOffer(
+    offer: WebsiteLoginSaveOfferView,
+  ): Promise<void> {
     saveOfferState.dismissedOfferIds.add(offer.offerId)
-    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
+    const message: Parameters<
+      typeof authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage
+    >[0] = {
       type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
       payload: { origin: location.origin, offerId: offer.offerId },
     }
-    sendRuntimeMessageWithoutResponse(message)
-    widgetState.dismissed = true
-    removeWidget()
-  })
-  toolbar.append(step, dismissButton)
-
-  const body = document.createElement('div')
-  body.className = 'body'
-
-  const nookTypedArgs0_3: Parameters<typeof createWidgetMark>[0] = {
-    className: 'mark',
-    size: 52,
-  }
-  const mark = createWidgetMark(nookTypedArgs0_3)
-
-  const title = document.createElement('h1')
-  title.textContent = translatedMessage(
-    offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginTitle
-      : BROWSER_MESSAGE_KEYS.WidgetSaveLoginTitle,
-  )
-
-  const site = document.createElement('p')
-  site.className = 'site-context'
-  site.textContent = location.hostname
-
-  const description = document.createElement('p')
-  description.className = 'description'
-  description.textContent = translatedMessage(
-    offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginDescription
-      : BROWSER_MESSAGE_KEYS.WidgetSaveLoginDescription,
-  )
-  description.setAttribute('data-testid', 'nook-auth-gate-save-description')
-
-  const saveButton = document.createElement('button')
-  saveButton.type = 'button'
-  saveButton.className = 'primary-button'
-  saveButton.setAttribute('data-testid', 'nook-auth-gate-save')
-  saveButton.textContent = translatedMessage(
-    offer.decision === NookWebsiteLoginSaveDecision.Update
-      ? BROWSER_MESSAGE_KEYS.WidgetUpdateLogin
-      : BROWSER_MESSAGE_KEYS.WidgetSaveLogin,
-  )
-  saveButton.addEventListener('click', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted) || widgetState.busy) return
-    widgetState.busy = true
-    saveButton.disabled = true
-    const commitObservationContext: AuthenticationOutcomeObservationContext = {
-      startedAt: Date.now(),
-      authPath: location.pathname,
-      sawMutation: false,
+    const delivery =
+      await authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage(
+        message,
+      )
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      delivery.response.kind !== 'completed'
+    ) {
+      throw new Error('login save dismissal failed')
     }
-    const evidence = collectOutcomeObservation(commitObservationContext)
-    // Commit re-checks the live page; require an explicit success marker now.
-    evidence.successMarkerPresent = Boolean(
+  }
+
+  async dismissPendingSaveOffer(): Promise<void> {
+    await Promise.all([...this.pendingSaveOfferRequests])
+    let offer: WebsiteLoginSaveOfferView | false = false
+    if (saveOfferState.watch.kind === SavePageWatchKind.Watching) {
+      offer = saveOfferState.watch.watch.offer
+    } else if (saveOfferState.display.kind === SaveOfferDisplayKind.Visible) {
+      offer = saveOfferState.display.offer
+    }
+    this.stopPendingSaveWatch()
+    saveOfferState.clearActiveOffer()
+    if (!offer) return
+    await this.dismissSaveOffer(offer)
+  }
+
+  private pageLooksLikeAuthPath(pathname: string): boolean {
+    return /(?:^|\/)(login|signin|sign-in|log-in|signup|sign-up|register|password|passwd|auth|sso|otp|2fa|mfa|verify)(?:\/|$)/i.test(
+      pathname,
+    )
+  }
+
+  private collectOutcomeObservation({
+    startedAt,
+    authPath,
+    sawMutation,
+  }: AuthenticationOutcomeObservationContext): AuthenticationOutcomeObservationView {
+    const successMarkerPresent = Boolean(
       document.querySelector(
         '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
       ),
     )
-    evidence.errorMarkerPresent = Boolean(
+    const errorMarkerPresent = Boolean(
       document.querySelector(
-        '[data-nook-auth-outcome="error"], [role="alert"]',
+        '[data-nook-auth-outcome="error"], [role="alert"], .error[role="alert"]',
       ),
     )
-    evidence.elapsedMs = 0
-    const message: Parameters<typeof sendLoginSaveActionRuntimeMessage>[0] = {
-      type: WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit,
+    const forms = passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    const authFieldsPresent = forms.some(
+      (form) =>
+        form.summary.passwordFieldCount > 0 ||
+        form.summary.usernameFieldCount > 0 ||
+        form.summary.oneTimeCodeFieldCount > 0,
+    )
+    return {
+      navigatedAwayFromAuthPath:
+        location.pathname !== authPath ||
+        !this.pageLooksLikeAuthPath(location.pathname),
+      authFieldsPresent,
+      successMarkerPresent,
+      errorMarkerPresent,
+      sameDocumentMutation: sawMutation,
+      inIframe: window !== window.top,
+      elapsedMs: Math.max(0, Date.now() - startedAt),
+    }
+  }
+
+  private async classifyOutcomeEvidence(
+    observation: AuthenticationOutcomeObservationView,
+  ): Promise<AuthenticationOutcomeRead> {
+    const message: Parameters<
+      typeof authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage
+    >[0] = {
+      type: AuthenticationOutcomeClassifyMessageType.NookAuthenticationOutcomeClassify,
       payload: {
-        origin: location.origin,
-        offerId: offer.offerId,
-        evidence,
+        observation,
+        timeoutMs: OUTCOME_EVIDENCE_TIMEOUT_MS,
       },
     }
-    void sendLoginSaveActionRuntimeMessage(message)
-      .then((delivery) => {
-        if (
-          delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
-          delivery.response.kind !== 'completed'
-        ) {
-          description.textContent = translatedMessage(
-            BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
-          )
-          saveButton.disabled = false
-          return
-        }
-        title.textContent = translatedMessage(
-          BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedTitle,
-        )
-        title.setAttribute('data-testid', 'nook-auth-gate-save-saved')
-        description.textContent = translatedMessage(
-          BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedDescription,
-        )
-        saveButton.hidden = true
-        notNowButton.hidden = true
-        saveOfferState.clearActiveOffer()
-        // Hold confirmation through the dismiss window so formless success
-        // pages cannot scan-away "Login saved" before the user sees it.
-        saveOfferState.confirmationActive = true
-        window.setTimeout(() => {
-          widgetState.dismissed = false
-          removeWidget()
-          scanState.schedule()
-        }, 1200)
-      })
-      .finally(() => {
-        widgetState.busy = false
-      })
-  })
-
-  const notNowButton = document.createElement('button')
-  notNowButton.type = 'button'
-  notNowButton.className = 'text-button'
-  notNowButton.setAttribute('data-testid', 'nook-auth-gate-save-dismiss')
-  notNowButton.textContent = translatedMessage(
-    BROWSER_MESSAGE_KEYS.WidgetSaveLoginNotNow,
-  )
-  notNowButton.addEventListener('click', (event) => {
-    if (!isTrustedAuthAction(event.isTrusted)) return
-    saveOfferState.dismissedOfferIds.add(offer.offerId)
-    const message: Parameters<typeof sendRuntimeMessageWithoutResponse>[0] = {
-      type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
-      payload: { origin: location.origin, offerId: offer.offerId },
+    const sendMessage: Parameters<
+      typeof authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage
+    >[0] = message
+    const delivery =
+      await authenticationRuntimeTransport.sendAuthenticationOutcomeRuntimeMessage(
+        sendMessage,
+      )
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      delivery.response.kind !== AuthenticationOutcomeResponseKind.Completed ||
+      !('verdict' in delivery.response)
+    ) {
+      return { kind: AuthenticationOutcomeReadKind.Unavailable }
     }
-    sendRuntimeMessageWithoutResponse(message)
-    widgetState.dismissed = true
-    removeWidget()
-  })
+    return {
+      kind: AuthenticationOutcomeReadKind.Available,
+      verdict: delivery.response.verdict,
+    }
+  }
 
-  body.append(mark, site, title, description, saveButton, notNowButton)
+  async evaluatePendingSaveEvidence(): Promise<void> {
+    if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
+    const { watch } = saveOfferState.watch
+    const observationContext: AuthenticationOutcomeObservationContext = {
+      startedAt: watch.startedAt,
+      authPath: watch.authPath,
+      sawMutation: watch.sawMutation,
+    }
+    const observation = this.collectOutcomeObservation(observationContext)
+    const verdictRead = await this.classifyOutcomeEvidence(observation)
+    if (
+      verdictRead.kind === AuthenticationOutcomeReadKind.Unavailable ||
+      saveOfferState.watch.kind !== SavePageWatchKind.Watching ||
+      saveOfferState.watch.watch.offer.offerId !== watch.offer.offerId
+    ) {
+      return
+    }
+    const { verdict } = verdictRead
+    if (verdict.allowsCredentialCommit) {
+      this.stopPendingSaveWatch()
+      if (saveOfferState.dismissedOfferIds.has(watch.offer.offerId)) return
+      widgetState.dismissed = false
+      saveOfferState.showOffer(watch.offer)
+      this.renderSaveOfferWidget(watch.offer)
+      return
+    }
+    if (
+      verdict.verdict === AuthenticationOutcomeVerdict.Conflicting ||
+      verdict.verdict === AuthenticationOutcomeVerdict.Timeout ||
+      (verdict.verdict === AuthenticationOutcomeVerdict.Insufficient &&
+        observation.errorMarkerPresent)
+    ) {
+      this.stopPendingSaveWatch()
+      const message: Parameters<
+        typeof authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse
+      >[0] = {
+        type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
+        payload: { origin: location.origin, offerId: watch.offer.offerId },
+      }
+      authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse(message)
+    }
+  }
 
-  const style = document.createElement('style')
-  style.textContent = `
+  beginPendingSaveWatch(offer: WebsiteLoginSaveOfferView): void {
+    this.stopPendingSaveWatch()
+    const startedAt = Date.now()
+    const authPath = location.pathname
+    const watch: PendingSaveWatch = {
+      offer,
+      startedAt,
+      authPath,
+      sawMutation: false,
+    }
+    watch.observer = new MutationObserver(() => {
+      if (saveOfferState.watch.kind === SavePageWatchKind.Idle) return
+      saveOfferState.watch.watch.sawMutation = true
+      void this.evaluatePendingSaveEvidence()
+    })
+    const nookTypedArgs0_2: Parameters<typeof watch.observer.observe>[1] = {
+      childList: true,
+      subtree: true,
+      attributes: true,
+    }
+    watch.observer.observe(document.documentElement, nookTypedArgs0_2)
+    watch.timer = window.setInterval(() => {
+      void this.evaluatePendingSaveEvidence()
+    }, OUTCOME_EVIDENCE_POLL_MS)
+    saveOfferState.watchPage(watch)
+    void this.evaluatePendingSaveEvidence()
+  }
+
+  stageSaveForCredentials(credentials: LoginCredentials): Promise<void> {
+    const trustedSurfaceGeneration = scanState.sequence
+    const stageRequest: StageSaveOfferRequest = {
+      credentials,
+      trustedSurfaceGeneration,
+    }
+    const operation = this.stageSaveOfferForCredentials(stageRequest)
+    const trackedOperation = operation.finally(() => {
+      this.pendingSaveOfferRequests.delete(trackedOperation)
+    })
+    this.pendingSaveOfferRequests.add(trackedOperation)
+    return trackedOperation
+  }
+
+  private async stageSaveOfferForCredentials({
+    credentials,
+    trustedSurfaceGeneration,
+  }: StageSaveOfferRequest): Promise<void> {
+    const message: Parameters<
+      typeof authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage
+    >[0] = {
+      type: WebsiteLoginSaveOfferMessageType.NookWebsiteLoginSaveOffer,
+      payload: {
+        origin: location.origin,
+        username: credentials.username,
+        password: credentials.password,
+      },
+    }
+    const delivery =
+      await authenticationRuntimeTransport.sendLoginSaveOfferRuntimeMessage(
+        message,
+      )
+    credentials.password = ''
+    credentials.username = ''
+    if (delivery.kind === RuntimeMessageDeliveryKind.Unavailable) {
+      return
+    }
+    const { response } = delivery
+    if (response.kind !== 'offer-available') return
+    const { offer } = response
+    if (trustedSurfaceGeneration !== scanState.sequence) {
+      await this.dismissSaveOffer(offer)
+      return
+    }
+    if (saveOfferState.dismissedOfferIds.has(offer.offerId)) return
+    this.beginPendingSaveWatch(offer)
+  }
+
+  captureSubmittedLogin(event: Event): void {
+    const target = event.target
+    if (
+      !(event instanceof SubmitEvent) ||
+      !(target instanceof HTMLFormElement) ||
+      widgetState.busy
+    ) {
+      return
+    }
+    const observations =
+      passwordFormInteraction.summarizeAuthenticationWorkflowForms()
+    const workflow = observations.find(
+      (candidate) =>
+        candidate.formScope.kind === 'owned' &&
+        candidate.formScope.owner === target,
+    )
+    if (!workflow || workflow.summary.passwordFieldCount === 0) return
+    const { submitter } = event
+    if (submitter) {
+      if (
+        !(
+          submitter instanceof HTMLButtonElement ||
+          submitter instanceof HTMLInputElement
+        ) ||
+        submitter.form !== target ||
+        (passwordFieldDiscovery.ownedObservationIsLocallyBounded(workflow) &&
+          !workflow.root.contains(submitter))
+      ) {
+        return
+      }
+    } else if (
+      passwordFieldDiscovery.ownedObservationIsLocallyBounded(workflow)
+    ) {
+      return
+    }
+    const nookTypedArgs0_1: Parameters<
+      typeof passwordFormCredentialReader.readLoginCredentials
+    >[0] = {
+      kind: PasswordFormQueryKind.Scoped,
+      root: workflow.root,
+      formScope: workflow.formScope,
+    }
+    const credentials =
+      passwordFormCredentialReader.readLoginCredentials(nookTypedArgs0_1)
+    if (credentials.kind === LoginCredentialsLookupKind.Absent) return
+    void this.stageSaveForCredentials(credentials.credentials)
+  }
+
+  async loadPendingSaveOffer(): Promise<PendingSaveOfferLoad> {
+    const message: Parameters<
+      typeof authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage
+    >[0] = {
+      type: WebsiteLoginSavePendingMessageType.NookWebsiteLoginSavePending,
+      payload: { origin: location.origin },
+    }
+    const delivery =
+      await authenticationRuntimeTransport.sendLoginSavePendingRuntimeMessage(
+        message,
+      )
+    if (
+      delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+      !delivery.response?.ok ||
+      !('state' in delivery.response) ||
+      delivery.response.state !== 'available' ||
+      !('offer' in delivery.response)
+    )
+      return { kind: PendingSaveOfferLoadKind.Absent }
+    const { response } = delivery
+    if (saveOfferState.dismissedOfferIds.has(response.offer.offerId)) {
+      return { kind: PendingSaveOfferLoadKind.Absent }
+    }
+    return { kind: PendingSaveOfferLoadKind.Loaded, offer: response.offer }
+  }
+
+  renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
+    workflowUi.removeWidget()
+    saveOfferState.showOffer(offer)
+    const host = document.createElement('div')
+    host.id = WIDGET_HOST_ID
+    host.setAttribute('data-testid', 'nook-auth-widget')
+    host.setAttribute('role', 'dialog')
+    host.setAttribute(
+      'aria-label',
+      workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetPilotLabel),
+    )
+    host.setAttribute('aria-expanded', 'true')
+    const nookTypedArgs0_5: Parameters<typeof host.attachShadow>[0] = {
+      mode: 'open',
+    }
+    const shadow = host.attachShadow(nookTypedArgs0_5)
+
+    const panel = document.createElement('div')
+    panel.className = 'panel'
+    panel.setAttribute('data-testid', 'nook-auth-gate')
+
+    const toolbar = document.createElement('div')
+    toolbar.className = 'toolbar'
+    toolbar.setAttribute('data-testid', 'nook-auth-gate-drag')
+
+    const step = document.createElement('p')
+    step.className = 'step-label'
+    const nookTypedArgs0_2: Parameters<typeof workflowUi.progressLabel>[0] = {
+      currentStep: 4,
+      totalSteps: 4,
+    }
+    step.textContent = workflowUi.progressLabel(nookTypedArgs0_2)
+
+    const dismissButton = document.createElement('button')
+    dismissButton.type = 'button'
+    dismissButton.className = 'icon-button dismiss-button'
+    dismissButton.textContent = '×'
+    dismissButton.setAttribute(
+      'aria-label',
+      workflowUi.translatedMessage(BROWSER_MESSAGE_KEYS.WidgetDismiss),
+    )
+    dismissButton.addEventListener('click', () => {
+      saveOfferState.dismissedOfferIds.add(offer.offerId)
+      const message: Parameters<
+        typeof authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse
+      >[0] = {
+        type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
+        payload: { origin: location.origin, offerId: offer.offerId },
+      }
+      authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse(message)
+      widgetState.dismissed = true
+      workflowUi.removeWidget()
+    })
+    toolbar.append(step, dismissButton)
+
+    const body = document.createElement('div')
+    body.className = 'body'
+
+    const nookTypedArgs0_3: Parameters<
+      typeof authenticationWidgetShell.createWidgetMark
+    >[0] = {
+      className: 'mark',
+      size: 52,
+    }
+    const mark = authenticationWidgetShell.createWidgetMark(nookTypedArgs0_3)
+
+    const title = document.createElement('h1')
+    title.textContent = workflowUi.translatedMessage(
+      offer.decision === NookWebsiteLoginSaveDecision.Update
+        ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginTitle
+        : BROWSER_MESSAGE_KEYS.WidgetSaveLoginTitle,
+    )
+
+    const site = document.createElement('p')
+    site.className = 'site-context'
+    site.textContent = location.hostname
+
+    const description = document.createElement('p')
+    description.className = 'description'
+    description.textContent = workflowUi.translatedMessage(
+      offer.decision === NookWebsiteLoginSaveDecision.Update
+        ? BROWSER_MESSAGE_KEYS.WidgetUpdateLoginDescription
+        : BROWSER_MESSAGE_KEYS.WidgetSaveLoginDescription,
+    )
+    description.setAttribute('data-testid', 'nook-auth-gate-save-description')
+
+    const saveButton = document.createElement('button')
+    saveButton.type = 'button'
+    saveButton.className = 'primary-button'
+    saveButton.setAttribute('data-testid', 'nook-auth-gate-save')
+    saveButton.textContent = workflowUi.translatedMessage(
+      offer.decision === NookWebsiteLoginSaveDecision.Update
+        ? BROWSER_MESSAGE_KEYS.WidgetUpdateLogin
+        : BROWSER_MESSAGE_KEYS.WidgetSaveLogin,
+    )
+    saveButton.addEventListener('click', (event) => {
+      if (!new AuthenticationGesture(event).trusted || widgetState.busy) return
+      widgetState.busy = true
+      saveButton.disabled = true
+      const commitObservationContext: AuthenticationOutcomeObservationContext =
+        {
+          startedAt: Date.now(),
+          authPath: location.pathname,
+          sawMutation: false,
+        }
+      const evidence = this.collectOutcomeObservation(commitObservationContext)
+      // Commit re-checks the live page; require an explicit success marker now.
+      evidence.successMarkerPresent = Boolean(
+        document.querySelector(
+          '[data-nook-auth-outcome="success"], [data-testid="mock-auth-success"]',
+        ),
+      )
+      evidence.errorMarkerPresent = Boolean(
+        document.querySelector(
+          '[data-nook-auth-outcome="error"], [role="alert"]',
+        ),
+      )
+      evidence.elapsedMs = 0
+      const message: Parameters<
+        typeof authenticationRuntimeTransport.sendLoginSaveActionRuntimeMessage
+      >[0] = {
+        type: WebsiteLoginSaveCommitMessageType.NookWebsiteLoginSaveCommit,
+        payload: {
+          origin: location.origin,
+          offerId: offer.offerId,
+          evidence,
+        },
+      }
+      void authenticationRuntimeTransport
+        .sendLoginSaveActionRuntimeMessage(message)
+        .then((delivery) => {
+          if (
+            delivery.kind === RuntimeMessageDeliveryKind.Unavailable ||
+            delivery.response.kind !== 'completed'
+          ) {
+            description.textContent = workflowUi.translatedMessage(
+              BROWSER_MESSAGE_KEYS.WidgetSaveLoginFailed,
+            )
+            saveButton.disabled = false
+            return
+          }
+          title.textContent = workflowUi.translatedMessage(
+            BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedTitle,
+          )
+          title.setAttribute('data-testid', 'nook-auth-gate-save-saved')
+          description.textContent = workflowUi.translatedMessage(
+            BROWSER_MESSAGE_KEYS.WidgetSaveLoginSavedDescription,
+          )
+          saveButton.hidden = true
+          notNowButton.hidden = true
+          saveOfferState.clearActiveOffer()
+          // Hold confirmation through the dismiss window so formless success
+          // pages cannot scan-away "Login saved" before the user sees it.
+          saveOfferState.confirmationActive = true
+          window.setTimeout(() => {
+            widgetState.dismissed = false
+            workflowUi.removeWidget()
+            scanState.schedule()
+          }, 1200)
+        })
+        .finally(() => {
+          widgetState.busy = false
+        })
+    })
+
+    const notNowButton = document.createElement('button')
+    notNowButton.type = 'button'
+    notNowButton.className = 'text-button'
+    notNowButton.setAttribute('data-testid', 'nook-auth-gate-save-dismiss')
+    notNowButton.textContent = workflowUi.translatedMessage(
+      BROWSER_MESSAGE_KEYS.WidgetSaveLoginNotNow,
+    )
+    notNowButton.addEventListener('click', (event) => {
+      if (!new AuthenticationGesture(event).trusted) return
+      saveOfferState.dismissedOfferIds.add(offer.offerId)
+      const message: Parameters<
+        typeof authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse
+      >[0] = {
+        type: WebsiteLoginSaveDismissMessageType.NookWebsiteLoginSaveDismiss,
+        payload: { origin: location.origin, offerId: offer.offerId },
+      }
+      authenticationRuntimeTransport.sendRuntimeMessageWithoutResponse(message)
+      widgetState.dismissed = true
+      workflowUi.removeWidget()
+    })
+
+    body.append(mark, site, title, description, saveButton, notNowButton)
+
+    const style = document.createElement('style')
+    style.textContent = `
     :host {
       all: initial;
       position: fixed;
@@ -664,22 +693,29 @@ export function renderSaveOfferWidget(offer: WebsiteLoginSaveOfferView): void {
     .text-button:hover { color: oklch(0.985 0 0); }
   `
 
-  panel.append(toolbar, body)
-  shadow.append(style, panel)
-  document.documentElement.append(host)
-  widgetState.attachHost(host)
-  widgetState.assignWorkflowKey(`save:${offer.offerId}`)
-  const pointerDragArgs: Parameters<typeof attachPointerDrag>[0] = {
-    host,
-    handle: toolbar,
-    behavior: { kind: PointerDragBehaviorKind.DragOnly },
-  }
-  attachPointerDrag(pointerDragArgs)
-  if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {
-    const nookTypedArgs0_6: Parameters<typeof applyWidgetPosition>[0] = {
+    panel.append(toolbar, body)
+    shadow.append(style, panel)
+    document.documentElement.append(host)
+    widgetState.attachHost(host)
+    widgetState.assignWorkflowKey(`save:${offer.offerId}`)
+    const pointerDragArgs: Parameters<
+      typeof authenticationWidgetPosition.attachPointerDrag
+    >[0] = {
       host,
-      position: widgetState.placement.position,
+      handle: toolbar,
+      behavior: { kind: PointerDragBehaviorKind.DragOnly },
     }
-    applyWidgetPosition(nookTypedArgs0_6)
+    authenticationWidgetPosition.attachPointerDrag(pointerDragArgs)
+    if (widgetState.placement.kind === WidgetPlacementKind.Positioned) {
+      const nookTypedArgs0_6: Parameters<
+        typeof authenticationWidgetPosition.applyWidgetPosition
+      >[0] = {
+        host,
+        position: widgetState.placement.position,
+      }
+      authenticationWidgetPosition.applyWidgetPosition(nookTypedArgs0_6)
+    }
   }
 }
+
+export const loginSaveInteraction = new LoginSaveInteraction()

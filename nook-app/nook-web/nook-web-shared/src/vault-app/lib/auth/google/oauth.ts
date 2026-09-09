@@ -20,9 +20,12 @@ import { google_oauth_tokens_to_config } from "$app-wasm";
 import { GOOGLE_OAUTH_CLIENT_ID } from "$lib/auth/google/config";
 
 const GIS_SCRIPT_URL = "https://accounts.google.com/gsi/client";
+
 export const DRIVE_APPDATA_SCOPE =
   "https://www.googleapis.com/auth/drive.appdata";
+
 export const DRIVE_FILE_SCOPE = "https://www.googleapis.com/auth/drive.file";
+
 export const DRIVE_READONLY_SCOPE =
   "https://www.googleapis.com/auth/drive.readonly";
 
@@ -119,6 +122,7 @@ type TokenRequest =
       kind: TokenRequestKind.AwaitingResponse;
       resolve: (response: GoogleTokenResponse) => void;
     };
+
 enum GoogleIdentityServicesKind {
   NotLoaded = "not-loaded",
   Loading = "loading",
@@ -134,281 +138,286 @@ type TokenClientSlot = {
   request: TokenRequest;
 };
 
-const tokenClients = new Map<string, TokenClientSlot>();
-let googleIdentityServices: GoogleIdentityServices = {
-  kind: GoogleIdentityServicesKind.NotLoaded,
-};
-
-export function isGoogleOAuthConfigured(): boolean {
-  return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
-}
-
-function googleClientId(): string {
-  const clientId = GOOGLE_OAUTH_CLIENT_ID.trim();
-  if (!clientId) {
-    throw new Error("Google OAuth client id is not configured.");
+/** Owns the browser runtime resources shared by these interactions. */
+class GoogleOAuthSession {
+  private tokenClients = new Map<string, TokenClientSlot>();
+  private googleIdentityServices: GoogleIdentityServices = {
+    kind: GoogleIdentityServicesKind.NotLoaded,
+  };
+  isGoogleOAuthConfigured(): boolean {
+    return Boolean(GOOGLE_OAUTH_CLIENT_ID.trim());
   }
-  return clientId;
-}
 
-function scopeString(scope: GoogleDriveOAuthScope): string {
-  switch (scope) {
-    case GoogleDriveOAuthScope.Shared:
-      return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
-    case GoogleDriveOAuthScope.AppData:
-    default:
-      return DRIVE_APPDATA_SCOPE;
+  private googleClientId(): string {
+    const clientId = GOOGLE_OAUTH_CLIENT_ID.trim();
+    if (!clientId) {
+      throw new Error("Google OAuth client id is not configured.");
+    }
+    return clientId;
   }
-}
 
-function loadGisScript(): Promise<void> {
-  return new Promise(
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (resolve, reject) => {
-      if (window.google?.accounts?.oauth2) {
-        resolve();
-        return;
-      }
-      const existing = document.querySelector(
-        `script[src="${GIS_SCRIPT_URL}"]`,
-      );
-      if (existing) {
-        const addEventListenerArgs: Parameters<
-          typeof existing.addEventListener
-        >[2] = { once: true };
-        existing.addEventListener(
-          "load",
-          () => resolve(),
-          addEventListenerArgs,
+  private scopeString(scope: GoogleDriveOAuthScope): string {
+    switch (scope) {
+      case GoogleDriveOAuthScope.Shared:
+        return `${DRIVE_FILE_SCOPE} ${DRIVE_READONLY_SCOPE}`;
+      case GoogleDriveOAuthScope.AppData:
+      default:
+        return DRIVE_APPDATA_SCOPE;
+    }
+  }
+
+  private loadGisScript(): Promise<void> {
+    return new Promise(
+      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+      (resolve, reject) => {
+        if (window.google?.accounts?.oauth2) {
+          resolve();
+          return;
+        }
+        const existing = document.querySelector(
+          `script[src="${GIS_SCRIPT_URL}"]`,
         );
-        const addEventListenerArgs2: Parameters<
-          typeof existing.addEventListener
-        >[2] = { once: true };
-        existing.addEventListener(
-          "error",
-          () => reject(new Error("Failed to load Google Identity Services.")),
-          addEventListenerArgs2,
-        );
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = GIS_SCRIPT_URL;
-      script.async = true;
-      script.defer = true;
-      script.onload = () => resolve();
-      script.onerror = () =>
-        reject(new Error("Failed to load Google Identity Services."));
-      document.head.appendChild(script);
-    },
-  );
-}
-
-async function ensureGisReady(): Promise<void> {
-  if (googleIdentityServices.kind === GoogleIdentityServicesKind.Loading) {
-    return googleIdentityServices.completion;
-  }
-  const promise = loadGisScript();
-  googleIdentityServices = {
-    kind: GoogleIdentityServicesKind.Loading,
-    completion: promise,
-  };
-  return promise;
-}
-
-async function tokenClientForScope(
-  scope: GoogleDriveOAuthScope,
-): Promise<TokenClientSlot> {
-  await ensureGisReady();
-  const key = scopeString(scope);
-  const existing = tokenClients.get(key);
-  if (existing) {
-    return existing;
-  }
-  const initTokenClientArgs: GoogleTokenClientConfig = {
-    client_id: googleClientId(),
-    scope: key,
-    callback: (response) => {
-      const current = tokenClients.get(key);
-      if (current?.request.kind === TokenRequestKind.AwaitingResponse) {
-        current.request.resolve(response);
-        current.request = { kind: TokenRequestKind.Idle };
-      }
-    },
-  };
-  const client =
-    window.google!.accounts.oauth2.initTokenClient(initTokenClientArgs);
-  const slot: TokenClientSlot = {
-    scopeKey: key,
-    client,
-    request: { kind: TokenRequestKind.Idle },
-  };
-  tokenClients.set(key, slot);
-  return slot;
-}
-
-/** Private mode: initialize the default `drive.appdata` token client. */
-export async function initGoogleAuth(): Promise<void> {
-  await tokenClientForScope(GoogleDriveOAuthScope.AppData);
-}
-
-/** Shared mode: initialize the per-file write + Drive read token client. */
-export async function initGoogleSharedDriveAuth(): Promise<void> {
-  await tokenClientForScope(GoogleDriveOAuthScope.Shared);
-}
-
-function tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
-  if (response.error) {
-    throw new Error(
-      ((...[v = "Google sign-in failed."]) => v)(
-        ((...[v = response.error]) => v)(response.error_description),
-      ),
+        if (existing) {
+          const addEventListenerArgs: Parameters<
+            typeof existing.addEventListener
+          >[2] = { once: true };
+          existing.addEventListener(
+            "load",
+            () => resolve(),
+            addEventListenerArgs,
+          );
+          const addEventListenerArgs2: Parameters<
+            typeof existing.addEventListener
+          >[2] = { once: true };
+          existing.addEventListener(
+            "error",
+            () => reject(new Error("Failed to load Google Identity Services.")),
+            addEventListenerArgs2,
+          );
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = GIS_SCRIPT_URL;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve();
+        script.onerror = () =>
+          reject(new Error("Failed to load Google Identity Services."));
+        document.head.appendChild(script);
+      },
     );
   }
-  if (!response.access_token) {
-    throw new Error("Google did not return an access token.");
+
+  private async ensureGisReady(): Promise<void> {
+    if (
+      this.googleIdentityServices.kind === GoogleIdentityServicesKind.Loading
+    ) {
+      return this.googleIdentityServices.completion;
+    }
+    const promise = this.loadGisScript();
+    this.googleIdentityServices = {
+      kind: GoogleIdentityServicesKind.Loading,
+      completion: promise,
+    };
+    return promise;
   }
-  const [expiresIn = 3600] = [response.expires_in];
-  return {
-    accessToken: response.access_token,
-    expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
-  };
-}
 
-export async function requestGoogleAccessToken(
-  request: GoogleAccessTokenRequest,
-): Promise<GoogleOAuthTokens> {
-  const scope = request.scope;
-  const slot = await tokenClientForScope(scope);
+  private async tokenClientForScope(
+    scope: GoogleDriveOAuthScope,
+  ): Promise<TokenClientSlot> {
+    await this.ensureGisReady();
+    const key = this.scopeString(scope);
+    const existing = this.tokenClients.get(key);
+    if (existing) {
+      return existing;
+    }
+    const initTokenClientArgs: GoogleTokenClientConfig = {
+      client_id: this.googleClientId(),
+      scope: key,
+      callback: (response) => {
+        const current = this.tokenClients.get(key);
+        if (current?.request.kind === TokenRequestKind.AwaitingResponse) {
+          current.request.resolve(response);
+          current.request = { kind: TokenRequestKind.Idle };
+        }
+      },
+    };
+    const client =
+      window.google!.accounts.oauth2.initTokenClient(initTokenClientArgs);
+    const slot: TokenClientSlot = {
+      scopeKey: key,
+      client,
+      request: { kind: TokenRequestKind.Idle },
+    };
+    this.tokenClients.set(key, slot);
+    return slot;
+  }
 
-  return new Promise(
-    // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
-    (resolve, reject) => {
-      slot.request = {
-        kind: TokenRequestKind.AwaitingResponse,
-        resolve: (response) => {
-          try {
-            resolve(tokensFromResponse(response));
-          } catch (error) {
-            reject(error);
-          }
-        },
-      };
-      const tokenPromptRequest: GoogleTokenPromptRequest = {
-        prompt: request.prompt,
-      };
-      slot.client.requestAccessToken(tokenPromptRequest);
-    },
-  );
-}
+  async initGoogleAuth(): Promise<void> {
+    await this.tokenClientForScope(GoogleDriveOAuthScope.AppData);
+  }
 
-/** Request the scopes required for cross-account shared-folder replication. */
-export async function requestGoogleDriveSharedAccess(
-  request: GoogleSharedDriveAccessRequest,
-): Promise<GoogleOAuthTokens> {
-  const requestGoogleAccessTokenArgs: Parameters<
-    typeof requestGoogleAccessToken
-  >[0] = {
-    prompt: request.prompt,
-    scope: GoogleDriveOAuthScope.Shared,
-  };
-  return requestGoogleAccessToken(requestGoogleAccessTokenArgs);
-}
+  async initGoogleSharedDriveAuth(): Promise<void> {
+    await this.tokenClientForScope(GoogleDriveOAuthScope.Shared);
+  }
 
-export function oauthTokensToConfig({
-  tokens,
-  existing,
-}: GoogleOAuthConfigurationUpdate): OAuthFileConfig {
-  return google_oauth_tokens_to_config(
-    tokens.accessToken,
-    tokens.expiresAt,
+  private tokensFromResponse(response: GoogleTokenResponse): GoogleOAuthTokens {
+    if (response.error) {
+      throw new Error(
+        ((...[v = "Google sign-in failed."]) => v)(
+          ((...[v = response.error]) => v)(response.error_description),
+        ),
+      );
+    }
+    if (!response.access_token) {
+      throw new Error("Google did not return an access token.");
+    }
+    const [expiresIn = 3600] = [response.expires_in];
+    return {
+      accessToken: response.access_token,
+      expiresAt: new Date(Date.now() + expiresIn * 1000).toISOString(),
+    };
+  }
+
+  async requestGoogleAccessToken(
+    request: GoogleAccessTokenRequest,
+  ): Promise<GoogleOAuthTokens> {
+    const scope = request.scope;
+    const slot = await this.tokenClientForScope(scope);
+
+    return new Promise(
+      // eslint-disable-next-line max-params -- Host API owns this positional callback signature.
+      (resolve, reject) => {
+        slot.request = {
+          kind: TokenRequestKind.AwaitingResponse,
+          resolve: (response) => {
+            try {
+              resolve(this.tokensFromResponse(response));
+            } catch (error) {
+              reject(error);
+            }
+          },
+        };
+        const tokenPromptRequest: GoogleTokenPromptRequest = {
+          prompt: request.prompt,
+        };
+        slot.client.requestAccessToken(tokenPromptRequest);
+      },
+    );
+  }
+
+  async requestGoogleDriveSharedAccess(
+    request: GoogleSharedDriveAccessRequest,
+  ): Promise<GoogleOAuthTokens> {
+    const requestGoogleAccessTokenArgs: Parameters<
+      typeof this.requestGoogleAccessToken
+    >[0] = {
+      prompt: request.prompt,
+      scope: GoogleDriveOAuthScope.Shared,
+    };
+    return this.requestGoogleAccessToken(requestGoogleAccessTokenArgs);
+  }
+
+  oauthTokensToConfig({
+    tokens,
     existing,
-  );
-}
+  }: GoogleOAuthConfigurationUpdate): OAuthFileConfig {
+    return google_oauth_tokens_to_config(
+      tokens.accessToken,
+      tokens.expiresAt,
+      existing,
+    );
+  }
 
-export function isOAuthAccessTokenExpired({
-  config,
-  skewMs,
-}: GoogleOAuthExpiryAssessment): boolean {
-  if (config.expiresAt.state === "unknown") return false;
-  const expiresAt = Date.parse(config.expiresAt.value);
-  if (Number.isNaN(expiresAt)) return false;
-  return Date.now() + skewMs >= expiresAt;
-}
+  isOAuthAccessTokenExpired({
+    config,
+    skewMs,
+  }: GoogleOAuthExpiryAssessment): boolean {
+    if (config.expiresAt.state === "unknown") return false;
+    const expiresAt = Date.parse(config.expiresAt.value);
+    if (Number.isNaN(expiresAt)) return false;
+    return Date.now() + skewMs >= expiresAt;
+  }
 
-export async function ensureValidOAuthFileConfig(
-  config: OAuthFileConfig,
-): Promise<OAuthFileConfig> {
-  if (
-    !(() => {
-      const isOAuthAccessTokenExpiredArgs: Parameters<
-        typeof isOAuthAccessTokenExpired
-      >[0] = { config, skewMs: 60_000 };
-      return isOAuthAccessTokenExpired(isOAuthAccessTokenExpiredArgs);
-    })()
-  ) {
-    return config;
-  }
-  const shared =
-    config.driveMode === "shared" || config.folderId.state === "folderId";
-  const scope = shared
-    ? GoogleDriveOAuthScope.Shared
-    : GoogleDriveOAuthScope.AppData;
-  const requestGoogleAccessTokenArgs2: Parameters<
-    typeof requestGoogleAccessToken
-  >[0] = {
-    prompt: GoogleOAuthPrompt.Default,
-    scope,
-  };
-  const refreshed = await requestGoogleAccessToken(
-    requestGoogleAccessTokenArgs2,
-  );
-  const oauthTokensToConfigArgs: Parameters<typeof oauthTokensToConfig>[0] = {
-    tokens: refreshed,
-    existing: configuredOAuthFile(config),
-  };
-  return oauthTokensToConfig(oauthTokensToConfigArgs);
-}
-
-export async function fetchGoogleAccountEmail(
-  accessToken: string,
-): Promise<GoogleAccountIdentity> {
-  const fetchArgs: Parameters<typeof fetch>[1] = {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  };
-  const response = await fetch(
-    "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
-    fetchArgs,
-  );
-  if (!response.ok) {
-    return { kind: GoogleAccountIdentityKind.Unavailable };
-  }
-  const payload: unknown = await response.json();
-  if (!payload || typeof payload !== "object" || !("user" in payload)) {
-    return { kind: GoogleAccountIdentityKind.Unavailable };
-  }
-  const user = payload.user;
-  if (!user || typeof user !== "object") {
-    return { kind: GoogleAccountIdentityKind.Unavailable };
-  }
-  if (
-    "emailAddress" in user &&
-    typeof user.emailAddress === "string" &&
-    user.emailAddress.trim()
-  ) {
-    return {
-      kind: GoogleAccountIdentityKind.Available,
-      label: user.emailAddress,
+  async ensureValidOAuthFileConfig(
+    config: OAuthFileConfig,
+  ): Promise<OAuthFileConfig> {
+    if (
+      !(() => {
+        const isOAuthAccessTokenExpiredArgs: Parameters<
+          typeof this.isOAuthAccessTokenExpired
+        >[0] = { config, skewMs: 60_000 };
+        return this.isOAuthAccessTokenExpired(isOAuthAccessTokenExpiredArgs);
+      })()
+    ) {
+      return config;
+    }
+    const shared =
+      config.driveMode === "shared" || config.folderId.state === "folderId";
+    const scope = shared
+      ? GoogleDriveOAuthScope.Shared
+      : GoogleDriveOAuthScope.AppData;
+    const requestGoogleAccessTokenArgs2: Parameters<
+      typeof this.requestGoogleAccessToken
+    >[0] = {
+      prompt: GoogleOAuthPrompt.Default,
+      scope,
     };
-  }
-  if (
-    "displayName" in user &&
-    typeof user.displayName === "string" &&
-    user.displayName.trim()
-  ) {
-    return {
-      kind: GoogleAccountIdentityKind.Available,
-      label: user.displayName,
+    const refreshed = await this.requestGoogleAccessToken(
+      requestGoogleAccessTokenArgs2,
+    );
+    const oauthTokensToConfigArgs: Parameters<
+      typeof this.oauthTokensToConfig
+    >[0] = {
+      tokens: refreshed,
+      existing: configuredOAuthFile(config),
     };
+    return this.oauthTokensToConfig(oauthTokensToConfigArgs);
   }
-  return { kind: GoogleAccountIdentityKind.Unavailable };
+
+  async fetchGoogleAccountEmail(
+    accessToken: string,
+  ): Promise<GoogleAccountIdentity> {
+    const fetchArgs: Parameters<typeof fetch>[1] = {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    };
+    const response = await fetch(
+      "https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)",
+      fetchArgs,
+    );
+    if (!response.ok) {
+      return { kind: GoogleAccountIdentityKind.Unavailable };
+    }
+    const payload: unknown = await response.json();
+    if (!payload || typeof payload !== "object" || !("user" in payload)) {
+      return { kind: GoogleAccountIdentityKind.Unavailable };
+    }
+    const user = payload.user;
+    if (!user || typeof user !== "object") {
+      return { kind: GoogleAccountIdentityKind.Unavailable };
+    }
+    if (
+      "emailAddress" in user &&
+      typeof user.emailAddress === "string" &&
+      user.emailAddress.trim()
+    ) {
+      return {
+        kind: GoogleAccountIdentityKind.Available,
+        label: user.emailAddress,
+      };
+    }
+    if (
+      "displayName" in user &&
+      typeof user.displayName === "string" &&
+      user.displayName.trim()
+    ) {
+      return {
+        kind: GoogleAccountIdentityKind.Available,
+        label: user.displayName,
+      };
+    }
+    return { kind: GoogleAccountIdentityKind.Unavailable };
+  }
 }
+
+export const googleOAuthSession = new GoogleOAuthSession();

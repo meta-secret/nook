@@ -1,10 +1,7 @@
 import {
-  findOneTimeCodeFields,
-  findPasswordFields,
-  hasAutocompleteToken,
   PasswordFormScopeKind,
-  preferredOneTimeCodeFillField,
   type PasswordFieldQuery,
+  passwordFieldDiscovery,
 } from "./password-form-fields";
 import {
   PasswordFormQueryKind,
@@ -40,124 +37,178 @@ export type GeneratedPasswordFillRequest = PasswordFormScopeQuery & {
 
 type NativeInputValueMutation = { input: HTMLInputElement; value: string };
 
-const filledLoginCredentialFields = new WeakMap<
-  ParentNode,
-  Set<HTMLInputElement>
->();
-
-function loginCredentialFieldKey(request: PasswordFormScopeQuery): ParentNode {
-  if (
-    request.kind === PasswordFormQueryKind.Scoped &&
-    request.formScope.kind === PasswordFormScopeKind.Owned
-  ) {
-    return request.formScope.owner;
-  }
-  return request.root;
-}
-
 type TrackedLoginCredentialField = NativeInputValueMutation & {
   request: PasswordFormScopeQuery;
 };
 
-export function trackLoginCredentialField({
-  request,
-  input,
-}: TrackedLoginCredentialField): void {
-  const key = loginCredentialFieldKey(request);
-  const tracked = ((v) => (v ? v : new Set<HTMLInputElement>()))(
-    filledLoginCredentialFields.get(key),
-  );
-  tracked.add(input);
-  filledLoginCredentialFields.set(key, tracked);
-}
+/** Owns the browser runtime resources shared by these interactions. */
+class PasswordFormCredentialInteraction {
+  readLoginCredentials(
+    request: PasswordFormScopeQuery,
+  ): LoginCredentialsLookup {
+    const nookTypedArgs0_25 = this.passwordFieldQuery(request);
+    const passwordFields =
+      passwordFieldDiscovery.findPasswordFields(nookTypedArgs0_25);
+    if (passwordFields.length === 0) {
+      return { kind: LoginCredentialsLookupKind.Absent };
+    }
 
-export function beginLoginCredentialFill(request: PasswordFormScopeQuery): void {
-  filledLoginCredentialFields.delete(loginCredentialFieldKey(request));
-}
-
-function passwordFieldQuery(
-  request: PasswordFormScopeQuery,
-): PasswordFieldQuery {
-  if (request.kind === PasswordFormQueryKind.Root) {
-    return { root: request.root };
-  }
-  return { root: request.root, formScope: request.formScope };
-}
-
-export function setNativeInputValue({
-  input,
-  value,
-}: NativeInputValueMutation): void {
-  const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
-  const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
-  if (descriptor?.set) {
-    descriptor.set.call(input, value);
-  } else {
-    input.value = value;
-  }
-  const inputEventOptions: ConstructorParameters<typeof Event>[1] = {
-    bubbles: true,
-  };
-  input.dispatchEvent(new Event("input", inputEventOptions));
-  const changeEventOptions: ConstructorParameters<typeof Event>[1] = {
-    bubbles: true,
-  };
-  input.dispatchEvent(new Event("change", changeEventOptions));
-}
-
-export function fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
-  const field = preferredOneTimeCodeFillField(
-    findOneTimeCodeFields(passwordFieldQuery(request)),
-  );
-  if (!field) return false;
-  const mutation: Parameters<typeof setNativeInputValue>[0] = {
-    input: field,
-    value: request.code,
-  };
-  setNativeInputValue(mutation);
-  field.focus();
-  return true;
-}
-
-export function fillGeneratedPassword(
-  request: GeneratedPasswordFillRequest,
-): boolean {
-  const passwordFields = findPasswordFields(passwordFieldQuery(request)).filter(
-    (field) => !field.readOnly,
-  );
-  const newPasswordFields = passwordFields.filter((field) => {
-    const tokenRequest: Parameters<typeof hasAutocompleteToken>[0] = {
-      field,
-      expected: "new-password",
+    const newPasswordFields = passwordFields.filter((field) => {
+      const nookArrowArgs4: Parameters<
+        typeof passwordFieldDiscovery.hasAutocompleteToken
+      >[0] = {
+        field,
+        expected: "new-password",
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs4);
+    });
+    const [passwordField = passwordFields[0]] = [
+      ((
+        ...[
+          v = passwordFields.find((field) => {
+            const nookArrowArgs5: Parameters<
+              typeof passwordFieldDiscovery.hasAutocompleteToken
+            >[0] = {
+              field,
+              expected: "current-password",
+            };
+            return passwordFieldDiscovery.hasAutocompleteToken(nookArrowArgs5);
+          }),
+        ]
+      ) => v)(newPasswordFields[0]),
+    ];
+    const password = passwordField.value.trim();
+    const nookNamedArgs0_3 = this.passwordFieldQuery(request);
+    const username = ((v) => (v ? v : ""))(
+      passwordFieldDiscovery
+        .findUsernameFields(nookNamedArgs0_3)[0]
+        ?.value.trim(),
+    );
+    if (!username || !password) {
+      return { kind: LoginCredentialsLookupKind.Absent };
+    }
+    return {
+      kind: LoginCredentialsLookupKind.Found,
+      credentials: { username, password },
     };
-    return hasAutocompleteToken(tokenRequest);
-  });
-  if (newPasswordFields.length === 0) return false;
-  for (const field of newPasswordFields) {
-    const mutation: Parameters<typeof setNativeInputValue>[0] = {
+  }
+
+  private filledLoginCredentialFields = new WeakMap<
+    ParentNode,
+    Set<HTMLInputElement>
+  >();
+  private loginCredentialFieldKey(request: PasswordFormScopeQuery): ParentNode {
+    if (
+      request.kind === PasswordFormQueryKind.Scoped &&
+      request.formScope.kind === PasswordFormScopeKind.Owned
+    ) {
+      return request.formScope.owner;
+    }
+    return request.root;
+  }
+
+  trackLoginCredentialField({
+    request,
+    input,
+  }: TrackedLoginCredentialField): void {
+    const key = this.loginCredentialFieldKey(request);
+    const tracked = ((v) => (v ? v : new Set<HTMLInputElement>()))(
+      this.filledLoginCredentialFields.get(key),
+    );
+    tracked.add(input);
+    this.filledLoginCredentialFields.set(key, tracked);
+  }
+
+  beginLoginCredentialFill(request: PasswordFormScopeQuery): void {
+    this.filledLoginCredentialFields.delete(
+      this.loginCredentialFieldKey(request),
+    );
+  }
+
+  private passwordFieldQuery(
+    request: PasswordFormScopeQuery,
+  ): PasswordFieldQuery {
+    if (request.kind === PasswordFormQueryKind.Root) {
+      return { root: request.root };
+    }
+    return { root: request.root, formScope: request.formScope };
+  }
+
+  setNativeInputValue({ input, value }: NativeInputValueMutation): void {
+    const prototype = Object.getPrototypeOf(input) as HTMLInputElement;
+    const descriptor = Object.getOwnPropertyDescriptor(prototype, "value");
+    if (descriptor?.set) {
+      descriptor.set.call(input, value);
+    } else {
+      input.value = value;
+    }
+    const inputEventOptions: ConstructorParameters<typeof Event>[1] = {
+      bubbles: true,
+    };
+    input.dispatchEvent(new Event("input", inputEventOptions));
+    const changeEventOptions: ConstructorParameters<typeof Event>[1] = {
+      bubbles: true,
+    };
+    input.dispatchEvent(new Event("change", changeEventOptions));
+  }
+
+  fillOneTimeCode(request: OneTimeCodeFillRequest): boolean {
+    const field = passwordFieldDiscovery.preferredOneTimeCodeFillField(
+      passwordFieldDiscovery.findOneTimeCodeFields(
+        this.passwordFieldQuery(request),
+      ),
+    );
+    if (!field) return false;
+    const mutation: Parameters<typeof this.setNativeInputValue>[0] = {
       input: field,
-      value: request.password,
+      value: request.code,
     };
-    setNativeInputValue(mutation);
+    this.setNativeInputValue(mutation);
+    field.focus();
+    return true;
   }
-  newPasswordFields[0]?.focus();
-  return true;
+
+  fillGeneratedPassword(request: GeneratedPasswordFillRequest): boolean {
+    const passwordFields = passwordFieldDiscovery
+      .findPasswordFields(this.passwordFieldQuery(request))
+      .filter((field) => !field.readOnly);
+    const newPasswordFields = passwordFields.filter((field) => {
+      const tokenRequest: Parameters<
+        typeof passwordFieldDiscovery.hasAutocompleteToken
+      >[0] = {
+        field,
+        expected: "new-password",
+      };
+      return passwordFieldDiscovery.hasAutocompleteToken(tokenRequest);
+    });
+    if (newPasswordFields.length === 0) return false;
+    for (const field of newPasswordFields) {
+      const mutation: Parameters<typeof this.setNativeInputValue>[0] = {
+        input: field,
+        value: request.password,
+      };
+      this.setNativeInputValue(mutation);
+    }
+    newPasswordFields[0]?.focus();
+    return true;
+  }
+
+  clearLoginCredentials(request: PasswordFormScopeQuery): void {
+    const clearField = (input: HTMLInputElement): void => {
+      const mutation: Parameters<typeof this.setNativeInputValue>[0] = {
+        input,
+        value: "",
+      };
+      this.setNativeInputValue(mutation);
+    };
+    const key = this.loginCredentialFieldKey(request);
+    const fields = ((v) => (v ? v : new Set<HTMLInputElement>()))(
+      this.filledLoginCredentialFields.get(key),
+    );
+    fields.forEach(clearField);
+    this.filledLoginCredentialFields.delete(key);
+  }
 }
 
-export function clearLoginCredentials(
-  request: PasswordFormScopeQuery,
-): void {
-  const clearField = (input: HTMLInputElement): void => {
-    const mutation: Parameters<typeof setNativeInputValue>[0] = {
-      input,
-      value: "",
-    };
-    setNativeInputValue(mutation);
-  };
-  const key = loginCredentialFieldKey(request);
-  const fields = ((v) => (v ? v : new Set<HTMLInputElement>()))(
-    filledLoginCredentialFields.get(key),
-  );
-  fields.forEach(clearField);
-  filledLoginCredentialFields.delete(key);
-}
+export const passwordFormCredentialInteraction =
+  new PasswordFormCredentialInteraction();

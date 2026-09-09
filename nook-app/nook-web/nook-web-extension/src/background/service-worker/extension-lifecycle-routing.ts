@@ -1,12 +1,12 @@
 import {
-  isBeginExtensionPairingMessage,
-  isExtensionLocalEventLogUpdatedMessage,
-  isOpenSimpleVaultMessage,
-} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-message-adapter'
+  BeginExtensionPairingMessage as BeginExtensionPairingMessageSchema,
+  ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageSchema,
+  OpenSimpleVaultMessage as OpenSimpleVaultMessageSchema,
+} from '../../../../nook-web-shared/src/extension/lifecycle-runtime-messages'
 import {
-  normalizeOpenCompanionLauncherMessage,
   OpenCompanionLauncherNormalizationKind,
-} from '../../../../nook-web-shared/src/extension/companion-launcher-message-adapter'
+  NormalizedOpenCompanionLauncherMessage as NormalizedOpenCompanionLauncherMessageSchema,
+} from '../../../../nook-web-shared/src/extension/companion-launcher-message'
 import { isExtensionRuntimeSender, isNokeySender } from './routing-trust'
 import type * as PairingState from '../../lib/pairing-state'
 import type * as PairingIdentity from './pairing-identity'
@@ -34,27 +34,27 @@ type ExtensionLifecycleRoutingArgs = {
 export type ExtensionLifecycleRoutingDependencies = {
   accountPickerAuthorizationCleanupPending: typeof AccountPickers.accountPickerAuthorizationCleanupPending
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
-  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
-  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
-  rebindStagedAuthenticatorEnrollmentsAuthorization: typeof AuthenticatorOperations.rebindStagedAuthenticatorEnrollmentsAuthorization
-  closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+  clearPendingAccountPickers: typeof AccountPickers.accountPickerSessions.clearPendingAccountPickers
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.authenticatorEnrollmentOperations.clearStagedAuthenticatorEnrollments
+  rebindStagedAuthenticatorEnrollmentsAuthorization: typeof AuthenticatorOperations.authenticatorEnrollmentOperations.rebindStagedAuthenticatorEnrollmentsAuthorization
+  closeExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
-  ensureExtensionSessionDocument: typeof SessionLifecycle.ensureExtensionSessionDocument
+  ensureExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.ensureExtensionSessionDocument
   extensionSessionDocument: typeof SessionLifecycle.extensionSessionDocument
   handlePairingStateQuery: typeof PairingStateQuery.handlePairingStateQuery
-  hasPairingApprovedType: typeof PairingIdentity.hasPairingApprovedType
+  hasPairingApprovedType: typeof PairingIdentity.extensionPairingIdentity.hasPairingApprovedType
   importLocalEventLogUpdate: typeof PairingImport.importLocalEventLogUpdate
   importPairingAfterCompanionReady: typeof PairingImport.importPairingAfterCompanionReady
   isExtensionAuthenticationSurfacesRefreshMessage: typeof SessionRuntimeMessages.isExtensionAuthenticationSurfacesRefreshMessage
-  isExtensionPairingStateQueryMessage: typeof PairingState.isExtensionPairingStateQueryMessage
+  isExtensionPairingStateQueryMessage: typeof PairingState.ExtensionPairingStateQueryMessage.is
   isExtensionSessionEnsureMessage: typeof SessionRuntimeMessages.isExtensionSessionEnsureMessage
   isExtensionSessionExpiryMessage: typeof SessionRuntimeMessages.isExtensionSessionExpiryMessage
   isExtensionSessionLockMessage: typeof SessionRuntimeMessages.isExtensionSessionLockMessage
-  openCompanionLauncher: typeof SessionLifecycle.openCompanionLauncher
-  openExtensionPairing: typeof PairingIdentity.openExtensionPairing
-  openSimpleVault: typeof SessionLifecycle.openSimpleVault
+  openCompanionLauncher: typeof SessionLifecycle.extensionSessionLifecycle.openCompanionLauncher
+  openExtensionPairing: typeof PairingIdentity.extensionPairingIdentity.openExtensionPairing
+  openSimpleVault: typeof SessionLifecycle.extensionSessionLifecycle.openSimpleVault
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
-  refreshAuthenticationSurfaces: typeof SessionLifecycle.refreshAuthenticationSurfaces
+  refreshAuthenticationSurfaces: typeof SessionLifecycle.extensionSessionLifecycle.refreshAuthenticationSurfaces
 }
 
 type MessageResponse = Parameters<
@@ -85,9 +85,9 @@ const pairingLaunchFailureResponse: MessageResponse = {
 
 type ClearAuthorizationStateArgs = {
   beginAccountPickerAuthorizationCleanup: typeof AccountPickers.beginAccountPickerAuthorizationCleanup
-  clearPendingAccountPickers: typeof AccountPickers.clearPendingAccountPickers
-  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.clearStagedAuthenticatorEnrollments
-  closeExtensionSessionDocument: typeof SessionLifecycle.closeExtensionSessionDocument
+  clearPendingAccountPickers: typeof AccountPickers.accountPickerSessions.clearPendingAccountPickers
+  clearStagedAuthenticatorEnrollments: typeof AuthenticatorOperations.authenticatorEnrollmentOperations.clearStagedAuthenticatorEnrollments
+  closeExtensionSessionDocument: typeof SessionLifecycle.extensionSessionLifecycle.closeExtensionSessionDocument
   completeAccountPickerAuthorizationCleanup: typeof AccountPickers.completeAccountPickerAuthorizationCleanup
   releaseAccountPickerAuthorizationCleanup: typeof AccountPickers.releaseAccountPickerAuthorizationCleanup
   closeSession: boolean
@@ -317,7 +317,7 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isExtensionLocalEventLogUpdatedMessage(message)) {
+  if (ExtensionLocalEventLogUpdatedMessageSchema.is(message)) {
     if (!isExtensionRuntimeSender(sender) || !isNokeySender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -381,7 +381,7 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isOpenSimpleVaultMessage(message)) {
+  if (OpenSimpleVaultMessageSchema.is(message)) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false
@@ -391,7 +391,10 @@ export function routeExtensionLifecycleMessage({
     return false
   }
 
-  const launcherMessage = normalizeOpenCompanionLauncherMessage(message)
+  const launcherMessage =
+    NormalizedOpenCompanionLauncherMessageSchema.normalizeOpenCompanionLauncherMessage(
+      message,
+    )
   if (
     launcherMessage.kind === OpenCompanionLauncherNormalizationKind.Normalized
   ) {
@@ -405,7 +408,7 @@ export function routeExtensionLifecycleMessage({
     return true
   }
 
-  if (isBeginExtensionPairingMessage(message)) {
+  if (BeginExtensionPairingMessageSchema.is(message)) {
     if (!isExtensionRuntimeSender(sender)) {
       sendResponse(forbiddenSenderResponse)
       return false

@@ -17,7 +17,7 @@ describe('login account listing failure handling', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { loginAccountAvailabilityForOrigin, loginAccountsForOrigin } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const grants = [grant('failed-vault'), grant('healthy-vault')]
     const responses = [
@@ -37,12 +37,16 @@ describe('login account listing failure handling', () => {
     const interactiveSendMessage = mock(() =>
       Promise.resolve(responses.shift()),
     )
-    const interactiveRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+    const interactiveRequest: Parameters<
+      typeof accountPickerSessions.loginAccountsForOrigin
+    >[0] = {
       grants,
       origin: 'https://example.test',
       sendMessage: interactiveSendMessage,
     }
-    await expect(loginAccountsForOrigin(interactiveRequest)).resolves.toEqual([
+    await expect(
+      accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
+    ).resolves.toEqual([
       {
         vaultStoreId: 'healthy-vault',
         vaultName: 'healthy-vault',
@@ -57,20 +61,22 @@ describe('login account listing failure handling', () => {
     const unavailableSendMessage = mock(() =>
       Promise.reject(new Error('extension session unavailable')),
     )
-    const unavailableRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+    const unavailableRequest: Parameters<
+      typeof accountPickerSessions.loginAccountsForOrigin
+    >[0] = {
       grants,
       origin: 'https://example.test',
       sendMessage: unavailableSendMessage,
     }
-    await expect(loginAccountsForOrigin(unavailableRequest)).resolves.toEqual(
-      [],
-    )
+    await expect(
+      accountPickerSessions.loginAccountsForOrigin(unavailableRequest),
+    ).resolves.toEqual([])
 
     const passiveSendMessage = mock(() =>
       Promise.resolve({ ok: false, reason: 'session-list-failed' }),
     )
     const passiveRequest: Parameters<
-      typeof loginAccountAvailabilityForOrigin
+      typeof accountPickerSessions.loginAccountAvailabilityForOrigin
     >[0] = {
       grants,
       origin: 'https://example.test',
@@ -78,7 +84,7 @@ describe('login account listing failure handling', () => {
       sendMessage: passiveSendMessage,
     }
     await expect(
-      loginAccountAvailabilityForOrigin(passiveRequest),
+      accountPickerSessions.loginAccountAvailabilityForOrigin(passiveRequest),
     ).resolves.toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
   })
@@ -87,7 +93,7 @@ describe('login account listing failure handling', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { loginAccountAvailabilityForOrigin, loginAccountsForOrigin } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const grants = [grant('failed-vault'), grant('healthy-vault')]
     const interactiveSendMessage = mock()
@@ -103,12 +109,16 @@ describe('login account listing failure handling', () => {
           },
         ],
       })
-    const interactiveRequest: Parameters<typeof loginAccountsForOrigin>[0] = {
+    const interactiveRequest: Parameters<
+      typeof accountPickerSessions.loginAccountsForOrigin
+    >[0] = {
       grants,
       origin: 'https://example.test',
       sendMessage: interactiveSendMessage,
     }
-    await expect(loginAccountsForOrigin(interactiveRequest)).resolves.toEqual([
+    await expect(
+      accountPickerSessions.loginAccountsForOrigin(interactiveRequest),
+    ).resolves.toEqual([
       {
         vaultStoreId: 'healthy-vault',
         vaultName: 'healthy-vault',
@@ -124,7 +134,7 @@ describe('login account listing failure handling', () => {
       Promise.reject(new Error('extension session unavailable')),
     )
     const passiveRequest: Parameters<
-      typeof loginAccountAvailabilityForOrigin
+      typeof accountPickerSessions.loginAccountAvailabilityForOrigin
     >[0] = {
       grants,
       origin: 'https://example.test',
@@ -132,7 +142,7 @@ describe('login account listing failure handling', () => {
       sendMessage: passiveSendMessage,
     }
     await expect(
-      loginAccountAvailabilityForOrigin(passiveRequest),
+      accountPickerSessions.loginAccountAvailabilityForOrigin(passiveRequest),
     ).resolves.toEqual({ ok: false })
     expect(passiveSendMessage).toHaveBeenCalledTimes(1)
   })
@@ -141,10 +151,10 @@ describe('login account listing failure handling', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { loginAccountAvailabilityForOrigin } =
+    const { accountPickerSessions } =
       await import('../src/background/service-worker/account-pickers')
     const passiveRequest: Parameters<
-      typeof loginAccountAvailabilityForOrigin
+      typeof accountPickerSessions.loginAccountAvailabilityForOrigin
     >[0] = {
       grants: [grant('malformed-vault')],
       origin: 'https://example.test',
@@ -157,7 +167,7 @@ describe('login account listing failure handling', () => {
       ),
     }
     await expect(
-      loginAccountAvailabilityForOrigin(passiveRequest),
+      accountPickerSessions.loginAccountAvailabilityForOrigin(passiveRequest),
     ).resolves.toEqual({ ok: false })
   })
 })

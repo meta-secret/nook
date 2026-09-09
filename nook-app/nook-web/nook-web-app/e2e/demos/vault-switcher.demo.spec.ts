@@ -7,7 +7,7 @@ import {
 } from '../helpers'
 import {
   ExtensionPairedVaultIdentityDiscoveryMessageType,
-  isOpenCompanionLauncherMessage,
+  OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
   OpenCompanionLauncherIntent,
   OpenCompanionLauncherMessageType,
   type CompanionIdentityDiscoveryTransportResponse,
@@ -248,7 +248,7 @@ test('list every local vault and pair the open vault with the companion', async 
     throw new Error('Companion launcher message was not recorded.')
   }
   const launcherMessage = JSON.parse(encodedLauncherMessage)
-  if (!isOpenCompanionLauncherMessage(launcherMessage)) {
+  if (!OpenCompanionLauncherMessageGuard.is(launcherMessage)) {
     throw new Error('Companion launcher message was malformed.')
   }
   expect(launcherMessage.payload).toEqual({ intent: 'pair' })

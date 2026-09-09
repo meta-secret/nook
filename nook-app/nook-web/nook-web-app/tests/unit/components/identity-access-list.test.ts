@@ -16,12 +16,12 @@ import {
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access-dashboard-state'
 import { AccessChainStage } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/access-chain'
 import {
-  buildIdentityAccessCards,
+  IdentityAccessPresentation,
   IdentityAccessKeyKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-access-list'
 import type { IdentityDirectoryEntry } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-directory-view'
 import {
-  buildIdentityKeyInventory,
+  IdentityKeyInventory,
   IdentityKeyInventoryRowKind,
 } from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/identity-key-inventory'
 import IdentityKeyInventory from '../../../../nook-web-shared/src/vault-app/lib/components/devices-access/IdentityKeyInventory.svelte'
@@ -72,13 +72,14 @@ function passkeyView(): DashboardView {
 
 describe('identity access cards', () => {
   test('names a passkey by its editable Nook name', () => {
-    const buildIdentityAccessCardsArgs: Parameters<
-      typeof buildIdentityAccessCards
+    const buildIdentityAccessCardsArgs: ConstructorParameters<
+      typeof IdentityAccessPresentation
     >[0] = {
       vault,
       view: passkeyView(),
     }
-    const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
+    const cards = new IdentityAccessPresentation(buildIdentityAccessCardsArgs)
+      .cards
     expect(cards).toHaveLength(1)
     expect(cards[0]).toMatchObject({
       kind: IdentityAccessKeyKind.Passkey,
@@ -117,21 +118,22 @@ describe('identity access cards', () => {
   })
 
   test('keeps the app as subordinate context when a passkey protects it', () => {
-    const buildIdentityAccessCardsArgs: Parameters<
-      typeof buildIdentityAccessCards
+    const buildIdentityAccessCardsArgs: ConstructorParameters<
+      typeof IdentityAccessPresentation
     >[0] = {
       vault,
       view: passkeyView(),
     }
-    const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
+    const cards = new IdentityAccessPresentation(buildIdentityAccessCardsArgs)
+      .cards
     expect(cards.map((card) => card.kind)).toEqual([
       IdentityAccessKeyKind.Passkey,
     ])
   })
 
   test('keeps an unnamed passkey title when the keeper is unknown', () => {
-    const buildIdentityAccessCardsArgs: Parameters<
-      typeof buildIdentityAccessCards
+    const buildIdentityAccessCardsArgs: ConstructorParameters<
+      typeof IdentityAccessPresentation
     >[0] = {
       vault,
       view: {
@@ -139,7 +141,8 @@ describe('identity access cards', () => {
         passkeyName: unknownText,
       },
     }
-    const cards = buildIdentityAccessCards(buildIdentityAccessCardsArgs)
+    const cards = new IdentityAccessPresentation(buildIdentityAccessCardsArgs)
+      .cards
     expect(cards[0]?.title).toBe(I18N_KEYS.DevicesAccessPasskeyUnnamed)
   })
 })
@@ -211,11 +214,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows.map((row) => row.kind)).toEqual([
       IdentityKeyInventoryRowKind.Protector,
@@ -266,11 +269,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows).toHaveLength(1)
     expect(rows[0]).toMatchObject({
@@ -306,11 +309,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows[0]?.apps.map((app) => app.title)).toEqual([
       `${I18N_KEYS.DevicesAccessOtherAppKey}(${JSON.stringify({ count: '1' })})`,
@@ -339,11 +342,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows[0]).toMatchObject({
       kind: IdentityKeyInventoryRowKind.Protector,
@@ -372,11 +375,11 @@ describe('identity key inventory', () => {
       ],
       vaults: [],
     }
-    const buildIdentityKeyInventoryArgs: Parameters<
-      typeof buildIdentityKeyInventory
+    const buildIdentityKeyInventoryArgs: ConstructorParameters<
+      typeof IdentityKeyInventory
     >[0] = { vault, identity, view }
 
-    const rows = buildIdentityKeyInventory(buildIdentityKeyInventoryArgs)
+    const rows = new IdentityKeyInventory(buildIdentityKeyInventoryArgs).rows
 
     expect(rows).toHaveLength(1)
     expect(rows[0]?.kind).toBe(IdentityKeyInventoryRowKind.Apps)
