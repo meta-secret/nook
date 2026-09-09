@@ -980,3 +980,11 @@ mod wasm_tests {
         Ok(())
     }
 }
+
+#[wasm_bindgen]
+#[must_use]
+pub fn compare_extension_pairing_records(
+    request: nook_companion_core::ExtensionPairingRecordComparisonRequest,
+) -> nook_companion_core::ExtensionPairingRecordComparison {
+    request.compare()
+}

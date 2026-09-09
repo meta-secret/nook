@@ -162,6 +162,32 @@ pub enum ExtensionPairingRecord {
     Setup(ExtensionReadySetup),
 }
 
+/// Compare the typed records before deciding whether a legacy write is complete.
+#[derive(Debug, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub struct ExtensionPairingRecordComparisonRequest {
+    pub current: ExtensionPairingRecord,
+    pub migrated: ExtensionPairingRecord,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Tsify)]
+#[tsify(into_wasm_abi, from_wasm_abi)]
+pub enum ExtensionPairingRecordComparison {
+    Equivalent,
+    Different,
+}
+
+impl ExtensionPairingRecordComparisonRequest {
+    #[must_use]
+    pub fn compare(self) -> ExtensionPairingRecordComparison {
+        if self.current == self.migrated {
+            ExtensionPairingRecordComparison::Equivalent
+        } else {
+            ExtensionPairingRecordComparison::Different
+        }
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize, Tsify)]
 #[serde(rename_all = "camelCase")]
 #[tsify(into_wasm_abi, from_wasm_abi)]
@@ -501,6 +527,39 @@ mod tests {
             assert_eq!(ExtensionConnectScope::parse(scope.as_str()), Some(scope));
         }
         assert_eq!(ExtensionConnectScope::parse("external-value"), None);
+    }
+
+    #[test]
+    fn migration_completion_compares_grant_content_and_record_variants() {
+        let current = ExtensionPairingRecord::Grant(Fixture::grant());
+        assert_eq!(
+            ExtensionPairingRecordComparisonRequest {
+                current: current.clone(),
+                migrated: current.clone(),
+            }
+            .compare(),
+            ExtensionPairingRecordComparison::Equivalent
+        );
+        let mut changed = Fixture::grant();
+        changed.device_id = "another-device".to_owned();
+        assert_eq!(
+            ExtensionPairingRecordComparisonRequest {
+                current: current.clone(),
+                migrated: ExtensionPairingRecord::Grant(changed),
+            }
+            .compare(),
+            ExtensionPairingRecordComparison::Different
+        );
+        assert_eq!(
+            ExtensionPairingRecordComparisonRequest {
+                current,
+                migrated: ExtensionPairingRecord::Setup(ExtensionReadySetup::from_grant(
+                    &Fixture::grant()
+                )),
+            }
+            .compare(),
+            ExtensionPairingRecordComparison::Different
+        );
     }
 
     #[test]
