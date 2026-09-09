@@ -34,8 +34,10 @@ impl<'a> DashlaneCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(DashlaneImportError::CsvTooLarge);
         }
-        let mut reader = CsvImportReader::new(self.text);
-        let headers = reader.headers()?.clone();
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let headers = read.headers;
         let headers = NormalizedDashlaneHeaders::from_record(&headers);
         let kind = match self.selection {
             DashlaneCsvSelection::Detect => headers.detect()?,
@@ -70,8 +72,8 @@ impl CheckedDashlaneCsv<'_> {
                 too_many_records: DashlaneImportError::TooManyRecords,
                 convert: |record: &StringRecord| self.columns.convert(record),
             },
-            |items: &mut Vec<SecretValue>| {
-                for item in items {
+            |items: Vec<SecretValue>| {
+                for mut item in items {
                     item.zeroize_plaintext();
                 }
             },

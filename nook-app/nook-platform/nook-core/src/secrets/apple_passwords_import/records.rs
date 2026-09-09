@@ -64,8 +64,10 @@ impl<'a> ApplePasswordsCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(ApplePasswordsImportError::CsvTooLarge);
         }
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = ApplePasswordHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = ApplePasswordHeaders::new(&read.headers).admit()?;
         Ok(CheckedApplePasswordsCsv { reader, columns })
     }
 }
@@ -84,8 +86,8 @@ impl CheckedApplePasswordsCsv<'_> {
                 too_many_records: ApplePasswordsImportError::TooManyRecords,
                 convert: |record: &StringRecord| self.columns.convert(record),
             },
-            |items: &mut Vec<SecretValue>| {
-                for item in items {
+            |items: Vec<SecretValue>| {
+                for mut item in items {
                     item.zeroize_plaintext();
                 }
             },

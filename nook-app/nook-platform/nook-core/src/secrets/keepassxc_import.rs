@@ -300,8 +300,10 @@ impl<'a> KeePassXcCsvInput<'a> {
             return Err(KeePassXcImportError::CsvTooLarge);
         }
 
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = KeePassXcHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = KeePassXcHeaders::new(&read.headers).admit()?;
         Ok(CheckedKeePassXcCsv { reader, columns })
     }
 }
@@ -316,8 +318,8 @@ impl CheckedKeePassXcCsv<'_> {
                 too_many_records: KeePassXcImportError::TooManyRecords,
                 convert: |record: &StringRecord| self.columns.convert(record),
             },
-            |items: &mut Vec<SecretValue>| {
-                for item in items {
+            |items: Vec<SecretValue>| {
+                for mut item in items {
                     item.zeroize_plaintext();
                 }
             },

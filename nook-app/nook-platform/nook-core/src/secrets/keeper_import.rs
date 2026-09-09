@@ -71,8 +71,10 @@ impl<'a> KeeperCsvInput<'a> {
         if self.text.len() > MAX_CSV_BYTES {
             return Err(KeeperImportError::CsvTooLarge);
         }
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = KeeperHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = KeeperHeaders::new(&read.headers).admit()?;
         Ok(CheckedKeeperCsv { reader, columns })
     }
 }

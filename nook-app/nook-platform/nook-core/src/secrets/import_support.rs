@@ -55,6 +55,11 @@ pub(crate) struct CsvImportReader<'a> {
     reader: Reader<&'a [u8]>,
 }
 
+pub(crate) struct ReadCsvHeaders<'a> {
+    pub(crate) reader: CsvImportReader<'a>,
+    pub(crate) headers: StringRecord,
+}
+
 pub(crate) struct CsvImportConversion<E, F> {
     pub(crate) too_many_records: E,
     pub(crate) convert: F,
@@ -70,8 +75,12 @@ impl<'a> CsvImportReader<'a> {
         }
     }
 
-    pub(crate) fn headers(&mut self) -> Result<&StringRecord, csv::Error> {
-        self.reader.headers()
+    pub(crate) fn headers(mut self) -> Result<ReadCsvHeaders<'a>, csv::Error> {
+        let headers = self.reader.headers()?.clone();
+        Ok(ReadCsvHeaders {
+            reader: self,
+            headers,
+        })
     }
 
     pub(crate) fn collect<T, E, F>(
@@ -112,7 +121,7 @@ impl<'a> CsvImportReader<'a> {
     where
         E: From<csv::Error>,
         F: FnMut(&StringRecord) -> Result<(Vec<T>, usize), E>,
-        C: FnOnce(&mut Vec<T>),
+        C: FnOnce(Vec<T>),
     {
         let CsvImportConversion {
             too_many_records,
@@ -125,13 +134,13 @@ impl<'a> CsvImportReader<'a> {
         };
         for record in self.reader.records() {
             if collection.source_count >= MAX_CSV_RECORDS {
-                cleanup(&mut collection.items);
+                cleanup(collection.items);
                 return Err(too_many_records);
             }
             let record = match record {
                 Ok(record) => record,
                 Err(error) => {
-                    cleanup(&mut collection.items);
+                    cleanup(collection.items);
                     return Err(error.into());
                 }
             };
@@ -139,7 +148,7 @@ impl<'a> CsvImportReader<'a> {
             let (mut converted, skipped) = match convert(&record) {
                 Ok(converted) => converted,
                 Err(error) => {
-                    cleanup(&mut collection.items);
+                    cleanup(collection.items);
                     return Err(error);
                 }
             };
@@ -276,11 +285,10 @@ mod tests {
 
     #[test]
     fn collection_retains_observed_headers_and_exact_record_bytes() -> anyhow::Result<()> {
-        let mut reader = CsvImportReader::new(" Password ,Name\n\" 密碼 \nsecond line \", name \n");
-        assert_eq!(
-            reader.headers()?,
-            &StringRecord::from(vec!["Password", "Name"])
-        );
+        let reader = CsvImportReader::new(" Password ,Name\n\" 密碼 \nsecond line \", name \n");
+        let read = reader.headers()?;
+        assert_eq!(read.headers, StringRecord::from(vec!["Password", "Name"]));
+        let reader = read.reader;
         let collection = reader.collect(CsvImportConversion {
             too_many_records: CsvFixtureError::Limit,
             convert: |record: &StringRecord| {

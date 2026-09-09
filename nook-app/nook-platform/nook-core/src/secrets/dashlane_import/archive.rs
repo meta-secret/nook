@@ -12,6 +12,10 @@ use zip::ZipArchive;
 pub(super) struct DashlaneArchive<'a> {
     archive: ZipArchive<Cursor<&'a [u8]>>,
 }
+struct ReadDashlaneEntry<'a> {
+    archive: DashlaneArchive<'a>,
+    csv: String,
+}
 impl<'a> DashlaneArchive<'a> {
     pub(super) fn open(bytes: &'a [u8]) -> Result<Self, DashlaneImportError> {
         Ok(Self {
@@ -44,7 +48,9 @@ impl<'a> DashlaneArchive<'a> {
             skipped_unsupported: 0.into(),
         };
         for (kind, index) in selected {
-            let csv = self.read_entry(index)?;
+            let read = self.read_entry(index)?;
+            self = read.archive;
+            let csv = read.csv;
             let collection = DashlaneCsvInput {
                 text: &csv,
                 selection: DashlaneCsvSelection::Archive(kind),
@@ -60,7 +66,7 @@ impl<'a> DashlaneArchive<'a> {
         }
         Ok(plan)
     }
-    fn read_entry(&mut self, index: usize) -> Result<String, DashlaneImportError> {
+    fn read_entry(mut self, index: usize) -> Result<ReadDashlaneEntry<'a>, DashlaneImportError> {
         let file = self
             .archive
             .by_index(index)
@@ -75,7 +81,7 @@ impl<'a> DashlaneArchive<'a> {
         if csv.len() > MAX_CSV_BYTES {
             return Err(DashlaneImportError::CsvTooLarge);
         }
-        Ok(csv)
+        Ok(ReadDashlaneEntry { archive: self, csv })
     }
 }
 struct DashlaneEntryName<'a> {

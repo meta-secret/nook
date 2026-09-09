@@ -244,7 +244,9 @@ impl<'a> LastPassCsvInput<'a> {
             .flexible(true)
             .trim(Trim::Headers)
             .from_reader(self.text.as_bytes());
-        let headers = reader.headers()?.clone();
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let headers = read.headers;
         let columns = LastPassColumns::admit(&headers)?;
         Ok(CheckedLastPassCsv { reader, columns })
     }

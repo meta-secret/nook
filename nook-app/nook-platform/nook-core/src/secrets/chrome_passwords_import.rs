@@ -225,8 +225,10 @@ impl<'a> ChromePasswordsCsvInput<'a> {
             return Err(ChromePasswordsImportError::CsvTooLarge);
         }
 
-        let mut reader = CsvImportReader::new(self.text);
-        let columns = ChromePasswordsHeaders::new(reader.headers()?).admit()?;
+        let reader = CsvImportReader::new(self.text);
+        let read = reader.headers()?;
+        let reader = read.reader;
+        let columns = ChromePasswordsHeaders::new(&read.headers).admit()?;
         Ok(CheckedChromePasswordsCsv { reader, columns })
     }
 }
