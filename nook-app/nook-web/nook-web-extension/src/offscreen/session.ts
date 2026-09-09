@@ -1,4 +1,8 @@
-import { err, type Result } from 'neverthrow'
+import {
+  SessionOperationFailure,
+  SessionOperationFailureKind,
+} from '../lib/session-operation-queue'
+import { err, ok, type Result } from 'neverthrow'
 import { ExtensionSessionLeaseFailure } from './session-lease'
 import { ActiveExtensionSessionLease } from './session-lease'
 import initNookWasm, {
@@ -42,7 +46,6 @@ import type {
 import type { CompanionVaultDiscoveryArgs } from './session-vault-operations'
 
 const SESSION_DURATION_MS = 15 * 60 * 1000
-const SESSION_LOCKED_ERROR = 'EXTENSION_SESSION_LOCKED'
 
 enum WasmStartupKind {
   NotStarted = 'not-started',
@@ -137,9 +140,7 @@ async function getManager(): Promise<NookVaultManager> {
   return manager
 }
 
-async function deviceResult(
-  activeManager: NookVaultManager,
-): Promise<DeviceResult> {
+async function deviceResult(activeManager: NookVaultManager): Promise<DeviceResult> {
   return {
     deviceId: activeManager.device_id,
     devicePublicKey: activeManager.device_public_key,
@@ -173,12 +174,11 @@ function scheduleSessionExpiry(generation: number): void {
           }
         }
         sessionMessageDispatcher.replaceOperations(
-          new Error(SESSION_LOCKED_ERROR),
+          new SessionOperationFailure(SessionOperationFailureKind.Locked),
         )
-        const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] =
-          {
-            type: ExtensionSessionLifecycleMessageType.Expired,
-          }
+        const expiryMessage: Parameters<typeof chrome.runtime.sendMessage>[0] = {
+          type: ExtensionSessionLifecycleMessageType.Expired,
+        }
         void chrome.runtime.sendMessage(expiryMessage)
       },
     }),
@@ -194,7 +194,9 @@ async function activateSession(): Promise<DeviceResult> {
   return deviceResult(activeManager)
 }
 
-function renewSessionExpiry(generation: number): Result<void, ExtensionSessionLeaseFailure> {
+function renewSessionExpiry(
+  generation: number,
+): Result<void, ExtensionSessionLeaseFailure> {
   if (
     generation !== sessionGeneration ||
     sessionExpirySchedule.kind !== SessionExpiryScheduleKind.Scheduled
@@ -229,97 +231,104 @@ async function handleMessage(
 async function handleCompanionIdentityHandoff(
   message: CompanionIdentityHandoffSessionTransportRequest,
 ) {
-  if (
-    companionEndpointAvailability.kind !==
-    CompanionEndpointAvailabilityKind.Active
-  ) {
-    throw new Error('Companion identity discovery is not active.')
-  }
-  const endpoint = companionEndpointAvailability.endpoint
-  companionEndpointAvailability = {
-    kind: CompanionEndpointAvailabilityKind.Inactive,
-  }
-  const generation = sessionGeneration
-  let consumed = false
   try {
-    const activeManager = await getManager()
-    consumed = true
-    const response: CompanionIdentityHandoffResponse =
-      await endpoint.authorize_and_seal(
-        activeManager,
-        message.payload.authorization,
-      )
-    const renewal = renewSessionExpiry(generation)
-    if (renewal.isErr()) return { ok: false, error: renewal.error }
-    return { ok: true, response }
-  } finally {
-    if (!consumed) endpoint.free()
+    if (
+      companionEndpointAvailability.kind !== CompanionEndpointAvailabilityKind.Active
+    ) {
+      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+    }
+    const endpoint = companionEndpointAvailability.endpoint
+    companionEndpointAvailability = {
+      kind: CompanionEndpointAvailabilityKind.Inactive,
+    }
+    const generation = sessionGeneration
+    let consumed = false
+    try {
+      const activeManager = await getManager()
+      consumed = true
+      const response: CompanionIdentityHandoffResponse =
+        await endpoint.authorize_and_seal(
+          activeManager,
+          message.payload.authorization,
+        )
+      const renewal = renewSessionExpiry(generation)
+      if (renewal.isErr())
+        return err(new SessionOperationFailure(SessionOperationFailureKind.Locked))
+      return ok({ ok: true, response })
+    } finally {
+      if (!consumed) endpoint.free()
+    }
+  } catch {
+    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }
 }
 
 async function handleCompanionIdentityDiscovery(
   message: CompanionIdentityDiscoverySessionTransportRequest,
 ) {
-  await ensureWasm()
-  const activeManager = await getManager()
-  const prior = companionEndpointAvailability
-  companionEndpointAvailability = {
-    kind: CompanionEndpointAvailabilityKind.Inactive,
-  }
-  const endpoint: CompanionDiscoveryEndpoint =
-    prior.kind === CompanionEndpointAvailabilityKind.Active
-      ? {
-          kind: CompanionDiscoveryEndpointKind.Discovered,
-          endpoint: prior.endpoint,
-        }
-      : {
-          kind: CompanionDiscoveryEndpointKind.Initial,
-          endpoint: new NookCompanionExtensionEndpoint(
-            message.payload.presence,
-          ),
-        }
-
   try {
-    // Construction above is the Rust-owned validation boundary for this
-    // generated presence projection.
-    const presence = message.payload.presence as CompanionExtensionPresence
-    const discovery = message.payload
-      .discovery as CompanionIdentityDiscoveryObservation
-    const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
-      activeManager,
-      endpoint,
-      presence,
-    }
-    const companionDiscovery = new CompanionVaultDiscovery(
-      companionDiscoveryArgs,
-    )
-    const discovered = await companionDiscovery.discover(discovery)
+    await ensureWasm()
+    const activeManager = await getManager()
+    const prior = companionEndpointAvailability
     companionEndpointAvailability = {
-      kind: CompanionEndpointAvailabilityKind.Active,
-      endpoint: discovered,
+      kind: CompanionEndpointAvailabilityKind.Inactive,
     }
-    const status: CompanionIdentityStatus = discovered.status
-    if (status.status !== 'unlocked') releaseCompanionEndpoint()
-    return { ok: true, status }
-  } catch (error) {
-    releaseCompanionEndpoint()
-    throw error
+    const endpoint: CompanionDiscoveryEndpoint =
+      prior.kind === CompanionEndpointAvailabilityKind.Active
+        ? {
+            kind: CompanionDiscoveryEndpointKind.Discovered,
+            endpoint: prior.endpoint,
+          }
+        : {
+            kind: CompanionDiscoveryEndpointKind.Initial,
+            endpoint: new NookCompanionExtensionEndpoint(message.payload.presence),
+          }
+
+    try {
+      // Construction above is the Rust-owned validation boundary for this
+      // generated presence projection.
+      const presence = message.payload.presence as CompanionExtensionPresence
+      const discovery = message.payload
+        .discovery as CompanionIdentityDiscoveryObservation
+      const companionDiscoveryArgs: CompanionVaultDiscoveryArgs = {
+        activeManager,
+        endpoint,
+        presence,
+      }
+      const companionDiscovery = new CompanionVaultDiscovery(companionDiscoveryArgs)
+      const discoveryResult = await companionDiscovery.discover(discovery)
+      if (discoveryResult.isErr()) return err(discoveryResult.error)
+      const discovered = discoveryResult.value
+      companionEndpointAvailability = {
+        kind: CompanionEndpointAvailabilityKind.Active,
+        endpoint: discovered,
+      }
+      const status: CompanionIdentityStatus = discovered.status
+      if (status.status !== 'unlocked') releaseCompanionEndpoint()
+      return ok({ ok: true, status })
+    } catch (error) {
+      releaseCompanionEndpoint()
+      return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
+    }
+  } catch {
+    return err(new SessionOperationFailure(SessionOperationFailureKind.Failed))
   }
 }
 
-type ExtensionSessionResponse =
+type SessionSuccess<T> =
+  T extends Result<infer Value, SessionOperationFailure> ? Value : never
+type ExtensionSessionResponse = SessionSuccess<
   | Awaited<ReturnType<typeof handleMessage>>
   | Awaited<ReturnType<typeof handleCompanionIdentityDiscovery>>
   | Awaited<ReturnType<typeof handleCompanionIdentityHandoff>>
+>
 
-const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
-  {
-    handleMessage,
-    handleCompanionIdentityDiscovery,
-    handleCompanionIdentityHandoff,
-    decodeProviders: async (providers) => {
-      return admit_extension_storage_providers(providers)
-    },
-  }
-const sessionMessageDispatcher =
-  ListeningExtensionSession.register(dispatchContext)
+const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> = {
+  handleMessage,
+  handleCompanionIdentityDiscovery,
+  handleCompanionIdentityHandoff,
+  decodeProviders: async (providers) => {
+    return admit_extension_storage_providers(providers)
+  },
+}
+const sessionMessageDispatcher = ListeningExtensionSession.register(dispatchContext)

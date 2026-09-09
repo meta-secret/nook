@@ -1,3 +1,8 @@
+import { err, ok } from 'neverthrow'
+import {
+  SessionOperationFailure,
+  SessionOperationFailureKind,
+} from '../src/lib/session-operation-queue'
 import { describe, expect, test } from 'bun:test'
 import {
   ExtensionSessionMessageType,
@@ -26,9 +31,7 @@ async function decodeProviders(providers: StorageProvider[]) {
 
 describe('ExtensionSessionMessageDispatcher', () => {
   test('routes grant authority through runtime ingress and the owned queue', async () => {
-    type RuntimeListener = Parameters<
-      typeof chrome.runtime.onMessage.addListener
-    >[0]
+    type RuntimeListener = Parameters<typeof chrome.runtime.onMessage.addListener>[0]
     const registered = Promise.withResolvers<RuntimeListener>()
     const blocked = Promise.withResolvers<void>()
     const started = Promise.withResolvers<void>()
@@ -43,15 +46,12 @@ describe('ExtensionSessionMessageDispatcher', () => {
     Object.assign(globalThis, {
       __NOOK_SIMPLE_VAULT_URL__: 'https://simple.example.test/',
     })
-    const { classifySessionGrantAuthority } =
-      await import('../src/offscreen/session-operations')
+    const { classifySessionGrantAuthority } = await import(
+      '../src/offscreen/session-operations'
+    )
     const manager = {
       classify_extension_grant_authority: (stored: string, vault: string) => {
-        expect(events).toEqual([
-          'block-started',
-          'block-finished',
-          'interactive',
-        ])
+        expect(events).toEqual(['block-started', 'block-finished', 'interactive'])
         expect(stored).toBe('{}')
         expect(vault).toBe('vault')
         events.push('classified')
@@ -60,29 +60,37 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     const stagedPayloads: { stored_json: string }[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders,
       handleMessage: async (message) => {
         if (message.type === ExtensionSessionMessageType.MigrateAuthProviders) {
           events.push('interactive')
-          return { kind: 'NoMatchingAuthority' as const }
+          return ok({ kind: 'NoMatchingAuthority' as const })
         }
         if (message.type === ExtensionSessionMessageType.Status) {
           events.push('block-started')
           started.resolve()
           await blocked.promise
           events.push('block-finished')
-          return { kind: 'NoMatchingAuthority' as const }
+          return ok({ kind: 'NoMatchingAuthority' as const })
         }
         if (message.type !== ExtensionSessionMessageType.ClassifyGrantAuthority)
-          throw new Error('unexpected request')
+          return err(
+            new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest),
+          )
         stagedPayloads.push(message.payload)
-        return classifySessionGrantAuthority({
-          manager,
-          payload: message.payload,
-        })
+        return ok(
+          classifySessionGrantAuthority({
+            manager,
+            payload: message.payload,
+          }),
+        )
       },
     })
-    dispatcher.registerRuntimeListener()
+    chrome.runtime.onMessage.addListener(dispatcher.listener())
     const listener = await registered.promise
     const queued = Promise.withResolvers<void>()
     const enqueue = dispatcher.enqueue.bind(dispatcher)
@@ -188,9 +196,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
         queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
       },
     })
-    expect(malformedProvider.kind).toBe(
-      ExtensionSessionRequestParseKind.Invalid,
-    )
+    expect(malformedProvider.kind).toBe(ExtensionSessionRequestParseKind.Invalid)
 
     const malformedEvent = await parseExtensionSessionRequest({
       type: ExtensionSessionMessageType.UpdateVault,
@@ -279,10 +285,15 @@ describe('ExtensionSessionMessageDispatcher', () => {
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     }
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders,
-      handleMessage: async (message) => ({
-        pin: messagePayload(message).pin,
-      }),
+      handleMessage: async (message) =>
+        ok({
+          pin: messagePayload(message).pin,
+        }),
     })
 
     const response = dispatcher.enqueue({
@@ -291,7 +302,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
 
     expect(payload.pin).toBe('')
-    await expect(response).resolves.toEqual({ pin: '123456' })
+    await expect(response).resolves.toEqual(ok({ pin: '123456' }))
   })
 
   test('stages browser-owned secrets before awaiting cold WASM', async () => {
@@ -408,12 +419,15 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders,
       handleMessage: async (message) => {
         handledTypes.push(message.type)
-        if (message.type === ExtensionSessionMessageType.CreatePin)
-          await blocker
-        return { ok: true }
+        if (message.type === ExtensionSessionMessageType.CreatePin) await blocker
+        return ok({ ok: true })
       },
     })
     const blockerResponse = dispatcher.enqueue({
@@ -439,13 +453,13 @@ describe('ExtensionSessionMessageDispatcher', () => {
         },
       },
     })
-    const ceremonyRejection = expect(ceremonyResponse).rejects.toThrow(
-      'EXTENSION_SESSION_REQUEST_EXPIRED',
+    const ceremonyRejection = expect(ceremonyResponse).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
     )
 
     await Bun.sleep(20)
     releaseBlocker()
-    await expect(blockerResponse).resolves.toEqual({ ok: true })
+    await expect(blockerResponse).resolves.toEqual(ok({ ok: true }))
     await ceremonyRejection
     expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
   })
@@ -491,10 +505,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders,
       handleMessage: async () => {
         handled = true
-        return { ok: true }
+        return ok({ ok: true })
       },
     })
 
@@ -503,10 +521,9 @@ describe('ExtensionSessionMessageDispatcher', () => {
       payload,
     })
 
-    expect(response).toEqual({
-      ok: false,
-      error: 'invalid-provider-payload',
-    })
+    expect(response).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+    )
     expect(handled).toBe(false)
     expect(payload.providers).toEqual([])
     expect(providers[0]).not.toHaveProperty('githubPat')
@@ -519,10 +536,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     let handled = false
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders,
       handleMessage: async () => {
         handled = true
-        return { ok: true }
+        return ok({ ok: true })
       },
     })
 
@@ -547,20 +568,20 @@ describe('ExtensionSessionMessageDispatcher', () => {
     }
     let handledGithubPat = ''
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders,
       handleMessage: async (message) => {
         const handledProviders = messagePayload(message).providers
         if (Array.isArray(handledProviders)) {
           const provider = handledProviders[0]
-          if (
-            provider &&
-            typeof provider === 'object' &&
-            'githubPat' in provider
-          ) {
+          if (provider && typeof provider === 'object' && 'githubPat' in provider) {
             handledGithubPat = String(provider.githubPat)
           }
         }
-        return { ok: true }
+        return ok({ ok: true })
       },
     })
 
@@ -571,7 +592,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
 
     expect(payload.providers).toEqual([])
     expect(providers[0]).not.toHaveProperty('githubPat')
-    await expect(response).resolves.toEqual({ ok: true })
+    await expect(response).resolves.toEqual(ok({ ok: true }))
     expect(handledGithubPat).toBe('github_pat_accepted_secret')
   })
 
@@ -584,6 +605,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
     })
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -592,9 +617,11 @@ describe('ExtensionSessionMessageDispatcher', () => {
             : ''
         handledTypes.push(type)
         if (type === ExtensionSessionMessageType.Reset) {
-          dispatcher.replaceOperations(new Error('reset'))
+          dispatcher.replaceOperations(
+            new SessionOperationFailure(SessionOperationFailureKind.Closed),
+          )
         }
-        return { ok: true }
+        return ok({ ok: true })
       },
     })
 
@@ -613,8 +640,8 @@ describe('ExtensionSessionMessageDispatcher', () => {
     expect(handledTypes).toEqual([])
 
     finishDecode([])
-    await expect(importResponse).resolves.toEqual({ ok: true })
-    await expect(resetResponse).resolves.toEqual({ ok: true })
+    await expect(importResponse).resolves.toEqual(ok({ ok: true }))
+    await expect(resetResponse).resolves.toEqual(ok({ ok: true }))
     expect(handledTypes).toEqual([
       ExtensionSessionMessageType.ImportVault,
       ExtensionSessionMessageType.Reset,
@@ -638,6 +665,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
       { githubPat: 'github_pat_canceled_staged_secret' },
     ] as StorageProvider[]
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -645,7 +676,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
             ? String(message.type)
             : ''
         if (type === ExtensionSessionMessageType.CreatePin) await blocker
-        return { ok: true }
+        return ok({ ok: true })
       },
     })
 
@@ -664,15 +695,19 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
 
-    dispatcher.replaceOperations(new Error('reset'))
+    dispatcher.replaceOperations(
+      new SessionOperationFailure(SessionOperationFailureKind.Closed),
+    )
     finishDecode(stagedProviders)
-    await expect(importResponse).rejects.toThrow('reset')
+    await expect(importResponse).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Closed)),
+    )
     await decodedProviders
     await Promise.resolve()
     expect(stagedProviders[0]).not.toHaveProperty('githubPat')
 
     releaseBlocker()
-    await expect(blockerResponse).resolves.toEqual({ ok: true })
+    await expect(blockerResponse).resolves.toEqual(ok({ ok: true }))
   })
 
   test('honors a vault-import deadline and scrubs expired staging', async () => {
@@ -687,13 +722,17 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ] as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders: async () => stagedProviders,
       handleMessage: async (message) => {
         handledTypes.push(message.type)
         if (message.type === ExtensionSessionMessageType.CreatePin) {
           await blocker
         }
-        return { ok: true }
+        return ok({ ok: true })
       },
     })
 
@@ -715,13 +754,13 @@ describe('ExtensionSessionMessageDispatcher', () => {
         },
       },
     })
-    const importRejection = expect(importResponse).rejects.toThrow(
-      'EXTENSION_SESSION_REQUEST_EXPIRED',
+    const importRejection = expect(importResponse).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
     )
 
     await Bun.sleep(20)
     releaseBlocker()
-    await expect(blockerResponse).resolves.toEqual({ ok: true })
+    await expect(blockerResponse).resolves.toEqual(ok({ ok: true }))
     await importRejection
     await Promise.resolve()
     expect(handledTypes).toEqual([ExtensionSessionMessageType.CreatePin])
@@ -740,6 +779,10 @@ describe('ExtensionSessionMessageDispatcher', () => {
     ] as StorageProvider[]
     const handledTypes: string[] = []
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders: () => decodedProviders,
       handleMessage: async (message) => {
         const type =
@@ -747,7 +790,7 @@ describe('ExtensionSessionMessageDispatcher', () => {
             ? String(message.type)
             : ''
         handledTypes.push(type)
-        return { ok: true }
+        return ok({ ok: true })
       },
     })
 
@@ -759,10 +802,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     })
     await Promise.resolve()
-    dispatcher.replaceOperations(new Error('session expired'))
+    dispatcher.replaceOperations(
+      new SessionOperationFailure(SessionOperationFailureKind.Closed),
+    )
     finishDecode(stagedProviders)
 
-    await expect(importResponse).rejects.toThrow('request expired')
+    await expect(importResponse).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
+    )
     expect(handledTypes).toEqual([])
     expect(stagedProviders[0]).not.toHaveProperty('githubPat')
   })
@@ -799,10 +846,14 @@ describe('ExtensionSessionMessageDispatcher', () => {
       },
     } as typeof chrome
     const dispatcher = new ExtensionSessionMessageDispatcher({
+      handleCompanionIdentityDiscovery: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
+      handleCompanionIdentityHandoff: async () =>
+        err(new SessionOperationFailure(SessionOperationFailureKind.InvalidRequest)),
       decodeProviders,
-      handleMessage: async () => ({ ok: true }),
+      handleMessage: async () => ok({ ok: true }),
     })
-    dispatcher.registerRuntimeListener()
+    chrome.runtime.onMessage.addListener(dispatcher.listener())
 
     if (registration.kind === ListenerRegistrationKind.NotRegistered) {
       throw new Error('runtime listener was not registered')

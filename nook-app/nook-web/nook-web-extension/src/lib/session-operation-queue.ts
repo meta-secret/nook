@@ -1,3 +1,4 @@
+import { err, type Result } from 'neverthrow'
 export enum SessionOperationPriority {
   Expiry = 'expiry',
   Interactive = 'interactive',
@@ -36,7 +37,7 @@ export const DEFAULT_SESSION_OPERATION_OPTIONS: SessionOperationOptions = {
 }
 
 export type EnqueueSessionOperationArgs<T> = {
-  operation: () => Promise<T>
+  operation: () => Promise<Result<T, SessionOperationFailure>>
   options: SessionOperationOptions
 }
 
@@ -50,12 +51,17 @@ const priorityOrder: Record<SessionOperationPriority, number> = {
 export enum SessionOperationFailureKind {
   Expired = 'EXTENSION_SESSION_REQUEST_EXPIRED',
   Failed = 'EXTENSION_SESSION_OPERATION_FAILED',
+  InvalidRequest = 'EXTENSION_SESSION_INVALID_REQUEST',
+  Locked = 'EXTENSION_SESSION_LOCKED',
+  Verification = 'EXTENSION_SESSION_VERIFICATION_FAILED',
+  Consumed = 'EXTENSION_SESSION_CONSUMED',
+  Closed = 'EXTENSION_SESSION_CLOSED',
 }
 
-export class SessionOperationFailure extends Error {
-  constructor(readonly kind: SessionOperationFailureKind) {
-    super(kind)
-    this.name = 'SessionOperationFailure'
+export class SessionOperationFailure {
+  constructor(readonly kind: SessionOperationFailureKind) {}
+  get message(): string {
+    return this.kind
   }
 }
 
@@ -84,14 +90,13 @@ interface QueuedOperation {
   readonly priority: SessionOperationPriority
   scheduleExpiry(): void
   run(): Promise<void>
-  cancel(error: Error): void
+  cancel(error: SessionOperationFailure): void
 }
 
 type QueuedSessionOperationConfiguration<T> = {
   readonly sequence: number
   readonly request: EnqueueSessionOperationArgs<T>
-  readonly resolve: (value: T) => void
-  readonly reject: (error: Error) => void
+  readonly resolve: (value: Result<T, SessionOperationFailure>) => void
   readonly remove: (entry: QueuedOperation) => void
 }
 
@@ -119,9 +124,7 @@ class QueuedSessionOperation<T> implements QueuedOperation {
     if (expiry.kind === SessionOperationExpiryKind.None) return
     const remaining = expiry.expiresAt - Date.now()
     if (remaining <= 0) {
-      this.cancel(
-        new SessionOperationFailure(SessionOperationFailureKind.Expired),
-      )
+      this.cancel(new SessionOperationFailure(SessionOperationFailureKind.Expired))
       return
     }
     this.state = {
@@ -143,7 +146,7 @@ class QueuedSessionOperation<T> implements QueuedOperation {
     if (timer.kind === PendingTimerKind.Scheduled) clearTimeout(timer.handle)
   }
 
-  cancel(error: Error): void {
+  cancel(error: SessionOperationFailure): void {
     if (this.state.kind !== OperationStateKind.Queued) return
     this.clearTimer(this.state.timer)
     this.state = { kind: OperationStateKind.Settled }
@@ -152,7 +155,7 @@ class QueuedSessionOperation<T> implements QueuedOperation {
     try {
       if (cleanup.kind === SessionOperationCleanupKind.OnExpire) cleanup.run()
     } finally {
-      this.configuration.reject(error)
+      this.configuration.resolve(err(error))
     }
   }
 
@@ -163,9 +166,7 @@ class QueuedSessionOperation<T> implements QueuedOperation {
       expiry.kind === SessionOperationExpiryKind.Deadline &&
       expiry.expiresAt <= Date.now()
     ) {
-      this.cancel(
-        new SessionOperationFailure(SessionOperationFailureKind.Expired),
-      )
+      this.cancel(new SessionOperationFailure(SessionOperationFailureKind.Expired))
       return
     }
     this.clearTimer(this.state.timer)
@@ -183,24 +184,15 @@ class RunningSessionOperation<T> {
     private readonly configuration: QueuedSessionOperationConfiguration<T>,
   ) {}
   async complete(): Promise<void> {
-    if (this.state !== OperationStateKind.Running)
-      throw new Error('Session operation already settled')
+    if (this.state !== OperationStateKind.Running) return
     this.state = OperationStateKind.Settled
-    try {
-      this.configuration.resolve(await this.configuration.request.operation())
-    } catch (error) {
-      this.configuration.reject(
-        error instanceof Error
-          ? error
-          : new SessionOperationFailure(SessionOperationFailureKind.Failed),
-      )
-    }
+    this.configuration.resolve(await this.configuration.request.operation())
   }
 }
 
 /** Closed queues expose their terminal reason, never enqueue or drain. */
 export class ClosedSessionOperationQueue {
-  constructor(readonly error: Error) {}
+  constructor(readonly error: SessionOperationFailure) {}
 }
 
 enum QueueStateKind {
@@ -209,7 +201,8 @@ enum QueueStateKind {
 }
 
 type QueueState =
-  { kind: QueueStateKind.Open } | { kind: QueueStateKind.Closed; error: Error }
+  | { kind: QueueStateKind.Open }
+  | { kind: QueueStateKind.Closed; error: SessionOperationFailure }
 
 enum QueueDrainKind {
   Idle = 'idle',
@@ -222,7 +215,7 @@ export class SessionOperationQueue {
   private drainState = QueueDrainKind.Idle
   private state: QueueState = { kind: QueueStateKind.Open }
 
-  close(error: Error): ClosedSessionOperationQueue {
+  close(error: SessionOperationFailure): ClosedSessionOperationQueue {
     if (this.state.kind === QueueStateKind.Closed)
       return new ClosedSessionOperationQueue(this.state.error)
     this.state = { kind: QueueStateKind.Closed, error }
@@ -232,14 +225,15 @@ export class SessionOperationQueue {
     return new ClosedSessionOperationQueue(error)
   }
 
-  enqueue<T>(request: EnqueueSessionOperationArgs<T>): Promise<T> {
+  enqueue<T>(
+    request: EnqueueSessionOperationArgs<T>,
+  ): Promise<Result<T, SessionOperationFailure>> {
     // eslint-disable-next-line max-params -- Promise owns its executor signature.
-    return new Promise<T>((resolve, reject) => {
+    return new Promise<Result<T, SessionOperationFailure>>((resolve) => {
       const entry = new QueuedSessionOperation({
         sequence: this.sequence++,
         request,
         resolve,
-        reject,
         remove: (expired) => this.remove(expired),
       })
       if (this.state.kind === QueueStateKind.Closed) {
@@ -266,11 +260,7 @@ export class SessionOperationQueue {
     if (this.drainState === QueueDrainKind.Running) return
     this.drainState = QueueDrainKind.Running
     try {
-      for (
-        let entry = this.entries.shift();
-        entry;
-        entry = this.entries.shift()
-      ) {
+      for (let entry = this.entries.shift(); entry; entry = this.entries.shift()) {
         await entry.run()
       }
     } finally {

@@ -1,3 +1,4 @@
+import { ok } from 'neverthrow'
 import initNookWasm from '../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 beforeAll(async () => {
   const bytes = await Bun.file(
@@ -135,13 +136,17 @@ describe('website passkey session operations', () => {
     const cancellationArgs: WebsitePasskeyOperationArgs = {
       message: cancelRequest('request-cancel'),
       getManager: async () => manager,
-      openVault: async () => {},
-      flushEvent: async () => {},
+      openVault: async () => {
+        return ok(undefined)
+      },
+      flushEvent: async () => {
+        return ok(undefined)
+      },
     }
 
     await expect(
       sessionWebsitePasskeys.handleWebsitePasskeyOperation(cancellationArgs),
-    ).resolves.toEqual({ ok: true })
+    ).resolves.toEqual(ok({ ok: true }))
     const canceledActivity: WebsitePasskeyRequestActivityArgs = {
       requestId: 'request-cancel',
       expiresAt: Date.now() + 60_000,
@@ -169,9 +174,13 @@ describe('website passkey session operations', () => {
     let flushCount = 0
     const openVault: WebsitePasskeyOperationArgs['openVault'] = async () => {
       openCount += 1
+
+      return ok(undefined)
     }
     const flushEvent: WebsitePasskeyOperationArgs['flushEvent'] = async () => {
       flushCount += 1
+
+      return ok(undefined)
     }
     const getManager = async () => manager
     const registrationArgs: WebsitePasskeyOperationArgs = {
@@ -189,23 +198,27 @@ describe('website passkey session operations', () => {
 
     await expect(
       sessionWebsitePasskeys.handleWebsitePasskeyOperation(registrationArgs),
-    ).resolves.toEqual({
-      ok: true,
-      credentialId: 'registration-credential',
-      clientDataJSON: 'registration-client-data',
-      attestationObject: 'registration-attestation',
-      transports: ['internal'],
-    })
+    ).resolves.toEqual(
+      ok({
+        ok: true,
+        credentialId: 'registration-credential',
+        clientDataJSON: 'registration-client-data',
+        attestationObject: 'registration-attestation',
+        transports: ['internal'],
+      }),
+    )
     await expect(
       sessionWebsitePasskeys.handleWebsitePasskeyOperation(assertionArgs),
-    ).resolves.toEqual({
-      ok: true,
-      credentialId: 'assertion-credential',
-      clientDataJSON: 'assertion-client-data',
-      authenticatorData: 'assertion-authenticator-data',
-      signature: 'assertion-signature',
-      userHandle: 'assertion-user-handle',
-    })
+    ).resolves.toEqual(
+      ok({
+        ok: true,
+        credentialId: 'assertion-credential',
+        clientDataJSON: 'assertion-client-data',
+        authenticatorData: 'assertion-authenticator-data',
+        signature: 'assertion-signature',
+        userHandle: 'assertion-user-handle',
+      }),
+    )
     expect(openCount).toBe(2)
     expect(flushCount).toBe(2)
     expect(state.registrationContinuationObserved).toBe(true)

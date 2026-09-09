@@ -1,3 +1,8 @@
+import { err, ok } from 'neverthrow'
+import {
+  SessionOperationFailure,
+  SessionOperationFailureKind,
+} from '../src/lib/session-operation-queue'
 import { CompanionDiscoveryEndpointKind } from '../src/offscreen/session-vault-operations'
 import { describe, expect, test } from 'bun:test'
 import {
@@ -157,10 +162,12 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual({
-      ok: true,
-      status: { imported: true },
-    })
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+      ok({
+        ok: true,
+        status: { imported: true },
+      }),
+    )
     expect(state.importedRecords).toBe(true)
     expect(state.operationOrder).toEqual(['activate', 'import'])
     expect(state.activatedAppId).toBe('device')
@@ -183,10 +190,12 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual({
-      ok: true,
-      status: { imported: true },
-    })
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+      ok({
+        ok: true,
+        status: { imported: true },
+      }),
+    )
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(true)
     expect(state.savedAppId).toBe('device')
@@ -209,8 +218,8 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'Lock the active local identity',
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Locked)),
     )
     expect(state.importedRecords).toBe(false)
     expect(state.replaced).toBe(false)
@@ -232,8 +241,8 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'import failed',
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.replaced).toBe(false)
     expect(state.saved).toBe(false)
@@ -252,8 +261,8 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'import failed',
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.activatedAppIds).toEqual(['device', 'other-device'])
     expect(state.operationOrder).toEqual(['activate', 'import', 'activate'])
@@ -273,8 +282,8 @@ describe('extension vault import operations', () => {
       dependencies: importDependencies(provider),
     }
 
-    await expect(importExtensionVaultWithDependencies(args)).rejects.toThrow(
-      'activation failed',
+    await expect(importExtensionVaultWithDependencies(args)).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
     expect(state.importedRecords).toBe(false)
     expect(state.replaced).toBe(false)
@@ -332,11 +341,8 @@ class CompanionVaultDiscoveryScenario {
 
   constructor(private readonly openOutcome: CompanionVaultOpenOutcome) {}
 
-  private async openVault(
-    ...args: [string, string, string, string]
-  ): Promise<void> {
-    const [vaultStoreId, deviceId, devicePublicKey, deviceSigningPublicKey] =
-      args
+  private async openVault(...args: [string, string, string, string]): Promise<void> {
+    const [vaultStoreId, deviceId, devicePublicKey, deviceSigningPublicKey] = args
     this.operationOrder.push(
       `open:${vaultStoreId}:${deviceId}:${devicePublicKey}:${deviceSigningPublicKey}`,
     )
@@ -361,9 +367,7 @@ class CompanionVaultDiscoveryScenario {
       endpoint: this.endpoint,
       presence: this.presence,
     }
-    const companionDiscovery = new CompanionVaultDiscovery(
-      companionDiscoveryArgs,
-    )
+    const companionDiscovery = new CompanionVaultDiscovery(companionDiscoveryArgs)
     return companionDiscovery.discover(this.discovery)
   }
 }
@@ -374,7 +378,10 @@ describe('companion discovery vault restoration', () => {
       CompanionVaultOpenOutcome.Opened,
     )
 
-    const discovered = await scenario.discover()
+    const discovery = await scenario.discover()
+    expect(discovery.isOk()).toBe(true)
+    if (discovery.isErr()) return
+    const discovered = discovery.value
     const status = discovered.status
 
     expect(status.status).toBe('unlocked')
@@ -389,11 +396,9 @@ describe('companion discovery vault restoration', () => {
       CompanionVaultOpenOutcome.Mismatched,
     )
 
-    await expect(scenario.discover()).rejects.toThrow(
-      'ActiveExtensionVaultMismatch',
+    await expect(scenario.discover()).resolves.toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Failed)),
     )
-    expect(scenario.operationOrder).toEqual([
-      'open:vault:device:public:signing',
-    ])
+    expect(scenario.operationOrder).toEqual(['open:vault:device:public:signing'])
   })
 })

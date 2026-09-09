@@ -1,220 +1,149 @@
 import { describe, expect, test } from 'bun:test'
+import { err, ok } from 'neverthrow'
 import {
   DEFAULT_SESSION_OPERATION_OPTIONS,
   SessionOperationCleanupKind,
   SessionOperationExpiryKind,
   SessionOperationPriority,
   SessionOperationQueue,
+  SessionOperationFailure,
   SessionOperationFailureKind,
 } from '../src/lib/session-operation-queue'
 
-enum ReleaseGateKind {
-  Waiting = 'waiting',
-  Releasable = 'releasable',
-}
-
-type ReleaseGate =
-  | { kind: ReleaseGateKind.Waiting }
-  | { kind: ReleaseGateKind.Releasable; release: () => void }
-enum PasswordResidencyKind {
-  Resident = 'resident',
-  Cleared = 'cleared',
-}
-
-type PasswordResidency =
-  | { kind: PasswordResidencyKind.Resident; password: string }
-  | { kind: PasswordResidencyKind.Cleared }
-enum SecretResidencyKind {
-  Resident = 'resident',
-  Cleared = 'cleared',
-}
-
-type SecretResidency =
-  | { kind: SecretResidencyKind.Resident; secret: string }
-  | { kind: SecretResidencyKind.Cleared }
-
 class SessionOperationGate {
-  private gate: ReleaseGate = { kind: ReleaseGateKind.Waiting }
+  private resolve: () => void = () => {}
   readonly promise = new Promise<void>((resolve) => {
-    this.gate = { kind: ReleaseGateKind.Releasable, release: resolve }
+    this.resolve = resolve
   })
-
   release(): void {
-    if (this.gate.kind === ReleaseGateKind.Releasable) this.gate.release()
+    this.resolve()
+  }
+  async operation() {
+    await this.promise
+    return ok(undefined)
+  }
+}
+class QueueFixture {
+  readonly queue = new SessionOperationQueue()
+  readonly gate = new SessionOperationGate()
+  readonly first = this.queue.enqueue({
+    operation: () => this.gate.operation(),
+    options: DEFAULT_SESSION_OPERATION_OPTIONS,
+  })
+  password = 'queued-sensitive-password'
+  released = 0
+  dispatched = 0
+  enqueue(expiresAt: number) {
+    return this.queue.enqueue({
+      operation: async () => {
+        this.dispatched += 1
+        return ok(undefined)
+      },
+      options: {
+        priority: SessionOperationPriority.Interactive,
+        expiry: { kind: SessionOperationExpiryKind.Deadline, expiresAt },
+        cleanup: {
+          kind: SessionOperationCleanupKind.OnExpire,
+          run: () => {
+            this.password = ''
+            this.released += 1
+          },
+        },
+      },
+    })
+  }
+  async finish() {
+    this.gate.release()
+    await this.first
   }
 }
 
-describe('SessionOperationQueue', () => {
+describe('SessionOperationQueue results', () => {
   test('serializes work and prioritizes interactive operations', async () => {
-    const queue = new SessionOperationQueue()
-    const blocker = new SessionOperationGate()
+    const fixture = new QueueFixture()
     const order: string[] = []
-    const first = queue.enqueue({
-      operation: async () => {
-        order.push('first')
-        await blocker.promise
-      },
-      options: DEFAULT_SESSION_OPERATION_OPTIONS,
-    })
-    const normal = queue.enqueue({
+    const normal = fixture.queue.enqueue({
       operation: async () => {
         order.push('normal')
+        return ok(undefined)
       },
       options: DEFAULT_SESSION_OPERATION_OPTIONS,
     })
-    const interactive = queue.enqueue({
+    const interactive = fixture.queue.enqueue({
       operation: async () => {
         order.push('interactive')
+        return ok(undefined)
       },
       options: {
+        ...DEFAULT_SESSION_OPERATION_OPTIONS,
         priority: SessionOperationPriority.Interactive,
-        expiry: { kind: SessionOperationExpiryKind.None },
-        cleanup: { kind: SessionOperationCleanupKind.None },
       },
     })
-
-    blocker.release()
-    await Promise.all([first, normal, interactive])
-
-    expect(order).toEqual(['first', 'interactive', 'normal'])
+    await fixture.finish()
+    expect((await normal).isOk()).toBe(true)
+    expect((await interactive).isOk()).toBe(true)
+    expect(order).toEqual(['interactive', 'normal'])
   })
-
-  test('expires queued work and clears its sensitive input', async () => {
-    const queue = new SessionOperationQueue()
-    const blocker = new SessionOperationGate()
-    const first = queue.enqueue({
-      operation: () => blocker.promise,
-      options: DEFAULT_SESSION_OPERATION_OPTIONS,
-    })
-    let passwordResidency: PasswordResidency = {
-      kind: PasswordResidencyKind.Resident,
-      password: 'temporary-password',
-    }
-    const queued = queue.enqueue({
-      operation: async () => {
-        throw new Error(
-          `Unexpected password use: ${
-            passwordResidency.kind === PasswordResidencyKind.Resident
-              ? passwordResidency.password
-              : 'cleared'
-          }`,
-        )
-      },
-      options: {
-        priority: SessionOperationPriority.Interactive,
-        expiry: {
-          kind: SessionOperationExpiryKind.Deadline,
-          expiresAt: Date.now() + 10,
-        },
-        cleanup: {
-          kind: SessionOperationCleanupKind.OnExpire,
-          run: () => {
-            passwordResidency = { kind: PasswordResidencyKind.Cleared }
-          },
-        },
-      },
-    })
-
-    await expect(queued).rejects.toThrow('EXTENSION_SESSION_REQUEST_EXPIRED')
-    expect(passwordResidency.kind).toBe(PasswordResidencyKind.Cleared)
-    blocker.release()
-    await first
+  test('expires queued work and releases sensitive input exactly once', async () => {
+    const fixture = new QueueFixture()
+    expect(await fixture.enqueue(Date.now() + 10)).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
+    )
+    expect(fixture.released).toBe(1)
+    expect(fixture.password).toBe('')
+    expect(fixture.dispatched).toBe(0)
+    await fixture.finish()
+    expect(fixture.released).toBe(1)
   })
-
-  test('continues after an operation fails', async () => {
+  test('continues after an explicit operation failure', async () => {
     const queue = new SessionOperationQueue()
-    const failed = queue.enqueue({
-      operation: async () => {
-        throw new Error('expected failure')
-      },
-      options: DEFAULT_SESSION_OPERATION_OPTIONS,
-    })
-    await expect(failed).rejects.toThrow('expected failure')
+    const failure = new SessionOperationFailure(SessionOperationFailureKind.Failed)
     expect(
       await queue.enqueue({
-        operation: async () => 'ok',
+        operation: async () => err(failure),
         options: DEFAULT_SESSION_OPERATION_OPTIONS,
       }),
-    ).toBe('ok')
-  })
-
-  test('closes terminally and clears queued sensitive input', async () => {
-    const queue = new SessionOperationQueue()
-    const blocker = new SessionOperationGate()
-    const first = queue.enqueue({
-      operation: () => blocker.promise,
-      options: DEFAULT_SESSION_OPERATION_OPTIONS,
-    })
-    let secretResidency: SecretResidency = {
-      kind: SecretResidencyKind.Resident,
-      secret: 'temporary-secret',
-    }
-    const queued = queue.enqueue({
-      operation: async () => {},
-      options: {
-        priority: SessionOperationPriority.Normal,
-        expiry: { kind: SessionOperationExpiryKind.None },
-        cleanup: {
-          kind: SessionOperationCleanupKind.OnExpire,
-          run: () => {
-            secretResidency = { kind: SecretResidencyKind.Cleared }
-          },
-        },
-      },
-    })
-
-    queue.close(new Error('session expired'))
-
-    await expect(queued).rejects.toThrow('session expired')
-    expect(secretResidency.kind).toBe(SecretResidencyKind.Cleared)
-    await expect(
-      queue.enqueue({
-        operation: async () => {},
+    ).toEqual(err(failure))
+    expect(
+      await queue.enqueue({
+        operation: async () => ok('next'),
         options: DEFAULT_SESSION_OPERATION_OPTIONS,
       }),
-    ).rejects.toThrow('session expired')
-    blocker.release()
-    await first
+    ).toEqual(ok('next'))
   })
-  test('rejects an already expired request before dispatch and releases its input once', async () => {
-    const queue = new SessionOperationQueue()
-    let dispatched = 0
-    let released = 0
-    const request = queue.enqueue({
-      operation: async () => {
-        dispatched += 1
-      },
-      options: {
-        priority: SessionOperationPriority.Normal,
-        expiry: {
-          kind: SessionOperationExpiryKind.Deadline,
-          expiresAt: Date.now() - 1,
-        },
-        cleanup: {
-          kind: SessionOperationCleanupKind.OnExpire,
-          run: () => {
-            released += 1
-          },
-        },
-      },
-    })
-    await expect(request).rejects.toMatchObject({
-      kind: SessionOperationFailureKind.Expired,
-    })
-    queue.close(new Error('closed'))
-    expect(dispatched).toBe(0)
-    expect(released).toBe(1)
+  test('closing clears queued input and rejects subsequent enqueue', async () => {
+    const fixture = new QueueFixture()
+    const queued = fixture.enqueue(Date.now() + 60000)
+    const failure = new SessionOperationFailure(SessionOperationFailureKind.Closed)
+    fixture.queue.close(failure)
+    expect(await queued).toEqual(err(failure))
+    expect(await fixture.enqueue(Date.now() + 60000)).toEqual(err(failure))
+    expect(fixture.released).toBe(2)
+    expect(fixture.password).toBe('')
+    expect(fixture.dispatched).toBe(0)
+    await fixture.finish()
   })
-
-  test('closing the queue leaves cleanup of running work with that operation', async () => {
-    const queue = new SessionOperationQueue()
+  test('already elapsed deadlines never dispatch and release once', async () => {
+    const fixture = new QueueFixture()
+    expect(await fixture.enqueue(Date.now() - 1)).toEqual(
+      err(new SessionOperationFailure(SessionOperationFailureKind.Expired)),
+    )
+    fixture.queue.close(
+      new SessionOperationFailure(SessionOperationFailureKind.Closed),
+    )
+    expect(fixture.released).toBe(1)
+    expect(fixture.password).toBe('')
+    expect(fixture.dispatched).toBe(0)
+    await fixture.finish()
+  })
+  test('running operation retains cleanup ownership when queue closes', async () => {
     const gate = new SessionOperationGate()
+    const queue = new SessionOperationQueue()
     let released = 0
     const running = queue.enqueue({
-      operation: () => gate.promise,
+      operation: () => gate.operation(),
       options: {
-        priority: SessionOperationPriority.Normal,
-        expiry: { kind: SessionOperationExpiryKind.None },
+        ...DEFAULT_SESSION_OPERATION_OPTIONS,
         cleanup: {
           kind: SessionOperationCleanupKind.OnExpire,
           run: () => {
@@ -223,9 +152,9 @@ describe('SessionOperationQueue', () => {
         },
       },
     })
-    queue.close(new Error('closed'))
+    queue.close(new SessionOperationFailure(SessionOperationFailureKind.Closed))
     expect(released).toBe(0)
     gate.release()
-    await running
+    expect((await running).isOk()).toBe(true)
   })
 })

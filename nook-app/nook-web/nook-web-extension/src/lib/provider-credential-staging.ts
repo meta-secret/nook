@@ -5,8 +5,7 @@ import { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/ex
 export type SerializedStorageProvider = unknown
 export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
 export type DecodedExtensionStorageProviders = StorageProvider[]
-export type ExtensionStorageProviderIdentities =
-  ExtensionStorageProviderPayload[]
+export type ExtensionStorageProviderIdentities = ExtensionStorageProviderPayload[]
 
 export enum ProviderCredentialStagingKind {
   InvalidInput = 'invalid-input',
@@ -33,9 +32,7 @@ export type StageProviderCredentialsArgs = {
 }
 
 export class ProviderCredentialBuffer {
-  constructor(
-    private readonly providers: SerializedExtensionStorageProviders,
-  ) {}
+  constructor(private readonly providers: SerializedExtensionStorageProviders) {}
   identities(): ExtensionStorageProviderIdentities {
     const providers = this.providers
     return providers.map((provider) => {
@@ -49,8 +46,7 @@ export class ProviderCredentialBuffer {
     if (typeof value === 'number') return Number.isFinite(value)
     if (Array.isArray(value))
       return value.every(ProviderCredentialBuffer.isSerializedProviderField)
-    if (!value || Object.getPrototypeOf(value) !== Object.prototype)
-      return false
+    if (!value || Object.getPrototypeOf(value) !== Object.prototype) return false
     return Object.values(value).every(
       ProviderCredentialBuffer.isSerializedProviderField,
     )
@@ -69,11 +65,7 @@ export class ProviderCredentialBuffer {
         typeof provider.oauthFile === 'object'
       ) {
         const oauth = provider.oauthFile
-        if (
-          'config' in oauth &&
-          oauth.config &&
-          typeof oauth.config === 'object'
-        ) {
+        if ('config' in oauth && oauth.config && typeof oauth.config === 'object') {
           if ('accessToken' in oauth.config)
             oauth.config.accessToken = { state: 'signedOut' }
           if ('refreshToken' in oauth.config)
@@ -98,19 +90,19 @@ export class ProviderCredentialBuffer {
   static async stage(
     args: StageProviderCredentialsArgs,
   ): Promise<ProviderCredentialStaging> {
-    if (
-      !args.providers.every(ProviderCredentialBuffer.isSerializedProviderField)
-    ) {
+    if (!args.providers.every(ProviderCredentialBuffer.isSerializedProviderField)) {
       return { kind: ProviderCredentialStagingKind.InvalidInput }
     }
-    const staged = structuredClone(args.providers)
     try {
-      const providers = await args.decode(staged)
-      return { kind: ProviderCredentialStagingKind.Staged, providers }
+      const staged = structuredClone(args.providers)
+      try {
+        const providers = await args.decode(staged)
+        return { kind: ProviderCredentialStagingKind.Staged, providers }
+      } finally {
+        new ProviderCredentialBuffer(staged).clear()
+      }
     } catch {
       return { kind: ProviderCredentialStagingKind.InvalidInput }
-    } finally {
-      new ProviderCredentialBuffer(staged).clear()
     }
   }
 }
