@@ -619,10 +619,12 @@ export class ExecutableSkillRepository {
     const packageDocument = this.parseJson(packageRequest);
     const manifest = this.parseJson(manifestRequest);
     if (packageDocument === false || manifest === false) return;
-    const dependencies = this.property(packageDocument)('devDependencies');
-    if (UntrustedYamlBoundary.isRecord(dependencies)) {
-      for (const name of Object.keys(dependencies)) {
-        if (!name.startsWith('@types/')) npmPackages.add(name);
+    for (const field of ['dependencies', 'devDependencies']) {
+      const dependencies = this.property(packageDocument)(field);
+      if (UntrustedYamlBoundary.isRecord(dependencies)) {
+        for (const name of Object.keys(dependencies)) {
+          if (!name.startsWith('@types/')) npmPackages.add(name);
+        }
       }
     }
     const packageAudit: AuditPackageDocumentRequest = {
@@ -718,6 +720,8 @@ export class ExecutableSkillRepository {
       'type',
       'version',
     ];
+    if (Object.hasOwn(document, 'dependencies'))
+      expectedKeys.push('dependencies');
     if (!this.sameKeys(document)(expectedKeys)) {
       collector.add({
         path: packagePath,
@@ -749,6 +753,15 @@ export class ExecutableSkillRepository {
       collector.add({
         path: packagePath,
         issue: 'devDependencies must be a pinned string map',
+      });
+    }
+    if (
+      Object.hasOwn(document, 'dependencies') &&
+      !this.pinnedDependencyMap(this.property(document)('dependencies'))
+    ) {
+      collector.add({
+        path: packagePath,
+        issue: 'dependencies must be a pinned string map',
       });
     }
   }
@@ -816,6 +829,25 @@ export class ExecutableSkillRepository {
       : false;
     const packageDependencies =
       this.property(packageDocument)('devDependencies');
+    const expectedWorkspaceKeys = ['devDependencies', 'name', 'version'];
+    if (Object.hasOwn(packageDocument, 'dependencies')) {
+      expectedWorkspaceKeys.push('dependencies');
+      const declaredRuntime = this.property(packageDocument)('dependencies');
+      const lockedRuntime = UntrustedYamlBoundary.isRecord(workspace)
+        ? this.property(workspace)('dependencies')
+        : false;
+      if (
+        !this.pinnedDependencyMap(declaredRuntime) ||
+        !this.pinnedDependencyMap(lockedRuntime) ||
+        !this.sameRecord(lockedRuntime)(declaredRuntime)
+      ) {
+        collector.add({
+          path: lockPath,
+          issue:
+            'workspace lock runtime dependencies must exactly match declared dependencies',
+        });
+      }
+    }
     if (
       !this.sameKeys(lock)([
         'configVersion',
@@ -827,7 +859,7 @@ export class ExecutableSkillRepository {
       lock.configVersion !== 1 ||
       !UntrustedYamlBoundary.isRecord(packages) ||
       !UntrustedYamlBoundary.isRecord(workspace) ||
-      !this.sameKeys(workspace)(['devDependencies', 'name', 'version']) ||
+      !this.sameKeys(workspace)(expectedWorkspaceKeys) ||
       workspace.name !== expectedName ||
       workspace.version !== '0.1.0' ||
       !UntrustedYamlBoundary.isRecord(workspaceDependencies) ||

@@ -65,6 +65,9 @@ export class ExecutableSkillsRepositoryScenario {
             name: '@nook/example-skill',
             version: '0.1.0',
             devDependencies: packageDocument.devDependencies,
+            ...('dependencies' in packageDocument
+              ? { dependencies: packageDocument.dependencies }
+              : {}),
           },
         },
         packages: {},
@@ -517,14 +520,97 @@ test('parses NUL-separated tracked paths without newline ambiguity', async () =>
   }
 });
 
-test('rejects identity, policy, runtime dependency, lifecycle, and lock drift', async () => {
+test('accepts pinned declared runtime dependencies with matching lock entries', async () => {
+  const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture({
+    packageDocument: { ...PACKAGE_DOCUMENT, dependencies: { zod: '4.4.3' } },
+  });
+  try {
+    const request = {
+      repoRoot,
+      tracked: ExecutableSkillsRepositoryScenario.trackedFiles(),
+    };
+    expect(ExecutableSkillRepository.auditFiles(request)).toEqual([]);
+  } finally {
+    await rm(repoRoot, REMOVE_OPTIONS);
+  }
+});
+
+test('rejects missing, mismatched, and undeclared runtime lock dependencies', async () => {
+  const declaredPackage = {
+    ...PACKAGE_DOCUMENT,
+    dependencies: { zod: '4.4.3' },
+  };
+  const workspaceIdentity = {
+    name: '@nook/example-skill',
+    version: '0.1.0',
+    devDependencies: PACKAGE_DOCUMENT.devDependencies,
+  };
+  const cases: readonly FixtureOverrides[] = [
+    {
+      packageDocument: declaredPackage,
+      lock: {
+        lockfileVersion: 1,
+        configVersion: 1,
+        workspaces: {
+          '': { name: '@nook/executable-skills-workspace' },
+          'teams/ai/dynamic-skills/example/scripts': workspaceIdentity,
+        },
+        packages: {},
+      },
+    },
+    {
+      packageDocument: declaredPackage,
+      lock: {
+        lockfileVersion: 1,
+        configVersion: 1,
+        workspaces: {
+          '': { name: '@nook/executable-skills-workspace' },
+          'teams/ai/dynamic-skills/example/scripts': {
+            ...workspaceIdentity,
+            dependencies: { zod: '4.4.2' },
+          },
+        },
+        packages: {},
+      },
+    },
+    {
+      lock: {
+        lockfileVersion: 1,
+        configVersion: 1,
+        workspaces: {
+          '': { name: '@nook/executable-skills-workspace' },
+          'teams/ai/dynamic-skills/example/scripts': {
+            ...workspaceIdentity,
+            dependencies: { zod: '4.4.3' },
+          },
+        },
+        packages: {},
+      },
+    },
+  ];
+  for (const overrides of cases) {
+    const repoRoot =
+      await ExecutableSkillsRepositoryScenario.packageFixture(overrides);
+    try {
+      expect(
+        ExecutableSkillsRepositoryScenario.audit(repoRoot)(
+          ExecutableSkillsRepositoryScenario.trackedFiles(),
+        ).some((finding) => finding.path === '.cortex/bun.lock'),
+      ).toBe(true);
+    } finally {
+      await rm(repoRoot, REMOVE_OPTIONS);
+    }
+  }
+});
+
+test('rejects identity, policy, unpinned dependency, lifecycle, and lock drift', async () => {
   const cases: readonly FixtureOverrides[] = [
     { skill: '---\nname: wrong\ndescription: Test.\n---\n' },
     { packageDocument: { ...PACKAGE_DOCUMENT, name: '@nook/wrong-skill' } },
     {
       packageDocument: {
         ...PACKAGE_DOCUMENT,
-        dependencies: { danger: '1.0.0' },
+        dependencies: { danger: '^1.0.0' },
       },
     },
     {
@@ -571,7 +657,7 @@ test('rejects identity, policy, runtime dependency, lifecycle, and lock drift', 
   }
 });
 
-test('parsed JSON keys cannot hide runtime dependency fields', async () => {
+test('parsed JSON keys cannot hide replacement of required development dependencies', async () => {
   const repoRoot = await ExecutableSkillsRepositoryScenario.packageFixture();
   try {
     await writeFile(
