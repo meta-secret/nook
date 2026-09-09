@@ -15,8 +15,6 @@ use std::collections::HashMap;
 use crate::errors::VaultSyncError;
 use crate::vault_sync::{CommonContentHash, VaultSyncAction, VaultSyncComparison};
 
-type VaultSyncResult<T> = Result<T, VaultSyncError>;
-
 /// Provider revision state for stores that may not have been written remotely yet.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum StoreRevision {
@@ -108,12 +106,14 @@ impl MemoryVaultStore {
         self.revision.as_ref()
     }
 
-    pub fn set_blob(&mut self, blob: impl Into<String>) {
+    pub fn set_blob(mut self, blob: impl Into<String>) -> Self {
         self.blob = blob.into();
+        self
     }
 
-    pub fn set_revision(&mut self, revision: StoreRevision) {
+    pub fn set_revision(mut self, revision: StoreRevision) -> Self {
         self.revision = revision;
+        self
     }
 
     #[must_use]
@@ -129,57 +129,97 @@ impl MemoryVaultStore {
     /// fetched remote already equals the proposed content the retry is
     /// idempotent; otherwise the caller must surface a sync conflict.
     pub fn write_if_revision_matches_or_same_content(
-        &mut self,
+        mut self,
         content: impl Into<String>,
         expected_revision: StoreRevisionRef<'_>,
-    ) -> VaultSyncResult<RevisionGuardedWrite> {
+    ) -> Result<GuardedVaultWrite, RejectedVaultWrite> {
         let content = content.into();
         if self.blob.trim() == content.trim() {
-            return Ok(RevisionGuardedWrite::AlreadyPresent {
-                revision: self.revision.clone(),
+            return Ok(GuardedVaultWrite {
+                outcome: RevisionGuardedWrite::AlreadyPresent {
+                    revision: self.revision.clone(),
+                },
+                store: self,
             });
         }
         if self.revision.as_ref() != expected_revision {
-            return Err(VaultSyncError::RemoteChangedDuringWrite);
+            return Err(RejectedVaultWrite {
+                store: self,
+                cause: VaultSyncError::RemoteChangedDuringWrite,
+            });
         }
         self.blob = content;
         let next = self.revision.next();
         self.revision = StoreRevision::Version(next.clone());
-        Ok(RevisionGuardedWrite::Written { revision: next })
+        Ok(GuardedVaultWrite {
+            store: self,
+            outcome: RevisionGuardedWrite::Written { revision: next },
+        })
     }
 
     /// Resolve a conflict by replacing `remote` with this local store.
-    pub fn keep_local(&self, remote: &mut Self) {
+    pub fn keep_local(&self, mut remote: Self) -> Self {
         remote.blob.clone_from(&self.blob);
         remote.revision = StoreRevision::Version(remote.revision.next());
+        remote
     }
 
     /// Resolve a conflict by replacing this local store with `remote`.
-    pub fn keep_remote(&mut self, remote: &Self) {
+    pub fn keep_remote(mut self, remote: &Self) -> Self {
         self.blob.clone_from(&remote.blob);
         self.revision.clone_from(&remote.revision);
+        self
     }
 }
 
-/// Borrowed local and remote stores awaiting a synchronization decision.
+/// Owned stores remain available after success or rejection.
+#[derive(Debug)]
+pub struct SyncedVaultStores {
+    pub local: MemoryVaultStore,
+    pub remote: MemoryVaultStore,
+    pub action: VaultSyncAction,
+}
+#[derive(Debug)]
+pub struct RejectedVaultSync {
+    pub local: MemoryVaultStore,
+    pub remote: MemoryVaultStore,
+    pub cause: VaultSyncError,
+}
+impl std::fmt::Display for RejectedVaultSync {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.cause.fmt(f)
+    }
+}
+impl std::error::Error for RejectedVaultSync {}
+#[derive(Debug)]
+pub struct GuardedVaultWrite {
+    pub store: MemoryVaultStore,
+    pub outcome: RevisionGuardedWrite,
+}
+#[derive(Debug)]
+pub struct RejectedVaultWrite {
+    pub store: MemoryVaultStore,
+    pub cause: VaultSyncError,
+}
+impl std::fmt::Display for RejectedVaultWrite {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.cause.fmt(f)
+    }
+}
+impl std::error::Error for RejectedVaultWrite {}
+
 pub struct VaultSyncPair<'a> {
-    local: &'a mut MemoryVaultStore,
-    remote: &'a mut MemoryVaultStore,
+    local: MemoryVaultStore,
+    remote: MemoryVaultStore,
     last_common_content_hash: CommonContentHash<'a>,
 }
-
 impl<'a> VaultSyncPair<'a> {
-    /// Compare stores without a remembered common content hash.
-    #[must_use]
-    pub fn new(local: &'a mut MemoryVaultStore, remote: &'a mut MemoryVaultStore) -> Self {
+    pub fn new(local: MemoryVaultStore, remote: MemoryVaultStore) -> Self {
         Self::with_common(local, remote, CommonContentHash::Unknown)
     }
-
-    /// Compare stores against a remembered common content hash.
-    #[must_use]
     pub fn with_common(
-        local: &'a mut MemoryVaultStore,
-        remote: &'a mut MemoryVaultStore,
+        local: MemoryVaultStore,
+        remote: MemoryVaultStore,
         last_common_content_hash: CommonContentHash<'a>,
     ) -> Self {
         Self {
@@ -188,91 +228,127 @@ impl<'a> VaultSyncPair<'a> {
             last_common_content_hash,
         }
     }
-
-    /// Prepare an action while retaining exclusive access to the compared stores.
-    pub fn prepare(self) -> VaultSyncResult<PreparedVaultSync<'a>> {
+    pub fn prepare(self) -> Result<PreparedVaultSync, RejectedVaultSync> {
         let action = VaultSyncComparison::with_common(
             self.local.blob(),
             self.remote.blob(),
             self.last_common_content_hash,
         )
-        .decide()?;
-        Ok(PreparedVaultSync {
-            local: self.local,
-            remote: self.remote,
-            action,
-        })
+        .decide();
+        match action {
+            Ok(action) => Ok(PreparedVaultSync {
+                local: self.local,
+                remote: self.remote,
+                action,
+            }),
+            Err(cause) => Err(RejectedVaultSync {
+                local: self.local,
+                remote: self.remote,
+                cause,
+            }),
+        }
     }
 }
-
-/// A non-cloneable synchronization decision tied to the stores it inspected.
-pub struct PreparedVaultSync<'a> {
-    local: &'a mut MemoryVaultStore,
-    remote: &'a mut MemoryVaultStore,
+#[derive(Debug)]
+pub struct PreparedVaultSync {
+    local: MemoryVaultStore,
+    remote: MemoryVaultStore,
     action: VaultSyncAction,
 }
-
-impl PreparedVaultSync<'_> {
-    #[must_use]
+impl PreparedVaultSync {
     pub fn action(&self) -> VaultSyncAction {
         self.action
     }
-
-    /// Commit the prepared action to its original local and remote stores.
-    #[must_use]
-    pub fn commit(self) -> VaultSyncAction {
+    /// Return inspected stores without committing their prepared transition.
+    pub fn cancel(self) -> SyncedVaultStores {
+        SyncedVaultStores {
+            local: self.local,
+            remote: self.remote,
+            action: self.action,
+        }
+    }
+    pub fn commit(self) -> SyncedVaultStores {
         let Self {
-            local,
-            remote,
+            mut local,
+            mut remote,
             action,
         } = self;
         match action {
             VaultSyncAction::Unchanged | VaultSyncAction::Conflict => {}
             VaultSyncAction::AdoptRemote => {
-                local.blob.clone_from(&remote.blob);
-                local.revision.clone_from(&remote.revision);
+                local = local.keep_remote(&remote);
             }
             VaultSyncAction::PushLocal => {
-                remote.blob.clone_from(&local.blob);
-                remote.revision = StoreRevision::Version(remote.revision.next());
+                remote = local.keep_local(remote);
             }
         }
-        action
+        SyncedVaultStores {
+            local,
+            remote,
+            action,
+        }
     }
 }
-
-/// Borrowed canonical local store and remote providers awaiting sequential fan-out.
-pub struct VaultSyncFanOut<'a> {
-    local: &'a mut MemoryVaultStore,
-    remotes: &'a mut HashMap<String, MemoryVaultStore>,
+#[derive(Debug)]
+pub struct VaultSyncFanOut {
+    pub local: MemoryVaultStore,
+    pub remotes: HashMap<String, MemoryVaultStore>,
 }
-
-impl<'a> VaultSyncFanOut<'a> {
-    #[must_use]
-    pub fn new(
-        local: &'a mut MemoryVaultStore,
-        remotes: &'a mut HashMap<String, MemoryVaultStore>,
-    ) -> Self {
+#[derive(Debug)]
+pub struct CompletedVaultFanOut {
+    pub stores: VaultSyncFanOut,
+    pub actions: Vec<(String, VaultSyncAction)>,
+}
+#[derive(Debug)]
+pub struct RejectedVaultFanOut {
+    pub stores: VaultSyncFanOut,
+    pub cause: VaultSyncError,
+}
+impl std::fmt::Display for RejectedVaultFanOut {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.cause.fmt(f)
+    }
+}
+impl std::error::Error for RejectedVaultFanOut {}
+impl VaultSyncFanOut {
+    pub fn new(local: MemoryVaultStore, remotes: HashMap<String, MemoryVaultStore>) -> Self {
         Self { local, remotes }
     }
-
-    /// Reconcile providers in lexical order, retaining earlier effects on failure.
-    #[allow(clippy::implicit_hasher)]
-    pub fn run(self) -> VaultSyncResult<Vec<(String, VaultSyncAction)>> {
-        let Self { local, remotes } = self;
-        let mut ids: Vec<String> = remotes.keys().cloned().collect();
-        ids.sort();
-        let mut results = Vec::with_capacity(ids.len());
-        for id in ids {
-            let remote = remotes
-                .get_mut(&id)
-                .ok_or(VaultSyncError::ProviderDisappeared {
-                    provider_id: id.clone(),
-                })?;
-            let action = VaultSyncPair::new(&mut *local, remote).prepare()?.commit();
-            results.push((id, action));
+    pub fn run(self) -> Result<CompletedVaultFanOut, RejectedVaultFanOut> {
+        let Self { mut local, remotes } = self;
+        let mut pending = remotes
+            .into_iter()
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let mut completed = HashMap::new();
+        let mut actions = Vec::new();
+        while let Some((id, remote)) = pending.pop_first() {
+            match VaultSyncPair::new(local, remote).prepare() {
+                Ok(prepared) => {
+                    let next = prepared.commit();
+                    local = next.local;
+                    completed.insert(id.clone(), next.remote);
+                    actions.push((id, next.action));
+                }
+                Err(rejected) => {
+                    completed.insert(id, rejected.remote);
+                    completed.extend(pending);
+                    return Err(RejectedVaultFanOut {
+                        stores: Self {
+                            local: rejected.local,
+                            remotes: completed,
+                        },
+                        cause: rejected.cause,
+                    });
+                }
+            }
         }
-        Ok(results)
+        Ok(CompletedVaultFanOut {
+            stores: Self {
+                local,
+                remotes: completed,
+            },
+            actions,
+        })
     }
 }
 
@@ -286,12 +362,14 @@ mod tests {
     fn reconcile_push_local_copies_blob_and_bumps_revision() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let local_blob = sample_yaml(3, store_id, "local")?;
-        let mut local = MemoryVaultStore::with_blob(local_blob);
-        let mut remote = MemoryVaultStore::with_blob_and_revision("", "rev-0");
+        let local = MemoryVaultStore::with_blob(local_blob);
+        let remote = MemoryVaultStore::with_blob_and_revision("", "rev-0");
 
-        let prepared = VaultSyncPair::new(&mut local, &mut remote).prepare()?;
+        let prepared = VaultSyncPair::new(local, remote).prepare()?;
         assert_eq!(prepared.action(), VaultSyncAction::PushLocal);
-        assert_eq!(prepared.commit(), VaultSyncAction::PushLocal);
+        let next = prepared.commit();
+        let (local, remote) = (next.local, next.remote);
+        assert_eq!(next.action, VaultSyncAction::PushLocal);
         assert_eq!(remote.blob(), local.blob());
         assert_eq!(remote.revision(), StoreRevisionRef::Version("rev-1"));
         Ok(())
@@ -301,12 +379,11 @@ mod tests {
     fn reconcile_adopt_remote_updates_local() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let remote_blob = sample_yaml(5, store_id, "remote")?;
-        let mut local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local")?);
-        let mut remote = MemoryVaultStore::with_blob_and_revision(remote_blob.clone(), "rev-9");
+        let local = MemoryVaultStore::with_blob(sample_yaml(2, store_id, "local")?);
+        let remote = MemoryVaultStore::with_blob_and_revision(remote_blob.clone(), "rev-9");
 
-        let action = VaultSyncPair::new(&mut local, &mut remote)
-            .prepare()?
-            .commit();
+        let next = VaultSyncPair::new(local, remote).prepare()?.commit();
+        let (local, remote, action) = (next.local, next.remote, next.action);
         assert_eq!(action, VaultSyncAction::AdoptRemote);
         assert_eq!(local.blob(), remote_blob);
         assert_eq!(local.revision(), StoreRevisionRef::Version("rev-9"));
@@ -318,12 +395,11 @@ mod tests {
         let store_id = "store_AAAAAAAAAAA";
         let local_blob = sample_yaml(2, store_id, "a")?;
         let remote_blob = sample_yaml(2, store_id, "b")?;
-        let mut local = MemoryVaultStore::with_blob(local_blob.clone());
-        let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
+        let local = MemoryVaultStore::with_blob(local_blob.clone());
+        let remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let action = VaultSyncPair::new(&mut local, &mut remote)
-            .prepare()?
-            .commit();
+        let next = VaultSyncPair::new(local, remote).prepare()?.commit();
+        let (local, remote, action) = (next.local, next.remote, next.action);
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
@@ -337,16 +413,13 @@ mod tests {
         let local_blob = sample_yaml(4, store_id, "local")?;
         let remote_blob = sample_yaml(3, store_id, "remote")?;
         let base_hash = VaultRevision::content_hash(&base_blob);
-        let mut local = MemoryVaultStore::with_blob(local_blob.clone());
-        let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
+        let local = MemoryVaultStore::with_blob(local_blob.clone());
+        let remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        let action = VaultSyncPair::with_common(
-            &mut local,
-            &mut remote,
-            CommonContentHash::Known(&base_hash),
-        )
-        .prepare()?
-        .commit();
+        let next = VaultSyncPair::with_common(local, remote, CommonContentHash::Known(&base_hash))
+            .prepare()?
+            .commit();
+        let (local, remote, action) = (next.local, next.remote, next.action);
         assert_eq!(action, VaultSyncAction::Conflict);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
@@ -357,8 +430,8 @@ mod tests {
     fn fan_out_pushes_to_multiple_remotes() -> anyhow::Result<()> {
         let store_id = "store_AAAAAAAAAAA";
         let local_blob = sample_yaml(4, store_id, "canonical")?;
-        let mut local = MemoryVaultStore::with_blob(local_blob.clone());
-        let mut remotes = HashMap::from([
+        let local = MemoryVaultStore::with_blob(local_blob.clone());
+        let remotes = HashMap::from([
             (
                 "github-a".to_owned(),
                 MemoryVaultStore::with_blob(sample_yaml(1, store_id, "stale-a")?),
@@ -369,7 +442,12 @@ mod tests {
             ),
         ]);
 
-        let results = VaultSyncFanOut::new(&mut local, &mut remotes).run()?;
+        let completed = VaultSyncFanOut::new(local, remotes).run()?;
+        let (local, remotes, results) = (
+            completed.stores.local,
+            completed.stores.remotes,
+            completed.actions,
+        );
         assert_eq!(results.len(), 2);
         assert!(
             results
@@ -386,12 +464,11 @@ mod tests {
         let store_id = "store_AAAAAAAAAAA";
         let local_blob = sample_yaml(3, store_id, "local")?;
         let remote_blob = sample_yaml(1, store_id, "remote")?;
-        let mut local = MemoryVaultStore::with_blob(local_blob.clone());
-        let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
+        let local = MemoryVaultStore::with_blob(local_blob.clone());
+        let remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        {
-            let _prepared = VaultSyncPair::new(&mut local, &mut remote).prepare()?;
-        }
+        let next = VaultSyncPair::new(local, remote).prepare()?.cancel();
+        let (local, remote) = (next.local, next.remote);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
         Ok(())
@@ -401,14 +478,13 @@ mod tests {
     fn comparison_error_preserves_both_stores() -> anyhow::Result<()> {
         let local_blob = sample_yaml(3, "store_AAAAAAAAAAA", "local")?;
         let remote_blob = sample_yaml(4, "store_BBBBBBBBBBB", "remote")?;
-        let mut local = MemoryVaultStore::with_blob(local_blob.clone());
-        let mut remote = MemoryVaultStore::with_blob(remote_blob.clone());
+        let local = MemoryVaultStore::with_blob(local_blob.clone());
+        let remote = MemoryVaultStore::with_blob(remote_blob.clone());
 
-        assert!(
-            VaultSyncPair::new(&mut local, &mut remote)
-                .prepare()
-                .is_err()
-        );
+        let rejected = VaultSyncPair::new(local, remote)
+            .prepare()
+            .expect_err("different stores reject");
+        let (local, remote) = (rejected.local, rejected.remote);
         assert_eq!(local.blob(), local_blob);
         assert_eq!(remote.blob(), remote_blob);
         Ok(())

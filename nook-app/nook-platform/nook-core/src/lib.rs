@@ -357,8 +357,9 @@ pub use vault_sync::{
 };
 pub use vault_sync_session::{YamlSyncOutcome, YamlSyncReloaded, YamlSyncSession};
 pub use vault_sync_store::{
-    MemoryVaultStore, PreparedVaultSync, RevisionGuardedWrite, StoreRevision, StoreRevisionRef,
-    VaultSyncFanOut, VaultSyncPair,
+    CompletedVaultFanOut, GuardedVaultWrite, MemoryVaultStore, PreparedVaultSync,
+    RejectedVaultFanOut, RejectedVaultSync, RejectedVaultWrite, RevisionGuardedWrite,
+    StoreRevision, StoreRevisionRef, SyncedVaultStores, VaultSyncFanOut, VaultSyncPair,
 };
 #[cfg_attr(
     dylint_lib = "nook_domain_api",
