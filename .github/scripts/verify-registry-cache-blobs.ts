@@ -1,242 +1,239 @@
 import { createHash } from "node:crypto";
-
+import { err, ok, type Result } from "neverthrow";
 import {
-  RegistryCacheDescriptorRegisterRegistryDescriptor,
-  type RegistryDescriptor,
-  type RegistryDescriptorRegistration,
-  RegistryDescriptorKind,
+  RegistryDescriptorCollection, RegistryDescriptorKind, RegistryFailureKind,
+  type RegistryDescriptor, type RegistryFailure,
 } from "./registry-cache-descriptor";
 
 interface RegistryDocument {
-  config?: RegistryDescriptor;
-  layers?: RegistryDescriptor[];
-  manifests?: RegistryDescriptor[];
+  blobs: readonly RegistryDescriptor[];
+  manifests: readonly RegistryDescriptor[];
 }
+interface RegistryLocation { host: string; reference: string; repository: string }
+interface RegistryAccess { location: RegistryLocation; authorization: string; reference: string }
+enum ManifestReferenceKind { Tag = "tag", Descriptor = "descriptor" }
+type ManifestReference =
+  | { kind: ManifestReferenceKind.Tag; reference: string }
+  | { kind: ManifestReferenceKind.Descriptor; reference: string; descriptor: RegistryDescriptor };
 
-interface RegistryLocation {
-  host: string;
-  reference: string;
-  repository: string;
-}
-
-interface RegistryRequest {
-  method?: string;
-  path: string;
-}
-
-interface ManifestInput {
-  descriptor?: RegistryDescriptor;
-  reference: string;
+class RegistryDescriptorDocument {
+  constructor(private readonly value: unknown) {}
+  admit(): Result<RegistryDescriptor, RegistryFailure> {
+    const value = this.value;
+    if (typeof value !== "object" || !value || !("digest" in value) ||
+      typeof value.digest !== "string" || !/^sha256:[0-9a-f]{64}$/.test(value.digest) ||
+      !("size" in value) || typeof value.size !== "number" || !Number.isSafeInteger(value.size) ||
+      value.size < 0 || !("mediaType" in value) || typeof value.mediaType !== "string")
+      return err({ kind: RegistryFailureKind.Schema, message: "registry descriptor has an invalid schema" });
+    return ok({ digest: value.digest, size: value.size, mediaType: value.mediaType });
+  }
 }
 
 class RegistryManifest {
-  static decode(text: string): RegistryDocument {
-    const value: unknown = JSON.parse(text);
-    if (!RegistryManifest.document(value))
-      throw new Error("registry manifest has an invalid schema");
-    return value;
-  }
-  private static record(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && !!value && !Array.isArray(value);
-  }
-  private static descriptor(value: unknown): value is RegistryDescriptor {
-    return (
-      RegistryManifest.record(value) &&
-      typeof value.digest === "string" &&
-      /^sha256:[0-9a-f]{64}$/.test(value.digest) &&
-      typeof value.size === "number" &&
-      Number.isSafeInteger(value.size) &&
-      value.size >= 0 &&
-      typeof value.mediaType === "string"
-    );
-  }
-  private static document(value: unknown): value is RegistryDocument {
-    return (
-      RegistryManifest.record(value) &&
-      (!("config" in value) || RegistryManifest.descriptor(value.config)) &&
-      (!("layers" in value) ||
-        (Array.isArray(value.layers) &&
-          value.layers.every(RegistryManifest.descriptor))) &&
-      (!("manifests" in value) ||
-        (Array.isArray(value.manifests) &&
-          value.manifests.every(RegistryManifest.descriptor)))
-    );
-  }
-}
-
-const registryRef = process.argv[2];
-if (!registryRef) {
-  throw new Error("usage: bun verify-registry-cache-blobs.ts <registry-ref>");
-}
-
-const parseLocation = (ref: string): RegistryLocation => {
-  const slash = ref.indexOf("/");
-  const colon = ref.lastIndexOf(":");
-  if (slash < 1 || colon <= slash + 1) {
-    throw new Error(`invalid registry cache ref: ${ref}`);
-  }
-  return {
-    host: ref.slice(0, slash),
-    repository: ref.slice(slash + 1, colon),
-    reference: ref.slice(colon + 1),
-  };
-};
-
-const location = parseLocation(registryRef);
-const username = process.env.NOOK_REGISTRY_USERNAME;
-const password = process.env.NOOK_REGISTRY_PASSWORD;
-if (!username || !password) {
-  throw new Error(
-    "registry blob verification requires NOOK_REGISTRY_USERNAME and NOOK_REGISTRY_PASSWORD",
-  );
-}
-const authorization = `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}`;
-
-const registryRequest = async (input: RegistryRequest): Promise<Response> => {
-  const { method = "GET" } = input;
-  const headers = new Headers();
-  headers.set("Authorization", authorization);
-  if (input.path.startsWith("manifests/")) {
-    headers.set(
-      "Accept",
-      "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json",
-    );
-  }
-  const init: RequestInit = {
-    headers,
-    method,
-    signal: AbortSignal.timeout(5 * 60_000),
-  };
-  const response = await fetch(
-    `https://${location.host}/v2/${location.repository}/${input.path}`,
-    init,
-  );
-  if (!response.ok) {
-    throw new Error(
-      `registry ${init.method} ${input.path} failed with HTTP ${response.status}`,
-    );
-  }
-  return response;
-};
-
-const descriptors = new Map<string, RegistryDescriptor>();
-const manifestDescriptors = new Map<string, RegistryDescriptor>();
-const visitedManifests = new Set<string>();
-const manifestRequest = (reference: string): RegistryRequest => ({
-  path: `manifests/${reference}`,
-});
-const childManifestInput = (descriptor: RegistryDescriptor): ManifestInput => ({
-  descriptor,
-  reference: descriptor.digest,
-});
-const blobRequest = (path: string): RegistryRequest => ({ path });
-const registerBlobDescriptor = (descriptor: RegistryDescriptor): void => {
-  const registration: RegistryDescriptorRegistration = {
-    collection: descriptors,
-    descriptor,
-    kind: RegistryDescriptorKind.Blob,
-  };
-  new RegistryCacheDescriptorRegisterRegistryDescriptor(registration).execute();
-};
-const registerManifestDescriptor = (descriptor: RegistryDescriptor): void => {
-  const registration: RegistryDescriptorRegistration = {
-    collection: manifestDescriptors,
-    descriptor,
-    kind: RegistryDescriptorKind.Manifest,
-  };
-  new RegistryCacheDescriptorRegisterRegistryDescriptor(registration).execute();
-};
-
-const collectManifest = async (input: ManifestInput): Promise<void> => {
-  if (input.descriptor) registerManifestDescriptor(input.descriptor);
-  if (visitedManifests.has(input.reference)) return;
-  visitedManifests.add(input.reference);
-  const response = await registryRequest(manifestRequest(input.reference));
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
-  if (input.descriptor) {
-    if (
-      bytes.length !== input.descriptor.size ||
-      digest !== input.descriptor.digest
-    ) {
-      throw new Error(
-        `${input.descriptor.digest} manifest has digest ${digest} and ${bytes.length} bytes; expected ${input.descriptor.size}`,
-      );
+  constructor(private readonly text: string) {}
+  decode(): Result<RegistryDocument, RegistryFailure> {
+    let value: unknown;
+    try { value = JSON.parse(this.text); }
+    catch { return err({ kind: RegistryFailureKind.Schema, message: "registry manifest is not valid JSON" }); }
+    if (typeof value !== "object" || !value || Array.isArray(value))
+      return err({ kind: RegistryFailureKind.Schema, message: "registry manifest has an invalid schema" });
+    const blobs: RegistryDescriptor[] = [];
+    if ("config" in value) {
+      const config = new RegistryDescriptorDocument(value.config).admit();
+      if (config.isErr()) return err(config.error);
+      blobs.push(config.value);
     }
-  } else {
-    const registryDigest = response.headers.get("docker-content-digest");
-    if (registryDigest && registryDigest !== digest) {
-      throw new Error(
-        `tagged manifest digest ${digest} does not match registry digest ${registryDigest}`,
-      );
+    const layers = this.descriptors("layers" in value ? value.layers : []);
+    if (layers.isErr()) return err(layers.error);
+    const manifests = this.descriptors("manifests" in value ? value.manifests : []);
+    if (manifests.isErr()) return err(manifests.error);
+    return ok({ blobs: [...blobs, ...layers.value], manifests: manifests.value });
+  }
+  private descriptors(value: unknown): Result<RegistryDescriptor[], RegistryFailure> {
+    if (!Array.isArray(value))
+      return err({ kind: RegistryFailureKind.Schema, message: "registry descriptor list has an invalid schema" });
+    const descriptors: RegistryDescriptor[] = [];
+    for (const entry of value) {
+      const admitted = new RegistryDescriptorDocument(entry).admit();
+      if (admitted.isErr()) return err(admitted.error);
+      descriptors.push(admitted.value);
     }
+    return ok(descriptors);
   }
-  const document = RegistryManifest.decode(new TextDecoder().decode(bytes));
-  const { layers = [], manifests = [] } = document;
-  if (document.config) registerBlobDescriptor(document.config);
-  for (const layer of layers) registerBlobDescriptor(layer);
-  for (const manifest of manifests)
-    await collectManifest(childManifestInput(manifest));
-};
+}
 
-const verifyBlob = async (descriptor: RegistryDescriptor): Promise<void> => {
-  if (!/^sha256:[0-9a-f]{64}$/.test(descriptor.digest) || descriptor.size < 0) {
-    throw new Error(
-      `invalid registry descriptor: ${JSON.stringify(descriptor)}`,
-    );
+class RegistryEnvironment {
+  constructor(private readonly input: { args: string[]; environment: NodeJS.ProcessEnv }) {}
+  admit(): Result<RegistryAccess, RegistryFailure> {
+    const reference = this.input.args[2];
+    if (!reference) return err({ kind: RegistryFailureKind.Configuration,
+      message: "usage: bun verify-registry-cache-blobs.ts <registry-ref>" });
+    const slash = reference.indexOf("/");
+    const colon = reference.lastIndexOf(":");
+    if (slash < 1 || colon <= slash + 1)
+      return err({ kind: RegistryFailureKind.Configuration, message: "invalid registry cache ref" });
+    const username = this.input.environment.NOOK_REGISTRY_USERNAME;
+    const password = this.input.environment.NOOK_REGISTRY_PASSWORD;
+    if (!username || !password)
+      return err({ kind: RegistryFailureKind.Configuration,
+        message: "registry blob verification requires NOOK_REGISTRY_USERNAME and NOOK_REGISTRY_PASSWORD" });
+    return ok({ reference, location: { host: reference.slice(0, slash),
+      repository: reference.slice(slash + 1, colon), reference: reference.slice(colon + 1) },
+      authorization: `Basic ${Buffer.from(`${username}:${password}`).toString("base64")}` });
   }
-  const path = `blobs/${descriptor.digest}`;
-  const response = await registryRequest(blobRequest(path));
-  const contentLengthHeader = response.headers.get("content-length");
-  const contentLength = contentLengthHeader
-    ? Number(contentLengthHeader)
-    : descriptor.size;
-  if (contentLength !== descriptor.size) {
-    throw new Error(
-      `${descriptor.digest} has ${contentLength} bytes; manifest requires ${descriptor.size}`,
-    );
-  }
-  const reader = response.body?.getReader();
-  if (!reader)
-    throw new Error(`${descriptor.digest} has no readable response body`);
-  const hash = createHash("sha256");
-  let bytesRead = 0;
-  for (;;) {
-    const chunk = await reader.read();
-    if (chunk.done) break;
-    bytesRead += chunk.value.length;
-    hash.update(chunk.value);
-  }
-  const digest = `sha256:${hash.digest("hex")}`;
-  if (bytesRead !== descriptor.size || digest !== descriptor.digest) {
-    throw new Error(
-      `${descriptor.digest} blob has digest ${digest} and ${bytesRead} bytes; expected ${descriptor.size}`,
-    );
-  }
-  console.log(
-    `verified complete registry blob ${descriptor.digest} (${bytesRead} bytes)`,
-  );
-};
+}
 
-const rootManifest: ManifestInput = { reference: location.reference };
-await collectManifest(rootManifest);
-if (descriptors.size === 0)
-  throw new Error(`${registryRef} contains no cache blob descriptors`);
-const pendingDescriptors = [...descriptors.values()];
-let nextDescriptor = 0;
-const verifyNextBlob = async (): Promise<void> => {
-  for (;;) {
-    const index = nextDescriptor;
-    nextDescriptor += 1;
-    const descriptor = pendingDescriptors[index];
-    if (!descriptor) return;
-    await verifyBlob(descriptor);
+class RegistryTransport {
+  constructor(private readonly access: RegistryAccess) {}
+  async get(path: string): Promise<Result<Response, RegistryFailure>> {
+    let response: Response;
+    try {
+      const headers = new Headers({ Authorization: this.access.authorization });
+      if (path.startsWith("manifests/")) headers.set("Accept",
+        "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.list.v2+json, application/vnd.docker.distribution.manifest.v2+json");
+      response = await fetch(`https://${this.access.location.host}/v2/${this.access.location.repository}/${path}`,
+        { headers, method: "GET", signal: AbortSignal.timeout(5 * 60_000) });
+    } catch { return err({ kind: RegistryFailureKind.Network, message: `registry GET ${path} failed` }); }
+    if (!response.ok) return err({ kind: RegistryFailureKind.Http,
+      message: `registry GET ${path} failed with HTTP ${response.status}` });
+    return ok(response);
   }
-};
-const verifierCount = Math.min(4, pendingDescriptors.length);
-await Promise.all(Array.from({ length: verifierCount }, verifyNextBlob));
-let totalBytes = 0;
-for (const descriptor of descriptors.values()) totalBytes += descriptor.size;
-console.log(
-  `verified ${descriptors.size} complete registry blobs (${totalBytes} hashed bytes) for ${registryRef}`,
-);
+}
+
+class RegistryManifestBody {
+  constructor(private readonly response: Response) {}
+  async read(reference: ManifestReference): Promise<Result<RegistryDocument, RegistryFailure>> {
+    let bytes: Uint8Array;
+    try { bytes = new Uint8Array(await this.response.arrayBuffer()); }
+    catch { return err({ kind: RegistryFailureKind.Body, message: "Unable to read registry manifest body" }); }
+    const digest = `sha256:${createHash("sha256").update(bytes).digest("hex")}`;
+    if (reference.kind === ManifestReferenceKind.Descriptor) {
+      if (bytes.length !== reference.descriptor.size || digest !== reference.descriptor.digest)
+        return err({ kind: RegistryFailureKind.Integrity,
+          message: `${reference.descriptor.digest} manifest has digest ${digest} and ${bytes.length} bytes; expected ${reference.descriptor.size}` });
+    } else {
+      const registryDigest = this.response.headers.get("docker-content-digest");
+      if (registryDigest && registryDigest !== digest)
+        return err({ kind: RegistryFailureKind.Integrity,
+          message: `tagged manifest digest ${digest} does not match registry digest ${registryDigest}` });
+    }
+    return new RegistryManifest(new TextDecoder().decode(bytes)).decode();
+  }
+}
+
+class RegistryManifestGraph {
+  constructor(private readonly state: {
+    blobs: RegistryDescriptorCollection;
+    manifests: RegistryDescriptorCollection;
+    visited: ReadonlySet<string>;
+  } = { blobs: new RegistryDescriptorCollection(RegistryDescriptorKind.Blob),
+    manifests: new RegistryDescriptorCollection(RegistryDescriptorKind.Manifest), visited: new Set() }) {}
+
+  async collect(request: { reference: ManifestReference; transport: RegistryTransport }): Promise<Result<RegistryManifestGraph, RegistryFailure>> {
+    let manifests = this.state.manifests;
+    if (request.reference.kind === ManifestReferenceKind.Descriptor) {
+      const registered = manifests.register(request.reference.descriptor);
+      if (registered.isErr()) return err(registered.error);
+      manifests = registered.value;
+    }
+    if (this.state.visited.has(request.reference.reference))
+      return ok(new RegistryManifestGraph({ ...this.state, manifests }));
+    const response = await request.transport.get(`manifests/${request.reference.reference}`);
+    if (response.isErr()) return err(response.error);
+    const document = await new RegistryManifestBody(response.value).read(request.reference);
+    if (document.isErr()) return err(document.error);
+    let blobs = this.state.blobs;
+    for (const descriptor of document.value.blobs) {
+      const registered = blobs.register(descriptor);
+      if (registered.isErr()) return err(registered.error);
+      blobs = registered.value;
+    }
+    let graph = new RegistryManifestGraph({ blobs, manifests,
+      visited: new Set([...this.state.visited, request.reference.reference]) });
+    for (const descriptor of document.value.manifests) {
+      const collected = await graph.collect({ transport: request.transport,
+        reference: { kind: ManifestReferenceKind.Descriptor, descriptor, reference: descriptor.digest } });
+      if (collected.isErr()) return err(collected.error);
+      graph = collected.value;
+    }
+    return ok(graph);
+  }
+  blobs(): readonly RegistryDescriptor[] { return this.state.blobs.values(); }
+}
+
+class RegistryBlob {
+  constructor(private readonly descriptor: RegistryDescriptor) {}
+  async verify(transport: RegistryTransport): Promise<Result<void, RegistryFailure>> {
+    const requested = await transport.get(`blobs/${this.descriptor.digest}`);
+    if (requested.isErr()) return err(requested.error);
+    const response = requested.value;
+    const lengthHeader = response.headers.get("content-length");
+    const length = lengthHeader ? Number(lengthHeader) : this.descriptor.size;
+    if (length !== this.descriptor.size)
+      return err({ kind: RegistryFailureKind.Integrity,
+        message: `${this.descriptor.digest} has ${length} bytes; manifest requires ${this.descriptor.size}` });
+    const body = response.body;
+    if (!body) return err({ kind: RegistryFailureKind.Body,
+      message: `${this.descriptor.digest} has no readable response body` });
+    const hash = createHash("sha256");
+    let bytesRead = 0;
+    // Reader acquisition and streaming are one foreign transport boundary.
+    try {
+      const reader = body.getReader();
+      try {
+        for (;;) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          bytesRead += chunk.value.length;
+          hash.update(chunk.value);
+        }
+      } finally { reader.releaseLock(); }
+    } catch { return err({ kind: RegistryFailureKind.Body,
+      message: `${this.descriptor.digest} registry blob stream failed` }); }
+    const digest = `sha256:${hash.digest("hex")}`;
+    if (bytesRead !== this.descriptor.size || digest !== this.descriptor.digest)
+      return err({ kind: RegistryFailureKind.Integrity,
+        message: `${this.descriptor.digest} blob has digest ${digest} and ${bytesRead} bytes; expected ${this.descriptor.size}` });
+    console.log(`verified complete registry blob ${this.descriptor.digest} (${bytesRead} bytes)`);
+    return ok();
+  }
+}
+
+class RegistryBlobLane {
+  constructor(private readonly descriptors: readonly RegistryDescriptor[]) {}
+  async verify(transport: RegistryTransport): Promise<Result<void, RegistryFailure>> {
+    for (const descriptor of this.descriptors) {
+      const outcome = await new RegistryBlob(descriptor).verify(transport);
+      if (outcome.isErr()) return err(outcome.error);
+    }
+    return ok();
+  }
+}
+class RegistryCacheVerification {
+  constructor(private readonly access: RegistryAccess) {}
+  async execute(): Promise<Result<void, RegistryFailure>> {
+    const transport = new RegistryTransport(this.access);
+    const collected = await new RegistryManifestGraph().collect({ transport,
+      reference: { kind: ManifestReferenceKind.Tag, reference: this.access.location.reference } });
+    if (collected.isErr()) return err(collected.error);
+    const descriptors = collected.value.blobs();
+    if (descriptors.length === 0) return err({ kind: RegistryFailureKind.Empty,
+      message: `${this.access.reference} contains no cache blob descriptors` });
+    const count = Math.min(4, descriptors.length);
+    const lanes = Array.from({ length: count }, (_, lane) =>
+      new RegistryBlobLane(descriptors.filter((_, index) => index % count === lane)));
+    const outcomes = await Promise.all(lanes.map((lane) => lane.verify(transport)));
+    for (const outcome of outcomes) if (outcome.isErr()) return err(outcome.error);
+    const totalBytes = descriptors.reduce((total, descriptor) => total + descriptor.size, 0);
+    console.log(`verified ${descriptors.length} complete registry blobs (${totalBytes} hashed bytes) for ${this.access.reference}`);
+    return ok();
+  }
+}
+
+const access = new RegistryEnvironment({ args: process.argv, environment: process.env }).admit();
+const outcome = access.isErr() ? err<void, RegistryFailure>(access.error)
+  : await new RegistryCacheVerification(access.value).execute();
+if (outcome.isErr()) {
+  console.error(outcome.error.message);
+  process.exitCode = 1;
+}
