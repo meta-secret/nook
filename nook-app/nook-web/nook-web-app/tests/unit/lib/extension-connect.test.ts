@@ -15,7 +15,6 @@ import {
   ExtensionLocalEventLogUpdatedMessage as ExtensionLocalEventLogUpdatedMessageGuard,
   OpenCompanionLauncherMessage as OpenCompanionLauncherMessageGuard,
   OpenCompanionLauncherIntent,
-  ExtensionPairingVaultType,
   ExtensionPairingApprovedMessageType,
   ExtensionIdentityHandoffRequestMessage as ExtensionIdentityHandoffRequestMessageSchema,
   ExtensionPairingApprovedMessage as ExtensionPairingApprovedMessageSchema,
@@ -207,7 +206,7 @@ describe('extension pairing approved message', () => {
       message: {
         type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
         payload: {
-          vaultType: ExtensionPairingVaultType.Simple,
+          vaultType: 'simple',
           deviceId: 'device-1',
           devicePublicKey: 'age1device',
           deviceSigningPublicKey: 'signing-key',
@@ -322,7 +321,7 @@ describe('extension pairing approved message', () => {
       ExtensionPairingApprovedMessageSchema.is({
         type: 'nook:extension-pairing-approved',
         payload: {
-          vaultType: ExtensionPairingVaultType.Simple,
+          vaultType: 'simple',
           deviceId: 'device-1',
           devicePublicKey: 'age1device',
           deviceSigningPublicKey: 'signing-key',
@@ -385,7 +384,7 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -465,7 +464,7 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -517,7 +516,7 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -540,7 +539,7 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',
@@ -585,7 +584,7 @@ describe('extension pairing approved message', () => {
       typeof extensionPairingGrantStorageItems
     >[0] = {
       grant: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-1',
         devicePublicKey: 'age1device',
         deviceSigningPublicKey: 'signing-key',

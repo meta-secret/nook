@@ -48,7 +48,7 @@
     vault,
     deviceId,
     devicePublicKey,
-    pendingJoins = [] as JoinRequest[],
+    pendingJoins = [],
     vaultMembers = [] as VaultMember[],
     isBusy,
     hasPasswordEnvelope = false,

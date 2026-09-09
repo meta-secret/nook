@@ -1,7 +1,6 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultType } from "$lib/vault/architecture-model";
 import type { VaultState } from "$lib/vault.svelte";
-import type { NookSecretRecord } from "$lib/nook";
 import { type RuntimeFailure, browserLogRuntime } from "$lib/runtime/log";
 import {
   classify_vault_recovery_error,
@@ -172,7 +171,9 @@ export class SentinelUnlockActions {
     try {
       await state.enqueueStorage(async () => {
         const connectArgs = state.connectStorageArgs();
-        await state.requireManager().connect(...connectArgs);
+        await state
+          .requireManager()
+          .connect(connectArgs.mode, connectArgs.pat, connectArgs.repo);
       });
     } catch (e) {
       if (
@@ -266,9 +267,9 @@ export class SentinelUnlockActions {
     state.dismissSuccess();
     state.isVerifying = true;
     try {
-      const rawRecords = (await state.enqueueStorage(() =>
+      const rawRecords = await state.enqueueStorage(() =>
         state.requireManager().finalize_sentinel_unlock(),
-      )) as NookSecretRecord[];
+      );
       for (const record of rawRecords) record.free();
       const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
         query: "",

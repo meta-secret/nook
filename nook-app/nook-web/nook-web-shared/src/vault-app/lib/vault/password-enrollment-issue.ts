@@ -26,7 +26,6 @@ import {
   githubRepositoryValue,
   isConfiguredOAuthFile,
   oauthAccessToken,
-  OAuthAccessTokenKind,
   OAuthFilePresentation,
   OAuthFileNameKind,
   type StorageProvider,
@@ -221,7 +220,7 @@ export class PasswordEnrollmentIssue {
                 ? existingSharedStorageTarget(folderId.value)
                 : createSharedStorageTarget(),
             credential:
-              accessCredential.kind === OAuthAccessTokenKind.Available
+              accessCredential.kind === "available"
                 ? sharedStorageGrantAccessToken(accessCredential.token)
                 : unavailableSharedStorageGrantCredential(),
           };
@@ -314,7 +313,11 @@ export class PasswordEnrollmentIssue {
               await state.enqueueStorage(() =>
                 state
                   .requireManager()
-                  .flush_event_outbox_for_provider(...targetArgs),
+                  .flush_event_outbox_for_provider(
+                    targetArgs.mode,
+                    targetArgs.pat,
+                    targetArgs.repo,
+                  ),
               );
             }
           }
@@ -325,7 +328,11 @@ export class PasswordEnrollmentIssue {
           await state.enqueueStorage(() =>
             state
               .requireManager()
-              .flush_event_outbox_for_provider(...targetArgs),
+              .flush_event_outbox_for_provider(
+                targetArgs.mode,
+                targetArgs.pat,
+                targetArgs.repo,
+              ),
           );
         }
       }

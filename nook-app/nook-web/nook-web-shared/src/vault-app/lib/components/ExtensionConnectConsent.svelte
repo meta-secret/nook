@@ -16,7 +16,6 @@
   import { Check, KeyRound, ShieldCheck } from "@lucide/svelte";
   import {
     ExtensionPairingApprovedMessageType,
-    ExtensionPairingVaultType,
     type ExtensionEventLogRecord,
     type ExtensionPairingApprovedMessage,
   } from "$web-shared/extension/runtime-messages";
@@ -103,7 +102,7 @@
     const message: ExtensionPairingApprovedMessage = {
       type: ExtensionPairingApprovedMessageType.NookExtensionPairingApproved,
       payload: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: "simple",
         deviceId: request.deviceId,
         devicePublicKey: request.devicePublicKey,
         deviceSigningPublicKey: request.deviceSigningPublicKey,
@@ -201,8 +200,7 @@
           providers: grantedProviders,
           vaultStoreId,
           vaultName: activeVaultName(),
-          eventLogRecords:
-            eventLogRecordValues.to_array() as ExtensionEventLogRecord[],
+          eventLogRecords: eventLogRecordValues.to_array(),
         };
         await sendGrantToExtension(sendGrantToExtensionArgs);
       } catch (caught) {

@@ -1,9 +1,7 @@
 import { vaultApplicationRuntime } from "$lib/runtime/wasm-bootstrap";
-type StoredVaultSynchronization = {
+import type { NookStorageConnectArgs } from "$app-wasm";
+type StoredVaultSynchronization = NookStorageConnectArgs & {
   readonly manager: NookVaultManager;
-  readonly mode: string;
-  readonly pat: string;
-  readonly repo: string;
 };
 import type {
   NookImportResult,
@@ -101,11 +99,7 @@ export function syncVaultFromStorage({
   pat,
   repo,
 }: StoredVaultSynchronization): Promise<NookVaultSyncResult> {
-  return manager.sync_vault_from_storage(
-    mode,
-    pat,
-    repo,
-  ) as Promise<NookVaultSyncResult>;
+  return manager.sync_vault_from_storage(mode, pat, repo);
 }
 
 const wasmLog = browserLogRuntime.createLogger("wasm");

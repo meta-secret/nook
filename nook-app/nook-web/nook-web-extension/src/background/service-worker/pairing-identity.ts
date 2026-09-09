@@ -31,7 +31,7 @@ import {
 } from '../../offscreen/session-request-adapter'
 import {
   WebsitePasskeyRequestParseKind,
-  type WebsitePasskeyCeremony,
+  WebsitePasskeyCeremony,
   type WebsitePasskeyRequest,
   WebsitePasskeyOptionsMessage as WebsitePasskeyOptionsMessageSchema,
 } from '../../lib/webauthn-messages'
@@ -750,8 +750,11 @@ class ExtensionPairingIdentity {
     }
     return {
       kind: WebsitePasskeyRequestContextKind.Validated,
-      origin: parsed.request.origin,
-      rpId: parsed.request.rpId,
+      origin: parsed.request.value.origin,
+      rpId:
+        parsed.request.ceremony === WebsitePasskeyCeremony.Get
+          ? parsed.request.value.rpId
+          : parsed.request.value.relyingParty.id,
       request: parsed.request,
     }
   }

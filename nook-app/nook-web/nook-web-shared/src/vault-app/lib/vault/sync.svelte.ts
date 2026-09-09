@@ -120,12 +120,12 @@ export class VaultSyncActions {
           );
           continue;
         }
-        const [mode, pat, repo] = state.providerWasmArgs(provider);
-        const joins = (await state.enqueueStorage(() =>
+        const { mode, pat, repo } = state.providerWasmArgs(provider);
+        const joins = await state.enqueueStorage(() =>
           state
             .requireManager()
             .merge_remote_joins_from_provider(mode, pat, repo),
-        )) as JoinRequest[];
+        );
         if (joins.length > 0) {
           mergedJoins.push(...joins);
         }
@@ -463,9 +463,9 @@ export class VaultSyncActions {
             state.stagedProviderLabel(),
             localYaml,
             "",
-            args[0],
-            args[1],
-            args[2],
+            args.mode,
+            args.pat,
+            args.repo,
             revision,
             localStoreId,
             remoteStoreId,
@@ -569,7 +569,7 @@ export class VaultSyncActions {
             syncLocalFolderProviderArgs3,
           );
         } else {
-          const [mode, pat, repo] = state.providerWasmArgs(provider);
+          const { mode, pat, repo } = state.providerWasmArgs(provider);
           const syncRequest: Parameters<typeof syncVaultFromStorage>[0] = {
             manager: state.requireManager(),
             mode,
@@ -610,7 +610,7 @@ export class VaultSyncActions {
 
     state.isSyncing = true;
     try {
-      const [mode, pat, repo] = state.wasmStorageArgs();
+      const { mode, pat, repo } = state.wasmStorageArgs();
       const syncRequest: Parameters<typeof syncVaultFromStorage>[0] = {
         manager: state.requireManager(),
         mode,

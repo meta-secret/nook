@@ -1,6 +1,6 @@
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import { isoTimestamp, type NookSecretRecord } from "$lib/nook";
+import { isoTimestamp } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   JoinEnrollmentState,
@@ -53,9 +53,9 @@ export class VaultDeviceActions {
     state.dismissSuccess();
     state.isSaving = true;
     try {
-      const rawRecords = (await state.enqueueStorage(() =>
+      const rawRecords = await state.enqueueStorage(() =>
         state.requireManager().approve_join_request(joinDeviceId),
-      )) as NookSecretRecord[];
+      );
       for (const record of rawRecords) record.free();
       await state.refreshSecretsFromSession();
       const request: EventOutboxRequest = {
@@ -87,9 +87,9 @@ export class VaultDeviceActions {
     state.dismissSuccess();
     state.isSaving = true;
     try {
-      const rawRecords = (await state.enqueueStorage(() =>
+      const rawRecords = await state.enqueueStorage(() =>
         state.requireManager().deny_join_request(joinDeviceId),
-      )) as NookSecretRecord[];
+      );
       for (const record of rawRecords) record.free();
       await state.refreshSecretsFromSession();
       await state.hydrateMultiDeviceState();
@@ -140,9 +140,9 @@ export class VaultDeviceActions {
     state.dismissSuccess();
     state.isSaving = true;
     try {
-      const rawRecords = (await state.enqueueStorage(() =>
+      const rawRecords = await state.enqueueStorage(() =>
         state.requireManager().revoke_vault_member(authId),
-      )) as NookSecretRecord[];
+      );
       if (isSelf) {
         state.clearUnlockedSession();
         state.showSuccess(state.t(I18N_KEYS.ToastsDeviceRemoved));
@@ -180,7 +180,12 @@ export class VaultDeviceActions {
       await state.enqueueStorage(() =>
         state
           .requireManager()
-          .request_vault_access(...storageArgs, isoTimestamp()),
+          .request_vault_access(
+            storageArgs.mode,
+            storageArgs.pat,
+            storageArgs.repo,
+            isoTimestamp(),
+          ),
       );
       await state.ensureProviderSaved();
       state.joinEnrollmentPrompt = JoinEnrollmentState.Pending;
@@ -209,15 +214,18 @@ export class VaultDeviceActions {
     state.dismissSuccess();
     state.isVerifying = true;
     try {
-      const rawRecords = (await state.enqueueStorage(() =>
+      const storageArgs = state.wasmStorageArgs();
+      const rawRecords = await state.enqueueStorage(() =>
         state
           .requireManager()
           .enroll_and_connect(
-            ...state.wasmStorageArgs(),
+            storageArgs.mode,
+            storageArgs.pat,
+            storageArgs.repo,
             secretsKey,
             membersKey,
           ),
-      )) as NookSecretRecord[];
+      );
       for (const record of rawRecords) record.free();
       const loadPageArgs: Parameters<typeof state.loadSecretPage>[0] = {
         query: "",

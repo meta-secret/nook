@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   is_local_folder_backup_supported,
   type NookLocalVaultEntry,
@@ -60,7 +61,7 @@ export type StagedRemoteStorage =
   | { kind: StagedRemoteStorageKind.Unavailable }
   | {
       kind: StagedRemoteStorageKind.Available;
-      args: [string, string, string];
+      args: NookStorageConnectArgs;
     };
 
 export enum LocalProviderLookupKind {

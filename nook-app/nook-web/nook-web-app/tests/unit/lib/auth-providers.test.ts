@@ -25,7 +25,6 @@ import {
   type ProviderStorageDescriptionRequest,
   type StorageProvider,
 } from '$lib/auth/providers'
-import { NookDuplicateSyncProviderState } from '$app-wasm'
 
 function githubProvider(
   overrides: Partial<StorageProvider> = {},
@@ -268,7 +267,7 @@ describe('findDuplicateSyncProvider', () => {
         candidate: candidate,
       }),
     ).toEqual({
-      state: NookDuplicateSyncProviderState.Duplicate,
+      state: 'duplicate',
       provider: existing,
     })
   })
@@ -281,7 +280,7 @@ describe('findDuplicateSyncProvider', () => {
         candidate: existing,
         excludeId: 'gh-self',
       }),
-    ).toEqual({ state: NookDuplicateSyncProviderState.Unique })
+    ).toEqual({ state: 'unique' })
   })
 
   test('returns the unique state when no duplicate exists', () => {
@@ -299,7 +298,7 @@ describe('findDuplicateSyncProvider', () => {
         candidate: candidate,
       }),
     ).toEqual({
-      state: NookDuplicateSyncProviderState.Unique,
+      state: 'unique',
     })
   })
 })

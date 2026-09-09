@@ -27,12 +27,10 @@ import {
   set_google_drive_provider_mode,
   set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
-  NookDuplicateSyncProviderState,
   NookStoredOAuthFileConfigurationState,
   stored_oauth_file_configuration_state,
   NookStoredLocalFolderConfigurationState,
   stored_local_folder_configuration_state,
-  NookOAuthAccessTokenKind as OAuthAccessTokenKind,
   type AuthProvidersSnapshot,
   type ActiveVaultScope,
   type LocalFolderConfig,
@@ -56,7 +54,9 @@ import {
   type StoredOAuthTokenExpiry,
   type ProviderVaultScope,
   NookGithubPatHintState,
-  type NookOAuthAccessToken,
+  type OAuthAccessToken,
+  type DuplicateSyncProvider,
+  missing_oauth_access_token,
   type NookVaultManager,
 } from "$app-wasm";
 
@@ -96,35 +96,13 @@ export {
   set_google_drive_provider_mode,
   set_icloud_provider_mode,
   wasm_storage_mode_for_provider,
-  OAuthAccessTokenKind,
 };
 
-export type OAuthAccessToken =
-  | { kind: OAuthAccessTokenKind.Missing }
-  | { kind: OAuthAccessTokenKind.Available; token: string };
-
-function copyOAuthAccessToken(
-  accessToken: NookOAuthAccessToken,
-): OAuthAccessToken {
-  try {
-    return accessToken.kind === OAuthAccessTokenKind.Available
-      ? {
-          kind: OAuthAccessTokenKind.Available,
-          token: accessToken.token,
-        }
-      : { kind: OAuthAccessTokenKind.Missing };
-  } finally {
-    accessToken.free();
-  }
-}
-
-export function oauthAccessToken(config: OAuthFileConfig): OAuthAccessToken {
-  return copyOAuthAccessToken(oauth_access_token(config));
-}
-
-export function missingOAuthAccessToken(): OAuthAccessToken {
-  return { kind: OAuthAccessTokenKind.Missing };
-}
+export type { OAuthAccessToken, DuplicateSyncProvider } from "$app-wasm";
+export {
+  oauth_access_token as oauthAccessToken,
+  missing_oauth_access_token as missingOAuthAccessToken,
+};
 
 export enum DriveFileIdentityKind {
   New = "new",
@@ -452,13 +430,6 @@ export type LocalFolderProviderConfiguration =
       config: LocalFolderConfig;
     };
 
-export type DuplicateSyncProvider =
-  | {
-      state: NookDuplicateSyncProviderState.Duplicate;
-      provider: StorageProvider;
-    }
-  | { state: NookDuplicateSyncProviderState.Unique };
-
 export type SyncProviderCandidateSet = {
   readonly providers: StorageProvider[];
   readonly candidate: StorageProvider;
@@ -496,22 +467,10 @@ export function findDuplicateSyncProvider({
   const findDuplicateSyncProviderWasmArgs: Parameters<
     typeof find_duplicate_sync_provider
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
-  const result = find_duplicate_sync_provider(
+  return find_duplicate_sync_provider(
     findDuplicateSyncProviderWasmArgs,
     candidate,
   );
-  try {
-    if (result.state === NookDuplicateSyncProviderState.Duplicate) {
-      const provider = result.provider;
-      return {
-        state: NookDuplicateSyncProviderState.Duplicate,
-        provider,
-      };
-    }
-    return { state: NookDuplicateSyncProviderState.Unique };
-  } finally {
-    result.free();
-  }
 }
 
 export function findDuplicateSyncProviderExcluding({
@@ -522,23 +481,11 @@ export function findDuplicateSyncProviderExcluding({
   const findDuplicateSyncProviderExcludingWasmArgs: Parameters<
     typeof find_duplicate_sync_provider_excluding
   >[0] = { providers, activeVaultStoreId: unselectedVaultScope() };
-  const result = find_duplicate_sync_provider_excluding(
+  return find_duplicate_sync_provider_excluding(
     findDuplicateSyncProviderExcludingWasmArgs,
     candidate,
     excludeId,
   );
-  try {
-    if (result.state === NookDuplicateSyncProviderState.Duplicate) {
-      const provider = result.provider;
-      return {
-        state: NookDuplicateSyncProviderState.Duplicate,
-        provider,
-      };
-    }
-    return { state: NookDuplicateSyncProviderState.Unique };
-  } finally {
-    result.free();
-  }
 }
 
 export async function saveAuthProviders({

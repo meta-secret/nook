@@ -147,7 +147,7 @@ export async function importExtensionVaultWithDependencies({
     throw new Error('Extension session received an invalid vault import.')
   }
   const providerSnapshot: AuthProvidersSnapshot = {
-    providers: providers as StorageProvider[],
+    providers,
     activeVaultStoreId: { state: 'unselected' },
   }
   const grantedProviders = dependencies.decodeProviders(providerSnapshot)
@@ -283,7 +283,7 @@ export async function flushPasskeyEventToProviders({
           args.repo,
         )
       } finally {
-        args.free()
+        args.pat = ''
       }
     }),
   )

@@ -1,4 +1,4 @@
-import type { ExtensionVaultEventPayload } from "./nook-companion-wasm/nook_companion_wasm";
+import type { ExtensionEventLogRecord as RustExtensionEventLogRecord } from "./nook-companion-wasm/nook_companion_wasm";
 
 export enum OpenSimpleVaultMessageType {
   NookOpenSimpleVault = "nook:open-simple-vault",
@@ -56,11 +56,9 @@ export class BeginExtensionPairingMessage {
 }
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
-export class ExtensionEventLogRecord {
+export type ExtensionEventLogRecord = RustExtensionEventLogRecord;
+export class ExtensionEventLogRecordAdmission {
   private constructor() {}
-  declare readonly eventId: string;
-  declare readonly path: string;
-  declare readonly event: ExtensionVaultEventPayload;
   static is(value: unknown): value is ExtensionEventLogRecord {
     if (!value || typeof value !== "object") return false;
     const record = value as Record<string, unknown>;
@@ -124,3 +122,5 @@ export class RuntimeMessageEnvelope {
     );
   }
 }
+
+export const ExtensionEventLogRecord = ExtensionEventLogRecordAdmission;

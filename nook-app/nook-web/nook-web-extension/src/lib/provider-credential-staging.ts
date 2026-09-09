@@ -1,8 +1,8 @@
 import type { StorageProvider } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
-import type { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/extension/runtime-messages'
+import { ExtensionStorageProviderPayload } from '../../../nook-web-shared/src/extension/runtime-messages'
 
-export type SerializedStorageProvider =
-  StorageProvider | ExtensionStorageProviderPayload
+/** Untrusted browser transport, admitted before stored-provider use. */
+export type SerializedStorageProvider = unknown
 export type SerializedExtensionStorageProviders = SerializedStorageProvider[]
 export type DecodedExtensionStorageProviders = StorageProvider[]
 export type ExtensionStorageProviderIdentities =
@@ -20,20 +20,8 @@ export type ProviderCredentialStaging =
       providers: StorageProvider[]
     }
 
-type ProviderCredentialCandidate = {
-  githubPat?: string | { state: string }
-  oauthFile?: {
-    config?: {
-      accessToken?: string | { state: string }
-      refreshToken?: string | { state: string }
-    }
-    accessToken?: string
-    refreshToken?: string
-  }
-}
-
 export type ProviderCredentialCleanupArgs<Result> = {
-  providers: StorageProvider[]
+  providers: SerializedExtensionStorageProviders
   operation: () => Promise<Result>
 }
 
@@ -50,10 +38,11 @@ export class ProviderCredentialBuffer {
   ) {}
   identities(): ExtensionStorageProviderIdentities {
     const providers = this.providers
-    return providers.map((provider) => ({
-      id: provider.id,
-      type: provider.type,
-    }))
+    return providers.map((provider) => {
+      if (!ExtensionStorageProviderPayload.is(provider))
+        throw new Error('Invalid provider identity.')
+      return { id: provider.id, type: provider.type }
+    })
   }
   private static isSerializedProviderField(value: unknown): boolean {
     if (typeof value === 'string' || typeof value === 'boolean') return true
@@ -68,29 +57,35 @@ export class ProviderCredentialBuffer {
   }
   clear(): void {
     const providers = this.providers
-    const candidates = providers as ProviderCredentialCandidate[]
-    for (const provider of candidates) {
+    for (const provider of providers) {
       if (!provider || typeof provider !== 'object') continue
-      if (typeof provider.githubPat === 'string') {
-        delete provider.githubPat
-      } else if ('githubPat' in provider) {
-        provider.githubPat = { state: 'missing' }
+      if ('githubPat' in provider) {
+        if (typeof provider.githubPat === 'string') delete provider.githubPat
+        else provider.githubPat = { state: 'missing' }
       }
-      if (provider.oauthFile && typeof provider.oauthFile === 'object') {
-        const config = provider.oauthFile.config
-        if (config && typeof config === 'object' && !Array.isArray(config)) {
-          config.accessToken = { state: 'signedOut' }
-          config.refreshToken = { state: 'notIssued' }
+      if (
+        'oauthFile' in provider &&
+        provider.oauthFile &&
+        typeof provider.oauthFile === 'object'
+      ) {
+        const oauth = provider.oauthFile
+        if (
+          'config' in oauth &&
+          oauth.config &&
+          typeof oauth.config === 'object'
+        ) {
+          if ('accessToken' in oauth.config)
+            oauth.config.accessToken = { state: 'signedOut' }
+          if ('refreshToken' in oauth.config)
+            oauth.config.refreshToken = { state: 'notIssued' }
         }
-        if (typeof provider.oauthFile.accessToken === 'string') {
-          provider.oauthFile.accessToken = ''
-        }
-        if ('refreshToken' in provider.oauthFile) {
-          delete provider.oauthFile.refreshToken
-        }
+        if ('accessToken' in oauth && typeof oauth.accessToken === 'string')
+          oauth.accessToken = ''
+        if ('refreshToken' in oauth) delete oauth.refreshToken
       }
     }
   }
+
   static async runWithCleanup<Result>(
     args: ProviderCredentialCleanupArgs<Result>,
   ): Promise<Result> {

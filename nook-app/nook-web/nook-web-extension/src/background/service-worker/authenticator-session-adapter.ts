@@ -1,7 +1,4 @@
-import type {
-  OtpauthEnrollmentPreview,
-  WebsiteAuthenticatorBackupAttachMessageMode,
-} from '../../lib/enrollment-messages'
+import type { WebsiteAuthenticatorBackupAttachMessageMode } from '../../lib/enrollment-messages'
 import {
   extensionSessionGrantIdentity,
   type StoredExtensionPairingGrant,
@@ -9,35 +6,23 @@ import {
 import { MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE } from '../../offscreen/session-request-adapter'
 import { extensionPairingIdentity } from './pairing-identity'
 
-export type AuthenticatorCodeSessionResponse = {
-  ok: true
-  code: string
-  expiresAt: number
-}
-
-export type AuthenticatorPreviewSessionResponse = {
-  ok: true
-  preview: OtpauthEnrollmentPreview
-}
-
-export type AuthenticatorSecretSessionResponse = {
-  ok: true
-  secretId: string
-}
-
-export type VerifiedAuthenticatorBackupAttachResponse = {
-  ok: true
-  secretId: string
-  backupCodesVerified: true
-  reviewedInputPersisted: true
-}
-
-function responseRecord(response: unknown): Record<string, unknown> {
-  if (!response || typeof response !== 'object') {
-    throw new Error('Extension session returned an invalid response.')
-  }
-  return response as Record<string, unknown>
-}
+import {
+  decode_authenticator_code_session_response,
+  decode_authenticator_preview_session_response,
+  decode_authenticator_secret_session_response,
+  decode_authenticator_backup_verification_session_response,
+  type AuthenticatorCodeSessionResponse,
+  type AuthenticatorPreviewSessionResponse,
+  type AuthenticatorSecretSessionResponse,
+  type VerifiedAuthenticatorBackupAttachResponse,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
+import { companionWasmReady } from '../../../../nook-web-shared/src/extension/companion-ready'
+export type {
+  AuthenticatorCodeSessionResponse,
+  AuthenticatorPreviewSessionResponse,
+  AuthenticatorSecretSessionResponse,
+  VerifiedAuthenticatorBackupAttachResponse,
+} from '../../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 type AuthenticatorCodeFromSessionArgs = {
   grant: StoredExtensionPairingGrant
@@ -48,6 +33,7 @@ export async function authenticatorCodeFromSession({
   grant,
   secretId,
 }: AuthenticatorCodeFromSessionArgs): Promise<AuthenticatorCodeSessionResponse> {
+  await companionWasmReady
   const message: Parameters<
     typeof extensionPairingIdentity.sendSessionMessage
   >[0] = {
@@ -58,88 +44,47 @@ export async function authenticatorCodeFromSession({
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  const response = responseRecord(
+  const response = decode_authenticator_code_session_response(
     await extensionPairingIdentity.sendSessionMessage(message),
   )
-  if (
-    response.ok !== true ||
-    typeof response.code !== 'string' ||
-    typeof response.expiresAt !== 'number' ||
-    !Number.isSafeInteger(response.expiresAt) ||
-    response.expiresAt <= Date.now()
-  ) {
+  if (response.expiresAt <= Date.now()) {
     throw new Error('Extension session returned an invalid authenticator code.')
   }
-  return { ok: true, code: response.code, expiresAt: response.expiresAt }
+  return response
 }
 
 export async function authenticatorPreviewFromSession(
   otpauthUri: string,
 ): Promise<AuthenticatorPreviewSessionResponse> {
+  await companionWasmReady
   const message: Parameters<
     typeof extensionPairingIdentity.sendSessionMessage
   >[0] = {
     type: 'nook:extension-session-authenticator-enroll-preview',
     payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
-  const response = responseRecord(
+  return decode_authenticator_preview_session_response(
     await extensionPairingIdentity.sendSessionMessage(message),
   )
-  const preview = response.preview
-  if (
-    response.ok !== true ||
-    !preview ||
-    typeof preview !== 'object' ||
-    !('issuer' in preview) ||
-    typeof preview.issuer !== 'string' ||
-    !('account' in preview) ||
-    typeof preview.account !== 'string' ||
-    !('websiteUrl' in preview) ||
-    typeof preview.websiteUrl !== 'string' ||
-    !('algorithm' in preview) ||
-    typeof preview.algorithm !== 'string' ||
-    !('digits' in preview) ||
-    typeof preview.digits !== 'number' ||
-    !('period' in preview) ||
-    typeof preview.period !== 'number'
-  ) {
-    throw new Error('Extension session returned an invalid preview.')
-  }
-  return {
-    ok: true,
-    preview: {
-      issuer: preview.issuer,
-      account: preview.account,
-      websiteUrl: preview.websiteUrl,
-      algorithm: preview.algorithm,
-      digits: preview.digits,
-      period: preview.period,
-    },
-  }
 }
 
 export async function stagedAuthenticatorCodeFromSession(
   otpauthUri: string,
 ): Promise<AuthenticatorCodeSessionResponse> {
+  await companionWasmReady
   const message: Parameters<
     typeof extensionPairingIdentity.sendSessionMessage
   >[0] = {
     type: 'nook:extension-session-authenticator-enroll-code',
     payload: { otpauthUri, queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE },
   }
-  const response = responseRecord(
+  const response = decode_authenticator_code_session_response(
     await extensionPairingIdentity.sendSessionMessage(message),
   )
-  if (
-    response.ok !== true ||
-    typeof response.code !== 'string' ||
-    typeof response.expiresAt !== 'number' ||
-    !Number.isSafeInteger(response.expiresAt) ||
-    response.expiresAt <= Date.now()
-  ) {
+  if (response.expiresAt <= Date.now()) {
     throw new Error('Extension session returned an invalid staged code.')
   }
-  return { ok: true, code: response.code, expiresAt: response.expiresAt }
+  return response
 }
 
 type ConfirmAuthenticatorEnrollmentArgs = {
@@ -153,6 +98,7 @@ export async function confirmAuthenticatorEnrollment({
   otpauthUri,
   origin,
 }: ConfirmAuthenticatorEnrollmentArgs): Promise<AuthenticatorSecretSessionResponse> {
+  await companionWasmReady
   const message: Parameters<
     typeof extensionPairingIdentity.sendSessionMessage
   >[0] = {
@@ -164,7 +110,7 @@ export async function confirmAuthenticatorEnrollment({
       queue: MESSAGE_DEFAULT_EXTENSION_SESSION_QUEUE,
     },
   }
-  return authenticatorSecretResponse(
+  return decode_authenticator_secret_session_response(
     await extensionPairingIdentity.sendSessionMessage(message),
   )
 }
@@ -182,6 +128,7 @@ export async function attachAuthenticatorBackupCodesFromSession({
   codes,
   mode,
 }: AuthenticatorBackupCodesSessionAttachmentRequest): Promise<VerifiedAuthenticatorBackupAttachResponse> {
+  await companionWasmReady
   const transportCodes = [...codes]
   const message: Parameters<
     typeof extensionPairingIdentity.sendSessionMessage
@@ -196,43 +143,11 @@ export async function attachAuthenticatorBackupCodesFromSession({
     },
   }
   try {
-    return verifiedAuthenticatorBackupAttachResponse(
+    return decode_authenticator_backup_verification_session_response(
       await extensionPairingIdentity.sendSessionMessage(message),
     )
   } finally {
     transportCodes.fill('')
-  }
-}
-
-function authenticatorSecretResponse(
-  response: unknown,
-): AuthenticatorSecretSessionResponse {
-  const record = responseRecord(response)
-  if (record.ok !== true || typeof record.secretId !== 'string') {
-    throw new Error('Extension session returned an invalid secret response.')
-  }
-  return { ok: true, secretId: record.secretId }
-}
-
-function verifiedAuthenticatorBackupAttachResponse(
-  response: unknown,
-): VerifiedAuthenticatorBackupAttachResponse {
-  const record = responseRecord(response)
-  if (
-    record.ok !== true ||
-    typeof record.secretId !== 'string' ||
-    record.backupCodesVerified !== true ||
-    record.reviewedInputPersisted !== true
-  ) {
-    throw new Error(
-      'Extension session did not verify persisted authenticator backup codes.',
-    )
-  }
-  return {
-    ok: true,
-    secretId: record.secretId,
-    backupCodesVerified: true,
-    reviewedInputPersisted: true,
   }
 }
 

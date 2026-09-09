@@ -1,7 +1,6 @@
 import { BrowserIdentityHandoffKind } from "$lib/vault/identity-handoff";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import type { NookSecretRecord } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
   get_active_vault_selection,
@@ -248,12 +247,12 @@ export class VaultLoginActions {
         );
       }
       state.applyDraftVaultArchitecture();
-      const rawRecords = (await state.enqueueStorage(() => {
+      const rawRecords = await state.enqueueStorage(() => {
         if (creatingAdditionalVault) {
           return state.requireManager().connect_fresh("local", "", "");
         }
         return state.requireManager().connect("local", "", "");
-      })) as NookSecretRecord[];
+      });
       for (const record of rawRecords) record.free();
       if (handoffAwaitingVaultCreation) {
         const handoff = state.externalIdentityHandoff;

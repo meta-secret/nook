@@ -3,13 +3,12 @@ import type { ExtensionSessionTransportRequest } from '../src/offscreen/session-
 import type { attachAuthenticatorBackupCodesFromSession } from '../src/background/service-worker/authenticator-session-adapter'
 import { ExtensionSessionMessageType } from '../src/lib/extension-session-message-type'
 import { WebsiteAuthenticatorBackupAttachMessageMode } from '../src/lib/enrollment-messages'
-import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
 
 function pairingGrant(): Parameters<
   typeof attachAuthenticatorBackupCodesFromSession
 >[0]['grant'] {
   return {
-    vaultType: ExtensionPairingVaultType.Simple,
+    vaultType: 'simple',
     deviceId: 'device-1',
     devicePublicKey: 'device-public-key',
     deviceSigningPublicKey: 'device-signing-public-key',

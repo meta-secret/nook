@@ -26,7 +26,6 @@ import {
   missingOAuthAccessToken,
   OAUTH_FILE_PROVIDER_TYPE,
   oauthAccessToken,
-  OAuthAccessTokenKind,
   oauthRefreshCredentialNotIssued,
   OAuthFilePresentation,
   OAuthFileNameKind,
@@ -110,7 +109,7 @@ export { VAULT_ASSESS_TIMEOUT_ERROR_NAME };
 const log = browserLogRuntime.createLogger("vault-providers");
 
 export interface VaultConnectAssessmentRequest {
-  readonly args: [string, string, string];
+  readonly args: NookStorageConnectArgs;
 }
 
 export interface RemoteVaultAssessmentHandling {
@@ -144,16 +143,6 @@ export interface ProviderRemoval {
 export class VaultProviderActions {
   constructor(private readonly state: ProviderActionsContext) {}
 
-  private static takeStorageArgsTuple(
-    args: NookStorageConnectArgs,
-  ): [string, string, string] {
-    try {
-      return [args.mode, args.pat, args.repo];
-    } finally {
-      args.free();
-    }
-  }
-
   private stagedProviderType(): StorageProviderType {
     const state = this.state;
     return state.loginSetup.kind === LoginSetupKind.Active
@@ -161,44 +150,34 @@ export class VaultProviderActions {
       : state.storageMode;
   }
 
-  wasmStorageArgs(): [string, string, string] {
+  wasmStorageArgs(): NookStorageConnectArgs {
     const state = this.state;
     const syncProvider = new ProviderSelectionActions(state).syncProviders()[0];
     if (state.localVaultPresent) {
-      return VaultProviderActions.takeStorageArgsTuple(
-        local_vault_storage_args(),
-      );
+      return local_vault_storage_args();
     }
     if (state.isAuthenticated && syncProvider) {
-      return VaultProviderActions.takeStorageArgsTuple(
-        authenticated_vault_storage_args($state.snapshot(syncProvider)),
-      );
+      return authenticated_vault_storage_args($state.snapshot(syncProvider));
     }
     if (state.storageMode === GITHUB_PROVIDER_TYPE) {
-      return VaultProviderActions.takeStorageArgsTuple(
-        draft_github_storage_args(state.githubPat, state.githubRepo),
-      );
+      return draft_github_storage_args(state.githubPat, state.githubRepo);
     }
     if (
       state.storageMode === OAUTH_FILE_PROVIDER_TYPE &&
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
     ) {
-      return VaultProviderActions.takeStorageArgsTuple(
-        draft_oauth_storage_args($state.snapshot(state.oauthFileDraft.config)),
+      return draft_oauth_storage_args(
+        $state.snapshot(state.oauthFileDraft.config),
       );
     }
-    return VaultProviderActions.takeStorageArgsTuple(
-      draft_local_storage_args(),
-    );
+    return draft_local_storage_args();
   }
 
-  static providerWasmArgs(provider: StorageProvider): [string, string, string] {
-    return VaultProviderActions.takeStorageArgsTuple(
-      provider_wasm_args($state.snapshot(provider)),
-    );
+  static providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs {
+    return provider_wasm_args($state.snapshot(provider));
   }
 
-  connectStorageArgs(): [string, string, string] {
+  connectStorageArgs(): NookStorageConnectArgs {
     const state = this.state;
     if (this.shouldUseJoinProviderForConnect()) {
       return VaultProviderActions.providerWasmArgs(
@@ -233,7 +212,7 @@ export class VaultProviderActions {
       return staged.state === NookStagedStorageArgsState.Ready
         ? {
             kind: StagedRemoteStorageKind.Available,
-            args: VaultProviderActions.takeStorageArgsTuple(staged.args),
+            args: staged.args,
           }
         : { kind: StagedRemoteStorageKind.Unavailable };
     } finally {
@@ -287,7 +266,7 @@ export class VaultProviderActions {
     }
     if (
       state.storageMode === OAUTH_FILE_PROVIDER_TYPE &&
-      oauthCredential.kind === OAuthAccessTokenKind.Available
+      oauthCredential.kind === "available"
     ) {
       return has_oauth_credentials(oauthCredential.token);
     }
@@ -330,7 +309,11 @@ export class VaultProviderActions {
       throw new Error(state.t(I18N_KEYS.ErrorsEngineUnavailable));
     const manager = state.requireManager();
     return (await state.enqueueStorage(async () => {
-      const assessPromise = manager.assess_vault_connect(...args);
+      const assessPromise = manager.assess_vault_connect(
+        args.mode,
+        args.pat,
+        args.repo,
+      );
       const startVaultDiscoveryTimeoutArgs: ConstructorParameters<
         typeof VaultDiscoveryTimeout
       >[0] = {

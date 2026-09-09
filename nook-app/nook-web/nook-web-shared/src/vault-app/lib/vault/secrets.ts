@@ -189,9 +189,9 @@ export class VaultSecretActions {
           promise: state.requireManager().add_secret(id, type, data),
           label: "Add secret",
         };
-        const rawRecords = (await state.raceStorageTimeout(
+        const rawRecords = await state.raceStorageTimeout(
           raceStorageTimeoutArgs,
-        )) as NookSecretRecord[];
+        );
         VaultSecretActions.freeSecretRecords(rawRecords);
       });
       await state.refreshSecretsFromSession();
@@ -385,9 +385,7 @@ export class VaultSecretActions {
     });
     try {
       await state.enqueueStorage(async () => {
-        const rawRecords = (await state
-          .requireManager()
-          .delete_secret(id)) as NookSecretRecord[];
+        const rawRecords = await state.requireManager().delete_secret(id);
         VaultSecretActions.freeSecretRecords(rawRecords);
       });
       committed = true;
@@ -417,9 +415,9 @@ export class VaultSecretActions {
     try {
       const newId = generate_secret_id();
       await state.enqueueStorage(async () => {
-        const rawRecords = (await state
+        const rawRecords = await state
           .requireManager()
-          .replace_secret(oldId, newId, type, data)) as NookSecretRecord[];
+          .replace_secret(oldId, newId, type, data);
         VaultSecretActions.freeSecretRecords(rawRecords);
       });
       await state.refreshSecretsFromSession();
@@ -445,10 +443,15 @@ export class VaultSecretActions {
       if (state.storageMode !== "local") {
         await state.ensureOAuthTokensFresh();
       }
+      const storageArgs = state.wasmStorageArgs();
       const raw = await state.enqueueStorage(() =>
         state
           .requireManager()
-          .fetch_vault_password_entries(...state.wasmStorageArgs()),
+          .fetch_vault_password_entries(
+            storageArgs.mode,
+            storageArgs.pat,
+            storageArgs.repo,
+          ),
       );
       state.passwordEntries = raw;
       if (

@@ -6,7 +6,6 @@ import {
 } from "$app-wasm";
 import {
   oauthAccessToken,
-  OAuthAccessTokenKind,
   unselectedVaultScope,
   type OAuthFilePreset,
   type StorageProvider,
@@ -55,7 +54,7 @@ export function shouldFlushSharedDriveGrant({
   accessCredential,
 }: SharedDriveGrantFlushAssessment): boolean {
   const credential: SharedStorageGrantCredential =
-    accessCredential.kind === OAuthAccessTokenKind.Available
+    accessCredential.kind === "available"
       ? { state: "accessToken", accessToken: accessCredential.token }
       : { state: "unavailable" };
   return should_flush_shared_storage_grant(grant, credential);

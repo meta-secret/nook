@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
 import { VaultAccessStatus, type NookSecretRecord } from "$lib/nook";
@@ -25,7 +26,7 @@ type StorageConnection =
   | { kind: StorageConnectionKind.Configured }
   | {
       kind: StorageConnectionKind.RemoteRecovery;
-      args: [string, string, string];
+      args: NookStorageConnectArgs;
     };
 
 const log = browserLogRuntime.createLogger("connect");
@@ -172,8 +173,16 @@ export class VaultConnectionActions {
         const connectPromise =
           state.remoteVaultRecoveryState ===
           RemoteVaultRecoveryState.ConnectFresh
-            ? state.requireManager().connect_fresh(...connectArgs)
-            : state.requireManager().connect(...connectArgs);
+            ? state
+                .requireManager()
+                .connect_fresh(
+                  connectArgs.mode,
+                  connectArgs.pat,
+                  connectArgs.repo,
+                )
+            : state
+                .requireManager()
+                .connect(connectArgs.mode, connectArgs.pat, connectArgs.repo);
         state.remoteVaultRecoveryState = RemoteVaultRecoveryState.None;
         const startVaultDiscoveryTimeoutArgs: ConstructorParameters<
           typeof VaultDiscoveryTimeout
@@ -185,10 +194,7 @@ export class VaultConnectionActions {
           startVaultDiscoveryTimeoutArgs,
         );
         try {
-          return (await Promise.race([
-            connectPromise,
-            timeout.completion,
-          ])) as NookSecretRecord[];
+          return await Promise.race([connectPromise, timeout.completion]);
         } finally {
           timeout.cancel();
         }

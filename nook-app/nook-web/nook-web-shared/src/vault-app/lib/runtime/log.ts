@@ -24,6 +24,7 @@
  */
 
 import {
+  type LogEntry,
   log_record,
   log_clear,
   log_count,
@@ -43,13 +44,7 @@ export enum LogLevel {
   Trace = "trace",
 }
 
-export type LogEntry = {
-  ts: string;
-  level: LogLevel;
-  scope: string;
-  message: string;
-  data?: string;
-};
+export type { LogEntry } from "$app-wasm";
 
 export type RuntimeFailure = {
   readonly message: string;
@@ -638,7 +633,7 @@ class BrowserLogRuntime {
       options.offset,
     );
     try {
-      return entries.to_array() as LogEntry[];
+      return entries.to_array();
     } finally {
       entries.free();
     }

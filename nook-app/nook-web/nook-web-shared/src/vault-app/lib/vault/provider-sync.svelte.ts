@@ -61,7 +61,7 @@ export class ProviderSyncActions {
     const localYaml = await read_local_vault_yaml().catch(() => "");
     const args =
       provider.type === "local-folder"
-        ? (["local-folder", "", ""] as const)
+        ? { mode: "local-folder", pat: "", repo: "" }
         : state.providerWasmArgs(provider);
     const revision = NookProviderSyncRevision.untracked();
     try {
@@ -71,9 +71,9 @@ export class ProviderSyncActions {
           provider.label,
           localYaml,
           "",
-          args[0],
-          args[1],
-          args[2],
+          args.mode,
+          args.pat,
+          args.repo,
           revision,
           localStoreId,
           remoteStoreId,
@@ -170,7 +170,7 @@ export class ProviderSyncActions {
         return;
       }
 
-      const [mode, pat, repo] = state.providerWasmArgs(provider);
+      const { mode, pat, repo } = state.providerWasmArgs(provider);
       // `sync_vault_from_storage` checks the IDB event-log flag; the in-memory
       // `event_log_mode()` bit can be false after reload until connect finishes.
       const raw = await state.enqueueStorage<NookVaultSyncResult>(() =>

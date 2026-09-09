@@ -7,7 +7,6 @@ import {
   githubPatValue,
   isConfiguredOAuthFile,
   oauthAccessToken,
-  OAuthAccessTokenKind,
   providerPersistenceDefaults,
   storedGithubPat,
   storedGithubRepository,
@@ -284,7 +283,7 @@ describe.sequential(
         throw new Error('expected configured OAuth credentials')
       }
       const loadedAccess = oauthAccessToken(loadedOauth.config)
-      if (loadedAccess.kind !== OAuthAccessTokenKind.Available) {
+      if (loadedAccess.kind !== 'available') {
         throw new Error('expected a loaded OAuth access token')
       }
       expect(loadedAccess.token).toBe(access)

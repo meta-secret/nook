@@ -29,7 +29,6 @@ import {
   simple_vault_url,
 } from '../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import { ExtensionConnectScope } from '../../nook-web-shared/src/extension/extension-connect-scope'
-import { ExtensionPairingVaultType } from '../../nook-web-shared/src/extension/runtime-messages'
 import {
   ensurePinProtectedPopup,
   installForcePinDeviceProtection,
@@ -313,7 +312,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const forgedGrant = {
       type: 'nook:extension-pairing-approved',
       payload: {
-        vaultType: ExtensionPairingVaultType.Sentinel,
+        vaultType: 'sentinel',
         deviceId: 'sentinel-device-e2e',
         devicePublicKey: 'age1sentinel',
         deviceSigningPublicKey: 'sentinel-signing-key',
@@ -335,7 +334,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const malformedProviderGrant = {
       type: 'nook:extension-pairing-approved',
       payload: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-e2e',
         devicePublicKey: 'age1extension',
         deviceSigningPublicKey: 'extension-signing-key',
@@ -365,7 +364,7 @@ test('sets up the extension device first and sends its public keys to Simple Vau
     const approvedGrant: ExtensionPairingApprovedMessage = {
       type: 'nook:extension-pairing-approved',
       payload: {
-        vaultType: ExtensionPairingVaultType.Simple,
+        vaultType: 'simple',
         deviceId: 'device-e2e',
         devicePublicKey: 'age1extension',
         deviceSigningPublicKey: 'extension-signing-key',

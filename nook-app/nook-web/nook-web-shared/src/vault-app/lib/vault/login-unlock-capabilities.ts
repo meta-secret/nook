@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   VaultAccessStatus,
   login_unlock_decision,
@@ -7,7 +8,7 @@ import {
   type NookPasswordEntrySummary,
 } from "$app-wasm";
 
-type VaultConnectAssessment = [string, string, string];
+type VaultConnectAssessment = NookStorageConnectArgs;
 
 type LoginUnlockCapabilityState = {
   hasManager: boolean;
@@ -31,11 +32,11 @@ export class LoginUnlockPresentation {
       return;
     }
     try {
-      const accessStatus = await state.assessVaultConnectStatus([
-        "local",
-        "",
-        "",
-      ]);
+      const accessStatus = await state.assessVaultConnectStatus({
+        mode: "local",
+        pat: "",
+        repo: "",
+      });
       const decision = login_unlock_decision(
         accessStatus,
         state.passwordEntries.length > 0

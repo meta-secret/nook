@@ -72,8 +72,6 @@ export class WebsitePasskeyOptionsMessage {
           kind: WebsitePasskeyRequestParseKind.Parsed,
           request: {
             ceremony: WebsitePasskeyCeremony.Get,
-            origin: value.origin,
-            rpId: value.rpId,
             value,
           },
         }
@@ -85,8 +83,6 @@ export class WebsitePasskeyOptionsMessage {
         kind: WebsitePasskeyRequestParseKind.Parsed,
         request: {
           ceremony: WebsitePasskeyCeremony.Create,
-          origin: value.origin,
-          rpId: value.relyingParty.id,
           value,
         },
       }
@@ -237,14 +233,10 @@ export type WebsitePasskeyRequestParse =
 export type WebsitePasskeyRequest =
   | {
       ceremony: WebsitePasskeyCeremony.Create
-      origin: string
-      rpId: string
       value: PasskeyRegistrationRequest
     }
   | {
       ceremony: WebsitePasskeyCeremony.Get
-      origin: string
-      rpId: string
       value: PasskeyAssertionRequest
     }
 

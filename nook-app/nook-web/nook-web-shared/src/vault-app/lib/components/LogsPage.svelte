@@ -34,13 +34,13 @@
   const hasOlder = $derived(offset + PAGE_SIZE < total);
   const hasNewer = $derived(offset > 0);
 
-  const LEVEL_CLASS: Record<LogLevel, string> = {
-    [LogLevel.Error]: "text-red-400",
-    [LogLevel.Warn]: "text-amber-400",
-    [LogLevel.Info]: "text-sky-400",
-    [LogLevel.Debug]: "text-emerald-400",
-    [LogLevel.Trace]: "text-muted-foreground",
-  };
+  const LEVEL_CLASS = new Map<string, string>([
+    [LogLevel.Error, "text-red-400"],
+    [LogLevel.Warn, "text-amber-400"],
+    [LogLevel.Info, "text-sky-400"],
+    [LogLevel.Debug, "text-emerald-400"],
+    [LogLevel.Trace, "text-muted-foreground"],
+  ]);
 
   async function load() {
     loading = true;
@@ -224,7 +224,7 @@
               <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <span class="text-muted-foreground">{entry.ts}</span>
                 <span
-                  class="font-semibold uppercase {LEVEL_CLASS[entry.level]}"
+                  class="font-semibold uppercase {LEVEL_CLASS.get(entry.level)}"
                 >
                   {entry.level}
                 </span>

@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import { VaultState } from "$lib/vault.svelte";
 import { isoTimestamp } from "$lib/nook";
@@ -32,7 +33,6 @@ import {
   LocalFolderProviderConfigurationKind,
   isConfiguredOAuthFile,
   oauthAccessToken,
-  OAuthAccessTokenKind,
   OAuthFilePresentation,
   OAuthFileNameKind,
   oauthConfigurationNotApplicable,
@@ -179,7 +179,7 @@ export class PasswordEnrollmentActions {
         throw new Error("Enter the vault password for state onboarding QR.");
       }
 
-      let enrollmentStorageArgs: [string, string, string];
+      let enrollmentStorageArgs: NookStorageConnectArgs;
       if (enrollmentProvider.type === GITHUB_PROVIDER_TYPE) {
         const githubPat = enrollmentProvider.githubPat;
         const githubRepo = enrollmentProvider.githubRepo;
@@ -187,7 +187,11 @@ export class PasswordEnrollmentActions {
         state.githubPat = githubPat;
         state.githubRepo = githubRepo;
         state.activateLoginSetup("github");
-        enrollmentStorageArgs = ["github", githubPat, githubRepo];
+        enrollmentStorageArgs = {
+          mode: "github",
+          pat: githubPat,
+          repo: githubRepo,
+        };
       } else if (
         payload.onboardingType === OnboardingType.SharedProviderGrant
       ) {
@@ -269,7 +273,7 @@ export class PasswordEnrollmentActions {
               })();
           const existingCredential = oauthAccessToken(existingConfig);
           const tokens =
-            existingCredential.kind === OAuthAccessTokenKind.Available
+            existingCredential.kind === "available"
               ? {
                   accessToken: existingCredential.token,
                   accountName:
@@ -429,7 +433,7 @@ export class PasswordEnrollmentActions {
         enrollmentStorageArgs =
           selection.kind === SavedEnrollmentProviderKind.Remote
             ? state.providerWasmArgs(selection.provider)
-            : ["local", "", ""];
+            : { mode: "local", pat: "", repo: "" };
       }
 
       await state.initDeviceIdentity();
@@ -438,7 +442,9 @@ export class PasswordEnrollmentActions {
         state
           .requireManager()
           .connect_with_password(
-            ...enrollmentStorageArgs,
+            enrollmentStorageArgs.mode,
+            enrollmentStorageArgs.pat,
+            enrollmentStorageArgs.repo,
             entryId,
             unlockPassword,
             state.secretPageSize,

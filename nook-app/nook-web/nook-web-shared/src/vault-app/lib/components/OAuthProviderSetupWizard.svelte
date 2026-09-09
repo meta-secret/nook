@@ -20,7 +20,6 @@
     DEFAULT_DRIVE_BACKUP_NAME,
     OAuthFilePresentation,
     oauthAccessToken,
-    OAuthAccessTokenKind,
   } from "$lib/auth/providers";
   import { browserLogRuntime } from "$lib/runtime/log";
   import {
@@ -74,8 +73,7 @@
   const isSharedProvider = $derived(isSharedGoogleDrive || isSharedICloud);
   const oauthSignedIn = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&
-      oauthAccessToken(vault.oauthFileDraft.config).kind ===
-        OAuthAccessTokenKind.Available,
+      oauthAccessToken(vault.oauthFileDraft.config).kind === "available",
   );
   const sharedTargetReady = $derived(
     vault.oauthFileDraft.kind === OAuthFileDraftKind.Configured &&

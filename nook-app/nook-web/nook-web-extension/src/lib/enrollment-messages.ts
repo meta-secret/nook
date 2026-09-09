@@ -234,11 +234,4 @@ export class WebsiteAuthenticatorBackupAttachMessage {
   }
 }
 
-export type OtpauthEnrollmentPreview = {
-  issuer: string
-  account: string
-  websiteUrl: string
-  algorithm: string
-  digits: number
-  period: number
-}
+export type { AuthenticatorEnrollmentPreview as OtpauthEnrollmentPreview } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'

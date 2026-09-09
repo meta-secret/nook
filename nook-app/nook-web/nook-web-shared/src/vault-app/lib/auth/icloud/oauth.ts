@@ -10,7 +10,6 @@ import { I18N_KEYS } from "../../../../generated/i18n-keys";
 import {
   configuredOAuthFile,
   oauthAccessToken,
-  OAuthAccessTokenKind,
   storedOAuthAccountEmail,
   unknownOAuthAccountIdentity,
   type OAuthFileConfig,
@@ -753,7 +752,7 @@ class ICloudOAuthSession {
   async ensureValidICloudOAuthFileConfig(
     config: OAuthFileConfig,
   ): Promise<OAuthFileConfig> {
-    if (oauthAccessToken(config).kind === OAuthAccessTokenKind.Available) {
+    if (oauthAccessToken(config).kind === "available") {
       return config;
     }
     const request: ICloudWebAuthTokenRequest = {

@@ -1,3 +1,8 @@
+import type {
+  ExtensionStorageProviderIdentity,
+  ExtensionPairingGrantApproval,
+  ExtensionStorageProviderType as RustExtensionStorageProviderType,
+} from "./nook-companion-wasm/nook_companion_wasm.js";
 import { ExtensionConnectScope } from "./extension-connect-scope";
 
 import { ExtensionPairedVaultIdentityStatusMessageStatus } from "./paired-vault-identity-status";
@@ -42,10 +47,7 @@ export {
 
 export { ExtensionPairedVaultIdentityStatusMessageStatus };
 
-export enum ExtensionPairingVaultType {
-  Simple = "simple",
-  Sentinel = "sentinel",
-}
+export type { ExtensionPairingVaultType } from "./nook-companion-wasm/nook_companion_wasm.js";
 
 export enum GeneratePasswordRequestType {
   NookWebsiteGeneratePassword = "nook:website-generate-password",
@@ -57,23 +59,20 @@ export type GeneratePasswordRequest = {
 };
 
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
-export class ExtensionPairingApprovedGrant {
+export type ExtensionPairingApprovedGrant = Omit<
+  ExtensionPairingGrantApproval,
+  "syncProviderCount" | "vaultType"
+> & {
+  vaultType: "simple";
+  providers: ExtensionStorageProviderPayload[];
+};
+export class ExtensionPairingApprovedGrantAdmission {
   private constructor() {}
-  declare readonly vaultType: ExtensionPairingVaultType.Simple;
-  declare readonly deviceId: string;
-  declare readonly devicePublicKey: string;
-  declare readonly deviceSigningPublicKey: string;
-  declare readonly deviceLabel: string;
-  declare readonly vaultStoreId: string;
-  declare readonly vaultName: string;
-  declare readonly approvedAt: string;
-  declare readonly scopes: ExtensionConnectScope[];
-  declare readonly providers: ExtensionStorageProviderPayload[];
   static is(value: unknown): value is ExtensionPairingApprovedGrant {
     if (!value || typeof value !== "object") return false;
     const payload = value as Record<string, unknown>;
     return (
-      payload.vaultType === ExtensionPairingVaultType.Simple &&
+      payload.vaultType === "simple" &&
       typeof payload.deviceId === "string" &&
       typeof payload.devicePublicKey === "string" &&
       typeof payload.deviceSigningPublicKey === "string" &&
@@ -88,23 +87,22 @@ export class ExtensionPairingApprovedGrant {
         ),
       ) &&
       Array.isArray(payload.providers) &&
-      payload.providers.every(ExtensionStorageProviderPayload.is)
+      payload.providers.every(ExtensionStorageProviderPayloadAdmission.is)
     );
   }
 }
 
-export enum ExtensionStorageProviderType {
-  Local = "local",
-  LocalFolder = "local-folder",
-  Github = "github",
-  OAuthFile = "oauth-file",
-}
-
+export type ExtensionStorageProviderType = RustExtensionStorageProviderType;
+export const ExtensionStorageProviderType = {
+  Local: "local",
+  LocalFolder: "local-folder",
+  Github: "github",
+  OAuthFile: "oauth-file",
+} satisfies Record<string, RustExtensionStorageProviderType>;
+export type ExtensionStorageProviderPayload = ExtensionStorageProviderIdentity;
 /** Structural browser wire value; validation requires no instance methods or runtime state. */
-export class ExtensionStorageProviderPayload {
+export class ExtensionStorageProviderPayloadAdmission {
   private constructor() {}
-  declare readonly id: string;
-  declare readonly type: `${ExtensionStorageProviderType}`;
   static is(value: unknown): value is ExtensionStorageProviderPayload {
     if (!value || typeof value !== "object") return false;
     const provider = value as Record<string, unknown>;
@@ -335,3 +333,9 @@ type IsPairedVaultRequestMessageArgs = {
   message: unknown;
   type: ExtensionPairedVaultUnlockRequestMessage["type"];
 };
+
+export const ExtensionStorageProviderPayload =
+  ExtensionStorageProviderPayloadAdmission;
+
+export const ExtensionPairingApprovedGrant =
+  ExtensionPairingApprovedGrantAdmission;

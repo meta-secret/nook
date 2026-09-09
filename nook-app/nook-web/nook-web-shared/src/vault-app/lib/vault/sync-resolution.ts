@@ -14,7 +14,6 @@ import {
   VaultSyncConflictKind,
 } from "$app-wasm";
 import { browserLogRuntime } from "$lib/runtime/log";
-import type { NookSecretRecord } from "$lib/nook";
 import { LoginSetupKind } from "$lib/vault/state/provider.svelte";
 import {
   ConflictProviderSaveKind,
@@ -124,7 +123,7 @@ export class SyncConflictActions {
           .requireManager()
           .resolve_projection_conflict(oldSecretId, chosenSecretId),
       );
-      for (const record of raw as NookSecretRecord[]) record.free();
+      for (const record of raw) record.free();
       await state.refreshSecretsFromSession();
       await state.refreshReplacementConflicts();
       void state.runFanOutSyncAfterLocalSave();

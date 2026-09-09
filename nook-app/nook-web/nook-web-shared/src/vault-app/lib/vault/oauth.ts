@@ -8,7 +8,6 @@ import {
   findDuplicateSyncProvider,
   missingOAuthAccessToken,
   oauthAccessToken,
-  OAuthAccessTokenKind,
   OAuthFilePresentation,
   OAuthFileNameKind,
   set_google_drive_provider_mode,
@@ -23,10 +22,7 @@ import {
   type ICloudMode,
   type OAuthFileConfig,
 } from "$lib/auth/providers";
-import {
-  NookDuplicateSyncProviderState,
-  verify_shared_google_drive_folder,
-} from "$app-wasm";
+import { verify_shared_google_drive_folder } from "$app-wasm";
 import {
   GoogleAccountIdentityKind,
   GoogleDriveOAuthScope,
@@ -132,7 +128,7 @@ export class VaultOAuthActions {
             };
             return findDuplicateSyncProvider(findDuplicateSyncProviderArgs);
           })()
-        : { state: NookDuplicateSyncProviderState.Unique };
+        : { state: "unique" };
     const refreshed =
       oauthFile.preset === "icloud"
         ? await iCloudOAuthSession.ensureValidICloudOAuthFileConfig(oauthFile)
@@ -151,7 +147,7 @@ export class VaultOAuthActions {
       return;
     }
     state.configureOauthFile(refreshed);
-    if (providerToRefresh.state === NookDuplicateSyncProviderState.Duplicate) {
+    if (providerToRefresh.state === "duplicate") {
       state.providers = state.providers.map((provider) =>
         provider.id === providerToRefresh.provider.id
           ? { ...provider, oauthFile: configuredOAuthFile(refreshed) }
@@ -264,8 +260,7 @@ export class VaultOAuthActions {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
-      oauthAccessToken(state.oauthFileDraft.config).kind ===
-        OAuthAccessTokenKind.Missing
+      oauthAccessToken(state.oauthFileDraft.config).kind === "missing"
     ) {
       throw new Error(state.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst));
     }
@@ -306,8 +301,7 @@ export class VaultOAuthActions {
     const state = this.state;
     if (
       state.oauthFileDraft.kind !== OAuthFileDraftKind.Configured ||
-      oauthAccessToken(state.oauthFileDraft.config).kind ===
-        OAuthAccessTokenKind.Missing
+      oauthAccessToken(state.oauthFileDraft.config).kind === "missing"
     ) {
       throw new Error(state.t(I18N_KEYS.ProviderSetupIcloudSharedSignInFirst));
     }
@@ -349,7 +343,7 @@ export class VaultOAuthActions {
     }
     const oauthFile = state.oauthFileDraft.config;
     const accessCredential = oauthAccessToken(oauthFile);
-    if (accessCredential.kind === OAuthAccessTokenKind.Missing) {
+    if (accessCredential.kind === "missing") {
       throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedSignInFirst));
     }
     const remoteFileName = new OAuthFilePresentation(oauthFile).oauthFileName();
@@ -424,7 +418,7 @@ export class VaultOAuthActions {
       state.oauthFileDraft.kind === OAuthFileDraftKind.Configured
         ? oauthAccessToken(state.oauthFileDraft.config)
         : missingOAuthAccessToken();
-    if (accessCredential.kind === OAuthAccessTokenKind.Missing) {
+    if (accessCredential.kind === "missing") {
       throw new Error(state.t(I18N_KEYS.ProviderSetupGoogleSharedSignInFirst));
     }
     let folder;

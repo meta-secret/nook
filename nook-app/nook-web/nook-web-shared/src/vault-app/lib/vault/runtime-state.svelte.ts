@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import {
   DeviceProtectionStatus,
   NookManualProviderSyncState,
@@ -205,13 +206,13 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     ]);
   }
 
-  wasmStorageArgs(): [string, string, string] {
+  wasmStorageArgs(): NookStorageConnectArgs {
     return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
     ).wasmStorageArgs();
   }
 
-  connectStorageArgs(): [string, string, string] {
+  connectStorageArgs(): NookStorageConnectArgs {
     return new providersActions.VaultProviderActions(
       this.providerActionsContext(),
     ).connectStorageArgs();
@@ -332,7 +333,7 @@ export abstract class VaultRuntimeState extends VaultLifecycleState {
     ).showLoginVaultPicker();
   }
 
-  providerWasmArgs(provider: StorageProvider): [string, string, string] {
+  providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs {
     return providersActions.VaultProviderActions.providerWasmArgs(provider);
   }
 

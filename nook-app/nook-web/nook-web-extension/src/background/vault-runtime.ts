@@ -14,7 +14,7 @@ import type {
 } from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 import initNookWasm, {
   configure_vault_application,
-  decode_storage_providers,
+  admit_extension_storage_providers,
   default_password_generation_options,
   generate_password,
   read_extension_pairing_state,
@@ -26,7 +26,6 @@ import initNookWasm, {
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
-  AuthProvidersSnapshot,
   ExtensionPairingState,
   StorageProvider,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
@@ -242,11 +241,7 @@ class BackgroundVaultRuntime {
     providers: SerializedExtensionStorageProviders,
   ): Promise<StorageProvider[]> {
     await this.ensureExtensionWasm()
-    const snapshot: AuthProvidersSnapshot = {
-      providers: providers as StorageProvider[],
-      activeVaultStoreId: { state: 'unselected' },
-    }
-    return decode_storage_providers(snapshot).providers
+    return admit_extension_storage_providers(providers)
   }
 }
 

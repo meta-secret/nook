@@ -219,11 +219,14 @@ export class VaultPasswordActions {
     state.dismissSuccess();
     state.isVerifying = true;
     try {
+      const storageArgs = state.wasmStorageArgs();
       const page = await state.enqueueStorage(() =>
         state
           .requireManager()
           .connect_with_password(
-            ...state.wasmStorageArgs(),
+            storageArgs.mode,
+            storageArgs.pat,
+            storageArgs.repo,
             entryId,
             password,
             state.secretPageSize,

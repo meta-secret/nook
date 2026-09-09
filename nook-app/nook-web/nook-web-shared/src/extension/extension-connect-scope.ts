@@ -2,13 +2,14 @@ import type { ExtensionConnectScope as RustExtensionConnectScope } from "./nook-
 
 export type ExtensionConnectScope = RustExtensionConnectScope;
 
-export type ExtensionConnectScopeRuntime = {
-  extension_vault_access_scope(): ExtensionConnectScope;
-  extension_password_filling_scope(): ExtensionConnectScope;
-  extension_passkey_management_scope(): ExtensionConnectScope;
-  extension_sync_provider_credentials_scope(): ExtensionConnectScope;
-  is_extension_connect_scope(value: string): boolean;
-};
+export type ExtensionConnectScopeRuntime = Pick<
+  typeof import("./nook-companion-wasm/nook_companion_wasm.js"),
+  | "extension_vault_access_scope"
+  | "extension_password_filling_scope"
+  | "extension_passkey_management_scope"
+  | "extension_sync_provider_credentials_scope"
+  | "is_extension_connect_scope"
+>;
 
 enum ExtensionConnectScopeRuntimeStateKind {
   Unconfigured = "unconfigured",

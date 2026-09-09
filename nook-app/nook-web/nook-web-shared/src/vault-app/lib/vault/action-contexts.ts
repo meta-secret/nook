@@ -1,3 +1,4 @@
+import type { NookStorageConnectArgs } from "$app-wasm";
 import type {
   NookPendingSyncConflict,
   NookProviderSyncRevision,
@@ -95,11 +96,7 @@ interface SharedStorageActionsContext {
 }
 
 type ProviderPersistenceOptions = { readonly replace: boolean };
-export type VaultStorageArguments = [
-  mode: string,
-  credential: string,
-  repository: string,
-];
+export type VaultStorageArguments = NookStorageConnectArgs;
 
 export type ProviderSyncRequest = {
   readonly providerId: string;
@@ -131,7 +128,7 @@ interface ProviderActionPorts extends SharedStorageActionsContext {
   stageStagedProviderSyncIssue(args: VaultStorageArguments): Promise<boolean>;
   stagedRemoteStorageArgs(): StagedRemoteStorage;
   syncProviderById(request: ProviderSyncRequest): Promise<void>;
-  wasmStorageArgs(): [string, string, string];
+  wasmStorageArgs(): NookStorageConnectArgs;
 }
 
 export type ProviderActionsContext = ProviderStateFields &
@@ -297,7 +294,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   initDeviceIdentity(): Promise<void>;
   loadDb(): Promise<void>;
   persistProviders(options: SyncProviderPersistenceOptions): Promise<void>;
-  providerWasmArgs(provider: StorageProvider): [string, string, string];
+  providerWasmArgs(provider: StorageProvider): NookStorageConnectArgs;
   raceStorageTimeout<T>(request: StorageTimeoutRace<T>): Promise<T>;
   assessVaultConnectStatus(
     args?: VaultStorageArguments,
@@ -323,7 +320,7 @@ interface SyncActionPorts extends SharedStorageActionsContext {
   updateProviderSyncMetadata(
     request: ProviderSyncMetadataRequest,
   ): Promise<void>;
-  wasmStorageArgs(): [string, string, string];
+  wasmStorageArgs(): NookStorageConnectArgs;
 }
 
 export type SyncActionsContext = SyncProviderFields &

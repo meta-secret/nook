@@ -3,12 +3,11 @@ import initNookWasm, {
   configure_vault_application,
   NookCompanionExtensionEndpoint,
   type NookDiscoveredCompanionExtensionEndpoint,
-  decode_storage_providers,
+  admit_extension_storage_providers,
   NookVaultManager,
   VaultApplication,
 } from '../../../nook-web-shared/src/vault-app/lib/nook-wasm/nook_wasm'
 import type {
-  AuthProvidersSnapshot,
   CompanionIdentityHandoffResponse,
   CompanionIdentityStatus,
   StorageProvider,
@@ -316,11 +315,7 @@ const dispatchContext: SessionMessageDispatchContext<ExtensionSessionResponse> =
     handleCompanionIdentityDiscovery,
     handleCompanionIdentityHandoff,
     decodeProviders: async (providers) => {
-      const snapshot: AuthProvidersSnapshot = {
-        providers: providers as StorageProvider[],
-        activeVaultStoreId: { state: 'unselected' },
-      }
-      return decode_storage_providers(snapshot).providers
+      return admit_extension_storage_providers(providers)
     },
   }
 const sessionMessageDispatcher =

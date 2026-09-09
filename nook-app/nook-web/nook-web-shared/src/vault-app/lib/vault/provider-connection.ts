@@ -73,10 +73,13 @@ export class ProviderConnectionActions {
           });
         }
         const stagedStorage = state.stagedRemoteStorageArgs();
-        const [storageMode, accessToken, remoteRef] =
-          stagedStorage.kind === StagedRemoteStorageKind.Available
-            ? stagedStorage.args
-            : state.wasmStorageArgs();
+        const {
+          mode: storageMode,
+          pat: accessToken,
+          repo: remoteRef,
+        } = stagedStorage.kind === StagedRemoteStorageKind.Available
+          ? stagedStorage.args
+          : state.wasmStorageArgs();
         return (
           await state.enqueueStorage(() =>
             state

@@ -1,25 +1,13 @@
 import { OriginRuntimeMessage as OriginRuntimeMessageSchema } from './origin-runtime-message'
 
-export type WebsiteLoginAccountOption = {
-  vaultStoreId: string
-  vaultName: string
-  secretId: string
-  username: string
-  websiteUrl: string
-  websiteHost: string
-}
+export type {
+  WebsiteLoginAccountOption,
+  WebsiteAuthenticatorOption,
+} from '../../../nook-web-shared/src/extension/nook-companion-wasm/nook_companion_wasm.js'
 
 export type WebsiteLoginFillResponse =
   | { ok: true; username: string; password: string }
   | { ok: false; reason: string }
-
-export type WebsiteAuthenticatorOption = {
-  vaultStoreId: string
-  vaultName: string
-  secretId: string
-  issuer: string
-  account: string
-}
 
 export enum WebsiteAuthenticatorResponseStatus {
   Ready = 'ready',

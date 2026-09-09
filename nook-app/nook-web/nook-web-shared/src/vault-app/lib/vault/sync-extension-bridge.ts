@@ -1,7 +1,6 @@
 import type { SyncActionsContext } from "$lib/vault/action-contexts";
 import { browserLogRuntime } from "$lib/runtime/log";
 import { publishExtensionEventLogUpdate } from "$web-shared/extension/event-log-bridge";
-import type { ExtensionEventLogRecord } from "$web-shared/extension/runtime-messages";
 import { ActiveVaultKind } from "$lib/vault/state/provider.svelte";
 
 const log = browserLogRuntime.createLogger("vault-sync");
@@ -28,8 +27,7 @@ export class ExtensionSyncPublication {
           typeof publishExtensionEventLogUpdate
         >[0] = {
           vaultStoreId,
-          eventLogRecords:
-            eventLogRecords.to_array() as ExtensionEventLogRecord[],
+          eventLogRecords: eventLogRecords.to_array(),
         };
         publishExtensionEventLogUpdate(publishExtensionEventLogUpdateArgs);
       } finally {

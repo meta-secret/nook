@@ -5,7 +5,6 @@ import {
 import type { NookAdoptedExtensionIdentityHandoff } from "$app-wasm";
 import { I18N_KEYS } from "../../../generated/i18n-keys";
 import type { VaultState } from "$lib/vault.svelte";
-import type { NookSecretRecord } from "$lib/nook";
 import { getVaultManager } from "$lib/nook";
 import { browserLogRuntime } from "$lib/runtime/log";
 import {
@@ -80,7 +79,7 @@ export class VaultInitializationActions {
       ? { kind: SavedAppLocaleKind.Missing }
       : {
           kind: SavedAppLocaleKind.Supported,
-          locale: supported_app_locale_code(parsed) as NookAppLocale,
+          locale: supported_app_locale_code(parsed),
         };
   }
 
@@ -92,7 +91,7 @@ export class VaultInitializationActions {
     if (!state.isVerifying) state.errorMsg = "";
     try {
       const localeState = VaultInitializationActions.savedAppLocale();
-      const browserLocale = state.browserLocale.app_locale() as NookAppLocale;
+      const browserLocale = state.browserLocale.app_locale();
       const locale =
         localeState.kind === SavedAppLocaleKind.Supported
           ? localeState.locale
@@ -364,9 +363,10 @@ export class VaultInitializationActions {
         if (creatingAdditionalVault) {
           state.requireManager().reset_vault_session();
         }
+        const storageArgs = state.wasmStorageArgs();
         const connectPromise = state
           .requireManager()
-          .connect_fresh(...state.wasmStorageArgs());
+          .connect_fresh(storageArgs.mode, storageArgs.pat, storageArgs.repo);
         const startVaultDiscoveryTimeoutArgs: ConstructorParameters<
           typeof VaultDiscoveryTimeout
         >[0] = {
@@ -377,10 +377,7 @@ export class VaultInitializationActions {
           startVaultDiscoveryTimeoutArgs,
         );
         try {
-          return (await Promise.race([
-            connectPromise,
-            timeout.completion,
-          ])) as NookSecretRecord[];
+          return await Promise.race([connectPromise, timeout.completion]);
         } finally {
           timeout.cancel();
         }
