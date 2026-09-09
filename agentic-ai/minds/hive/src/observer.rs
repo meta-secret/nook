@@ -286,11 +286,13 @@ impl Neo4jTaskStore {
             .await?;
         let mut agents = Vec::new();
         while let Some(row) = rows.next().await? {
+            let last_seen_at = row.get("last_seen_at")?;
             agents.push(ObservedAgent {
                 id: row.get("id")?,
                 pod_name: row.get("pod_name")?,
                 status: row.get("status")?,
-                last_seen_at: row.get("last_seen_at")?,
+                last_seen_at,
+                presence_expires_at: ObservedAgent::presence_expires_at(last_seen_at),
             });
         }
         Ok(agents)

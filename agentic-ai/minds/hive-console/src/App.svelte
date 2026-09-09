@@ -365,7 +365,7 @@ FORM: Dense three-region operator console using the incumbent Nook system and at
   }
 
   function isAgentHealthy(agent: ObservedAgent) {
-    return !unavailable && Date.now() - agent.last_seen_at < 2 * 60_000;
+    return !unavailable && Date.now() < agent.presence_expires_at;
   }
 
   function statusLabel(status: string) {

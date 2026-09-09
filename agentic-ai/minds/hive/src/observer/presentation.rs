@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{ALERT_LIMIT, STALE_ACTIVITY_MS, STUCK_CANCELLATION_MS};
+use super::{AGENT_PRESENCE_WINDOW_MS, ALERT_LIMIT, STALE_ACTIVITY_MS, STUCK_CANCELLATION_MS};
 use crate::observer::ObserverCopy;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -59,6 +59,14 @@ pub struct ObservedAgent {
     pub pod_name: String,
     pub status: String,
     pub last_seen_at: i64,
+    /// Observation deadline in Unix milliseconds; consumers still compare their live clock.
+    pub presence_expires_at: i64,
+}
+
+impl ObservedAgent {
+    pub(super) fn presence_expires_at(last_seen_at: i64) -> i64 {
+        last_seen_at.saturating_add(AGENT_PRESENCE_WINDOW_MS)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -232,7 +240,18 @@ impl ObservedTask {
 
 #[cfg(test)]
 mod tests {
-    use super::{AlertKind, AlertSeverity, ObservedAlert, ObservedTask, STALE_ACTIVITY_MS};
+    use super::{
+        AlertKind, AlertSeverity, ObservedAgent, ObservedAlert, ObservedTask, STALE_ACTIVITY_MS,
+    };
+
+    #[test]
+    fn agent_presence_projects_the_shared_window_as_a_deadline() {
+        assert_eq!(
+            ObservedAgent::presence_expires_at(1_700_000_000_000),
+            1_700_000_120_000
+        );
+        assert_eq!(ObservedAgent::presence_expires_at(i64::MAX - 1), i64::MAX);
+    }
     use crate::observer::ObserverCopy;
 
     #[test]

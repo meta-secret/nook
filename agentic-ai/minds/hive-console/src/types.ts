@@ -64,6 +64,7 @@ export type ObservedAgent = {
   pod_name: string;
   status: string;
   last_seen_at: number;
+  presence_expires_at: number;
 };
 
 export type ObservedDependency = {
